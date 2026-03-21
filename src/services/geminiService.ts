@@ -43,7 +43,7 @@ export async function generateSong(
     Output Format:
     Return a JSON object with the following structure:
     {
-      "title": "[Genre1 Genre2] 'English Title' / 'Korean Title'",
+      "title": "[Genre1 Genre2] 'English Title' │ 'Korean Title'",
       "lyrics": {
         "english": "Full English lyrics with structure like [Verse 1], [Chorus], etc.",
         "korean": "Full Korean translation of the lyrics with the same structure"
@@ -59,7 +59,7 @@ export async function generateSong(
 
     Rules for Title:
     - Use at most two main genres in the brackets.
-    - Format: [Genre1 Genre2] 'English Title' / 'Korean Title'
+    - Format: [Genre1 Genre2] 'English Title' │ 'Korean Title'
     
     Rules for Lyrics:
     - Structure: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro]

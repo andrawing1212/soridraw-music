@@ -35,7 +35,10 @@ import {
   Heart as HeartIcon,
   User as UserIcon,
   Heart,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  Unlock,
+  Edit2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -49,6 +52,8 @@ import {
   collection, 
   addDoc, 
   deleteDoc, 
+  updateDoc,
+  writeBatch,
   query, 
   where, 
   getDocs, 
@@ -267,6 +272,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
   const navigate = useNavigate();
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -274,30 +280,35 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsExpanded(false);
         setIsProfileOpen(false);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Collapse menu on scroll or activity elsewhere
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setIsExpanded(true);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+    }, 2000);
+  };
+
+  // Collapse menu on scroll
   useEffect(() => {
-    const handleActivity = () => {
-      if (isExpanded) {
-        // We could auto-collapse after some time, but the user asked for "when moving or touching elsewhere"
-        // which is mostly covered by handleClickOutside. 
-        // But let's add a scroll listener to collapse it.
-      }
+    const handleScroll = () => {
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-    window.addEventListener('scroll', () => {
-      setIsExpanded(false);
-      setIsProfileOpen(false);
-    });
-    return () => window.removeEventListener('scroll', () => {
-      setIsExpanded(false);
-      setIsProfileOpen(false);
-    });
-  }, [isExpanded]);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -342,17 +353,27 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
       {/* Floating Bar (Menu Folder) */}
       <div 
         ref={menuRef}
-        className="fixed top-6 left-4 md:left-[calc((100vw-1152px)/2-68px)] z-50 flex flex-col items-center gap-4"
+        className="fixed top-6 left-4 md:left-6 xl:left-8 2xl:left-[calc((100vw-1152px)/2-82px)] z-50 flex flex-col items-center gap-4"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         {/* Folder Trigger Icon */}
         <button 
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={() => {
+            if (isExpanded) {
+              setIsExpanded(false);
+              setIsProfileOpen(false);
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            } else {
+              setIsExpanded(true);
+            }
+          }}
           className={cn(
-            "p-3 rounded-2xl bg-zinc-900/90 border border-white/10 backdrop-blur-md text-white shadow-2xl transition-all z-50",
+            "p-3 md:p-[14.4px] rounded-2xl bg-zinc-900/90 border border-white/10 backdrop-blur-md text-white shadow-2xl transition-all z-50",
             isExpanded ? "bg-brand-orange border-brand-orange/50 scale-90" : "hover:bg-zinc-800"
           )}
         >
-          <Menu className={cn("w-6 h-6 transition-transform", isExpanded && "rotate-90")} />
+          <Menu className={cn("w-6 h-6 md:w-[28.8px] md:h-[28.8px] transition-transform", isExpanded && "rotate-90")} />
         </button>
 
         {/* Expanded Icons */}
@@ -362,7 +383,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
               initial={{ opacity: 0, y: -20, scale: 0.8 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.8 }}
-              className="flex flex-col items-center gap-4"
+              className="flex flex-col items-center gap-4 md:gap-5"
             >
               {/* Profile Icon */}
               <div className="relative">
@@ -374,7 +395,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
                     <img 
                       src={user.photoURL || 'https://picsum.photos/seed/user/100/100'} 
                       alt="Profile" 
-                      className="w-10 h-10 object-cover"
+                      className="w-10 h-10 md:w-12 md:h-12 object-cover"
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -382,9 +403,9 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
                 ) : (
                   <button 
                     onClick={() => { handleLogin(); setIsExpanded(false); }}
-                    className="p-2.5 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
+                    className="p-2.5 md:p-3 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
                   >
-                    <UserIcon className="w-5 h-5" />
+                    <UserIcon className="w-5 h-5 md:w-6 md:h-6" />
                   </button>
                 )}
 
@@ -395,18 +416,19 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
                       initial={{ opacity: 0, x: 10, scale: 0.95 }}
                       animate={{ opacity: 1, x: 0, scale: 1 }}
                       exit={{ opacity: 0, x: 10, scale: 0.95 }}
-                      className="absolute left-full ml-3 top-0 w-32 py-2 bg-zinc-900/95 border border-white/10 backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden"
+                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-zinc-900/95 border border-white/10 backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden"
                     >
                       <div className="px-3 py-2 border-b border-white/5 mb-1">
-                        <p className="text-[10px] text-gray-400 truncate font-medium">{user.displayName}</p>
+                        <p className="text-[10px] md:text-[12px] text-gray-400 truncate font-medium">{user.displayName}</p>
                       </div>
                       <button 
                         onClick={() => {
                           handleLogout();
                           setIsProfileOpen(false);
                           setIsExpanded(false);
+                          if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-brand-orange hover:bg-white/5 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] md:text-[13px] font-bold text-brand-orange hover:bg-white/5 transition-colors text-left"
                       >
                         로그아웃
                       </button>
@@ -418,19 +440,19 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
               {/* Home Icon */}
               <button 
                 onClick={handleHomeClick}
-                className="p-2.5 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
                 title="홈으로"
               >
-                <HomeIcon className="w-5 h-5" />
+                <HomeIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
 
               {/* Heart Icon (Favorites) */}
               <button 
                 onClick={handleHistoryClick}
-                className="p-2.5 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
                 title="내 보관함"
               >
-                <HeartIcon className="w-5 h-5" />
+                <HeartIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
 
               {/* Suno Icon */}
@@ -439,7 +461,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
                 target="_blank" 
                 rel="noopener noreferrer"
                 onClick={handleSunoClick}
-                className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
                 title="Suno Create"
               >
                 SUNO
@@ -451,7 +473,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
 
       {/* Right Menu - Login (Only on Home Page) */}
       {location.pathname === '/' && !user && (
-        <div className="fixed top-6 right-4 md:right-[calc((100vw-1152px)/2+12px)] z-50">
+        <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50">
           <button 
             onClick={handleLogin}
             className="px-4 py-2 rounded-2xl bg-brand-orange text-white text-[11px] font-bold shadow-lg shadow-brand-orange/20 hover:brightness-110 transition-all flex items-center gap-2"
@@ -465,11 +487,122 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
   );
 }
 
-function FavoritesPage({ favorites, toggleFavorite, user }: { favorites: any[]; toggleFavorite: (song: any) => void; user: User | null }) {
+function FavoritesPage({ 
+  favorites, 
+  toggleFavorite, 
+  updateFavorite,
+  clearAllFavorites,
+  unlockAllFavorites,
+  user 
+}: { 
+  favorites: any[]; 
+  toggleFavorite: (song: any) => void; 
+  updateFavorite: (id: string, updates: Partial<any>) => void;
+  clearAllFavorites: () => void;
+  unlockAllFavorites: () => void;
+  user: User | null 
+}) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedType, setCopiedType] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
+  const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
+  const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
+  const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (selectedSong) {
+      const draft = drafts[selectedSong.id];
+      if (draft) {
+        setEditedTitle(draft.title);
+        setEditedKoreanLyrics(draft.korean);
+        setEditedEnglishLyrics(draft.english);
+        setIsEditing(draft.isEditing);
+      } else {
+        setEditedTitle(selectedSong.title);
+        setEditedKoreanLyrics(selectedSong.lyrics.korean);
+        setEditedEnglishLyrics(selectedSong.lyrics.english);
+        setIsEditing(false);
+      }
+    }
+  }, [selectedSong]);
+
+  // Update draft whenever edit state changes
+  useEffect(() => {
+    if (selectedSong) {
+      setDrafts(prev => ({
+        ...prev,
+        [selectedSong.id]: {
+          title: editedTitle,
+          korean: editedKoreanLyrics,
+          english: editedEnglishLyrics,
+          isEditing: isEditing
+        }
+      }));
+    }
+  }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, isEditing, selectedSong]);
+
+  const handleSave = async () => {
+    if (!selectedSong) return;
+    await updateFavorite(selectedSong.id, {
+      title: editedTitle,
+      lyrics: {
+        ...selectedSong.lyrics,
+        korean: editedKoreanLyrics,
+        english: editedEnglishLyrics
+      }
+    });
+    
+    // Clear draft after successful save
+    setDrafts(prev => {
+      const newDrafts = { ...prev };
+      delete newDrafts[selectedSong.id];
+      return newDrafts;
+    });
+
+    setSelectedSong({
+      ...selectedSong,
+      title: editedTitle,
+      lyrics: {
+        ...selectedSong.lyrics,
+        korean: editedKoreanLyrics,
+        english: editedEnglishLyrics
+      }
+    });
+    setIsEditing(false);
+  };
+
+  const handleToggleLock = async (song: any) => {
+    const newLockedState = !song.isLocked;
+    await updateFavorite(song.id, { isLocked: newLockedState });
+    if (selectedSong && selectedSong.id === song.id) {
+      setSelectedSong({ ...selectedSong, isLocked: newLockedState });
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (confirmDeleteAll === 0) {
+      setConfirmDeleteAll(1);
+      setTimeout(() => setConfirmDeleteAll(0), 3000);
+    } else {
+      clearAllFavorites();
+      setConfirmDeleteAll(0);
+    }
+  };
+
+  const handleBulkUnlock = () => {
+    if (confirmUnlockAll === 0) {
+      setConfirmUnlockAll(1);
+      setTimeout(() => setConfirmUnlockAll(0), 3000);
+    } else {
+      unlockAllFavorites();
+      setConfirmUnlockAll(0);
+    }
+  };
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -525,27 +658,64 @@ ${song.prompt}
   return (
     <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans">
       <div className="flex flex-col items-center text-center mb-12">
-        <button 
-          onClick={() => navigate('/')}
-          className="mb-6 p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
+        <motion.div
+          initial={{ opacity: 0, y: -40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 100, damping: 10 }}
         >
-          <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
-        </button>
+          <button 
+            onClick={() => navigate('/')}
+            className="mb-6 p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
+          >
+            <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
+          </button>
+        </motion.div>
         <p className="text-gray-500 text-[18px] md:text-[21px] whitespace-nowrap">내가 하트 누른 곡들을 모아보세요.</p>
       </div>
 
-      {/* Search Bar */}
-      <div className="max-w-md mx-auto mb-12 relative group">
-        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-          <Search className="w-4 h-4 text-gray-500 group-focus-within:text-brand-orange transition-colors" />
+      {/* Search Bar & Bulk Actions */}
+      <div className="max-w-2xl mx-auto mb-12 space-y-4">
+        <div className="relative group">
+          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+            <Search className="w-4 h-4 text-gray-500 group-focus-within:text-brand-orange transition-colors" />
+          </div>
+          <input 
+            type="text"
+            placeholder="제목, 가사, 장르, 키워드로 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all"
+          />
         </div>
-        <input 
-          type="text"
-          placeholder="제목, 가사, 장르, 분위기로 검색..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all"
-        />
+
+        {favorites.length > 0 && (
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={handleBulkUnlock}
+              className={cn(
+                "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                confirmUnlockAll === 1 
+                  ? "bg-brand-orange text-white animate-pulse" 
+                  : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+              )}
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              {confirmUnlockAll === 1 ? "한 번 더 클릭하여 잠금 해제" : "잠금 해제"}
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className={cn(
+                "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                confirmDeleteAll === 1 
+                  ? "bg-red-500 text-white animate-pulse" 
+                  : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+              )}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {confirmDeleteAll === 1 ? "한 번 더 클릭하여 전체 삭제" : "전체 삭제"}
+            </button>
+          </div>
+        )}
       </div>
 
       {favorites.length === 0 ? (
@@ -569,19 +739,49 @@ ${song.prompt}
               layout
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-zinc-900/50 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800/50 transition-all group"
+              className="bg-zinc-900/50 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800/50 transition-all group flex flex-col h-full"
             >
               <div className="flex justify-between items-start mb-4">
-                <h3 className="text-base font-bold text-white line-clamp-1">{song.title}</h3>
-                <button 
-                  onClick={() => toggleFavorite(song)}
-                  className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex-1">
+                  <h3 className="text-[14.4px] font-bold text-white leading-tight">
+                    {song.title.includes(']') ? (
+                      <>
+                        <span className="block mb-1">{song.title.split(']')[0]}]</span>
+                        <span>{song.title.split(']')[1].trim()}</span>
+                      </>
+                    ) : (
+                      song.title
+                    )}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleToggleLock(song)}
+                    className={cn(
+                      "p-2 rounded-xl transition-all",
+                      song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
+                    )}
+                    title={song.isLocked ? "잠금 해제" : "잠금"}
+                  >
+                    {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                  <button 
+                    onClick={() => toggleFavorite(song)}
+                    disabled={song.isLocked}
+                    className={cn(
+                      "p-2 rounded-xl transition-all",
+                      song.isLocked 
+                        ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
+                        : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                    )}
+                    title={song.isLocked ? "잠긴 곡은 삭제할 수 없습니다" : "삭제"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="flex flex-col flex-grow space-y-4">
                 <div className="flex flex-wrap gap-1.5 overflow-hidden">
                   {song.appliedKeywords.genre.map((g: string) => (
                     <span key={g} className="text-[8px] px-2 py-0.5 rounded-md bg-white/5 text-gray-500 whitespace-nowrap">#{g}</span>
@@ -591,7 +791,7 @@ ${song.prompt}
                   ))}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-auto">
                   <button 
                     onClick={() => setSelectedSong(song)}
                     className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-xs hover:bg-white/10 transition-all"
@@ -633,34 +833,120 @@ ${song.prompt}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-zinc-800/30">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-white">{selectedSong.title}</h2>
-                  <button 
-                    onClick={() => copyToClipboard(selectedSong.title, 'title')}
-                    className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
-                  >
-                    {copiedType === 'title' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setSelectedSong(null)} className="p-2 rounded-full hover:bg-white/5 text-gray-400">
-                    <X className="w-6 h-6" />
-                  </button>
+              <div className="p-8 border-b border-white/5 bg-zinc-800/30 relative flex flex-col items-center text-center">
+                <button 
+                  onClick={() => setSelectedSong(null)} 
+                  className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/5 text-gray-400 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+
+                <div className="w-full max-w-lg space-y-4">
+                  <div className="flex items-center justify-center gap-3">
+                    {isEditing ? (
+                      <input 
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className="w-full bg-black/30 border border-brand-orange/30 rounded-xl px-4 py-2 text-white font-bold text-xl text-center focus:outline-none"
+                      />
+                    ) : (
+                      <h2 className="text-[19px] font-bold text-white leading-tight">
+                        {selectedSong.title.includes(']') ? (
+                          <>
+                            <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
+                            <span>{selectedSong.title.split(']')[1].trim()}</span>
+                          </>
+                        ) : (
+                          selectedSong.title
+                        )}
+                      </h2>
+                    )}
+                    {!isEditing && (
+                      <button 
+                        onClick={() => copyToClipboard(selectedSong.title, 'title')}
+                        className="p-2 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                      >
+                        {copiedType === 'title' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-center gap-3">
+                    {isEditing ? (
+                      <>
+                        <button 
+                          onClick={handleSave}
+                          className="px-6 py-2.5 rounded-xl bg-brand-orange text-white text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
+                        >
+                          저장하기
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setIsEditing(false);
+                            // Reset draft to original song data
+                            setDrafts(prev => {
+                              const newDrafts = { ...prev };
+                              delete newDrafts[selectedSong.id];
+                              return newDrafts;
+                            });
+                            setEditedTitle(selectedSong.title);
+                            setEditedKoreanLyrics(selectedSong.lyrics.korean);
+                            setEditedEnglishLyrics(selectedSong.lyrics.english);
+                          }}
+                          className="px-6 py-2.5 rounded-xl bg-white/5 text-gray-400 text-sm font-bold hover:bg-white/10 transition-all"
+                        >
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center gap-3 relative w-full">
+                        <button 
+                          onClick={() => handleToggleLock(selectedSong)}
+                          className={cn(
+                            "absolute left-0 w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all",
+                            selectedSong.isLocked 
+                              ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
+                              : "bg-transparent text-white border-white hover:bg-white/10"
+                          )}
+                          title={selectedSong.isLocked ? "잠금 해제" : "잠금"}
+                        >
+                          {selectedSong.isLocked ? <Lock className="w-4.5 h-4.5" /> : <Unlock className="w-4.5 h-4.5" />}
+                        </button>
+                        <button 
+                          onClick={() => setIsEditing(true)}
+                          className="px-4 py-2 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-[11.5px] font-bold border border-brand-orange/20"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          수정하기
+                        </button>
+                        <a 
+                          href="https://suno.com/create" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="absolute right-0 w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
+                          title="Suno Create"
+                        >
+                          SUNO
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
                 {/* Keywords & Tempo */}
                 <div className="bg-white/5 rounded-2xl p-4 border border-white/5 relative">
-                  <div className="absolute top-4 right-4">
-                    <button 
-                      onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].join(', '), 'keywords')}
-                      className="p-1.5 rounded-lg hover:bg-white/10 text-gray-500 transition-colors"
-                    >
-                      {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
+                  {!isEditing && (
+                    <div className="absolute top-4 right-4">
+                      <button 
+                        onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].join(', '), 'keywords')}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-gray-500 transition-colors"
+                      >
+                        {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2 mb-3">
                     {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => (
                       <span key={k} className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold">#{k}</span>
@@ -676,25 +962,43 @@ ${song.prompt}
 
                 {/* Lyrics */}
                 <div className="space-y-8 relative">
-                  <div className="absolute top-0 right-0">
-                    <button 
-                      onClick={() => copyToClipboard(`${selectedSong.lyrics.korean}\n\n${selectedSong.lyrics.english}`, 'lyrics')}
-                      className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
-                    >
-                      {copiedType === 'lyrics' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
+                  {!isEditing && (
+                    <div className="absolute top-0 right-0">
+                      <button 
+                        onClick={() => copyToClipboard(`${selectedSong.lyrics.korean}\n\n${selectedSong.lyrics.english}`, 'lyrics')}
+                        className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                      >
+                        {copiedType === 'lyrics' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  )}
                   <div>
-                    <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">Lyrics (Korean)</h3>
-                    <p className="text-base text-white leading-relaxed whitespace-pre-wrap">
-                      {selectedSong.lyrics.korean}
-                    </p>
+                    <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">한글 가사</h3>
+                    {isEditing ? (
+                      <textarea 
+                        value={editedKoreanLyrics}
+                        onChange={(e) => setEditedKoreanLyrics(e.target.value)}
+                        className="w-full h-48 bg-black/30 border border-brand-orange/30 rounded-xl p-4 text-white text-sm focus:outline-none custom-scrollbar"
+                      />
+                    ) : (
+                      <p className="text-base text-white leading-relaxed whitespace-pre-wrap">
+                        {selectedSong.lyrics.korean}
+                      </p>
+                    )}
                   </div>
                   <div className="pt-8 border-t border-white/5">
-                    <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">Lyrics (English)</h3>
-                    <p className="text-base text-gray-400 leading-relaxed whitespace-pre-wrap italic">
-                      {selectedSong.lyrics.english}
-                    </p>
+                    <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">영어 가사</h3>
+                    {isEditing ? (
+                      <textarea 
+                        value={editedEnglishLyrics}
+                        onChange={(e) => setEditedEnglishLyrics(e.target.value)}
+                        className="w-full h-48 bg-black/30 border border-brand-orange/30 rounded-xl p-4 text-gray-400 text-sm focus:outline-none italic custom-scrollbar"
+                      />
+                    ) : (
+                      <p className="text-base text-gray-400 leading-relaxed whitespace-pre-wrap italic">
+                        {selectedSong.lyrics.english}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -753,6 +1057,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
+  const navigate = useNavigate();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -802,8 +1107,12 @@ function App() {
 
     try {
       if (existingFav) {
+        if (existingFav.isLocked) {
+          showToast('잠긴 곡은 삭제할 수 없습니다.');
+          return;
+        }
         await deleteDoc(doc(db, 'favorites', existingFav.id));
-        showToast('저장이 취소되었습니다.');
+        showToast('곡이 삭제 되었습니다.');
       } else {
         await addDoc(collection(db, 'favorites'), {
           uid: user.uid,
@@ -811,6 +1120,7 @@ function App() {
           lyrics: song.lyrics,
           prompt: song.prompt,
           appliedKeywords: song.appliedKeywords,
+          isLocked: false,
           createdAt: serverTimestamp()
         });
         showToast('저장되었습니다.');
@@ -820,7 +1130,58 @@ function App() {
     }
   };
 
-  const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(true);
+  const updateFavorite = async (id: string, updates: Partial<any>) => {
+    try {
+      await updateDoc(doc(db, 'favorites', id), updates);
+      if ('isLocked' in updates) {
+        showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
+      } else {
+        showToast('수정되었습니다.');
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'favorites');
+    }
+  };
+
+  const clearAllFavorites = async () => {
+    if (!user) return;
+    const unlockedFavs = favorites.filter(f => !f.isLocked);
+    if (unlockedFavs.length === 0) {
+      showToast('삭제할 수 있는 곡이 없습니다.');
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      unlockedFavs.forEach(f => {
+        batch.delete(doc(db, 'favorites', f.id));
+      });
+      await batch.commit();
+      showToast(`${unlockedFavs.length}개의 곡이 삭제되었습니다.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+    }
+  };
+
+  const unlockAllFavorites = async () => {
+    if (!user) return;
+    const lockedFavs = favorites.filter(f => f.isLocked);
+    if (lockedFavs.length === 0) {
+      showToast('잠긴 곡이 없습니다.');
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      lockedFavs.forEach(f => {
+        batch.update(doc(db, 'favorites', f.id), { isLocked: false });
+      });
+      await batch.commit();
+      showToast(`${lockedFavs.length}개의 곡이 잠금 해제되었습니다.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+    }
+  };
+
+  const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
   const [isMoodRandomized, setIsMoodRandomized] = useState(false);
   const [isThemeRandomized, setIsThemeRandomized] = useState(false);
@@ -929,7 +1290,7 @@ function App() {
       const nextMode = ((kpopMode + 1) % 3) as 0 | 1 | 2;
       let canChange = true;
       
-      if (nextMode !== 0 && !state.includes(id) && state.length >= 15) {
+      if (nextMode !== 0 && !state.includes(id) && state.length >= 9) {
         canChange = false;
       }
 
@@ -958,7 +1319,7 @@ function App() {
       const nextMode = ((citypopMode + 1) % 3) as 0 | 1 | 2;
       let canChange = true;
       
-      if (nextMode !== 0 && !state.includes(id) && state.length >= 15) {
+      if (nextMode !== 0 && !state.includes(id) && state.length >= 9) {
         canChange = false;
       }
 
@@ -995,7 +1356,7 @@ function App() {
           setSelectedMoods(prev => prev.filter(m => !moodsToRemove.includes(m)));
         }
       }
-    } else if (state.length < 15) {
+    } else if (state.length < 9) {
       set([...state, id]);
       
       // Trot Logic: Auto-select moods
@@ -1004,13 +1365,13 @@ function App() {
           const moodsToAdd = ['melancholic', 'nostalgic', 'bittersweet', 'loneliness', 'emotional', 'cinematic'];
           setSelectedMoods(prev => {
             const combined = Array.from(new Set([...prev, ...moodsToAdd]));
-            return combined.slice(0, 15);
+            return combined.slice(0, 9);
           });
         } else if (id === 'semi-trot') {
           const moodsToAdd = ['urban', 'infectious', 'groovy', 'upbeat', 'cheerful', 'bright'];
           setSelectedMoods(prev => {
             const combined = Array.from(new Set([...prev, ...moodsToAdd]));
-            return combined.slice(0, 15);
+            return combined.slice(0, 9);
           });
         }
       }
@@ -1070,9 +1431,13 @@ function App() {
     setIsThemeRandomized(false);
     setUserInput('');
     setResult(null);
+    setHistoryIndex(-1);
     setLyricsLength('normal');
     setDrumStyle('none');
     setSelectedGenders([]);
+    setTempoEnabled(true);
+    setMinBPM(90);
+    setMaxBPM(110);
   };
 
   const deleteHistoryItem = (index: number) => {
@@ -1115,49 +1480,35 @@ function App() {
   };
 
   const applyRandom = () => {
-    const getRandomForCategory = (all: CategoryItem[], pinned: string[], maxTotal: number, isGenre: boolean = false) => {
+    const getRandomForCategory = (all: CategoryItem[], pinned: string[], count: number, isGenre: boolean = false) => {
       const result = [...pinned];
       const remainingPool = all.filter(item => 
         !pinned.includes(item.id) && 
         (!isGenre || !TROT_GENRES.includes(item.id))
       );
       
-      // Decide how many more to add (up to maxTotal)
-      const currentCount = pinned.length;
-      const additionalCount = Math.max(0, Math.floor(Math.random() * (maxTotal - currentCount + 1)));
-      const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, additionalCount);
+      const needed = Math.max(0, count - pinned.length);
+      const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, needed);
       
       return [...result, ...picked.map(p => p.id)];
     };
 
-    // Random button logic: Max 5 per category, total 5-15
-    let g = getRandomForCategory(GENRES, pinnedGenres, 5, true);
-    let m = getRandomForCategory(MOODS, pinnedMoods, 5);
-    let t = getRandomForCategory(THEMES, pinnedThemes, 5);
-    
-    let total = g.length + m.length + t.length;
-    
-    // If total is not between 5 and 15, adjust
-    if (total < 5 || total > 15) {
-      const allItems = [
-        ...GENRES.filter(i => !g.includes(i.id)).map(i => ({ ...i, cat: 'genre' })),
-        ...MOODS.filter(i => !m.includes(i.id)).map(i => ({ ...i, cat: 'mood' })),
-        ...THEMES.filter(i => !t.includes(i.id)).map(i => ({ ...i, cat: 'theme' }))
-      ];
-      
-      if (total < 5) {
-        const needed = 5 - total;
-        const extra = allItems.sort(() => 0.5 - Math.random()).slice(0, needed);
-        extra.forEach(p => {
-          if (p.cat === 'genre') g.push(p.id);
-          if (p.cat === 'mood') m.push(p.id);
-          if (p.cat === 'theme') t.push(p.id);
-        });
-      } else if (total > 15) {
-        const toRemove = total - 15;
-        // Logic to remove if needed
-      }
+    // Random selection: Total 5-15, balanced across categories
+    const totalTarget = Math.floor(Math.random() * 11) + 5; // 5-15
+    const basePerCat = Math.floor(totalTarget / 3);
+    const extra = totalTarget % 3;
+
+    const counts = [basePerCat, basePerCat, basePerCat];
+    for (let i = 0; i < extra; i++) {
+      counts[i]++;
     }
+    
+    // Shuffle counts to randomize which category gets the extra
+    counts.sort(() => 0.5 - Math.random());
+
+    let g = getRandomForCategory(GENRES, pinnedGenres, counts[0], true);
+    let m = getRandomForCategory(MOODS, pinnedMoods, counts[1]);
+    let t = getRandomForCategory(THEMES, pinnedThemes, counts[2]);
 
     setSelectedGenres(g);
     setSelectedMoods(m);
@@ -1368,13 +1719,23 @@ ${result.prompt}
               <div className="max-w-6xl mx-auto">
                 <div className="text-center">
                   <motion.div
-                    initial={{ opacity: 0, y: -20 }}
+                    initial={{ opacity: 0, y: -40 }}
                     animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: "spring", stiffness: 100, damping: 10 }}
                     className="flex flex-col items-center justify-center mb-6"
                   >
-                    <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-brand-orange/10">
-                      <Music className="w-8 h-8 text-brand-orange" />
-                    </div>
+                    <button 
+                      onClick={() => {
+                        if (!user) {
+                          handleLogin();
+                        } else {
+                          navigate('/history');
+                        }
+                      }}
+                      className="inline-flex items-center justify-center p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
+                    >
+                      <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
+                    </button>
                   </motion.div>
                   <h1 
                     className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-2 font-display"
@@ -1615,10 +1976,10 @@ ${result.prompt}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                      className="flex items-center gap-1 px-3 py-1 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 text-[10px] font-bold"
+                      className="flex items-center gap-1.5 px-[18px] py-[6px] rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 text-[15px] font-bold"
                     >
                       {isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}
-                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-[16px] h-[16px]" /> : <ChevronDown className="w-[16px] h-[16px]" />}
                     </button>
                     <button
                       onClick={() => {
@@ -1706,14 +2067,14 @@ ${result.prompt}
                   onClick={copyAll}
                   onMouseEnter={() => setHoveredItem({ id: 'copy-all', label: '전체 복사', description: '키워드, 제목, 가사, 프롬프트를 한 번에 복사합니다.' })}
                   onMouseLeave={() => setHoveredItem(null)}
-                  className="flex items-center gap-3 px-8 py-3 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/20 shadow-lg shadow-brand-orange/5 group"
+                  className="flex items-center gap-[18px] px-[48px] py-[18px] rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/20 shadow-lg shadow-brand-orange/5 group"
                 >
                   {copiedType === 'all' ? (
-                    <Check className="w-5 h-5" />
+                    <Check className="w-[30px] h-[30px]" />
                   ) : (
-                    <Copy className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <Copy className="w-[30px] h-[30px] group-hover:scale-110 transition-transform" />
                   )}
-                  <span className="font-bold text-sm">전체 복사</span>
+                  <span className="font-bold text-lg">전체 복사</span>
                 </button>
               </div>
 
@@ -1734,12 +2095,36 @@ ${result.prompt}
                     <Music className="w-4 h-4" />
                     제목 (Title)
                   </div>
-                  <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
-                    {result.title}
-                  </h2>
+                  <div className="h-[60px] md:h-auto flex items-center justify-center">
+                    <h2 className="text-[17px] md:text-2xl font-bold text-white leading-tight line-clamp-2 text-center">
+                      {result.title}
+                    </h2>
+                  </div>
 
                   {/* History Navigation & Heart Icon Below Title */}
                   <div className="flex items-center justify-center gap-3 mt-4">
+                    <button
+                      onClick={() => {
+                        if (window.confirm('이 곡을 히스토리에서 삭제하시겠습니까?')) {
+                          const newHistory = [...history];
+                          newHistory.splice(historyIndex, 1);
+                          setHistory(newHistory);
+                          if (newHistory.length === 0) {
+                            setResult(null);
+                            setHistoryIndex(-1);
+                          } else {
+                            const nextIndex = Math.min(historyIndex, newHistory.length - 1);
+                            setHistoryIndex(nextIndex);
+                            setResult(newHistory[nextIndex]);
+                          }
+                        }
+                      }}
+                      className="p-2.5 rounded-2xl bg-white/10 border border-white/10 shadow-lg transition-all hover:bg-red-500/20 group/trash"
+                      title="히스토리에서 삭제"
+                    >
+                      <Trash2 className="w-5 h-5 text-gray-400 group-hover/trash:text-red-500" />
+                    </button>
+
                     <div className="flex items-center gap-2 bg-zinc-800/70 p-1.5 rounded-2xl border border-white/10 shadow-lg">
                       <button
                         onClick={() => navigateHistory('prev')}
@@ -1748,7 +2133,7 @@ ${result.prompt}
                       >
                         <ArrowLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-xs font-mono font-bold text-gray-400 min-w-[40px] text-center">
+                      <span className="text-xl font-mono font-bold text-gray-400 min-w-[80px] text-center">
                         {historyIndex + 1} / {history.length}
                       </span>
                       <button
@@ -1784,7 +2169,7 @@ ${result.prompt}
                   <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
                     <h3 className="font-bold text-white flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
-                      English Lyrics
+                      영어 가사
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
@@ -1811,12 +2196,12 @@ ${result.prompt}
                   <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
                     <h3 className="font-bold text-white flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
-                      Korean Lyrics
+                      한글 가사
                     </h3>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
-                        onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한국어 가사 복사', description: '한국어 가사 전체를 복사합니다.' })}
+                        onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
                         className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
                       >
@@ -1868,7 +2253,16 @@ ${result.prompt}
             </main>
           </>
         } />
-        <Route path="/history" element={<FavoritesPage favorites={favorites} toggleFavorite={toggleFavorite} user={user} />} />
+        <Route path="/history" element={
+          <FavoritesPage 
+            favorites={favorites} 
+            toggleFavorite={toggleFavorite} 
+            updateFavorite={updateFavorite}
+            clearAllFavorites={clearAllFavorites}
+            unlockAllFavorites={unlockAllFavorites}
+            user={user} 
+          />
+        } />
       </Routes>
 
       {/* Tooltip / Description Overlay */}
@@ -1992,7 +2386,7 @@ function CategorySection({
           >
             <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
             {title}
-            <span className="text-[14px] font-normal text-gray-500 ml-2">({selected.length}/15)</span>
+            <span className="text-[14px] font-normal text-gray-500 ml-2">({selected.length}/{items.length})</span>
           </h3>
           <AnimatePresence>
             {showTitleTooltip && (

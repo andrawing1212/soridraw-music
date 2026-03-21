@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "Favorite": {
+      "title": "Favorite Song",
+      "description": "A song that a user has marked as a favorite.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The UID of the user who favorited the song."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the song."
+        },
+        "lyrics": {
+          "type": "object",
+          "description": "The lyrics of the song in English and Korean.",
+          "properties": {
+            "english": { "type": "string" },
+            "korean": { "type": "string" }
+          }
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The music generation prompt."
+        },
+        "appliedKeywords": {
+          "type": "object",
+          "description": "The keywords used to generate the song.",
+          "properties": {
+            "genre": { "type": "array", "items": { "type": "string" } },
+            "mood": { "type": "array", "items": { "type": "string" } },
+            "theme": { "type": "array", "items": { "type": "string" } },
+            "tempo": { "type": "string" },
+            "vocalGender": { "type": "string" }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the favorite was created."
+        }
+      },
+      "required": ["uid", "title", "lyrics", "prompt", "appliedKeywords", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/favorites/{favoriteId}": {
+      "schema": "Favorite",
+      "description": "Collection of user favorite songs."
+    }
+  }
+}

@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: favorites
+    // Document ID: auto-generated
+    // Fields:
+    //   - uid: string (required) - The user's UID
+    //   - title: string (required, max 200 chars)
+    //   - lyrics: map (required)
+    //     - english: string (required, max 5000 chars)
+    //     - korean: string (required, max 5000 chars)
+    //   - prompt: string (required, max 2000 chars)
+    //   - appliedKeywords: map (required)
+    //     - genre: list of strings (required, max 10 items)
+    //     - mood: list of strings (required, max 10 items)
+    //     - theme: list of strings (required, max 10 items)
+    //     - tempo: string (optional, max 50 chars)
+    //     - vocalGender: string (optional, max 50 chars)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "andrawing1213@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasAll(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'createdAt']) &&
+             data.keys().hasOnly(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'createdAt']) &&
+             data.uid is string &&
+             data.title is string && data.title.size() <= 200 &&
+             data.lyrics is map &&
+             data.lyrics.keys().hasOnly(['english', 'korean']) &&
+             data.lyrics.english is string && data.lyrics.english.size() <= 5000 &&
+             data.lyrics.korean is string && data.lyrics.korean.size() <= 5000 &&
+             data.prompt is string && data.prompt.size() <= 2000 &&
+             data.appliedKeywords is map &&
+             data.appliedKeywords.keys().hasOnly(['genre', 'mood', 'theme', 'tempo', 'vocalGender']) &&
+             data.appliedKeywords.genre is list && data.appliedKeywords.genre.size() <= 10 &&
+             data.appliedKeywords.mood is list && data.appliedKeywords.mood.size() <= 10 &&
+             data.appliedKeywords.theme is list && data.appliedKeywords.theme.size() <= 10 &&
+             (!('tempo' in data.appliedKeywords) || (data.appliedKeywords.tempo is string && data.appliedKeywords.tempo.size() <= 50)) &&
+             (!('vocalGender' in data.appliedKeywords) || (data.appliedKeywords.vocalGender is string && data.appliedKeywords.vocalGender.size() <= 50)) &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /favorites/{favoriteId} {
+      // Users can only read their own favorites
+      allow read: if isOwner(resource.data.uid);
+      
+      // Users can only create favorites for themselves
+      allow create: if isOwner(request.resource.data.uid) && isValidFavorite(request.resource.data);
+      
+      // Users can only delete their own favorites
+      allow delete: if isOwner(resource.data.uid);
+      
+      // Favorites are immutable once created
+      allow update: if false;
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

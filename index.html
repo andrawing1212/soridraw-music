@@ -7,13 +7,26 @@
 
     <!-- PWA 색상 -->
     <meta name="theme-color" content="#ff8200" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SORIDRAW" />
 
     <!-- 아이콘 -->
-    <link rel="icon" type="image/png" href="/icons/favicon3.png" />
-    <link rel="apple-touch-icon" href="/icons/icon-192-v2.png" />
+    <link rel="icon" type="image/png" href="/icons/favicon3.png?v=4" />
+    <link rel="apple-touch-icon" href="/icons/icon-192-v2.png?v=4" />
 
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.json?v=4" crossorigin="use-credentials" />
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+    </script>
   </head>
 
   <body>

@@ -173,12 +173,14 @@ function SecondaryScrollControl() {
   const [dragY, setDragY] = useState(0);
   const startY = useRef(0);
   const scrollRaf = useRef<number | null>(null);
+  
+  // Max drag distance (track height is 160px, circle radius is 12px)
+  const MAX_DRAG = 70;
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
-      // Show only if page is long enough and scrolled a bit
       setIsVisible(scrollHeight > clientHeight * 1.2 && window.scrollY > 200);
     };
 
@@ -187,15 +189,25 @@ function SecondaryScrollControl() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Global cleanup for safety
+  useEffect(() => {
+    const handleGlobalStop = () => setIsDragging(false);
+    window.addEventListener('blur', handleGlobalStop);
+    window.addEventListener('visibilitychange', handleGlobalStop);
+    return () => {
+      window.removeEventListener('blur', handleGlobalStop);
+      window.removeEventListener('visibilitychange', handleGlobalStop);
+    };
+  }, []);
+
   const startScrolling = useCallback(() => {
     const scroll = () => {
       if (isDragging) {
-        // Calculate speed based on drag distance
-        // Max speed limit: 40px per frame
-        const speedFactor = 0.12;
+        // Speed factor adjusted for the clamped range
+        const speedFactor = 0.4;
         const speed = dragY * speedFactor;
         
-        // Clamp speed
+        // Clamp speed (max 40px per frame)
         const clampedSpeed = Math.max(-40, Math.min(40, speed));
         
         if (Math.abs(clampedSpeed) > 0.5) {
@@ -227,7 +239,9 @@ function SecondaryScrollControl() {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (isDragging) {
-      setDragY(e.clientY - startY.current);
+      const delta = e.clientY - startY.current;
+      // Clamp dragY to stay within the visual track
+      setDragY(Math.max(-MAX_DRAG, Math.min(MAX_DRAG, delta)));
     }
   };
 
@@ -236,37 +250,43 @@ function SecondaryScrollControl() {
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   };
 
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
   if (!isVisible) return null;
 
   return (
-    <div className="fixed right-3 top-1/2 -translate-y-1/2 z-[9999] flex flex-col items-center pointer-events-none">
-      <div className="relative h-40 w-10 flex items-center justify-center">
+    <div className="fixed right-2 top-1/2 -translate-y-1/2 z-[9999] flex flex-col items-center pointer-events-none">
+      <div className="relative h-40 w-8 flex items-center justify-center">
         {/* Track Visual */}
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1 bg-white/5 rounded-full" />
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-white/5 rounded-full" />
         
-        {/* Control Circle */}
+        {/* Control Circle (Reduced Size) */}
         <motion.div
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
           animate={{ y: isDragging ? dragY : 0 }}
           transition={isDragging ? { type: "just" } : { type: "spring", stiffness: 400, damping: 30 }}
           className={cn(
-            "w-12 h-12 rounded-full bg-zinc-900/60 backdrop-blur-md border border-white/10 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
-            isDragging ? "border-brand-orange/40 bg-zinc-800/80" : "hover:border-white/20"
+            "w-6 h-6 rounded-full bg-zinc-900/80 backdrop-blur-md border border-white/10 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
+            isDragging ? "border-brand-orange/40 bg-zinc-800" : "hover:border-white/20"
           )}
         >
           <div className={cn(
-            "w-1.5 h-1.5 rounded-full transition-all",
+            "w-1 h-1 rounded-full transition-all",
             isDragging ? "bg-brand-orange scale-125" : "bg-white/30"
           )} />
           
-          {isDragging && Math.abs(dragY) > 15 && (
+          {isDragging && Math.abs(dragY) > 10 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               {dragY < 0 ? (
-                <ChevronUp className="w-4 h-4 text-brand-orange/60 animate-pulse" />
+                <ChevronUp className="w-3 h-3 text-brand-orange/60 animate-pulse" />
               ) : (
-                <ChevronDown className="w-4 h-4 text-brand-orange/60 animate-pulse" />
+                <ChevronDown className="w-3 h-3 text-brand-orange/60 animate-pulse" />
               )}
             </div>
           )}

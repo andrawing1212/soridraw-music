@@ -3,7 +3,7 @@ import { SongResult, LyricsLength, DrumStyle } from "../types";
 import { BASE_PROMPTS } from "../constants";
 
 // 롤백: 원래 작동하던 GEMINI_API_KEY 방식입니다.
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyB_qCZsU7BJn6X2DRPVoaIYKjDldD0pqIo" });
 
 export async function generateSong(
   genres: string[],

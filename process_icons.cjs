@@ -2,7 +2,7 @@ const Jimp = require('jimp');
 const fs = require('fs');
 const path = require('path');
 
-const inputPath = 'public/icons/favicon3.png';
+const inputPath = 'public/new_icon_source.png';
 
 async function processIcons() {
   try {
@@ -15,16 +15,13 @@ async function processIcons() {
 
     console.log('Processing 192x192 icon...');
     await image.clone().resize(192, 192).writeAsync('public/icon-192.png');
-    await image.clone().resize(192, 192).writeAsync('public/icons/icon-192-v2.png');
 
     console.log('Processing 512x512 icon...');
     await image.clone().resize(512, 512).writeAsync('public/icon-512.png');
-    await image.clone().resize(512, 512).writeAsync('public/icons/icon-512-v2.png');
 
     console.log('Processing 32x32 favicon...');
     await image.clone().resize(32, 32).writeAsync('public/favicon.png');
     await image.clone().resize(32, 32).writeAsync('public/favicon.ico');
-    await image.clone().resize(32, 32).writeAsync('public/icons/favicon3.png');
 
     console.log('Icons processed successfully!');
   } catch (error) {

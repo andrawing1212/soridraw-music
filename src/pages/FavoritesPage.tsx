@@ -518,11 +518,11 @@ ${song.prompt}
                   <div className="flex gap-2 mt-auto">
                     <button 
                       onClick={() => setSelectedSong(song)}
-                      onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '가사 보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
+                      onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
                       onMouseLeave={() => onHover(null)}
-                      className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-xs hover:bg-white/10 transition-all"
+                      className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-sm hover:bg-white/10 transition-all"
                     >
-                      가사 보기
+                      상세보기
                     </button>
                     <button 
                       onClick={() => copyAll(song)}

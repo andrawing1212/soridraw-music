@@ -173,6 +173,7 @@ function SecondaryScrollControl() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const isDraggingRef = useRef(false);
   const dragYRef = useRef(0);
   const startY = useRef(0);
   const scrollRaf = useRef<number | null>(null);
@@ -185,7 +186,8 @@ function SecondaryScrollControl() {
     const handleScroll = () => {
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
-      setIsVisible(scrollHeight > clientHeight * 1.2 && window.scrollY > 200);
+      // Show if page is long enough, regardless of current scroll position
+      setIsVisible(scrollHeight > clientHeight * 1.2);
       
       // Show on scroll
       setIsActive(true);
@@ -200,28 +202,32 @@ function SecondaryScrollControl() {
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    
-    // Check for modal presence periodically or on clicks
+    window.addEventListener('resize', handleScroll);
     const modalInterval = setInterval(checkModal, 500);
     
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
       clearInterval(modalInterval);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
     };
   }, []);
 
   const stopScrolling = useCallback(() => {
+    isDraggingRef.current = false;
     setIsDragging(false);
     dragYRef.current = 0;
     setDragY(0);
+    
     if (scrollRaf.current) {
       cancelAnimationFrame(scrollRaf.current);
       scrollRaf.current = null;
     }
     
-    // Keep active for a bit after drag ends
+    // Restore scroll behavior
+    document.documentElement.style.scrollBehavior = '';
+    
     if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
     activeTimerRef.current = setTimeout(() => setIsActive(false), 2000);
   }, []);
@@ -239,7 +245,7 @@ function SecondaryScrollControl() {
 
   useEffect(() => {
     const scroll = () => {
-      if (!isDragging) {
+      if (!isDraggingRef.current) {
         if (scrollRaf.current) {
           cancelAnimationFrame(scrollRaf.current);
           scrollRaf.current = null;
@@ -247,29 +253,18 @@ function SecondaryScrollControl() {
         return;
       }
 
-      // Speed factor adjusted for the clamped range
       const speedFactor = 0.4;
       const speed = dragYRef.current * speedFactor;
-      
-      // Clamp speed (max 40px per frame)
       const clampedSpeed = Math.max(-40, Math.min(40, speed));
       
-      // Boundary checks
-      const isAtTop = window.scrollY <= 0;
-      const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1;
+      // Boundary checks with small epsilon
+      const isAtTop = window.scrollY <= 0.5;
+      const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
 
-      // Immediate stop conditions at boundaries
-      if (clampedSpeed < 0 && isAtTop) {
-        stopScrolling();
-        return;
-      }
-      if (clampedSpeed > 0 && isAtBottom) {
-        stopScrolling();
-        return;
-      }
+      const canScrollUp = clampedSpeed < 0 && !isAtTop;
+      const canScrollDown = clampedSpeed > 0 && !isAtBottom;
 
-      // Dead zone threshold (1.5px) to prevent jitter
-      if (Math.abs(clampedSpeed) > 1.5) {
+      if ((canScrollUp || canScrollDown) && Math.abs(clampedSpeed) > 1.5) {
         window.scrollBy(0, clampedSpeed);
       }
       
@@ -277,6 +272,8 @@ function SecondaryScrollControl() {
     };
 
     if (isDragging) {
+      // Disable smooth scroll during drag to prevent lag/infinite loops
+      document.documentElement.style.scrollBehavior = 'auto';
       scrollRaf.current = requestAnimationFrame(scroll);
     } else {
       if (scrollRaf.current) {
@@ -291,15 +288,15 @@ function SecondaryScrollControl() {
   }, [isDragging, stopScrolling]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    isDraggingRef.current = true;
     setIsDragging(true);
     startY.current = e.clientY;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (isDragging) {
+    if (isDraggingRef.current) {
       const delta = e.clientY - startY.current;
-      // Clamp dragY to stay within the visual track (-MAX_DRAG to +MAX_DRAG)
       const clampedDelta = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, delta));
       setDragY(clampedDelta);
       dragYRef.current = clampedDelta;
@@ -320,10 +317,13 @@ function SecondaryScrollControl() {
 
   return (
     <AnimatePresence>
-      {(isActive || isDragging) && !isModalOpen && (
+      {(isActive || isDragging || isVisible) && !isModalOpen && (
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
+          animate={{ 
+            opacity: (isActive || isDragging) ? 1 : 0.3, 
+            x: 0 
+          }}
           exit={{ opacity: 0, x: 20 }}
           className="fixed right-2 top-1/2 -translate-y-1/2 z-[9999] flex flex-col items-center pointer-events-none"
         >

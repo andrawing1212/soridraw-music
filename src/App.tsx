@@ -1993,8 +1993,8 @@ ${result.prompt}
                     className="max-w-2xl mx-auto leading-relaxed px-4"
                     style={{ fontFamily: 'Courier New', color: '#b0b3b8', fontWeight: 'normal', fontSize: '14px' }}
                   >
-                    <span className="text-white font-bold text-2xl md:text-3xl">나의 이야기를 음악으로!</span><br />
-                    세상에 단 하나 뿐인 나만의 곡을 만들어보세요
+                    <span className="text-gray-300 font-bold text-xl md:text-2xl">나의 이야기를 음악으로</span><br />
+                    <span className="text-gray-400">세상에 단 하나 뿐인 나만의 곡을 만들어보세요</span>
                   </p>
                 </div>
               </div>
@@ -3078,8 +3078,10 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
     };
   }, [isDragging, min, max, onMinChange, onMaxChange]);
 
-  const minPos = ((min - 40) / (160 - 40)) * 100;
-  const maxPos = ((max - 40) / (160 - 40)) * 100;
+  const displayMin = enabled ? 40 : min;
+  const displayMax = enabled ? 160 : max;
+  const minPos = ((displayMin - 40) / (160 - 40)) * 100;
+  const maxPos = ((displayMax - 40) / (160 - 40)) * 100;
   const isValid = (max - min <= 40) && (min !== 40 || max !== 160);
 
   return (
@@ -3124,7 +3126,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 type="number"
                 min={40}
                 max={max}
-                value={min}
+                value={enabled ? 40 : min}
                 disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
@@ -3140,7 +3142,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 type="number"
                 min={min}
                 max={160}
-                value={max}
+                value={enabled ? 160 : max}
                 disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
@@ -3202,7 +3204,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             type="number"
             min={40}
             max={max}
-            value={min}
+            value={enabled ? 40 : min}
             disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
@@ -3218,7 +3220,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             type="number"
             min={min}
             max={160}
-            value={max}
+            value={enabled ? 160 : max}
             disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);

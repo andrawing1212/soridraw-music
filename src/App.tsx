@@ -405,7 +405,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
                 ) : (
                   <button 
                     onClick={() => { handleLogin(); setIsExpanded(false); }}
-                    className="p-2.5 md:p-3 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
+                    className="p-2.5 md:p-3 rounded-2xl bg-zinc-800/80 border border-white/20 backdrop-blur-md text-white shadow-xl hover:bg-zinc-700 transition-all"
                   >
                     <UserIcon className="w-5 h-5 md:w-6 md:h-6" />
                   </button>
@@ -442,7 +442,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
               {/* Home Icon */}
               <button 
                 onClick={handleHomeClick}
-                className="p-2.5 md:p-3 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-zinc-800/80 border border-white/20 backdrop-blur-md text-white shadow-xl hover:bg-zinc-700 transition-all"
                 title="홈으로"
               >
                 <HomeIcon className="w-5 h-5 md:w-6 md:h-6" />
@@ -451,7 +451,7 @@ function Navigation({ user, handleLogin, handleLogout }: { user: User | null; ha
               {/* Heart Icon (Favorites) */}
               <button 
                 onClick={handleHistoryClick}
-                className="p-2.5 md:p-3 rounded-2xl bg-zinc-900/80 border border-white/10 backdrop-blur-md text-white shadow-xl hover:bg-zinc-800 transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-zinc-800/80 border border-white/20 backdrop-blur-md text-white shadow-xl hover:bg-zinc-700 transition-all"
                 title="내 보관함"
               >
                 <HeartIcon className="w-5 h-5 md:w-6 md:h-6" />
@@ -873,7 +873,7 @@ ${song.prompt}
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-zinc-900/50 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800/50 transition-all group flex flex-col h-full"
+                className="bg-zinc-800/50 border border-white/15 rounded-3xl p-6 hover:bg-zinc-700/50 transition-all group flex flex-col h-full"
               >
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
@@ -978,9 +978,9 @@ ${song.prompt}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-zinc-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-2xl bg-zinc-800 border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
             >
-              <div className="p-8 border-b border-white/5 bg-zinc-800/30 relative flex flex-col items-center text-center">
+              <div className="p-8 border-b border-white/10 bg-zinc-700/30 relative flex flex-col items-center text-center">
                 <button 
                   onClick={() => setSelectedSong(null)} 
                   className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/5 text-gray-400 transition-colors"
@@ -1855,7 +1855,7 @@ ${result.prompt}
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans selection:bg-brand-orange/30">
+    <div className="min-h-screen bg-[#141414] text-gray-100 font-sans selection:bg-brand-orange/30">
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} />
 
       <Routes>
@@ -1889,7 +1889,7 @@ ${result.prompt}
             )}
 
             {/* Header */}
-            <header className="pt-24 pb-12 px-6 border-b border-white/5 bg-gradient-to-b from-zinc-900/50 to-transparent relative">
+            <header className="pt-24 pb-12 px-6 border-b border-white/10 bg-gradient-to-b from-zinc-800/50 to-transparent relative">
               <div className="max-w-6xl mx-auto">
                 <div className="text-center">
                   <motion.div
@@ -1922,7 +1922,7 @@ ${result.prompt}
                   </p>
                   <p 
                     className="max-w-2xl mx-auto leading-relaxed px-4"
-                    style={{ fontFamily: 'Courier New', color: '#96999d', fontWeight: 'normal', fontSize: '14px' }}
+                    style={{ fontFamily: 'Courier New', color: '#b0b3b8', fontWeight: 'normal', fontSize: '14px' }}
                   >
                     '당신의 이야기를 음악으로'<br />
                     키워드를 선택하여 세상에 단 하나 뿐인 당신만의 감성적인 곡을 만들어보세요.
@@ -2069,12 +2069,12 @@ ${result.prompt}
                 setIsInputFocused(true);
               }}
               onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-[#1b1b1e] border border-white/20 rounded-2xl py-5 pl-12 pr-6 text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
+              className="w-full bg-[#28282c] border border-white/30 rounded-2xl py-5 pl-12 pr-6 text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
               rows={1}
             />
             {!userInput && !isInputFocused && (
               <div className="absolute inset-0 pointer-events-none flex items-center pl-12 overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap text-gray-500 text-[14px] md:text-lg">
+                <div className="animate-marquee whitespace-nowrap text-gray-400 text-[14px] md:text-lg">
                   작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 ) &nbsp;&nbsp;&nbsp;&nbsp; 작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 )
                 </div>
               </div>
@@ -2141,9 +2141,9 @@ ${result.prompt}
 
 
               {/* Applied Keywords After Generation */}
-              <div className="bg-zinc-900/50 rounded-2xl p-3 border border-white/5">
+              <div className="bg-zinc-800/50 rounded-2xl p-3 border border-white/10">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                  <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                     <Check className="w-3 h-3 text-brand-orange" />
                     적용된 키워드
                   </h3>
@@ -2299,21 +2299,21 @@ ${result.prompt}
                       <Trash2 className="w-5 h-5 text-gray-400 group-hover/trash:text-red-500" />
                     </button>
 
-                    <div className="flex items-center gap-2 bg-zinc-800/70 p-1.5 rounded-2xl border border-white/10 shadow-lg">
+                    <div className="flex items-center gap-2 bg-zinc-700/70 p-1.5 rounded-2xl border border-white/15 shadow-lg">
                       <button
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}
-                        className="p-1.5 rounded-xl hover:bg-white/5 text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        className="p-1.5 rounded-xl hover:bg-white/10 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ArrowLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-xl font-mono font-bold text-gray-400 min-w-[80px] text-center">
+                      <span className="text-xl font-mono font-bold text-gray-300 min-w-[80px] text-center">
                         {historyIndex + 1} / {history.length}
                       </span>
                       <button
                         onClick={() => navigateHistory('next')}
                         disabled={historyIndex <= 0}
-                        className="p-1.5 rounded-xl hover:bg-white/5 text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        className="p-1.5 rounded-xl hover:bg-white/10 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ArrowRight className="w-4 h-4" />
                       </button>
@@ -2552,7 +2552,7 @@ function CategorySection({
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
   return (
-    <div className="bg-zinc-900/40 rounded-3xl p-6 border border-white/5 flex flex-col h-full relative group">
+    <div className="bg-zinc-800/40 rounded-3xl p-6 border border-white/10 flex flex-col h-full relative group">
       <div className="flex items-center justify-between mb-6">
         <div className="relative">
           <h3 
@@ -2562,7 +2562,7 @@ function CategorySection({
           >
             <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
             {title}
-            <span className="text-[14px] font-normal text-gray-500 ml-2">({selected.length}/{items.length})</span>
+            <span className="text-[14px] font-normal text-gray-400 ml-2">({selected.length}/{items.length})</span>
           </h3>
           <AnimatePresence>
             {showTitleTooltip && (
@@ -2632,7 +2632,7 @@ function CategorySection({
               kpopStyle = "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20";
               displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
             } else {
-              kpopStyle = "bg-[#19191b] border-white/5 text-gray-400 hover:border-brand-orange/30 hover:text-gray-200";
+              kpopStyle = "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100";
             }
           }
 
@@ -2646,7 +2646,7 @@ function CategorySection({
               citypopStyle = "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20";
               displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
             } else {
-              citypopStyle = "bg-[#19191b] border-white/5 text-gray-400 hover:border-brand-orange/30 hover:text-gray-200";
+              citypopStyle = "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100";
             }
           }
 
@@ -2753,7 +2753,7 @@ function LyricsLengthControl({ value, onChange }: LyricsLengthControlProps) {
   ];
 
   return (
-    <div className="bg-zinc-900/40 rounded-3xl p-6 border border-white/5 flex flex-col h-full">
+    <div className="bg-zinc-800/40 rounded-3xl p-6 border border-white/10 flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2788,7 +2788,7 @@ function LyricsLengthControl({ value, onChange }: LyricsLengthControlProps) {
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[#19191b] border-white/5 text-gray-500 hover:border-brand-orange/30 hover:text-gray-200"
+                  : "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100"
               )}
             >
               {opt.label}
@@ -2829,7 +2829,7 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
   ];
 
   return (
-    <div className="bg-zinc-900/40 rounded-3xl p-6 border border-white/5 flex flex-col h-full">
+    <div className="bg-zinc-800/40 rounded-3xl p-6 border border-white/10 flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2864,7 +2864,7 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[#19191b] border-white/5 text-gray-500 hover:border-brand-orange/30 hover:text-gray-200"
+                  : "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100"
               )}
             >
               {opt.label}
@@ -2912,7 +2912,7 @@ function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
   };
 
   return (
-    <div className="bg-zinc-900/40 rounded-3xl p-6 border border-white/5 flex flex-col h-full">
+    <div className="bg-zinc-800/40 rounded-3xl p-6 border border-white/10 flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2947,7 +2947,7 @@ function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value.includes(opt.id as VocalGender)
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[#19191b] border-white/5 text-gray-500 hover:border-brand-orange/30 hover:text-gray-200"
+                  : "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100"
               )}
             >
               {opt.label}
@@ -3040,7 +3040,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   return (
     <div className={cn(
-      "bg-zinc-900/40 rounded-3xl px-6 py-4 border border-white/5 transition-all"
+      "bg-zinc-800/40 rounded-3xl px-6 py-4 border border-white/10 transition-all"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="relative flex items-center justify-center md:justify-start gap-3">
@@ -3058,7 +3058,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               "px-4 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-2",
               enabled 
                 ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
-                : "bg-zinc-800/50 text-gray-400 border-white/5 hover:border-brand-orange/30 hover:text-gray-200"
+                : "bg-zinc-700/50 text-gray-300 border-white/10 hover:border-brand-orange/30 hover:text-gray-100"
             )}
           >
             <Sparkles className={cn("w-3.5 h-3.5", enabled && "animate-pulse")} />
@@ -3113,7 +3113,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             }}
             className="w-8 bg-transparent text-rose-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-gray-500 text-[9px] uppercase font-bold tracking-tighter">bpm</span>
+          <span className="text-gray-400 text-[9px] uppercase font-bold tracking-tighter">bpm</span>
         </div>
       </div>
 
@@ -3123,7 +3123,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
       )}>
         <div 
           ref={sliderRef}
-          className="relative h-2 bg-zinc-800 rounded-full cursor-pointer mx-2.5"
+          className="relative h-2 bg-zinc-700 rounded-full cursor-pointer mx-2.5"
           onClick={(e) => {
             if (enabled) return;
             const rect = sliderRef.current!.getBoundingClientRect();
@@ -3155,8 +3155,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             className={cn(
               "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
-                ? "bg-zinc-900 border-cyan-500 shadow-lg shadow-cyan-500/20 scale-110" 
-                : "bg-zinc-900 border-cyan-500/40 shadow-lg shadow-cyan-500/10 scale-100 cursor-not-allowed",
+                ? "bg-zinc-800 border-cyan-500 shadow-lg shadow-cyan-500/20 scale-110" 
+                : "bg-zinc-800 border-cyan-500/40 shadow-lg shadow-cyan-500/10 scale-100 cursor-not-allowed",
               isDragging === 'min' && "scale-125 border-cyan-400"
             )}
             style={{ left: `${minPos}%` }}
@@ -3171,8 +3171,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             className={cn(
               "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
-                ? "bg-zinc-900 border-rose-500 shadow-lg shadow-rose-500/20 scale-110" 
-                : "bg-zinc-900 border-rose-500/40 shadow-lg shadow-rose-500/10 scale-100 cursor-not-allowed",
+                ? "bg-zinc-800 border-rose-500 shadow-lg shadow-rose-500/20 scale-110" 
+                : "bg-zinc-800 border-rose-500/40 shadow-lg shadow-rose-500/10 scale-100 cursor-not-allowed",
               isDragging === 'max' && "scale-125 border-rose-400"
             )}
             style={{ left: `${maxPos}%` }}
@@ -3181,7 +3181,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           </div>
         </div>
         
-        <div className="flex justify-between mt-3 text-[9px] font-bold text-gray-600 uppercase tracking-widest">
+        <div className="flex justify-between mt-3 text-[9px] font-bold text-gray-400 uppercase tracking-widest">
           <span>40 BPM</span>
           <span>100 BPM</span>
           <span>160 BPM</span>

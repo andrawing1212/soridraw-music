@@ -5,7 +5,8 @@ import {
   Route, 
   Link, 
   useNavigate,
-  useLocation
+  useLocation,
+  Navigate
 } from 'react-router-dom';
 import { 
   Music, 
@@ -1576,8 +1577,8 @@ function App() {
     setIsMoodRandomized(false);
     setIsThemeRandomized(false);
     setUserInput('');
-    setResult(null);
-    setHistoryIndex(-1);
+    // setResult(null); // Keep current song result visible
+    // setHistoryIndex(-1);
     setLyricsLength('normal');
     setDrumStyle('none');
     setSelectedGenders([]);
@@ -1860,30 +1861,32 @@ ${result.prompt}
       <Routes>
         <Route path="/" element={
           <>
-            {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) */}
-            <div className="fixed top-6 right-2 md:right-4 xl:right-6 2xl:right-[calc((100vw-1152px)/2-63px)] z-50">
-              <motion.div
-                animate={{ 
-                  y: [0, -5, 0],
-                  scale: [1, 1.05, 1]
-                }}
-                transition={{ 
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              >
-                <a 
-                  href="https://suno.com/create" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-brand-orange flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-brand-orange/10 backdrop-blur-md shadow-xl shadow-brand-orange/20"
-                  title="Suno Create"
+            {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Only show after login */}
+            {user && (
+              <div className="fixed top-6 right-2 md:right-4 xl:right-6 2xl:right-[calc((100vw-1152px)/2-63px)] z-50">
+                <motion.div
+                  animate={{ 
+                    y: [0, -5, 0],
+                    scale: [1, 1.05, 1]
+                  }}
+                  transition={{ 
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
                 >
-                  SUNO
-                </a>
-              </motion.div>
-            </div>
+                  <a 
+                    href="https://suno.com/create" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-brand-orange flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-brand-orange/10 backdrop-blur-md shadow-xl shadow-brand-orange/20"
+                    title="Suno Create"
+                  >
+                    SUNO
+                  </a>
+                </motion.div>
+              </div>
+            )}
 
             {/* Header */}
             <header className="pt-24 pb-12 px-6 border-b border-white/5 bg-gradient-to-b from-zinc-900/50 to-transparent relative">
@@ -2434,6 +2437,8 @@ ${result.prompt}
             user={user} 
           />
         } />
+        <Route path="/archive" element={<Navigate to="/history" replace />} />
+        <Route path="/library" element={<Navigate to="/history" replace />} />
       </Routes>
 
       {/* Tooltip / Description Overlay */}

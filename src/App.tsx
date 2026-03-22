@@ -495,20 +495,24 @@ function FavoritesPage({
   updateFavorite,
   clearAllFavorites,
   unlockAllFavorites,
-  user 
+  user,
+  onHover,
+  hoveredItem
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
   updateFavorite: (id: string, updates: Partial<any>) => void;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
-  user: User | null 
+  user: User | null;
+  onHover: (item: { id: string; label: string; description: string } | null) => void;
+  hoveredItem: { id: string; label: string; description: string } | null;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [showSortPopup, setShowSortPopup] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(10);
+  const [visibleCount, setVisibleCount] = useState(9);
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
@@ -519,6 +523,21 @@ function FavoritesPage({
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const placeholders = [
+    "제목으로 검색해보세요...",
+    "가사 내용으로 검색해보세요...",
+    "장르나 키워드로 검색해보세요...",
+    "분위기로 검색해보세요..."
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -764,6 +783,8 @@ ${song.prompt}
         >
           <button 
             onClick={() => navigate('/')}
+            onMouseEnter={() => onHover({ id: 'back-home', label: '홈으로', description: '메인 페이지로 돌아갑니다.' })}
+            onMouseLeave={() => onHover(null)}
             className="mb-6 p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
           >
             <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
@@ -774,7 +795,7 @@ ${song.prompt}
             className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-2 font-display"
             style={{ fontFamily: 'Verdana' }}
           >
-            Music's <span className="text-studio-brown">Note</span>
+            Music <span className="text-studio-brown">Note</span>
           </h1>
           <p className="text-gray-400 text-lg">세상에 단 하나뿐인 노래의 완성!</p>
           <p className="text-gray-500 text-sm">저장한 곡을 편집하고, 수노에서 음악을 만들어 보세요.</p>
@@ -790,7 +811,7 @@ ${song.prompt}
             </div>
             <input 
               type="text"
-              placeholder="제목, 가사, 장르, 키워드로 검색..."
+              placeholder={placeholders[placeholderIndex]}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-700/80 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-gray-400"
@@ -801,6 +822,8 @@ ${song.prompt}
           <div className="relative" ref={sortPopupRef}>
             <button
               onClick={toggleSortPopup}
+              onMouseEnter={() => onHover({ id: 'sort', label: '정렬 방식', description: '곡 목록의 정렬 순서를 변경합니다.' })}
+              onMouseLeave={() => onHover(null)}
               className="px-4 py-3 rounded-2xl bg-zinc-800/80 border border-white/20 text-white text-sm font-bold hover:bg-zinc-700 transition-all flex items-center gap-2 min-w-[120px] justify-center"
             >
               <Filter className="w-4 h-4 text-brand-orange" />
@@ -846,6 +869,8 @@ ${song.prompt}
           <div className="flex justify-center gap-3">
             <button
               onClick={handleBulkUnlock}
+              onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
+              onMouseLeave={() => onHover(null)}
               className={cn(
                 "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
                 confirmUnlockAll === 1 
@@ -858,6 +883,8 @@ ${song.prompt}
             </button>
             <button
               onClick={handleBulkDelete}
+              onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
+              onMouseLeave={() => onHover(null)}
               className={cn(
                 "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
                 confirmDeleteAll === 1 
@@ -912,24 +939,26 @@ ${song.prompt}
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => handleToggleLock(song)}
+                      onMouseEnter={() => onHover({ id: `lock-${song.id}`, label: song.isLocked ? '잠금 해제' : '잠금', description: song.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                      onMouseLeave={() => onHover(null)}
                       className={cn(
                         "p-2 rounded-xl transition-all",
                         song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
                       )}
-                      title={song.isLocked ? "잠금 해제" : "잠금"}
                     >
                       {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                     </button>
                     <button 
                       onClick={() => toggleFavorite(song)}
                       disabled={song.isLocked}
+                      onMouseEnter={() => onHover({ id: `delete-${song.id}`, label: '삭제', description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : '이 곡을 목록에서 삭제합니다.' })}
+                      onMouseLeave={() => onHover(null)}
                       className={cn(
                         "p-2 rounded-xl transition-all",
                         song.isLocked 
                           ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
                           : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
                       )}
-                      title={song.isLocked ? "잠긴 곡은 삭제할 수 없습니다" : "삭제"}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -949,14 +978,17 @@ ${song.prompt}
                   <div className="flex gap-2 mt-auto">
                     <button 
                       onClick={() => setSelectedSong(song)}
+                      onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '가사 보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
+                      onMouseLeave={() => onHover(null)}
                       className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-xs hover:bg-white/10 transition-all"
                     >
                       가사 보기
                     </button>
                     <button 
                       onClick={() => copyAll(song)}
+                      onMouseEnter={() => onHover({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
+                      onMouseLeave={() => onHover(null)}
                       className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center group/copy border border-brand-orange/20"
-                      title="곡 정보 모두 복사"
                     >
                       {copiedType === `all-${song.id}` ? (
                         <Check className="w-4 h-4 text-green-500" />
@@ -973,7 +1005,9 @@ ${song.prompt}
           {visibleCount < filteredFavorites.length && (
             <div className="flex justify-center pt-8">
               <button
-                onClick={() => setVisibleCount(prev => prev + 8)}
+                onClick={() => setVisibleCount(prev => prev + 6)}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 6개 더 불러옵니다.' })}
+                onMouseLeave={() => onHover(null)}
                 className="px-8 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-white/10 flex items-center gap-2 group"
               >
                 <Plus className="w-5 h-5 text-brand-orange group-hover:rotate-90 transition-transform" />
@@ -1945,8 +1979,8 @@ ${result.prompt}
                     className="max-w-2xl mx-auto leading-relaxed px-4"
                     style={{ fontFamily: 'Courier New', color: '#b0b3b8', fontWeight: 'normal', fontSize: '14px' }}
                   >
-                    '당신의 이야기를 음악으로'<br />
-                    키워드를 선택하여 세상에 단 하나 뿐인 당신만의 감성적인 곡을 만들어보세요.
+                    <span className="text-white font-bold">'나의 이야기를 음악으로'</span><br />
+                    세상에 단 하나 뿐인 나만의 곡을 만들어보세요.
                   </p>
                 </div>
               </div>
@@ -2117,6 +2151,8 @@ ${result.prompt}
 
             <button
               onClick={handleGenerate}
+              onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
+              onMouseLeave={() => setHoveredItem(null)}
               className={cn(
                 "flex-1 py-4 md:py-5 rounded-2xl text-white font-bold text-xl md:text-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
                 isGenerating 
@@ -2414,7 +2450,7 @@ ${result.prompt}
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col aspect-square">
+                <div className="bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1">
                   <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
                     <h3 className="font-bold text-white flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
@@ -2456,6 +2492,8 @@ ${result.prompt}
             clearAllFavorites={clearAllFavorites}
             unlockAllFavorites={unlockAllFavorites}
             user={user} 
+            onHover={setHoveredItem}
+            hoveredItem={hoveredItem}
           />
         } />
         <Route path="/archive" element={<Navigate to="/history" replace />} />
@@ -2574,7 +2612,7 @@ function CategorySection({
 
   return (
     <div className="bg-zinc-800/40 rounded-3xl p-6 border border-white/10 flex flex-col h-full relative group">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="relative">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2628,6 +2666,21 @@ function CategorySection({
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
+      </div>
+      
+      {/* Expand/Collapse Button - Moved to top of keywords */}
+      <div className="pb-4 flex justify-center">
+        <button
+          onClick={onToggleExpand}
+          className="flex items-center gap-2 px-6 py-2 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 hover:border-brand-orange/50 group/expand shadow-lg shadow-brand-orange/5"
+        >
+          <span className="text-[12px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
+          {isExpanded ? (
+            <ChevronUp className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
+          ) : (
+            <ChevronDown className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
+          )}
+        </button>
       </div>
       
       <div className={cn(
@@ -2736,24 +2789,6 @@ function CategorySection({
           );
         })}
       </div>
-
-      {/* Expand/Collapse Button - mt-auto ensures they align at the bottom of the grid row */}
-      <div className={cn(
-        "pt-4 flex justify-center",
-        (isExpanded || allExpanded) ? "mt-auto" : ""
-      )}>
-        <button
-          onClick={onToggleExpand}
-          className="flex items-center gap-2 px-6 py-2 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 hover:border-brand-orange/50 group/expand shadow-lg shadow-brand-orange/5"
-        >
-          <span className="text-[12px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
-          {isExpanded ? (
-            <ChevronUp className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
-          ) : (
-            <ChevronDown className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
-          )}
-        </button>
-      </div>
     </div>
   );
 }
@@ -2782,7 +2817,7 @@ function LyricsLengthControl({ value, onChange }: LyricsLengthControlProps) {
           className="text-[18px] font-bold text-white flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가사 길이 (Lyrics Length)
+          가사 길이
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2845,8 +2880,8 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
 
   const options = [
     { id: 'none', label: '기본', description: '표준 드럼 비트를 사용합니다.', recommendation: '모든 가사 길이에 적합' },
-    { id: 'half-time', label: 'Half Time', description: '드럼 비트를 절반 속도로 연주하여 여유로운 느낌을 줍니다.', recommendation: '빠른템포' },
-    { id: 'double-time', label: 'Double Time', description: '드럼 비트를 2배 빠르게 연주하여 긴박감을 줍니다.', recommendation: '느린템포' }
+    { id: 'half-time', label: 'Half', description: '드럼 비트를 절반 속도로 연주하여 여유로운 느낌을 줍니다.', recommendation: '빠른템포' },
+    { id: 'double-time', label: 'Double', description: '드럼 비트를 2배 빠르게 연주하여 긴박감을 줍니다.', recommendation: '느린템포' }
   ];
 
   return (
@@ -2858,7 +2893,7 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
           className="text-[18px] font-bold text-white flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          드럼 스타일 (Drum Style)
+          드럼 스타일
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2941,7 +2976,7 @@ function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
           className="text-[18px] font-bold text-white flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가수 성별 (Vocal Gender)
+          가수 성별 <span className="text-[12px] font-normal text-gray-400">(둘다 적용 = 듀엣)</span>
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -3064,43 +3099,103 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
       "bg-zinc-800/40 rounded-3xl px-6 py-4 border border-white/10 transition-all"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-        <div className="relative flex items-center justify-center md:justify-start gap-3">
-          <h3 
-            onMouseEnter={() => setShowTitleTooltip(true)}
-            onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[18px] font-bold text-white flex items-center gap-2 cursor-help"
-          >
-            <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-            템포(BPM)
-          </h3>
+        <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <h3 
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className="text-[18px] font-bold text-white flex items-center gap-2 cursor-help"
+              >
+                <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+                템포(BPM)
+              </h3>
+              <AnimatePresence>
+                {showTitleTooltip && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+                  >
+                    <p className="text-[11px] text-gray-300 leading-snug">곡의 빠르기를 BPM 단위로 조절합니다.</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className={cn(
+              "hidden md:flex items-center gap-1 px-1.5 py-1 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity",
+              enabled && "opacity-30 pointer-events-none"
+            )}>
+              <input
+                type="number"
+                min={40}
+                max={max}
+                value={min}
+                disabled={enabled}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (!isNaN(val)) {
+                    const clamped = Math.max(40, Math.min(val, max));
+                    onMinChange(clamped);
+                  }
+                }}
+                className="w-8 bg-transparent text-cyan-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="text-gray-600 font-bold text-sm">-</span>
+              <input
+                type="number"
+                min={min}
+                max={160}
+                value={max}
+                disabled={enabled}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (!isNaN(val)) {
+                    const clamped = Math.max(min, Math.min(val, 160));
+                    onMaxChange(clamped);
+                  }
+                }}
+                className="w-8 bg-transparent text-rose-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="text-gray-400 text-[9px] uppercase font-bold tracking-tighter">bpm</span>
+            </div>
+          </div>
+
+          <div className="md:hidden">
+            <button
+              onClick={() => onEnabledChange(!enabled)}
+              className={cn(
+                "px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
+                enabled 
+                  ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
+                  : "bg-zinc-700/50 text-gray-300 border-white/10 hover:border-brand-orange/30 hover:text-gray-100"
+              )}
+            >
+              <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
+              <span>랜덤</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="hidden md:block">
           <button
             onClick={() => onEnabledChange(!enabled)}
             className={cn(
-              "px-4 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-2",
+              "px-6 py-3 rounded-xl text-base font-bold transition-all border flex items-center gap-2",
               enabled 
                 ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
                 : "bg-zinc-700/50 text-gray-300 border-white/10 hover:border-brand-orange/30 hover:text-gray-100"
             )}
           >
-            <Sparkles className={cn("w-3.5 h-3.5", enabled && "animate-pulse")} />
-            <span className="md:inline hidden">랜덤</span>
+            <Dices className={cn("w-5 h-5", enabled && "animate-pulse")} />
+            <span>랜덤</span>
           </button>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
-              >
-                <p className="text-[11px] text-gray-300 leading-snug">곡의 빠르기를 BPM 단위로 조절합니다.</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
-          
+
         <div className={cn(
-          "flex items-center gap-1.5 px-2 py-1 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity",
+          "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity w-fit mx-auto",
           enabled && "opacity-30 pointer-events-none"
         )}>
           <input
@@ -3116,9 +3211,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMinChange(clamped);
               }
             }}
-            className="w-8 bg-transparent text-cyan-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-10 bg-transparent text-cyan-400 font-mono font-bold text-lg focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-gray-600 font-bold text-sm">-</span>
+          <span className="text-gray-600 font-bold text-lg">-</span>
           <input
             type="number"
             min={min}
@@ -3132,19 +3227,19 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMaxChange(clamped);
               }
             }}
-            className="w-8 bg-transparent text-rose-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-10 bg-transparent text-rose-400 font-mono font-bold text-lg focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-gray-400 text-[9px] uppercase font-bold tracking-tighter">bpm</span>
+          <span className="text-gray-400 text-[10px] uppercase font-bold tracking-tighter">bpm</span>
         </div>
       </div>
 
       <div className={cn(
-        "px-4 py-2 transition-opacity",
+        "px-0 py-2 transition-opacity",
         enabled && "opacity-50 pointer-events-none"
       )}>
         <div 
           ref={sliderRef}
-          className="relative h-2 bg-zinc-700 rounded-full cursor-pointer mx-2.5"
+          className="relative h-2 bg-zinc-700 rounded-full cursor-pointer mx-0"
           onClick={(e) => {
             if (enabled) return;
             const rect = sliderRef.current!.getBoundingClientRect();

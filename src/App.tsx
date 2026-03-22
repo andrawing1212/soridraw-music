@@ -38,7 +38,8 @@ import {
   AlertCircle,
   Lock,
   Unlock,
-  Edit2
+  Edit2,
+  Filter
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -504,6 +505,9 @@ function FavoritesPage({
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre' | 'title' | 'locked'>('latest');
+  const [showSortPopup, setShowSortPopup] = useState(false);
+  const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
@@ -604,6 +608,24 @@ function FavoritesPage({
     }
   };
 
+  const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
+    setSortBy(newSort);
+    // Reset timer when a sort option is clicked
+    if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
+    sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 3000);
+  };
+
+  const toggleSortPopup = () => {
+    if (showSortPopup) {
+      setShowSortPopup(false);
+      if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
+    } else {
+      setShowSortPopup(true);
+      if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
+      sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 3000);
+    }
+  };
+
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
     setCopiedType(type);
@@ -653,10 +675,51 @@ ${song.prompt}
     song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.appliedKeywords.genre.some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
     song.appliedKeywords.mood.some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  ).sort((a, b) => {
+    switch (sortBy) {
+      case 'latest':
+        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+      case 'oldest':
+        return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+      case 'genre':
+        return (a.appliedKeywords.genre[0] || '').localeCompare(b.appliedKeywords.genre[0] || '');
+      case 'title':
+        return a.title.localeCompare(b.title);
+      case 'locked':
+        if (a.isLocked === b.isLocked) return 0;
+        return a.isLocked ? -1 : 1;
+      default:
+        return 0;
+    }
+  });
 
   return (
-    <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans">
+    <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative">
+      {/* Suno Icon at Top Right (Symmetrical to Floating Bar) */}
+      <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50">
+        <motion.div
+          animate={{ 
+            y: [0, -5, 0],
+            scale: [1, 1.05, 1]
+          }}
+          transition={{ 
+            duration: 3,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        >
+          <a 
+            href="https://suno.com/create" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-brand-orange flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-brand-orange/10 backdrop-blur-md shadow-xl shadow-brand-orange/20"
+            title="Suno Create"
+          >
+            SUNO
+          </a>
+        </motion.div>
+      </div>
+
       <div className="flex flex-col items-center text-center mb-12">
         <motion.div
           initial={{ opacity: 0, y: -40 }}
@@ -670,22 +733,69 @@ ${song.prompt}
             <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
           </button>
         </motion.div>
-        <p className="text-gray-500 text-[18px] md:text-[21px] whitespace-nowrap">내가 하트 누른 곡들을 모아보세요.</p>
+        <div className="space-y-2">
+          <h2 className="text-2xl md:text-3xl font-bold text-white">♡ 선택 받은 곡 보관소</h2>
+          <p className="text-gray-400 text-lg">세상에 단 하나뿐인 노래의 완성!</p>
+          <p className="text-gray-500 text-sm">저장한 곡을 편집하고, 수노에서 음악을 만들어 보세요.</p>
+        </div>
       </div>
 
       {/* Search Bar & Bulk Actions */}
       <div className="max-w-2xl mx-auto mb-12 space-y-4">
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-            <Search className="w-4 h-4 text-gray-500 group-focus-within:text-brand-orange transition-colors" />
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 group">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-gray-400 group-focus-within:text-brand-orange transition-colors" />
+            </div>
+            <input 
+              type="text"
+              placeholder="제목, 가사, 장르, 키워드로 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-zinc-800/80 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-gray-500"
+            />
           </div>
-          <input 
-            type="text"
-            placeholder="제목, 가사, 장르, 키워드로 검색..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all"
-          />
+          
+          {/* View All (모아보기) Button */}
+          <div className="relative">
+            <button
+              onClick={toggleSortPopup}
+              className="px-4 py-3 rounded-2xl bg-zinc-800/80 border border-white/20 text-white text-sm font-bold hover:bg-zinc-700 transition-all flex items-center gap-2"
+            >
+              <Filter className="w-4 h-4 text-brand-orange" />
+              모아보기
+            </button>
+
+            <AnimatePresence>
+              {showSortPopup && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full right-0 mt-2 w-40 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+                >
+                  {[
+                    { id: 'latest', label: '최신 순' },
+                    { id: 'oldest', label: '오래된 순' },
+                    { id: 'genre', label: '장르 순' },
+                    { id: 'title', label: '제목 순' },
+                    { id: 'locked', label: '잠금 순' }
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => handleSortChange(option.id as any)}
+                      className={cn(
+                        "w-full px-4 py-3 text-left text-sm transition-colors hover:bg-white/5",
+                        sortBy === option.id ? "text-brand-orange font-bold" : "text-gray-400"
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {favorites.length > 0 && (

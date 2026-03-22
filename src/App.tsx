@@ -1005,8 +1005,8 @@ ${song.prompt}
           {visibleCount < filteredFavorites.length && (
             <div className="flex justify-center pt-8">
               <button
-                onClick={() => setVisibleCount(prev => prev + 6)}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 6개 더 불러옵니다.' })}
+                onClick={() => setVisibleCount(prev => prev + 9)}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 9개 더 불러옵니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className="px-8 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-white/10 flex items-center gap-2 group"
               >
@@ -1979,8 +1979,8 @@ ${result.prompt}
                     className="max-w-2xl mx-auto leading-relaxed px-4"
                     style={{ fontFamily: 'Courier New', color: '#b0b3b8', fontWeight: 'normal', fontSize: '14px' }}
                   >
-                    <span className="text-white font-bold">'나의 이야기를 음악으로'</span><br />
-                    세상에 단 하나 뿐인 나만의 곡을 만들어보세요.
+                    <span className="text-white font-bold text-2xl md:text-3xl">나의 이야기를 음악으로!</span><br />
+                    세상에 단 하나 뿐인 나만의 곡을 만들어보세요
                   </p>
                 </div>
               </div>
@@ -2052,15 +2052,18 @@ ${result.prompt}
           <LyricsLengthControl 
             value={lyricsLength}
             onChange={setLyricsLength}
+            onHover={setHoveredItem}
           />
           <DrumStyleControl 
             lyricsLength={lyricsLength}
             value={drumStyle}
             onChange={setDrumStyle}
+            onHover={setHoveredItem}
           />
           <VocalGenderControl
             value={selectedGenders}
             onChange={setSelectedGenders}
+            onHover={setHoveredItem}
           />
         </div>
 
@@ -2073,6 +2076,7 @@ ${result.prompt}
             max={maxBPM}
             onMinChange={setMinBPM}
             onMaxChange={setMaxBPM}
+            onHover={setHoveredItem}
           />
         </div>
 
@@ -2200,7 +2204,7 @@ ${result.prompt}
               {/* Applied Keywords After Generation */}
               <div className="bg-zinc-800/50 rounded-2xl p-3 border border-white/10">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <h3 className="text-[16.5px] font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                     <Check className="w-3 h-3 text-brand-orange" />
                     적용된 키워드
                   </h3>
@@ -2504,13 +2508,13 @@ ${result.prompt}
       <AnimatePresence>
         {hoveredItem && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl bg-zinc-800/50 backdrop-blur-md border border-brand-orange/30 shadow-2xl pointer-events-none max-w-xs text-center"
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-8 py-5 rounded-3xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_40px_rgba(242,125,38,0.15)] pointer-events-none max-w-sm text-center"
           >
-            <p className="text-brand-orange font-bold mb-1">{hoveredItem.label}</p>
-            <p className="text-xs text-gray-400">{hoveredItem.description}</p>
+            <p className="text-brand-orange font-black text-lg mb-1.5 tracking-tight">{hoveredItem.label}</p>
+            <p className="text-sm text-gray-300 font-medium leading-relaxed">{hoveredItem.description}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2652,7 +2656,8 @@ function CategorySection({
           </button>
           <button 
             onClick={onUnpinAll}
-            title="Unpin All"
+            onMouseEnter={() => onHover({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+            onMouseLeave={() => onHover(null)}
             className="p-2 rounded-lg bg-white/5 hover:bg-brand-orange/20 text-gray-500 hover:text-brand-orange transition-all"
           >
             <PinOff className="w-4 h-4" />
@@ -2672,6 +2677,8 @@ function CategorySection({
       <div className="pb-4 flex justify-center">
         <button
           onClick={onToggleExpand}
+          onMouseEnter={() => onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
+          onMouseLeave={() => onHover(null)}
           className="flex items-center gap-2 px-6 py-2 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 hover:border-brand-orange/50 group/expand shadow-lg shadow-brand-orange/5"
         >
           <span className="text-[12px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
@@ -2796,9 +2803,10 @@ function CategorySection({
 interface LyricsLengthControlProps {
   value: LyricsLength;
   onChange: (val: LyricsLength) => void;
+  onHover: (item: { id: string; label: string; description: string } | null) => void;
 }
 
-function LyricsLengthControl({ value, onChange }: LyricsLengthControlProps) {
+function LyricsLengthControl({ value, onChange, onHover }: LyricsLengthControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -2838,8 +2846,8 @@ function LyricsLengthControl({ value, onChange }: LyricsLengthControlProps) {
           <div key={opt.id} className="relative flex-1">
             <button
               onClick={() => onChange(opt.id as LyricsLength)}
-              onMouseEnter={() => setHoveredOption(opt.id)}
-              onMouseLeave={() => setHoveredOption(null)}
+              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
+              onMouseLeave={() => onHover(null)}
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
@@ -2849,18 +2857,6 @@ function LyricsLengthControl({ value, onChange }: LyricsLengthControlProps) {
             >
               {opt.label}
             </button>
-            <AnimatePresence>
-              {hoveredOption === opt.id && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute bottom-full left-0 right-0 mb-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl pointer-events-none"
-                >
-                  <p className="text-[10px] text-gray-300 text-center">{opt.description}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         ))}
       </div>
@@ -2872,9 +2868,10 @@ interface DrumStyleControlProps {
   lyricsLength: LyricsLength;
   value: DrumStyle;
   onChange: (val: DrumStyle) => void;
+  onHover: (item: { id: string; label: string; description: string } | null) => void;
 }
 
-function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlProps) {
+function DrumStyleControl({ lyricsLength, value, onChange, onHover }: DrumStyleControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -2914,8 +2911,8 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
           <div key={opt.id} className="relative flex-1">
             <button
               onClick={() => onChange(opt.id as DrumStyle)}
-              onMouseEnter={() => setHoveredOption(opt.id)}
-              onMouseLeave={() => setHoveredOption(null)}
+              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
+              onMouseLeave={() => onHover(null)}
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
@@ -2925,19 +2922,6 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
             >
               {opt.label}
             </button>
-            <AnimatePresence>
-              {hoveredOption === opt.id && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute bottom-full left-0 right-0 mb-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl pointer-events-none"
-                >
-                  <p className="text-[10px] text-gray-300 text-center mb-1">{opt.description}</p>
-                  <p className="text-[9px] text-brand-orange text-center font-bold">추천: {opt.recommendation}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         ))}
       </div>
@@ -2948,9 +2932,10 @@ function DrumStyleControl({ lyricsLength, value, onChange }: DrumStyleControlPro
 interface VocalGenderControlProps {
   value: VocalGender[];
   onChange: (val: VocalGender[]) => void;
+  onHover: (item: { id: string; label: string; description: string } | null) => void;
 }
 
-function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
+function VocalGenderControl({ value, onChange, onHover }: VocalGenderControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -2976,7 +2961,7 @@ function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
           className="text-[18px] font-bold text-white flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가수 성별 <span className="text-[12px] font-normal text-gray-400">(둘다 적용 = 듀엣)</span>
+          가수 <span className="text-[12px] font-normal text-gray-400">(둘다 적용 = 듀엣)</span>
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2997,8 +2982,8 @@ function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
           <div key={opt.id} className="relative flex-1">
             <button
               onClick={() => toggleGender(opt.id as VocalGender)}
-              onMouseEnter={() => setHoveredOption(opt.id)}
-              onMouseLeave={() => setHoveredOption(null)}
+              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
+              onMouseLeave={() => onHover(null)}
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value.includes(opt.id as VocalGender)
@@ -3008,18 +2993,6 @@ function VocalGenderControl({ value, onChange }: VocalGenderControlProps) {
             >
               {opt.label}
             </button>
-            <AnimatePresence>
-              {hoveredOption === opt.id && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute bottom-full left-0 right-0 mb-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl pointer-events-none"
-                >
-                  <p className="text-[10px] text-gray-300 text-center">{opt.description}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         ))}
       </div>
@@ -3034,9 +3007,10 @@ interface TempoControlProps {
   max: number;
   onMinChange: (val: number) => void;
   onMaxChange: (val: number) => void;
+  onHover: (item: { id: string; label: string; description: string } | null) => void;
 }
 
-function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange }: TempoControlProps) {
+function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onHover }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
@@ -3124,10 +3098,14 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               </AnimatePresence>
             </div>
 
-            <div className={cn(
-              "hidden md:flex items-center gap-1 px-1.5 py-1 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity",
-              enabled && "opacity-30 pointer-events-none"
-            )}>
+            <div 
+              className={cn(
+                "hidden md:flex items-center gap-1 px-1.5 py-1 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity",
+                enabled && "opacity-30 pointer-events-none"
+              )}
+              onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
+              onMouseLeave={() => onHover(null)}
+            >
               <input
                 type="number"
                 min={40}
@@ -3166,6 +3144,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           <div className="md:hidden">
             <button
               onClick={() => onEnabledChange(!enabled)}
+              onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '템포를 무작위로 설정합니다.' })}
+              onMouseLeave={() => onHover(null)}
               className={cn(
                 "px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
                 enabled 
@@ -3182,6 +3162,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
         <div className="hidden md:block">
           <button
             onClick={() => onEnabledChange(!enabled)}
+            onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '템포를 무작위로 설정합니다.' })}
+            onMouseLeave={() => onHover(null)}
             className={cn(
               "px-6 py-3 rounded-xl text-base font-bold transition-all border flex items-center gap-2",
               enabled 
@@ -3194,10 +3176,14 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           </button>
         </div>
 
-        <div className={cn(
-          "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity w-fit mx-auto",
-          enabled && "opacity-30 pointer-events-none"
-        )}>
+        <div 
+          className={cn(
+            "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-zinc-800/80 rounded-lg border border-white/10 shadow-inner transition-opacity w-fit mx-auto",
+            enabled && "opacity-30 pointer-events-none"
+          )}
+          onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
+          onMouseLeave={() => onHover(null)}
+        >
           <input
             type="number"
             min={40}
@@ -3233,10 +3219,14 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
         </div>
       </div>
 
-      <div className={cn(
-        "px-0 py-2 transition-opacity",
-        enabled && "opacity-50 pointer-events-none"
-      )}>
+      <div 
+        className={cn(
+          "px-0 py-2 transition-opacity",
+          enabled && "opacity-50 pointer-events-none"
+        )}
+        onMouseEnter={() => onHover({ id: 'bpm-slider', label: 'BPM 조절', description: '슬라이더를 드래그하여 BPM을 조절합니다.' })}
+        onMouseLeave={() => onHover(null)}
+      >
         <div 
           ref={sliderRef}
           className="relative h-2 bg-zinc-700 rounded-full cursor-pointer mx-0"

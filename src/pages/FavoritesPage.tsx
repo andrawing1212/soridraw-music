@@ -291,7 +291,7 @@ ${song.prompt}
   return (
     <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative">
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) */}
-      <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
+      <div className="fixed top-[26px] md:top-[28px] right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
         <motion.div
           animate={{ 
             y: [0, -5, 0],
@@ -307,7 +307,7 @@ ${song.prompt}
             href="https://suno.com/create" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="w-10 h-10 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
+            className="w-12 h-12 md:w-[64px] md:h-[64px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[10px] md:text-[12px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
             title="Suno Create"
           >
             SUNO

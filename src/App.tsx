@@ -507,7 +507,9 @@ function FavoritesPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre' | 'title' | 'locked'>('latest');
   const [showSortPopup, setShowSortPopup] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(15);
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
@@ -612,7 +614,7 @@ function FavoritesPage({
     setSortBy(newSort);
     // Reset timer when a sort option is clicked
     if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-    sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 3000);
+    sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
   };
 
   const toggleSortPopup = () => {
@@ -622,9 +624,21 @@ function FavoritesPage({
     } else {
       setShowSortPopup(true);
       if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-      sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 3000);
+      sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
     }
   };
+
+  // Close sort popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sortPopupRef.current && !sortPopupRef.current.contains(event.target as Node)) {
+        setShowSortPopup(false);
+        if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -695,8 +709,8 @@ ${song.prompt}
 
   return (
     <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative">
-      {/* Suno Icon at Top Right (Symmetrical to Floating Bar) */}
-      <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50">
+      {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) */}
+      <div className="fixed top-6 right-2 md:right-4 xl:right-6 2xl:right-[calc((100vw-1152px)/2-63px)] z-50">
         <motion.div
           animate={{ 
             y: [0, -5, 0],
@@ -734,7 +748,12 @@ ${song.prompt}
           </button>
         </motion.div>
         <div className="space-y-2">
-          <h2 className="text-2xl md:text-3xl font-bold text-white">♡ 선택 받은 곡 보관소</h2>
+          <h1 
+            className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-2 font-display"
+            style={{ fontFamily: 'Verdana' }}
+          >
+            Music's <span className="text-studio-brown">Note</span>
+          </h1>
           <p className="text-gray-400 text-lg">세상에 단 하나뿐인 노래의 완성!</p>
           <p className="text-gray-500 text-sm">저장한 곡을 편집하고, 수노에서 음악을 만들어 보세요.</p>
         </div>
@@ -752,18 +771,21 @@ ${song.prompt}
               placeholder="제목, 가사, 장르, 키워드로 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-gray-500"
+              className="w-full bg-zinc-700/80 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-gray-400"
             />
           </div>
           
           {/* View All (모아보기) Button */}
-          <div className="relative">
+          <div className="relative" ref={sortPopupRef}>
             <button
               onClick={toggleSortPopup}
-              className="px-4 py-3 rounded-2xl bg-zinc-800/80 border border-white/20 text-white text-sm font-bold hover:bg-zinc-700 transition-all flex items-center gap-2"
+              className="px-4 py-3 rounded-2xl bg-zinc-800/80 border border-white/20 text-white text-sm font-bold hover:bg-zinc-700 transition-all flex items-center gap-2 min-w-[120px] justify-center"
             >
               <Filter className="w-4 h-4 text-brand-orange" />
-              모아보기
+              {sortBy === 'latest' ? '최신 순' : 
+               sortBy === 'oldest' ? '오래된 순' : 
+               sortBy === 'genre' ? '장르 순' : 
+               sortBy === 'title' ? '제목 순' : '잠금 순'}
             </button>
 
             <AnimatePresence>
@@ -842,87 +864,101 @@ ${song.prompt}
           <p className="text-gray-500">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredFavorites.map((song) => (
-            <motion.div
-              key={song.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-zinc-900/50 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800/50 transition-all group flex flex-col h-full"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex-1">
-                  <h3 className="text-[14.4px] font-bold text-white leading-tight">
-                    {song.title.includes(']') ? (
-                      <>
-                        <span className="block mb-1">{song.title.split(']')[0]}]</span>
-                        <span>{song.title.split(']')[1].trim()}</span>
-                      </>
-                    ) : (
-                      song.title
-                    )}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => handleToggleLock(song)}
-                    className={cn(
-                      "p-2 rounded-xl transition-all",
-                      song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
-                    )}
-                    title={song.isLocked ? "잠금 해제" : "잠금"}
-                  >
-                    {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                  </button>
-                  <button 
-                    onClick={() => toggleFavorite(song)}
-                    disabled={song.isLocked}
-                    className={cn(
-                      "p-2 rounded-xl transition-all",
-                      song.isLocked 
-                        ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
-                        : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                    )}
-                    title={song.isLocked ? "잠긴 곡은 삭제할 수 없습니다" : "삭제"}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col flex-grow space-y-4">
-                <div className="flex flex-wrap gap-1.5 overflow-hidden">
-                  {song.appliedKeywords.genre.map((g: string) => (
-                    <span key={g} className="text-[8px] px-2 py-0.5 rounded-md bg-white/5 text-gray-500 whitespace-nowrap">#{g}</span>
-                  ))}
-                  {song.appliedKeywords.mood.map((m: string) => (
-                    <span key={m} className="text-[8px] px-2 py-0.5 rounded-md bg-white/5 text-gray-500 whitespace-nowrap">#{m}</span>
-                  ))}
+        <div className="space-y-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredFavorites.slice(0, visibleCount).map((song) => (
+              <motion.div
+                key={song.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-zinc-900/50 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800/50 transition-all group flex flex-col h-full"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-[14.4px] font-bold text-white leading-tight">
+                      {song.title.includes(']') ? (
+                        <>
+                          <span className="block mb-1">{song.title.split(']')[0]}]</span>
+                          <span>{song.title.split(']')[1].trim()}</span>
+                        </>
+                      ) : (
+                        song.title
+                      )}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleToggleLock(song)}
+                      className={cn(
+                        "p-2 rounded-xl transition-all",
+                        song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
+                      )}
+                      title={song.isLocked ? "잠금 해제" : "잠금"}
+                    >
+                      {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                    </button>
+                    <button 
+                      onClick={() => toggleFavorite(song)}
+                      disabled={song.isLocked}
+                      className={cn(
+                        "p-2 rounded-xl transition-all",
+                        song.isLocked 
+                          ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
+                          : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                      )}
+                      title={song.isLocked ? "잠긴 곡은 삭제할 수 없습니다" : "삭제"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex gap-2 mt-auto">
-                  <button 
-                    onClick={() => setSelectedSong(song)}
-                    className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-xs hover:bg-white/10 transition-all"
-                  >
-                    가사 보기
-                  </button>
-                  <button 
-                    onClick={() => copyAll(song)}
-                    className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center group/copy border border-brand-orange/20"
-                    title="곡 정보 모두 복사"
-                  >
-                    {copiedType === `all-${song.id}` ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4 group-hover/copy:scale-110 transition-transform" />
-                    )}
-                  </button>
+                <div className="flex flex-col flex-grow space-y-4">
+                  <div className="flex flex-wrap gap-1.5 overflow-hidden">
+                    {song.appliedKeywords.genre.map((g: string) => (
+                      <span key={g} className="text-[8px] px-2 py-0.5 rounded-md bg-white/5 text-gray-500 whitespace-nowrap">#{g}</span>
+                    ))}
+                    {song.appliedKeywords.mood.map((m: string) => (
+                      <span key={m} className="text-[8px] px-2 py-0.5 rounded-md bg-white/5 text-gray-500 whitespace-nowrap">#{m}</span>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 mt-auto">
+                    <button 
+                      onClick={() => setSelectedSong(song)}
+                      className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-xs hover:bg-white/10 transition-all"
+                    >
+                      가사 보기
+                    </button>
+                    <button 
+                      onClick={() => copyAll(song)}
+                      className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center group/copy border border-brand-orange/20"
+                      title="곡 정보 모두 복사"
+                    >
+                      {copiedType === `all-${song.id}` ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 group-hover/copy:scale-110 transition-transform" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
+          </div>
+
+          {visibleCount < filteredFavorites.length && (
+            <div className="flex justify-center pt-8">
+              <button
+                onClick={() => setVisibleCount(prev => prev + 15)}
+                className="px-8 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-white/10 flex items-center gap-2 group"
+              >
+                <Plus className="w-5 h-5 text-brand-orange group-hover:rotate-90 transition-transform" />
+                더보기 ({filteredFavorites.length - visibleCount}개 남음)
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1824,6 +1860,31 @@ ${result.prompt}
       <Routes>
         <Route path="/" element={
           <>
+            {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) */}
+            <div className="fixed top-6 right-2 md:right-4 xl:right-6 2xl:right-[calc((100vw-1152px)/2-63px)] z-50">
+              <motion.div
+                animate={{ 
+                  y: [0, -5, 0],
+                  scale: [1, 1.05, 1]
+                }}
+                transition={{ 
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
+                <a 
+                  href="https://suno.com/create" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-brand-orange flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-brand-orange/10 backdrop-blur-md shadow-xl shadow-brand-orange/20"
+                  title="Suno Create"
+                >
+                  SUNO
+                </a>
+              </motion.div>
+            </div>
+
             {/* Header */}
             <header className="pt-24 pb-12 px-6 border-b border-white/5 bg-gradient-to-b from-zinc-900/50 to-transparent relative">
               <div className="max-w-6xl mx-auto">

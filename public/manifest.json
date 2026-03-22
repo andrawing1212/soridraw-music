@@ -4,8 +4,8 @@
   "description": "SORIDRAW's Studio",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#FF8200",
+  "background_color": "#3E2723",
+  "theme_color": "#3E2723",
   "icons": [
     {
       "src": "/icon.svg",

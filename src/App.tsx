@@ -167,6 +167,115 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function SecondaryScrollControl() {
+  const [isVisible, setIsVisible] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const startY = useRef(0);
+  const scrollRaf = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      // Show only if page is long enough and scrolled a bit
+      setIsVisible(scrollHeight > clientHeight * 1.2 && window.scrollY > 200);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const startScrolling = useCallback(() => {
+    const scroll = () => {
+      if (isDragging) {
+        // Calculate speed based on drag distance
+        // Max speed limit: 40px per frame
+        const speedFactor = 0.12;
+        const speed = dragY * speedFactor;
+        
+        // Clamp speed
+        const clampedSpeed = Math.max(-40, Math.min(40, speed));
+        
+        if (Math.abs(clampedSpeed) > 0.5) {
+          window.scrollBy(0, clampedSpeed);
+        }
+        scrollRaf.current = requestAnimationFrame(scroll);
+      }
+    };
+    scrollRaf.current = requestAnimationFrame(scroll);
+  }, [isDragging, dragY]);
+
+  useEffect(() => {
+    if (isDragging) {
+      startScrolling();
+    } else {
+      if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
+      setDragY(0);
+    }
+    return () => {
+      if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
+    };
+  }, [isDragging, startScrolling]);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    setIsDragging(true);
+    startY.current = e.clientY;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setDragY(e.clientY - startY.current);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed right-3 top-1/2 -translate-y-1/2 z-[9999] flex flex-col items-center pointer-events-none">
+      <div className="relative h-40 w-10 flex items-center justify-center">
+        {/* Track Visual */}
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1 bg-white/5 rounded-full" />
+        
+        {/* Control Circle */}
+        <motion.div
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          animate={{ y: isDragging ? dragY : 0 }}
+          transition={isDragging ? { type: "just" } : { type: "spring", stiffness: 400, damping: 30 }}
+          className={cn(
+            "w-12 h-12 rounded-full bg-zinc-900/60 backdrop-blur-md border border-white/10 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
+            isDragging ? "border-brand-orange/40 bg-zinc-800/80" : "hover:border-white/20"
+          )}
+        >
+          <div className={cn(
+            "w-1.5 h-1.5 rounded-full transition-all",
+            isDragging ? "bg-brand-orange scale-125" : "bg-white/30"
+          )} />
+          
+          {isDragging && Math.abs(dragY) > 15 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              {dragY < 0 ? (
+                <ChevronUp className="w-4 h-4 text-brand-orange/60 animate-pulse" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-brand-orange/60 animate-pulse" />
+              )}
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
 const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
@@ -1817,6 +1926,8 @@ ${result.prompt}
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SecondaryScrollControl />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {

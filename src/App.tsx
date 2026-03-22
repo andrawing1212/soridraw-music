@@ -141,7 +141,7 @@ class ErrorBoundary extends Component<any, any> {
       }
 
       return (
-        <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-6 text-center">
           <div className="max-w-md space-y-6">
             <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-500/10">
               <AlertCircle className="w-12 h-12 text-red-500" />
@@ -506,9 +506,9 @@ function FavoritesPage({
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre' | 'title' | 'locked'>('latest');
+  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [showSortPopup, setShowSortPopup] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(15);
+  const [visibleCount, setVisibleCount] = useState(10);
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
@@ -612,7 +612,15 @@ function FavoritesPage({
   };
 
   const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
-    setSortBy(newSort);
+    if (newSort === 'title') {
+      setSortBy(prev => prev === 'title-en' ? 'title-ko' : 'title-en');
+    } else if (newSort === 'genre') {
+      setSortBy(prev => prev === 'genre-1' ? 'genre-2' : 'genre-1');
+    } else if (newSort === 'locked') {
+      setSortBy(prev => prev === 'locked-top' ? 'locked-bottom' : 'locked-top');
+    } else {
+      setSortBy(newSort as any);
+    }
     // Reset timer when a sort option is clicked
     if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
     sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
@@ -691,18 +699,31 @@ ${song.prompt}
     song.appliedKeywords.genre.some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
     song.appliedKeywords.mood.some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase()))
   ).sort((a, b) => {
+    const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
+
     switch (sortBy) {
       case 'latest':
         return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
       case 'oldest':
         return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
-      case 'genre':
+      case 'genre-1':
         return (a.appliedKeywords.genre[0] || '').localeCompare(b.appliedKeywords.genre[0] || '');
-      case 'title':
+      case 'genre-2':
+        return (a.appliedKeywords.genre[1] || a.appliedKeywords.genre[0] || '').localeCompare(b.appliedKeywords.genre[1] || b.appliedKeywords.genre[0] || '');
+      case 'title-en':
         return a.title.localeCompare(b.title);
-      case 'locked':
-        if (a.isLocked === b.isLocked) return 0;
-        return a.isLocked ? -1 : 1;
+      case 'title-ko':
+        const aIsKo = isKorean(a.title);
+        const bIsKo = isKorean(b.title);
+        if (aIsKo && !bIsKo) return -1;
+        if (!aIsKo && bIsKo) return 1;
+        return a.title.localeCompare(b.title);
+      case 'locked-top':
+        if (a.isLocked !== b.isLocked) return a.isLocked ? -1 : 1;
+        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+      case 'locked-bottom':
+        if (a.isLocked !== b.isLocked) return a.isLocked ? 1 : -1;
+        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
       default:
         return 0;
     }
@@ -711,7 +732,7 @@ ${song.prompt}
   return (
     <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative">
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) */}
-      <div className="fixed top-6 right-2 md:right-4 xl:right-6 2xl:right-[calc((100vw-1152px)/2-63px)] z-50">
+      <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
         <motion.div
           animate={{ 
             y: [0, -5, 0],
@@ -727,7 +748,7 @@ ${song.prompt}
             href="https://suno.com/create" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-brand-orange flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-brand-orange/10 backdrop-blur-md shadow-xl shadow-brand-orange/20"
+            className="w-10 h-10 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
             title="Suno Create"
           >
             SUNO
@@ -785,8 +806,8 @@ ${song.prompt}
               <Filter className="w-4 h-4 text-brand-orange" />
               {sortBy === 'latest' ? '최신 순' : 
                sortBy === 'oldest' ? '오래된 순' : 
-               sortBy === 'genre' ? '장르 순' : 
-               sortBy === 'title' ? '제목 순' : '잠금 순'}
+               sortBy.startsWith('genre') ? '장르 순' : 
+               sortBy.startsWith('title') ? '제목 순' : '잠금 순'}
             </button>
 
             <AnimatePresence>
@@ -952,7 +973,7 @@ ${song.prompt}
           {visibleCount < filteredFavorites.length && (
             <div className="flex justify-center pt-8">
               <button
-                onClick={() => setVisibleCount(prev => prev + 15)}
+                onClick={() => setVisibleCount(prev => prev + 8)}
                 className="px-8 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-white/10 flex items-center gap-2 group"
               >
                 <Plus className="w-5 h-5 text-brand-orange group-hover:rotate-90 transition-transform" />
@@ -1855,7 +1876,7 @@ ${result.prompt}
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-gray-100 font-sans selection:bg-brand-orange/30">
+    <div className="min-h-screen bg-[#0f0f0f] text-gray-100 font-sans selection:bg-brand-orange/30">
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} />
 
       <Routes>
@@ -1863,7 +1884,7 @@ ${result.prompt}
           <>
             {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Only show after login */}
             {user && (
-              <div className="fixed top-6 right-2 md:right-4 xl:right-6 2xl:right-[calc((100vw-1152px)/2-63px)] z-50">
+              <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
                 <motion.div
                   animate={{ 
                     y: [0, -5, 0],
@@ -1879,7 +1900,7 @@ ${result.prompt}
                     href="https://suno.com/create" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-brand-orange flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-brand-orange/10 backdrop-blur-md shadow-xl shadow-brand-orange/20"
+                    className="w-10 h-10 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
                     title="Suno Create"
                   >
                     SUNO

@@ -713,6 +713,16 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
+  const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(false);
+  const keywordsContainerRef = useRef<HTMLDivElement>(null);
+  const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
+
+  useEffect(() => {
+    if (keywordsContainerRef.current) {
+      const { scrollHeight, clientHeight } = keywordsContainerRef.current;
+      setHasKeywordsOverflow(scrollHeight > clientHeight + 5); // Small buffer
+    }
+  }, [selectedGenres, selectedMoods, selectedThemes]);
 
   useEffect(() => {
     const handleHide = () => {
@@ -735,6 +745,15 @@ function App() {
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const navigate = useNavigate();
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Real-time tempo calculation when in random mode
+  useEffect(() => {
+    if (tempoEnabled && (selectedGenres.length > 0 || selectedMoods.length > 0)) {
+      const { min, max } = calculateOptimalBPM(selectedGenres, selectedMoods);
+      setMinBPM(min);
+      setMaxBPM(max);
+    }
+  }, [selectedGenres, selectedMoods, tempoEnabled]);
 
   useEffect(() => {
     const testConnection = async () => {
@@ -1199,6 +1218,7 @@ function App() {
       const { min, max } = calculateOptimalBPM(g, m);
       setMinBPM(min);
       setMaxBPM(max);
+      // Keep tempoEnabled true to show real-time updates if keywords change
     }
   };
 
@@ -1281,6 +1301,7 @@ function App() {
         currentMaxBPM = max;
         setMinBPM(min);
         setMaxBPM(max);
+        setTempoEnabled(false); // Apply the calculated BPM to the menu
       }
 
       const tempoInfo = tempoEnabled && (currentMinBPM !== 40 || currentMaxBPM !== 160)
@@ -1557,33 +1578,56 @@ ${result.prompt}
         {/* Search & Actions */}
         <div className="space-y-6">
           {/* Applied Keywords Display */}
-          <div className="flex flex-wrap gap-2 min-h-[32px] justify-center">
-            <AnimatePresence>
-              {[...selectedGenres, ...selectedMoods, ...selectedThemes].map((id) => {
-                const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
-                return (
-                  <motion.span
-                    key={id}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
-                  >
-                    {item?.label}
-                    <button 
-                      onClick={() => {
-                        if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
-                        else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
-                        else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
-                      }}
-                      className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
+          <div className="relative">
+            <div 
+              ref={keywordsContainerRef}
+              className={cn(
+                "flex flex-wrap gap-2 justify-center transition-all duration-300 overflow-hidden",
+                !isKeywordsExpanded ? "max-h-[42px]" : "max-h-[500px]"
+              )}
+            >
+              <AnimatePresence>
+                {[...selectedGenres, ...selectedMoods, ...selectedThemes].map((id) => {
+                  const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
+                  return (
+                    <motion.span
+                      key={id}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </motion.span>
-                );
-              })}
-            </AnimatePresence>
+                      {item?.label}
+                      <button 
+                        onClick={() => {
+                          if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
+                          else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
+                          else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
+                        }}
+                        className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </motion.span>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+            
+            {(hasKeywordsOverflow || isKeywordsExpanded) && (
+              <div className="flex justify-center mt-2">
+                <button
+                  onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
+                  className="text-[10px] font-bold text-gray-500 hover:text-brand-orange transition-colors flex items-center gap-1 uppercase tracking-tighter bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5"
+                >
+                  {isKeywordsExpanded ? (
+                    <>접기 <ChevronUp className="w-3 h-3" /></>
+                  ) : (
+                    <>더보기 <ChevronDown className="w-3 h-3" /></>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="relative group">
@@ -2545,8 +2589,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
     };
   }, [isDragging, min, max, onMinChange, onMaxChange]);
 
-  const displayMin = enabled ? 40 : min;
-  const displayMax = enabled ? 160 : max;
+  const displayMin = min;
+  const displayMax = max;
   const minPos = ((displayMin - 40) / (160 - 40)) * 100;
   const maxPos = ((displayMax - 40) / (160 - 40)) * 100;
   const isValid = (max - min <= 40) && (min !== 40 || max !== 160);
@@ -2593,7 +2637,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 type="number"
                 min={40}
                 max={max}
-                value={enabled ? 40 : min}
+                value={min}
                 disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
@@ -2609,7 +2653,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 type="number"
                 min={min}
                 max={160}
-                value={enabled ? 160 : max}
+                value={max}
                 disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
@@ -2671,7 +2715,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             type="number"
             min={40}
             max={max}
-            value={enabled ? 40 : min}
+            value={min}
             disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
@@ -2687,7 +2731,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             type="number"
             min={min}
             max={160}
-            value={enabled ? 160 : max}
+            value={max}
             disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);

@@ -1253,6 +1253,20 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
+
+  useEffect(() => {
+    const handleHide = () => {
+      if (hoveredItem) setHoveredItem(null);
+    };
+    window.addEventListener('scroll', handleHide, true);
+    window.addEventListener('mousedown', handleHide, true);
+    window.addEventListener('touchstart', handleHide, true);
+    return () => {
+      window.removeEventListener('scroll', handleHide, true);
+      window.removeEventListener('mousedown', handleHide, true);
+      window.removeEventListener('touchstart', handleHide, true);
+    };
+  }, [hoveredItem]);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
@@ -2511,10 +2525,10 @@ ${result.prompt}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-8 py-5 rounded-3xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_40px_rgba(242,125,38,0.15)] pointer-events-none max-w-sm text-center"
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-none max-w-[200px] text-center"
           >
-            <p className="text-brand-orange font-black text-lg mb-1.5 tracking-tight">{hoveredItem.label}</p>
-            <p className="text-sm text-gray-300 font-medium leading-relaxed">{hoveredItem.description}</p>
+            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
+            <p className="text-[11px] text-gray-300 font-medium leading-relaxed">{hoveredItem.description}</p>
           </motion.div>
         )}
       </AnimatePresence>

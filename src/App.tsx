@@ -169,67 +169,126 @@ function cn(...inputs: ClassValue[]) {
 
 function SecondaryScrollControl() {
   const [isVisible, setIsVisible] = useState(false);
+  const [isActive, setIsActive] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const dragYRef = useRef(0);
   const startY = useRef(0);
   const scrollRaf = useRef<number | null>(null);
+  const activeTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Max drag distance (track height is 160px, circle radius is 12px)
-  const MAX_DRAG = 70;
+  const MAX_DRAG = 65;
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
       setIsVisible(scrollHeight > clientHeight * 1.2 && window.scrollY > 200);
+      
+      // Show on scroll
+      setIsActive(true);
+      if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
+      activeTimerRef.current = setTimeout(() => setIsActive(false), 2000);
+    };
+
+    const checkModal = () => {
+      // Check if the lyrics modal is open (it has z-[100])
+      const modal = document.querySelector('.z-\\[100\\]');
+      setIsModalOpen(!!modal);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Check for modal presence periodically or on clicks
+    const modalInterval = setInterval(checkModal, 500);
+    
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearInterval(modalInterval);
+      if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
+    };
+  }, []);
+
+  const stopScrolling = useCallback(() => {
+    setIsDragging(false);
+    dragYRef.current = 0;
+    setDragY(0);
+    if (scrollRaf.current) {
+      cancelAnimationFrame(scrollRaf.current);
+      scrollRaf.current = null;
+    }
+    
+    // Keep active for a bit after drag ends
+    if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
+    activeTimerRef.current = setTimeout(() => setIsActive(false), 2000);
   }, []);
 
   // Global cleanup for safety
   useEffect(() => {
-    const handleGlobalStop = () => setIsDragging(false);
+    const handleGlobalStop = () => stopScrolling();
     window.addEventListener('blur', handleGlobalStop);
     window.addEventListener('visibilitychange', handleGlobalStop);
     return () => {
       window.removeEventListener('blur', handleGlobalStop);
       window.removeEventListener('visibilitychange', handleGlobalStop);
     };
-  }, []);
-
-  const startScrolling = useCallback(() => {
-    const scroll = () => {
-      if (isDragging) {
-        // Speed factor adjusted for the clamped range
-        const speedFactor = 0.4;
-        const speed = dragY * speedFactor;
-        
-        // Clamp speed (max 40px per frame)
-        const clampedSpeed = Math.max(-40, Math.min(40, speed));
-        
-        if (Math.abs(clampedSpeed) > 0.5) {
-          window.scrollBy(0, clampedSpeed);
-        }
-        scrollRaf.current = requestAnimationFrame(scroll);
-      }
-    };
-    scrollRaf.current = requestAnimationFrame(scroll);
-  }, [isDragging, dragY]);
+  }, [stopScrolling]);
 
   useEffect(() => {
+    const scroll = () => {
+      if (!isDragging) {
+        if (scrollRaf.current) {
+          cancelAnimationFrame(scrollRaf.current);
+          scrollRaf.current = null;
+        }
+        return;
+      }
+
+      // Speed factor adjusted for the clamped range
+      const speedFactor = 0.4;
+      const speed = dragYRef.current * speedFactor;
+      
+      // Clamp speed (max 40px per frame)
+      const clampedSpeed = Math.max(-40, Math.min(40, speed));
+      
+      // Boundary checks
+      const isAtTop = window.scrollY <= 0;
+      const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1;
+
+      // Immediate stop conditions at boundaries
+      if (clampedSpeed < 0 && isAtTop) {
+        stopScrolling();
+        return;
+      }
+      if (clampedSpeed > 0 && isAtBottom) {
+        stopScrolling();
+        return;
+      }
+
+      // Dead zone threshold (1.5px) to prevent jitter
+      if (Math.abs(clampedSpeed) > 1.5) {
+        window.scrollBy(0, clampedSpeed);
+      }
+      
+      scrollRaf.current = requestAnimationFrame(scroll);
+    };
+
     if (isDragging) {
-      startScrolling();
+      scrollRaf.current = requestAnimationFrame(scroll);
     } else {
-      if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
-      setDragY(0);
+      if (scrollRaf.current) {
+        cancelAnimationFrame(scrollRaf.current);
+        scrollRaf.current = null;
+      }
     }
+
     return () => {
       if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current);
     };
-  }, [isDragging, startScrolling]);
+  }, [isDragging, stopScrolling]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsDragging(true);
@@ -240,59 +299,70 @@ function SecondaryScrollControl() {
   const handlePointerMove = (e: React.PointerEvent) => {
     if (isDragging) {
       const delta = e.clientY - startY.current;
-      // Clamp dragY to stay within the visual track
-      setDragY(Math.max(-MAX_DRAG, Math.min(MAX_DRAG, delta)));
+      // Clamp dragY to stay within the visual track (-MAX_DRAG to +MAX_DRAG)
+      const clampedDelta = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, delta));
+      setDragY(clampedDelta);
+      dragYRef.current = clampedDelta;
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    stopScrolling();
   };
 
   const handlePointerCancel = (e: React.PointerEvent) => {
-    setIsDragging(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    stopScrolling();
   };
 
   if (!isVisible) return null;
 
   return (
-    <div className="fixed right-2 top-1/2 -translate-y-1/2 z-[9999] flex flex-col items-center pointer-events-none">
-      <div className="relative h-40 w-8 flex items-center justify-center">
-        {/* Track Visual */}
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-white/5 rounded-full" />
-        
-        {/* Control Circle (Reduced Size) */}
-        <motion.div
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-          animate={{ y: isDragging ? dragY : 0 }}
-          transition={isDragging ? { type: "just" } : { type: "spring", stiffness: 400, damping: 30 }}
-          className={cn(
-            "w-6 h-6 rounded-full bg-zinc-900/80 backdrop-blur-md border border-white/10 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
-            isDragging ? "border-brand-orange/40 bg-zinc-800" : "hover:border-white/20"
-          )}
+    <AnimatePresence>
+      {(isActive || isDragging) && !isModalOpen && (
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          className="fixed right-2 top-1/2 -translate-y-1/2 z-[9999] flex flex-col items-center pointer-events-none"
         >
-          <div className={cn(
-            "w-1 h-1 rounded-full transition-all",
-            isDragging ? "bg-brand-orange scale-125" : "bg-white/30"
-          )} />
-          
-          {isDragging && Math.abs(dragY) > 10 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              {dragY < 0 ? (
-                <ChevronUp className="w-3 h-3 text-brand-orange/60 animate-pulse" />
-              ) : (
-                <ChevronDown className="w-3 h-3 text-brand-orange/60 animate-pulse" />
+          <div className="relative h-40 w-8 flex items-center justify-center">
+            {/* Track Visual */}
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-white/5 rounded-full" />
+            
+            {/* Control Circle (Reduced Size) */}
+            <motion.div
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+              animate={{ y: isDragging ? dragY : 0 }}
+              transition={isDragging ? { type: "just" } : { type: "spring", stiffness: 400, damping: 30 }}
+              className={cn(
+                "w-6 h-6 rounded-full bg-zinc-900/80 backdrop-blur-md border border-brand-orange/40 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
+                isDragging ? "border-brand-orange bg-zinc-800" : "hover:border-brand-orange/60"
               )}
-            </div>
-          )}
+            >
+              <div className={cn(
+                "w-1 h-1 rounded-full transition-all",
+                isDragging ? "bg-brand-orange scale-125" : "bg-brand-orange/60"
+              )} />
+              
+              {isDragging && Math.abs(dragY) > 10 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  {dragY < 0 ? (
+                    <ChevronUp className="w-3 h-3 text-brand-orange/60 animate-pulse" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3 text-brand-orange/60 animate-pulse" />
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </div>
         </motion.div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
 

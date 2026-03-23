@@ -1680,7 +1680,7 @@ ${result.prompt}
               onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
               onMouseLeave={() => setHoveredItem(null)}
               className={cn(
-                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[32px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[20px] md:text-[32px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
                 isGenerating 
                   ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
                   : "music-waves shadow-brand-orange/20 hover:brightness-110"
@@ -1689,12 +1689,12 @@ ${result.prompt}
               {isGenerating ? (
                 <>
                   <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
-                  <span className="text-sm md:text-2xl">작곡 취소</span>
+                  <span>작곡 취소</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
-                  <span className="text-sm md:text-2xl">곡 생성하기</span>
+                  <span>곡 생성하기</span>
                 </>
               )}
             </button>
@@ -1822,7 +1822,7 @@ ${result.prompt}
               <div className="flex justify-center">
                 <button
                   onClick={copyAll}
-                  onMouseEnter={() => setHoveredItem({ id: 'copy-all', label: '전체 복사', description: '키워드, 제목, 가사, 프롬프트를 한 번에 복사합니다.' })}
+                  onMouseEnter={() => setHoveredItem({ id: 'copy-all', label: '곡 정보 복사', description: '키워드, 제목, 가사, 프롬프트를 한 번에 복사합니다.' })}
                   onMouseLeave={() => setHoveredItem(null)}
                   className="flex items-center gap-[18px] px-[48px] py-[18px] rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/20 shadow-lg shadow-brand-orange/5 group"
                 >
@@ -1831,7 +1831,7 @@ ${result.prompt}
                   ) : (
                     <Copy className="w-[30px] h-[30px] group-hover:scale-110 transition-transform" />
                   )}
-                  <span className="font-bold text-lg">전체 복사</span>
+                  <span className="font-bold text-lg">곡 정보 복사</span>
                 </button>
               </div>
 

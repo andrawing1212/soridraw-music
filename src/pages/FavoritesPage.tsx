@@ -715,7 +715,7 @@ ${song.prompt}
                     </div>
                   )}
                   <div>
-                    <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">한글 가사</h3>
+                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-4">한글버전 Lyrics</h3>
                     {isEditing ? (
                       <textarea 
                         value={editedKoreanLyrics}
@@ -729,7 +729,7 @@ ${song.prompt}
                     )}
                   </div>
                   <div className="pt-8 border-t border-white/5">
-                    <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">영어 가사</h3>
+                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-4">영어버전 Lyrics</h3>
                     {isEditing ? (
                       <textarea 
                         value={editedEnglishLyrics}
@@ -754,7 +754,7 @@ ${song.prompt}
                       {copiedType === 'prompt' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
-                  <h3 className="text-brand-orange font-bold text-[10px] uppercase tracking-widest mb-4">Music Prompt</h3>
+                  <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-4"> 곡 프롬프트 Styles </h3>
                   <div className="bg-black/30 rounded-2xl p-4 border border-white/5">
                     <p className="text-xs text-gray-500 font-sans leading-relaxed">
                       {selectedSong.prompt}

@@ -744,7 +744,7 @@ function App() {
     if (hoveredItem) {
       const timer = setTimeout(() => {
         setHoveredItem(null);
-      }, 4000);
+      }, 6000);
       return () => clearTimeout(timer);
     } else {
       setIsTooltipHovered(false);
@@ -2078,14 +2078,12 @@ ${result.prompt}
       <AnimatePresence>
         {hoveredItem && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, x: '-50%' }}
             animate={{ 
               opacity: isTooltipHovered ? 0.1 : 1, 
-              scale: isTooltipHovered ? 0.95 : 1, 
-              y: 0,
               x: '-50%'
             }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            exit={{ opacity: 0, x: '-50%' }}
             onMouseEnter={() => setIsTooltipHovered(true)}
             onMouseLeave={() => setIsTooltipHovered(false)}
             className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"

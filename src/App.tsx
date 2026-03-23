@@ -1006,8 +1006,9 @@ function App() {
         // Update hover description
         const kpopItem = GENRES.find(g => g.id === 'kpop')!;
         let nextDesc = kpopItem.description;
-        if (nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
-        else if (nextMode === 2) nextDesc = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
+        if (nextMode === 2) nextDesc = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
+        else if (nextMode === 0 || nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
+        
         setHoveredItem({ ...kpopItem, description: nextDesc, _ts: Date.now() });
       }
       return;
@@ -1033,8 +1034,9 @@ function App() {
         // Update hover description
         const citypopItem = GENRES.find(g => g.id === 'citypop')!;
         let nextDesc = citypopItem.description;
-        if (nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
-        else if (nextMode === 2) nextDesc = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
+        if (nextMode === 2) nextDesc = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
+        else if (nextMode === 0 || nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
+        
         setHoveredItem({ ...citypopItem, description: nextDesc, _ts: Date.now() });
       }
       return;
@@ -1077,7 +1079,7 @@ function App() {
     // For all other items, update hover description on click (for mobile support)
     const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
     if (item) {
-      setHoveredItem(item);
+      setHoveredItem({ ...item, _ts: Date.now() });
     }
   };
 
@@ -2310,28 +2312,30 @@ function CategorySection({
           let displayDescription = item.description;
 
           if (isKpop) {
-            if (kpopMode === 1) {
-              kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
-              displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
-            } else if (kpopMode === 2) {
+            if (kpopMode === 2) {
               kpopStyle = "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20";
               displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
+            } else if (kpopMode === 1) {
+              kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
+              displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             } else {
               kpopStyle = "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100";
+              displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             }
           }
 
           // City Pop specific styles
           let citypopStyle = "";
           if (isCitypop) {
-            if (citypopMode === 1) {
-              citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
-              displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
-            } else if (citypopMode === 2) {
+            if (citypopMode === 2) {
               citypopStyle = "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20";
               displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
+            } else if (citypopMode === 1) {
+              citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
+              displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             } else {
               citypopStyle = "bg-[#222226] border-white/10 text-gray-300 hover:border-brand-orange/30 hover:text-gray-100";
+              displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             }
           }
 
@@ -2347,7 +2351,6 @@ function CategorySection({
                 onTouchEnd={onLongPressEnd}
                 onClick={() => {
                   onToggle(item.id);
-                  onHover({ ...item, description: displayDescription, _ts: Date.now() });
                 }}
                 className={cn(
                   "px-3 py-1.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2",

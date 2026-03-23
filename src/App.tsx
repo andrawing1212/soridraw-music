@@ -1067,6 +1067,12 @@ function App() {
         }
       }
     }
+
+    // For all other items, update hover description on click (for mobile support)
+    const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
+    if (item) {
+      setHoveredItem(item);
+    }
   };
 
   const togglePin = (id: string, category: 'genre' | 'mood' | 'theme') => {
@@ -1678,7 +1684,7 @@ ${result.prompt}
               onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
               onMouseLeave={() => setHoveredItem(null)}
               className={cn(
-                "flex-1 py-4 md:py-5 rounded-2xl text-white font-bold text-xl md:text-2xl shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+                "flex-1 py-4 md:py-5 rounded-2xl text-white font-bold text-3xl md:text-[28.8px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
                 isGenerating 
                   ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
                   : "music-waves shadow-brand-orange/20 hover:brightness-110"
@@ -2268,7 +2274,6 @@ function CategorySection({
                 onMouseLeave={() => onHover(null)}
                 onClick={() => {
                   onToggle(item.id);
-                  onHover({ ...item, description: displayDescription });
                 }}
                 className={cn(
                   "px-3 py-1.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2",

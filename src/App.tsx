@@ -725,18 +725,14 @@ function App() {
   }, [selectedGenres, selectedMoods, selectedThemes]);
 
   useEffect(() => {
-    const handleHide = () => {
-      if (hoveredItem) setHoveredItem(null);
-    };
-    window.addEventListener('scroll', handleHide, true);
-    window.addEventListener('mousedown', handleHide, true);
-    window.addEventListener('touchstart', handleHide, true);
-    return () => {
-      window.removeEventListener('scroll', handleHide, true);
-      window.removeEventListener('mousedown', handleHide, true);
-      window.removeEventListener('touchstart', handleHide, true);
-    };
+    if (hoveredItem) {
+      const timer = setTimeout(() => {
+        setHoveredItem(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
   }, [hoveredItem]);
+
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
@@ -1661,7 +1657,10 @@ ${result.prompt}
           <div className="flex flex-row items-stretch gap-2 md:gap-4">
             <div className="relative flex-shrink-0">
               <button
-                onClick={applyRandom}
+                onClick={() => {
+                  applyRandom();
+                  setHoveredItem({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' });
+                }}
                 onMouseEnter={() => setHoveredItem({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
                 className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2 group/random"
@@ -1672,7 +1671,10 @@ ${result.prompt}
             </div>
 
             <button
-              onClick={handleGenerate}
+              onClick={() => {
+                handleGenerate();
+                setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' });
+              }}
               onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
               onMouseLeave={() => setHoveredItem(null)}
               className={cn(
@@ -2201,7 +2203,10 @@ function CategorySection({
       {/* Expand/Collapse Button - Moved to top of keywords */}
       <div className="pb-4 flex justify-center">
         <button
-          onClick={onToggleExpand}
+          onClick={() => {
+            onToggleExpand();
+            onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' });
+          }}
           onMouseEnter={() => onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
           onMouseLeave={() => onHover(null)}
           className="flex items-center gap-2 px-6 py-2 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 hover:border-brand-orange/50 group/expand shadow-lg shadow-brand-orange/5"
@@ -2261,7 +2266,10 @@ function CategorySection({
               <button
                 onMouseEnter={() => onHover({ ...item, description: displayDescription })}
                 onMouseLeave={() => onHover(null)}
-                onClick={() => onToggle(item.id)}
+                onClick={() => {
+                  onToggle(item.id);
+                  onHover({ ...item, description: displayDescription });
+                }}
                 className={cn(
                   "px-3 py-1.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2",
                   isKpop ? kpopStyle : (
@@ -2370,7 +2378,10 @@ function LyricsLengthControl({ value, onChange, onHover }: LyricsLengthControlPr
         {options.map((opt) => (
           <div key={opt.id} className="relative flex-1">
             <button
-              onClick={() => onChange(opt.id as LyricsLength)}
+              onClick={() => {
+                onChange(opt.id as LyricsLength);
+                onHover({ id: opt.id, label: opt.label, description: opt.description });
+              }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
               onMouseLeave={() => onHover(null)}
               className={cn(
@@ -2435,7 +2446,10 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover }: DrumStyleC
         {options.map((opt) => (
           <div key={opt.id} className="relative flex-1">
             <button
-              onClick={() => onChange(opt.id as DrumStyle)}
+              onClick={() => {
+                onChange(opt.id as DrumStyle);
+                onHover({ id: opt.id, label: opt.label, description: opt.description });
+              }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
               onMouseLeave={() => onHover(null)}
               className={cn(
@@ -2506,7 +2520,10 @@ function VocalGenderControl({ value, onChange, onHover }: VocalGenderControlProp
         {options.map((opt) => (
           <div key={opt.id} className="relative flex-1">
             <button
-              onClick={() => toggleGender(opt.id as VocalGender)}
+              onClick={() => {
+                toggleGender(opt.id as VocalGender);
+                onHover({ id: opt.id, label: opt.label, description: opt.description });
+              }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
               onMouseLeave={() => onHover(null)}
               className={cn(
@@ -2670,8 +2687,11 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
           <div className="md:hidden">
             <button
-              onClick={() => onEnabledChange(!enabled)}
-              onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '템포를 무작위로 설정합니다.' })}
+              onClick={() => {
+                onEnabledChange(!enabled);
+                onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
+              }}
+              onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
@@ -2688,8 +2708,11 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
         <div className="hidden md:block">
           <button
-            onClick={() => onEnabledChange(!enabled)}
-            onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '템포를 무작위로 설정합니다.' })}
+            onClick={() => {
+              onEnabledChange(!enabled);
+              onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
+            }}
+            onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "px-6 py-3 rounded-xl text-base font-bold transition-all border flex items-center gap-2",

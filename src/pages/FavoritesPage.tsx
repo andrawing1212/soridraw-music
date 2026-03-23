@@ -86,6 +86,7 @@ export default function FavoritesPage({
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const placeholders = [
     "제목으로 검색해보세요...",
     "가사 내용으로 검색해보세요...",
@@ -439,17 +440,34 @@ ${song.prompt}
       {/* Search Bar & Bulk Actions */}
       <div className="max-w-2xl mx-auto mb-12 space-y-4">
         <div className="flex items-center gap-4">
-          <div className="relative flex-1 group">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+          <div className="relative flex-1 group overflow-hidden">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
               <Search className="w-4 h-4 text-gray-400 group-focus-within:text-brand-orange transition-colors" />
             </div>
             <input 
               type="text"
-              placeholder={placeholders[placeholderIndex]}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-700/80 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-gray-400"
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              className="w-full bg-zinc-700/80 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-brand-orange/50 transition-all"
             />
+            {!searchQuery && !isSearchFocused && (
+              <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={placeholderIndex}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.35 }}
+                    className="text-sm text-gray-400 whitespace-nowrap"
+                  >
+                    {placeholders[placeholderIndex]}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            )}
           </div>
           
           {/* View All (모아보기) Button */}
@@ -571,7 +589,7 @@ ${song.prompt}
                     </h3>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-gray-300 font-semibold opacity-100">
+                    <span className="text-[10px] text-gray-500 font-medium opacity-60">
                       {getRelativeTime(song.createdAt)}
                     </span>
                     <div className="flex items-center gap-1.5">

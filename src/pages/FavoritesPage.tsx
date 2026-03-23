@@ -680,7 +680,7 @@ ${song.prompt}
                   {/* Title Section */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">SONG INFO</h3>
+                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">SONG INFO-Title</h3>
                       {!isEditing && (
                         <button 
                           onClick={() => copyToClipboard(selectedSong.title, 'title')}

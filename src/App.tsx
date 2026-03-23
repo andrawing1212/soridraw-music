@@ -2080,9 +2080,9 @@ ${result.prompt}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ 
-              opacity: 1, 
-              scale: 1, 
-              y: isTooltipHovered ? -100 : 0,
+              opacity: isTooltipHovered ? 0.1 : 1, 
+              scale: isTooltipHovered ? 0.95 : 1, 
+              y: 0,
               x: '-50%'
             }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}

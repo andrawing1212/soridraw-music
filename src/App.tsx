@@ -758,6 +758,7 @@ function App() {
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const navigate = useNavigate();
+  const location = useLocation();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Real-time tempo calculation when in random mode
@@ -890,6 +891,19 @@ function App() {
     }
   };
 
+  // Reset state on navigation to Home
+  useEffect(() => {
+    if (location.pathname === '/') {
+      clearAll();
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname]);
+
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
   const [isMoodRandomized, setIsMoodRandomized] = useState(false);
@@ -944,29 +958,7 @@ function App() {
     }
   };
 
-  // Load history from localStorage
-  useEffect(() => {
-    const savedHistory = localStorage.getItem('soridraw_history');
-    if (savedHistory) {
-      try {
-        const parsed = JSON.parse(savedHistory);
-        setHistory(parsed);
-        if (parsed.length > 0) {
-          setResult(parsed[0]);
-          setHistoryIndex(0);
-        }
-      } catch (e) {
-        console.error('Failed to parse history', e);
-      }
-    }
-  }, []);
-
-  // Save history to localStorage
-  useEffect(() => {
-    if (history.length > 0) {
-      localStorage.setItem('soridraw_history', JSON.stringify(history));
-    }
-  }, [history]);
+  // History state is now purely in-memory and will reset on refresh as requested.
 
 
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme') => {
@@ -1126,17 +1118,21 @@ function App() {
   };
 
   const clearAll = () => {
-    setSelectedGenres(pinnedGenres);
-    if (!pinnedGenres.includes('kpop')) setKpopMode(0);
-    if (!pinnedGenres.includes('citypop')) setCitypopMode(0);
-    setSelectedMoods(pinnedMoods);
-    setSelectedThemes(pinnedThemes);
+    setPinnedGenres([]);
+    setPinnedMoods([]);
+    setPinnedThemes([]);
+    setSelectedGenres([]);
+    setKpopMode(0);
+    setCitypopMode(0);
+    setSelectedMoods([]);
+    setSelectedThemes([]);
     setIsGenreRandomized(false);
     setIsMoodRandomized(false);
     setIsThemeRandomized(false);
     setUserInput('');
-    // setResult(null); // Keep current song result visible
-    // setHistoryIndex(-1);
+    setResult(null);
+    setHistoryIndex(-1);
+    setHistory([]);
     setLyricsLength('normal');
     setDrumStyle('none');
     setSelectedGenders([]);
@@ -1148,7 +1144,6 @@ function App() {
   const deleteHistoryItem = (index: number) => {
     const newHistory = history.filter((_, i) => i !== index);
     setHistory(newHistory);
-    localStorage.setItem('soridraw_history', JSON.stringify(newHistory));
     
     if (newHistory.length === 0) {
       setResult(null);
@@ -1163,7 +1158,6 @@ function App() {
   const clearHistory = () => {
     if (window.confirm('모든 히스토리를 삭제하시겠습니까?')) {
       setHistory([]);
-      localStorage.removeItem('soridraw_history');
       setResult(null);
       setHistoryIndex(-1);
     }

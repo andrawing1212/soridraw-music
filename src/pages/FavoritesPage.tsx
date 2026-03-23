@@ -18,7 +18,11 @@ import {
   Lock,
   Unlock,
   Edit2,
-  Filter
+  Filter,
+  Link2,
+  Link2Off,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -61,6 +65,8 @@ export default function FavoritesPage({
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSyncEnabled, setIsSyncEnabled] = useState(false);
+  const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [editedTitle, setEditedTitle] = useState('');
   const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
   const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
@@ -594,138 +600,159 @@ ${song.prompt}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative w-full max-w-2xl bg-zinc-800 border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
             >
-              <div className="p-8 border-b border-white/10 bg-zinc-700/30 relative flex flex-col items-center text-center">
+              <div className="p-8 border-b border-white/10 bg-zinc-700/30 relative flex flex-col items-center">
                 <button 
                   onClick={() => setSelectedSong(null)} 
-                  className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/5 text-gray-400 transition-colors"
+                  className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/5 text-gray-400 transition-colors z-10"
                 >
                   <X className="w-6 h-6" />
                 </button>
 
-                <div className="w-full max-w-lg space-y-4">
+                <div className="w-full max-w-lg space-y-6">
+                  {/* Title Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">제목 Song Title</h3>
+                      {!isEditing && (
+                        <button 
+                          onClick={() => copyToClipboard(selectedSong.title, 'title')}
+                          onMouseEnter={() => onHover({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="p-2 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                        >
+                          {copiedType === 'title' ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6" />}
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <input 
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className="w-full bg-black/30 border border-brand-orange/30 rounded-xl px-4 py-3 text-white font-bold text-xl focus:outline-none"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <AnimatePresence mode="wait">
+                          {isTitleExpanded && (
+                            <motion.h2 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="text-[19px] font-bold text-white leading-tight text-left w-full overflow-hidden"
+                            >
+                              {selectedSong.title.includes(']') ? (
+                                <>
+                                  <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
+                                  <span>{selectedSong.title.split(']')[1].trim()}</span>
+                                </>
+                              ) : (
+                                selectedSong.title
+                              )}
+                            </motion.h2>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
                   {!isEditing && (
-                    <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center justify-center gap-4">
                       <button 
-                        onClick={() => copyToClipboard(selectedSong.title, 'title')}
-                        onMouseEnter={() => onHover({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                        onClick={() => handleToggleLock(selectedSong)}
+                        onMouseEnter={() => onHover({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                         onMouseLeave={() => {
                           onHover(null);
                           onLongPressEnd();
                         }}
-                        onTouchStart={() => onLongPressStart({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                        onTouchStart={() => onLongPressStart({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="p-2 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                        className={cn(
+                          "w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all",
+                          selectedSong.isLocked 
+                            ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
+                            : "bg-transparent text-white border-white hover:bg-white/10"
+                        )}
                       >
-                        {copiedType === 'title' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                        {selectedSong.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
                       </button>
-                      <div className="w-full">
-                        <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-1 text-left">제목 Song Title</h3>
-                        <h2 className="text-[19px] font-bold text-white leading-tight text-left">
-                          {selectedSong.title.includes(']') ? (
-                            <>
-                              <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
-                              <span>{selectedSong.title.split(']')[1].trim()}</span>
-                            </>
-                          ) : (
-                            selectedSong.title
-                          )}
-                        </h2>
-                      </div>
-                    </div>
-                  )}
-                  {isEditing && (
-                    <div className="w-full">
-                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-1 text-left">제목 Song Title</h3>
-                      <input 
-                        value={editedTitle}
-                        onChange={(e) => setEditedTitle(e.target.value)}
-                        className="w-full bg-black/30 border border-brand-orange/30 rounded-xl px-4 py-2 text-white font-bold text-xl focus:outline-none"
-                      />
+
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        onMouseEnter={() => onHover({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
+                        onMouseLeave={() => {
+                          onHover(null);
+                          onLongPressEnd();
+                        }}
+                        onTouchStart={() => onLongPressStart({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="px-6 py-3 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-sm font-bold border border-brand-orange/20"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        수정하기
+                      </button>
+
+                      <a 
+                        href="https://suno.com/create" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        onMouseEnter={() => onHover({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                        onMouseLeave={() => {
+                          onHover(null);
+                          onLongPressEnd();
+                        }}
+                        onTouchStart={() => onLongPressStart({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="w-12 h-12 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
+                      >
+                        SUNO
+                      </a>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-center gap-3">
-                    {isEditing ? (
-                      <>
-                        <button 
-                          onClick={handleSave}
-                          className="px-6 py-2.5 rounded-xl bg-brand-orange text-white text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
-                        >
-                          저장하기
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setIsEditing(false);
-                            // Reset draft to original song data
-                            setDrafts(prev => {
-                              const newDrafts = { ...prev };
-                              delete newDrafts[selectedSong.id];
-                              return newDrafts;
-                            });
-                            setEditedTitle(selectedSong.title);
-                            setEditedKoreanLyrics(selectedSong.lyrics.korean);
-                            setEditedEnglishLyrics(selectedSong.lyrics.english);
-                          }}
-                          className="px-6 py-2.5 rounded-xl bg-white/5 text-gray-400 text-sm font-bold hover:bg-white/10 transition-all"
-                        >
-                          취소
-                        </button>
-                      </>
-                    ) : (
-                      <div className="flex items-center justify-center gap-3 relative w-full">
-                        <button 
-                          onClick={() => handleToggleLock(selectedSong)}
-                          onMouseEnter={() => onHover({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className={cn(
-                            "absolute left-0 w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all",
-                            selectedSong.isLocked 
-                              ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
-                              : "bg-transparent text-white border-white hover:bg-white/10"
-                          )}
-                          title={selectedSong.isLocked ? "잠금 해제" : "잠금"}
-                        >
-                          {selectedSong.isLocked ? <Lock className="w-4.5 h-4.5" /> : <Unlock className="w-4.5 h-4.5" />}
-                        </button>
-                        <button 
-                          onClick={() => setIsEditing(true)}
-                          onMouseEnter={() => onHover({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="px-4 py-2 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-[11.5px] font-bold border border-brand-orange/20"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          수정하기
-                        </button>
-                        <a 
-                          href="https://suno.com/create" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          onMouseEnter={() => onHover({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="absolute right-0 w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
-                          title="Suno Create"
-                        >
-                          SUNO
-                        </a>
-                      </div>
-                    )}
-                  </div>
+                  {isEditing && (
+                    <div className="flex items-center justify-center gap-3">
+                      <button 
+                        onClick={handleSave}
+                        className="px-8 py-3 rounded-xl bg-brand-orange text-white text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
+                      >
+                        저장하기
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setIsEditing(false);
+                          setDrafts(prev => {
+                            const newDrafts = { ...prev };
+                            delete newDrafts[selectedSong.id];
+                            return newDrafts;
+                          });
+                          setEditedTitle(selectedSong.title);
+                          setEditedKoreanLyrics(selectedSong.lyrics.korean);
+                          setEditedEnglishLyrics(selectedSong.lyrics.english);
+                        }}
+                        className="px-8 py-3 rounded-xl bg-white/5 text-gray-400 text-sm font-bold hover:bg-white/10 transition-all"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {/* Expand Button at Bottom Center, overlapping border */}
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsTitleExpanded(!isTitleExpanded)}
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+                  >
+                    {isTitleExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+                )}
               </div>
 
               <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
@@ -758,7 +785,23 @@ ${song.prompt}
                 <div className="space-y-8">
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">한글버전 Lyrics</h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">한글버전 Lyrics</h3>
+                        {isEditing && (
+                          <button
+                            onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                            className={cn(
+                              "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all border",
+                              isSyncEnabled 
+                                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
+                                : "bg-white/5 text-gray-500 border-white/10"
+                            )}
+                          >
+                            {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
+                            한/영 연동 {isSyncEnabled ? 'ON' : 'OFF'}
+                          </button>
+                        )}
+                      </div>
                       {!isEditing && (
                         <button 
                           onClick={() => copyToClipboard(selectedSong.lyrics.korean, 'lyrics-korean')}
@@ -778,7 +821,11 @@ ${song.prompt}
                     {isEditing ? (
                       <textarea 
                         value={editedKoreanLyrics}
-                        onChange={(e) => setEditedKoreanLyrics(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditedKoreanLyrics(val);
+                          if (isSyncEnabled) setEditedEnglishLyrics(val);
+                        }}
                         className="w-full h-48 bg-black/30 border border-brand-orange/30 rounded-xl p-4 text-white text-sm focus:outline-none custom-scrollbar"
                       />
                     ) : (
@@ -789,7 +836,23 @@ ${song.prompt}
                   </div>
                   <div className="pt-8 border-t border-white/5">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">영어버전 Lyrics</h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">영어버전 Lyrics</h3>
+                        {isEditing && (
+                          <button
+                            onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                            className={cn(
+                              "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all border",
+                              isSyncEnabled 
+                                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
+                                : "bg-white/5 text-gray-500 border-white/10"
+                            )}
+                          >
+                            {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
+                            한/영 연동 {isSyncEnabled ? 'ON' : 'OFF'}
+                          </button>
+                        )}
+                      </div>
                       {!isEditing && (
                         <button 
                           onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-english')}
@@ -809,7 +872,11 @@ ${song.prompt}
                     {isEditing ? (
                       <textarea 
                         value={editedEnglishLyrics}
-                        onChange={(e) => setEditedEnglishLyrics(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditedEnglishLyrics(val);
+                          if (isSyncEnabled) setEditedKoreanLyrics(val);
+                        }}
                         className="w-full h-48 bg-black/30 border border-brand-orange/30 rounded-xl p-4 text-gray-400 text-sm focus:outline-none italic custom-scrollbar"
                       />
                     ) : (

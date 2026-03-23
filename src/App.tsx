@@ -755,6 +755,7 @@ function App() {
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const navigate = useNavigate();
@@ -782,23 +783,35 @@ function App() {
     };
     testConnection();
 
+    let unsubFavs: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      setIsAuthReady(true);
+      
+      if (unsubFavs) {
+        unsubFavs();
+        unsubFavs = null;
+      }
+
       if (currentUser) {
         // Fetch favorites for the user
         const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
-        const unsubFavs = onSnapshot(q, (snapshot) => {
+        unsubFavs = onSnapshot(q, (snapshot) => {
           const favs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setFavorites(favs);
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, 'favorites');
         });
-        return () => unsubFavs();
       } else {
         setFavorites([]);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (unsubFavs) unsubFavs();
+    };
   }, []);
 
   const showToast = (message: string) => {
@@ -2056,7 +2069,14 @@ ${result.prompt}
         <Route
           path="/history"
           element={
-            user ? (
+            !isAuthReady ? (
+              <div className="min-h-screen flex items-center justify-center text-white bg-[#0f0f0f]">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
+                  <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
+                </div>
+              </div>
+            ) : user ? (
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <FavoritesPageLazy
                   favorites={favorites}

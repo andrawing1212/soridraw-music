@@ -571,7 +571,7 @@ ${song.prompt}
                     </h3>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-gray-500 font-medium opacity-60">
+                    <span className="text-[10px] text-gray-300 font-semibold opacity-100">
                       {getRelativeTime(song.createdAt)}
                     </span>
                     <div className="flex items-center gap-1.5">

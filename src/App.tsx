@@ -1736,7 +1736,7 @@ ${result.prompt}
               onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
               onTouchEnd={handleLongPressEnd}
               className={cn(
-                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[30px] md:text-[38px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[28px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
                 isGenerating 
                   ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
                   : "music-waves shadow-brand-orange/20 hover:brightness-110"

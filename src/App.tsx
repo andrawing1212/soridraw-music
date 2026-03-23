@@ -1233,6 +1233,12 @@ function App() {
   };
 
   const handleGenerate = async () => {
+    if (!user) {
+      showToast('로그인이 필요합니다.');
+      handleLogin();
+      return;
+    }
+
     if (isGenerating) {
       // Cancel logic
       if (abortControllerRef.current) {
@@ -1758,7 +1764,7 @@ ${result.prompt}
 
         {/* Result Area */}
         <AnimatePresence>
-          {result && (
+          {user && result && (
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2056,20 +2062,24 @@ ${result.prompt}
         <Route
           path="/history"
           element={
-            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-              <FavoritesPageLazy
-                favorites={favorites}
-                toggleFavorite={toggleFavorite}
-                updateFavorite={updateFavorite}
-                clearAllFavorites={clearAllFavorites}
-                unlockAllFavorites={unlockAllFavorites}
-                user={user}
-                onHover={setHoveredItem}
-                hoveredItem={hoveredItem}
-                onLongPressStart={handleLongPressStart}
-                onLongPressEnd={handleLongPressEnd}
-              />
-            </Suspense>
+            user ? (
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <FavoritesPageLazy
+                  favorites={favorites}
+                  toggleFavorite={toggleFavorite}
+                  updateFavorite={updateFavorite}
+                  clearAllFavorites={clearAllFavorites}
+                  unlockAllFavorites={unlockAllFavorites}
+                  user={user}
+                  onHover={setHoveredItem}
+                  hoveredItem={hoveredItem}
+                  onLongPressStart={handleLongPressStart}
+                  onLongPressEnd={handleLongPressEnd}
+                />
+              </Suspense>
+            ) : (
+              <Navigate to="/" replace />
+            )
           }
         />
         <Route path="/archive" element={<Navigate to="/history" replace />} />

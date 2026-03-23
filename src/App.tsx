@@ -713,6 +713,7 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
+  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(false);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
@@ -740,7 +741,14 @@ function App() {
   }, [selectedGenres, selectedMoods, selectedThemes]);
 
   useEffect(() => {
-    // Tooltip auto-hide timer removed as per user request to keep it visible while hovering
+    if (hoveredItem) {
+      const timer = setTimeout(() => {
+        setHoveredItem(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    } else {
+      setIsTooltipHovered(false);
+    }
   }, [hoveredItem]);
 
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -2071,12 +2079,19 @@ ${result.prompt}
         {hoveredItem && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+            animate={{ 
+              opacity: 1, 
+              scale: 1, 
+              y: isTooltipHovered ? -100 : 0,
+              x: '-50%'
+            }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.2)] max-w-[200px] text-center select-none transition-opacity hover:opacity-20 cursor-default"
+            onMouseEnter={() => setIsTooltipHovered(true)}
+            onMouseLeave={() => setIsTooltipHovered(false)}
+            className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"
           >
-            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight pointer-events-none">{hoveredItem.label}</p>
-            <p className="text-[11px] text-gray-300 font-medium leading-relaxed pointer-events-none">{hoveredItem.description}</p>
+            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
+            <p className="text-[11px] text-gray-300 font-medium leading-relaxed">{hoveredItem.description}</p>
           </motion.div>
         )}
       </AnimatePresence>

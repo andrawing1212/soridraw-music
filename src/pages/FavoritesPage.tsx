@@ -664,13 +664,6 @@ ${song.prompt}
               <div className="p-8 border-b border-white/10 bg-zinc-700/30 relative flex flex-col items-center">
                 <button 
                   onClick={() => setSelectedSong(null)} 
-                  onMouseEnter={() => onHover({ id: 'popup-close', label: '닫기', description: '팝업창을 닫습니다.' })}
-                  onMouseLeave={() => {
-                    onHover(null);
-                    onLongPressEnd();
-                  }}
-                  onTouchStart={() => onLongPressStart({ id: 'popup-close', label: '닫기', description: '팝업창을 닫습니다.' })}
-                  onTouchEnd={onLongPressEnd}
                   className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/5 text-gray-400 transition-colors z-10"
                 >
                   <X className="w-6 h-6" />
@@ -825,13 +818,6 @@ ${song.prompt}
                       <button 
                         onClick={handleSave}
                         disabled={isTranslating}
-                        onMouseEnter={() => onHover({ id: 'popup-save', label: '저장하기', description: '변경사항을 저장합니다.' })}
-                        onMouseLeave={() => {
-                          onHover(null);
-                          onLongPressEnd();
-                        }}
-                        onTouchStart={() => onLongPressStart({ id: 'popup-save', label: '저장하기', description: '변경사항을 저장합니다.' })}
-                        onTouchEnd={onLongPressEnd}
                         className={cn(
                           "px-8 py-3 rounded-xl bg-brand-orange text-white text-sm font-bold transition-all shadow-lg shadow-brand-orange/20 flex items-center gap-2",
                           isTranslating ? "opacity-70 cursor-wait" : "hover:brightness-110"
@@ -856,13 +842,6 @@ ${song.prompt}
                           setEditedKoreanLyrics(selectedSong.lyrics.korean);
                           setEditedEnglishLyrics(selectedSong.lyrics.english);
                         }}
-                        onMouseEnter={() => onHover({ id: 'popup-cancel', label: '취소', description: '편집을 취소하고 원래대로 돌아갑니다.' })}
-                        onMouseLeave={() => {
-                          onHover(null);
-                          onLongPressEnd();
-                        }}
-                        onTouchStart={() => onLongPressStart({ id: 'popup-cancel', label: '취소', description: '편집을 취소하고 원래대로 돌아갑니다.' })}
-                        onTouchEnd={onLongPressEnd}
                         className="px-8 py-3 rounded-xl bg-white/5 text-gray-400 text-sm font-bold hover:bg-white/10 transition-all"
                       >
                         취소
@@ -875,13 +854,6 @@ ${song.prompt}
                 {!isEditing && (
                   <button
                     onClick={() => setIsTitleExpanded(!isTitleExpanded)}
-                    onMouseEnter={() => onHover({ id: 'popup-expand', label: isTitleExpanded ? '축소' : '확장', description: isTitleExpanded ? '제목 영역을 축소합니다.' : '제목 영역을 확장하여 전체 내용을 확인합니다.' })}
-                    onMouseLeave={() => {
-                      onHover(null);
-                      onLongPressEnd();
-                    }}
-                    onTouchStart={() => onLongPressStart({ id: 'popup-expand', label: isTitleExpanded ? '축소' : '확장', description: isTitleExpanded ? '제목 영역을 축소합니다.' : '제목 영역을 확장하여 전체 내용을 확인합니다.' })}
-                    onTouchEnd={onLongPressEnd}
                     className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-zinc-800 border border-white/15 flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
                   >
                     {isTitleExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}

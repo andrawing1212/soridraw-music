@@ -87,6 +87,9 @@ export default function FavoritesPage({
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
+  const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const placeholders = [
     "제목으로 검색해보세요...",
     "가사 내용으로 검색해보세요...",
@@ -99,6 +102,10 @@ export default function FavoritesPage({
       setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
     }, 4000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    return () => clearSelectionLongPressTimer();
   }, []);
 
   const navigate = useNavigate();
@@ -240,6 +247,65 @@ export default function FavoritesPage({
       unlockAllFavorites();
       setConfirmUnlockAll(0);
     }
+  };
+
+
+  const clearSelectionLongPressTimer = () => {
+    if (selectionLongPressTimerRef.current) {
+      clearTimeout(selectionLongPressTimerRef.current);
+      selectionLongPressTimerRef.current = null;
+    }
+  };
+
+  const toggleSongSelection = (songId: string) => {
+    setSelectedSongIds(prev =>
+      prev.includes(songId) ? prev.filter(id => id !== songId) : [...prev, songId]
+    );
+  };
+
+  const handleCardLongPressStart = (song: any) => {
+    if (isSelectionMode) return;
+    clearSelectionLongPressTimer();
+    selectionLongPressTimerRef.current = setTimeout(() => {
+      setIsSelectionMode(true);
+      setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
+    }, 2000);
+  };
+
+  const handleCardLongPressEnd = () => {
+    clearSelectionLongPressTimer();
+  };
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedSongIds([]);
+    clearSelectionLongPressTimer();
+  };
+
+  const handleSelectedLock = async () => {
+    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const unlockeds = selectedSongs.filter(song => !song.isLocked);
+
+    if (unlockeds.length === 0) {
+      exitSelectionMode();
+      return;
+    }
+
+    await Promise.all(unlockeds.map(song => updateFavorite(song.id, { isLocked: true })));
+    exitSelectionMode();
+  };
+
+  const handleSelectedDelete = async () => {
+    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
+
+    if (deletableSongs.length === 0) {
+      exitSelectionMode();
+      return;
+    }
+
+    await Promise.all(deletableSongs.map(song => Promise.resolve(toggleFavorite(song))));
+    exitSelectionMode();
   };
 
   const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
@@ -518,35 +584,72 @@ ${song.prompt}
         </div>
 
         {favorites.length > 0 && (
-          <div className="flex justify-center gap-3">
-            <button
-              onClick={handleBulkUnlock}
-              onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className={cn(
-                "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                confirmUnlockAll === 1 
-                  ? "bg-brand-orange text-white animate-pulse" 
-                  : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
-              )}
-            >
-              <Unlock className="w-3.5 h-3.5" />
-              {confirmUnlockAll === 1 ? "한 번 더 클릭하여 잠금 해제" : "잠금 해제"}
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className={cn(
-                "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                confirmDeleteAll === 1 
-                  ? "bg-red-500 text-white animate-pulse" 
-                  : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-              )}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              {confirmDeleteAll === 1 ? "한 번 더 클릭하여 전체 삭제" : "전체 삭제"}
-            </button>
+          <div className="flex justify-center gap-3 flex-wrap">
+            {isSelectionMode ? (
+              <>
+                <div className="px-4 py-2 rounded-xl bg-brand-orange/10 text-brand-orange text-[11px] font-bold border border-brand-orange/20">
+                  {selectedSongIds.length}곡 선택됨
+                </div>
+                <button
+                  onClick={handleSelectedLock}
+                  onMouseEnter={() => onHover({ id: 'selected-lock', label: '선택 잠금', description: '선택한 곡을 한 번에 잠급니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  선택 잠금
+                </button>
+                <button
+                  onClick={handleSelectedDelete}
+                  onMouseEnter={() => onHover({ id: 'selected-delete', label: '선택 삭제', description: '선택한 곡 중 잠기지 않은 곡을 한 번에 삭제합니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  선택 삭제
+                </button>
+                <button
+                  onClick={exitSelectionMode}
+                  onMouseEnter={() => onHover({ id: 'selection-exit', label: '선택 모드 해제', description: '선택 모드를 종료합니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-zinc-800 text-gray-300 hover:bg-zinc-700 hover:text-white border border-white/10"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  선택 해제
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleBulkUnlock}
+                  onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                    confirmUnlockAll === 1 
+                      ? "bg-brand-orange text-white animate-pulse" 
+                      : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  {confirmUnlockAll === 1 ? "한 번 더 클릭하여 잠금 해제" : "잠금 해제"}
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                    confirmDeleteAll === 1 
+                      ? "bg-red-500 text-white animate-pulse" 
+                      : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                  )}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {confirmDeleteAll === 1 ? "한 번 더 클릭하여 전체 삭제" : "전체 삭제"}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -567,13 +670,32 @@ ${song.prompt}
       ) : (
         <div className="space-y-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredFavorites.slice(0, visibleCount).map((song) => (
+            {filteredFavorites.slice(0, visibleCount).map((song) => {
+              const isSelected = selectedSongIds.includes(song.id);
+
+              return (
               <motion.div
                 key={song.id}
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-zinc-800/50 border border-white/15 rounded-3xl p-6 hover:bg-zinc-700/50 transition-all group flex flex-col h-full"
+                onMouseDown={() => handleCardLongPressStart(song)}
+                onMouseUp={handleCardLongPressEnd}
+                onMouseLeave={handleCardLongPressEnd}
+                onTouchStart={() => handleCardLongPressStart(song)}
+                onTouchEnd={handleCardLongPressEnd}
+                onTouchCancel={handleCardLongPressEnd}
+                onClick={() => {
+                  if (isSelectionMode) toggleSongSelection(song.id);
+                }}
+                className={cn(
+                  "rounded-3xl p-6 transition-all group flex flex-col h-full border",
+                  isSelectionMode
+                    ? isSelected
+                      ? "bg-brand-orange/10 border-brand-orange/50 ring-1 ring-brand-orange/40"
+                      : "bg-zinc-800/50 border-white/15 hover:bg-zinc-700/50 cursor-pointer"
+                    : "bg-zinc-800/50 border-white/15 hover:bg-zinc-700/50"
+                )}
               >
                 <div className="flex justify-between items-start mb-4 gap-4">
                   <div className="flex-1 min-w-0">
@@ -589,36 +711,53 @@ ${song.prompt}
                     </h3>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-gray-500 font-medium opacity-60">
+                    <span className="text-[10px] text-gray-300 font-semibold opacity-100">
                       {getRelativeTime(song.createdAt)}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      <button 
-                        onClick={() => handleToggleLock(song)}
-                        onMouseEnter={() => onHover({ id: `lock-${song.id}`, label: song.isLocked ? '잠금 해제' : '잠금', description: song.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                        onMouseLeave={() => onHover(null)}
-                        className={cn(
-                          "p-2 rounded-xl transition-all",
-                          song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
-                        )}
-                      >
-                        {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                      </button>
-                      <button 
-                        onClick={() => toggleFavorite(song)}
-                        disabled={song.isLocked}
-                        onMouseEnter={() => onHover({ id: `delete-${song.id}`, label: '삭제', description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : '이 곡을 목록에서 삭제합니다.' })}
-                        onMouseLeave={() => onHover(null)}
-                        className={cn(
-                          "p-2 rounded-xl transition-all",
-                          song.isLocked 
-                            ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
-                            : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                        )}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {isSelectionMode ? (
+                      <div className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold border",
+                        isSelected
+                          ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30"
+                          : "bg-white/5 text-gray-400 border-white/10"
+                      )}>
+                        {isSelected ? "선택됨" : "선택"}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleLock(song);
+                          }}
+                          onMouseEnter={() => onHover({ id: `lock-${song.id}`, label: song.isLocked ? '잠금 해제' : '잠금', description: song.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                          onMouseLeave={() => onHover(null)}
+                          className={cn(
+                            "p-2 rounded-xl transition-all",
+                            song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
+                          )}
+                        >
+                          {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(song);
+                          }}
+                          disabled={song.isLocked}
+                          onMouseEnter={() => onHover({ id: `delete-${song.id}`, label: '삭제', description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : '이 곡을 목록에서 삭제합니다.' })}
+                          onMouseLeave={() => onHover(null)}
+                          className={cn(
+                            "p-2 rounded-xl transition-all",
+                            song.isLocked 
+                              ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
+                              : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                          )}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -633,40 +772,66 @@ ${song.prompt}
                   </div>
 
                   <div className="flex gap-2 mt-auto">
-                    <button 
-                      onClick={() => setSelectedSong(song)}
-                      onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
-                      onMouseLeave={() => {
-                        onHover(null);
-                        onLongPressEnd();
-                      }}
-                      onTouchStart={() => onLongPressStart({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-sm hover:bg-white/10 transition-all"
-                    >
-                      상세보기
-                    </button>
-                    <button 
-                      onClick={() => copyAll(song)}
-                      onMouseEnter={() => onHover({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
-                      onMouseLeave={() => {
-                        onHover(null);
-                        onLongPressEnd();
-                      }}
-                      onTouchStart={() => onLongPressStart({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center group/copy border border-brand-orange/20"
-                    >
-                      {copiedType === `all-${song.id}` ? (
-                        <Check className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Copy className="w-4 h-4 group-hover/copy:scale-110 transition-transform" />
-                      )}
-                    </button>
+                    {isSelectionMode ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSongSelection(song.id);
+                        }}
+                        className={cn(
+                          "w-full py-3 rounded-xl font-bold text-sm transition-all border",
+                          isSelected
+                            ? "bg-brand-orange/15 text-brand-orange border-brand-orange/30"
+                            : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                        )}
+                      >
+                        {isSelected ? "선택 해제" : "곡 선택"}
+                      </button>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSong(song);
+                          }}
+                          onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-sm hover:bg-white/10 transition-all"
+                        >
+                          상세보기
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyAll(song);
+                          }}
+                          onMouseEnter={() => onHover({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center group/copy border border-brand-orange/20"
+                        >
+                          {copiedType === `all-${song.id}` ? (
+                            <Check className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4 group-hover/copy:scale-110 transition-transform" />
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </motion.div>
-            ))}
+              );
+            })}
           </div>
 
           {visibleCount < filteredFavorites.length && (

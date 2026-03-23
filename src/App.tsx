@@ -713,6 +713,7 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
+  const [tooltipOffset, setTooltipOffset] = useState({ x: 0, y: 0 });
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(false);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
@@ -740,12 +741,7 @@ function App() {
   }, [selectedGenres, selectedMoods, selectedThemes]);
 
   useEffect(() => {
-    if (hoveredItem) {
-      const timer = setTimeout(() => {
-        setHoveredItem(null);
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
+    // Tooltip auto-hide timer removed as per user request to keep it visible while hovering
   }, [hoveredItem]);
 
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -2075,13 +2071,28 @@ ${result.prompt}
       <AnimatePresence>
         {hoveredItem && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-none max-w-[200px] text-center"
+            drag
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              setTooltipOffset(prev => ({
+                x: prev.x + info.offset.x,
+                y: prev.y + info.offset.y
+              }));
+            }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ 
+              opacity: 1, 
+              scale: 1,
+              left: `calc(50% + ${tooltipOffset.x}px)`,
+              bottom: `calc(40px - ${tooltipOffset.y}px)`,
+              x: '-50%'
+            }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
+            className="fixed z-[100] px-5 py-3 rounded-2xl bg-zinc-900/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.2)] cursor-grab max-w-[200px] text-center select-none"
           >
-            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
-            <p className="text-[11px] text-gray-300 font-medium leading-relaxed">{hoveredItem.description}</p>
+            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight pointer-events-none">{hoveredItem.label}</p>
+            <p className="text-[11px] text-gray-300 font-medium leading-relaxed pointer-events-none">{hoveredItem.description}</p>
           </motion.div>
         )}
       </AnimatePresence>

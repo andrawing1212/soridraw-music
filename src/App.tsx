@@ -762,6 +762,19 @@ function App() {
   const location = useLocation();
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const hasInitializedHomeRef = useRef(false);
+
+  const getHistoryStorageKey = (uid: string) => `soridraw_history_${uid}`;
+
+  type PersistedHistory = {
+    history: SongResult[];
+    historyIndex: number;
+  };
+
+  type ClearAllOptions = {
+    preserveHistory?: boolean;
+  };
+
   // Real-time tempo calculation when in random mode
   useEffect(() => {
     if (tempoEnabled && (selectedGenres.length > 0 || selectedMoods.length > 0)) {
@@ -904,12 +917,18 @@ function App() {
     }
   };
 
-  // Reset state on navigation to Home
+  // Reset filters on navigation to Home, but preserve generated song history
   useEffect(() => {
-    if (location.pathname === '/') {
-      clearAll();
+    if (location.pathname !== '/') return;
+
+    if (!hasInitializedHomeRef.current) {
+      hasInitializedHomeRef.current = true;
       window.scrollTo(0, 0);
+      return;
     }
+
+    clearAll({ preserveHistory: true });
+    window.scrollTo(0, 0);
   }, [location.pathname]);
 
   // Scroll to top on mount
@@ -965,13 +984,73 @@ function App() {
 
   const handleLogout = async () => {
     try {
+      setHistory([]);
+      setResult(null);
+      setHistoryIndex(-1);
       await signOut(auth);
     } catch (error) {
       console.error("Logout Error:", error);
     }
   };
 
-  // History state is now purely in-memory and will reset on refresh as requested.
+  // History state is now persisted per logged-in user.
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    if (!user) {
+      setHistory([]);
+      setResult(null);
+      setHistoryIndex(-1);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(getHistoryStorageKey(user.uid));
+
+      if (!raw) {
+        setHistory([]);
+        setResult(null);
+        setHistoryIndex(-1);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as PersistedHistory;
+      const safeHistory = Array.isArray(parsed?.history) ? parsed.history : [];
+      const safeIndex =
+        typeof parsed?.historyIndex === 'number'
+          ? parsed.historyIndex
+          : safeHistory.length > 0
+            ? 0
+            : -1;
+
+      setHistory(safeHistory);
+      setHistoryIndex(safeIndex);
+      setResult(safeIndex >= 0 ? safeHistory[safeIndex] ?? null : null);
+    } catch (error) {
+      console.error('Failed to restore history:', error);
+      setHistory([]);
+      setResult(null);
+      setHistoryIndex(-1);
+    }
+  }, [user, isAuthReady]);
+
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
+
+    try {
+      const payload: PersistedHistory = {
+        history,
+        historyIndex,
+      };
+
+      localStorage.setItem(
+        getHistoryStorageKey(user.uid),
+        JSON.stringify(payload)
+      );
+    } catch (error) {
+      console.error('Failed to persist history:', error);
+    }
+  }, [history, historyIndex, user, isAuthReady]);
 
 
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme') => {
@@ -1130,28 +1209,51 @@ function App() {
     }
   };
 
-  const clearAll = () => {
+  const clearAll = (options: ClearAllOptions = {}) => {
+    const { preserveHistory = false } = options;
+
     setPinnedGenres([]);
     setPinnedMoods([]);
     setPinnedThemes([]);
+
     setSelectedGenres([]);
     setKpopMode(0);
     setCitypopMode(0);
     setSelectedMoods([]);
     setSelectedThemes([]);
+
     setIsGenreRandomized(false);
     setIsMoodRandomized(false);
     setIsThemeRandomized(false);
+
     setUserInput('');
-    setResult(null);
-    setHistoryIndex(-1);
-    setHistory([]);
     setLyricsLength('normal');
     setDrumStyle('none');
     setSelectedGenders([]);
+
     setTempoEnabled(true);
     setMinBPM(90);
     setMaxBPM(110);
+
+    if (!preserveHistory) {
+      setResult(null);
+      setHistoryIndex(-1);
+      setHistory([]);
+
+      if (user) {
+        try {
+          localStorage.removeItem(getHistoryStorageKey(user.uid));
+        } catch (error) {
+          console.error('Failed to clear persisted history:', error);
+        }
+      }
+    } else {
+      setResult(prev => {
+        if (history.length === 0) return null;
+        if (historyIndex >= 0 && history[historyIndex]) return history[historyIndex];
+        return history[0] ?? prev;
+      });
+    }
   };
 
   const deleteHistoryItem = (index: number) => {
@@ -1757,8 +1859,8 @@ ${result.prompt}
 
             <div className="relative flex-shrink-0">
               <button
-                onClick={clearAll}
-                onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
+                onClick={() => clearAll({ preserveHistory: true })}
+                onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
                 className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2"
               >

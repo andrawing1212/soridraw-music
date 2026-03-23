@@ -322,6 +322,24 @@ ${song.prompt}
     );
   }
 
+  const getRelativeTime = (timestamp: any) => {
+    if (!timestamp) return '';
+    const now = new Date();
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return '방금 전';
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}시간 전`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) return `${diffInDays}일 전`;
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths < 12) return `${diffInMonths}달 전`;
+    return `${Math.floor(diffInMonths / 12)}년 전`;
+  };
+
   const filteredFavorites = favorites.filter(song => 
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -539,8 +557,8 @@ ${song.prompt}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-zinc-800/50 border border-white/15 rounded-3xl p-6 hover:bg-zinc-700/50 transition-all group flex flex-col h-full"
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
+                <div className="flex justify-between items-start mb-4 gap-4">
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-[14.4px] font-bold text-white leading-tight">
                       {song.title.includes(']') ? (
                         <>
@@ -552,32 +570,37 @@ ${song.prompt}
                       )}
                     </h3>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => handleToggleLock(song)}
-                      onMouseEnter={() => onHover({ id: `lock-${song.id}`, label: song.isLocked ? '잠금 해제' : '잠금', description: song.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                      onMouseLeave={() => onHover(null)}
-                      className={cn(
-                        "p-2 rounded-xl transition-all",
-                        song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
-                      )}
-                    >
-                      {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                    </button>
-                    <button 
-                      onClick={() => toggleFavorite(song)}
-                      disabled={song.isLocked}
-                      onMouseEnter={() => onHover({ id: `delete-${song.id}`, label: '삭제', description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : '이 곡을 목록에서 삭제합니다.' })}
-                      onMouseLeave={() => onHover(null)}
-                      className={cn(
-                        "p-2 rounded-xl transition-all",
-                        song.isLocked 
-                          ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
-                          : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                      )}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-gray-500 font-medium opacity-60">
+                      {getRelativeTime(song.createdAt)}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        onClick={() => handleToggleLock(song)}
+                        onMouseEnter={() => onHover({ id: `lock-${song.id}`, label: song.isLocked ? '잠금 해제' : '잠금', description: song.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                        onMouseLeave={() => onHover(null)}
+                        className={cn(
+                          "p-2 rounded-xl transition-all",
+                          song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500 hover:bg-white/10"
+                        )}
+                      >
+                        {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                      </button>
+                      <button 
+                        onClick={() => toggleFavorite(song)}
+                        disabled={song.isLocked}
+                        onMouseEnter={() => onHover({ id: `delete-${song.id}`, label: '삭제', description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : '이 곡을 목록에서 삭제합니다.' })}
+                        onMouseLeave={() => onHover(null)}
+                        className={cn(
+                          "p-2 rounded-xl transition-all",
+                          song.isLocked 
+                            ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
+                            : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                        )}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 

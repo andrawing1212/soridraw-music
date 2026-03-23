@@ -135,3 +135,30 @@ export async function generateSong(
   const result = JSON.parse(response.text || "{}");
   return result as SongResult;
 }
+
+export async function translateLyrics(
+  lyrics: string,
+  targetLanguage: 'korean' | 'english'
+): Promise<string> {
+  const model = "gemini-3-flash-preview";
+  const systemInstruction = `
+    You are a professional lyricist and translator.
+    Your task is to translate the provided lyrics into ${targetLanguage}.
+    
+    CRITICAL: 
+    - Maintain the original structure, line breaks, and section markers (e.g., [Verse 1], [Chorus]).
+    - Do NOT translate literally. Capture the lyrical and poetic essence.
+    - The translated lyrics should feel natural and emotionally resonant in ${targetLanguage}.
+    - Return ONLY the translated lyrics text.
+  `;
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: lyrics,
+    config: {
+      systemInstruction,
+    }
+  });
+
+  return response.text || "";
+}

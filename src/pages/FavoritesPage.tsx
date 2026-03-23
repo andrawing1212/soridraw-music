@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { translateLyrics } from '../services/geminiService';
 import {
   Music,
   Copy,
@@ -66,10 +67,21 @@ export default function FavoritesPage({
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [originalLyricsKo, setOriginalLyricsKo] = useState('');
+  const [originalLyricsEn, setOriginalLyricsEn] = useState('');
+  const [originalTitle, setOriginalTitle] = useState('');
+  const popupOpenedRef = useRef(false);
   const [isTitleExpanded, setIsTitleExpanded] = useState(true);
   const [editedTitle, setEditedTitle] = useState('');
   const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
   const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
+
+  const isModified = selectedSong && (
+    editedTitle !== originalTitle ||
+    editedKoreanLyrics !== originalLyricsKo ||
+    editedEnglishLyrics !== originalLyricsEn
+  );
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
@@ -92,6 +104,14 @@ export default function FavoritesPage({
 
   useEffect(() => {
     if (selectedSong) {
+      // Set original lyrics when a song is selected (only if not already set for this song)
+      if (!popupOpenedRef.current) {
+        setOriginalLyricsKo(selectedSong.lyrics.korean);
+        setOriginalLyricsEn(selectedSong.lyrics.english);
+        setOriginalTitle(selectedSong.title);
+        popupOpenedRef.current = true;
+      }
+
       const draft = drafts[selectedSong.id];
       if (draft) {
         setEditedTitle(draft.title);
@@ -104,6 +124,13 @@ export default function FavoritesPage({
         setEditedEnglishLyrics(selectedSong.lyrics.english);
         setIsEditing(false);
       }
+      setIsSyncEnabled(false);
+    } else {
+      setOriginalLyricsKo('');
+      setOriginalLyricsEn('');
+      setOriginalTitle('');
+      popupOpenedRef.current = false;
+      setIsSyncEnabled(false);
     }
   }, [selectedSong]);
 
@@ -124,12 +151,37 @@ export default function FavoritesPage({
 
   const handleSave = async () => {
     if (!selectedSong) return;
+    
+    let finalKorean = editedKoreanLyrics;
+    let finalEnglish = editedEnglishLyrics;
+
+    if (isSyncEnabled) {
+      setIsTranslating(true);
+      try {
+        const koreanChanged = editedKoreanLyrics !== selectedSong.lyrics.korean;
+        const englishChanged = editedEnglishLyrics !== selectedSong.lyrics.english;
+
+        if (koreanChanged && !englishChanged) {
+          finalEnglish = await translateLyrics(editedKoreanLyrics, 'english');
+        } else if (englishChanged && !koreanChanged) {
+          finalKorean = await translateLyrics(editedEnglishLyrics, 'korean');
+        } else if (koreanChanged && englishChanged) {
+          // Both changed, prioritize Korean for translation
+          finalEnglish = await translateLyrics(editedKoreanLyrics, 'english');
+        }
+      } catch (error) {
+        console.error("Translation failed:", error);
+      } finally {
+        setIsTranslating(false);
+      }
+    }
+
     await updateFavorite(selectedSong.id, {
       title: editedTitle,
       lyrics: {
         ...selectedSong.lyrics,
-        korean: editedKoreanLyrics,
-        english: editedEnglishLyrics
+        korean: finalKorean,
+        english: finalEnglish
       }
     });
     
@@ -145,11 +197,20 @@ export default function FavoritesPage({
       title: editedTitle,
       lyrics: {
         ...selectedSong.lyrics,
-        korean: editedKoreanLyrics,
-        english: editedEnglishLyrics
+        korean: finalKorean,
+        english: finalEnglish
       }
     });
     setIsEditing(false);
+    setIsSyncEnabled(false);
+  };
+
+  const handleRestoreOriginal = () => {
+    if (!originalLyricsKo && !originalLyricsEn) return;
+    setEditedKoreanLyrics(originalLyricsKo);
+    setEditedEnglishLyrics(originalLyricsEn);
+    setEditedTitle(originalTitle);
+    setIsEditing(true);
   };
 
   const handleToggleLock = async (song: any) => {
@@ -684,7 +745,10 @@ ${song.prompt}
                       </button>
 
                       <button 
-                        onClick={() => setIsEditing(true)}
+                        onClick={() => {
+                          setIsEditing(true);
+                          setIsSyncEnabled(false);
+                        }}
                         onMouseEnter={() => onHover({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
                         onMouseLeave={() => {
                           onHover(null);
@@ -697,6 +761,23 @@ ${song.prompt}
                         <Edit2 className="w-4 h-4" />
                         수정하기
                       </button>
+
+                      {isModified && (
+                        <button 
+                          onClick={handleRestoreOriginal}
+                          onMouseEnter={() => onHover({ id: 'popup-restore', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-restore', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="px-6 py-3 rounded-2xl bg-zinc-800 text-gray-400 hover:bg-zinc-700 hover:text-white transition-all flex items-center gap-2 text-sm font-bold border border-white/10"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          원본 복원
+                        </button>
+                      )}
 
                       <a 
                         href="https://suno.com/create" 
@@ -718,11 +799,36 @@ ${song.prompt}
 
                   {isEditing && (
                     <div className="flex items-center justify-center gap-3">
+                      {isModified && (
+                        <button 
+                          onClick={handleRestoreOriginal}
+                          onMouseEnter={() => onHover({ id: 'popup-restore-edit', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-restore-edit', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="px-6 py-3 rounded-xl bg-zinc-800 text-gray-400 hover:bg-zinc-700 hover:text-white transition-all flex items-center gap-2 text-sm font-bold border border-white/10"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          원본 복원
+                        </button>
+                      )}
                       <button 
                         onClick={handleSave}
-                        className="px-8 py-3 rounded-xl bg-brand-orange text-white text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
+                        disabled={isTranslating}
+                        className={cn(
+                          "px-8 py-3 rounded-xl bg-brand-orange text-white text-sm font-bold transition-all shadow-lg shadow-brand-orange/20 flex items-center gap-2",
+                          isTranslating ? "opacity-70 cursor-wait" : "hover:brightness-110"
+                        )}
                       >
-                        저장하기
+                        {isTranslating ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            번역 중...
+                          </>
+                        ) : '저장하기'}
                       </button>
                       <button 
                         onClick={() => {
@@ -790,6 +896,13 @@ ${song.prompt}
                         {isEditing && (
                           <button
                             onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                            onMouseEnter={() => onHover({ id: 'sync-info-ko', label: '한/영 연동', description: 'ON 상태에서 저장하면, 마지막으로 수정한 언어를 기준으로 반대 언어 가사를 자동 번역하여 함께 저장합니다.' })}
+                            onMouseLeave={() => {
+                              onHover(null);
+                              onLongPressEnd();
+                            }}
+                            onTouchStart={() => onLongPressStart({ id: 'sync-info-ko', label: '한/영 연동', description: 'ON 상태에서 저장하면, 마지막으로 수정한 언어를 기준으로 반대 언어 가사를 자동 번역하여 함께 저장합니다.' })}
+                            onTouchEnd={onLongPressEnd}
                             className={cn(
                               "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all border",
                               isSyncEnabled 
@@ -821,15 +934,14 @@ ${song.prompt}
                     {isEditing ? (
                       <textarea 
                         value={editedKoreanLyrics}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditedKoreanLyrics(val);
-                          if (isSyncEnabled) setEditedEnglishLyrics(val);
-                        }}
+                        onChange={(e) => setEditedKoreanLyrics(e.target.value)}
                         className="w-full h-48 bg-black/30 border border-brand-orange/30 rounded-xl p-4 text-white text-sm focus:outline-none custom-scrollbar"
                       />
                     ) : (
-                      <p className="text-base text-white leading-relaxed whitespace-pre-wrap">
+                      <p 
+                        className="text-base text-white leading-6 whitespace-pre-wrap font-normal"
+                        style={{ fontFamily: 'Arial, sans-serif' }}
+                      >
                         {selectedSong.lyrics.korean}
                       </p>
                     )}
@@ -841,6 +953,13 @@ ${song.prompt}
                         {isEditing && (
                           <button
                             onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                            onMouseEnter={() => onHover({ id: 'sync-info-en', label: '한/영 연동', description: 'ON 상태에서 저장하면, 마지막으로 수정한 언어를 기준으로 반대 언어 가사를 자동 번역하여 함께 저장합니다.' })}
+                            onMouseLeave={() => {
+                              onHover(null);
+                              onLongPressEnd();
+                            }}
+                            onTouchStart={() => onLongPressStart({ id: 'sync-info-en', label: '한/영 연동', description: 'ON 상태에서 저장하면, 마지막으로 수정한 언어를 기준으로 반대 언어 가사를 자동 번역하여 함께 저장합니다.' })}
+                            onTouchEnd={onLongPressEnd}
                             className={cn(
                               "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all border",
                               isSyncEnabled 
@@ -872,15 +991,14 @@ ${song.prompt}
                     {isEditing ? (
                       <textarea 
                         value={editedEnglishLyrics}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditedEnglishLyrics(val);
-                          if (isSyncEnabled) setEditedKoreanLyrics(val);
-                        }}
+                        onChange={(e) => setEditedEnglishLyrics(e.target.value)}
                         className="w-full h-48 bg-black/30 border border-brand-orange/30 rounded-xl p-4 text-gray-400 text-sm focus:outline-none italic custom-scrollbar"
                       />
                     ) : (
-                      <p className="text-base text-gray-400 leading-relaxed whitespace-pre-wrap italic">
+                      <p 
+                        className="text-base text-gray-400 leading-6 whitespace-pre-wrap font-normal"
+                        style={{ fontFamily: 'Arial, sans-serif' }}
+                      >
                         {selectedSong.lyrics.english}
                       </p>
                     )}

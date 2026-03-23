@@ -993,14 +993,12 @@ function App() {
           set([...state, id]);
         }
 
-        // Update hover description if currently hovering
-        if (hoveredItem?.id === 'kpop') {
-          const kpopItem = GENRES.find(g => g.id === 'kpop')!;
-          let nextDesc = kpopItem.description;
-          if (nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
-          else if (nextMode === 2) nextDesc = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
-          setHoveredItem({ ...kpopItem, description: nextDesc });
-        }
+        // Update hover description
+        const kpopItem = GENRES.find(g => g.id === 'kpop')!;
+        let nextDesc = kpopItem.description;
+        if (nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
+        else if (nextMode === 2) nextDesc = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
+        setHoveredItem({ ...kpopItem, description: nextDesc });
       }
       return;
     }
@@ -1022,14 +1020,12 @@ function App() {
           set([...state, id]);
         }
 
-        // Update hover description if currently hovering
-        if (hoveredItem?.id === 'citypop') {
-          const citypopItem = GENRES.find(g => g.id === 'citypop')!;
-          let nextDesc = citypopItem.description;
-          if (nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
-          else if (nextMode === 2) nextDesc = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
-          setHoveredItem({ ...citypopItem, description: nextDesc });
-        }
+        // Update hover description
+        const citypopItem = GENRES.find(g => g.id === 'citypop')!;
+        let nextDesc = citypopItem.description;
+        if (nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
+        else if (nextMode === 2) nextDesc = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
+        setHoveredItem({ ...citypopItem, description: nextDesc });
       }
       return;
     }
@@ -1684,7 +1680,7 @@ ${result.prompt}
               onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
               onMouseLeave={() => setHoveredItem(null)}
               className={cn(
-                "flex-1 py-4 md:py-5 rounded-2xl text-white font-bold text-3xl md:text-[28.8px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[32px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
                 isGenerating 
                   ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
                   : "music-waves shadow-brand-orange/20 hover:brightness-110"

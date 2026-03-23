@@ -716,6 +716,21 @@ function App() {
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(false);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLongPressStart = (item: CategoryItem) => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      setHoveredItem(item);
+    }, 2000);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (keywordsContainerRef.current) {
@@ -950,14 +965,6 @@ function App() {
     }
   }, [history]);
 
-  useEffect(() => {
-    if (hoveredItem) {
-      const timer = setTimeout(() => {
-        setHoveredItem(null);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [hoveredItem]);
 
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme') => {
     const setters = {
@@ -998,7 +1005,7 @@ function App() {
         let nextDesc = kpopItem.description;
         if (nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
         else if (nextMode === 2) nextDesc = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
-        setHoveredItem({ ...kpopItem, description: nextDesc });
+        setHoveredItem({ ...kpopItem, description: nextDesc, _ts: Date.now() });
       }
       return;
     }
@@ -1025,7 +1032,7 @@ function App() {
         let nextDesc = citypopItem.description;
         if (nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
         else if (nextMode === 2) nextDesc = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
-        setHoveredItem({ ...citypopItem, description: nextDesc });
+        setHoveredItem({ ...citypopItem, description: nextDesc, _ts: Date.now() });
       }
       return;
     }
@@ -1427,6 +1434,13 @@ ${result.prompt}
                     href="https://suno.com/create" 
                     target="_blank" 
                     rel="noopener noreferrer"
+                    onMouseEnter={() => setHoveredItem({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                    onMouseLeave={() => {
+                      setHoveredItem(null);
+                      handleLongPressEnd();
+                    }}
+                    onTouchStart={() => handleLongPressStart({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                    onTouchEnd={handleLongPressEnd}
                     className="w-12 h-12 md:w-[64px] md:h-[64px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[10px] md:text-[12px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
                     title="Suno Create"
                   >
@@ -1494,6 +1508,8 @@ ${result.prompt}
             onUnpinAll={() => unpinAll('genre')}
             onRandom={() => randomizeCategory('genre')}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
             hoveredItem={hoveredItem}
             isExpanded={isGenreExpanded}
             onToggleExpand={() => setIsGenreExpanded(!isGenreExpanded)}
@@ -1514,6 +1530,8 @@ ${result.prompt}
             onUnpinAll={() => unpinAll('mood')}
             onRandom={() => randomizeCategory('mood')}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
             hoveredItem={hoveredItem}
             isExpanded={isMoodExpanded}
             onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
@@ -1532,6 +1550,8 @@ ${result.prompt}
             onUnpinAll={() => unpinAll('theme')}
             onRandom={() => randomizeCategory('theme')}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
             hoveredItem={hoveredItem}
             isExpanded={isThemeExpanded}
             onToggleExpand={() => setIsThemeExpanded(!isThemeExpanded)}
@@ -1546,17 +1566,23 @@ ${result.prompt}
             value={lyricsLength}
             onChange={setLyricsLength}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
           />
           <DrumStyleControl 
             lyricsLength={lyricsLength}
             value={drumStyle}
             onChange={setDrumStyle}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
           />
           <VocalGenderControl
             value={selectedGenders}
             onChange={setSelectedGenders}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
           />
         </div>
 
@@ -1570,6 +1596,8 @@ ${result.prompt}
             onMinChange={setMinBPM}
             onMaxChange={setMaxBPM}
             onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
           />
         </div>
 
@@ -1664,7 +1692,12 @@ ${result.prompt}
                   setHoveredItem({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' });
                 }}
                 onMouseEnter={() => setHoveredItem({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
-                onMouseLeave={() => setHoveredItem(null)}
+                onMouseLeave={() => {
+                  setHoveredItem(null);
+                  handleLongPressEnd();
+                }}
+                onTouchStart={() => handleLongPressStart({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
+                onTouchEnd={handleLongPressEnd}
                 className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2 group/random"
               >
                 <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
@@ -1678,9 +1711,14 @@ ${result.prompt}
                 setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' });
               }}
               onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
-              onMouseLeave={() => setHoveredItem(null)}
+              onMouseLeave={() => {
+                setHoveredItem(null);
+                handleLongPressEnd();
+              }}
+              onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
+              onTouchEnd={handleLongPressEnd}
               className={cn(
-                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[20px] md:text-[32px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[30px] md:text-[38px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
                 isGenerating 
                   ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
                   : "music-waves shadow-brand-orange/20 hover:brightness-110"
@@ -1853,7 +1891,7 @@ ${result.prompt}
                     제목 (Title)
                   </div>
                   <div className="h-[60px] md:h-auto flex items-center justify-center">
-                    <h2 className="text-[17px] md:text-2xl font-bold text-white leading-tight line-clamp-2 text-center">
+                    <h2 className="text-[15px] md:text-2xl font-bold text-white leading-tight line-clamp-2 text-center">
                       {result.title}
                     </h2>
                   </div>
@@ -2023,6 +2061,8 @@ ${result.prompt}
                 user={user}
                 onHover={setHoveredItem}
                 hoveredItem={hoveredItem}
+                onLongPressStart={handleLongPressStart}
+                onLongPressEnd={handleLongPressEnd}
               />
             </Suspense>
           }
@@ -2112,6 +2152,8 @@ interface CategorySectionProps {
   onUnpinAll: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
   hoveredItem: CategoryItem | null;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -2133,6 +2175,8 @@ function CategorySection({
   onUnpinAll,
   onRandom,
   onHover,
+  onLongPressStart,
+  onLongPressEnd,
   hoveredItem,
   isExpanded,
   onToggleExpand,
@@ -2173,7 +2217,12 @@ function CategorySection({
           <button 
             onClick={onRandom}
             onMouseEnter={() => onHover({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
-            onMouseLeave={() => onHover(null)}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
+            onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2 rounded-lg transition-all",
               isRandomized 
@@ -2186,7 +2235,12 @@ function CategorySection({
           <button 
             onClick={onUnpinAll}
             onMouseEnter={() => onHover({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
-            onMouseLeave={() => onHover(null)}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+            onTouchEnd={onLongPressEnd}
             className="p-2 rounded-lg bg-white/5 hover:bg-brand-orange/20 text-gray-500 hover:text-brand-orange transition-all"
           >
             <PinOff className="w-4 h-4" />
@@ -2194,7 +2248,12 @@ function CategorySection({
           <button 
             onClick={onClear}
             onMouseEnter={() => onHover({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
-            onMouseLeave={() => onHover(null)}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
+            onTouchEnd={onLongPressEnd}
             className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all"
           >
             <Trash2 className="w-4 h-4" />
@@ -2210,7 +2269,12 @@ function CategorySection({
             onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' });
           }}
           onMouseEnter={() => onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
-          onMouseLeave={() => onHover(null)}
+          onMouseLeave={() => {
+            onHover(null);
+            onLongPressEnd();
+          }}
+          onTouchStart={() => onLongPressStart({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
+          onTouchEnd={onLongPressEnd}
           className="flex items-center gap-2 px-6 py-2 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 hover:border-brand-orange/50 group/expand shadow-lg shadow-brand-orange/5"
         >
           <span className="text-[12px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
@@ -2267,9 +2331,15 @@ function CategorySection({
             <div key={item.id} className="relative group/btn">
               <button
                 onMouseEnter={() => onHover({ ...item, description: displayDescription })}
-                onMouseLeave={() => onHover(null)}
+                onMouseLeave={() => {
+                  onHover(null);
+                  onLongPressEnd();
+                }}
+                onTouchStart={() => onLongPressStart({ ...item, description: displayDescription })}
+                onTouchEnd={onLongPressEnd}
                 onClick={() => {
                   onToggle(item.id);
+                  onHover({ ...item, description: displayDescription, _ts: Date.now() });
                 }}
                 className={cn(
                   "px-3 py-1.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2",
@@ -2337,10 +2407,12 @@ function CategorySection({
 interface LyricsLengthControlProps {
   value: LyricsLength;
   onChange: (val: LyricsLength) => void;
-  onHover: (item: { id: string; label: string; description: string } | null) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
 }
 
-function LyricsLengthControl({ value, onChange, onHover }: LyricsLengthControlProps) {
+function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: LyricsLengthControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -2381,10 +2453,15 @@ function LyricsLengthControl({ value, onChange, onHover }: LyricsLengthControlPr
             <button
               onClick={() => {
                 onChange(opt.id as LyricsLength);
-                onHover({ id: opt.id, label: opt.label, description: opt.description });
+                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
               }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => onHover(null)}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
+              onTouchEnd={onLongPressEnd}
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
@@ -2405,10 +2482,12 @@ interface DrumStyleControlProps {
   lyricsLength: LyricsLength;
   value: DrumStyle;
   onChange: (val: DrumStyle) => void;
-  onHover: (item: { id: string; label: string; description: string } | null) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
 }
 
-function DrumStyleControl({ lyricsLength, value, onChange, onHover }: DrumStyleControlProps) {
+function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressStart, onLongPressEnd }: DrumStyleControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -2449,10 +2528,15 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover }: DrumStyleC
             <button
               onClick={() => {
                 onChange(opt.id as DrumStyle);
-                onHover({ id: opt.id, label: opt.label, description: opt.description });
+                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
               }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => onHover(null)}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
+              onTouchEnd={onLongPressEnd}
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
@@ -2472,10 +2556,12 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover }: DrumStyleC
 interface VocalGenderControlProps {
   value: VocalGender[];
   onChange: (val: VocalGender[]) => void;
-  onHover: (item: { id: string; label: string; description: string } | null) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
 }
 
-function VocalGenderControl({ value, onChange, onHover }: VocalGenderControlProps) {
+function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: VocalGenderControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -2526,7 +2612,12 @@ function VocalGenderControl({ value, onChange, onHover }: VocalGenderControlProp
                 onHover({ id: opt.id, label: opt.label, description: opt.description });
               }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => onHover(null)}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
+              onTouchEnd={onLongPressEnd}
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value.includes(opt.id as VocalGender)
@@ -2551,9 +2642,11 @@ interface TempoControlProps {
   onMinChange: (val: number) => void;
   onMaxChange: (val: number) => void;
   onHover: (item: { id: string; label: string; description: string } | null) => void;
+  onLongPressStart: (item: { id: string; label: string; description: string }) => void;
+  onLongPressEnd: () => void;
 }
 
-function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onHover }: TempoControlProps) {
+function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);

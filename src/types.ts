@@ -30,4 +30,5 @@ export interface CategoryItem {
   id: string;
   label: string;
   description: string;
+  _ts?: number;
 }

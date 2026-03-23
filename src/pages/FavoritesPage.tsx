@@ -37,7 +37,9 @@ export default function FavoritesPage({
   unlockAllFavorites,
   user,
   onHover,
-  hoveredItem
+  hoveredItem,
+  onLongPressStart,
+  onLongPressEnd
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
@@ -45,8 +47,10 @@ export default function FavoritesPage({
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
   user: User | null;
-  onHover: (item: { id: string; label: string; description: string } | null) => void;
-  hoveredItem: { id: string; label: string; description: string } | null;
+  onHover: (item: { id: string; label: string; description: string; _ts?: number } | null) => void;
+  hoveredItem: { id: string; label: string; description: string; _ts?: number } | null;
+  onLongPressStart: (item: { id: string; label: string; description: string }) => void;
+  onLongPressEnd: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -324,7 +328,12 @@ ${song.prompt}
           <button 
             onClick={() => navigate('/')}
             onMouseEnter={() => onHover({ id: 'back-home', label: '홈으로', description: '메인 페이지로 돌아갑니다.' })}
-            onMouseLeave={() => onHover(null)}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'back-home', label: '홈으로', description: '메인 페이지로 돌아갑니다.' })}
+            onTouchEnd={onLongPressEnd}
             className="mb-6 p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
           >
             <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
@@ -519,7 +528,12 @@ ${song.prompt}
                     <button 
                       onClick={() => setSelectedSong(song)}
                       onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
-                      onMouseLeave={() => onHover(null)}
+                      onMouseLeave={() => {
+                        onHover(null);
+                        onLongPressEnd();
+                      }}
+                      onTouchStart={() => onLongPressStart({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
+                      onTouchEnd={onLongPressEnd}
                       className="flex-[4] py-3 rounded-xl bg-white/5 text-white font-bold text-sm hover:bg-white/10 transition-all"
                     >
                       상세보기
@@ -527,7 +541,12 @@ ${song.prompt}
                     <button 
                       onClick={() => copyAll(song)}
                       onMouseEnter={() => onHover({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
-                      onMouseLeave={() => onHover(null)}
+                      onMouseLeave={() => {
+                        onHover(null);
+                        onLongPressEnd();
+                      }}
+                      onTouchStart={() => onLongPressStart({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
+                      onTouchEnd={onLongPressEnd}
                       className="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center group/copy border border-brand-orange/20"
                     >
                       {copiedType === `all-${song.id}` ? (
@@ -584,34 +603,46 @@ ${song.prompt}
                 </button>
 
                 <div className="w-full max-w-lg space-y-4">
-                  <div className="flex items-center justify-center gap-3">
-                    {isEditing ? (
+                  {!isEditing && (
+                    <div className="flex flex-col items-center gap-2">
+                      <button 
+                        onClick={() => copyToClipboard(selectedSong.title, 'title')}
+                        onMouseEnter={() => onHover({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                        onMouseLeave={() => {
+                          onHover(null);
+                          onLongPressEnd();
+                        }}
+                        onTouchStart={() => onLongPressStart({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="p-2 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                      >
+                        {copiedType === 'title' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                      </button>
+                      <div className="w-full">
+                        <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-1 text-left">제목 Song Title</h3>
+                        <h2 className="text-[19px] font-bold text-white leading-tight text-left">
+                          {selectedSong.title.includes(']') ? (
+                            <>
+                              <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
+                              <span>{selectedSong.title.split(']')[1].trim()}</span>
+                            </>
+                          ) : (
+                            selectedSong.title
+                          )}
+                        </h2>
+                      </div>
+                    </div>
+                  )}
+                  {isEditing && (
+                    <div className="w-full">
+                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-1 text-left">제목 Song Title</h3>
                       <input 
                         value={editedTitle}
                         onChange={(e) => setEditedTitle(e.target.value)}
-                        className="w-full bg-black/30 border border-brand-orange/30 rounded-xl px-4 py-2 text-white font-bold text-xl text-center focus:outline-none"
+                        className="w-full bg-black/30 border border-brand-orange/30 rounded-xl px-4 py-2 text-white font-bold text-xl focus:outline-none"
                       />
-                    ) : (
-                      <h2 className="text-[19px] font-bold text-white leading-tight">
-                        {selectedSong.title.includes(']') ? (
-                          <>
-                            <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
-                            <span>{selectedSong.title.split(']')[1].trim()}</span>
-                          </>
-                        ) : (
-                          selectedSong.title
-                        )}
-                      </h2>
-                    )}
-                    {!isEditing && (
-                      <button 
-                        onClick={() => copyToClipboard(selectedSong.title, 'title')}
-                        className="p-2 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
-                      >
-                        {copiedType === 'title' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-center gap-3">
                     {isEditing ? (
@@ -644,6 +675,13 @@ ${song.prompt}
                       <div className="flex items-center justify-center gap-3 relative w-full">
                         <button 
                           onClick={() => handleToggleLock(selectedSong)}
+                          onMouseEnter={() => onHover({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                          onTouchEnd={onLongPressEnd}
                           className={cn(
                             "absolute left-0 w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all",
                             selectedSong.isLocked 
@@ -656,6 +694,13 @@ ${song.prompt}
                         </button>
                         <button 
                           onClick={() => setIsEditing(true)}
+                          onMouseEnter={() => onHover({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
+                          onTouchEnd={onLongPressEnd}
                           className="px-4 py-2 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-[11.5px] font-bold border border-brand-orange/20"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -665,6 +710,13 @@ ${song.prompt}
                           href="https://suno.com/create" 
                           target="_blank" 
                           rel="noopener noreferrer"
+                          onMouseEnter={() => onHover({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                          onTouchEnd={onLongPressEnd}
                           className="absolute right-0 w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
                           title="Suno Create"
                         >
@@ -703,19 +755,26 @@ ${song.prompt}
                 </div>
 
                 {/* Lyrics */}
-                <div className="space-y-8 relative">
-                  {!isEditing && (
-                    <div className="absolute top-0 right-0">
-                      <button 
-                        onClick={() => copyToClipboard(`${selectedSong.lyrics.korean}\n\n${selectedSong.lyrics.english}`, 'lyrics')}
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
-                      >
-                        {copiedType === 'lyrics' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  )}
+                <div className="space-y-8">
                   <div>
-                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-4">한글버전 Lyrics</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">한글버전 Lyrics</h3>
+                      {!isEditing && (
+                        <button 
+                          onClick={() => copyToClipboard(selectedSong.lyrics.korean, 'lyrics-korean')}
+                          onMouseEnter={() => onHover({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 버전 가사를 복사합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 버전 가사를 복사합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                        >
+                          {copiedType === 'lyrics-korean' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                        </button>
+                      )}
+                    </div>
                     {isEditing ? (
                       <textarea 
                         value={editedKoreanLyrics}
@@ -729,7 +788,24 @@ ${song.prompt}
                     )}
                   </div>
                   <div className="pt-8 border-t border-white/5">
-                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-4">영어버전 Lyrics</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">영어버전 Lyrics</h3>
+                      {!isEditing && (
+                        <button 
+                          onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-english')}
+                          onMouseEnter={() => onHover({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 버전 가사를 복사합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 버전 가사를 복사합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                        >
+                          {copiedType === 'lyrics-english' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                        </button>
+                      )}
+                    </div>
                     {isEditing ? (
                       <textarea 
                         value={editedEnglishLyrics}
@@ -745,16 +821,25 @@ ${song.prompt}
                 </div>
 
                 {/* Prompt */}
-                <div className="pt-8 border-t border-white/5 relative">
-                  <div className="absolute top-8 right-0">
-                    <button 
-                      onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}
-                      className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
-                    >
-                      {copiedType === 'prompt' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                <div className="pt-8 border-t border-white/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest"> 곡 프롬프트 Styles </h3>
+                    {!isEditing && (
+                      <button 
+                        onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}
+                        onMouseEnter={() => onHover({ id: 'copy-prompt', label: '프롬프트 복사', description: '곡 생성 프롬프트를 복사합니다.' })}
+                        onMouseLeave={() => {
+                          onHover(null);
+                          onLongPressEnd();
+                        }}
+                        onTouchStart={() => onLongPressStart({ id: 'copy-prompt', label: '프롬프트 복사', description: '곡 생성 프롬프트를 복사합니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 transition-colors"
+                      >
+                        {copiedType === 'prompt' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                      </button>
+                    )}
                   </div>
-                  <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest mb-4"> 곡 프롬프트 Styles </h3>
                   <div className="bg-black/30 rounded-2xl p-4 border border-white/5">
                     <p className="text-xs text-gray-500 font-sans leading-relaxed">
                       {selectedSong.prompt}

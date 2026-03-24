@@ -269,7 +269,7 @@ export default function FavoritesPage({
     selectionLongPressTimerRef.current = setTimeout(() => {
       setIsSelectionMode(true);
       setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
-    }, 750);
+    }, 800);
   };
 
   const handleCardLongPressEnd = () => {

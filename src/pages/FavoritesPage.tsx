@@ -280,10 +280,10 @@ export default function FavoritesPage({
     allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked)
   ) => ({
     id: 'selection-lock',
-    label: allSelectedLocked ? '선택 잠금' : '선택 잠금 해제',
+    label: allSelectedLocked ? '선택 잠금 해제' : '선택 잠금',
     description: allSelectedLocked
-      ? '선택된 곡들을 삭제되지 않도록 잠급니다.'
-      : '선택된 곡들의 잠금을 해제합니다.'
+      ? '선택된 곡들의 잠금을 해제합니다.'
+      : '선택된 곡들을 삭제되지 않도록 잠급니다.'
   });
 
 

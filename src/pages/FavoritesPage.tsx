@@ -264,11 +264,14 @@ export default function FavoritesPage({
   };
 
   const handleCardLongPressStart = (song: any) => {
-    if (isSelectionMode) return;
     clearSelectionLongPressTimer();
     selectionLongPressTimerRef.current = setTimeout(() => {
-      setIsSelectionMode(true);
-      setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
+      if (isSelectionMode) {
+        exitSelectionMode();
+      } else {
+        setIsSelectionMode(true);
+        setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
+      }
     }, 750);
   };
 
@@ -586,53 +589,98 @@ ${song.prompt}
           </div>
         </div>
 
-        {favorites.length > 0 && (
+        {favorites.length > 0 && !isSelectionMode && (
           <div className="flex justify-center gap-3 flex-wrap">
-            {isSelectionMode ? (
+            <>
               <button
-                onClick={exitSelectionMode}
-                onMouseEnter={() => onHover({ id: 'selection-exit-top', label: '선택 해제', description: '선택 모드를 종료하고 선택을 해제합니다.' })}
+                onClick={handleBulkUnlock}
+                onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
                 onMouseLeave={() => onHover(null)}
-                className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-zinc-800 text-gray-200 hover:bg-zinc-700 border border-white/10"
+                className={cn(
+                  "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                  confirmUnlockAll === 1 
+                    ? "bg-brand-orange text-white animate-pulse" 
+                    : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                )}
               >
-                <X className="w-3.5 h-3.5" />
-                선택 해제
+                <Unlock className="w-3.5 h-3.5" />
+                {confirmUnlockAll === 1 ? "한 번 더 클릭하여 잠금 해제" : "잠금 해제"}
               </button>
-            ) : (
-              <>
-                <button
-                  onClick={handleBulkUnlock}
-                  onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
-                  onMouseLeave={() => onHover(null)}
-                  className={cn(
-                    "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                    confirmUnlockAll === 1 
-                      ? "bg-brand-orange text-white animate-pulse" 
-                      : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  {confirmUnlockAll === 1 ? "한 번 더 클릭하여 잠금 해제" : "잠금 해제"}
-                </button>
-                <button
-                  onClick={handleBulkDelete}
-                  onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
-                  onMouseLeave={() => onHover(null)}
-                  className={cn(
-                    "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                    confirmDeleteAll === 1 
-                      ? "bg-red-500 text-white animate-pulse" 
-                      : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                  )}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {confirmDeleteAll === 1 ? "한 번 더 클릭하여 전체 삭제" : "전체 삭제"}
-                </button>
-              </>
-            )}
+              <button
+                onClick={handleBulkDelete}
+                onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
+                  confirmDeleteAll === 1 
+                    ? "bg-red-500 text-white animate-pulse" 
+                    : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                )}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {confirmDeleteAll === 1 ? "한 번 더 클릭하여 전체 삭제" : "전체 삭제"}
+              </button>
+            </>
           </div>
         )}
       </div>
+
+      {/* Selection Mode FAB - Repositioned below search bar */}
+      <AnimatePresence>
+        {isSelectionMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
+          >
+            <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-2xl ring-1 ring-white/5">
+              <button
+                onClick={handleSelectedLock}
+                disabled={selectedSongIds.length === 0}
+                className={cn(
+                  "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border",
+                  selectedSongIds.length === 0
+                    ? "bg-zinc-800/50 text-gray-600 border-white/5 cursor-not-allowed"
+                    : "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                )}
+                aria-label="선택 잠금"
+              >
+                <Lock className="w-5 h-5" />
+                {selectedLockedCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-amber-500 text-[10px] leading-4.5 font-bold text-white text-center">
+                    {selectedLockedCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={exitSelectionMode}
+                className="min-w-[140px] h-12 px-5 rounded-xl bg-zinc-800 text-white border border-white/10 hover:bg-zinc-700 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="text-[15px] font-bold">{selectedSongIds.length}</span>
+                <span className="text-[14px] font-medium text-gray-400">선택 해제</span>
+                <Check className="w-5 h-5 text-brand-orange" />
+              </button>
+
+              <button
+                onClick={handleSelectedDelete}
+                disabled={selectedSongIds.length === 0}
+                className={cn(
+                  "h-12 w-12 rounded-xl transition-all flex items-center justify-center border",
+                  selectedSongIds.length === 0
+                    ? "bg-zinc-800/50 text-gray-600 border-white/5 cursor-not-allowed"
+                    : "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20"
+                )}
+                aria-label="선택 삭제"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {favorites.length === 0 ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-zinc-900/30 rounded-3xl border border-white/5 p-12">
@@ -669,11 +717,11 @@ ${song.prompt}
                   if (isSelectionMode) toggleSongSelection(song.id);
                 }}
                 className={cn(
-                  "rounded-3xl p-6 transition-all group flex flex-col h-full border",
+                  "rounded-3xl p-6 transition-all group flex flex-col h-full border select-none",
                   isSelectionMode
                     ? isSelected
-                      ? "bg-brand-orange/10 border-brand-orange/50 ring-1 ring-brand-orange/40"
-                      : "bg-zinc-800/50 border-white/15 hover:bg-zinc-700/50 cursor-pointer"
+                      ? "bg-brand-orange/5 border-brand-orange/40 ring-1 ring-brand-orange/30"
+                      : "bg-zinc-800/40 border-white/10 hover:bg-zinc-700/40 cursor-pointer"
                     : "bg-zinc-800/50 border-white/15 hover:bg-zinc-700/50"
                 )}
               >
@@ -691,18 +739,37 @@ ${song.prompt}
                     </h3>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-gray-300 font-semibold opacity-100">
-                      {getRelativeTime(song.createdAt)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {isSelectionMode && isSelected && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="w-5 h-5 rounded-full bg-brand-orange flex items-center justify-center"
+                        >
+                          <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                        </motion.div>
+                      )}
+                      <span className="text-[10px] text-gray-300 font-semibold opacity-100">
+                        {getRelativeTime(song.createdAt)}
+                      </span>
+                    </div>
                     {isSelectionMode ? (
                       <div className="flex items-center gap-1.5">
-                        <div className="relative p-2 rounded-xl bg-white/5 text-gray-500 border border-white/10 opacity-80">
+                        <div className={cn(
+                          "relative p-2 rounded-xl transition-all",
+                          song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-white/5 text-gray-500"
+                        )}>
                           {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                          <span className="absolute left-1/2 top-1/2 w-5 h-[1.5px] bg-gray-400 -translate-x-1/2 -translate-y-1/2 rotate-[-35deg]" />
+                          <span className="absolute inset-0 flex items-center justify-center text-white/80 text-lg leading-none pointer-events-none">╱</span>
                         </div>
-                        <div className="relative p-2 rounded-xl bg-white/5 text-gray-500 border border-white/10 opacity-80">
+                        <div className={cn(
+                          "relative p-2 rounded-xl transition-all",
+                          song.isLocked 
+                            ? "bg-zinc-800 text-zinc-600" 
+                            : "bg-red-500/10 text-red-500"
+                        )}>
                           <Trash2 className="w-4 h-4" />
-                          <span className="absolute left-1/2 top-1/2 w-5 h-[1.5px] bg-gray-400 -translate-x-1/2 -translate-y-1/2 rotate-[-35deg]" />
+                          <span className="absolute inset-0 flex items-center justify-center text-white/80 text-lg leading-none pointer-events-none">╱</span>
                         </div>
                       </div>
                     ) : (
@@ -761,13 +828,20 @@ ${song.prompt}
                           toggleSongSelection(song.id);
                         }}
                         className={cn(
-                          "w-full py-3 rounded-xl font-bold text-sm transition-all border",
+                          "w-full py-3 rounded-xl font-bold text-sm transition-all border flex items-center justify-center gap-2",
                           isSelected
-                            ? "bg-brand-orange/15 text-brand-orange border-brand-orange/30"
-                            : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                            ? "bg-brand-orange/20 text-brand-orange border-brand-orange/40"
+                            : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10"
                         )}
                       >
-                        {isSelected ? "선택 해제" : "곡 선택"}
+                        {isSelected ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            선택 해제
+                          </>
+                        ) : (
+                          "선택"
+                        )}
                       </button>
                     ) : (
                       <>
@@ -831,50 +905,6 @@ ${song.prompt}
           )}
         </div>
       )}
-
-      <AnimatePresence>
-        {isSelectionMode && selectedSongIds.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.18 }}
-            className="fixed top-[26px] md:top-[28px] left-1/2 -translate-x-1/2 z-[120] pointer-events-none"
-          >
-            <div className="pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-[30px] border border-white/10 bg-[rgba(168,168,174,0.3)] backdrop-blur-lg shadow-2xl">
-              <button
-                onClick={handleSelectedLock}
-                className="relative h-14 w-14 rounded-2xl bg-[#4b402f]/70 text-amber-200 hover:bg-[#5a4b36]/80 transition-all flex items-center justify-center"
-                aria-label="선택 잠금"
-              >
-                <Lock className="w-6 h-6" />
-                {selectedLockedCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-amber-300 text-[11px] leading-5 font-bold text-amber-950 text-center">
-                    {selectedLockedCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={exitSelectionMode}
-                className="min-w-[162px] h-14 px-6 rounded-2xl bg-[#7a5722]/80 text-white border border-amber-300/25 hover:bg-[#886128]/85 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="text-[17px] font-semibold leading-none">{selectedSongIds.length}</span>
-                <span className="text-[17px] font-semibold leading-none">곡</span>
-                <Check className="w-7 h-7 text-amber-300 stroke-[3]" />
-              </button>
-
-              <button
-                onClick={handleSelectedDelete}
-                className="h-14 w-14 rounded-2xl bg-red-950/70 text-red-300 hover:bg-red-900/80 transition-all flex items-center justify-center"
-                aria-label="선택 삭제"
-              >
-                <Trash2 className="w-6 h-6" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Lyrics Modal */}
       <AnimatePresence>

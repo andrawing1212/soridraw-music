@@ -250,6 +250,25 @@ export default function FavoritesPage({
   };
 
 
+  const isScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      isScrollingRef.current = true;
+      clearSelectionLongPressTimer();
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 150);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
+
   const clearSelectionLongPressTimer = () => {
     if (selectionLongPressTimerRef.current) {
       clearTimeout(selectionLongPressTimerRef.current);
@@ -264,6 +283,7 @@ export default function FavoritesPage({
   };
 
   const handleCardLongPressStart = (song: any) => {
+    if (isScrollingRef.current) return;
     clearSelectionLongPressTimer();
     selectionLongPressTimerRef.current = setTimeout(() => {
       if (isSelectionMode) {
@@ -272,7 +292,7 @@ export default function FavoritesPage({
         setIsSelectionMode(true);
         setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
       }
-    }, 750);
+    }, 600);
   };
 
   const handleCardLongPressEnd = () => {
@@ -287,15 +307,22 @@ export default function FavoritesPage({
 
   const handleSelectedLock = async () => {
     const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
-    const unlockeds = selectedSongs.filter(song => !song.isLocked);
+    if (selectedSongs.length === 0) return;
 
-    if (unlockeds.length === 0) {
-      exitSelectionMode();
-      return;
+    const allLocked = selectedSongs.every(song => song.isLocked);
+    
+    if (allLocked) {
+      // If all are locked, unlock them
+      await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: false })));
+    } else {
+      // Otherwise, lock all (including those already locked)
+      await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: true })));
     }
-
-    await Promise.all(unlockeds.map(song => updateFavorite(song.id, { isLocked: true })));
-    exitSelectionMode();
+    
+    // Update selectedSong if it's one of the modified ones
+    if (selectedSong && selectedSongIds.includes(selectedSong.id)) {
+      setSelectedSong({ ...selectedSong, isLocked: !allLocked });
+    }
   };
 
   const handleSelectedDelete = async () => {
@@ -589,45 +616,9 @@ ${song.prompt}
           </div>
         </div>
 
-        {favorites.length > 0 && !isSelectionMode && (
-          <div className="flex justify-center gap-3 flex-wrap">
-            <>
-              <button
-                onClick={handleBulkUnlock}
-                onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
-                onMouseLeave={() => onHover(null)}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                  confirmUnlockAll === 1 
-                    ? "bg-brand-orange text-white animate-pulse" 
-                    : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
-                )}
-              >
-                <Unlock className="w-3.5 h-3.5" />
-                {confirmUnlockAll === 1 ? "한 번 더 클릭하여 잠금 해제" : "잠금 해제"}
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
-                onMouseLeave={() => onHover(null)}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2",
-                  confirmDeleteAll === 1 
-                    ? "bg-red-500 text-white animate-pulse" 
-                    : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                )}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {confirmDeleteAll === 1 ? "한 번 더 클릭하여 전체 삭제" : "전체 삭제"}
-              </button>
-            </>
-          </div>
-        )}
-      </div>
-
-      {/* Selection Mode FAB - Repositioned below search bar */}
+      {/* Bulk Actions Popup (Unlock All, Delete All) */}
       <AnimatePresence>
-        {isSelectionMode && (
+        {favorites.length > 0 && !isSelectionMode && !selectedSong && !showSortPopup && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -635,19 +626,67 @@ ${song.prompt}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
           >
-            <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-2xl ring-1 ring-white/5">
+            <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+              <button
+                onClick={handleBulkUnlock}
+                onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
+                  confirmUnlockAll === 1 
+                    ? "bg-brand-orange text-white border-brand-orange animate-pulse" 
+                    : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
+                )}
+              >
+                <Unlock className="w-4 h-4" />
+                {confirmUnlockAll === 1 ? "확인" : "전체 잠금"}
+              </button>
+
+              <button
+                onClick={handleBulkDelete}
+                onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
+                  confirmDeleteAll === 1 
+                    ? "bg-red-500 text-white border-red-500 animate-pulse" 
+                    : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
+                )}
+              >
+                <Trash2 className="w-4 h-4" />
+                {confirmDeleteAll === 1 ? "확인" : "전체 삭제"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </div>
+
+      {/* Selection Mode FAB */}
+      <AnimatePresence>
+        {isSelectionMode && !selectedSong && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
+          >
+            <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
               <button
                 onClick={handleSelectedLock}
                 disabled={selectedSongIds.length === 0}
                 className={cn(
-                  "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border",
+                  "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
                   selectedSongIds.length === 0
-                    ? "bg-zinc-800/50 text-gray-600 border-white/5 cursor-not-allowed"
-                    : "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                    ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
+                    : selectedSongs.every(s => s.isLocked)
+                      ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
+                      : "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
                 )}
-                aria-label="선택 잠금"
+                aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
               >
-                <Lock className="w-5 h-5" />
+                {selectedSongs.every(s => s.isLocked) ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                 {selectedLockedCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-amber-500 text-[10px] leading-4.5 font-bold text-white text-center">
                     {selectedLockedCount}
@@ -657,10 +696,10 @@ ${song.prompt}
 
               <button
                 onClick={exitSelectionMode}
-                className="min-w-[140px] h-12 px-5 rounded-xl bg-zinc-800 text-white border border-white/10 hover:bg-zinc-700 transition-all flex items-center justify-center gap-2"
+                className="flex-1 h-12 px-2 rounded-xl bg-zinc-200 text-zinc-900 border border-white/10 hover:bg-zinc-300 transition-all flex items-center justify-center gap-2"
               >
                 <span className="text-[15px] font-bold">{selectedSongIds.length}</span>
-                <span className="text-[14px] font-medium text-gray-400">선택 해제</span>
+                <span className="text-[14px] font-medium text-zinc-600">확인</span>
                 <Check className="w-5 h-5 text-brand-orange" />
               </button>
 
@@ -668,10 +707,10 @@ ${song.prompt}
                 onClick={handleSelectedDelete}
                 disabled={selectedSongIds.length === 0}
                 className={cn(
-                  "h-12 w-12 rounded-xl transition-all flex items-center justify-center border",
+                  "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
                   selectedSongIds.length === 0
-                    ? "bg-zinc-800/50 text-gray-600 border-white/5 cursor-not-allowed"
-                    : "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20"
+                    ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
+                    : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
                 )}
                 aria-label="선택 삭제"
               >

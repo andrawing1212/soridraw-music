@@ -90,12 +90,6 @@ export default function FavoritesPage({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const longPressTriggeredRef = useRef(false);
-  const pressStartPointRef = useRef<{ x: number; y: number } | null>(null);
-  const selectionModeExitLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const selectionModeExitStartPointRef = useRef<{ x: number; y: number } | null>(null);
-  const latestSelectedSongRef = useRef<any | null>(null);
-  const latestSelectionModeRef = useRef(false);
   const placeholders = [
     "제목으로 검색해보세요...",
     "가사 내용으로 검색해보세요...",
@@ -111,99 +105,10 @@ export default function FavoritesPage({
   }, []);
 
   useEffect(() => {
-    return () => {
-      clearSelectionLongPressTimer();
-      clearSelectionModeExitLongPressTimer();
-    };
+    return () => clearSelectionLongPressTimer();
   }, []);
 
   const navigate = useNavigate();
-
-  useEffect(() => {
-    latestSelectedSongRef.current = selectedSong;
-  }, [selectedSong]);
-
-  useEffect(() => {
-    latestSelectionModeRef.current = isSelectionMode;
-  }, [isSelectionMode]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      if (latestSelectedSongRef.current) {
-        setSelectedSong(null);
-        return;
-      }
-
-      if (latestSelectionModeRef.current) {
-        exitSelectionMode();
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedSong && !isSelectionMode) return;
-
-    window.history.pushState(
-      {
-        favoritesOverlay: selectedSong ? 'song-popup' : 'selection-mode',
-      },
-      '',
-      window.location.href
-    );
-  }, [selectedSong, isSelectionMode]);
-
-  useEffect(() => {
-    if (!isSelectionMode) return;
-
-    const handleMouseDown = (event: MouseEvent) => {
-      startSelectionModeExitLongPress(event.clientX, event.clientY, event.target);
-    };
-
-    const handleMouseMove = (event: MouseEvent) => {
-      cancelSelectionModeExitIfMoved(event.clientX, event.clientY);
-    };
-
-    const handleMouseEnd = () => {
-      endSelectionModeExitLongPress();
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      const touch = event.touches[0];
-      if (!touch) return;
-      startSelectionModeExitLongPress(touch.clientX, touch.clientY, event.target);
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      const touch = event.touches[0];
-      if (!touch) return;
-      cancelSelectionModeExitIfMoved(touch.clientX, touch.clientY);
-    };
-
-    const handleTouchEnd = () => {
-      endSelectionModeExitLongPress();
-    };
-
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseEnd);
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.addEventListener('touchmove', handleTouchMove, { passive: true });
-    document.addEventListener('touchend', handleTouchEnd);
-    document.addEventListener('touchcancel', handleTouchEnd);
-
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseEnd);
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-      document.removeEventListener('touchcancel', handleTouchEnd);
-    };
-  }, [isSelectionMode]);
 
   useEffect(() => {
     if (selectedSong) {
@@ -352,84 +257,16 @@ export default function FavoritesPage({
     }
   };
 
-  const setPressStartPoint = (x: number, y: number) => {
-    pressStartPointRef.current = { x, y };
-  };
-
-  const clearPressStartPoint = () => {
-    pressStartPointRef.current = null;
-  };
-
-  const clearSelectionModeExitLongPressTimer = () => {
-    if (selectionModeExitLongPressTimerRef.current) {
-      clearTimeout(selectionModeExitLongPressTimerRef.current);
-      selectionModeExitLongPressTimerRef.current = null;
-    }
-  };
-
-  const setSelectionModeExitStartPoint = (x: number, y: number) => {
-    selectionModeExitStartPointRef.current = { x, y };
-  };
-
-  const clearSelectionModeExitStartPoint = () => {
-    selectionModeExitStartPointRef.current = null;
-  };
-
-  const startSelectionModeExitLongPress = (x: number, y: number, target: EventTarget | null) => {
-    if (!isSelectionMode) return;
-
-    const element = target instanceof HTMLElement ? target : null;
-    if (
-      element?.closest('[data-selection-card="true"]') ||
-      element?.closest('[data-selection-toolbar="true"]') ||
-      element?.closest('[data-selection-modal="true"]')
-    ) {
-      return;
-    }
-
-    clearSelectionModeExitLongPressTimer();
-    setSelectionModeExitStartPoint(x, y);
-    selectionModeExitLongPressTimerRef.current = setTimeout(() => {
-      exitSelectionMode();
-    }, 1000);
-  };
-
-  const cancelSelectionModeExitIfMoved = (x: number, y: number) => {
-    if (!selectionModeExitStartPointRef.current) return;
-    const dx = Math.abs(x - selectionModeExitStartPointRef.current.x);
-    const dy = Math.abs(y - selectionModeExitStartPointRef.current.y);
-    if (dx > 8 || dy > 8) {
-      clearSelectionModeExitLongPressTimer();
-    }
-  };
-
-  const endSelectionModeExitLongPress = () => {
-    clearSelectionModeExitLongPressTimer();
-    clearSelectionModeExitStartPoint();
-  };
-
-  const cancelLongPressIfMoved = (x: number, y: number) => {
-    if (!pressStartPointRef.current) return;
-    const dx = Math.abs(x - pressStartPointRef.current.x);
-    const dy = Math.abs(y - pressStartPointRef.current.y);
-    if (dx > 8 || dy > 8) {
-      clearSelectionLongPressTimer();
-    }
-  };
-
   const toggleSongSelection = (songId: string) => {
     setSelectedSongIds(prev =>
       prev.includes(songId) ? prev.filter(id => id !== songId) : [...prev, songId]
     );
   };
 
-  const handleCardLongPressStart = (song: any, x: number, y: number) => {
+  const handleCardLongPressStart = (song: any) => {
     if (isSelectionMode) return;
-    longPressTriggeredRef.current = false;
-    setPressStartPoint(x, y);
     clearSelectionLongPressTimer();
     selectionLongPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
       setIsSelectionMode(true);
       setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
     }, 750);
@@ -437,18 +274,12 @@ export default function FavoritesPage({
 
   const handleCardLongPressEnd = () => {
     clearSelectionLongPressTimer();
-    clearPressStartPoint();
-    window.setTimeout(() => {
-      longPressTriggeredRef.current = false;
-    }, 0);
   };
 
   const exitSelectionMode = () => {
     setIsSelectionMode(false);
     setSelectedSongIds([]);
     clearSelectionLongPressTimer();
-    clearSelectionModeExitLongPressTimer();
-    clearSelectionModeExitStartPoint();
   };
 
   const handleSelectedLock = async () => {
@@ -575,6 +406,9 @@ ${song.prompt}
     if (diffInMonths < 12) return `${diffInMonths}달 전`;
     return `${Math.floor(diffInMonths / 12)}년 전`;
   };
+
+  const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+  const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
 
   const filteredFavorites = favorites.filter(song => 
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -755,38 +589,15 @@ ${song.prompt}
         {favorites.length > 0 && (
           <div className="flex justify-center gap-3 flex-wrap">
             {isSelectionMode ? (
-              <>
-                <div className="px-4 py-2 rounded-xl bg-brand-orange/10 text-brand-orange text-[11px] font-bold border border-brand-orange/20">
-                  {selectedSongIds.length}곡 선택됨
-                </div>
-                <button
-                  onClick={handleSelectedLock}
-                  onMouseEnter={() => onHover({ id: 'selected-lock', label: '선택 잠금', description: '선택한 곡을 한 번에 잠급니다.' })}
-                  onMouseLeave={() => onHover(null)}
-                  className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  선택 잠금
-                </button>
-                <button
-                  onClick={handleSelectedDelete}
-                  onMouseEnter={() => onHover({ id: 'selected-delete', label: '선택 삭제', description: '선택한 곡 중 잠기지 않은 곡을 한 번에 삭제합니다.' })}
-                  onMouseLeave={() => onHover(null)}
-                  className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  선택 삭제
-                </button>
-                <button
-                  onClick={exitSelectionMode}
-                  onMouseEnter={() => onHover({ id: 'selection-exit', label: '선택 모드 해제', description: '선택 모드를 종료합니다.' })}
-                  onMouseLeave={() => onHover(null)}
-                  className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-zinc-800 text-gray-300 hover:bg-zinc-700 hover:text-white border border-white/10"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  선택 해제
-                </button>
-              </>
+              <button
+                onClick={exitSelectionMode}
+                onMouseEnter={() => onHover({ id: 'selection-exit-top', label: '선택 해제', description: '선택 모드를 종료하고 선택을 해제합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className="px-4 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center gap-2 bg-zinc-800 text-gray-200 hover:bg-zinc-700 border border-white/10"
+              >
+                <X className="w-3.5 h-3.5" />
+                선택 해제
+              </button>
             ) : (
               <>
                 <button
@@ -844,39 +655,18 @@ ${song.prompt}
 
               return (
               <motion.div
-                data-selection-card="true"
                 key={song.id}
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                onMouseDown={(e) => handleCardLongPressStart(song, e.clientX, e.clientY)}
+                onMouseDown={() => handleCardLongPressStart(song)}
                 onMouseUp={handleCardLongPressEnd}
                 onMouseLeave={handleCardLongPressEnd}
-                onMouseMove={(e) => cancelLongPressIfMoved(e.clientX, e.clientY)}
-                onDragStart={(e) => e.preventDefault()}
-                onContextMenu={(e) => e.preventDefault()}
-                onTouchStart={(e) => {
-                  const touch = e.touches[0];
-                  if (!touch) return;
-                  handleCardLongPressStart(song, touch.clientX, touch.clientY);
-                }}
+                onTouchStart={() => handleCardLongPressStart(song)}
                 onTouchEnd={handleCardLongPressEnd}
                 onTouchCancel={handleCardLongPressEnd}
-                onTouchMove={(e) => {
-                  const touch = e.touches[0];
-                  if (!touch) return;
-                  cancelLongPressIfMoved(touch.clientX, touch.clientY);
-                }}
                 onClick={() => {
-                  if (longPressTriggeredRef.current) return;
                   if (isSelectionMode) toggleSongSelection(song.id);
-                }}
-                style={{
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  WebkitTouchCallout: 'none',
-                  WebkitTapHighlightColor: 'transparent',
-                  touchAction: 'manipulation'
                 }}
                 className={cn(
                   "rounded-3xl p-6 transition-all group flex flex-col h-full border",
@@ -905,13 +695,15 @@ ${song.prompt}
                       {getRelativeTime(song.createdAt)}
                     </span>
                     {isSelectionMode ? (
-                      <div className={cn(
-                        "px-2.5 py-1 rounded-full text-[10px] font-bold border",
-                        isSelected
-                          ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30"
-                          : "bg-white/5 text-gray-400 border-white/10"
-                      )}>
-                        {isSelected ? "선택됨" : "선택"}
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative p-2 rounded-xl bg-white/5 text-gray-500 border border-white/10 opacity-80">
+                          {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                          <span className="absolute left-1/2 top-1/2 w-5 h-[1.5px] bg-gray-400 -translate-x-1/2 -translate-y-1/2 rotate-[-35deg]" />
+                        </div>
+                        <div className="relative p-2 rounded-xl bg-white/5 text-gray-500 border border-white/10 opacity-80">
+                          <Trash2 className="w-4 h-4" />
+                          <span className="absolute left-1/2 top-1/2 w-5 h-[1.5px] bg-gray-400 -translate-x-1/2 -translate-y-1/2 rotate-[-35deg]" />
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5">
@@ -1040,54 +832,46 @@ ${song.prompt}
         </div>
       )}
 
-
       <AnimatePresence>
         {isSelectionMode && selectedSongIds.length > 0 && (
           <motion.div
-            data-selection-toolbar="true"
-            initial={{ y: -24, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -24, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="fixed top-24 md:top-28 left-1/2 -translate-x-1/2 z-[999] bg-zinc-900/75 backdrop-blur-xl border border-white/15 rounded-2xl px-4 md:px-5 py-3 shadow-2xl flex items-center gap-3 md:gap-4"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.18 }}
+            className="fixed top-[26px] md:top-[28px] left-1/2 -translate-x-1/2 z-[120] pointer-events-none"
           >
-            <button
-              onClick={handleSelectedLock}
-              onMouseEnter={() => onHover({ id: 'selected-lock-floating', label: '선택 잠금', description: '선택한 곡을 한 번에 잠급니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 text-gray-100 hover:text-brand-orange hover:bg-white/10 transition"
-              aria-label="선택 잠금"
-              title="선택 잠금"
-            >
-              <Lock className="w-5 h-5" />
-            </button>
+            <div className="pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-[30px] border border-white/10 bg-[rgba(168,168,174,0.1)] backdrop-blur-1 shadow-2xl">
+              <button
+                onClick={handleSelectedLock}
+                className="relative h-14 w-14 rounded-2xl bg-[#4b402f]/70 text-amber-200 hover:bg-[#5a4b36]/80 transition-all flex items-center justify-center"
+                aria-label="선택 잠금"
+              >
+                <Lock className="w-6 h-6" />
+                {selectedLockedCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-amber-300 text-[11px] leading-5 font-bold text-amber-950 text-center">
+                    {selectedLockedCount}
+                  </span>
+                )}
+              </button>
 
-            <div className="px-3 md:px-4 py-2 rounded-xl bg-brand-orange/15 border border-brand-orange/30 text-white text-sm font-extrabold tracking-tight min-w-[96px] text-center">
-              {selectedSongIds.length}곡 <Check className="inline-block w-4 h-4 ml-1 text-brand-orange align-[-2px]" />
+              <button
+                onClick={exitSelectionMode}
+                className="min-w-[162px] h-14 px-6 rounded-2xl bg-[#7a5722]/80 text-white border border-amber-300/25 hover:bg-[#886128]/85 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="text-[17px] font-semibold leading-none">{selectedSongIds.length}</span>
+                <span className="text-[17px] font-semibold leading-none">곡</span>
+                <Check className="w-7 h-7 text-amber-300 stroke-[3]" />
+              </button>
+
+              <button
+                onClick={handleSelectedDelete}
+                className="h-14 w-14 rounded-2xl bg-red-950/70 text-red-300 hover:bg-red-900/80 transition-all flex items-center justify-center"
+                aria-label="선택 삭제"
+              >
+                <Trash2 className="w-6 h-6" />
+              </button>
             </div>
-
-            <button
-              onClick={handleSelectedDelete}
-              onMouseEnter={() => onHover({ id: 'selected-delete-floating', label: '선택 삭제', description: '선택한 곡 중 잠기지 않은 곡을 한 번에 삭제합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className="flex items-center justify-center w-10 h-10 rounded-xl bg-red-500/10 text-red-400 hover:text-white hover:bg-red-500 transition"
-              aria-label="선택 삭제"
-              title="선택 삭제"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={exitSelectionMode}
-              onMouseEnter={() => onHover({ id: 'selected-exit-floating', label: '선택 해제', description: '선택 모드를 종료합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 text-gray-100 hover:bg-white/10 transition font-bold text-sm"
-              aria-label="선택 해제"
-              title="선택 해제"
-            >
-              <X className="w-4 h-4" />
-              선택 해제
-            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1095,7 +879,7 @@ ${song.prompt}
       {/* Lyrics Modal */}
       <AnimatePresence>
         {selectedSong && (
-          <div data-selection-modal="true" className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 font-sans">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 font-sans">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

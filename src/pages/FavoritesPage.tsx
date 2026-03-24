@@ -90,6 +90,10 @@ export default function FavoritesPage({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const selectionBeforeSelectAllRef = useRef<string[]>([]);
+  const selectionHistoryPushedRef = useRef(false);
+  const detailHistoryPushedRef = useRef(false);
   const placeholders = [
     "제목으로 검색해보세요...",
     "가사 내용으로 검색해보세요...",
@@ -107,6 +111,28 @@ export default function FavoritesPage({
   useEffect(() => {
     return () => clearSelectionLongPressTimer();
   }, []);
+
+  useEffect(() => {
+    if (isSelectionMode && !selectionHistoryPushedRef.current) {
+      window.history.pushState({ favoritesOverlay: 'selection-mode' }, '');
+      selectionHistoryPushedRef.current = true;
+    }
+
+    if (!isSelectionMode) {
+      selectionHistoryPushedRef.current = false;
+    }
+  }, [isSelectionMode]);
+
+  useEffect(() => {
+    if (selectedSong && !detailHistoryPushedRef.current) {
+      window.history.pushState({ favoritesOverlay: 'song-detail' }, '');
+      detailHistoryPushedRef.current = true;
+    }
+
+    if (!selectedSong) {
+      detailHistoryPushedRef.current = false;
+    }
+  }, [selectedSong]);
 
   const navigate = useNavigate();
 
@@ -229,23 +255,64 @@ export default function FavoritesPage({
     }
   };
 
+  const getBulkUnlockHover = (isConfirm = confirmUnlockAll === 1) => ({
+    id: 'bulk-unlock',
+    label: '전체 잠금 해제',
+    description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '모든 곡의 잠금을 해제합니다.'
+  });
+
+  const getBulkDeleteHover = (isConfirm = confirmDeleteAll === 1) => ({
+    id: 'bulk-delete',
+    label: '전체 삭제',
+    description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '잠금되지 않은 모든 곡을 삭제합니다.'
+  });
+
+  const getSelectionLockHover = (
+    allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked)
+  ) => ({
+    id: 'selection-lock',
+    label: allSelectedLocked ? '선택 잠금 해제' : '선택 잠금',
+    description: allSelectedLocked
+      ? '선택된 곡들의 잠금을 해제합니다.'
+      : '선택된 곡들을 삭제되지 않도록 잠급니다.'
+  });
+
+
   const handleBulkDelete = () => {
     if (confirmDeleteAll === 0) {
       setConfirmDeleteAll(1);
-      setTimeout(() => setConfirmDeleteAll(0), 3000);
+      onHover(getBulkDeleteHover(true));
+      setTimeout(() => {
+        setConfirmDeleteAll(0);
+        if (hoveredItem?.id === 'bulk-delete') {
+          onHover(getBulkDeleteHover(false));
+        }
+      }, 3000);
     } else {
       clearAllFavorites();
       setConfirmDeleteAll(0);
+      if (hoveredItem?.id === 'bulk-delete') {
+        onHover(getBulkDeleteHover(false));
+      }
     }
   };
 
   const handleBulkUnlock = () => {
     if (confirmUnlockAll === 0) {
       setConfirmUnlockAll(1);
-      setTimeout(() => setConfirmUnlockAll(0), 3000);
+      onHover(getBulkUnlockHover(true));
+      setTimeout(() => {
+        setConfirmUnlockAll(0);
+        if (hoveredItem?.id === 'bulk-unlock') {
+          onHover(getBulkUnlockHover(false));
+        }
+      }, 3000);
     } else {
       unlockAllFavorites();
       setConfirmUnlockAll(0);
+      if (hoveredItem?.id === 'bulk-unlock') {
+        onHover(getBulkUnlockHover(false));
+      }
     }
   };
 
@@ -282,13 +349,36 @@ export default function FavoritesPage({
     );
   };
 
+  const cycleSelectionModeSelection = (fallbackSongId?: string) => {
+    const allSongIds = favorites.map(song => song.id);
+    if (allSongIds.length === 0) return;
+
+    const isAllSelected = selectedSongIds.length === allSongIds.length && allSongIds.every(id => selectedSongIds.includes(id));
+
+    if (isAllSelected) {
+      const restoredSelection = selectionBeforeSelectAllRef.current.length > 0
+        ? selectionBeforeSelectAllRef.current.filter(id => allSongIds.includes(id))
+        : (fallbackSongId ? [fallbackSongId] : []);
+      setSelectedSongIds(restoredSelection);
+      return;
+    }
+
+    selectionBeforeSelectAllRef.current = selectedSongIds.length > 0
+      ? [...selectedSongIds]
+      : (fallbackSongId ? [fallbackSongId] : []);
+    setSelectedSongIds(allSongIds);
+  };
+
   const handleCardLongPressStart = (song: any) => {
     if (isScrollingRef.current) return;
+    longPressTriggeredRef.current = false;
     clearSelectionLongPressTimer();
     selectionLongPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
       if (isSelectionMode) {
-        exitSelectionMode();
+        cycleSelectionModeSelection(song.id);
       } else {
+        selectionBeforeSelectAllRef.current = [];
         setIsSelectionMode(true);
         setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
       }
@@ -299,11 +389,45 @@ export default function FavoritesPage({
     clearSelectionLongPressTimer();
   };
 
-  const exitSelectionMode = () => {
+  const exitSelectionMode = (source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && selectionHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+
     setIsSelectionMode(false);
     setSelectedSongIds([]);
+    selectionBeforeSelectAllRef.current = [];
     clearSelectionLongPressTimer();
+    longPressTriggeredRef.current = false;
+    selectionHistoryPushedRef.current = false;
   };
+
+  const closeSelectedSong = (source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && detailHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+
+    setSelectedSong(null);
+    detailHistoryPushedRef.current = false;
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (selectedSong) {
+        closeSelectedSong('history');
+        return;
+      }
+
+      if (isSelectionMode) {
+        exitSelectionMode('history');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedSong, isSelectionMode]);
 
   const handleSelectedLock = async () => {
     const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
@@ -632,14 +756,18 @@ ${song.prompt}
               <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
                 <button
                   onClick={handleSelectedLock}
+                  onMouseEnter={() => onHover(getSelectionLockHover())}
+                  onMouseLeave={() => onHover(null)}
+                  onTouchStart={() => onLongPressStart(getSelectionLockHover())}
+                  onTouchEnd={onLongPressEnd}
                   disabled={selectedSongIds.length === 0}
                   className={cn(
                     "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
                     selectedSongIds.length === 0
                       ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
                       : selectedSongs.every(s => s.isLocked)
-                        ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
-                        : "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                        ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                        : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
                   )}
                   aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
                 >
@@ -653,15 +781,23 @@ ${song.prompt}
 
                 <button
                   onClick={exitSelectionMode}
-                  className="flex-1 h-12 px-2 rounded-xl bg-zinc-300 text-zinc-900 border border-white/10 hover:bg-zinc-400 transition-all flex items-center justify-center gap-2"
+                  onMouseEnter={() => onHover({ id: 'selection-confirm', label: '확인', description: '선택모드를 종료하고 현재 선택 상태를 확정합니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  onTouchStart={() => onLongPressStart({ id: 'selection-confirm', label: '확인', description: '선택모드를 종료하고 현재 선택 상태를 확정합니다.' })}
+                  onTouchEnd={onLongPressEnd}
+                  className="flex-1 h-12 px-2 rounded-xl bg-zinc-400 text-zinc-950 border border-white/10 hover:bg-zinc-500 transition-all flex items-center justify-center gap-2"
                 >
-                  <span className="text-[15px] font-bold">{selectedSongIds.length}</span>
-                  <span className="text-[14px] font-medium text-zinc-700">확인</span>
+                  <span className="text-[15px] font-bold">{selectedSongIds.length}곡</span>
+                  <span className="text-[14px] font-medium text-zinc-800">확인</span>
                   <Check className="w-5 h-5 text-brand-orange" />
                 </button>
 
                 <button
                   onClick={handleSelectedDelete}
+                  onMouseEnter={() => onHover({ id: 'selection-delete', label: '선택 삭제', description: '선택된 곡 중 잠기지 않은 곡만 삭제합니다.' })}
+                  onMouseLeave={() => onHover(null)}
+                  onTouchStart={() => onLongPressStart({ id: 'selection-delete', label: '선택 삭제', description: '선택된 곡 중 잠기지 않은 곡만 삭제합니다.' })}
+                  onTouchEnd={onLongPressEnd}
                   disabled={selectedSongIds.length === 0}
                   className={cn(
                     "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
@@ -688,7 +824,7 @@ ${song.prompt}
                 <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
                   <button
                     onClick={handleBulkUnlock}
-                    onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
+                    onMouseEnter={() => onHover(getBulkUnlockHover())}
                     onMouseLeave={() => onHover(null)}
                     className={cn(
                       "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
@@ -703,7 +839,7 @@ ${song.prompt}
 
                   <button
                     onClick={handleBulkDelete}
-                    onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
+                    onMouseEnter={() => onHover(getBulkDeleteHover())}
                     onMouseLeave={() => onHover(null)}
                     className={cn(
                       "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
@@ -754,6 +890,11 @@ ${song.prompt}
                 onTouchEnd={handleCardLongPressEnd}
                 onTouchCancel={handleCardLongPressEnd}
                 onClick={() => {
+                  if (longPressTriggeredRef.current) {
+                    longPressTriggeredRef.current = false;
+                    return;
+                  }
+
                   if (isSelectionMode) toggleSongSelection(song.id);
                 }}
                 className={cn(
@@ -954,7 +1095,7 @@ ${song.prompt}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedSong(null)}
+              onClick={() => closeSelectedSong()}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
             <motion.div
@@ -965,7 +1106,7 @@ ${song.prompt}
             >
               <div className="p-8 border-b border-white/10 bg-zinc-700/30 relative flex flex-col items-center">
                 <button 
-                  onClick={() => setSelectedSong(null)} 
+                  onClick={() => closeSelectedSong()} 
                   className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/5 text-gray-400 transition-colors z-10"
                 >
                   <X className="w-6 h-6" />

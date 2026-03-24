@@ -269,7 +269,7 @@ export default function FavoritesPage({
     selectionLongPressTimerRef.current = setTimeout(() => {
       setIsSelectionMode(true);
       setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
-    }, 800);
+    }, 750);
   };
 
   const handleCardLongPressEnd = () => {
@@ -682,11 +682,22 @@ ${song.prompt}
                 onMouseDown={() => handleCardLongPressStart(song)}
                 onMouseUp={handleCardLongPressEnd}
                 onMouseLeave={handleCardLongPressEnd}
+                onMouseMove={handleCardLongPressEnd}
+                onDragStart={(e) => e.preventDefault()}
+                onContextMenu={(e) => e.preventDefault()}
                 onTouchStart={() => handleCardLongPressStart(song)}
                 onTouchEnd={handleCardLongPressEnd}
                 onTouchCancel={handleCardLongPressEnd}
+                onTouchMove={handleCardLongPressEnd}
                 onClick={() => {
                   if (isSelectionMode) toggleSongSelection(song.id);
+                }}
+                style={{
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  WebkitTouchCallout: 'none',
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation'
                 }}
                 className={cn(
                   "rounded-3xl p-6 transition-all group flex flex-col h-full border",

@@ -944,7 +944,7 @@ ${song.prompt}
                   "rounded-3xl p-6 transition-all group flex flex-col h-full border select-none",
                   isSelectionMode
                     ? isSelected
-                      ? "bg-brand-orange/5 border-brand-orange/40 ring-1 ring-brand-orange/30"
+                      ? "border-brand-orange/40 ring-1 ring-brand-orange/30"
                       : "bg-zinc-800/40 border-white/10 hover:bg-zinc-700/40 cursor-pointer"
                     : "bg-zinc-800/50 border-white/15 hover:bg-zinc-700/50"
                 )}

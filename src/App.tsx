@@ -1616,7 +1616,7 @@ ${result.prompt}
                     className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-2 font-display"
                     style={{ fontFamily: 'Verdana' }}
                   >
-                    Music Note <span className="text-studio-brown">Studio</span>
+                    SORIDRAW's <span className="text-studio-brown">Studio</span>
                   </h1>
                   <p className="text-[11px] md:text-[13px] text-gray-500 font-medium tracking-widest uppercase mb-4">
                     Compose Your Atmosphere
@@ -2243,7 +2243,7 @@ ${result.prompt}
       </AnimatePresence>
 
       <footer className="py-12 px-6 text-center border-t border-white/5 text-gray-600 text-sm">
-        <p>© 2026 Music Note Studio. All rights reserved.</p>
+        <p>© 2026 SORIDRAW's Studio. All rights reserved.</p>
       </footer>
 
       {/* Toast Notification */}

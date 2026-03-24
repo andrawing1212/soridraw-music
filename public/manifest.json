@@ -1,6 +1,6 @@
 {
-  "name": "Music Note Studio",
-  "short_name": "MusicNote",
+  "name": "SORIDRAW's Studio",
+  "short_name": "SORIDRAW",
   "description": "세상에 단 하나뿐인 노래의 완성!",
   "start_url": "/",
   "display": "standalone",

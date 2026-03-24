@@ -536,8 +536,8 @@ ${song.prompt}
         </div>
       </div>
 
-      {/* Search Bar & Bulk Actions */}
-      <div className="max-w-2xl mx-auto mb-12 space-y-4">
+      {/* Search Bar */}
+      <div className="max-w-2xl mx-auto mb-6 space-y-4">
         <div className="flex items-center gap-4">
           <div className="relative flex-1 group overflow-hidden">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
@@ -568,7 +568,7 @@ ${song.prompt}
               </div>
             )}
           </div>
-          
+
           {/* View All (모아보기) Button */}
           <div className="relative" ref={sortPopupRef}>
             <button
@@ -615,109 +615,110 @@ ${song.prompt}
             </AnimatePresence>
           </div>
         </div>
-
-      {/* Bulk Actions Popup (Unlock All, Delete All) */}
-      <AnimatePresence>
-        {favorites.length > 0 && !isSelectionMode && !selectedSong && !showSortPopup && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
-          >
-            <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
-              <button
-                onClick={handleBulkUnlock}
-                onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
-                onMouseLeave={() => onHover(null)}
-                className={cn(
-                  "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
-                  confirmUnlockAll === 1 
-                    ? "bg-brand-orange text-white border-brand-orange animate-pulse" 
-                    : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
-                )}
-              >
-                <Unlock className="w-4 h-4" />
-                {confirmUnlockAll === 1 ? "확인" : "전체 잠금"}
-              </button>
-
-              <button
-                onClick={handleBulkDelete}
-                onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
-                onMouseLeave={() => onHover(null)}
-                className={cn(
-                  "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
-                  confirmDeleteAll === 1 
-                    ? "bg-red-500 text-white border-red-500 animate-pulse" 
-                    : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
-                )}
-              >
-                <Trash2 className="w-4 h-4" />
-                {confirmDeleteAll === 1 ? "확인" : "전체 삭제"}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       </div>
 
-      {/* Selection Mode FAB */}
-      <AnimatePresence>
-        {isSelectionMode && !selectedSong && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
-          >
-            <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
-              <button
-                onClick={handleSelectedLock}
-                disabled={selectedSongIds.length === 0}
-                className={cn(
-                  "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
-                  selectedSongIds.length === 0
-                    ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
-                    : selectedSongs.every(s => s.isLocked)
-                      ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
-                      : "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
-                )}
-                aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
-              >
-                {selectedSongs.every(s => s.isLocked) ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
-                {selectedLockedCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-amber-500 text-[10px] leading-4.5 font-bold text-white text-center">
-                    {selectedLockedCount}
-                  </span>
-                )}
-              </button>
+      {/* Unified Sticky Action Popup */}
+      <AnimatePresence mode="wait">
+        {!selectedSong && !showSortPopup && (
+          isSelectionMode ? (
+            <motion.div
+              key="selection-popup"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
+            >
+              <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+                <button
+                  onClick={handleSelectedLock}
+                  disabled={selectedSongIds.length === 0}
+                  className={cn(
+                    "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
+                    selectedSongIds.length === 0
+                      ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
+                      : selectedSongs.every(s => s.isLocked)
+                        ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
+                        : "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                  )}
+                  aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
+                >
+                  {selectedSongs.every(s => s.isLocked) ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                  {selectedLockedCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-amber-500 text-[10px] leading-4.5 font-bold text-white text-center">
+                      {selectedLockedCount}
+                    </span>
+                  )}
+                </button>
 
-              <button
-                onClick={exitSelectionMode}
-                className="flex-1 h-12 px-2 rounded-xl bg-zinc-200 text-zinc-900 border border-white/10 hover:bg-zinc-300 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="text-[15px] font-bold">{selectedSongIds.length}</span>
-                <span className="text-[14px] font-medium text-zinc-600">확인</span>
-                <Check className="w-5 h-5 text-brand-orange" />
-              </button>
+                <button
+                  onClick={exitSelectionMode}
+                  className="flex-1 h-12 px-2 rounded-xl bg-zinc-300 text-zinc-900 border border-white/10 hover:bg-zinc-400 transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="text-[15px] font-bold">{selectedSongIds.length}</span>
+                  <span className="text-[14px] font-medium text-zinc-700">확인</span>
+                  <Check className="w-5 h-5 text-brand-orange" />
+                </button>
 
-              <button
-                onClick={handleSelectedDelete}
-                disabled={selectedSongIds.length === 0}
-                className={cn(
-                  "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
-                  selectedSongIds.length === 0
-                    ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
-                    : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
-                )}
-                aria-label="선택 삭제"
+                <button
+                  onClick={handleSelectedDelete}
+                  disabled={selectedSongIds.length === 0}
+                  className={cn(
+                    "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
+                    selectedSongIds.length === 0
+                      ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
+                      : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
+                  )}
+                  aria-label="선택 삭제"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            favorites.length > 0 && (
+              <motion.div
+                key="bulk-popup"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
               >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
-          </motion.div>
+                <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+                  <button
+                    onClick={handleBulkUnlock}
+                    onMouseEnter={() => onHover({ id: 'bulk-unlock', label: '전체 잠금 해제', description: '모든 곡의 잠금을 해제합니다.' })}
+                    onMouseLeave={() => onHover(null)}
+                    className={cn(
+                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
+                      confirmUnlockAll === 1 
+                        ? "bg-brand-orange text-white border-brand-orange animate-pulse" 
+                        : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
+                    )}
+                  >
+                    <Unlock className="w-4 h-4" />
+                    {confirmUnlockAll === 1 ? "확인" : "전체 잠금 해제"}
+                  </button>
+
+                  <button
+                    onClick={handleBulkDelete}
+                    onMouseEnter={() => onHover({ id: 'bulk-delete', label: '전체 삭제', description: '잠금되지 않은 모든 곡을 삭제합니다.' })}
+                    onMouseLeave={() => onHover(null)}
+                    className={cn(
+                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
+                      confirmDeleteAll === 1 
+                        ? "bg-red-500 text-white border-red-500 animate-pulse" 
+                        : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
+                    )}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {confirmDeleteAll === 1 ? "확인" : "전체 삭제"}
+                  </button>
+                </div>
+              </motion.div>
+            )
+          )
         )}
       </AnimatePresence>
 
@@ -876,7 +877,7 @@ ${song.prompt}
                         {isSelected ? (
                           <>
                             <Check className="w-4 h-4" />
-                            선택 해제
+                            확인
                           </>
                         ) : (
                           "선택"

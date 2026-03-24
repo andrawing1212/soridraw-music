@@ -841,7 +841,7 @@ ${song.prompt}
             transition={{ duration: 0.18 }}
             className="fixed top-[26px] md:top-[28px] left-1/2 -translate-x-1/2 z-[120] pointer-events-none"
           >
-            <div className="pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-[30px] border border-white/10 bg-[rgba(168,168,174,0.1)] backdrop-blur-1 shadow-2xl">
+            <div className="pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-[30px] border border-white/10 bg-[rgba(168,168,174,0.3)] backdrop-blur-lg shadow-2xl">
               <button
                 onClick={handleSelectedLock}
                 className="relative h-14 w-14 rounded-2xl bg-[#4b402f]/70 text-amber-200 hover:bg-[#5a4b36]/80 transition-all flex items-center justify-center"

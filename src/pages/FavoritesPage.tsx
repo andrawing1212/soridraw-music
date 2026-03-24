@@ -90,6 +90,8 @@ export default function FavoritesPage({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const pressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const placeholders = [
     "제목으로 검색해보세요...",
     "가사 내용으로 검색해보세요...",
@@ -257,23 +259,47 @@ export default function FavoritesPage({
     }
   };
 
+  const setPressStartPoint = (x: number, y: number) => {
+    pressStartPointRef.current = { x, y };
+  };
+
+  const clearPressStartPoint = () => {
+    pressStartPointRef.current = null;
+  };
+
+  const cancelLongPressIfMoved = (x: number, y: number) => {
+    if (!pressStartPointRef.current) return;
+    const dx = Math.abs(x - pressStartPointRef.current.x);
+    const dy = Math.abs(y - pressStartPointRef.current.y);
+    if (dx > 8 || dy > 8) {
+      clearSelectionLongPressTimer();
+    }
+  };
+
   const toggleSongSelection = (songId: string) => {
     setSelectedSongIds(prev =>
       prev.includes(songId) ? prev.filter(id => id !== songId) : [...prev, songId]
     );
   };
 
-  const handleCardLongPressStart = (song: any) => {
+  const handleCardLongPressStart = (song: any, x: number, y: number) => {
     if (isSelectionMode) return;
+    longPressTriggeredRef.current = false;
+    setPressStartPoint(x, y);
     clearSelectionLongPressTimer();
     selectionLongPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
       setIsSelectionMode(true);
       setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
-    }, 800);
+    }, 750);
   };
 
   const handleCardLongPressEnd = () => {
     clearSelectionLongPressTimer();
+    clearPressStartPoint();
+    window.setTimeout(() => {
+      longPressTriggeredRef.current = false;
+    }, 0);
   };
 
   const exitSelectionMode = () => {
@@ -679,17 +705,26 @@ ${song.prompt}
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                onMouseDown={() => handleCardLongPressStart(song)}
+                onMouseDown={(e) => handleCardLongPressStart(song, e.clientX, e.clientY)}
                 onMouseUp={handleCardLongPressEnd}
                 onMouseLeave={handleCardLongPressEnd}
-                onMouseMove={handleCardLongPressEnd}
+                onMouseMove={(e) => cancelLongPressIfMoved(e.clientX, e.clientY)}
                 onDragStart={(e) => e.preventDefault()}
                 onContextMenu={(e) => e.preventDefault()}
-                onTouchStart={() => handleCardLongPressStart(song)}
+                onTouchStart={(e) => {
+                  const touch = e.touches[0];
+                  if (!touch) return;
+                  handleCardLongPressStart(song, touch.clientX, touch.clientY);
+                }}
                 onTouchEnd={handleCardLongPressEnd}
                 onTouchCancel={handleCardLongPressEnd}
-                onTouchMove={handleCardLongPressEnd}
+                onTouchMove={(e) => {
+                  const touch = e.touches[0];
+                  if (!touch) return;
+                  cancelLongPressIfMoved(touch.clientX, touch.clientY);
+                }}
                 onClick={() => {
+                  if (longPressTriggeredRef.current) return;
                   if (isSelectionMode) toggleSongSelection(song.id);
                 }}
                 style={{

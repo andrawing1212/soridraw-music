@@ -779,7 +779,7 @@ ${song.prompt}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
+              className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
             >
               <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
                 <button
@@ -847,7 +847,7 @@ ${song.prompt}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
+                className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
               >
                 <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
                   <button

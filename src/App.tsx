@@ -898,6 +898,25 @@ function App() {
     }
   };
 
+  const lockAllFavorites = async () => {
+    if (!user) return;
+    const unlockedFavs = favorites.filter(f => !f.isLocked);
+    if (unlockedFavs.length === 0) {
+      showToast('이미 모든 곡이 잠겨 있습니다.');
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      unlockedFavs.forEach(f => {
+        batch.update(doc(db, 'favorites', f.id), { isLocked: true });
+      });
+      await batch.commit();
+      showToast(`${unlockedFavs.length}개의 곡이 잠금 설정되었습니다.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+    }
+  };
+
   const unlockAllFavorites = async () => {
     if (!user) return;
     const lockedFavs = favorites.filter(f => f.isLocked);
@@ -2186,6 +2205,7 @@ ${result.prompt}
                   updateFavorite={updateFavorite}
                   clearAllFavorites={clearAllFavorites}
                   unlockAllFavorites={unlockAllFavorites}
+                  lockAllFavorites={lockAllFavorites}
                   user={user}
                   onHover={setHoveredItem}
                   hoveredItem={hoveredItem}

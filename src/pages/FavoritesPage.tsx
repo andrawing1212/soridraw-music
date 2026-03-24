@@ -40,6 +40,7 @@ export default function FavoritesPage({
   updateFavorite,
   clearAllFavorites,
   unlockAllFavorites,
+  lockAllFavorites,
   user,
   onHover,
   hoveredItem,
@@ -51,6 +52,7 @@ export default function FavoritesPage({
   updateFavorite: (id: string, updates: Partial<any>) => void;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
+  lockAllFavorites: () => void;
   user: User | null;
   onHover: (item: { id: string; label: string; description: string; _ts?: number } | null) => void;
   hoveredItem: { id: string; label: string; description: string; _ts?: number } | null;
@@ -84,6 +86,7 @@ export default function FavoritesPage({
   );
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
+  const [confirmLockAll, setConfirmLockAll] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -255,15 +258,21 @@ export default function FavoritesPage({
     }
   };
 
+  const getBulkLockHover = (isConfirm = confirmLockAll === 1) => ({
+    id: 'bulk-lock',
+    label: '일괄잠금',
+    description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '모든 곡을 삭제되지 않도록 잠급니다.'
+  });
+
   const getBulkUnlockHover = (isConfirm = confirmUnlockAll === 1) => ({
     id: 'bulk-unlock',
-    label: '전체 잠금 해제',
+    label: '일괄해제',
     description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '모든 곡의 잠금을 해제합니다.'
   });
 
   const getBulkDeleteHover = (isConfirm = confirmDeleteAll === 1) => ({
     id: 'bulk-delete',
-    label: '전체 삭제',
+    label: '전체삭제',
     description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '잠금되지 않은 모든 곡을 삭제합니다.'
   });
 
@@ -271,12 +280,31 @@ export default function FavoritesPage({
     allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked)
   ) => ({
     id: 'selection-lock',
-    label: allSelectedLocked ? '선택 잠금 해제' : '선택 잠금',
+    label: allSelectedLocked ? '선택 잠금' : '선택 잠금 해제',
     description: allSelectedLocked
-      ? '선택된 곡들의 잠금을 해제합니다.'
-      : '선택된 곡들을 삭제되지 않도록 잠급니다.'
+      ? '선택된 곡들을 삭제되지 않도록 잠급니다.'
+      : '선택된 곡들의 잠금을 해제합니다.'
   });
 
+
+  const handleBulkLock = () => {
+    if (confirmLockAll === 0) {
+      setConfirmLockAll(1);
+      onHover(getBulkLockHover(true));
+      setTimeout(() => {
+        setConfirmLockAll(0);
+        if (hoveredItem?.id === 'bulk-lock') {
+          onHover(getBulkLockHover(false));
+        }
+      }, 3000);
+    } else {
+      lockAllFavorites();
+      setConfirmLockAll(0);
+      if (hoveredItem?.id === 'bulk-lock') {
+        onHover(getBulkLockHover(false));
+      }
+    }
+  };
 
   const handleBulkDelete = () => {
     if (confirmDeleteAll === 0) {
@@ -645,7 +673,7 @@ ${song.prompt}
             onTouchEnd={onLongPressEnd}
             className="mb-6 p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
           >
-            <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
+            <HeartIcon className="w-10 h-10 text-brand-orange fill-current group-hover:scale-110 transition-transform" />
           </button>
         </motion.div>
         <div className="space-y-2">
@@ -781,14 +809,14 @@ ${song.prompt}
 
                 <button
                   onClick={exitSelectionMode}
-                  onMouseEnter={() => onHover({ id: 'selection-confirm', label: '확인', description: '선택모드를 종료하고 현재 선택 상태를 확정합니다.' })}
+                  onMouseEnter={() => onHover({ id: 'selection-confirm', label: '  확인', description: '현재 선택 상태를 확정합니다.' })}
                   onMouseLeave={() => onHover(null)}
-                  onTouchStart={() => onLongPressStart({ id: 'selection-confirm', label: '확인', description: '선택모드를 종료하고 현재 선택 상태를 확정합니다.' })}
+                  onTouchStart={() => onLongPressStart({ id: 'selection-confirm', label: '  확인', description: '현재 선택 상태를 확정합니다.' })}
                   onTouchEnd={onLongPressEnd}
                   className="flex-1 h-12 px-2 rounded-xl bg-zinc-400 text-zinc-950 border border-white/10 hover:bg-zinc-500 transition-all flex items-center justify-center gap-2"
                 >
-                  <span className="text-[15px] font-bold">{selectedSongIds.length}곡</span>
-                  <span className="text-[14px] font-medium text-zinc-800">확인</span>
+                  <span className="text-[14px] font-bold">{selectedSongIds.length}곡</span>
+                  <span className="text-[16px] font-medium text-zinc-800">확인</span>
                   <Check className="w-5 h-5 text-brand-orange" />
                 </button>
 
@@ -821,20 +849,35 @@ ${song.prompt}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 className="sticky top-32 z-[120] flex justify-center mb-8 pointer-events-none"
               >
-                <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+                <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+                  <button
+                    onClick={handleBulkLock}
+                    onMouseEnter={() => onHover(getBulkLockHover())}
+                    onMouseLeave={() => onHover(null)}
+                    className={cn(
+                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
+                      confirmLockAll === 1 
+                        ? "bg-white text-zinc-950 border-white animate-pulse" 
+                        : "bg-white/10 text-white border-white/20 hover:bg-white/20"
+                    )}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    {confirmLockAll === 1 ? "확인" : "일괄잠금"}
+                  </button>
+
                   <button
                     onClick={handleBulkUnlock}
                     onMouseEnter={() => onHover(getBulkUnlockHover())}
                     onMouseLeave={() => onHover(null)}
                     className={cn(
-                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
+                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
                       confirmUnlockAll === 1 
                         ? "bg-brand-orange text-white border-brand-orange animate-pulse" 
                         : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
                     )}
                   >
-                    <Unlock className="w-4 h-4" />
-                    {confirmUnlockAll === 1 ? "확인" : "전체 잠금 해제"}
+                    <Unlock className="w-3.5 h-3.5" />
+                    {confirmUnlockAll === 1 ? "확인" : "일괄해제"}
                   </button>
 
                   <button
@@ -842,14 +885,14 @@ ${song.prompt}
                     onMouseEnter={() => onHover(getBulkDeleteHover())}
                     onMouseLeave={() => onHover(null)}
                     className={cn(
-                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm border",
+                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
                       confirmDeleteAll === 1 
                         ? "bg-red-500 text-white border-red-500 animate-pulse" 
                         : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
                     )}
                   >
-                    <Trash2 className="w-4 h-4" />
-                    {confirmDeleteAll === 1 ? "확인" : "전체 삭제"}
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {confirmDeleteAll === 1 ? "확인" : "전체삭제"}
                   </button>
                 </div>
               </motion.div>

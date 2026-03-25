@@ -91,7 +91,9 @@ export default function FavoritesPage({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
+  const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const longPressTriggeredRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
@@ -408,6 +410,7 @@ export default function FavoritesPage({
       } else {
         selectionBeforeSelectAllRef.current = [];
         setIsSelectionMode(true);
+        setLastSelectionAction('none');
         setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
       }
     }, 600);
@@ -425,6 +428,7 @@ export default function FavoritesPage({
 
     setIsSelectionMode(false);
     setSelectedSongIds([]);
+    setLastSelectionAction('none');
     selectionBeforeSelectAllRef.current = [];
     clearSelectionLongPressTimer();
     longPressTriggeredRef.current = false;
@@ -466,9 +470,11 @@ export default function FavoritesPage({
     if (allLocked) {
       // If all are locked, unlock them
       await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: false })));
+      setLastSelectionAction('unlock');
     } else {
       // Otherwise, lock all (including those already locked)
       await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: true })));
+      setLastSelectionAction('lock');
     }
     
     // Update selectedSong if it's one of the modified ones
@@ -482,7 +488,16 @@ export default function FavoritesPage({
     const deletableSongs = selectedSongs.filter(song => !song.isLocked);
 
     if (deletableSongs.length === 0) {
-      exitSelectionMode();
+      setIsShaking(true);
+      onHover({ 
+        id: 'selection-delete-error', 
+        label: '삭제 불가', 
+        description: '잠긴 곡은 삭제할 수 없습니다. 먼저 잠금을 해제해주세요.' 
+      });
+      setTimeout(() => {
+        setIsShaking(false);
+        onHover(null);
+      }, 1500);
       return;
     }
 
@@ -591,6 +606,7 @@ ${song.prompt}
 
   const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
   const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
+  const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
 
   const filteredFavorites = favorites.filter(song => 
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -776,9 +792,18 @@ ${song.prompt}
             <motion.div
               key="selection-popup"
               initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={{ 
+                opacity: 1, 
+                y: 0,
+                x: isShaking ? [0, -2, 2, -2, 2, 0] : 0
+              }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 300, 
+                damping: 30,
+                x: { duration: 0.4 }
+              }}
               className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
             >
               <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
@@ -794,7 +819,9 @@ ${song.prompt}
                     selectedSongIds.length === 0
                       ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
                       : selectedSongs.every(s => s.isLocked)
-                        ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20"
+                        ? lastSelectionAction === 'lock'
+                          ? "bg-amber-500/40 text-amber-500 border-amber-500/30"
+                          : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
                         : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
                   )}
                   aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
@@ -831,7 +858,9 @@ ${song.prompt}
                     "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
                     selectedSongIds.length === 0
                       ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
-                      : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
+                      : hasDeletableSongs
+                        ? "bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+                        : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
                   )}
                   aria-label="선택 삭제"
                 >

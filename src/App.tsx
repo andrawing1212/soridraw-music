@@ -1552,42 +1552,43 @@ ${result.prompt}
     <div className="min-h-screen bg-[#0f0f0f] text-gray-100 font-sans selection:bg-brand-orange/30">
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} />
 
+      {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
+      {user && (
+        <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
+          <motion.div
+            animate={{ 
+              y: [0, -5, 0],
+              scale: [1, 1.05, 1]
+            }}
+            transition={{ 
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          >
+            <a 
+              href="https://suno.com/create" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              onMouseEnter={() => setHoveredItem({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+              onMouseLeave={() => {
+                setHoveredItem(null);
+                handleLongPressEnd();
+              }}
+              onTouchStart={() => handleLongPressStart({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+              onTouchEnd={handleLongPressEnd}
+              className="w-12 h-12 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[10px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
+              title="Suno Create"
+            >
+              SUNO
+            </a>
+          </motion.div>
+        </div>
+      )}
+
       <Routes>
         <Route path="/" element={
           <>
-            {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Only show after login */}
-            {user && (
-              <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
-                <motion.div
-                  animate={{ 
-                    y: [0, -5, 0],
-                    scale: [1, 1.05, 1]
-                  }}
-                  transition={{ 
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                >
-                  <a 
-                    href="https://suno.com/create" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    onMouseEnter={() => setHoveredItem({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                    onMouseLeave={() => {
-                      setHoveredItem(null);
-                      handleLongPressEnd();
-                    }}
-                    onTouchStart={() => handleLongPressStart({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                    onTouchEnd={handleLongPressEnd}
-                    className="w-12 h-12 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[10px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
-                    title="Suno Create"
-                  >
-                    SUNO
-                  </a>
-                </motion.div>
-              </div>
-            )}
 
             {/* Header */}
             <header className="pt-24 pb-12 px-6 border-b border-white/10 bg-gradient-to-b from-zinc-800/50 to-transparent relative">

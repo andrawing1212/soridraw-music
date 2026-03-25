@@ -492,7 +492,9 @@ export default function FavoritesPage({
       onHover({ 
         id: 'selection-delete-error', 
         label: '삭제 불가', 
-        description: '잠긴 곡은 삭제할 수 없습니다. 먼저 잠금을 해제해주세요.' 
+        description: selectedSongIds.length === 0 
+          ? '삭제할 곡을 선택해주세요.' 
+          : '선택된 곡이 모두 잠겨있어 삭제할 수 없습니다.' 
       });
       setTimeout(() => {
         setIsShaking(false);
@@ -647,31 +649,6 @@ ${song.prompt}
 
   return (
     <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative">
-      {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) */}
-      <div className="fixed top-[26px] md:top-[28px] right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
-        <motion.div
-          animate={{ 
-            y: [0, -5, 0],
-            scale: [1, 1.05, 1]
-          }}
-          transition={{ 
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          <a 
-            href="https://suno.com/create" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="w-12 h-12 md:w-[64px] md:h-[64px] rounded-2xl border border-white/10 flex items-center justify-center text-brand-orange text-[10px] md:text-[12px] font-black tracking-tighter hover:scale-110 transition-all bg-zinc-900/90 backdrop-blur-md shadow-2xl"
-            title="Suno Create"
-          >
-            SUNO
-          </a>
-        </motion.div>
-      </div>
-
       <div className="flex flex-col items-center text-center mb-12">
         <motion.div
           initial={{ opacity: 0, y: -40 }}
@@ -859,8 +836,8 @@ ${song.prompt}
                     selectedSongIds.length === 0
                       ? "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
                       : hasDeletableSongs
-                        ? "bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-                        : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
+                        ? "bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                        : "bg-red-500/5 text-red-500/40 border-red-500/10 hover:bg-red-500/20"
                   )}
                   aria-label="선택 삭제"
                 >

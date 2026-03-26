@@ -2084,14 +2084,11 @@ ${result.prompt}
                       <Trash2 className="w-5 h-5 text-[var(--text-secondary)] group-hover/trash:text-red-500" />
                     </button>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-[var(--input-bg)] p-1.5 rounded-2xl border border-[var(--border-color)] shadow-lg">
                       <button
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}
-                        className={cn(
-                          "p-3 rounded-xl transition-all border",
-                          "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
-                        )}
+                        className="p-1.5 rounded-xl hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ArrowLeft className="w-4 h-4" />
                       </button>
@@ -2101,10 +2098,7 @@ ${result.prompt}
                       <button
                         onClick={() => navigateHistory('next')}
                         disabled={historyIndex <= 0}
-                        className={cn(
-                          "p-3 rounded-xl transition-all border",
-                          "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
-                        )}
+                        className="p-1.5 rounded-xl hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ArrowRight className="w-4 h-4" />
                       </button>
@@ -2411,10 +2405,10 @@ function CategorySection({
             onTouchStart={() => onLongPressStart({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-3 rounded-xl transition-all border",
+              "p-2 rounded-lg transition-all",
               isRandomized 
-                ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+                ? "bg-brand-orange/20 text-brand-orange shadow-lg shadow-brand-orange/10" 
+                : "bg-[var(--hover-bg)] hover:bg-brand-orange/20 text-[var(--text-secondary)] hover:text-brand-orange"
             )}
           >
             <Dices className="w-4 h-4" />
@@ -2428,7 +2422,7 @@ function CategorySection({
             }}
             onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
             onTouchEnd={onLongPressEnd}
-            className="p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
+            className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-brand-orange/20 text-[var(--text-secondary)] hover:text-brand-orange transition-all"
           >
             <PinOff className="w-4 h-4" />
           </button>
@@ -2441,7 +2435,7 @@ function CategorySection({
             }}
             onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
             onTouchEnd={onLongPressEnd}
-            className="p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
+            className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-red-500/20 text-[var(--text-secondary)] hover:text-red-400 transition-all"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -2462,7 +2456,7 @@ function CategorySection({
           }}
           onTouchStart={() => onLongPressStart({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
           onTouchEnd={onLongPressEnd}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-brand-orange transition-all group/expand shadow-[var(--shadow-md)]"
+          className="flex items-center gap-2 px-6 py-2 rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 hover:border-brand-orange/50 group/expand shadow-lg shadow-brand-orange/5"
         >
           <span className="text-[12px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
           {isExpanded ? (
@@ -2496,7 +2490,7 @@ function CategorySection({
               kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             } else {
-              kpopStyle = "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]";
+              kpopStyle = "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-brand-orange/30 hover:text-[var(--text-primary)]";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             }
           }
@@ -2511,7 +2505,7 @@ function CategorySection({
               citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             } else {
-              citypopStyle = "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]";
+              citypopStyle = "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-brand-orange/30 hover:text-[var(--text-primary)]";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             }
           }
@@ -2530,12 +2524,12 @@ function CategorySection({
                   onToggle(item.id);
                 }}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
+                  "px-3 py-1.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2",
                   isKpop ? kpopStyle : (
                     isCitypop ? citypopStyle : (
                       isSelected
                         ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                        : "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-brand-orange/30 hover:text-[var(--text-primary)]"
                     )
                   )
                 )}
@@ -2654,7 +2648,7 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                  : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               {opt.label}
@@ -2729,7 +2723,7 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                  : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               {opt.label}
@@ -2810,7 +2804,7 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value.includes(opt.id as VocalGender)
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                  : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               {opt.label}
@@ -2926,7 +2920,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-3 py-3 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity",
+                "hidden md:flex items-center gap-1 px-1.5 py-1 bg-[var(--input-bg)] rounded-lg border border-[var(--border-color)] shadow-inner transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -2976,10 +2970,10 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
+                "px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
                 enabled 
-                  ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                  : "bg-[var(--card-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+                  ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
+                  : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
@@ -2999,8 +2993,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             className={cn(
               "px-6 py-3 rounded-xl text-base font-bold transition-all border flex items-center gap-2",
               enabled 
-                ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                : "bg-[var(--card-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+                ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
+                : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]/20"
             )}
           >
             <Dices className={cn("w-5 h-5", enabled && "animate-pulse")} />
@@ -3010,7 +3004,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-4 py-3 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
+            "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-[var(--input-bg)] rounded-lg border border-[var(--border-color)] shadow-inner transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}

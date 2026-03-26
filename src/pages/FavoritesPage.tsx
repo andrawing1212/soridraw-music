@@ -735,7 +735,7 @@ ${song.prompt}
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full right-0 mt-2 w-40 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl z-50 overflow-hidden"
+                  className="absolute top-full right-0 mt-2 w-40 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl shadow-[var(--shadow-md)] z-50 overflow-hidden"
                 >
                   {[
                     { id: 'latest', label: '최신 순' },
@@ -783,7 +783,7 @@ ${song.prompt}
               }}
               className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
             >
-              <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+              <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-md)] ring-1 ring-white/5">
                 <button
                   onClick={handleSelectedLock}
                   onMouseEnter={() => onHover(getSelectionLockHover())}
@@ -855,7 +855,7 @@ ${song.prompt}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
               >
-                <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-xl)] ring-1 ring-[var(--border-color)]">
+                <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-md)] ring-1 ring-[var(--border-color)]">
                   <button
                     onClick={handleBulkLock}
                     onMouseEnter={() => onHover(getBulkLockHover())}
@@ -908,7 +908,7 @@ ${song.prompt}
       </AnimatePresence>
 
       {favorites.length === 0 ? (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--bg-secondary)]/30 rounded-3xl border border-[var(--border-color)] p-12">
+        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">아직 저장된 곡이 없습니다.</p>
           <Link to="/" className="mt-6 text-brand-orange font-bold hover:underline">
@@ -947,12 +947,12 @@ ${song.prompt}
                   if (isSelectionMode) toggleSongSelection(song.id);
                 }}
                 className={cn(
-                  "rounded-3xl p-6 transition-all group flex flex-col h-full border select-none",
+                  "rounded-3xl p-6 transition-all group flex flex-col h-full border select-none shadow-[var(--shadow-md)]",
                   isSelectionMode
                     ? isSelected
                       ? "border-brand-orange/40 ring-1 ring-brand-orange/30"
                       : "bg-[var(--card-bg)]/40 border-[var(--border-color)] hover:bg-[var(--hover-bg)]/40 cursor-pointer"
-                    : "bg-[var(--card-bg)]/50 border-[var(--border-color)] hover:bg-[var(--hover-bg)]/50"
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
                 )}
               >
                 <div className="flex justify-between items-start mb-4 gap-4">
@@ -1151,7 +1151,7 @@ ${song.prompt}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              className="relative w-full max-w-2xl bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-[var(--shadow-md)] flex flex-col max-h-[90vh]"
             >
               <div className="p-8 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30 relative flex flex-col items-center">
                 <button 

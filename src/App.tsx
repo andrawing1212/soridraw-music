@@ -1926,7 +1926,7 @@ ${result.prompt}
 
 
               {/* Applied Keywords After Generation */}
-              <div className="bg-[var(--card-bg)] rounded-2xl p-3 border border-[var(--border-color)]">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)]">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-[16.5px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest flex items-center gap-2">
                     <Check className="w-3 h-3 text-brand-orange" />
@@ -2026,7 +2026,7 @@ ${result.prompt}
                   onClick={copyAll}
                   onMouseEnter={() => setHoveredItem({ id: 'copy-all', label: '곡 정보 복사', description: '키워드, 제목, 가사, 프롬프트를 한 번에 복사합니다.' })}
                   onMouseLeave={() => setHoveredItem(null)}
-                  className="flex items-center gap-[18px] px-[48px] py-[18px] rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/20 shadow-lg shadow-brand-orange/5 group"
+                  className="flex items-center gap-[18px] px-[48px] py-[18px] rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-brand-orange transition-all border border-[var(--border-color)] shadow-[var(--shadow-md)] group"
                 >
                   {copiedType === 'all' ? (
                     <Check className="w-[30px] h-[30px]" />
@@ -2038,7 +2038,7 @@ ${result.prompt}
               </div>
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-2xl relative overflow-hidden group">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 flex items-center gap-2">
                   <button
                     onClick={() => copyToClipboard(result.title, 'title')}
@@ -2124,7 +2124,7 @@ ${result.prompt}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* English Lyrics Section */}
-                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics">
+                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)]">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
@@ -2151,7 +2151,7 @@ ${result.prompt}
                 </div>
 
                 {/* Korean Lyrics Section */}
-                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-xl)]">
+                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)]">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
@@ -2178,7 +2178,7 @@ ${result.prompt}
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-[var(--shadow-xl)]">
+                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-[var(--shadow-md)]">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
@@ -2605,7 +2605,7 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
   ];
 
   return (
-    <div className="bg-[var(--bg-secondary)]/30 rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2680,7 +2680,7 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
   ];
 
   return (
-    <div className="bg-[var(--bg-secondary)]/30 rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2761,7 +2761,7 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
   };
 
   return (
-    <div className="bg-[var(--bg-secondary)]/30 rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2890,7 +2890,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   return (
     <div className={cn(
-      "bg-[var(--bg-secondary)]/30 rounded-3xl px-6 py-4 border border-[var(--border-color)] transition-all"
+      "bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--border-color)] transition-all shadow-[var(--shadow-md)]"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">

@@ -143,13 +143,13 @@ class ErrorBoundary extends Component<any, any> {
       }
 
       return (
-        <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-6 text-center">
           <div className="max-w-md space-y-6">
             <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-500/10">
               <AlertCircle className="w-12 h-12 text-red-500" />
             </div>
-            <h2 className="text-2xl font-bold text-white">문제가 발생했습니다</h2>
-            <p className="text-gray-400">{errorMessage}</p>
+            <h2 className="text-2xl font-bold text-[var(--text-primary)]">문제가 발생했습니다</h2>
+            <p className="text-[var(--text-secondary)]">{errorMessage}</p>
             <button 
               onClick={() => window.location.reload()}
               className="px-6 py-3 rounded-xl bg-brand-orange text-white font-bold hover:brightness-110 transition-all"
@@ -2089,7 +2089,7 @@ ${result.prompt}
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}
                         className={cn(
-                          "p-3 rounded-xl transition-all border",
+                          "px-4 py-3 rounded-xl transition-all border",
                           "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
                         )}
                       >
@@ -2102,7 +2102,7 @@ ${result.prompt}
                         onClick={() => navigateHistory('next')}
                         disabled={historyIndex <= 0}
                         className={cn(
-                          "p-3 rounded-xl transition-all border",
+                          "px-4 py-3 rounded-xl transition-all border",
                           "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
                         )}
                       >
@@ -2118,8 +2118,8 @@ ${result.prompt}
                         className={cn(
                           "w-5 h-5 transition-all",
                           favorites.some(f => f.title === result.title && f.prompt === result.prompt)
-                            ? "fill-[#FF8C00] text-[#FF8C00]"
-                            : "text-[var(--text-primary)] group-hover/heart:text-[#FF8C00]"
+                            ? "fill-brand-orange text-brand-orange"
+                            : "text-[var(--text-primary)] group-hover/heart:text-brand-orange"
                         )} 
                       />
                     </button>
@@ -2222,7 +2222,7 @@ ${result.prompt}
           path="/history"
           element={
             !isAuthReady ? (
-              <div className="min-h-screen flex items-center justify-center text-white bg-[#0f0f0f]">
+              <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
                 <div className="flex flex-col items-center gap-4">
                   <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
                   <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
@@ -2531,13 +2531,9 @@ function CategorySection({
                 }}
                 className={cn(
                   "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
-                  isKpop ? kpopStyle : (
-                    isCitypop ? citypopStyle : (
-                      isSelected
-                        ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-                    )
-                  )
+                  isSelected
+                    ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
                 )}
               >
                 {isKpop && kpopMode > 0 && (
@@ -2578,7 +2574,7 @@ function CategorySection({
                 className={cn(
                   "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                   isPinned 
-                    ? "bg-[#A0522D] border-[#8B4513] text-white opacity-100 scale-100" 
+                    ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
                     : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
                 )}
               >
@@ -2968,20 +2964,20 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           </div>
 
           <div className="md:hidden">
-            <button
-              onClick={() => {
-                onEnabledChange(!enabled);
-                onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
-              }}
-              onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className={cn(
-                "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
-                enabled 
-                  ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                  : "bg-[var(--card-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
+              <button
+                onClick={() => {
+                  onEnabledChange(!enabled);
+                  onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
+                }}
+                onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
+                  enabled 
+                    ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
+                    : "bg-[var(--card-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+                )}
+              >
               <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
               <span>랜덤</span>
             </button>

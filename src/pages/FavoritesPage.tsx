@@ -744,16 +744,16 @@ ${song.prompt}
                     { id: 'title', label: '제목 순' },
                     { id: 'locked', label: '잠금 순' }
                   ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => handleSortChange(option.id as any)}
-                      className={cn(
-                        "w-full px-4 py-3 text-left text-sm transition-colors hover:bg-[var(--hover-bg)]",
-                        sortBy === option.id ? "text-brand-orange font-bold" : "text-[var(--text-secondary)]"
-                      )}
-                    >
-                      {option.label}
-                    </button>
+            <button
+              key={option.id}
+              onClick={() => handleSortChange(option.id as any)}
+              className={cn(
+                "w-full px-4 py-3 text-left text-sm transition-colors hover:bg-[var(--hover-bg)]",
+                sortBy === option.id ? "text-brand-orange font-bold" : "text-[var(--text-secondary)]"
+              )}
+            >
+              {option.label}
+            </button>
                   ))}
                 </motion.div>
               )}
@@ -784,28 +784,28 @@ ${song.prompt}
               className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
             >
               <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-md)] ring-1 ring-white/5">
-                <button
-                  onClick={handleSelectedLock}
-                  onMouseEnter={() => onHover(getSelectionLockHover())}
-                  onMouseLeave={() => onHover(null)}
-                  onTouchStart={() => onLongPressStart(getSelectionLockHover())}
-                  onTouchEnd={onLongPressEnd}
-                  disabled={selectedSongIds.length === 0}
-                  className={cn(
-                    "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
-                    selectedSongIds.length === 0
-                      ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed"
-                      : selectedSongs.every(s => s.isLocked)
-                        ? lastSelectionAction === 'lock'
-                          ? "bg-amber-500/40 text-amber-500 border-amber-500/30"
-                          : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
-                        : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
-                  )}
-                  aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
-                >
+                  <button
+                    onClick={handleSelectedLock}
+                    onMouseEnter={() => onHover(getSelectionLockHover())}
+                    onMouseLeave={() => onHover(null)}
+                    onTouchStart={() => onLongPressStart(getSelectionLockHover())}
+                    onTouchEnd={onLongPressEnd}
+                    disabled={selectedSongIds.length === 0}
+                    className={cn(
+                      "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
+                      selectedSongIds.length === 0
+                        ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed"
+                        : selectedSongs.every(s => s.isLocked)
+                          ? lastSelectionAction === 'lock'
+                            ? "bg-brand-orange/40 text-brand-orange border-brand-orange/30"
+                            : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
+                          : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
+                    )}
+                    aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
+                  >
                   {selectedSongs.every(s => s.isLocked) ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                   {selectedLockedCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-amber-500 text-[10px] leading-4.5 font-bold text-white text-center">
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-brand-orange text-[10px] leading-4.5 font-bold text-white text-center">
                       {selectedLockedCount}
                     </span>
                   )}
@@ -1419,7 +1419,7 @@ ${song.prompt}
                           onTouchEnd={onLongPressEnd}
                           className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
                         >
-                          {copiedType === 'lyrics-korean' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                          {copiedType === 'lyrics-korean' ? <Check className="w-8 h-8 text-brand-orange" /> : <Copy className="w-8 h-8" />}
                         </button>
                       )}
                     </div>
@@ -1476,7 +1476,7 @@ ${song.prompt}
                           onTouchEnd={onLongPressEnd}
                           className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
                         >
-                          {copiedType === 'lyrics-english' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                          {copiedType === 'lyrics-english' ? <Check className="w-8 h-8 text-brand-orange" /> : <Copy className="w-8 h-8" />}
                         </button>
                       )}
                     </div>
@@ -1513,7 +1513,7 @@ ${song.prompt}
                         onTouchEnd={onLongPressEnd}
                         className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
                       >
-                        {copiedType === 'prompt' ? <Check className="w-8 h-8 text-green-500" /> : <Copy className="w-8 h-8" />}
+                        {copiedType === 'prompt' ? <Check className="w-8 h-8 text-brand-orange" /> : <Copy className="w-8 h-8" />}
                       </button>
                     )}
                   </div>

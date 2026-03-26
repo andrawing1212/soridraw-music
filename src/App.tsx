@@ -1641,7 +1641,7 @@ ${result.prompt}
                     className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display"
                     style={{ fontFamily: 'Verdana' }}
                   >
-                    SORIDRAW's <span className="text-studio-brown">Studio</span>
+                    SORIDRAW's <span className="text-brand-orange">Studio</span>
                   </h1>
                   <p className="text-[11px] md:text-[13px] text-[var(--text-secondary)] font-medium tracking-widest uppercase mb-4">
                     Compose Your Atmosphere

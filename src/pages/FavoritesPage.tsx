@@ -674,7 +674,7 @@ ${song.prompt}
             className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display"
             style={{ fontFamily: 'Verdana' }}
           >
-            Music <span className="text-studio-brown">Note</span>
+            Music <span className="text-brand-orange">Note</span>
           </h1>
           <p className="text-[var(--text-secondary)] text-lg">세상에 단 하나뿐인 노래의 완성!</p>
           <p className="text-[var(--text-secondary)]/60 text-sm">저장한 곡을 편집하고, 수노에서 음악을 만들어 보세요.</p>

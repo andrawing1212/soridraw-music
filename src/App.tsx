@@ -34,6 +34,7 @@ import {
   Menu,
   Sun,
   Moon,
+  Monitor,
   Home as HomeIcon,
   Heart as HeartIcon,
   User as UserIcon,
@@ -471,7 +472,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, handleLogout, theme, toggleTheme }: { user: User | null; handleLogin: () => void; handleLogout: () => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
+function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }: { user: User | null; handleLogin: () => void; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -664,9 +665,15 @@ function Navigation({ user, handleLogin, handleLogout, theme, toggleTheme }: { u
               <button 
                 onClick={toggleTheme}
                 className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
-                title={theme === 'light' ? '다크 모드로 전환' : '라이트 모드로 전환'}
+                title={
+                  themeMode === 'light' ? '다크 모드로 전환' : 
+                  themeMode === 'dark' ? '시스템 설정으로 전환' : 
+                  '라이트 모드로 전환'
+                }
               >
-                {theme === 'light' ? <Moon className="w-5 h-5 md:w-6 md:h-6" /> : <Sun className="w-5 h-5 md:w-6 md:h-6" />}
+                {themeMode === 'light' ? <Sun className="w-5 h-5 md:w-6 md:h-6" /> : 
+                 themeMode === 'dark' ? <Moon className="w-5 h-5 md:w-6 md:h-6" /> : 
+                 <Monitor className="w-5 h-5 md:w-6 md:h-6" />}
               </button>
 
               {/* Suno Icon */}
@@ -702,18 +709,55 @@ function Navigation({ user, handleLogin, handleLogout, theme, toggleTheme }: { u
 }
 
 function App() {
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
+    const saved = localStorage.getItem('themeMode') as 'light' | 'dark' | 'system';
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    return 'system';
+  });
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const savedMode = localStorage.getItem('themeMode') || 'system';
+    if (savedMode === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return (savedMode === 'dark' ? 'dark' : 'light');
   });
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    const updateTheme = () => {
+      if (themeMode === 'system') {
+        setTheme(mediaQuery.matches ? 'dark' : 'light');
+      } else {
+        setTheme(themeMode as 'light' | 'dark');
+      }
+    };
 
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    updateTheme();
+
+    const handleChange = () => {
+      if (themeMode === 'system') {
+        setTheme(mediaQuery.matches ? 'dark' : 'light');
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('themeMode', themeMode);
+  }, [theme, themeMode]);
+
+  const toggleTheme = () => {
+    setThemeMode(prev => {
+      if (prev === 'light') return 'dark';
+      if (prev === 'dark') return 'system';
+      return 'light';
+    });
+  };
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
@@ -1574,7 +1618,7 @@ ${result.prompt}
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
-      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
+      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} />
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (

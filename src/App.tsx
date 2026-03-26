@@ -32,6 +32,8 @@ import {
   Shuffle,
   Dices,
   Menu,
+  Sun,
+  Moon,
   Home as HomeIcon,
   Heart as HeartIcon,
   User as UserIcon,
@@ -40,9 +42,7 @@ import {
   Lock,
   Unlock,
   Edit2,
-  Filter,
-  Sun,
-  Moon
+  Filter
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -143,21 +143,21 @@ class ErrorBoundary extends Component<any, any> {
       }
 
       return (
-        <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6 text-center">
-            <div className="max-w-md space-y-6">
-              <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-500/10">
-                <AlertCircle className="w-12 h-12 text-red-500" />
-              </div>
-              <h2 className="text-2xl font-bold text-text-primary">문제가 발생했습니다</h2>
-              <p className="text-text-secondary">{errorMessage}</p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="px-6 py-3 rounded-xl bg-brand-orange text-white font-bold hover:brightness-110 transition-all"
-              >
-                다시 시도하기
-              </button>
+        <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center p-6 text-center">
+          <div className="max-w-md space-y-6">
+            <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-500/10">
+              <AlertCircle className="w-12 h-12 text-red-500" />
             </div>
+            <h2 className="text-2xl font-bold text-white">문제가 발생했습니다</h2>
+            <p className="text-gray-400">{errorMessage}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 rounded-xl bg-brand-orange text-white font-bold hover:brightness-110 transition-all"
+            >
+              다시 시도하기
+            </button>
           </div>
+        </div>
       );
     }
 
@@ -331,7 +331,7 @@ function SecondaryScrollControl() {
         >
           <div className="relative h-40 w-8 flex items-center justify-center">
             {/* Track Visual */}
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-text-primary/5 rounded-full" />
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-white/5 rounded-full" />
             
             {/* Control Circle (Reduced Size) */}
             <motion.div
@@ -342,8 +342,8 @@ function SecondaryScrollControl() {
               animate={{ y: isDragging ? dragY : 0 }}
               transition={isDragging ? { type: "just" } : { type: "spring", stiffness: 400, damping: 30 }}
               className={cn(
-                "w-6 h-6 rounded-full bg-surface/80 backdrop-blur-md border border-brand-orange/40 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
-                isDragging ? "border-brand-orange bg-surface-hover" : "hover:border-brand-orange/60"
+                "w-6 h-6 rounded-full bg-zinc-900/80 backdrop-blur-md border border-brand-orange/40 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
+                isDragging ? "border-brand-orange bg-zinc-800" : "hover:border-brand-orange/60"
               )}
             >
               <div className={cn(
@@ -471,19 +471,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ 
-  user, 
-  handleLogin, 
-  handleLogout,
-  theme,
-  toggleTheme 
-}: { 
-  user: User | null; 
-  handleLogin: () => void; 
-  handleLogout: () => void;
-  theme: 'dark' | 'light';
-  toggleTheme: () => void;
-}) {
+function Navigation({ user, handleLogin, handleLogout, theme, toggleTheme }: { user: User | null; handleLogin: () => void; handleLogout: () => void; theme: 'light' | 'dark'; toggleTheme: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -586,8 +574,8 @@ function Navigation({
             }
           }}
           className={cn(
-            "p-3 md:p-[14.4px] rounded-2xl bg-surface/90 border border-border-main backdrop-blur-md text-text-primary shadow-2xl transition-all z-50",
-            isExpanded ? "bg-brand-orange border-brand-orange/50 scale-90" : "hover:bg-surface-hover"
+            "p-3 md:p-[14.4px] rounded-2xl bg-[var(--card-bg)]/90 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-2xl transition-all z-50",
+            isExpanded ? "bg-brand-orange border-brand-orange/50 scale-90 text-white" : "hover:bg-[var(--hover-bg)]"
           )}
         >
           <Menu className={cn("w-6 h-6 md:w-[28.8px] md:h-[28.8px] transition-transform", isExpanded && "rotate-90")} />
@@ -620,7 +608,7 @@ function Navigation({
                 ) : (
                   <button 
                     onClick={() => { handleLogin(); setIsExpanded(false); }}
-                    className="p-2.5 md:p-3 rounded-2xl bg-surface/80 border border-border-main backdrop-blur-md text-text-primary shadow-xl hover:bg-surface-hover transition-all"
+                    className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                   >
                     <UserIcon className="w-5 h-5 md:w-6 md:h-6" />
                   </button>
@@ -633,10 +621,10 @@ function Navigation({
                       initial={{ opacity: 0, x: 10, scale: 0.95 }}
                       animate={{ opacity: 1, x: 0, scale: 1 }}
                       exit={{ opacity: 0, x: 10, scale: 0.95 }}
-                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-surface/95 border border-border-main backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden"
+                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-[var(--card-bg)]/95 border border-[var(--border-color)] backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden"
                     >
-                      <div className="px-3 py-2 border-b border-border-main mb-1">
-                        <p className="text-[10px] md:text-[12px] text-text-secondary truncate font-medium">{user.displayName}</p>
+                      <div className="px-3 py-2 border-b border-[var(--border-color)]/50 mb-1">
+                        <p className="text-[10px] md:text-[12px] text-[var(--text-secondary)] truncate font-medium">{user.displayName}</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -645,7 +633,7 @@ function Navigation({
                           setIsExpanded(false);
                           if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] md:text-[13px] font-bold text-brand-orange hover:bg-text-primary/5 transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] md:text-[13px] font-bold text-brand-orange hover:bg-[var(--hover-bg)] transition-colors text-left"
                       >
                         로그아웃
                       </button>
@@ -654,23 +642,10 @@ function Navigation({
                 </AnimatePresence>
               </div>
 
-              {/* Theme Toggle Icon */}
-              <button 
-                onClick={toggleTheme}
-                className="p-2.5 md:p-3 rounded-2xl bg-surface/80 border border-border-main backdrop-blur-md text-text-primary shadow-xl hover:bg-surface-hover transition-all"
-                title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
-              >
-                {theme === 'dark' ? (
-                  <Sun className="w-5 h-5 md:w-6 md:h-6 text-amber-400" />
-                ) : (
-                  <Moon className="w-5 h-5 md:w-6 md:h-6 text-indigo-400" />
-                )}
-              </button>
-
               {/* Home Icon */}
               <button 
                 onClick={handleHomeClick}
-                className="p-2.5 md:p-3 rounded-2xl bg-surface/80 border border-border-main backdrop-blur-md text-text-primary shadow-xl hover:bg-surface-hover transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="홈으로"
               >
                 <HomeIcon className="w-5 h-5 md:w-6 md:h-6" />
@@ -679,10 +654,19 @@ function Navigation({
               {/* Heart Icon (Favorites) */}
               <button 
                 onClick={handleHistoryClick}
-                className="p-2.5 md:p-3 rounded-2xl bg-surface/80 border border-border-main backdrop-blur-md text-text-primary shadow-xl hover:bg-surface-hover transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="내 보관함"
               >
                 <HeartIcon className="w-5 h-5 md:w-6 md:h-6" />
+              </button>
+
+              {/* Theme Toggle Button */}
+              <button 
+                onClick={toggleTheme}
+                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
+                title={theme === 'light' ? '다크 모드로 전환' : '라이트 모드로 전환'}
+              >
+                {theme === 'light' ? <Moon className="w-5 h-5 md:w-6 md:h-6" /> : <Sun className="w-5 h-5 md:w-6 md:h-6" />}
               </button>
 
               {/* Suno Icon */}
@@ -691,7 +675,7 @@ function Navigation({
                 target="_blank" 
                 rel="noopener noreferrer"
                 onClick={handleSunoClick}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-text-primary flex items-center justify-center text-text-primary text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[var(--text-primary)] flex items-center justify-center text-[var(--text-primary)] text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
                 title="Suno Create"
               >
                 SUNO
@@ -718,21 +702,18 @@ function Navigation({
 }
 
 function App() {
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
-    if (saved === 'dark' || saved === 'light') return saved;
-    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
   useEffect(() => {
-    document.documentElement.classList.remove('dark', 'light');
-    document.documentElement.classList.add(theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
@@ -1592,55 +1573,49 @@ ${result.prompt}
   };
 
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary font-sans selection:bg-brand-orange/30">
-      <Navigation 
-        user={user} 
-        handleLogin={handleLogin} 
-        handleLogout={handleLogout} 
-        theme={theme}
-        toggleTheme={toggleTheme}
-      />
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} theme={theme} toggleTheme={toggleTheme} />
 
-        {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
-        {user && (
-          <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
-            <motion.div
-              animate={{ 
-                y: [0, -5, 0],
-                scale: [1, 1.05, 1]
+      {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
+      {user && (
+        <div className="fixed top-6 right-4 md:right-6 xl:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
+          <motion.div
+            animate={{ 
+              y: [0, -5, 0],
+              scale: [1, 1.05, 1]
+            }}
+            transition={{ 
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          >
+            <a 
+              href="https://suno.com/create" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              onMouseEnter={() => setHoveredItem({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+              onMouseLeave={() => {
+                setHoveredItem(null);
+                handleLongPressEnd();
               }}
-              transition={{ 
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
+              onTouchStart={() => handleLongPressStart({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+              onTouchEnd={handleLongPressEnd}
+              className="w-12 h-12 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-[var(--border-color)] flex items-center justify-center text-brand-orange text-[10px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-[var(--card-bg)]/90 backdrop-blur-md shadow-2xl"
+              title="Suno Create"
             >
-              <a 
-                href="https://suno.com/create" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                onMouseEnter={() => setHoveredItem({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                onMouseLeave={() => {
-                  setHoveredItem(null);
-                  handleLongPressEnd();
-                }}
-                onTouchStart={() => handleLongPressStart({ id: 'suno-main', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                onTouchEnd={handleLongPressEnd}
-                className="w-12 h-12 md:w-[57.6px] md:h-[57.6px] rounded-2xl border border-border-main flex items-center justify-center text-brand-orange text-[10px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-surface/90 backdrop-blur-md shadow-2xl"
-                title="Suno Create"
-              >
-                SUNO
-              </a>
-            </motion.div>
-          </div>
-        )}
+              SUNO
+            </a>
+          </motion.div>
+        </div>
+      )}
 
       <Routes>
         <Route path="/" element={
           <>
 
             {/* Header */}
-            <header className="pt-24 pb-12 px-6 border-b border-white/10 bg-gradient-to-b from-zinc-800/50 to-transparent relative">
+            <header className="pt-24 pb-12 px-6 border-b border-[var(--border-color)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
               <div className="max-w-6xl mx-auto">
                 <div className="text-center">
                   <motion.div
@@ -1663,20 +1638,20 @@ ${result.prompt}
                     </button>
                   </motion.div>
                   <h1 
-                    className="text-3xl md:text-5xl font-bold tracking-tight text-text-primary mb-2 font-display"
+                    className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display"
                     style={{ fontFamily: 'Verdana' }}
                   >
                     SORIDRAW's <span className="text-studio-brown">Studio</span>
                   </h1>
-                  <p className="text-[11px] md:text-[13px] text-text-muted font-medium tracking-widest uppercase mb-4">
+                  <p className="text-[11px] md:text-[13px] text-[var(--text-secondary)] font-medium tracking-widest uppercase mb-4">
                     Compose Your Atmosphere
                   </p>
                   <p 
                     className="max-w-2xl mx-auto leading-relaxed px-4"
                     style={{ fontFamily: 'Courier New', color: 'var(--text-secondary)', fontWeight: 'normal', fontSize: '14px' }}
                   >
-                    <span className="text-text-primary font-bold text-xl md:text-2xl">나의 이야기를 음악으로</span><br />
-                    <span className="text-text-secondary">세상에 단 하나 뿐인 나만의 곡을 만들어보세요</span>
+                    <span className="text-[var(--text-primary)] opacity-80 font-bold text-xl md:text-2xl">나의 이야기를 음악으로</span><br />
+                    <span className="text-[var(--text-secondary)]">세상에 단 하나 뿐인 나만의 곡을 만들어보세요</span>
                   </p>
                 </div>
               </div>
@@ -1833,7 +1808,7 @@ ${result.prompt}
               <div className="flex justify-center mt-2">
                 <button
                   onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
-                  className="text-[10px] font-bold text-text-muted hover:text-brand-orange transition-colors flex items-center gap-1 uppercase tracking-tighter bg-surface/50 px-3 py-1 rounded-full border border-border-main"
+                  className="text-[10px] font-bold text-gray-500 hover:text-brand-orange transition-colors flex items-center gap-1 uppercase tracking-tighter bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5"
                 >
                   {isKeywordsExpanded ? (
                     <>접기 <ChevronUp className="w-3 h-3" /></>
@@ -1847,7 +1822,7 @@ ${result.prompt}
 
           <div className="relative group">
             <div className="absolute top-6 left-4 pointer-events-none z-10">
-              <Search className="w-5 h-5 text-text-muted group-focus-within:text-brand-orange transition-colors" />
+              <Search className="w-5 h-5 text-gray-400 group-focus-within:text-brand-orange transition-colors" />
             </div>
             
             <textarea
@@ -1861,12 +1836,12 @@ ${result.prompt}
                 setIsInputFocused(true);
               }}
               onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-surface-active/50 border border-border-main rounded-2xl py-5 pl-12 pr-6 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
+              className="w-full bg-[#28282c] border border-white/30 rounded-2xl py-5 pl-12 pr-6 text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
               rows={1}
             />
             {!userInput && !isInputFocused && (
               <div className="absolute inset-0 pointer-events-none flex items-center pl-12 overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap text-text-secondary text-[14px] md:text-lg">
+                <div className="animate-marquee whitespace-nowrap text-gray-400 text-[14px] md:text-lg">
                   작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 ) &nbsp;&nbsp;&nbsp;&nbsp; 작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 )
                 </div>
               </div>
@@ -1887,7 +1862,7 @@ ${result.prompt}
                 }}
                 onTouchStart={() => handleLongPressStart({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
                 onTouchEnd={handleLongPressEnd}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-surface hover:bg-surface-hover text-text-primary transition-all border border-border-main flex items-center justify-center gap-2 group/random"
+                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2 group/random"
               >
                 <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
                 <span className="hidden md:block font-bold">랜덤 선택</span>
@@ -1931,7 +1906,7 @@ ${result.prompt}
                 onClick={() => clearAll({ preserveHistory: true })}
                 onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-surface hover:bg-surface-hover text-text-primary transition-all border border-border-main flex items-center justify-center gap-2"
+                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2"
               >
                 <Trash2 className="w-5 h-5 text-red-500" />
                 <span className="hidden md:block font-bold">Clear all</span>
@@ -1946,14 +1921,14 @@ ${result.prompt}
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-8 pt-12 border-t border-border-main"
+              className="space-y-8 pt-12 border-t border-[var(--border-color)]"
             >
 
 
               {/* Applied Keywords After Generation */}
-              <div className="bg-surface/50 rounded-2xl p-3 border border-border-main">
+              <div className="bg-[var(--card-bg)] rounded-2xl p-3 border border-[var(--border-color)]">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-[16.5px] font-semibold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+                  <h3 className="text-[16.5px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest flex items-center gap-2">
                     <Check className="w-3 h-3 text-brand-orange" />
                     적용된 키워드
                   </h3>
@@ -1977,7 +1952,7 @@ ${result.prompt}
                       }}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="p-2 rounded-lg bg-text-primary/5 hover:bg-text-primary/10 text-text-secondary hover:text-text-primary transition-all"
+                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
                     >
                       {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                     </button>
@@ -1992,7 +1967,7 @@ ${result.prompt}
                   {isAppliedKeywordsExpanded && (['genre', 'mood', 'theme'] as const).map((cat) => (
                     <div key={cat} className="space-y-1 group/cat">
                       <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-text-muted uppercase tracking-tighter">{cat}</p>
+                        <p className="text-[9px] font-bold text-gray-600 uppercase tracking-tighter">{cat}</p>
                         <button
                           onClick={() => copyToClipboard(result.appliedKeywords[cat].join(', '), `kw-${cat}`)}
                           className="opacity-0 group-hover/cat:opacity-100 transition-opacity p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-400"
@@ -2018,7 +1993,7 @@ ${result.prompt}
                                 "px-2 py-0.5 rounded-md text-[11px] transition-all cursor-help",
                                 isRandom 
                                   ? "bg-brand-orange/20 text-brand-orange font-bold border border-brand-orange/30" 
-                                  : "bg-zinc-800 text-gray-400 border border-white/5"
+                                  : "bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)]"
                               )}
                             >
                               {kw}
@@ -2033,7 +2008,7 @@ ${result.prompt}
                       <p className="text-[9px] font-bold text-gray-600 uppercase tracking-tighter">tempo</p>
                       <div className="flex flex-wrap gap-1">
                         <span 
-                          className="px-2 py-0.5 rounded-md text-[11px] bg-zinc-800 text-gray-400 border border-white/5 cursor-help"
+                          className="px-2 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
                           onMouseEnter={() => setHoveredItem({ id: 'kw-tempo', label: 'Tempo', description: '곡의 빠르기를 나타내는 BPM 범위입니다.' })}
                           onMouseLeave={() => setHoveredItem(null)}
                         >
@@ -2063,13 +2038,13 @@ ${result.prompt}
               </div>
 
               {/* Title Card */}
-              <div className="bg-surface rounded-3xl p-6 border border-border-main shadow-2xl relative overflow-hidden group">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 flex items-center gap-2">
                   <button
                     onClick={() => copyToClipboard(result.title, 'title')}
                     onMouseEnter={() => setHoveredItem({ id: 'copy-title', label: '제목 복사', description: '곡의 제목을 복사합니다.' })}
                     onMouseLeave={() => setHoveredItem(null)}
-                    className="p-2 rounded-lg bg-text-primary/5 hover:bg-text-primary/10 text-text-secondary hover:text-text-primary transition-all"
+                    className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                   >
                     {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                   </button>
@@ -2080,7 +2055,7 @@ ${result.prompt}
                     제목 (Title)
                   </div>
                   <div className="h-[60px] md:h-auto flex items-center justify-center">
-                    <h2 className="text-[15px] md:text-2xl font-bold text-text-primary leading-tight line-clamp-2 text-center">
+                    <h2 className="text-[15px] md:text-2xl font-bold text-[var(--text-primary)] leading-tight line-clamp-2 text-center">
                       {result.title}
                     </h2>
                   </div>
@@ -2103,27 +2078,27 @@ ${result.prompt}
                           }
                         }
                       }}
-                      className="p-2.5 rounded-2xl bg-text-primary/10 border border-border-main shadow-lg transition-all hover:bg-red-500/20 group/trash"
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-red-500/20 group/trash"
                       title="히스토리에서 삭제"
                     >
-                      <Trash2 className="w-5 h-5 text-text-muted group-hover/trash:text-red-500" />
+                      <Trash2 className="w-5 h-5 text-[var(--text-secondary)] group-hover/trash:text-red-500" />
                     </button>
 
-                    <div className="flex items-center gap-2 bg-surface-active/70 p-1.5 rounded-2xl border border-border-main shadow-lg">
+                    <div className="flex items-center gap-2 bg-[var(--input-bg)] p-1.5 rounded-2xl border border-[var(--border-color)] shadow-lg">
                       <button
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}
-                        className="p-1.5 rounded-xl hover:bg-text-primary/10 text-text-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        className="p-1.5 rounded-xl hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ArrowLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-xl font-mono font-bold text-text-secondary min-w-[80px] text-center">
+                      <span className="text-xl font-mono font-bold text-[var(--text-secondary)] min-w-[80px] text-center">
                         {historyIndex + 1} / {history.length}
                       </span>
                       <button
                         onClick={() => navigateHistory('next')}
                         disabled={historyIndex <= 0}
-                        className="p-1.5 rounded-xl hover:bg-text-primary/10 text-text-secondary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        className="p-1.5 rounded-xl hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                       >
                         <ArrowRight className="w-4 h-4" />
                       </button>
@@ -2131,14 +2106,14 @@ ${result.prompt}
 
                     <button
                       onClick={() => toggleFavorite(result)}
-                      className="p-2.5 rounded-2xl bg-text-primary/10 border border-border-main shadow-lg transition-all hover:bg-text-primary/20 group/heart"
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart"
                     >
                       <Heart 
                         className={cn(
                           "w-5 h-5 transition-all",
                           favorites.some(f => f.title === result.title && f.prompt === result.prompt)
                             ? "fill-[#FF8C00] text-[#FF8C00]"
-                            : "text-text-primary group-hover/heart:text-[#FF8C00]"
+                            : "text-[var(--text-primary)] group-hover/heart:text-[#FF8C00]"
                         )} 
                       />
                     </button>
@@ -2149,9 +2124,9 @@ ${result.prompt}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* English Lyrics Section */}
-                <div className="aspect-square bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col group/lyrics">
-                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-active/30">
-                    <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm">
+                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics">
+                  <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
+                    <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
                       영어 가사
                     </h3>
@@ -2160,7 +2135,7 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-text-primary/5 hover:bg-text-primary/10 text-text-secondary hover:text-text-primary transition-all"
+                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                       >
                         {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -2168,7 +2143,7 @@ ${result.prompt}
                   </div>
                   <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
                     <div className="flex-1" />
-                    <pre className="whitespace-pre-wrap font-sans text-text-primary leading-relaxed text-sm md:text-base w-full text-center">
+                    <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
                       {result.lyrics.english}
                     </pre>
                     <div className="flex-1" />
@@ -2176,9 +2151,9 @@ ${result.prompt}
                 </div>
 
                 {/* Korean Lyrics Section */}
-                <div className="aspect-square bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col group/lyrics">
-                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-active/30">
-                    <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm">
+                <div className="aspect-square bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col group/lyrics">
+                  <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
+                    <h3 className="font-bold text-white flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
                       한글 가사
                     </h3>
@@ -2187,7 +2162,7 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-text-primary/5 hover:bg-text-primary/10 text-text-secondary hover:text-text-primary transition-all"
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
                       >
                         {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -2195,7 +2170,7 @@ ${result.prompt}
                   </div>
                   <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
                     <div className="flex-1" />
-                    <pre className="whitespace-pre-wrap font-sans text-text-secondary leading-relaxed text-sm md:text-base w-full text-center">
+                    <pre className="whitespace-pre-wrap font-sans text-gray-400 leading-relaxed text-sm md:text-base w-full text-center">
                       {result.lyrics.korean}
                     </pre>
                     <div className="flex-1" />
@@ -2203,9 +2178,9 @@ ${result.prompt}
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1">
-                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-active/30">
-                    <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm">
+                <div className="bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1">
+                  <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
+                    <h3 className="font-bold text-white flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
                       음악 프롬프트
                     </h3>
@@ -2214,7 +2189,7 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.prompt, 'prompt')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-text-primary/5 hover:bg-text-primary/10 text-text-secondary hover:text-text-primary transition-all"
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
                       >
                         {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -2222,8 +2197,8 @@ ${result.prompt}
                   </div>
                   <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full">
                     <div className="flex-1" />
-                    <div className="bg-black/30 rounded-2xl p-6 border border-border-main">
-                      <p className="text-text-secondary leading-relaxed text-sm font-mono">
+                    <div className="bg-black/30 rounded-2xl p-6 border border-white/5">
+                      <p className="text-gray-400 leading-relaxed text-sm font-mono">
                         {result.prompt}
                       </p>
                     </div>
@@ -2241,14 +2216,14 @@ ${result.prompt}
           path="/history"
           element={
             !isAuthReady ? (
-              <div className="min-h-screen flex items-center justify-center text-text-primary bg-bg-primary">
+              <div className="min-h-screen flex items-center justify-center text-white bg-[#0f0f0f]">
                 <div className="flex flex-col items-center gap-4">
                   <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
-                  <p className="text-sm font-medium text-text-secondary">사용자 정보를 불러오는 중...</p>
+                  <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
                 </div>
               </div>
             ) : user ? (
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-text-primary">불러오는 중...</div>}>
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <FavoritesPageLazy
                   favorites={favorites}
                   toggleFavorite={toggleFavorite}
@@ -2284,15 +2259,15 @@ ${result.prompt}
             exit={{ opacity: 0, x: '-50%' }}
             onMouseEnter={() => setIsTooltipHovered(true)}
             onMouseLeave={() => setIsTooltipHovered(false)}
-            className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-surface/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"
+            className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"
           >
             <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
-            <p className="text-[11px] text-text-secondary font-medium leading-relaxed">{hoveredItem.description}</p>
+            <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <footer className="py-12 px-6 text-center border-t border-border-main text-text-muted text-sm">
+      <footer className="py-12 px-6 text-center border-t border-[var(--border-color)] text-[var(--text-secondary)]/50 text-sm">
         <p>© 2026 SORIDRAW's Studio. All rights reserved.</p>
       </footer>
 
@@ -2303,7 +2278,7 @@ ${result.prompt}
             initial={{ opacity: 0, y: 20, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: 20, x: '-50%' }}
-            className="fixed bottom-24 left-1/2 z-[100] px-4 py-2 rounded-full bg-surface border border-border-main shadow-2xl text-xs font-bold text-text-primary flex items-center gap-2"
+            className="fixed bottom-24 left-1/2 z-[100] px-4 py-2 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl text-xs font-bold text-[var(--text-primary)] flex items-center gap-2"
           >
             <Check className="w-3 h-3 text-brand-orange" />
             {toast.message}
@@ -2321,8 +2296,7 @@ ${result.prompt}
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: var(--text-primary);
-          opacity: 0.1;
+          background: rgba(255, 255, 255, 0.1);
           border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
@@ -2395,17 +2369,17 @@ function CategorySection({
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
   return (
-    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full relative group">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       <div className="flex items-center justify-between mb-4">
         <div className="relative">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[20px] font-bold text-text-primary flex items-center gap-2 cursor-help"
+            className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
           >
             <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
             {title}
-            <span className="text-[14px] font-normal text-text-muted ml-2">({selected.length}/{items.length})</span>
+            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
           </h3>
           <AnimatePresence>
             {showTitleTooltip && (
@@ -2413,9 +2387,9 @@ function CategorySection({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-surface border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
               >
-                <p className="text-[11px] text-text-secondary leading-snug">{description}</p>
+                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -2434,7 +2408,7 @@ function CategorySection({
               "p-2 rounded-lg transition-all",
               isRandomized 
                 ? "bg-brand-orange/20 text-brand-orange shadow-lg shadow-brand-orange/10" 
-                : "bg-text-primary/5 hover:bg-brand-orange/20 text-text-muted hover:text-brand-orange"
+                : "bg-[var(--hover-bg)] hover:bg-brand-orange/20 text-[var(--text-secondary)] hover:text-brand-orange"
             )}
           >
             <Dices className="w-4 h-4" />
@@ -2448,7 +2422,7 @@ function CategorySection({
             }}
             onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
             onTouchEnd={onLongPressEnd}
-            className="p-2 rounded-lg bg-text-primary/5 hover:bg-brand-orange/20 text-text-muted hover:text-brand-orange transition-all"
+            className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-brand-orange/20 text-[var(--text-secondary)] hover:text-brand-orange transition-all"
           >
             <PinOff className="w-4 h-4" />
           </button>
@@ -2461,7 +2435,7 @@ function CategorySection({
             }}
             onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
             onTouchEnd={onLongPressEnd}
-            className="p-2 rounded-lg bg-text-primary/5 hover:bg-red-500/20 text-text-muted hover:text-red-400 transition-all"
+            className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-red-500/20 text-[var(--text-secondary)] hover:text-red-400 transition-all"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -2516,7 +2490,7 @@ function CategorySection({
               kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             } else {
-              kpopStyle = "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary";
+              kpopStyle = "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-brand-orange/30 hover:text-[var(--text-primary)]";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             }
           }
@@ -2531,7 +2505,7 @@ function CategorySection({
               citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             } else {
-              citypopStyle = "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary";
+              citypopStyle = "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-brand-orange/30 hover:text-[var(--text-primary)]";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             }
           }
@@ -2555,7 +2529,7 @@ function CategorySection({
                     isCitypop ? citypopStyle : (
                       isSelected
                         ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-[#19191b] border-white/5 text-gray-400 hover:border-brand-orange/30 hover:text-gray-200"
+                        : "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-brand-orange/30 hover:text-[var(--text-primary)]"
                     )
                   )
                 )}
@@ -2582,9 +2556,9 @@ function CategorySection({
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl w-40 pointer-events-none"
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-40 pointer-events-none"
                   >
-                    <p className="text-[10px] text-gray-300 text-center leading-tight">{hoveredItem.description}</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] text-center leading-tight">{hoveredItem.description}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -2599,7 +2573,7 @@ function CategorySection({
                   "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                   isPinned 
                     ? "bg-[#A0522D] border-[#8B4513] text-white opacity-100 scale-100" 
-                    : "bg-zinc-800 border-white/10 text-gray-500 opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
                 )}
               >
                 <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
@@ -2631,12 +2605,12 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
   ];
 
   return (
-    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full">
+    <div className="bg-[var(--bg-secondary)]/30 rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
           onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-text-primary flex items-center gap-2 cursor-help"
+          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
           가사 길이
@@ -2647,9 +2621,9 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-surface border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-text-secondary leading-snug">가사의 전체적인 분량을 조절합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다.</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2673,8 +2647,8 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
-                  ? "bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               {opt.label}
@@ -2706,12 +2680,12 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
   ];
 
   return (
-    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full">
+    <div className="bg-[var(--bg-secondary)]/30 rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
           onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-text-primary flex items-center gap-2 cursor-help"
+          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
           드럼 스타일
@@ -2722,9 +2696,9 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-surface border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-text-secondary leading-snug">드럼의 연주 방식을 선택합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">드럼의 연주 방식을 선택합니다.</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2748,8 +2722,8 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
-                  ? "bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               {opt.label}
@@ -2787,15 +2761,15 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
   };
 
   return (
-    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full">
+    <div className="bg-[var(--bg-secondary)]/30 rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
           onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-text-primary flex items-center gap-2 cursor-help"
+          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가수 <span className="text-[12px] font-normal text-text-muted">(둘다 적용 = 듀엣)</span>
+          가수 <span className="text-[12px] font-normal text-[var(--text-secondary)]">(둘다 적용 = 듀엣)</span>
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2803,9 +2777,9 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-surface border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-text-secondary leading-snug">가수의 성별을 선택합니다. 둘 다 선택 시 듀엣이 적용됩니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가수의 성별을 선택합니다. 둘 다 선택 시 듀엣이 적용됩니다.</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2829,8 +2803,8 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
               className={cn(
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value.includes(opt.id as VocalGender)
-                  ? "bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               {opt.label}
@@ -2916,7 +2890,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   return (
     <div className={cn(
-      "bg-surface/40 rounded-3xl px-6 py-4 border border-border-main transition-all"
+      "bg-[var(--bg-secondary)]/30 rounded-3xl px-6 py-4 border border-[var(--border-color)] transition-all"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
@@ -2925,7 +2899,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               <h3 
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className="text-[18px] font-bold text-text-primary flex items-center gap-2 cursor-help"
+                className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
               >
                 <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
                 템포(BPM)
@@ -2936,9 +2910,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-surface border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
                   >
-                    <p className="text-[11px] text-text-secondary leading-snug">곡의 빠르기를 BPM 단위로 조절합니다.</p>
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 빠르기를 BPM 단위로 조절합니다.</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -2946,7 +2920,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-1.5 py-1 bg-surface-active/50 rounded-lg border border-border-main shadow-inner transition-opacity",
+                "hidden md:flex items-center gap-1 px-1.5 py-1 bg-[var(--input-bg)] rounded-lg border border-[var(--border-color)] shadow-inner transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -2967,7 +2941,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 }}
                 className="w-8 bg-transparent text-cyan-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
-              <span className="text-text-muted font-bold text-sm">-</span>
+              <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
                 type="number"
                 min={min}
@@ -2983,7 +2957,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 }}
                 className="w-8 bg-transparent text-rose-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
-              <span className="text-text-muted text-[9px] uppercase font-bold tracking-tighter">bpm</span>
+              <span className="text-[var(--text-secondary)] text-[9px] uppercase font-bold tracking-tighter">bpm</span>
             </div>
           </div>
 
@@ -2999,7 +2973,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 "px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
                 enabled 
                   ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
-                  : "bg-surface text-text-secondary border border-border-main hover:border-brand-orange/30 hover:text-text-primary"
+                  : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]/20"
               )}
             >
               <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
@@ -3020,7 +2994,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               "px-6 py-3 rounded-xl text-base font-bold transition-all border flex items-center gap-2",
               enabled 
                 ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" 
-                : "bg-surface text-text-secondary border border-border-main hover:border-brand-orange/30 hover:text-text-primary"
+                : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]/20"
             )}
           >
             <Dices className={cn("w-5 h-5", enabled && "animate-pulse")} />
@@ -3030,7 +3004,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-surface-active/50 rounded-lg border border-border-main shadow-inner transition-opacity w-fit mx-auto",
+            "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-[var(--input-bg)] rounded-lg border border-[var(--border-color)] shadow-inner transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -3051,7 +3025,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             }}
             className="w-10 bg-transparent text-cyan-400 font-mono font-bold text-lg focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-text-muted font-bold text-lg">-</span>
+          <span className="text-[var(--text-secondary)]/50 font-bold text-lg">-</span>
           <input
             type="number"
             min={min}
@@ -3067,7 +3041,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             }}
             className="w-10 bg-transparent text-rose-400 font-mono font-bold text-lg focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-text-muted text-[10px] uppercase font-bold tracking-tighter">bpm</span>
+          <span className="text-[var(--text-secondary)] text-[10px] uppercase font-bold tracking-tighter">bpm</span>
         </div>
       </div>
 
@@ -3081,7 +3055,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
       >
         <div 
           ref={sliderRef}
-          className="relative h-2 bg-surface-active rounded-full cursor-pointer mx-0"
+          className="relative h-2 bg-[var(--hover-bg)] rounded-full cursor-pointer mx-0"
           onClick={(e) => {
             if (enabled) return;
             const rect = sliderRef.current!.getBoundingClientRect();
@@ -3101,7 +3075,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           <div 
             className={cn(
               "absolute h-full rounded-full transition-colors",
-              !enabled ? (isValid ? "bg-brand-orange" : "bg-text-primary/20") : "bg-brand-orange/40"
+              !enabled ? (isValid ? "bg-brand-orange" : "bg-[var(--text-secondary)]/30") : "bg-brand-orange/40"
             )}
             style={{ left: `${minPos}%`, width: `${maxPos - minPos}%` }}
           />
@@ -3113,8 +3087,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             className={cn(
               "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
-                ? "bg-surface border-cyan-500 shadow-lg shadow-cyan-500/20 scale-110" 
-                : "bg-surface border-cyan-500/40 shadow-lg shadow-cyan-500/10 scale-100 cursor-not-allowed",
+                ? "bg-[var(--card-bg)] border-cyan-500 shadow-lg shadow-cyan-500/20 scale-110" 
+                : "bg-[var(--card-bg)] border-cyan-500/40 shadow-lg shadow-cyan-500/10 scale-100 cursor-not-allowed",
               isDragging === 'min' && "scale-125 border-cyan-400"
             )}
             style={{ left: `${minPos}%` }}
@@ -3129,8 +3103,8 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             className={cn(
               "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
-                ? "bg-surface border-rose-500 shadow-lg shadow-rose-500/20 scale-110" 
-                : "bg-surface border-rose-500/40 shadow-lg shadow-rose-500/10 scale-100 cursor-not-allowed",
+                ? "bg-[var(--card-bg)] border-rose-500 shadow-lg shadow-rose-500/20 scale-110" 
+                : "bg-[var(--card-bg)] border-rose-500/40 shadow-lg shadow-rose-500/10 scale-100 cursor-not-allowed",
               isDragging === 'max' && "scale-125 border-rose-400"
             )}
             style={{ left: `${maxPos}%` }}
@@ -3139,7 +3113,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           </div>
         </div>
         
-        <div className="flex justify-between mt-3 text-[9px] font-bold text-text-muted uppercase tracking-widest">
+        <div className="flex justify-between mt-3 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">
           <span>40 BPM</span>
           <span>100 BPM</span>
           <span>160 BPM</span>
@@ -3158,7 +3132,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               <Check className="w-3 h-3" /> 템포 지정됨
             </span>
           ) : (
-            <span className="text-text-muted text-[10px] font-bold uppercase tracking-wider bg-text-primary/5 px-3 py-0.5 rounded-full border border-border-main">
+            <span className="text-[var(--text-secondary)] text-[10px] font-bold uppercase tracking-wider bg-[var(--hover-bg)]/50 px-3 py-0.5 rounded-full border border-[var(--border-color)]">
               범위 20 이하일 때 적용
             </span>
           )

@@ -855,7 +855,7 @@ ${song.prompt}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
               >
-                <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_30px_rgba(255,99,33,0.15)] ring-1 ring-white/5">
+                <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-xl)] ring-1 ring-[var(--border-color)]">
                   <button
                     onClick={handleBulkLock}
                     onMouseEnter={() => onHover(getBulkLockHover())}
@@ -878,7 +878,7 @@ ${song.prompt}
                     className={cn(
                       "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
                       confirmUnlockAll === 1 
-                        ? "bg-brand-orange text-white border-brand-orange animate-pulse" 
+                        ? "bg-brand-orange text-[var(--bg-primary)] border-brand-orange animate-pulse" 
                         : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
                     )}
                   >
@@ -893,7 +893,7 @@ ${song.prompt}
                     className={cn(
                       "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
                       confirmDeleteAll === 1 
-                        ? "bg-red-500 text-white border-red-500 animate-pulse" 
+                        ? "bg-red-500 text-[var(--bg-primary)] border-red-500 animate-pulse" 
                         : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
                     )}
                   >
@@ -976,7 +976,7 @@ ${song.prompt}
                           animate={{ scale: 1 }}
                           className="w-5 h-5 rounded-full bg-brand-orange flex items-center justify-center"
                         >
-                          <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                          <Check className="w-3.5 h-3.5 text-[var(--bg-primary)] stroke-[3]" />
                         </motion.div>
                       )}
                       <span className="text-[10px] text-[var(--text-secondary)] font-semibold opacity-100">
@@ -1126,7 +1126,7 @@ ${song.prompt}
                 onClick={() => setVisibleCount(prev => prev + 9)}
                 onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 9개 더 불러옵니다.' })}
                 onMouseLeave={() => onHover(null)}
-                className="px-8 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-white/10 flex items-center gap-2 group"
+                className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
               >
                 <Plus className="w-5 h-5 text-brand-orange group-hover:rotate-90 transition-transform" />
                 더보기 ({filteredFavorites.length - visibleCount}개 남음)

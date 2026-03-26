@@ -1808,7 +1808,7 @@ ${result.prompt}
               <div className="flex justify-center mt-2">
                 <button
                   onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
-                  className="text-[10px] font-bold text-gray-500 hover:text-brand-orange transition-colors flex items-center gap-1 uppercase tracking-tighter bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5"
+                  className="text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-colors flex items-center gap-1 uppercase tracking-tighter bg-[var(--card-bg)]/50 px-3 py-1 rounded-full border border-[var(--border-color)]"
                 >
                   {isKeywordsExpanded ? (
                     <>접기 <ChevronUp className="w-3 h-3" /></>
@@ -1822,7 +1822,7 @@ ${result.prompt}
 
           <div className="relative group">
             <div className="absolute top-6 left-4 pointer-events-none z-10">
-              <Search className="w-5 h-5 text-gray-400 group-focus-within:text-brand-orange transition-colors" />
+              <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
             </div>
             
             <textarea
@@ -1836,12 +1836,12 @@ ${result.prompt}
                 setIsInputFocused(true);
               }}
               onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-[#28282c] border border-white/30 rounded-2xl py-5 pl-12 pr-6 text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
+              className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative shadow-[var(--shadow-lg)]"
               rows={1}
             />
             {!userInput && !isInputFocused && (
               <div className="absolute inset-0 pointer-events-none flex items-center pl-12 overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap text-gray-400 text-[14px] md:text-lg">
+                <div className="animate-marquee whitespace-nowrap text-[var(--text-secondary)] text-[14px] md:text-lg">
                   작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 ) &nbsp;&nbsp;&nbsp;&nbsp; 작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 )
                 </div>
               </div>
@@ -1862,7 +1862,7 @@ ${result.prompt}
                 }}
                 onTouchStart={() => handleLongPressStart({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
                 onTouchEnd={handleLongPressEnd}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2 group/random"
+                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
               >
                 <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
                 <span className="hidden md:block font-bold">랜덤 선택</span>
@@ -1906,7 +1906,7 @@ ${result.prompt}
                 onClick={() => clearAll({ preserveHistory: true })}
                 onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-white/10 flex items-center justify-center gap-2"
+                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] flex items-center justify-center gap-2 shadow-[var(--shadow-md)]"
               >
                 <Trash2 className="w-5 h-5 text-red-500" />
                 <span className="hidden md:block font-bold">Clear all</span>
@@ -1952,7 +1952,7 @@ ${result.prompt}
                       }}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                      className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                     >
                       {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                     </button>
@@ -1967,10 +1967,10 @@ ${result.prompt}
                   {isAppliedKeywordsExpanded && (['genre', 'mood', 'theme'] as const).map((cat) => (
                     <div key={cat} className="space-y-1 group/cat">
                       <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-gray-600 uppercase tracking-tighter">{cat}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
                         <button
                           onClick={() => copyToClipboard(result.appliedKeywords[cat].join(', '), `kw-${cat}`)}
-                          className="opacity-0 group-hover/cat:opacity-100 transition-opacity p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-400"
+                          className="opacity-0 group-hover/cat:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                         >
                           {copiedType === `kw-${cat}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                         </button>
@@ -2005,7 +2005,7 @@ ${result.prompt}
                   ))}
                   {result.appliedKeywords.tempo && (
                     <div className="space-y-1">
-                      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-tighter">tempo</p>
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">tempo</p>
                       <div className="flex flex-wrap gap-1">
                         <span 
                           className="px-2 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
@@ -2151,9 +2151,9 @@ ${result.prompt}
                 </div>
 
                 {/* Korean Lyrics Section */}
-                <div className="aspect-square bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col group/lyrics">
-                  <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
-                    <h3 className="font-bold text-white flex items-center gap-2 text-sm">
+                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-xl)]">
+                  <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                    <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
                       한글 가사
                     </h3>
@@ -2162,7 +2162,7 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                       >
                         {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -2170,7 +2170,7 @@ ${result.prompt}
                   </div>
                   <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
                     <div className="flex-1" />
-                    <pre className="whitespace-pre-wrap font-sans text-gray-400 leading-relaxed text-sm md:text-base w-full text-center">
+                    <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
                       {result.lyrics.korean}
                     </pre>
                     <div className="flex-1" />
@@ -2178,9 +2178,9 @@ ${result.prompt}
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1">
-                  <div className="p-5 border-b border-white/5 flex items-center justify-between bg-zinc-800/30">
-                    <h3 className="font-bold text-white flex items-center gap-2 text-sm">
+                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-[var(--shadow-xl)]">
+                  <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                    <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
                       음악 프롬프트
                     </h3>
@@ -2189,7 +2189,7 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.prompt, 'prompt')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                       >
                         {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -2197,8 +2197,8 @@ ${result.prompt}
                   </div>
                   <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full">
                     <div className="flex-1" />
-                    <div className="bg-black/30 rounded-2xl p-6 border border-white/5">
-                      <p className="text-gray-400 leading-relaxed text-sm font-mono">
+                    <div className="bg-[var(--input-bg)] rounded-2xl p-6 border border-[var(--border-color)]">
+                      <p className="text-[var(--text-secondary)] leading-relaxed text-sm font-mono">
                         {result.prompt}
                       </p>
                     </div>

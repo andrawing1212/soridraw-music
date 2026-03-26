@@ -586,7 +586,7 @@ function Navigation({
             }
           }}
           className={cn(
-            "p-3 md:p-[14.4px] rounded-2xl bg-surface border border-border-main backdrop-blur-md text-text-primary shadow-xl transition-all z-50",
+            "p-3 md:p-[14.4px] rounded-2xl bg-surface/90 border border-border-main backdrop-blur-md text-text-primary shadow-2xl transition-all z-50",
             isExpanded ? "bg-brand-orange border-brand-orange/50 scale-90" : "hover:bg-surface-hover"
           )}
         >
@@ -633,7 +633,7 @@ function Navigation({
                       initial={{ opacity: 0, x: 10, scale: 0.95 }}
                       animate={{ opacity: 1, x: 0, scale: 1 }}
                       exit={{ opacity: 0, x: 10, scale: 0.95 }}
-                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-surface border border-border-main backdrop-blur-xl rounded-xl shadow-xl overflow-hidden"
+                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-surface/95 border border-border-main backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden"
                     >
                       <div className="px-3 py-2 border-b border-border-main mb-1">
                         <p className="text-[10px] md:text-[12px] text-text-secondary truncate font-medium">{user.displayName}</p>
@@ -1861,7 +1861,7 @@ ${result.prompt}
                 setIsInputFocused(true);
               }}
               onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-surface/50 border border-border-main rounded-2xl py-5 pl-12 pr-6 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange/30 transition-all text-base md:text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
+              className="w-full bg-surface-active/50 border border-border-main rounded-2xl py-5 pl-12 pr-6 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative"
               rows={1}
             />
             {!userInput && !isInputFocused && (
@@ -2109,7 +2109,7 @@ ${result.prompt}
                       <Trash2 className="w-5 h-5 text-text-muted group-hover/trash:text-red-500" />
                     </button>
 
-                    <div className="flex items-center gap-2 bg-surface/70 p-1.5 rounded-2xl border border-border-main shadow-lg">
+                    <div className="flex items-center gap-2 bg-surface-active/70 p-1.5 rounded-2xl border border-border-main shadow-lg">
                       <button
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}
@@ -2149,8 +2149,8 @@ ${result.prompt}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* English Lyrics Section */}
-                <div className="aspect-square bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col group/lyrics shadow-sm">
-                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-hover/30">
+                <div className="aspect-square bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col group/lyrics">
+                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-active/30">
                     <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
                       영어 가사
@@ -2176,8 +2176,8 @@ ${result.prompt}
                 </div>
 
                 {/* Korean Lyrics Section */}
-                <div className="aspect-square bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col group/lyrics shadow-sm">
-                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-hover/30">
+                <div className="aspect-square bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col group/lyrics">
+                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-active/30">
                     <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
                       한글 가사
@@ -2203,8 +2203,8 @@ ${result.prompt}
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-sm">
-                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-hover/30">
+                <div className="bg-surface rounded-3xl border border-border-main overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1">
+                  <div className="p-5 border-b border-border-main flex items-center justify-between bg-surface-active/30">
                     <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
                       음악 프롬프트
@@ -2222,7 +2222,7 @@ ${result.prompt}
                   </div>
                   <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full">
                     <div className="flex-1" />
-                    <div className="bg-bg-primary/50 rounded-2xl p-6 border border-border-main">
+                    <div className="bg-black/30 rounded-2xl p-6 border border-border-main">
                       <p className="text-text-secondary leading-relaxed text-sm font-mono">
                         {result.prompt}
                       </p>
@@ -2284,7 +2284,7 @@ ${result.prompt}
             exit={{ opacity: 0, x: '-50%' }}
             onMouseEnter={() => setIsTooltipHovered(true)}
             onMouseLeave={() => setIsTooltipHovered(false)}
-            className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-surface border border-brand-orange/30 shadow-xl pointer-events-auto cursor-default max-w-[200px] text-center"
+            className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-surface/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"
           >
             <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
             <p className="text-[11px] text-text-secondary font-medium leading-relaxed">{hoveredItem.description}</p>
@@ -2395,7 +2395,7 @@ function CategorySection({
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
   return (
-    <div className="bg-card-bg rounded-3xl p-6 border border-border-main flex flex-col h-full relative group shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full relative group">
       <div className="flex items-center justify-between mb-4">
         <div className="relative">
           <h3 
@@ -2516,7 +2516,7 @@ function CategorySection({
               kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             } else {
-              kpopStyle = "bg-surface/60 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary";
+              kpopStyle = "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
             }
           }
@@ -2531,7 +2531,7 @@ function CategorySection({
               citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             } else {
-              citypopStyle = "bg-surface/60 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary";
+              citypopStyle = "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
             }
           }
@@ -2555,7 +2555,7 @@ function CategorySection({
                     isCitypop ? citypopStyle : (
                       isSelected
                         ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-surface/60 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                        : "bg-[#19191b] border-white/5 text-gray-400 hover:border-brand-orange/30 hover:text-gray-200"
                     )
                   )
                 )}
@@ -2582,9 +2582,9 @@ function CategorySection({
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-surface border border-border-main shadow-xl w-40 pointer-events-none"
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-zinc-800 border border-brand-orange/30 shadow-2xl w-40 pointer-events-none"
                   >
-                    <p className="text-[10px] text-text-secondary text-center leading-tight">{hoveredItem.description}</p>
+                    <p className="text-[10px] text-gray-300 text-center leading-tight">{hoveredItem.description}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -2598,8 +2598,8 @@ function CategorySection({
                 className={cn(
                   "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                   isPinned 
-                    ? "bg-studio-brown border-studio-brown/50 text-white opacity-100 scale-100" 
-                    : "bg-surface border border-border-main text-text-muted opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                    ? "bg-[#A0522D] border-[#8B4513] text-white opacity-100 scale-100" 
+                    : "bg-zinc-800 border-white/10 text-gray-500 opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
                 )}
               >
                 <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
@@ -2631,7 +2631,7 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
   ];
 
   return (
-    <div className="bg-card-bg rounded-3xl p-6 border border-border-main flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2639,7 +2639,7 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
           className="text-[18px] font-bold text-text-primary flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가사 분량
+          가사 길이
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2674,7 +2674,7 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-surface/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                  : "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
               )}
             >
               {opt.label}
@@ -2706,7 +2706,7 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
   ];
 
   return (
-    <div className="bg-card-bg rounded-3xl p-6 border border-border-main flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2749,7 +2749,7 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-surface/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                  : "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
               )}
             >
               {opt.label}
@@ -2787,7 +2787,7 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
   };
 
   return (
-    <div className="bg-card-bg rounded-3xl p-6 border border-border-main flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-surface/40 rounded-3xl p-6 border border-border-main flex flex-col h-full">
       <div className="relative mb-6">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
@@ -2830,7 +2830,7 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value.includes(opt.id as VocalGender)
                   ? "bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-surface/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
+                  : "bg-surface-active/50 border border-border-main text-text-secondary hover:border-brand-orange/30 hover:text-text-primary"
               )}
             >
               {opt.label}
@@ -2916,7 +2916,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   return (
     <div className={cn(
-      "bg-card-bg rounded-3xl px-6 py-4 border border-border-main shadow-sm hover:shadow-md transition-all"
+      "bg-surface/40 rounded-3xl px-6 py-4 border border-border-main transition-all"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
@@ -2946,7 +2946,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-1.5 py-1 bg-surface/50 rounded-lg border border-border-main shadow-inner transition-opacity",
+                "hidden md:flex items-center gap-1 px-1.5 py-1 bg-surface-active/50 rounded-lg border border-border-main shadow-inner transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -3030,7 +3030,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-surface/50 rounded-lg border border-border-main shadow-inner transition-opacity w-fit mx-auto",
+            "md:hidden flex items-center justify-center gap-1 px-3 py-1.5 bg-surface-active/50 rounded-lg border border-border-main shadow-inner transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}

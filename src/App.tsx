@@ -66,6 +66,8 @@ import {
   where, 
   getDocs, 
   doc, 
+  getDoc,
+  setDoc,
   onSnapshot,
   serverTimestamp,
   getDocFromServer,
@@ -1071,34 +1073,25 @@ function App() {
   };
 
   // Reset filters on navigation to Home, but preserve generated song history
-  useEffect(() => {
-    if (location.pathname !== '/') return;
+useEffect(() => {
+  const loadRecentSongs = async () => {
+    if (!user) return;
 
-    if (!hasInitializedHomeRef.current) {
-      hasInitializedHomeRef.current = true;
-      window.scrollTo(0, 0);
-      return;
-    }
+    try {
+      const ref = doc(db, "user_recent_songs", user.uid);
+      const snap = await getDoc(ref);
 
-    // 1. Clear current state (preserving history)
-    clearAll({ preserveHistory: true, preservePinned: true });
-
-    // 2. Check for pending keywords from Favorites
-    const pending = sessionStorage.getItem('pendingAppliedKeywords');
-    if (pending) {
-      try {
-        const keywords = JSON.parse(pending);
-        // This function clears pinned keywords and sets new ones
-        applyKeywordsToNext(keywords);
-        // 3. Prevent duplicate application
-        sessionStorage.removeItem('pendingAppliedKeywords');
-      } catch (e) {
-        console.error('Failed to parse pending keywords', e);
+      if (snap.exists()) {
+        const songs = snap.data().songs || [];
+        setHistory(songs);
       }
+    } catch (e) {
+      console.error("Failed to load recent songs:", e);
     }
+  };
 
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
+  loadRecentSongs();
+}, [user]);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -1573,7 +1566,27 @@ function App() {
       // Keep tempoEnabled true to show real-time updates if keywords change
     }
   };
+const saveRecentSong = async (newSong: any) => {
+  if (!user) return;
 
+  try {
+    const ref = doc(db, "user_recent_songs", user.uid);
+    const snap = await getDoc(ref);
+
+    let existingSongs: any[] = [];
+
+    if (snap.exists()) {
+      existingSongs = snap.data().songs || [];
+    }
+
+    const updatedSongs = [newSong, ...existingSongs].slice(0, 10);
+
+    await setDoc(ref, { songs: updatedSongs }, { merge: true });
+
+  } catch (e) {
+    console.error("Failed to save recent songs:", e);
+  }
+};
   const handleGenerate = async () => {
     if (!user) {
       showToast('로그인이 필요합니다.');
@@ -1713,7 +1726,8 @@ function App() {
       };
 
       setResult(newResult);
-      setHistory(prev => [newResult, ...prev].slice(0, 5)); // Keep last 5
+      setHistory(prev => [newResult, ...prev].slice(0, 10));
+saveRecentSong(newResult); // 🔥 추가
       setHistoryIndex(0);
     } catch (error: any) {
       if (error.name === 'AbortError') {

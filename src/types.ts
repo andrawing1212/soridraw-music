@@ -2,7 +2,6 @@ export type Category = 'genre' | 'mood' | 'theme';
 export type LyricsLength = 'very-short' | 'short' | 'normal';
 export type DrumStyle = 'none' | 'half-time' | 'double-time';
 export type VocalType = string;
-export type VocalTone = 'default' | 'husky' | 'soft' | 'deep';
 
 export interface SongResult {
   title: string;
@@ -17,7 +16,6 @@ export interface SongResult {
     theme: string[];
     tempo?: string;
     vocalType?: VocalType;
-    vocalTone?: VocalTone;
   };
   randomKeywords?: string[];
 }

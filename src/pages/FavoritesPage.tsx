@@ -666,7 +666,7 @@ ${song.prompt}
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
 
   const applyKeywordsToNext = (song: any) => {
-    localStorage.setItem('soridraw_pending_keywords', JSON.stringify(song.appliedKeywords));
+    sessionStorage.setItem('soridraw_pending_keywords', JSON.stringify(song.appliedKeywords));
     navigate('/');
   };
 
@@ -1504,32 +1504,30 @@ ${song.prompt}
               <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
                 {/* Keywords & Tempo */}
                 <div className="bg-[var(--bg-secondary)]/30 rounded-2xl p-4 border border-[var(--border-color)] relative">
-                  {!isEditing && (
-                    <div className="absolute top-4 right-4">
-                      <button 
-                        onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].join(', '), 'keywords')}
-                        className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
-                      >
-                        {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+                    <div className="flex flex-wrap gap-2 pr-12 sm:pr-0">
                       {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => (
                         <span key={k} className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold">#{k}</span>
                       ))}
                     </div>
                     {!isEditing && (
-                      <button
-                        onClick={() => applyKeywordsToNext(selectedSong)}
-                        onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
-                        onMouseLeave={() => onHover(null)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/30 text-[11px] font-bold"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        다음 곡에 적용
-                      </button>
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          onClick={() => applyKeywordsToNext(selectedSong)}
+                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                          onMouseLeave={() => onHover(null)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/30 text-[11px] font-bold whitespace-nowrap"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          다음 곡에 적용
+                        </button>
+                        <button 
+                          onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].join(', '), 'keywords')}
+                          className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
+                        >
+                          {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     )}
                   </div>
                   {selectedSong.appliedKeywords.tempo && (

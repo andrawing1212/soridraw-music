@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { SongResult, LyricsLength, DrumStyle, VocalType, VocalTone } from "../types";
+import { SongResult, LyricsLength, DrumStyle, VocalType } from "../types";
 import { BASE_PROMPTS } from "../constants";
 
 // 롤백: 원래 작동하던 GEMINI_API_KEY 방식입니다.
@@ -23,7 +23,6 @@ export async function generateSong(
   drumStyle: DrumStyle = 'none',
   maleCount: number = 0,
   femaleCount: number = 0,
-  vocalTone?: VocalTone,
   tempo?: string,
   specialPrompt?: string,
   kpopMode: 0 | 1 | 2 = 0
@@ -118,7 +117,6 @@ export async function generateSong(
         if (malePart && femalePart) return `${malePart} + ${femalePart}`;
         return malePart || femalePart || "Appropriate for the genre and mood";
       })()}
-    - ${vocalTone ? `VOCAL TONE: ${vocalTone}` : "Vocal tone should be appropriate for the genre and mood."}
     
     Keywords to use:
     Genres: ${genres.join(", ")}
@@ -156,8 +154,7 @@ export async function generateSong(
               mood: { type: Type.ARRAY, items: { type: Type.STRING } },
               theme: { type: Type.ARRAY, items: { type: Type.STRING } },
               tempo: { type: Type.STRING },
-              vocalType: { type: Type.STRING },
-              vocalTone: { type: Type.STRING }
+              vocalType: { type: Type.STRING }
             },
             required: ["genre", "mood", "theme"]
           }

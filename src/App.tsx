@@ -50,7 +50,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { GENRES, MOODS, THEMES } from './constants';
-import { CategoryItem, SongResult, LyricsLength, DrumStyle, VocalType, VocalTone } from './types';
+import { CategoryItem, SongResult, LyricsLength, DrumStyle, VocalType } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
@@ -769,10 +769,28 @@ function App() {
   const [drumStyle, setDrumStyle] = useState<DrumStyle>('none');
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
-  const [vocalTone, setVocalTone] = useState<VocalTone>('default');
-  const [pinnedGenres, setPinnedGenres] = useState<string[]>([]);
-  const [pinnedMoods, setPinnedMoods] = useState<string[]>([]);
-  const [pinnedThemes, setPinnedThemes] = useState<string[]>([]);
+  const [pinnedGenres, setPinnedGenres] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem('soridraw_pinned_genres');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [pinnedMoods, setPinnedMoods] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem('soridraw_pinned_moods');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [pinnedThemes, setPinnedThemes] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem('soridraw_pinned_themes');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('soridraw_pinned_genres', JSON.stringify(pinnedGenres));
+  }, [pinnedGenres]);
+  useEffect(() => {
+    sessionStorage.setItem('soridraw_pinned_moods', JSON.stringify(pinnedMoods));
+  }, [pinnedMoods]);
+  useEffect(() => {
+    sessionStorage.setItem('soridraw_pinned_themes', JSON.stringify(pinnedThemes));
+  }, [pinnedThemes]);
   const [isGenreExpanded, setIsGenreExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
@@ -885,6 +903,7 @@ function App() {
 
   type ClearAllOptions = {
     preserveHistory?: boolean;
+    preservePinned?: boolean;
   };
 
   // Real-time tempo calculation when in random mode
@@ -1058,7 +1077,7 @@ function App() {
       return;
     }
 
-    clearAll({ preserveHistory: true });
+    clearAll({ preserveHistory: true, preservePinned: true });
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
@@ -1088,6 +1107,11 @@ function App() {
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
 
+    // Overwrite pinned keywords when applying from Favorites or Results
+    setPinnedGenres([]);
+    setPinnedMoods([]);
+    setPinnedThemes([]);
+
     setSelectedGenres(genreIds);
     setSelectedMoods(moodIds);
     setSelectedThemes(themeIds);
@@ -1112,12 +1136,12 @@ function App() {
   };
 
   useEffect(() => {
-    const pending = localStorage.getItem('soridraw_pending_keywords');
+    const pending = sessionStorage.getItem('soridraw_pending_keywords');
     if (pending) {
       try {
         const keywords = JSON.parse(pending);
         applyKeywordsToNext(keywords);
-        localStorage.removeItem('soridraw_pending_keywords');
+        sessionStorage.removeItem('soridraw_pending_keywords');
       } catch (e) {
         console.error('Failed to parse pending keywords', e);
       }
@@ -1396,11 +1420,13 @@ function App() {
   };
 
   const clearAll = (options: ClearAllOptions = {}) => {
-    const { preserveHistory = false } = options;
+    const { preserveHistory = false, preservePinned = false } = options;
 
-    setPinnedGenres([]);
-    setPinnedMoods([]);
-    setPinnedThemes([]);
+    if (!preservePinned) {
+      setPinnedGenres([]);
+      setPinnedMoods([]);
+      setPinnedThemes([]);
+    }
 
     setSelectedGenres([]);
     setKpopMode(0);
@@ -1417,7 +1443,6 @@ function App() {
     setDrumStyle('none');
     setMaleCount(0);
     setFemaleCount(0);
-    setVocalTone('default');
 
     setTempoEnabled(true);
     setMinBPM(90);
@@ -1637,7 +1662,6 @@ function App() {
         drumStyle,
         maleCount,
         femaleCount,
-        vocalTone,
         tempoInfo,
         specialPrompt,
         kpopMode
@@ -1884,14 +1908,6 @@ ${result.prompt}
             femaleCount={femaleCount}
             onMaleChange={setMaleCount}
             onFemaleChange={setFemaleCount}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-          />
-
-          <VocalToneControl 
-            value={vocalTone}
-            onChange={setVocalTone}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -3036,80 +3052,6 @@ function SingerControl({ maleCount, femaleCount, onMaleChange, onFemaleChange, o
   );
 }
 
-interface VocalToneControlProps {
-  value: VocalTone;
-  onChange: (value: VocalTone) => void;
-  onHover: (item: CategoryItem | null) => void;
-  onLongPressStart: (item: CategoryItem) => void;
-  onLongPressEnd: () => void;
-}
-
-function VocalToneControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: VocalToneControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const options: { id: VocalTone; label: string; description: string }[] = [
-    { id: 'default', label: '기본', description: '장르에 어울리는 표준적인 보컬 톤입니다.' },
-    { id: 'husky', label: '허스키', description: '거칠고 매력적인 허스키 보컬 톤입니다.' },
-    { id: 'soft', label: '부드러운', description: '섬세하고 감미로운 소프트 보컬 톤입니다.' },
-    { id: 'deep', label: '깊은/낮은', description: '중후하고 깊은 울림이 있는 보컬 톤입니다.' },
-  ];
-
-  return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6">
-        <h3 
-          onMouseEnter={() => setShowTitleTooltip(true)}
-          onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-        >
-          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          보컬 톤
-        </h3>
-        <AnimatePresence>
-          {showTitleTooltip && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
-            >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가수의 목소리 톤을 선택합니다.</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 mt-auto">
-        {options.map((opt) => {
-          const isSelected = value === opt.id;
-          return (
-            <button
-              key={opt.id}
-              onClick={() => {
-                onChange(opt.id);
-                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
-              }}
-              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
-              }}
-              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "py-3 rounded-xl text-xs font-bold transition-all border",
-                isSelected
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 interface TempoControlProps {
   enabled: boolean;

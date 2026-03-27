@@ -40,46 +40,27 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "andrawing1212@gmail.com" && request.auth.token.email_verified == true));
+          (request.auth.token.email == "andrawing1213@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isValidFavorite(data) {
-      return data.keys().hasAll(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'isLocked', 'createdAt']) &&
-             data.keys().hasOnly(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'isLocked', 'createdAt']) &&
+      return data.keys().hasAll(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'createdAt']) &&
+             data.keys().hasOnly(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'createdAt']) &&
              data.uid is string &&
              data.title is string && data.title.size() <= 200 &&
              data.lyrics is map &&
              data.lyrics.keys().hasOnly(['english', 'korean']) &&
-             data.lyrics.english is string && data.lyrics.english.size() <= 10000 &&
-             data.lyrics.korean is string && data.lyrics.korean.size() <= 10000 &&
-             data.prompt is string && data.prompt.size() <= 5000 &&
+             data.lyrics.english is string && data.lyrics.english.size() <= 5000 &&
+             data.lyrics.korean is string && data.lyrics.korean.size() <= 5000 &&
+             data.prompt is string && data.prompt.size() <= 2000 &&
              data.appliedKeywords is map &&
-             data.appliedKeywords.keys().hasOnly(['genre', 'mood', 'theme', 'tempo', 'vocalType', 'lyricsLength', 'drumStyle', 'maleCount', 'femaleCount', 'tempoConfig']) &&
+             data.appliedKeywords.keys().hasOnly(['genre', 'mood', 'theme', 'tempo', 'vocalGender']) &&
              data.appliedKeywords.genre is list && data.appliedKeywords.genre.size() <= 10 &&
              data.appliedKeywords.mood is list && data.appliedKeywords.mood.size() <= 10 &&
              data.appliedKeywords.theme is list && data.appliedKeywords.theme.size() <= 10 &&
              (!('tempo' in data.appliedKeywords) || (data.appliedKeywords.tempo is string && data.appliedKeywords.tempo.size() <= 50)) &&
-             (!('vocalType' in data.appliedKeywords) || (data.appliedKeywords.vocalType is string && data.appliedKeywords.vocalType.size() <= 50)) &&
-             (!('lyricsLength' in data.appliedKeywords) || (data.appliedKeywords.lyricsLength is string && data.appliedKeywords.lyricsLength.size() <= 50)) &&
-             (!('drumStyle' in data.appliedKeywords) || (data.appliedKeywords.drumStyle is string && data.appliedKeywords.drumStyle.size() <= 50)) &&
-             (!('maleCount' in data.appliedKeywords) || (data.appliedKeywords.maleCount is number)) &&
-             (!('femaleCount' in data.appliedKeywords) || (data.appliedKeywords.femaleCount is number)) &&
-             (!('tempoConfig' in data.appliedKeywords) || (
-               data.appliedKeywords.tempoConfig is map &&
-               data.appliedKeywords.tempoConfig.keys().hasOnly(['enabled', 'min', 'max']) &&
-               data.appliedKeywords.tempoConfig.enabled is bool &&
-               data.appliedKeywords.tempoConfig.min is number &&
-               data.appliedKeywords.tempoConfig.max is number
-             )) &&
-             data.isLocked is bool &&
+             (!('vocalGender' in data.appliedKeywords) || (data.appliedKeywords.vocalGender is string && data.appliedKeywords.vocalGender.size() <= 50)) &&
              data.createdAt is timestamp;
-    }
-
-    function isValidRecentSongs(data) {
-      return data.keys().hasAll(['songs']) &&
-             data.keys().hasOnly(['songs']) &&
-             data.songs is list &&
-             data.songs.size() <= 5;
     }
 
     // ===============================================================
@@ -96,21 +77,8 @@ service cloud.firestore {
       // Users can only delete their own favorites
       allow delete: if isOwner(resource.data.uid);
       
-      // Only isLocked can be updated
-      allow update: if isOwner(resource.data.uid) && 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isLocked']) &&
-                      request.resource.data.isLocked is bool;
-    }
-
-    match /user_recent_songs/{uid} {
-      // Users can only read their own recent songs
-      allow read: if isOwner(uid);
-      
-      // Users can only create/update their own recent songs
-      allow create, update: if isOwner(uid) && isValidRecentSongs(request.resource.data);
-      
-      // Users can only delete their own recent songs
-      allow delete: if isOwner(uid);
+      // Favorites are immutable once created
+      allow update: if false;
     }
 
     // Default deny

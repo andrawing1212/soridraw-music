@@ -68,8 +68,6 @@ import {
   onSnapshot,
   serverTimestamp,
   getDocFromServer,
-  getDoc,
-  setDoc,
   query as firestoreQuery
 } from 'firebase/firestore';
 
@@ -897,19 +895,16 @@ function App() {
 
   const hasInitializedHomeRef = useRef(false);
 
+  const getHistoryStorageKey = (uid: string) => `soridraw_history_${uid}`;
+
+  type PersistedHistory = {
+    history: SongResult[];
+    historyIndex: number;
+  };
+
   type ClearAllOptions = {
     preserveHistory?: boolean;
     preservePinned?: boolean;
-  };
-
-  const saveRecentSongs = async (uid: string, songs: SongResult[]) => {
-    try {
-      await setDoc(doc(db, 'user_recent_songs', uid), {
-        songs: songs.slice(0, 5)
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `user_recent_songs/${uid}`);
-    }
   };
 
   // Real-time tempo calculation when in random mode
@@ -935,61 +930,34 @@ function App() {
 
     let unsubFavs: (() => void) | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
       
+      if (unsubFavs) {
+        unsubFavs();
+        unsubFavs = null;
+      }
+
       if (currentUser) {
-        // Fetch recent songs (one-time read for home page)
-        try {
-          const recentDoc = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
-          if (recentDoc.exists()) {
-            const data = recentDoc.data();
-            const songs = data.songs || [];
-            setHistory(songs);
-            if (songs.length > 0) {
-              setHistoryIndex(0);
-              setResult(songs[0]);
-            }
-          } else {
-            setHistory([]);
-            setResult(null);
-            setHistoryIndex(-1);
-          }
-        } catch (error) {
-          console.error('Failed to fetch recent songs:', error);
-        }
+        // Fetch favorites for the user
+        const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
+        unsubFavs = onSnapshot(q, (snapshot) => {
+          const favs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setFavorites(favs);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, 'favorites');
+        });
       } else {
         setFavorites([]);
-        setHistory([]);
-        setResult(null);
-        setHistoryIndex(-1);
       }
     });
 
     return () => {
       unsubscribe();
-    };
-  }, []);
-
-  // Fetch favorites only when on the favorites page
-  useEffect(() => {
-    let unsubFavs: (() => void) | null = null;
-
-    if (user && location.pathname === '/favorites') {
-      const q = query(collection(db, 'favorites'), where('uid', '==', user.uid));
-      unsubFavs = onSnapshot(q, (snapshot) => {
-        const favs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setFavorites(favs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'favorites');
-      });
-    }
-
-    return () => {
       if (unsubFavs) unsubFavs();
     };
-  }, [user, location.pathname]);
+  }, []);
 
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -1003,33 +971,18 @@ function App() {
       return;
     }
 
-     const isFav = !!song.isFavorite && !!song.favoriteId;
-     const favId = song.favoriteId;
+    const existingFav = favorites.find(f => f.title === song.title && f.prompt === song.prompt);
 
     try {
-      if (isFav && favId) {
-        // Check if locked (only if we have the favorite doc in local state)
-        const localFav = favorites.find(f => f.id === favId);
-        if (localFav?.isLocked) {
+      if (existingFav) {
+        if (existingFav.isLocked) {
           showToast('잠긴 곡은 삭제할 수 없습니다.');
           return;
         }
-        await deleteDoc(doc(db, 'favorites', favId));
+        await deleteDoc(doc(db, 'favorites', existingFav.id));
         showToast('곡이 삭제 되었습니다.');
-        
-        // Update history and result
-        const updatedHistory = history.map(s => 
-          (s.title === song.title && s.prompt === song.prompt) 
-            ? { ...s, isFavorite: false, favoriteId: undefined } 
-            : s
-        );
-        setHistory(updatedHistory);
-        if (result && result.title === song.title && result.prompt === song.prompt) {
-          setResult({ ...result, isFavorite: false, favoriteId: undefined });
-        }
-        saveRecentSongs(user.uid, updatedHistory);
       } else {
-        const favoriteData = {
+        await addDoc(collection(db, 'favorites'), {
           uid: user.uid,
           title: song.title,
           lyrics: song.lyrics,
@@ -1037,27 +990,11 @@ function App() {
           appliedKeywords: song.appliedKeywords,
           isLocked: false,
           createdAt: serverTimestamp()
-        };
-
-        console.log("DEBUG: Saving to favorites. Payload:", JSON.stringify(favoriteData, null, 2));
-
-        const docRef = await addDoc(collection(db, 'favorites'), favoriteData);
+        });
         showToast('저장되었습니다.');
-        
-        // Update history and result
-        const updatedHistory = history.map(s => 
-          (s.title === song.title && s.prompt === song.prompt) 
-            ? { ...s, isFavorite: true, favoriteId: docRef.id } 
-            : s
-        );
-        setHistory(updatedHistory);
-        if (result && result.title === song.title && result.prompt === song.prompt) {
-          setResult({ ...result, isFavorite: true, favoriteId: docRef.id });
-        }
-        saveRecentSongs(user.uid, updatedHistory);
       }
     } catch (error) {
-      handleFirestoreError(error, isFav ? OperationType.DELETE : OperationType.CREATE, 'favorites');
+      handleFirestoreError(error, existingFav ? OperationType.DELETE : OperationType.CREATE, 'favorites');
     }
   };
 
@@ -1282,6 +1219,66 @@ function App() {
     }
   };
 
+  // History state is now persisted per logged-in user.
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    if (!user) {
+      setHistory([]);
+      setResult(null);
+      setHistoryIndex(-1);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(getHistoryStorageKey(user.uid));
+
+      if (!raw) {
+        setHistory([]);
+        setResult(null);
+        setHistoryIndex(-1);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as PersistedHistory;
+      const safeHistory = Array.isArray(parsed?.history) ? parsed.history : [];
+      const safeIndex =
+        typeof parsed?.historyIndex === 'number'
+          ? parsed.historyIndex
+          : safeHistory.length > 0
+            ? 0
+            : -1;
+
+      setHistory(safeHistory);
+      setHistoryIndex(safeIndex);
+      setResult(safeIndex >= 0 ? safeHistory[safeIndex] ?? null : null);
+    } catch (error) {
+      console.error('Failed to restore history:', error);
+      setHistory([]);
+      setResult(null);
+      setHistoryIndex(-1);
+    }
+  }, [user, isAuthReady]);
+
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
+
+    try {
+      const payload: PersistedHistory = {
+        history,
+        historyIndex,
+      };
+
+      localStorage.setItem(
+        getHistoryStorageKey(user.uid),
+        JSON.stringify(payload)
+      );
+    } catch (error) {
+      console.error('Failed to persist history:', error);
+    }
+  }, [history, historyIndex, user, isAuthReady]);
+
+
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme') => {
     const setters = {
       genre: { state: selectedGenres, set: setSelectedGenres, pinned: pinnedGenres },
@@ -1473,7 +1470,11 @@ function App() {
       setHistory([]);
 
       if (user) {
-        // No longer using local storage for history
+        try {
+          localStorage.removeItem(getHistoryStorageKey(user.uid));
+        } catch (error) {
+          console.error('Failed to clear persisted history:', error);
+        }
       }
     } else {
       setResult(prev => {
@@ -1687,7 +1688,6 @@ function App() {
 
       const newResult = {
         ...song,
-        isFavorite: false,
         appliedKeywords: {
           ...song.appliedKeywords,
           lyricsLength,
@@ -1704,13 +1704,8 @@ function App() {
       };
 
       setResult(newResult);
-      const updatedHistory = [newResult, ...history].slice(0, 5);
-      setHistory(updatedHistory);
+      setHistory(prev => [newResult, ...prev].slice(0, 5)); // Keep last 5
       setHistoryIndex(0);
-      
-      if (user) {
-        saveRecentSongs(user.uid, updatedHistory);
-      }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('Generation cancelled');
@@ -2106,62 +2101,6 @@ ${result.prompt}
           </div>
         </div>
 
-        {/* Recent Songs List */}
-        {user && history.length > 0 && (
-          <div className="space-y-4 mb-8 pt-8 border-t border-[var(--border-color)]">
-            <div className="flex items-center justify-between px-2">
-              <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <History className="w-5 h-5 text-brand-orange" />
-                최근 생성한 곡
-              </h3>
-              <span className="text-xs text-[var(--text-secondary)] font-medium">최근 5곡</span>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-              {history.map((song, index) => (
-                <button
-                  key={song.id || index}
-                  onClick={() => {
-                    setResult(song);
-                    setHistoryIndex(index);
-                  }}
-                  className={cn(
-                    "flex-shrink-0 w-48 p-4 rounded-2xl border transition-all text-left group relative overflow-hidden",
-                    historyIndex === index 
-                      ? "bg-brand-orange/10 border-brand-orange shadow-lg shadow-brand-orange/10" 
-                      : "bg-[var(--card-bg)] border-[var(--border-color)] hover:border-brand-orange/50"
-                  )}
-                >
-                  <div className="relative z-10">
-                    <h4 className={cn(
-                      "font-bold text-sm mb-2 line-clamp-1 transition-colors",
-                      historyIndex === index ? "text-brand-orange" : "text-[var(--text-primary)]"
-                    )}>
-                      {song.title}
-                    </h4>
-                    <div className="flex flex-wrap gap-1">
-                      {[...song.appliedKeywords.genre, ...song.appliedKeywords.mood, ...song.appliedKeywords.theme].slice(0, 2).map((kw, i) => (
-                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)]">
-                          {kw}
-                        </span>
-                      ))}
-                      {[...song.appliedKeywords.genre, ...song.appliedKeywords.mood, ...song.appliedKeywords.theme].length > 2 && (
-                        <span className="text-[10px] text-[var(--text-secondary)]">
-                          +{[...song.appliedKeywords.genre, ...song.appliedKeywords.mood, ...song.appliedKeywords.theme].length - 2}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {historyIndex === index && (
-                    <div className="absolute top-2 right-2">
-                      <div className="w-2 h-2 rounded-full bg-brand-orange animate-pulse" />
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Result Area */}
         <AnimatePresence>
           {user && result && (
@@ -2325,11 +2264,6 @@ ${result.prompt}
                           const newHistory = [...history];
                           newHistory.splice(historyIndex, 1);
                           setHistory(newHistory);
-                          
-                          if (user) {
-                            saveRecentSongs(user.uid, newHistory);
-                          }
-
                           if (newHistory.length === 0) {
                             setResult(null);
                             setHistoryIndex(-1);
@@ -2379,7 +2313,7 @@ ${result.prompt}
                       <Heart 
                         className={cn(
                           "w-5 h-5 transition-all",
-                          result.isFavorite
+                          favorites.some(f => f.title === result.title && f.prompt === result.prompt)
                             ? "fill-brand-orange text-brand-orange"
                             : "text-[var(--text-primary)] group-hover/heart:text-brand-orange"
                         )} 

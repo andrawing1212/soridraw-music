@@ -87,6 +87,10 @@ export default function FavoritesPage({
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [confirmLockAll, setConfirmLockAll] = useState(0);
+  const [confirmDeleteSong, setConfirmDeleteSong] = useState(false);
+  const [confirmToggleLock, setConfirmToggleLock] = useState(false);
+  const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
+  const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; isEditing: boolean }>>({});
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -260,6 +264,29 @@ export default function FavoritesPage({
     }
   };
 
+  const handlePopupToggleLock = async (song: any) => {
+    if (!confirmToggleLock) {
+      setConfirmToggleLock(true);
+      return;
+    }
+    
+    await handleToggleLock(song);
+    setConfirmToggleLock(false);
+  };
+
+  const handlePopupDelete = async (song: any) => {
+    if (song.isLocked) return;
+    
+    if (!confirmDeleteSong) {
+      setConfirmDeleteSong(true);
+      return;
+    }
+    
+    toggleFavorite(song);
+    setSelectedSong(null);
+    setConfirmDeleteSong(false);
+  };
+
   const getBulkLockHover = (isConfirm = confirmLockAll === 1) => ({
     id: 'bulk-lock',
     label: '일괄잠금',
@@ -429,6 +456,9 @@ export default function FavoritesPage({
     setIsSelectionMode(false);
     setSelectedSongIds([]);
     setLastSelectionAction('none');
+    setConfirmDeleteAll(0);
+    setConfirmUnlockAll(0);
+    setConfirmLockAll(0);
     selectionBeforeSelectAllRef.current = [];
     clearSelectionLongPressTimer();
     longPressTriggeredRef.current = false;
@@ -443,10 +473,31 @@ export default function FavoritesPage({
 
     setSelectedSong(null);
     detailHistoryPushedRef.current = false;
+    setConfirmDeleteSong(false);
+    setConfirmToggleLock(false);
   };
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (e: PopStateEvent) => {
+      // If we have pending confirmations in popup, cancel them first
+      if (confirmDeleteSong || confirmToggleLock) {
+        setConfirmDeleteSong(false);
+        setConfirmToggleLock(false);
+        // Push state back to stay on current view
+        window.history.pushState({ favoritesOverlay: 'song-detail' }, '');
+        return;
+      }
+
+      // If we have bulk confirmations, cancel them first
+      if (confirmDeleteAll > 0 || confirmUnlockAll > 0 || confirmLockAll > 0) {
+        setConfirmDeleteAll(0);
+        setConfirmUnlockAll(0);
+        setConfirmLockAll(0);
+        // Push state back to stay on current view
+        window.history.pushState({ favoritesOverlay: 'selection-mode' }, '');
+        return;
+      }
+
       if (selectedSong) {
         closeSelectedSong('history');
         return;
@@ -458,8 +509,11 @@ export default function FavoritesPage({
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedSong, isSelectionMode]);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    };
+  }, [selectedSong, isSelectionMode, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
 
   const handleSelectedLock = async () => {
     const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
@@ -1021,16 +1075,32 @@ ${song.prompt}
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleFavorite(song);
+                            if (song.isLocked) return;
+
+                            if (deletingSongId === song.id) {
+                              toggleFavorite(song);
+                              setDeletingSongId(null);
+                              if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+                            } else {
+                              setDeletingSongId(song.id);
+                              if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+                              deleteTimerRef.current = setTimeout(() => setDeletingSongId(null), 5000);
+                            }
                           }}
                           disabled={song.isLocked}
-                          onMouseEnter={() => onHover({ id: `delete-${song.id}`, label: '삭제', description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : '이 곡을 목록에서 삭제합니다.' })}
+                          onMouseEnter={() => onHover({ 
+                            id: `delete-${song.id}`, 
+                            label: deletingSongId === song.id ? '삭제 확인' : '삭제', 
+                            description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (deletingSongId === song.id ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.') 
+                          })}
                           onMouseLeave={() => onHover(null)}
                           className={cn(
                             "p-2 rounded-xl transition-all",
                             song.isLocked 
                               ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 cursor-not-allowed" 
-                              : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                              : deletingSongId === song.id
+                                ? "bg-red-500 text-white shadow-lg shadow-red-500/30"
+                                : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
                           )}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1043,10 +1113,28 @@ ${song.prompt}
                 <div className="flex flex-col flex-grow space-y-4">
                   <div className="flex flex-wrap gap-1.5 overflow-hidden">
                     {song.appliedKeywords.genre.map((g: string) => (
-                      <span key={g} className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap">#{g}</span>
+                      <span 
+                        key={g} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHover({ id: `genre-${g}`, label: g, description: `${g} 장르입니다.`, _ts: Date.now() });
+                        }}
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
+                      >
+                        #{g}
+                      </span>
                     ))}
                     {song.appliedKeywords.mood.map((m: string) => (
-                      <span key={m} className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap">#{m}</span>
+                      <span 
+                        key={m} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHover({ id: `mood-${m}`, label: m, description: `${m} 분위기입니다.`, _ts: Date.now() });
+                        }}
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
+                      >
+                        #{m}
+                      </span>
                     ))}
                   </div>
 
@@ -1218,22 +1306,60 @@ ${song.prompt}
                   {!isEditing && (
                     <div className="flex items-center justify-center gap-4">
                       <button 
-                        onClick={() => handleToggleLock(selectedSong)}
-                        onMouseEnter={() => onHover({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                        onClick={() => handlePopupToggleLock(selectedSong)}
+                        onMouseEnter={() => onHover({ 
+                          id: 'popup-lock', 
+                          label: confirmToggleLock ? (selectedSong.isLocked ? '해제 확인' : '잠금 확인') : (selectedSong.isLocked ? '잠금 해제' : '잠금'), 
+                          description: confirmToggleLock ? '한번 더 누르면 실행됩니다.' : (selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.') 
+                        })}
                         onMouseLeave={() => {
                           onHover(null);
                           onLongPressEnd();
                         }}
-                        onTouchStart={() => onLongPressStart({ id: 'popup-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                        onTouchStart={() => onLongPressStart({ 
+                          id: 'popup-lock', 
+                          label: confirmToggleLock ? (selectedSong.isLocked ? '해제 확인' : '잠금 확인') : (selectedSong.isLocked ? '잠금 해제' : '잠금'), 
+                          description: confirmToggleLock ? '한번 더 누르면 실행됩니다.' : (selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.') 
+                        })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
                           "w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all",
                           selectedSong.isLocked 
-                            ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
-                            : "bg-transparent text-[var(--text-primary)] border-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                            ? confirmToggleLock ? "bg-brand-orange text-white border-brand-orange" : "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
+                            : confirmToggleLock ? "bg-brand-orange text-white border-brand-orange" : "bg-transparent text-[var(--text-primary)] border-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
                         )}
                       >
                         {selectedSong.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+                      </button>
+
+                      <button 
+                        onClick={() => handlePopupDelete(selectedSong)}
+                        disabled={selectedSong.isLocked}
+                        onMouseEnter={() => onHover({ 
+                          id: 'popup-delete', 
+                          label: confirmDeleteSong ? '삭제 확인' : '삭제', 
+                          description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.') 
+                        })}
+                        onMouseLeave={() => {
+                          onHover(null);
+                          onLongPressEnd();
+                        }}
+                        onTouchStart={() => onLongPressStart({ 
+                          id: 'popup-delete', 
+                          label: confirmDeleteSong ? '삭제 확인' : '삭제', 
+                          description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.') 
+                        })}
+                        onTouchEnd={onLongPressEnd}
+                        className={cn(
+                          "w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all",
+                          selectedSong.isLocked 
+                            ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed" 
+                            : confirmDeleteSong 
+                              ? "bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/30" 
+                              : "bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500 hover:text-white"
+                        )}
+                      >
+                        <Trash2 className="w-5 h-5" />
                       </button>
 
                       <button 

@@ -49,7 +49,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { GENRES, MOODS, THEMES } from './constants';
-import { CategoryItem, SongResult, LyricsLength, DrumStyle, VocalGender } from './types';
+import { CategoryItem, SongResult, LyricsLength, DrumStyle, VocalType, VocalTone } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
@@ -709,6 +709,8 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }:
 }
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
     const saved = localStorage.getItem('themeMode') as 'light' | 'dark' | 'system';
     if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
@@ -764,7 +766,8 @@ function App() {
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [drumStyle, setDrumStyle] = useState<DrumStyle>('none');
-  const [selectedGenders, setSelectedGenders] = useState<VocalGender[]>([]);
+  const [vocalType, setVocalType] = useState<VocalType>('male-solo');
+  const [vocalTone, setVocalTone] = useState<VocalTone>('default');
   const [pinnedGenres, setPinnedGenres] = useState<string[]>([]);
   const [pinnedMoods, setPinnedMoods] = useState<string[]>([]);
   const [pinnedThemes, setPinnedThemes] = useState<string[]>([]);
@@ -819,6 +822,47 @@ function App() {
     }
   }, [hoveredItem]);
 
+  const [exitCount, setExitCount] = useState(0);
+  const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (location.pathname === '/') {
+        setExitCount(prev => {
+          const newCount = prev + 1;
+          
+          if (newCount >= 4) {
+            setToast({ message: '앱을 종료하려면 한 번 더 눌러주세요.', visible: true });
+            if (newCount >= 5) {
+              console.log('App Exit Triggered');
+              // In a real PWA environment, you might use specific APIs to exit
+            }
+            return newCount;
+          }
+          
+          if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+          exitTimerRef.current = setTimeout(() => setExitCount(0), 2000);
+          
+          return newCount;
+        });
+        
+        // Push state back to prevent actual back navigation if on home
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    // Initial push state to enable popstate on home
+    if (location.pathname === '/') {
+      window.history.pushState(null, '', window.location.href);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    };
+  }, [location.pathname]);
+
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
@@ -826,8 +870,6 @@ function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
-  const navigate = useNavigate();
-  const location = useLocation();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const hasInitializedHomeRef = useRef(false);
@@ -1316,7 +1358,8 @@ function App() {
     setUserInput('');
     setLyricsLength('normal');
     setDrumStyle('none');
-    setSelectedGenders([]);
+    setVocalType('female-solo');
+    setVocalTone('default');
 
     setTempoEnabled(true);
     setMinBPM(90);
@@ -1494,15 +1537,6 @@ function App() {
         });
       }
 
-      let genderPrompt = "";
-      if (selectedGenders.length === 2) {
-        genderPrompt = "Duet (Male and Female)";
-      } else if (selectedGenders.includes('male')) {
-        genderPrompt = "Male Vocal";
-      } else if (selectedGenders.includes('female')) {
-        genderPrompt = "Female Vocal";
-      }
-
       let currentMinBPM = minBPM;
       let currentMaxBPM = maxBPM;
 
@@ -1543,7 +1577,8 @@ function App() {
         userInput,
         lyricsLength,
         drumStyle,
-        genderPrompt || undefined,
+        vocalType,
+        vocalTone,
         tempoInfo,
         specialPrompt,
         kpopMode
@@ -1785,9 +1820,17 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />
-          <VocalGenderControl
-            value={selectedGenders}
-            onChange={setSelectedGenders}
+          <VocalTypeControl 
+            value={vocalType}
+            onChange={setVocalType}
+            onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
+          />
+
+          <VocalToneControl 
+            value={vocalTone}
+            onChange={setVocalTone}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -2572,6 +2615,8 @@ function CategorySection({
                 onTouchEnd={onLongPressEnd}
                 onClick={() => {
                   onToggle(item.id);
+                  // Show description on click for mobile/touch users
+                  onHover({ ...item, description: displayDescription, _ts: Date.now() });
                 }}
                 className={cn(
                   "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
@@ -2781,30 +2826,23 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
   );
 }
 
-interface VocalGenderControlProps {
-  value: VocalGender[];
-  onChange: (val: VocalGender[]) => void;
+interface VocalTypeControlProps {
+  value: VocalType;
+  onChange: (value: VocalType) => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: VocalGenderControlProps) {
+function VocalTypeControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: VocalTypeControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
-
-  const options = [
-    { id: 'male', label: '남자', description: '남성 보컬을 적용합니다.' },
-    { id: 'female', label: '여자', description: '여성 보컬을 적용합니다.' }
+  const options: { id: VocalType; label: string; description: string }[] = [
+    { id: 'male-solo', label: '남자 1인', description: '남성 솔로 보컬 스타일입니다.' },
+    { id: 'female-solo', label: '여자 1인', description: '여성 솔로 보컬 스타일입니다.' },
+    { id: 'male-group', label: '남자 그룹', description: '남성 그룹/합창 보컬 스타일입니다.' },
+    { id: 'female-group', label: '여자 그룹', description: '여성 그룹/합창 보컬 스타일입니다.' },
+    { id: 'duet', label: '듀엣', description: '남녀 또는 동성 듀엣 보컬 스타일입니다.' },
   ];
-
-  const toggleGender = (gender: VocalGender) => {
-    if (value.includes(gender)) {
-      onChange(value.filter(g => g !== gender));
-    } else {
-      onChange([...value, gender]);
-    }
-  };
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
@@ -2815,7 +2853,7 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
           className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가수 <span className="text-[12px] font-normal text-[var(--text-secondary)]">(둘다 적용 = 듀엣)</span>
+          보컬 구성
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2825,19 +2863,21 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
               exit={{ opacity: 0, y: 10 }}
               className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가수의 성별을 선택합니다. 둘 다 선택 시 듀엣이 적용됩니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가수의 성별과 인원 구성을 선택합니다.</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="flex gap-2 mt-auto">
-        {options.map((opt) => (
-          <div key={opt.id} className="relative flex-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-auto">
+        {options.map((opt) => {
+          const isSelected = value === opt.id;
+          return (
             <button
+              key={opt.id}
               onClick={() => {
-                toggleGender(opt.id as VocalGender);
-                onHover({ id: opt.id, label: opt.label, description: opt.description });
+                onChange(opt.id);
+                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
               }}
               onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
               onMouseLeave={() => {
@@ -2847,16 +2887,91 @@ function VocalGenderControl({ value, onChange, onHover, onLongPressStart, onLong
               onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "w-full py-3 rounded-xl text-sm font-bold transition-all border",
-                value.includes(opt.id as VocalGender)
+                "py-3 rounded-xl text-xs font-bold transition-all border",
+                isSelected
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
                   : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
               )}
             >
               {opt.label}
             </button>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface VocalToneControlProps {
+  value: VocalTone;
+  onChange: (value: VocalTone) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
+}
+
+function VocalToneControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: VocalToneControlProps) {
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const options: { id: VocalTone; label: string; description: string }[] = [
+    { id: 'default', label: '기본', description: '장르에 어울리는 표준적인 보컬 톤입니다.' },
+    { id: 'husky', label: '허스키', description: '거칠고 매력적인 허스키 보컬 톤입니다.' },
+    { id: 'soft', label: '부드러운', description: '섬세하고 감미로운 소프트 보컬 톤입니다.' },
+    { id: 'deep', label: '깊은/낮은', description: '중후하고 깊은 울림이 있는 보컬 톤입니다.' },
+  ];
+
+  return (
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
+      <div className="relative mb-6">
+        <h3 
+          onMouseEnter={() => setShowTitleTooltip(true)}
+          onMouseLeave={() => setShowTitleTooltip(false)}
+          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+        >
+          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+          보컬 톤
+        </h3>
+        <AnimatePresence>
+          {showTitleTooltip && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+            >
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가수의 목소리 톤을 선택합니다.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mt-auto">
+        {options.map((opt) => {
+          const isSelected = value === opt.id;
+          return (
+            <button
+              key={opt.id}
+              onClick={() => {
+                onChange(opt.id);
+                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
+              }}
+              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
+              onTouchEnd={onLongPressEnd}
+              className={cn(
+                "py-3 rounded-xl text-xs font-bold transition-all border",
+                isSelected
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

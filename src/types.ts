@@ -1,7 +1,8 @@
 export type Category = 'genre' | 'mood' | 'theme';
 export type LyricsLength = 'very-short' | 'short' | 'normal';
 export type DrumStyle = 'none' | 'half-time' | 'double-time';
-export type VocalGender = 'male' | 'female';
+export type VocalType = 'male-solo' | 'female-solo' | 'male-group' | 'female-group' | 'duet';
+export type VocalTone = 'default' | 'husky' | 'soft' | 'deep';
 
 export interface SongResult {
   title: string;
@@ -15,7 +16,8 @@ export interface SongResult {
     mood: string[];
     theme: string[];
     tempo?: string;
-    vocalGender?: string;
+    vocalType?: VocalType;
+    vocalTone?: VocalTone;
   };
   randomKeywords?: string[];
 }

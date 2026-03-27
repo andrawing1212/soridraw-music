@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { SongResult, LyricsLength, DrumStyle } from "../types";
+import { SongResult, LyricsLength, DrumStyle, VocalType, VocalTone } from "../types";
 import { BASE_PROMPTS } from "../constants";
 
 // 롤백: 원래 작동하던 GEMINI_API_KEY 방식입니다.
@@ -10,10 +10,10 @@ export async function generateSong(
   moods: string[],
   themes: string[],
   userInput: string,
-  // ... (이하 기존 코드 동일)
   lyricsLength: LyricsLength = 'normal',
   drumStyle: DrumStyle = 'none',
-  vocalGender?: string,
+  vocalType?: VocalType,
+  vocalTone?: VocalTone,
   tempo?: string,
   specialPrompt?: string,
   kpopMode: 0 | 1 | 2 = 0
@@ -84,7 +84,8 @@ export async function generateSong(
     - CRITICAL: The total song duration MUST be between 2 minutes 30 seconds and 3 minutes. NEVER exceed 3 minutes 20 seconds.
     - Ensure the song can be finished within 2 minutes 45 seconds if possible.
     - ${tempo ? `TEMPO CONSTRAINT: ${tempo}` : "Tempo should be appropriate for the genre and mood."}
-    - ${vocalGender ? `VOCAL GENDER: ${vocalGender}` : "Vocal gender should be appropriate for the genre and mood."}
+    - ${vocalType ? `VOCAL TYPE: ${vocalType}` : "Vocal type should be appropriate for the genre and mood."}
+    - ${vocalTone ? `VOCAL TONE: ${vocalTone}` : "Vocal tone should be appropriate for the genre and mood."}
     
     Keywords to use:
     Genres: ${genres.join(", ")}
@@ -122,7 +123,8 @@ export async function generateSong(
               mood: { type: Type.ARRAY, items: { type: Type.STRING } },
               theme: { type: Type.ARRAY, items: { type: Type.STRING } },
               tempo: { type: Type.STRING },
-              vocalGender: { type: Type.STRING }
+              vocalType: { type: Type.STRING },
+              vocalTone: { type: Type.STRING }
             },
             required: ["genre", "mood", "theme"]
           }

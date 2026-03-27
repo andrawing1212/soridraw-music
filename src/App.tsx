@@ -1997,18 +1997,12 @@ ${result.prompt}
             </div>
             
             {(hasKeywordsOverflow || isKeywordsExpanded) && (
-              <div className="flex justify-center mt-2">
-                <button
-                  onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
-                  className="text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-colors flex items-center gap-1 uppercase tracking-tighter bg-[var(--card-bg)]/50 px-3 py-1 rounded-full border border-[var(--border-color)]"
-                >
-                  {isKeywordsExpanded ? (
-                    <>접기 <ChevronUp className="w-3 h-3" /></>
-                  ) : (
-                    <>더보기 <ChevronDown className="w-3 h-3" /></>
-                  )}
-                </button>
-              </div>
+              <button
+                onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
+                className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+              >
+                {isKeywordsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </button>
             )}
           </div>
 
@@ -2118,7 +2112,7 @@ ${result.prompt}
 
 
               {/* Applied Keywords After Generation */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)]">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative">
                 <div className="flex items-center justify-between gap-4 mb-6">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-brand-orange" />
@@ -2133,13 +2127,6 @@ ${result.prompt}
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span className="whitespace-nowrap">다음 곡 적용</span>
-                    </button>
-                    <button
-                      onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                      className="flex items-center justify-center gap-1.5 px-3 h-10 min-w-[90px] rounded-xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] text-[11px] font-bold shadow-sm active:scale-95"
-                    >
-                      <span className="whitespace-nowrap">{isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}</span>
-                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
                     <button
                       onClick={() => {
@@ -2219,6 +2206,14 @@ ${result.prompt}
                     </div>
                   )}
                 </motion.div>
+
+                {/* Expand Button at Bottom Center */}
+                <button
+                  onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+                >
+                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </button>
               </div>
 
               {/* Copy All Button */}
@@ -2649,31 +2644,6 @@ function CategorySection({
         </div>
       </div>
       
-      {/* Expand/Collapse Button - Moved to top of keywords */}
-      <div className="pb-4 flex justify-center">
-        <button
-          onClick={() => {
-            onToggleExpand();
-            onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' });
-          }}
-          onMouseEnter={() => onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
-          onMouseLeave={() => {
-            onHover(null);
-            onLongPressEnd();
-          }}
-          onTouchStart={() => onLongPressStart({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
-          onTouchEnd={onLongPressEnd}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-brand-orange transition-all group/expand shadow-[var(--shadow-md)]"
-        >
-          <span className="text-[11px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
-          {isExpanded ? (
-            <ChevronUp className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
-          ) : (
-            <ChevronDown className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
-          )}
-        </button>
-      </div>
-      
       <div className={cn(
         "flex flex-wrap gap-2 transition-all duration-500",
         !isExpanded ? "max-h-[40px] md:max-h-[84px] overflow-hidden" : "max-h-[1000px] overflow-visible"
@@ -2799,6 +2769,28 @@ function CategorySection({
           );
         })}
       </div>
+
+      {/* Expand/Collapse Button - Unified circular arrow style at bottom center */}
+      <button
+        onClick={() => {
+          onToggleExpand();
+          onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' });
+        }}
+        onMouseEnter={() => onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
+        onMouseLeave={() => {
+          onHover(null);
+          onLongPressEnd();
+        }}
+        onTouchStart={() => onLongPressStart({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
+        onTouchEnd={onLongPressEnd}
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+      >
+        {isExpanded ? (
+          <ChevronUp className="w-5 h-5" />
+        ) : (
+          <ChevronDown className="w-5 h-5" />
+        )}
+      </button>
     </div>
   );
 }

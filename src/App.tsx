@@ -2296,7 +2296,7 @@ ${result.prompt}
                         <ArrowLeft className="w-4 h-4" />
                       </button>
                       <span className="text-xl font-mono font-bold text-[var(--text-secondary)] min-w-[80px] text-center">
-                        {historyIndex + 1} / {history.length}
+                        {history.length - historyIndex} / {history.length}
                       </span>
                       <button
                         onClick={() => navigateHistory('next')}

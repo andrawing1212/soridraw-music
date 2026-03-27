@@ -99,6 +99,7 @@ export default function FavoritesPage({
   const [isShaking, setIsShaking] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
+  const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const longPressTriggeredRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
@@ -427,8 +428,11 @@ export default function FavoritesPage({
     setSelectedSongIds(allSongIds);
   };
 
-  const handleCardLongPressStart = (song: any) => {
+  const handleCardLongPressStart = (e: React.MouseEvent | React.TouchEvent, song: any) => {
     if (isScrollingRef.current) return;
+    // Only trigger if not clicking a button
+    if ((e.target as HTMLElement).closest('button')) return;
+
     longPressTriggeredRef.current = false;
     clearSelectionLongPressTimer();
     selectionLongPressTimerRef.current = setTimeout(() => {
@@ -439,6 +443,7 @@ export default function FavoritesPage({
         selectionBeforeSelectAllRef.current = [];
         setIsSelectionMode(true);
         setLastSelectionAction('none');
+        setPendingSelectionAction(null);
         setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
       }
     }, 600);
@@ -457,6 +462,7 @@ export default function FavoritesPage({
     setIsSelectionMode(false);
     setSelectedSongIds([]);
     setLastSelectionAction('none');
+    setPendingSelectionAction(null);
     setConfirmDeleteAll(0);
     setConfirmUnlockAll(0);
     setConfirmLockAll(0);
@@ -480,6 +486,9 @@ export default function FavoritesPage({
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
+      // Clear any pending actions on back navigation
+      setPendingSelectionAction(null);
+
       // If we have pending confirmations in popup, cancel them first
       if (confirmDeleteSong || confirmToggleLock) {
         setConfirmDeleteSong(false);
@@ -509,36 +518,57 @@ export default function FavoritesPage({
       }
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedSong) {
+          closeSelectedSong();
+        } else if (isSelectionMode) {
+          exitSelectionMode();
+        }
+      }
+    };
+
     window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
       if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
     };
   }, [selectedSong, isSelectionMode, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
 
   const handleSelectedLock = async () => {
+    if (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock') {
+      setPendingSelectionAction(null);
+      return;
+    }
+    
     const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
     const allLocked = selectedSongs.every(song => song.isLocked);
+    setPendingSelectionAction(allLocked ? 'unlock' : 'lock');
+  };
+
+  const executeSelectedLock = async (shouldLock: boolean) => {
+    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    if (selectedSongs.length === 0) return;
+
+    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
+    setLastSelectionAction(shouldLock ? 'lock' : 'unlock');
     
-    if (allLocked) {
-      // If all are locked, unlock them
-      await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: false })));
-      setLastSelectionAction('unlock');
-    } else {
-      // Otherwise, lock all (including those already locked)
-      await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: true })));
-      setLastSelectionAction('lock');
-    }
-    
-    // Update selectedSong if it's one of the modified ones
     if (selectedSong && selectedSongIds.includes(selectedSong.id)) {
-      setSelectedSong({ ...selectedSong, isLocked: !allLocked });
+      setSelectedSong({ ...selectedSong, isLocked: shouldLock });
     }
+    setPendingSelectionAction(null);
   };
 
   const handleSelectedDelete = async () => {
+    if (pendingSelectionAction === 'delete') {
+      setPendingSelectionAction(null);
+      return;
+    }
+
     const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
     const deletableSongs = selectedSongs.filter(song => !song.isLocked);
 
@@ -558,8 +588,27 @@ export default function FavoritesPage({
       return;
     }
 
+    setPendingSelectionAction('delete');
+  };
+
+  const executeSelectedDelete = async () => {
+    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
+    
     await Promise.all(deletableSongs.map(song => Promise.resolve(toggleFavorite(song))));
     exitSelectionMode();
+  };
+
+  const handleSelectionConfirm = () => {
+    if (pendingSelectionAction === 'delete') {
+      executeSelectedDelete();
+    } else if (pendingSelectionAction === 'lock') {
+      executeSelectedLock(true);
+    } else if (pendingSelectionAction === 'unlock') {
+      executeSelectedLock(false);
+    } else {
+      exitSelectionMode();
+    }
   };
 
   const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
@@ -718,7 +767,15 @@ ${song.prompt}
   });
 
   return (
-    <div className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative">
+    <div 
+      className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative"
+      onClick={(e) => {
+        // If clicking the background (not a card or popup), exit selection mode
+        if (isSelectionMode && e.target === e.currentTarget) {
+          exitSelectionMode();
+        }
+      }}
+    >
       <div className="flex flex-col items-center text-center mb-12">
         <motion.div
           initial={{ opacity: 0, y: -40 }}
@@ -865,11 +922,13 @@ ${song.prompt}
                       "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
                       selectedSongIds.length === 0
                         ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed"
-                        : selectedSongs.every(s => s.isLocked)
-                          ? lastSelectionAction === 'lock'
-                            ? "bg-brand-orange/40 text-brand-orange border-brand-orange/30"
+                        : (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock')
+                          ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_15px_rgba(242,125,38,0.3)] animate-pulse"
+                          : selectedSongs.every(s => s.isLocked)
+                            ? lastSelectionAction === 'lock'
+                              ? "bg-brand-orange/40 text-brand-orange border-brand-orange/30"
+                              : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
                             : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
-                          : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
                     )}
                     aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
                   >
@@ -882,16 +941,29 @@ ${song.prompt}
                 </button>
 
                 <button
-                  onClick={exitSelectionMode}
-                  onMouseEnter={() => onHover({ id: 'selection-confirm', label: '  확인', description: '현재 선택 상태를 확정합니다.' })}
+                  onClick={handleSelectionConfirm}
+                  onMouseEnter={() => onHover({ 
+                    id: 'selection-confirm', 
+                    label: pendingSelectionAction ? '실행 확인' : '  확인', 
+                    description: pendingSelectionAction ? '대기 중인 작업을 실행합니다.' : '현재 선택 상태를 확정합니다.' 
+                  })}
                   onMouseLeave={() => onHover(null)}
-                  onTouchStart={() => onLongPressStart({ id: 'selection-confirm', label: '  확인', description: '현재 선택 상태를 확정합니다.' })}
+                  onTouchStart={() => onLongPressStart({ 
+                    id: 'selection-confirm', 
+                    label: pendingSelectionAction ? '실행 확인' : '  확인', 
+                    description: pendingSelectionAction ? '대기 중인 작업을 실행합니다.' : '현재 선택 상태를 확정합니다.' 
+                  })}
                   onTouchEnd={onLongPressEnd}
-                  className="flex-1 h-12 px-2 rounded-xl bg-[var(--text-secondary)] text-[var(--bg-primary)] border border-[var(--border-color)] hover:opacity-80 transition-all flex items-center justify-center gap-2"
+                  className={cn(
+                    "flex-1 h-12 px-2 rounded-xl transition-all flex items-center justify-center gap-2 border",
+                    pendingSelectionAction
+                      ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20"
+                      : "bg-[var(--text-secondary)] text-[var(--bg-primary)] border-[var(--border-color)] hover:opacity-80"
+                  )}
                 >
                   <span className="text-[14px] font-bold">{selectedSongIds.length}곡</span>
-                  <span className="text-[16px] font-medium opacity-80">확인</span>
-                  <Check className="w-5 h-5 text-brand-orange" />
+                  <span className="text-[16px] font-medium opacity-80">{pendingSelectionAction ? '실행' : '확인'}</span>
+                  <Check className={cn("w-5 h-5", pendingSelectionAction ? "text-white" : "text-brand-orange")} />
                 </button>
 
                 <button
@@ -905,9 +977,11 @@ ${song.prompt}
                     "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
                     selectedSongIds.length === 0
                       ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed"
-                      : hasDeletableSongs
-                        ? "bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                        : "bg-red-500/5 text-red-500/40 border-red-500/10 hover:bg-red-500/20"
+                      : pendingSelectionAction === 'delete'
+                        ? "bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse"
+                        : hasDeletableSongs
+                          ? "bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
+                          : "bg-red-500/5 text-red-500/40 border-red-500/10 hover:bg-red-500/20"
                   )}
                   aria-label="선택 삭제"
                 >
@@ -1002,25 +1076,29 @@ ${song.prompt}
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                onMouseDown={() => handleCardLongPressStart(song)}
+                onMouseDown={(e) => handleCardLongPressStart(e, song)}
                 onMouseUp={handleCardLongPressEnd}
                 onMouseLeave={handleCardLongPressEnd}
-                onTouchStart={() => handleCardLongPressStart(song)}
+                onTouchStart={(e) => handleCardLongPressStart(e, song)}
                 onTouchEnd={handleCardLongPressEnd}
                 onTouchCancel={handleCardLongPressEnd}
-                onClick={() => {
+                onClick={(e) => {
                   if (longPressTriggeredRef.current) {
                     longPressTriggeredRef.current = false;
                     return;
                   }
 
-                  if (isSelectionMode) toggleSongSelection(song.id);
+                  if (isSelectionMode) {
+                    e.stopPropagation();
+                    toggleSongSelection(song.id);
+                    setPendingSelectionAction(null);
+                  }
                 }}
                 className={cn(
                   "rounded-3xl p-6 transition-all group flex flex-col h-full border select-none shadow-[var(--shadow-md)]",
                   isSelectionMode
                     ? isSelected
-                      ? "border-brand-orange/40 ring-1 ring-brand-orange/30"
+                      ? "border-brand-orange/40 ring-1 ring-brand-orange/30 bg-[var(--card-bg)]"
                       : "bg-[var(--card-bg)]/40 border-[var(--border-color)] hover:bg-[var(--hover-bg)]/40 cursor-pointer"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
                 )}

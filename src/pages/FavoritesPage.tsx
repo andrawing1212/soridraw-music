@@ -23,7 +23,8 @@ import {
   Link2,
   Link2Off,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -664,6 +665,11 @@ ${song.prompt}
   const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
 
+  const applyKeywordsToNext = (song: any) => {
+    localStorage.setItem('soridraw_pending_keywords', JSON.stringify(song.appliedKeywords));
+    navigate('/');
+  };
+
   const filteredFavorites = favorites.filter(song => 
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1199,6 +1205,22 @@ ${song.prompt}
                             <Copy className="w-4 h-4 group-hover/copy:scale-110 transition-transform" />
                           )}
                         </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            applyKeywordsToNext(song);
+                          }}
+                          onMouseEnter={() => onHover({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="flex-1 py-3 rounded-xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center justify-center group/apply border border-brand-orange/30"
+                        >
+                          <RefreshCw className="w-4 h-4 group-hover/apply:rotate-180 transition-transform duration-500" />
+                        </button>
                       </>
                     )}
                   </div>
@@ -1492,10 +1514,23 @@ ${song.prompt}
                       </button>
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => (
-                      <span key={k} className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold">#{k}</span>
-                    ))}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-wrap gap-2">
+                      {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => (
+                        <span key={k} className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold">#{k}</span>
+                      ))}
+                    </div>
+                    {!isEditing && (
+                      <button
+                        onClick={() => applyKeywordsToNext(selectedSong)}
+                        onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                        onMouseLeave={() => onHover(null)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/30 text-[11px] font-bold"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        다음 곡에 적용
+                      </button>
+                    )}
                   </div>
                   {selectedSong.appliedKeywords.tempo && (
                     <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans">

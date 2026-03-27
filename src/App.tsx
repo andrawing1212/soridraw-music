@@ -43,7 +43,8 @@ import {
   Lock,
   Unlock,
   Edit2,
-  Filter
+  Filter,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -1067,6 +1068,61 @@ function App() {
   }, []);
 
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
+
+  const applyKeywordsToNext = (appliedKeywords: SongResult['appliedKeywords']) => {
+    const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
+      return labels.map(label => {
+        // Special case for City Pop and K-Pop which might have extra labels
+        if (label.includes('City Pop') || label === '80s Japanese Pop' || label === 'Funk' || label === 'Groovy' || label === 'Retro' || label === 'Nu-Disco' || label === 'Synth-pop') {
+          return 'citypop';
+        }
+        if (label.includes('K-Pop')) {
+          return 'kpop';
+        }
+        const item = category.find(c => c.label === label);
+        return item ? item.id : null;
+      }).filter(Boolean) as string[];
+    };
+
+    const genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
+    const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
+    const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
+
+    setSelectedGenres(genreIds);
+    setSelectedMoods(moodIds);
+    setSelectedThemes(themeIds);
+
+    if (appliedKeywords.tempo) {
+      const bpmMatch = appliedKeywords.tempo.match(/(\d+)/g);
+      if (bpmMatch) {
+        if (bpmMatch.length === 1) {
+          const bpm = parseInt(bpmMatch[0]);
+          setMinBPM(bpm);
+          setMaxBPM(bpm);
+        } else if (bpmMatch.length === 2) {
+          setMinBPM(parseInt(bpmMatch[0]));
+          setMaxBPM(parseInt(bpmMatch[1]));
+        }
+        setTempoEnabled(false); // Manual mode
+      }
+    }
+
+    showToast('키워드가 다음 곡 생성에 적용되었습니다.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    const pending = localStorage.getItem('soridraw_pending_keywords');
+    if (pending) {
+      try {
+        const keywords = JSON.parse(pending);
+        applyKeywordsToNext(keywords);
+        localStorage.removeItem('soridraw_pending_keywords');
+      } catch (e) {
+        console.error('Failed to parse pending keywords', e);
+      }
+    }
+  }, []);
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
   const [isMoodRandomized, setIsMoodRandomized] = useState(false);
   const [isThemeRandomized, setIsThemeRandomized] = useState(false);
@@ -2025,6 +2081,15 @@ ${result.prompt}
                     적용된 키워드
                   </h3>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => applyKeywordsToNext(result.appliedKeywords)}
+                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/30 text-[12px] font-bold"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      다음 곡에 적용
+                    </button>
                     <button
                       onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
                       className="flex items-center gap-1.5 px-[18px] py-[6px] rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 text-[15px] font-bold"

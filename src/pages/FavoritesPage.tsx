@@ -660,6 +660,7 @@ export default function FavoritesPage({
       `[Genres] ${song.appliedKeywords.genre.join(', ')}`,
       `[Moods] ${song.appliedKeywords.mood.join(', ')}`,
       `[Themes] ${song.appliedKeywords.theme.join(', ')}`,
+      song.appliedKeywords.vocalType ? `[Vocal] ${song.appliedKeywords.vocalType}` : '',
       song.appliedKeywords.tempo ? `[Tempo] ${song.appliedKeywords.tempo}` : ''
     ].filter(Boolean).join('\n');
 
@@ -724,6 +725,7 @@ ${song.prompt}
       drumStyle: song.appliedKeywords.drumStyle ?? 'none',
       maleCount: song.appliedKeywords.maleCount ?? 0,
       femaleCount: song.appliedKeywords.femaleCount ?? 0,
+      rapEnabled: song.appliedKeywords.rapEnabled ?? false,
       tempoConfig: song.appliedKeywords.tempoConfig ?? null
     }));
     navigate('/');
@@ -1230,6 +1232,17 @@ ${song.prompt}
                         #{m}
                       </span>
                     ))}
+                    {song.appliedKeywords.vocalType && (
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHover({ id: `vocal-${song.id}`, label: '보컬', description: `${song.appliedKeywords.vocalType} 구성입니다.`, _ts: Date.now() });
+                        }}
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
+                      >
+                        #{song.appliedKeywords.vocalType}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex gap-2 mt-auto">
@@ -1618,6 +1631,12 @@ ${song.prompt}
                       </div>
                     )}
                   </div>
+                  {selectedSong.appliedKeywords.vocalType && (
+                    <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans mb-1">
+                      <span className="w-1 h-1 rounded-full bg-brand-orange" />
+                      Vocal: {selectedSong.appliedKeywords.vocalType}
+                    </div>
+                  )}
                   {selectedSong.appliedKeywords.tempo && (
                     <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans">
                       <span className="w-1 h-1 rounded-full bg-brand-orange" />

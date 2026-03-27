@@ -14,6 +14,196 @@ const VOCAL_POOLS = {
 
 const getRandomTone = (pool: string[]) => pool[Math.floor(Math.random() * pool.length)];
 
+/**
+ * Builds a randomized lyric structure prompt based on vocal configuration using the "Hybrid Method".
+ * Guarantees that every selected member appears at least once in the lyrics.
+ */
+function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEnabled: boolean): string {
+  const totalCount = maleCount + femaleCount;
+
+  // 1. Generate all individual roles (A, B, C, D...)
+  const mRoles = [];
+  for (let i = 0; i < maleCount; i++) mRoles.push(`Male ${String.fromCharCode(65 + i)}`);
+  const fRoles = [];
+  for (let i = 0; i < femaleCount; i++) fRoles.push(`Female ${String.fromCharCode(65 + i)}`);
+  
+  const allIndividualRoles = [...mRoles, ...fRoles];
+  
+  // Helper to build a structure string
+  const buildStructure = (steps: { section: string, role: string }[]) => {
+    return steps.map(s => `[${s.section} - ${s.role}]`).join("\n    ");
+  };
+
+  const templates: string[] = [];
+
+  // 1-2 People: Simple Structure (Existing logic refined)
+  if (totalCount <= 2) {
+    if (totalCount === 1) {
+      const soloRole = allIndividualRoles[0] || "Vocal";
+      templates.push(buildStructure([
+        { section: "Verse 1", role: soloRole },
+        { section: "Pre-Chorus", role: soloRole },
+        { section: "Chorus", role: soloRole },
+        { section: "Verse 2", role: soloRole },
+        { section: "Bridge", role: soloRole },
+        { section: "Chorus", role: soloRole },
+        { section: "Outro", role: soloRole }
+      ]));
+    } else if (totalCount === 2) {
+      const r1 = allIndividualRoles[0];
+      const r2 = allIndividualRoles[1];
+      templates.push(buildStructure([
+        { section: "Verse 1", role: r1 },
+        { section: "Pre-Chorus", role: r2 },
+        { section: "Chorus", role: "All" },
+        { section: "Verse 2", role: r2 },
+        { section: "Pre-Chorus", role: r1 },
+        { section: "Chorus", role: "All" },
+        { section: "Bridge", role: `${r1} + ${r2}` },
+        { section: "Chorus", role: "All" },
+        { section: "Outro", role: "All" }
+      ]));
+      templates.push(buildStructure([
+        { section: "Verse 1", role: r1 },
+        { section: "Chorus", role: `${r1} Lead + ${r2} Harmony` },
+        { section: "Verse 2", role: r2 },
+        { section: "Chorus", role: `${r2} Lead + ${r1} Harmony` },
+        { section: "Bridge", role: "Mixed Harmony" },
+        { section: "Chorus", role: "All" }
+      ]));
+    }
+  } 
+  // 3+ People: Hybrid Structure with Guaranteed Appearance
+  else {
+    // We create multiple versions, each ensuring all members appear.
+    const createGuaranteedVersion = (layoutType: number) => {
+      let pool = [...allIndividualRoles].sort(() => Math.random() - 0.5);
+      const usePool = () => pool.length > 0 ? pool.shift()! : allIndividualRoles[Math.floor(Math.random() * allIndividualRoles.length)];
+      
+      const steps = [];
+      if (layoutType === 0) {
+        // Verse focus
+        steps.push({ section: "Verse 1", role: usePool() });
+        steps.push({ section: "Pre-Chorus", role: usePool() });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Verse 2", role: usePool() });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Bridge", role: usePool() });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Outro", role: pool.length > 0 ? pool.join(" + ") : "Mixed Harmony" });
+      } else if (layoutType === 1) {
+        // Alternating Verse
+        steps.push({ section: "Verse 1", role: `${usePool()} + ${usePool()} alternating` });
+        steps.push({ section: "Pre-Chorus", role: usePool() });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Verse 2", role: usePool() });
+        steps.push({ section: "Bridge", role: pool.length > 0 ? pool.join(" + ") : "Mixed Harmony" });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Outro", role: "All" });
+      } else {
+        // Lead centered Chorus
+        const lead = usePool();
+        const group = maleCount > femaleCount ? "Male Group" : femaleCount > maleCount ? "Female Group" : "Mixed Group";
+        steps.push({ section: "Verse 1", role: usePool() });
+        steps.push({ section: "Verse 2", role: usePool() });
+        steps.push({ section: "Pre-Chorus", role: usePool() });
+        steps.push({ section: "Chorus", role: `${lead} Lead + ${group}` });
+        steps.push({ section: "Bridge", role: pool.length > 0 ? pool.join(" + ") : usePool() });
+        steps.push({ section: "Chorus", role: `${lead} Lead + ${group}` });
+        steps.push({ section: "Outro", role: "All" });
+      }
+      
+      // If pool still has members (e.g. 6 people), append them to the last section or Outro
+      if (pool.length > 0) {
+        const last = steps[steps.length - 1];
+        if (last.role === "All") {
+          last.role = `All (${pool.join(" + ")} focus)`;
+        } else {
+          last.role += ` + ${pool.join(" + ")}`;
+        }
+      }
+
+      return buildStructure(steps);
+    };
+
+    templates.push(createGuaranteedVersion(0));
+    templates.push(createGuaranteedVersion(1));
+    templates.push(createGuaranteedVersion(2));
+  }
+
+  // Add Rap if enabled
+  if (rapEnabled) {
+    templates.forEach((template, index) => {
+      const lines = template.split("\n    ");
+      const rand = Math.random();
+      const rapRole = allIndividualRoles[Math.floor(Math.random() * allIndividualRoles.length)];
+      const rapLabel = `Rap (${rapRole})`;
+      
+      if (rand < 0.33) {
+        // Bridge
+        const bridgeIdx = lines.findIndex(l => l.includes("Bridge"));
+        if (bridgeIdx !== -1) {
+          lines[bridgeIdx] = `[Bridge - ${rapLabel}]`;
+        } else {
+          lines.splice(lines.length - 1, 0, `[Bridge - ${rapLabel}]`);
+        }
+      } else if (rand < 0.66) {
+        // Verse 2
+        const verse2Idx = lines.findIndex(l => l.includes("Verse 2"));
+        if (verse2Idx !== -1) {
+          lines[verse2Idx] = `[Verse 2 - ${rapLabel}]`;
+        } else {
+          lines.splice(1, 0, `[Verse 2 - ${rapLabel}]`);
+        }
+      } else {
+        // Before Final Chorus
+        const lastChorusIdx = lines.lastIndexOf("[Chorus - All]");
+        if (lastChorusIdx !== -1) {
+          lines.splice(lastChorusIdx, 0, `[Rap Break - ${rapLabel}]`);
+        } else {
+          lines.splice(lines.length - 1, 0, `[Rap Section - ${rapLabel}]`);
+        }
+      }
+      templates[index] = lines.join("\n    ");
+    });
+  }
+
+  const selectedTemplate = templates[Math.floor(Math.random() * templates.length)];
+
+  return `
+    HYBRID LYRIC PART SEPARATION RULES:
+    - You MUST follow this specific part distribution structure for the lyrics:
+    ${selectedTemplate}
+    - EVERY member (Male A, Male B, Female A, Female B, etc.) MUST appear at least once in an individual or small group part.
+    - Verse sections: Can be segmented using individual roles (e.g., Male A, Female B).
+    - Chorus sections: MUST be simple (e.g., [Chorus - All] or [Chorus - Lead + Group]). DO NOT list multiple individual roles in Chorus.
+    - Pre-Chorus: Use single roles or small combinations.
+    - Bridge/Outro: Can be solo, mixed harmony, or rap.
+    - Ensure each section is clearly labeled with the role in English (e.g., [Verse 1 - Male A]).
+    - IMPORTANT: The Korean lyrics MUST also include these same part labels in English.
+  `;
+}
+
+/**
+ * Builds a simple vocal prompt for the music production instructions.
+ */
+function buildVocalPrompt(maleCount: number, femaleCount: number, rapEnabled: boolean): string {
+  const parts = [];
+  if (maleCount > 0 && femaleCount > 0) {
+    parts.push("mixed vocal group");
+  } else if (maleCount > 0) {
+    parts.push(maleCount === 1 ? "male vocal" : "male group vocal");
+  } else if (femaleCount > 0) {
+    parts.push(femaleCount === 1 ? "female vocal" : "female group vocal");
+  }
+
+  if (rapEnabled) {
+    parts.push("with rap section");
+  }
+
+  return parts.join(", ");
+}
+
 export async function generateSong(
   genres: string[],
   moods: string[],
@@ -23,12 +213,16 @@ export async function generateSong(
   drumStyle: DrumStyle = 'none',
   maleCount: number = 0,
   femaleCount: number = 0,
+  rapEnabled: boolean = false,
   tempo?: string,
   specialPrompt?: string,
   kpopMode: 0 | 1 | 2 = 0
 ): Promise<SongResult> {
   const model = "gemini-3-flash-preview";
   
+  const vocalPrompt = buildVocalPrompt(maleCount, femaleCount, rapEnabled);
+  const lyricStructurePrompt = buildLyricStructurePrompt(maleCount, femaleCount, rapEnabled);
+
   const kpopInstruction = kpopMode === 2 ? `
     CRITICAL K-POP STYLE (Korean + English Mixed Version):
     - For 'lyrics.korean': Generate K-Pop style lyrics that are primarily in Korean but naturally code-switch with English. 
@@ -54,7 +248,7 @@ export async function generateSong(
     {
       "title": "[Genre1 Genre2] 'English Title' │ 'Korean Title'",
       "lyrics": {
-        "english": "Full English lyrics with structure like [Verse 1], [Chorus], etc.",
+        "english": "Full English lyrics with structure like [Verse 1 - Role], [Chorus - Role], etc.",
         "korean": "Full Korean translation of the lyrics with the same structure"
       },
       "prompt": "A detailed music production prompt",
@@ -71,6 +265,7 @@ export async function generateSong(
     - Format: [Genre1 Genre2] 'English Title' │ 'Korean Title'
     
     Rules for Lyrics:
+    ${lyricStructurePrompt}
     - Structure: [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro]
     - CRITICAL: Ensure clear line breaks between sections.
     - CRITICAL: The content of the lyrics MUST be influenced ONLY by the 'Themes' and 'User Story'. 
@@ -93,30 +288,7 @@ export async function generateSong(
     - CRITICAL: The total song duration MUST be between 2 minutes 30 seconds and 3 minutes. NEVER exceed 3 minutes 20 seconds.
     - Ensure the song can be finished within 2 minutes 45 seconds if possible.
     - ${tempo ? `TEMPO CONSTRAINT: ${tempo}` : "Tempo should be appropriate for the genre and mood."}
-    - VOCAL CONFIGURATION: ${(() => {
-        if (maleCount === 1 && femaleCount === 1) return "Duet (Male & Female) with balanced vocal distribution and harmonies.";
-        
-        const getGenderConfig = (gender: 'Male' | 'Female', count: number) => {
-          if (count === 0) return null;
-          if (count === 1) return `${gender} Solo Vocal`;
-          if (count === 2) {
-            const main = getRandomTone(VOCAL_POOLS.main);
-            const sub = getRandomTone(VOCAL_POOLS.sub);
-            return `${gender} Duo: Main Vocal (${main}) and Sub Vocal (${sub}) with tight harmonies.`;
-          }
-          // Group (3+)
-          const main = getRandomTone(VOCAL_POOLS.main);
-          const sub = getRandomTone(VOCAL_POOLS.sub);
-          const chorus = getRandomTone(VOCAL_POOLS.chorus);
-          return `${gender} Group: Main Vocal (${main}), Sub Vocal (${sub}), and Background Chorus/Harmonies (${chorus}).`;
-        };
-
-        const malePart = getGenderConfig('Male', maleCount);
-        const femalePart = getGenderConfig('Female', femaleCount);
-        
-        if (malePart && femalePart) return `${malePart} + ${femalePart}`;
-        return malePart || femalePart || "Appropriate for the genre and mood";
-      })()}
+    - VOCAL CONFIGURATION: ${vocalPrompt}
     
     Keywords to use:
     Genres: ${genres.join(", ")}
@@ -169,20 +341,18 @@ export async function generateSong(
   // Override vocalType with the requested configuration for accuracy
   if (result.appliedKeywords) {
     const vocalDescription = [];
-    if (maleCount === 1 && femaleCount === 1) {
-      vocalDescription.push("Duet");
-    } else {
-      const getDesc = (gender: string, count: number) => {
-        if (count === 1) return `${gender} Solo`;
-        if (count === 2) return `${gender} Duo`;
-        if (count >= 3) return `${gender} Group`;
-        return null;
-      };
-      const m = getDesc('Male', maleCount);
-      const f = getDesc('Female', femaleCount);
-      if (m) vocalDescription.push(m);
-      if (f) vocalDescription.push(f);
-    }
+    const getDesc = (gender: string, count: number) => {
+      if (count === 1) return `${gender} Solo`;
+      if (count === 2) return `${gender} Duo`;
+      if (count >= 3) return `${gender} Group`;
+      return null;
+    };
+    const m = getDesc('Male', maleCount);
+    const f = getDesc('Female', femaleCount);
+    if (m) vocalDescription.push(m);
+    if (f) vocalDescription.push(f);
+    if (rapEnabled) vocalDescription.push("Rap");
+    
     result.appliedKeywords.vocalType = vocalDescription.join(" + ") || "Default";
   }
   

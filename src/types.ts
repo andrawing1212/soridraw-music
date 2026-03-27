@@ -20,6 +20,7 @@ export interface SongResult {
     drumStyle?: DrumStyle;
     maleCount?: number;
     femaleCount?: number;
+    rapEnabled?: boolean;
     tempoConfig?: {
       enabled: boolean;
       min: number;

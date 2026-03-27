@@ -45,7 +45,8 @@ import {
   Edit2,
   Filter,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  Mic2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -770,6 +771,7 @@ function App() {
   const [drumStyle, setDrumStyle] = useState<DrumStyle>('none');
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
+  const [rapEnabled, setRapEnabled] = useState(false);
   const [pinnedGenres, setPinnedGenres] = useState<string[]>(() => {
     const saved = sessionStorage.getItem('soridraw_pinned_genres');
     return saved ? JSON.parse(saved) : [];
@@ -1138,6 +1140,7 @@ function App() {
     if (appliedKeywords.drumStyle) setDrumStyle(appliedKeywords.drumStyle);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
+    if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
     
     if (appliedKeywords.tempoConfig) {
       setTempoEnabled(appliedKeywords.tempoConfig.enabled);
@@ -1459,6 +1462,7 @@ function App() {
     setDrumStyle('none');
     setMaleCount(0);
     setFemaleCount(0);
+    setRapEnabled(false);
 
     setTempoEnabled(true);
     setMinBPM(90);
@@ -1588,6 +1592,8 @@ function App() {
     }
 
     setIsGenerating(true);
+    // Clear previous title if it exists to ensure the new one is noticeable
+    setResult(prev => prev ? { ...prev, title: '생성 중...' } : null);
     abortControllerRef.current = new AbortController();
 
     try {
@@ -1678,6 +1684,7 @@ function App() {
         drumStyle,
         maleCount,
         femaleCount,
+        rapEnabled,
         tempoInfo,
         specialPrompt,
         kpopMode
@@ -1686,14 +1693,16 @@ function App() {
       // Check if aborted before updating state
       if (abortControllerRef.current?.signal.aborted) return;
 
-      const newResult = {
+      const newResult: SongResult = {
         ...song,
+        title: song.title, // Explicitly ensure title is from the new song
         appliedKeywords: {
           ...song.appliedKeywords,
           lyricsLength,
           drumStyle,
           maleCount,
           femaleCount,
+          rapEnabled,
           tempoConfig: {
             enabled: tempoEnabled,
             min: minBPM,
@@ -1736,6 +1745,7 @@ function App() {
       `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
       `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
       `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+      result.appliedKeywords.vocalType ? `[Vocal] ${result.appliedKeywords.vocalType}` : '',
       result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
     ].filter(Boolean).join('\n');
 
@@ -1934,8 +1944,10 @@ ${result.prompt}
           <SingerControl 
             maleCount={maleCount}
             femaleCount={femaleCount}
+            rapEnabled={rapEnabled}
             onMaleChange={setMaleCount}
             onFemaleChange={setFemaleCount}
+            onRapChange={setRapEnabled}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -2111,111 +2123,6 @@ ${result.prompt}
             >
 
 
-              {/* Applied Keywords After Generation */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative">
-                <div className="flex items-center justify-between gap-4 mb-6">
-                  <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-brand-orange" />
-                    적용된 키워드
-                  </h3>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => applyKeywordsToNext(result.appliedKeywords)}
-                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-1.5 px-3 h-10 min-w-[90px] rounded-xl bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[11px] font-bold border border-brand-orange/20 active:scale-95"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span className="whitespace-nowrap">다음 곡 적용</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        const kwText = [
-                          `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
-                          `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
-                          `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
-                          result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
-                        ].filter(Boolean).join('\n');
-                        copyToClipboard(kwText, 'keywords');
-                      }}
-                      onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      className="p-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]"
-                    >
-                      {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                
-                <motion.div 
-                  initial={false}
-                  animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 overflow-hidden"
-                >
-                  {isAppliedKeywordsExpanded && (['genre', 'mood', 'theme'] as const).map((cat) => (
-                    <div key={cat} className="space-y-1 group/cat">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
-                        <button
-                          onClick={() => copyToClipboard(result.appliedKeywords[cat].join(', '), `kw-${cat}`)}
-                          className="opacity-0 group-hover/cat:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                        >
-                          {copiedType === `kw-${cat}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {result.appliedKeywords[cat].map((kw, idx) => {
-                          const isRandom = result.randomKeywords?.includes(kw);
-                          const description = [...GENRES, ...MOODS, ...THEMES].find(item => item.label === kw)?.description;
-                          
-                          return (
-                            <span 
-                              key={idx} 
-                              onMouseEnter={() => {
-                                if (description) {
-                                  setHoveredItem({ id: `kw-${cat}-${idx}`, label: kw, description });
-                                }
-                              }}
-                              onMouseLeave={() => setHoveredItem(null)}
-                              className={cn(
-                                "px-2 py-0.5 rounded-md text-[11px] transition-all cursor-help",
-                                isRandom 
-                                  ? "bg-brand-orange/20 text-brand-orange font-bold border border-brand-orange/30" 
-                                  : "bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)]"
-                              )}
-                            >
-                              {kw}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                  {result.appliedKeywords.tempo && (
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">tempo</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span 
-                          className="px-2 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
-                          onMouseEnter={() => setHoveredItem({ id: 'kw-tempo', label: 'Tempo', description: '곡의 빠르기를 나타내는 BPM 범위입니다.' })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                        >
-                          {result.appliedKeywords.tempo}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-
-                {/* Expand Button at Bottom Center */}
-                <button
-                  onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
-                >
-                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                </button>
-              </div>
-
               {/* Copy All Button */}
               <div className="flex justify-center">
                 <button
@@ -2322,6 +2229,126 @@ ${result.prompt}
                   </div>
                 </div>
               </div>
+
+              {/* Applied Keywords After Generation */}
+              <div className="bg-[var(--card-bg)] rounded-3xl p-4 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative">
+                <div className="flex items-center justify-between gap-4 mb-3">
+                  <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-brand-orange" />
+                    적용된 키워드
+                  </h3>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => applyKeywordsToNext(result.appliedKeywords)}
+                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex items-center justify-center gap-1.5 px-3 h-9 min-w-[90px] rounded-xl bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[11px] font-bold border border-brand-orange/20 active:scale-95"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span className="whitespace-nowrap">다음 곡 적용</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const kwText = [
+                          `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
+                          `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
+                          `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+                          result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
+                        ].filter(Boolean).join('\n');
+                        copyToClipboard(kwText, 'keywords');
+                      }}
+                      onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="p-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]"
+                    >
+                      {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                
+                <motion.div 
+                  initial={false}
+                  animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
+                >
+                  {isAppliedKeywordsExpanded && (['genre', 'mood', 'theme'] as const).map((cat) => (
+                    <div key={cat} className="space-y-0.5 group/cat">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
+                        <button
+                          onClick={() => copyToClipboard(result.appliedKeywords[cat].join(', '), `kw-${cat}`)}
+                          className="opacity-0 group-hover/cat:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                        >
+                          {copiedType === `kw-${cat}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {result.appliedKeywords[cat].map((kw, idx) => {
+                          const isRandom = result.randomKeywords?.includes(kw);
+                          const description = [...GENRES, ...MOODS, ...THEMES].find(item => item.label === kw)?.description;
+                          
+                          return (
+                            <span 
+                              key={idx} 
+                              onMouseEnter={() => {
+                                if (description) {
+                                  setHoveredItem({ id: `kw-${cat}-${idx}`, label: kw, description });
+                                }
+                              }}
+                              onMouseLeave={() => setHoveredItem(null)}
+                              className={cn(
+                                "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help",
+                                isRandom 
+                                  ? "bg-brand-orange/20 text-brand-orange font-bold border border-brand-orange/30" 
+                                  : "bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)]"
+                              )}
+                            >
+                              {kw}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  {result.appliedKeywords.vocalType && (
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>
+                      <div className="flex flex-wrap gap-1">
+                        <span 
+                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
+                          onMouseEnter={() => setHoveredItem({ id: 'kw-vocal', label: 'Vocal', description: '곡의 보컬 구성을 나타냅니다.' })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                        >
+                          {result.appliedKeywords.vocalType}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {result.appliedKeywords.tempo && (
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">tempo</p>
+                      <div className="flex flex-wrap gap-1">
+                        <span 
+                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border border-[var(--border-color)] cursor-help"
+                          onMouseEnter={() => setHoveredItem({ id: 'kw-tempo', label: 'Tempo', description: '곡의 빠르기를 나타내는 BPM 범위입니다.' })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                        >
+                          {result.appliedKeywords.tempo}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Expand Button at Bottom Center */}
+                <button
+                  onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+                >
+                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
@@ -2947,14 +2974,26 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
 interface SingerControlProps {
   maleCount: number;
   femaleCount: number;
+  rapEnabled: boolean;
   onMaleChange: (count: number) => void;
   onFemaleChange: (count: number) => void;
+  onRapChange: (enabled: boolean) => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function SingerControl({ maleCount, femaleCount, onMaleChange, onFemaleChange, onHover, onLongPressStart, onLongPressEnd }: SingerControlProps) {
+function SingerControl({ 
+  maleCount, 
+  femaleCount, 
+  rapEnabled,
+  onMaleChange, 
+  onFemaleChange, 
+  onRapChange,
+  onHover, 
+  onLongPressStart, 
+  onLongPressEnd 
+}: SingerControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
   const getMaleDescription = (count: number) => {
@@ -2972,12 +3011,12 @@ function SingerControl({ maleCount, femaleCount, onMaleChange, onFemaleChange, o
   };
 
   const getCombinedDescription = () => {
-    if (maleCount === 1 && femaleCount === 1) return "남녀가 같이 부르는 듀엣";
     if (maleCount === 0 && femaleCount === 0) return "가수의 성별과 인원 구성을 선택합니다.";
     
     const parts = [];
     if (maleCount > 0) parts.push(getMaleDescription(maleCount));
     if (femaleCount > 0) parts.push(getFemaleDescription(femaleCount));
+    if (rapEnabled) parts.push("랩 섹션 포함");
     return parts.join(" + ");
   };
 
@@ -3009,7 +3048,7 @@ function SingerControl({ maleCount, femaleCount, onMaleChange, onFemaleChange, o
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6">
+      <div className="relative mb-6 flex items-center justify-between">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
           onMouseLeave={() => setShowTitleTooltip(false)}
@@ -3018,6 +3057,22 @@ function SingerControl({ maleCount, femaleCount, onMaleChange, onFemaleChange, o
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
           가수
         </h3>
+
+        <button
+          onClick={() => onRapChange(!rapEnabled)}
+          onMouseEnter={() => onHover({ id: 'rap', label: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
+          onMouseLeave={() => onHover(null)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+            rapEnabled 
+              ? "bg-brand-orange/10 border-brand-orange text-brand-orange" 
+              : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)]"
+          )}
+        >
+          <Mic2 className={cn("w-3 h-3", rapEnabled ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
+          랩 {rapEnabled ? 'ON' : 'OFF'}
+        </button>
+
         <AnimatePresence>
           {showTitleTooltip && (
             <motion.div

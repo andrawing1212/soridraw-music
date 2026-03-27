@@ -44,7 +44,8 @@ import {
   Unlock,
   Edit2,
   Filter,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -2118,44 +2119,46 @@ ${result.prompt}
 
               {/* Applied Keywords After Generation */}
               <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)]">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-[16.5px] font-semibold text-[var(--text-secondary)] uppercase tracking-widest flex items-center gap-2">
-                    <Check className="w-3 h-3 text-brand-orange" />
-                    적용된 키워드
-                  </h3>
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-brand-orange/10 border border-brand-orange/20 w-fit">
+                    <CheckCircle2 className="w-5 h-5 text-brand-orange" />
+                    <span className="text-[14px] font-bold text-brand-orange uppercase tracking-wider">적용된 키워드</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <button
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-2 px-4 h-10 rounded-full bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[13px] font-bold border border-brand-orange/20 active:scale-95"
+                      className="flex items-center justify-center gap-2 px-4 h-10 rounded-full bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[13px] font-bold border border-brand-orange/20 active:scale-95"
                     >
                       <RefreshCw className="w-4 h-4" />
                       <span className="whitespace-nowrap">다음 곡 적용</span>
                     </button>
-                    <button
-                      onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                      className="flex items-center gap-2 px-4 h-10 rounded-full bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] text-[13px] font-bold shadow-sm active:scale-95"
-                    >
-                      <span className="whitespace-nowrap">{isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}</span>
-                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const kwText = [
-                          `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
-                          `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
-                          `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
-                          result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
-                        ].filter(Boolean).join('\n');
-                        copyToClipboard(kwText, 'keywords');
-                      }}
-                      onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
-                    >
-                      {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 h-10 rounded-full bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] text-[13px] font-bold shadow-sm active:scale-95"
+                      >
+                        <span className="whitespace-nowrap">{isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}</span>
+                        {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          const kwText = [
+                            `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
+                            `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
+                            `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+                            result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
+                          ].filter(Boolean).join('\n');
+                          copyToClipboard(kwText, 'keywords');
+                        }}
+                        onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
+                        onMouseLeave={() => setHoveredItem(null)}
+                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                      >
+                        {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 
@@ -3184,7 +3187,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-3 py-3 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity",
+                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -3203,7 +3206,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                     onMinChange(clamped);
                   }
                 }}
-                className="w-8 bg-transparent text-cyan-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-7 bg-transparent text-cyan-400 font-mono font-bold text-[14px] focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
@@ -3219,7 +3222,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                     onMaxChange(clamped);
                   }
                 }}
-                className="w-8 bg-transparent text-rose-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-7 bg-transparent text-rose-400 font-mono font-bold text-[14px] focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <span className="text-[var(--text-secondary)] text-[9px] uppercase font-bold tracking-tighter">bpm</span>
             </div>
@@ -3268,7 +3271,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-4 py-3 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
+            "md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -3287,9 +3290,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMinChange(clamped);
               }
             }}
-            className="w-10 bg-transparent text-cyan-400 font-mono font-bold text-lg focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-9 bg-transparent text-cyan-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-[var(--text-secondary)]/50 font-bold text-lg">-</span>
+          <span className="text-[var(--text-secondary)]/50 font-bold text-base">-</span>
           <input
             type="number"
             min={min}
@@ -3303,9 +3306,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMaxChange(clamped);
               }
             }}
-            className="w-10 bg-transparent text-rose-400 font-mono font-bold text-lg focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-9 bg-transparent text-rose-400 font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-[var(--text-secondary)] text-[10px] uppercase font-bold tracking-tighter">bpm</span>
+          <span className="text-[var(--text-secondary)] text-[9px] uppercase font-bold tracking-tighter">bpm</span>
         </div>
       </div>
 

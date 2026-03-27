@@ -2123,23 +2123,6 @@ ${result.prompt}
             >
 
 
-              {/* Copy All Button */}
-              <div className="flex justify-center">
-                <button
-                  onClick={copyAll}
-                  onMouseEnter={() => setHoveredItem({ id: 'copy-all', label: '곡 정보 복사', description: '키워드, 제목, 가사, 프롬프트를 한 번에 복사합니다.' })}
-                  onMouseLeave={() => setHoveredItem(null)}
-                  className="flex items-center gap-[18px] px-[48px] py-[18px] rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-brand-orange transition-all border border-[var(--border-color)] shadow-[var(--shadow-md)] group"
-                >
-                  {copiedType === 'all' ? (
-                    <Check className="w-[30px] h-[30px]" />
-                  ) : (
-                    <Copy className="w-[30px] h-[30px] group-hover:scale-110 transition-transform" />
-                  )}
-                  <span className="font-bold text-lg">곡 정보 복사</span>
-                </button>
-              </div>
-
               {/* Title Card */}
               <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 flex items-center gap-2">

@@ -766,7 +766,8 @@ function App() {
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [drumStyle, setDrumStyle] = useState<DrumStyle>('none');
-  const [vocalType, setVocalType] = useState<VocalType>('male-solo');
+  const [maleCount, setMaleCount] = useState(0);
+  const [femaleCount, setFemaleCount] = useState(0);
   const [vocalTone, setVocalTone] = useState<VocalTone>('default');
   const [pinnedGenres, setPinnedGenres] = useState<string[]>([]);
   const [pinnedMoods, setPinnedMoods] = useState<string[]>([]);
@@ -1218,9 +1219,9 @@ function App() {
 
         // Update hover description
         const kpopItem = GENRES.find(g => g.id === 'kpop')!;
-        let nextDesc = kpopItem.description;
+        let nextDesc = "K-Pop 장르를 선택하고 스타일(기본/Mix)을 순환하며 선택합니다.";
         if (nextMode === 2) nextDesc = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
-        else if (nextMode === 0 || nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
+        else if (nextMode === 1) nextDesc = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
         
         setHoveredItem({ ...kpopItem, description: nextDesc, _ts: Date.now() });
       }
@@ -1246,9 +1247,9 @@ function App() {
 
         // Update hover description
         const citypopItem = GENRES.find(g => g.id === 'citypop')!;
-        let nextDesc = citypopItem.description;
+        let nextDesc = "City Pop 장르를 선택하고 스타일(올드/현대)을 순환하며 선택합니다.";
         if (nextMode === 2) nextDesc = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
-        else if (nextMode === 0 || nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
+        else if (nextMode === 1) nextDesc = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
         
         setHoveredItem({ ...citypopItem, description: nextDesc, _ts: Date.now() });
       }
@@ -1358,7 +1359,8 @@ function App() {
     setUserInput('');
     setLyricsLength('normal');
     setDrumStyle('none');
-    setVocalType('female-solo');
+    setMaleCount(0);
+    setFemaleCount(0);
     setVocalTone('default');
 
     setTempoEnabled(true);
@@ -1577,7 +1579,8 @@ function App() {
         userInput,
         lyricsLength,
         drumStyle,
-        vocalType,
+        maleCount,
+        femaleCount,
         vocalTone,
         tempoInfo,
         specialPrompt,
@@ -1820,9 +1823,11 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />
-          <VocalTypeControl 
-            value={vocalType}
-            onChange={setVocalType}
+          <SingerControl 
+            maleCount={maleCount}
+            femaleCount={femaleCount}
+            onMaleChange={setMaleCount}
+            onFemaleChange={setFemaleCount}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -2498,7 +2503,7 @@ function CategorySection({
             onTouchStart={() => onLongPressStart({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-3 rounded-xl transition-all border",
+              "p-2.5 rounded-xl transition-all border",
               isRandomized 
                 ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
                 : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
@@ -2515,7 +2520,7 @@ function CategorySection({
             }}
             onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
             onTouchEnd={onLongPressEnd}
-            className="p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
+            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
           >
             <PinOff className="w-4 h-4" />
           </button>
@@ -2528,7 +2533,7 @@ function CategorySection({
             }}
             onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
             onTouchEnd={onLongPressEnd}
-            className="p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
+            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -2549,9 +2554,9 @@ function CategorySection({
           }}
           onTouchStart={() => onLongPressStart({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
           onTouchEnd={onLongPressEnd}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-brand-orange transition-all group/expand shadow-[var(--shadow-md)]"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-brand-orange transition-all group/expand shadow-[var(--shadow-md)]"
         >
-          <span className="text-[12px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest">{isExpanded ? '접기' : '펼쳐보기'}</span>
           {isExpanded ? (
             <ChevronUp className="w-5 h-5 group-hover/expand:scale-125 transition-transform" />
           ) : (
@@ -2579,12 +2584,15 @@ function CategorySection({
             if (kpopMode === 2) {
               kpopStyle = "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20";
               displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
+              displayLabel = "K-Pop (Mix)";
             } else if (kpopMode === 1) {
               kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
+              displayLabel = "K-Pop";
             } else {
               kpopStyle = "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]";
-              displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
+              displayDescription = "K-Pop 장르를 선택하고 스타일(기본/Mix)을 순환하며 선택합니다.";
+              displayLabel = "K-Pop";
             }
           }
 
@@ -2594,12 +2602,15 @@ function CategorySection({
             if (citypopMode === 2) {
               citypopStyle = "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20";
               displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
+              displayLabel = "City Pop(M)";
             } else if (citypopMode === 1) {
               citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
+              displayLabel = "City Pop(O)";
             } else {
               citypopStyle = "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]";
-              displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
+              displayDescription = "City Pop 장르를 선택하고 스타일(올드/현대)을 순환하며 선택합니다.";
+              displayLabel = "City Pop";
             }
           }
 
@@ -2616,13 +2627,19 @@ function CategorySection({
                 onClick={() => {
                   onToggle(item.id);
                   // Show description on click for mobile/touch users
-                  onHover({ ...item, description: displayDescription, _ts: Date.now() });
+                  // For K-Pop and City Pop, toggleSelection already updates the hover state with the correct next description
+                  if (!isKpop && !isCitypop) {
+                    onHover({ ...item, description: displayDescription, _ts: Date.now() });
+                  }
                 }}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
+                  "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2",
+                  (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
                   isSelected
                     ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]",
+                  isKpop && kpopMode > 0 ? kpopStyle : "",
+                  isCitypop && citypopMode > 0 ? citypopStyle : ""
                 )}
               >
                 {isKpop && kpopMode > 0 && (
@@ -2826,23 +2843,68 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
   );
 }
 
-interface VocalTypeControlProps {
-  value: VocalType;
-  onChange: (value: VocalType) => void;
+interface SingerControlProps {
+  maleCount: number;
+  femaleCount: number;
+  onMaleChange: (count: number) => void;
+  onFemaleChange: (count: number) => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function VocalTypeControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: VocalTypeControlProps) {
+function SingerControl({ maleCount, femaleCount, onMaleChange, onFemaleChange, onHover, onLongPressStart, onLongPressEnd }: SingerControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const options: { id: VocalType; label: string; description: string }[] = [
-    { id: 'male-solo', label: '남자 1인', description: '남성 솔로 보컬 스타일입니다.' },
-    { id: 'female-solo', label: '여자 1인', description: '여성 솔로 보컬 스타일입니다.' },
-    { id: 'male-group', label: '남자 그룹', description: '남성 그룹/합창 보컬 스타일입니다.' },
-    { id: 'female-group', label: '여자 그룹', description: '여성 그룹/합창 보컬 스타일입니다.' },
-    { id: 'duet', label: '듀엣', description: '남녀 또는 동성 듀엣 보컬 스타일입니다.' },
-  ];
+
+  const getMaleDescription = (count: number) => {
+    if (count === 0) return "남성 보컬 미선택";
+    if (count === 1) return "남성 솔로 보컬";
+    if (count === 2) return "남성 듀오 보컬";
+    return "남성 그룹 보컬";
+  };
+
+  const getFemaleDescription = (count: number) => {
+    if (count === 0) return "여성 보컬 미선택";
+    if (count === 1) return "여성 솔로 보컬";
+    if (count === 2) return "여성 듀오 보컬";
+    return "여성 그룹 보컬";
+  };
+
+  const getCombinedDescription = () => {
+    if (maleCount === 1 && femaleCount === 1) return "남녀가 같이 부르는 듀엣";
+    if (maleCount === 0 && femaleCount === 0) return "가수의 성별과 인원 구성을 선택합니다.";
+    
+    const parts = [];
+    if (maleCount > 0) parts.push(getMaleDescription(maleCount));
+    if (femaleCount > 0) parts.push(getFemaleDescription(femaleCount));
+    return parts.join(" + ");
+  };
+
+  const handleMaleClick = () => {
+    const next = (maleCount + 1) % 4;
+    onMaleChange(next);
+    const label = next === 0 ? "남자" : next === 3 ? "남자 그룹" : `남자 ${next}인`;
+    onHover({ id: 'male', label, description: getMaleDescription(next), _ts: Date.now() });
+  };
+
+  const handleFemaleClick = () => {
+    const next = (femaleCount + 1) % 4;
+    onFemaleChange(next);
+    const label = next === 0 ? "여자" : next === 3 ? "여자 그룹" : `여자 ${next}인`;
+    onHover({ id: 'female', label, description: getFemaleDescription(next), _ts: Date.now() });
+  };
+
+  const getMaleLabel = () => {
+    if (maleCount === 0) return "남자";
+    if (maleCount === 3) return "남자 그룹";
+    return `남자 ${maleCount}인`;
+  };
+
+  const getFemaleLabel = () => {
+    if (femaleCount === 0) return "여자";
+    if (femaleCount === 3) return "여자 그룹";
+    return `여자 ${femaleCount}인`;
+  };
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
@@ -2853,7 +2915,7 @@ function VocalTypeControl({ value, onChange, onHover, onLongPressStart, onLongPr
           className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          보컬 구성
+          가수
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2863,40 +2925,47 @@ function VocalTypeControl({ value, onChange, onHover, onLongPressStart, onLongPr
               exit={{ opacity: 0, y: 10 }}
               className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가수의 성별과 인원 구성을 선택합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-auto">
-        {options.map((opt) => {
-          const isSelected = value === opt.id;
-          return (
-            <button
-              key={opt.id}
-              onClick={() => {
-                onChange(opt.id);
-                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
-              }}
-              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
-              }}
-              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "py-3 rounded-xl text-xs font-bold transition-all border",
-                isSelected
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
+      <div className="grid grid-cols-2 gap-2 mt-auto">
+        <button
+          onClick={handleMaleClick}
+          onMouseEnter={() => onHover({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
+          onMouseLeave={() => onHover(null)}
+          onTouchStart={() => onLongPressStart({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
+          onTouchEnd={onLongPressEnd}
+          className={cn(
+            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
+            maleCount === 1 
+              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+              : maleCount > 1
+                ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
+                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+          )}
+        >
+          {getMaleLabel()}
+        </button>
+        <button
+          onClick={handleFemaleClick}
+          onMouseEnter={() => onHover({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
+          onMouseLeave={() => onHover(null)}
+          onTouchStart={() => onLongPressStart({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
+          onTouchEnd={onLongPressEnd}
+          className={cn(
+            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
+            femaleCount === 1 
+              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+              : femaleCount > 1
+                ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
+                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+          )}
+        >
+          {getFemaleLabel()}
+        </button>
       </div>
     </div>
   );

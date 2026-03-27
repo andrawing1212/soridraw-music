@@ -5,6 +5,15 @@ import { BASE_PROMPTS } from "../constants";
 // 롤백: 원래 작동하던 GEMINI_API_KEY 방식입니다.
 const ai = new GoogleGenAI({ apiKey: "AIzaSyB_qCZsU7BJn6X2DRPVoaIYKjDldD0pqIo" });
 
+// Vocal Tone Pools for Role-based structure
+const VOCAL_POOLS = {
+  main: ["Powerful", "Emotional", "Clear", "Soulful", "Dynamic", "Husky", "Crisp", "Velvety"],
+  sub: ["Soft", "Sweet", "Airy", "Melodic", "Smooth", "Gentle", "Breathy", "Warm"],
+  chorus: ["Harmonious", "Layered", "Background", "Ethereal", "Rich", "Wide", "Atmospheric", "Choral"]
+};
+
+const getRandomTone = (pool: string[]) => pool[Math.floor(Math.random() * pool.length)];
+
 export async function generateSong(
   genres: string[],
   moods: string[],
@@ -12,7 +21,8 @@ export async function generateSong(
   userInput: string,
   lyricsLength: LyricsLength = 'normal',
   drumStyle: DrumStyle = 'none',
-  vocalType?: VocalType,
+  maleCount: number = 0,
+  femaleCount: number = 0,
   vocalTone?: VocalTone,
   tempo?: string,
   specialPrompt?: string,
@@ -84,7 +94,30 @@ export async function generateSong(
     - CRITICAL: The total song duration MUST be between 2 minutes 30 seconds and 3 minutes. NEVER exceed 3 minutes 20 seconds.
     - Ensure the song can be finished within 2 minutes 45 seconds if possible.
     - ${tempo ? `TEMPO CONSTRAINT: ${tempo}` : "Tempo should be appropriate for the genre and mood."}
-    - ${vocalType ? `VOCAL TYPE: ${vocalType}` : "Vocal type should be appropriate for the genre and mood."}
+    - VOCAL CONFIGURATION: ${(() => {
+        if (maleCount === 1 && femaleCount === 1) return "Duet (Male & Female) with balanced vocal distribution and harmonies.";
+        
+        const getGenderConfig = (gender: 'Male' | 'Female', count: number) => {
+          if (count === 0) return null;
+          if (count === 1) return `${gender} Solo Vocal`;
+          if (count === 2) {
+            const main = getRandomTone(VOCAL_POOLS.main);
+            const sub = getRandomTone(VOCAL_POOLS.sub);
+            return `${gender} Duo: Main Vocal (${main}) and Sub Vocal (${sub}) with tight harmonies.`;
+          }
+          // Group (3+)
+          const main = getRandomTone(VOCAL_POOLS.main);
+          const sub = getRandomTone(VOCAL_POOLS.sub);
+          const chorus = getRandomTone(VOCAL_POOLS.chorus);
+          return `${gender} Group: Main Vocal (${main}), Sub Vocal (${sub}), and Background Chorus/Harmonies (${chorus}).`;
+        };
+
+        const malePart = getGenderConfig('Male', maleCount);
+        const femalePart = getGenderConfig('Female', femaleCount);
+        
+        if (malePart && femalePart) return `${malePart} + ${femalePart}`;
+        return malePart || femalePart || "Appropriate for the genre and mood";
+      })()}
     - ${vocalTone ? `VOCAL TONE: ${vocalTone}` : "Vocal tone should be appropriate for the genre and mood."}
     
     Keywords to use:
@@ -135,6 +168,27 @@ export async function generateSong(
   });
 
   const result = JSON.parse(response.text || "{}");
+  
+  // Override vocalType with the requested configuration for accuracy
+  if (result.appliedKeywords) {
+    const vocalDescription = [];
+    if (maleCount === 1 && femaleCount === 1) {
+      vocalDescription.push("Duet");
+    } else {
+      const getDesc = (gender: string, count: number) => {
+        if (count === 1) return `${gender} Solo`;
+        if (count === 2) return `${gender} Duo`;
+        if (count >= 3) return `${gender} Group`;
+        return null;
+      };
+      const m = getDesc('Male', maleCount);
+      const f = getDesc('Female', femaleCount);
+      if (m) vocalDescription.push(m);
+      if (f) vocalDescription.push(f);
+    }
+    result.appliedKeywords.vocalType = vocalDescription.join(" + ") || "Default";
+  }
+  
   return result as SongResult;
 }
 

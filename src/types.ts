@@ -1,7 +1,7 @@
 export type Category = 'genre' | 'mood' | 'theme';
 export type LyricsLength = 'very-short' | 'short' | 'normal';
 export type DrumStyle = 'none' | 'half-time' | 'double-time';
-export type VocalType = 'male-solo' | 'female-solo' | 'male-group' | 'female-group' | 'duet';
+export type VocalType = string;
 export type VocalTone = 'default' | 'husky' | 'soft' | 'deep';
 
 export interface SongResult {

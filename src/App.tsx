@@ -1073,25 +1073,34 @@ function App() {
   };
 
   // Reset filters on navigation to Home, but preserve generated song history
-useEffect(() => {
-  const loadRecentSongs = async () => {
-    if (!user) return;
+    useEffect(() => {
+      if (location.pathname !== '/') return;
 
-    try {
-      const ref = doc(db, "user_recent_songs", user.uid);
-      const snap = await getDoc(ref);
-
-      if (snap.exists()) {
-        const songs = snap.data().songs || [];
-        setHistory(songs);
+      if (!hasInitializedHomeRef.current) {
+        hasInitializedHomeRef.current = true;
+        window.scrollTo(0, 0);
+        return;
       }
-    } catch (e) {
-      console.error("Failed to load recent songs:", e);
-    }
-  };
 
-  loadRecentSongs();
-}, [user]);
+      // 1. Clear current state (preserving history)
+      clearAll({ preserveHistory: true, preservePinned: true });
+
+      // 2. Check for pending keywords from Favorites
+      const pending = sessionStorage.getItem('pendingAppliedKeywords');
+      if (pending) {
+        try {
+          const keywords = JSON.parse(pending);
+          // This function clears pinned keywords and sets new ones
+          applyKeywordsToNext(keywords);
+          // 3. Prevent duplicate application
+          sessionStorage.removeItem('pendingAppliedKeywords');
+        } catch (e) {
+          console.error('Failed to parse pending keywords', e);
+        }
+      }
+
+      window.scrollTo(0, 0);
+    }, [location.pathname]);
 
   // Scroll to top on mount
   useEffect(() => {

@@ -1077,7 +1077,23 @@ function App() {
       return;
     }
 
+    // 1. Clear current state (preserving history)
     clearAll({ preserveHistory: true, preservePinned: true });
+
+    // 2. Check for pending keywords from Favorites
+    const pending = sessionStorage.getItem('pendingAppliedKeywords');
+    if (pending) {
+      try {
+        const keywords = JSON.parse(pending);
+        // This function clears pinned keywords and sets new ones
+        applyKeywordsToNext(keywords);
+        // 3. Prevent duplicate application
+        sessionStorage.removeItem('pendingAppliedKeywords');
+      } catch (e) {
+        console.error('Failed to parse pending keywords', e);
+      }
+    }
+
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
@@ -1135,18 +1151,7 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    const pending = sessionStorage.getItem('soridraw_pending_keywords');
-    if (pending) {
-      try {
-        const keywords = JSON.parse(pending);
-        applyKeywordsToNext(keywords);
-        sessionStorage.removeItem('soridraw_pending_keywords');
-      } catch (e) {
-        console.error('Failed to parse pending keywords', e);
-      }
-    }
-  }, []);
+
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
   const [isMoodRandomized, setIsMoodRandomized] = useState(false);
   const [isThemeRandomized, setIsThemeRandomized] = useState(false);

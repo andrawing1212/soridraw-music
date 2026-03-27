@@ -666,7 +666,12 @@ ${song.prompt}
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
 
   const applyKeywordsToNext = (song: any) => {
-    sessionStorage.setItem('soridraw_pending_keywords', JSON.stringify(song.appliedKeywords));
+    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify({
+      genre: song.appliedKeywords.genre ?? [],
+      mood: song.appliedKeywords.mood ?? [],
+      theme: song.appliedKeywords.theme ?? [],
+      tempo: song.appliedKeywords.tempo ?? null
+    }));
     navigate('/');
   };
 

@@ -1003,8 +1003,8 @@ function App() {
       return;
     }
 
-    const isFav = song.isFavorite || !!(song as any).id;
-    const favId = song.favoriteId || (song as any).id;
+     const isFav = !!song.isFavorite && !!song.favoriteId;
+     const favId = song.favoriteId;
 
     try {
       if (isFav && favId) {
@@ -1029,7 +1029,7 @@ function App() {
         }
         saveRecentSongs(user.uid, updatedHistory);
       } else {
-        const docRef = await addDoc(collection(db, 'favorites'), {
+        const favoriteData = {
           uid: user.uid,
           title: song.title,
           lyrics: song.lyrics,
@@ -1037,7 +1037,11 @@ function App() {
           appliedKeywords: song.appliedKeywords,
           isLocked: false,
           createdAt: serverTimestamp()
-        });
+        };
+
+        console.log("DEBUG: Saving to favorites. Payload:", JSON.stringify(favoriteData, null, 2));
+
+        const docRef = await addDoc(collection(db, 'favorites'), favoriteData);
         showToast('저장되었습니다.');
         
         // Update history and result

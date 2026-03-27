@@ -33,8 +33,24 @@
             "mood": { "type": "array", "items": { "type": "string" } },
             "theme": { "type": "array", "items": { "type": "string" } },
             "tempo": { "type": "string" },
-            "vocalGender": { "type": "string" }
+            "vocalType": { "type": "string" },
+            "lyricsLength": { "type": "string" },
+            "drumStyle": { "type": "string" },
+            "maleCount": { "type": "number" },
+            "femaleCount": { "type": "number" },
+            "tempoConfig": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "min": { "type": "number" },
+                "max": { "type": "number" }
+              }
+            }
           }
+        },
+        "isLocked": {
+          "type": "boolean",
+          "description": "Whether the favorite is locked from deletion."
         },
         "createdAt": {
           "type": "string",
@@ -42,7 +58,7 @@
           "description": "The time the favorite was created."
         }
       },
-      "required": ["uid", "title", "lyrics", "prompt", "appliedKeywords", "createdAt"]
+      "required": ["uid", "title", "lyrics", "prompt", "appliedKeywords", "isLocked", "createdAt"]
     },
     "RecentSongs": {
       "title": "Recent Songs",

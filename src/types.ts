@@ -10,6 +10,8 @@ export interface SongResult {
     korean: string;
   };
   prompt: string;
+  isFavorite?: boolean;
+  favoriteId?: string;
   appliedKeywords: {
     genre: string[];
     mood: string[];

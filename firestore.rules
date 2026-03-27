@@ -63,6 +63,13 @@ service cloud.firestore {
              data.createdAt is timestamp;
     }
 
+    function isValidRecentSongs(data) {
+      return data.keys().hasAll(['songs']) &&
+             data.keys().hasOnly(['songs']) &&
+             data.songs is list &&
+             data.songs.size() <= 5;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -79,6 +86,17 @@ service cloud.firestore {
       
       // Favorites are immutable once created
       allow update: if false;
+    }
+
+    match /user_recent_songs/{uid} {
+      // Users can only read their own recent songs
+      allow read: if isOwner(uid);
+      
+      // Users can only create/update their own recent songs
+      allow create, update: if isOwner(uid) && isValidRecentSongs(request.resource.data);
+      
+      // Users can only delete their own recent songs
+      allow delete: if isOwner(uid);
     }
 
     // Default deny

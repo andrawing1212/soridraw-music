@@ -2135,13 +2135,15 @@ ${result.prompt}
                       {song.title}
                     </h4>
                     <div className="flex flex-wrap gap-1">
-                      {song.appliedKeywords.slice(0, 2).map((kw, i) => (
+                      {[...song.appliedKeywords.genre, ...song.appliedKeywords.mood, ...song.appliedKeywords.theme].slice(0, 2).map((kw, i) => (
                         <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)]">
-                          {kw.label}
+                          {kw}
                         </span>
                       ))}
-                      {song.appliedKeywords.length > 2 && (
-                        <span className="text-[10px] text-[var(--text-secondary)]">+{song.appliedKeywords.length - 2}</span>
+                      {[...song.appliedKeywords.genre, ...song.appliedKeywords.mood, ...song.appliedKeywords.theme].length > 2 && (
+                        <span className="text-[10px] text-[var(--text-secondary)]">
+                          +{[...song.appliedKeywords.genre, ...song.appliedKeywords.mood, ...song.appliedKeywords.theme].length - 2}
+                        </span>
                       )}
                     </div>
                   </div>

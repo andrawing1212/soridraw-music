@@ -670,7 +670,12 @@ ${song.prompt}
       genre: song.appliedKeywords.genre ?? [],
       mood: song.appliedKeywords.mood ?? [],
       theme: song.appliedKeywords.theme ?? [],
-      tempo: song.appliedKeywords.tempo ?? null
+      tempo: song.appliedKeywords.tempo ?? null,
+      lyricsLength: song.appliedKeywords.lyricsLength ?? 'normal',
+      drumStyle: song.appliedKeywords.drumStyle ?? 'none',
+      maleCount: song.appliedKeywords.maleCount ?? 0,
+      femaleCount: song.appliedKeywords.femaleCount ?? 0,
+      tempoConfig: song.appliedKeywords.tempoConfig ?? null
     }));
     navigate('/');
   };
@@ -1215,12 +1220,12 @@ ${song.prompt}
                             e.stopPropagation();
                             applyKeywordsToNext(song);
                           }}
-                          onMouseEnter={() => onHover({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                          onMouseEnter={() => onHover({ id: `apply-next-${song.id}`, label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onMouseLeave={() => {
                             onHover(null);
                             onLongPressEnd();
                           }}
-                          onTouchStart={() => onLongPressStart({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                          onTouchStart={() => onLongPressStart({ id: `apply-next-${song.id}`, label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
                           className="flex-1 py-3 rounded-xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center justify-center group/apply border border-brand-orange/30"
                         >
@@ -1519,12 +1524,12 @@ ${song.prompt}
                       <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
                           onClick={() => applyKeywordsToNext(selectedSong)}
-                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onMouseLeave={() => onHover(null)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/30 text-[11px] font-bold whitespace-nowrap"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[12px] font-bold whitespace-nowrap active:scale-95"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
-                          다음 곡에 적용
+                          다음 곡 적용
                         </button>
                         <button 
                           onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].join(', '), 'keywords')}

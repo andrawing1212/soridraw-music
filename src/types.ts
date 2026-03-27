@@ -16,6 +16,15 @@ export interface SongResult {
     theme: string[];
     tempo?: string;
     vocalType?: VocalType;
+    lyricsLength?: LyricsLength;
+    drumStyle?: DrumStyle;
+    maleCount?: number;
+    femaleCount?: number;
+    tempoConfig?: {
+      enabled: boolean;
+      min: number;
+      max: number;
+    };
   };
   randomKeywords?: string[];
 }

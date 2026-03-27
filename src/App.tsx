@@ -1132,7 +1132,17 @@ function App() {
     setSelectedMoods(moodIds);
     setSelectedThemes(themeIds);
 
-    if (appliedKeywords.tempo) {
+    // Expand to include other generation settings
+    if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
+    if (appliedKeywords.drumStyle) setDrumStyle(appliedKeywords.drumStyle);
+    if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
+    if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
+    
+    if (appliedKeywords.tempoConfig) {
+      setTempoEnabled(appliedKeywords.tempoConfig.enabled);
+      setMinBPM(appliedKeywords.tempoConfig.min);
+      setMaxBPM(appliedKeywords.tempoConfig.max);
+    } else if (appliedKeywords.tempo) {
       const bpmMatch = appliedKeywords.tempo.match(/(\d+)/g);
       if (bpmMatch) {
         if (bpmMatch.length === 1) {
@@ -1147,7 +1157,7 @@ function App() {
       }
     }
 
-    showToast('키워드가 다음 곡 생성에 적용되었습니다.');
+    showToast('키워드가 다음 곡 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1677,6 +1687,18 @@ function App() {
 
       const newResult = {
         ...song,
+        appliedKeywords: {
+          ...song.appliedKeywords,
+          lyricsLength,
+          drumStyle,
+          maleCount,
+          femaleCount,
+          tempoConfig: {
+            enabled: tempoEnabled,
+            min: minBPM,
+            max: maxBPM
+          }
+        },
         randomKeywords
       };
 
@@ -2104,19 +2126,19 @@ ${result.prompt}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
-                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 키워드를 다음 곡 생성 설정에 적용합니다.' })}
+                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all border border-brand-orange/30 text-[12px] font-bold"
+                      className="flex items-center gap-2 px-4 h-10 rounded-full bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[13px] font-bold border border-brand-orange/20 active:scale-95"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      다음 곡에 적용
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="whitespace-nowrap">다음 곡 적용</span>
                     </button>
                     <button
                       onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                      className="flex items-center gap-1.5 px-[18px] py-[6px] rounded-full bg-transparent hover:bg-brand-orange/10 text-brand-orange transition-all border border-brand-orange/30 text-[15px] font-bold"
+                      className="flex items-center gap-2 px-4 h-10 rounded-full bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] text-[13px] font-bold shadow-sm active:scale-95"
                     >
-                      {isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}
-                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-[16px] h-[16px]" /> : <ChevronDown className="w-[16px] h-[16px]" />}
+                      <span className="whitespace-nowrap">{isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}</span>
+                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
                     <button
                       onClick={() => {

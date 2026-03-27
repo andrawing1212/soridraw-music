@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
+import { GENRES, MOODS, THEMES } from '../constants';
 import {
   Music,
   Copy,
@@ -1607,9 +1608,29 @@ ${song.prompt}
                 <div className="bg-[var(--bg-secondary)]/30 rounded-2xl p-4 border border-[var(--border-color)] relative">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
                     <div className="flex flex-wrap gap-2 pr-12 sm:pr-0">
-                      {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => (
-                        <span key={k} className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold">#{k}</span>
-                      ))}
+                      {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => {
+                        const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.label === k);
+                        return (
+                          <span 
+                            key={k} 
+                            onMouseEnter={() => {
+                              if (item) {
+                                onHover({ id: `keyword-${k}`, label: k, description: item.description });
+                              }
+                            }}
+                            onMouseLeave={() => onHover(null)}
+                            onTouchStart={() => {
+                              if (item) {
+                                onLongPressStart({ id: `keyword-${k}`, label: k, description: item.description });
+                              }
+                            }}
+                            onTouchEnd={onLongPressEnd}
+                            className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold cursor-help transition-all hover:bg-brand-orange/20 active:scale-95"
+                          >
+                            #{k}
+                          </span>
+                        );
+                      })}
                     </div>
                     {!isEditing && (
                       <div className="flex items-center gap-2 self-end sm:self-auto">

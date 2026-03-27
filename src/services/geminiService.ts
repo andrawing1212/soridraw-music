@@ -20,6 +20,7 @@ const getRandomTone = (pool: string[]) => pool[Math.floor(Math.random() * pool.l
  */
 function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEnabled: boolean): string {
   const totalCount = maleCount + femaleCount;
+  const hasBothGenders = maleCount > 0 && femaleCount > 0;
 
   // 1. Generate all individual roles (A, B, C, D...)
   const mRoles = [];
@@ -78,11 +79,32 @@ function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEn
     // We create multiple versions, each ensuring all members appear.
     const createGuaranteedVersion = (layoutType: number) => {
       let pool = [...allIndividualRoles].sort(() => Math.random() - 0.5);
-      const usePool = () => pool.length > 0 ? pool.shift()! : allIndividualRoles[Math.floor(Math.random() * allIndividualRoles.length)];
       
+      const usePool = () => {
+        if (pool.length > 0) return pool.shift()!;
+        return allIndividualRoles[Math.floor(Math.random() * allIndividualRoles.length)];
+      };
+      
+      const getMixedPair = () => {
+        if (hasBothGenders) {
+          // Try to get one of each from pool to ensure inclusion
+          const mIdx = pool.findIndex(r => r.startsWith('Male'));
+          const m = mIdx !== -1 ? pool.splice(mIdx, 1)[0] : mRoles[Math.floor(Math.random() * mRoles.length)];
+          
+          const fIdx = pool.findIndex(r => r.startsWith('Female'));
+          const f = fIdx !== -1 ? pool.splice(fIdx, 1)[0] : fRoles[Math.floor(Math.random() * fRoles.length)];
+          
+          return `${m} + ${f}`;
+        }
+        // Fallback for same-gender groups: Duo part
+        const r1 = usePool();
+        const r2 = usePool();
+        return r1 === r2 ? r1 : `${r1} + ${r2}`;
+      };
+
       const steps = [];
       if (layoutType === 0) {
-        // Verse focus
+        // Layout 0: Verse focus (Solo Verses)
         steps.push({ section: "Verse 1", role: usePool() });
         steps.push({ section: "Pre-Chorus", role: usePool() });
         steps.push({ section: "Chorus", role: "All" });
@@ -92,7 +114,7 @@ function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEn
         steps.push({ section: "Chorus", role: "All" });
         steps.push({ section: "Outro", role: pool.length > 0 ? pool.join(" + ") : "Mixed Harmony" });
       } else if (layoutType === 1) {
-        // Alternating Verse
+        // Layout 1: Alternating Verse
         steps.push({ section: "Verse 1", role: `${usePool()} + ${usePool()} alternating` });
         steps.push({ section: "Pre-Chorus", role: usePool() });
         steps.push({ section: "Chorus", role: "All" });
@@ -100,8 +122,8 @@ function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEn
         steps.push({ section: "Bridge", role: pool.length > 0 ? pool.join(" + ") : "Mixed Harmony" });
         steps.push({ section: "Chorus", role: "All" });
         steps.push({ section: "Outro", role: "All" });
-      } else {
-        // Lead centered Chorus
+      } else if (layoutType === 2) {
+        // Layout 2: Lead centered Chorus
         const lead = usePool();
         const group = maleCount > femaleCount ? "Male Group" : femaleCount > maleCount ? "Female Group" : "Mixed Group";
         steps.push({ section: "Verse 1", role: usePool() });
@@ -111,9 +133,21 @@ function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEn
         steps.push({ section: "Bridge", role: pool.length > 0 ? pool.join(" + ") : usePool() });
         steps.push({ section: "Chorus", role: `${lead} Lead + ${group}` });
         steps.push({ section: "Outro", role: "All" });
+      } else {
+        // Layout 3: Mixed Gender Focus (Dual Vocal Flow)
+        // Mixed parts are applied to Verses and potentially Bridge (approx 30-40% of sections)
+        steps.push({ section: "Verse 1", role: getMixedPair() });
+        steps.push({ section: "Pre-Chorus", role: usePool() });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Verse 2", role: getMixedPair() });
+        steps.push({ section: "Chorus", role: "All" });
+        // Bridge can be mixed or solo
+        steps.push({ section: "Bridge", role: Math.random() > 0.5 ? getMixedPair() : usePool() });
+        steps.push({ section: "Chorus", role: "All" });
+        steps.push({ section: "Outro", role: "All" });
       }
       
-      // If pool still has members (e.g. 6 people), append them to the last section or Outro
+      // Final check: If pool still has members (e.g. 6+ people), ensure they appear in Outro
       if (pool.length > 0) {
         const last = steps[steps.length - 1];
         if (last.role === "All") {
@@ -126,9 +160,9 @@ function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEn
       return buildStructure(steps);
     };
 
-    templates.push(createGuaranteedVersion(0));
-    templates.push(createGuaranteedVersion(1));
-    templates.push(createGuaranteedVersion(2));
+    const availableLayouts = hasBothGenders ? [0, 1, 2, 3] : [0, 1, 2];
+    const selectedLayout = availableLayouts[Math.floor(Math.random() * availableLayouts.length)];
+    templates.push(createGuaranteedVersion(selectedLayout));
   }
 
   // Add Rap if enabled
@@ -136,8 +170,17 @@ function buildLyricStructurePrompt(maleCount: number, femaleCount: number, rapEn
     templates.forEach((template, index) => {
       const lines = template.split("\n    ");
       const rand = Math.random();
-      const rapRole = allIndividualRoles[Math.floor(Math.random() * allIndividualRoles.length)];
-      const rapLabel = `Rap (${rapRole})`;
+      
+      // For Rap, also allow mixed if both genders exist
+      let rapLabel = "";
+      if (hasBothGenders && Math.random() > 0.5) {
+        const m = mRoles[Math.floor(Math.random() * mRoles.length)];
+        const f = fRoles[Math.floor(Math.random() * fRoles.length)];
+        rapLabel = `Rap (${m} + ${f})`;
+      } else {
+        const rapRole = allIndividualRoles[Math.floor(Math.random() * allIndividualRoles.length)];
+        rapLabel = `Rap (${rapRole})`;
+      }
       
       if (rand < 0.33) {
         // Bridge

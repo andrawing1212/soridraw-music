@@ -808,7 +808,7 @@ function App() {
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
-  const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(false);
+  const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(true);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1161,7 +1161,7 @@ function App() {
       }
     }
 
-    showToast('키워드가 다음 곡 적용되었습니다.');
+    showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1652,7 +1652,7 @@ function App() {
         currentMaxBPM = max;
         setMinBPM(min);
         setMaxBPM(max);
-        setTempoEnabled(false); // Apply the calculated BPM to the menu
+        // Keep tempoEnabled true as requested by user
       }
 
       const tempoInfo = tempoEnabled && (currentMinBPM !== 40 || currentMaxBPM !== 160)
@@ -2240,12 +2240,12 @@ ${result.prompt}
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
-                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                      onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center justify-center gap-1.5 px-3 h-9 min-w-[90px] rounded-xl bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[11px] font-bold border border-brand-orange/20 active:scale-95"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span className="whitespace-nowrap">다음 곡 적용</span>
+                      <span className="whitespace-nowrap">다음 곡에 적용</span>
                     </button>
                     <button
                       onClick={() => {

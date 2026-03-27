@@ -2119,46 +2119,44 @@ ${result.prompt}
 
               {/* Applied Keywords After Generation */}
               <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)]">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                  <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-brand-orange/10 border border-brand-orange/20 w-fit">
-                    <CheckCircle2 className="w-5 h-5 text-brand-orange" />
-                    <span className="text-[14px] font-bold text-brand-orange uppercase tracking-wider">적용된 키워드</span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex items-center justify-between gap-4 mb-6">
+                  <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-brand-orange" />
+                    적용된 키워드
+                  </h3>
+                  <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-2 px-4 h-10 rounded-full bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[13px] font-bold border border-brand-orange/20 active:scale-95"
+                      className="flex items-center justify-center gap-1.5 px-3 h-10 min-w-[90px] rounded-xl bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[11px] font-bold border border-brand-orange/20 active:scale-95"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <RefreshCw className="w-3.5 h-3.5" />
                       <span className="whitespace-nowrap">다음 곡 적용</span>
                     </button>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 h-10 rounded-full bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] text-[13px] font-bold shadow-sm active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">{isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}</span>
-                        {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          const kwText = [
-                            `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
-                            `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
-                            `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
-                            result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
-                          ].filter(Boolean).join('\n');
-                          copyToClipboard(kwText, 'keywords');
-                        }}
-                        onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
-                      >
-                        {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
+                      className="flex items-center justify-center gap-1.5 px-3 h-10 min-w-[90px] rounded-xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] text-[11px] font-bold shadow-sm active:scale-95"
+                    >
+                      <span className="whitespace-nowrap">{isAppliedKeywordsExpanded ? '접기' : '펼쳐보기'}</span>
+                      {isAppliedKeywordsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const kwText = [
+                          `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
+                          `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
+                          `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+                          result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
+                        ].filter(Boolean).join('\n');
+                        copyToClipboard(kwText, 'keywords');
+                      }}
+                      onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="p-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]"
+                    >
+                      {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
                 

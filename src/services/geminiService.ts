@@ -3,7 +3,9 @@ import { SongResult, LyricsLength, DrumStyle, VocalType } from "../types";
 import { BASE_PROMPTS } from "../constants";
 
 // 롤백: 원래 작동하던 GEMINI_API_KEY 방식입니다.
-const ai = new GoogleGenAI({ apiKey: "AIzaSyB_qCZsU7BJn6X2DRPVoaIYKjDldD0pqIo" });
+const ai = new GoogleGenAI({
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY
+});
 
 // Vocal Tone Pools for Role-based structure
 const VOCAL_POOLS = {

@@ -1319,7 +1319,7 @@ ${song.prompt}
                           }}
                           onTouchStart={() => onLongPressStart({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="flex-1 py-3 rounded-xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center justify-center group/apply border border-brand-orange/30"
+                          className="flex-1 py-3 rounded-xl bg-[var(--card-bg)] text-brand-orange hover:bg-brand-orange/10 transition-all flex items-center justify-center group/apply border border-brand-orange/30 active:scale-95"
                         >
                           <RefreshCw className="w-4 h-4 group-hover/apply:rotate-180 transition-transform duration-500" />
                         </button>
@@ -1638,7 +1638,7 @@ ${song.prompt}
                           onClick={() => applyKeywordsToNext(selectedSong)}
                           onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onMouseLeave={() => onHover(null)}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[12px] font-bold whitespace-nowrap active:scale-95"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[var(--card-bg)] text-brand-orange hover:bg-brand-orange/10 transition-all shadow-sm text-[12px] font-bold whitespace-nowrap border border-brand-orange/30 active:scale-95"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
                           다음 곡에 적용

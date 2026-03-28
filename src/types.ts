@@ -10,6 +10,7 @@ export interface SongResult {
     korean: string;
   };
   prompt: string;
+  createdAt?: number;
   appliedKeywords: {
     genre: string[];
     mood: string[];

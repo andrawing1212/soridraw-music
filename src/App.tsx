@@ -2129,26 +2129,34 @@ ${result.prompt}
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-8 pt-12 border-t border-[var(--border-color)]"
+              className="space-y-10 pt-20 border-t-2 border-[var(--border-color)]/20"
             >
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative overflow-hidden group">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[var(--border-color)]/80 shadow-[var(--shadow-lg)] relative overflow-hidden group hover:border-brand-orange/20 transition-all duration-500">
                 <div className="absolute top-0 right-0 p-4 flex items-center gap-2">
                   <button
                     onClick={() => copyToClipboard(result.title, 'title')}
                     onMouseEnter={() => setHoveredItem({ id: 'copy-title', label: '제목 복사', description: '곡의 제목을 복사합니다.' })}
                     onMouseLeave={() => setHoveredItem(null)}
-                    className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                    className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
                   >
-                    {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
+                    {copiedType === 'title' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                    <span className="hidden md:block text-sm font-bold">복사</span>
                   </button>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-brand-orange font-mono text-sm tracking-widest uppercase font-bold">
-                    <Music className="w-4 h-4" />
-                    제목 (Title)
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center gap-2">
+                    {historyIndex === 0 && (
+                      <span className="px-3 py-1 bg-brand-orange/10 text-brand-orange text-[11px] font-bold rounded-full border border-brand-orange/20 normal-case tracking-normal mb-1">
+                        최근 생성 곡
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2 text-brand-orange font-mono text-sm tracking-widest uppercase font-bold">
+                      <Music className="w-4 h-4" />
+                      제목 (Title)
+                    </div>
                   </div>
                   <div className="h-[60px] md:h-auto flex items-center justify-center">
                     <h2 className="text-[15px] md:text-2xl font-bold text-[var(--text-primary)] leading-tight line-clamp-2 text-center">
@@ -2224,7 +2232,7 @@ ${result.prompt}
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-4 border border-[var(--border-color)] shadow-[var(--shadow-md)] relative">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)]/80 shadow-[var(--shadow-md)] relative hover:border-brand-orange/10 transition-all duration-500">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-brand-orange" />
@@ -2235,26 +2243,10 @@ ${result.prompt}
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-1.5 px-3 h-9 min-w-[90px] rounded-xl bg-brand-orange text-white hover:bg-brand-orange/90 transition-all shadow-md text-[11px] font-bold border border-brand-orange/20 active:scale-95"
+                      className="flex items-center justify-center gap-1.5 px-3 h-9 min-w-[90px] rounded-xl bg-[var(--card-bg)] text-brand-orange hover:bg-brand-orange/10 transition-all shadow-sm text-[11px] font-bold border border-brand-orange/30 active:scale-95"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span className="whitespace-nowrap">다음 곡에 적용</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        const kwText = [
-                          `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
-                          `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
-                          `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
-                          result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
-                        ].filter(Boolean).join('\n');
-                        copyToClipboard(kwText, 'keywords');
-                      }}
-                      onMouseEnter={() => setHoveredItem({ id: 'copy-keywords', label: '키워드 복사', description: '적용된 모든 키워드를 복사합니다.' })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      className="p-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]"
-                    >
-                      {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -2268,12 +2260,6 @@ ${result.prompt}
                     <div key={cat} className="space-y-0.5 group/cat">
                       <div className="flex items-center justify-between">
                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
-                        <button
-                          onClick={() => copyToClipboard(result.appliedKeywords[cat].join(', '), `kw-${cat}`)}
-                          className="opacity-0 group-hover/cat:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                        >
-                          {copiedType === `kw-${cat}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                        </button>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {result.appliedKeywords[cat].map((kw, idx) => {
@@ -2346,7 +2332,7 @@ ${result.prompt}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* English Lyrics Section */}
-                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)]">
+                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
@@ -2357,9 +2343,10 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                        className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
                       >
-                        {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                        <span className="hidden md:block text-sm font-bold">복사</span>
                       </button>
                     </div>
                   </div>
@@ -2373,7 +2360,7 @@ ${result.prompt}
                 </div>
 
                 {/* Korean Lyrics Section */}
-                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)]">
+                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Music className="w-4 h-4 text-brand-orange" />
@@ -2384,9 +2371,10 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                        className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
                       >
-                        {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                        <span className="hidden md:block text-sm font-bold">복사</span>
                       </button>
                     </div>
                   </div>
@@ -2400,7 +2388,7 @@ ${result.prompt}
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-[var(--shadow-md)]">
+                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
@@ -2411,9 +2399,10 @@ ${result.prompt}
                         onClick={() => copyToClipboard(result.prompt, 'prompt')}
                         onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-2 rounded-lg bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+                        className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
                       >
-                        {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        {copiedType === 'prompt' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                        <span className="hidden md:block text-sm font-bold">복사</span>
                       </button>
                     </div>
                   </div>

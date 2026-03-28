@@ -807,7 +807,13 @@ function App() {
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const historyIndexRef = useRef(historyIndex);
+  const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+  }, [historyIndex]);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(true);
@@ -1235,8 +1241,13 @@ function App() {
         setHistory(songs);
 
         if (songs.length > 0) {
-          setHistoryIndex(0);
-          setResult(songs[0]);
+          const lastIndex = historyIndexRef.current;
+          const currentIndex = (lastIndex >= 0 && lastIndex < songs.length) 
+            ? lastIndex 
+            : Math.max(0, songs.length - 1);
+          
+          setHistoryIndex(currentIndex);
+          setResult(songs[currentIndex]);
         } else {
           setHistoryIndex(-1);
           setResult(null);
@@ -1738,6 +1749,7 @@ saveRecentSong(newResult); // 🔥 추가
   };
 
   const navigateHistory = (direction: 'prev' | 'next') => {
+    setIsConfirmingDeleteHistory(false);
     if (direction === 'prev' && historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
@@ -2147,9 +2159,19 @@ ${result.prompt}
                   </button>
                 </div>
                 <div className="space-y-4">
+                  {/* Go to Favorites Button (PC only) */}
+                  <div className="absolute bottom-0 right-0 p-4 hidden md:flex">
+                    <button
+                      onClick={() => navigate('/favorites')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--hover-bg)]/10 hover:bg-[var(--hover-bg)]/30 text-[var(--text-secondary)] hover:text-brand-orange transition-all border border-[var(--border-color)]/30 active:scale-95 group/fav-link"
+                    >
+                      <HeartIcon className="w-4 h-4 group-hover/fav-link:fill-brand-orange" />
+                      <span className="text-xs font-bold">보관함으로 이동</span>
+                    </button>
+                  </div>
                   <div className="flex flex-col items-center gap-2">
                     {historyIndex === 0 && (
-                      <span className="px-3 py-1 bg-brand-orange/10 text-brand-orange text-[11px] font-bold rounded-full border border-brand-orange/20 normal-case tracking-normal mb-1">
+                      <span className="px-3 py-1 bg-brand-white/10 text-brand-White text-[10px] font-bold rounded-full border border-brand-orange/17 normal-case tracking-normal mb-1">
                         최근 생성 곡
                       </span>
                     )}
@@ -2168,24 +2190,27 @@ ${result.prompt}
                   <div className="flex items-center justify-center gap-3 mt-4">
                     <button
                       onClick={() => {
-                        if (window.confirm('이 곡을 히스토리에서 삭제하시겠습니까?')) {
-                          const newHistory = [...history];
-                          newHistory.splice(historyIndex, 1);
-                          setHistory(newHistory);
-                          if (newHistory.length === 0) {
-                            setResult(null);
-                            setHistoryIndex(-1);
-                          } else {
-                            const nextIndex = Math.min(historyIndex, newHistory.length - 1);
-                            setHistoryIndex(nextIndex);
-                            setResult(newHistory[nextIndex]);
-                          }
+                        if (isConfirmingDeleteHistory) {
+                          deleteHistoryItem(historyIndex);
+                          setIsConfirmingDeleteHistory(false);
+                        } else {
+                          setIsConfirmingDeleteHistory(true);
+                          setTimeout(() => setIsConfirmingDeleteHistory(false), 3000);
                         }
                       }}
-                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-red-500/20 group/trash"
-                      title="히스토리에서 삭제"
+                      className={cn(
+                        "p-2.5 rounded-2xl border shadow-lg transition-all group/trash flex items-center justify-center min-w-[44px]",
+                        isConfirmingDeleteHistory 
+                          ? "bg-red-500 text-white border-red-600" 
+                          : "bg-[var(--hover-bg)] border-[var(--border-color)] hover:bg-red-500/20"
+                      )}
+                      title={isConfirmingDeleteHistory ? "정말 삭제하시겠습니까?" : "히스토리에서 삭제"}
                     >
-                      <Trash2 className="w-5 h-5 text-[var(--text-secondary)] group-hover/trash:text-red-500" />
+                      {isConfirmingDeleteHistory ? (
+                        <span className="text-[10px] font-bold px-1 whitespace-nowrap">삭제 확인</span>
+                      ) : (
+                        <Trash2 className="w-5 h-5 text-[var(--text-secondary)] group-hover/trash:text-red-500" />
+                      )}
                     </button>
 
                     <div className="flex items-center gap-2">
@@ -2199,7 +2224,7 @@ ${result.prompt}
                       >
                         <ArrowLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-xl font-mono font-bold text-[var(--text-secondary)] min-w-[80px] text-center">
+                      <span className="text-sm font-mono font-bold text-[var(--text-secondary)] min-w-[80px] text-center">
                         {history.length - historyIndex} / {history.length}
                       </span>
                       <button

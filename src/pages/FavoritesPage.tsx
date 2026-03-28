@@ -1498,7 +1498,7 @@ ${song.prompt}
                         }}
                         onTouchStart={() => onLongPressStart({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="px-4 py-2 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-xs font-bold border border-brand-orange/20"
+                        className="px-3.5 py-3 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-xs font-bold border border-brand-orange/20"
                       >
                         <Edit2 className="w-4 h-4" />
                         수정하기

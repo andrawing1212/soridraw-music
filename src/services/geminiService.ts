@@ -7,15 +7,6 @@ const ai = new GoogleGenAI({
   apiKey: import.meta.env.VITE_GEMINI_API_KEY
 });
 
-// Vocal Tone Pools for Role-based structure
-const VOCAL_POOLS = {
-  main: ["Powerful", "Emotional", "Clear", "Soulful", "Dynamic", "Husky", "Crisp", "Velvety"],
-  sub: ["Soft", "Sweet", "Airy", "Melodic", "Smooth", "Gentle", "Breathy", "Warm"],
-  chorus: ["Harmonious", "Layered", "Background", "Ethereal", "Rich", "Wide", "Atmospheric", "Choral"]
-};
-
-const getRandomTone = (pool: string[]) => pool[Math.floor(Math.random() * pool.length)];
-
 /**
  * Builds a randomized lyric structure prompt based on vocal configuration using the "Hybrid Method".
  * Guarantees that every selected member appears at least once in the lyrics.

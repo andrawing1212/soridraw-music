@@ -899,13 +899,6 @@ function App() {
 
   const hasInitializedHomeRef = useRef(false);
 
-  const getHistoryStorageKey = (uid: string) => `soridraw_history_${uid}`;
-
-  type PersistedHistory = {
-    history: SongResult[];
-    historyIndex: number;
-  };
-
   type ClearAllOptions = {
     preserveHistory?: boolean;
     preservePinned?: boolean;
@@ -1224,10 +1217,8 @@ function App() {
     }
   };
 
-  // History state is now persisted per logged-in user.
+  // History state is now persisted per logged-in user in Firestore.
   useEffect(() => {
-    if (!isAuthReady) return;
-
     if (!user) {
       setHistory([]);
       setResult(null);
@@ -1235,53 +1226,30 @@ function App() {
       return;
     }
 
-    try {
-      const raw = localStorage.getItem(getHistoryStorageKey(user.uid));
+    const ref = doc(db, "user_recent_songs", user.uid);
 
-      if (!raw) {
+    const unsubscribe = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        const songs = snap.data().songs || [];
+
+        setHistory(songs);
+
+        if (songs.length > 0) {
+          setHistoryIndex(0);
+          setResult(songs[0]);
+        } else {
+          setHistoryIndex(-1);
+          setResult(null);
+        }
+      } else {
         setHistory([]);
         setResult(null);
         setHistoryIndex(-1);
-        return;
       }
+    });
 
-      const parsed = JSON.parse(raw) as PersistedHistory;
-      const safeHistory = Array.isArray(parsed?.history) ? parsed.history : [];
-      const safeIndex =
-        typeof parsed?.historyIndex === 'number'
-          ? parsed.historyIndex
-          : safeHistory.length > 0
-            ? 0
-            : -1;
-
-      setHistory(safeHistory);
-      setHistoryIndex(safeIndex);
-      setResult(safeIndex >= 0 ? safeHistory[safeIndex] ?? null : null);
-    } catch (error) {
-      console.error('Failed to restore history:', error);
-      setHistory([]);
-      setResult(null);
-      setHistoryIndex(-1);
-    }
-  }, [user, isAuthReady]);
-
-  useEffect(() => {
-    if (!isAuthReady || !user) return;
-
-    try {
-      const payload: PersistedHistory = {
-        history,
-        historyIndex,
-      };
-
-      localStorage.setItem(
-        getHistoryStorageKey(user.uid),
-        JSON.stringify(payload)
-      );
-    } catch (error) {
-      console.error('Failed to persist history:', error);
-    }
-  }, [history, historyIndex, user, isAuthReady]);
+    return () => unsubscribe();
+  }, [user]);
 
 
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme') => {
@@ -1440,7 +1408,7 @@ function App() {
     }
   };
 
-  const clearAll = (options: ClearAllOptions = {}) => {
+  const clearAll = async (options: ClearAllOptions = {}) => {
     const { preserveHistory = false, preservePinned = false } = options;
 
     if (!preservePinned) {
@@ -1477,9 +1445,10 @@ function App() {
 
       if (user) {
         try {
-          localStorage.removeItem(getHistoryStorageKey(user.uid));
+          const ref = doc(db, "user_recent_songs", user.uid);
+          await setDoc(ref, { songs: [] }, { merge: true });
         } catch (error) {
-          console.error('Failed to clear persisted history:', error);
+          console.error('Failed to clear history in Firestore:', error);
         }
       }
     } else {
@@ -1491,8 +1460,18 @@ function App() {
     }
   };
 
-  const deleteHistoryItem = (index: number) => {
+  const deleteHistoryItem = async (index: number) => {
     const newHistory = history.filter((_, i) => i !== index);
+    
+    if (user) {
+      try {
+        const ref = doc(db, "user_recent_songs", user.uid);
+        await setDoc(ref, { songs: newHistory }, { merge: true });
+      } catch (e) {
+        console.error("Failed to update history in Firestore:", e);
+      }
+    }
+
     setHistory(newHistory);
     
     if (newHistory.length === 0) {
@@ -1505,8 +1484,16 @@ function App() {
     }
   };
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
     if (window.confirm('모든 히스토리를 삭제하시겠습니까?')) {
+      if (user) {
+        try {
+          const ref = doc(db, "user_recent_songs", user.uid);
+          await setDoc(ref, { songs: [] }, { merge: true });
+        } catch (e) {
+          console.error("Failed to clear history in Firestore:", e);
+        }
+      }
       setHistory([]);
       setResult(null);
       setHistoryIndex(-1);

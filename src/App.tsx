@@ -2147,28 +2147,45 @@ ${result.prompt}
 
               {/* Title Card */}
               <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[var(--border-color)]/80 shadow-[var(--shadow-lg)] relative overflow-hidden group hover:border-brand-orange/20 transition-all duration-500">
-                <div className="absolute top-0 right-0 p-4 flex items-center gap-2">
-                  <button
-                    onClick={() => copyToClipboard(result.title, 'title')}
-                    onMouseEnter={() => setHoveredItem({ id: 'copy-title', label: '제목 복사', description: '곡의 제목을 복사합니다.' })}
-                    onMouseLeave={() => setHoveredItem(null)}
-                    className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
-                  >
-                    {copiedType === 'title' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                    <span className="hidden md:block text-sm font-bold">복사</span>
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {/* Go to Favorites Button (PC only) */}
-                  <div className="absolute bottom-0 right-0 p-4 hidden md:flex">
+                  <div className="absolute top-4 right-4 hidden md:flex items-center gap-3 z-10">
                     <button
-                      onClick={() => navigate('/favorites')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--hover-bg)]/10 hover:bg-[var(--hover-bg)]/30 text-[var(--text-secondary)] hover:text-brand-orange transition-all border border-[var(--border-color)]/30 active:scale-95 group/fav-link"
+                      onClick={() => navigate('/history')}
+                      onMouseEnter={() =>
+                        setHoveredItem({
+                          id: 'go-history',
+                          label: '보관함으로 이동',
+                          description: '보관함 페이지로 이동합니다.',
+                        })
+                      }
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-brand-orange/10 text-brand-orange border border-brand-orange/30 hover:border-brand-orange/40 transition-all active:scale-95 shadow-sm"
                     >
-                      <HeartIcon className="w-4 h-4 group-hover/fav-link:fill-brand-orange" />
-                      <span className="text-xs font-bold">보관함으로 이동</span>
+                      <HeartIcon className="w-5 h-5" />
+                      <span className="text-sm font-bold whitespace-nowrap">보관함</span>
+                    </button>
+
+                    <button
+                      onClick={() => copyToClipboard(result.title, 'title')}
+                      onMouseEnter={() =>
+                        setHoveredItem({
+                          id: 'copy-title',
+                          label: '제목 복사',
+                          description: '곡의 제목을 복사합니다.',
+                        })
+                      }
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                    >
+                      {copiedType === 'title' ? (
+                        <Check className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <Copy className="w-5 h-5" />
+                      )}
+                      <span className="text-sm font-bold whitespace-nowrap">복사</span>
                     </button>
                   </div>
+
+                <div className="space-y-4">
                   <div className="flex flex-col items-center gap-2">
                     {historyIndex === 0 && (
                       <span className="px-3 py-1 bg-brand-white/10 text-brand-White text-[10px] font-bold rounded-full border border-brand-orange/17 normal-case tracking-normal mb-1">

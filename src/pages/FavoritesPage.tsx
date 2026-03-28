@@ -1500,7 +1500,7 @@ ${song.prompt}
                         onTouchEnd={onLongPressEnd}
                         className="px-4 py-2 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-xs font-bold border border-brand-orange/20"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-4 h-4" />
                         수정하기
                       </button>
 

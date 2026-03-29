@@ -1238,8 +1238,18 @@ function App() {
     const unsubscribe = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         const songs = snap.data().songs || [];
+        
+        // Sort songs: newest first (descending order)
+        const sortedSongs = [...songs].sort((a, b) => {
+          const timeA = a.createdAt || 0;
+          const timeB = b.createdAt || 0;
+          return timeB - timeA;
+        });
+        
+        // If no createdAt, reverse
+        const finalSongs = sortedSongs.length > 0 && !sortedSongs[0].createdAt ? [...songs].reverse() : sortedSongs;
 
-        setHistory(songs);
+        setHistory(finalSongs);
 
         if (songs.length > 0) {
           const lastIndex = historyIndexRef.current;

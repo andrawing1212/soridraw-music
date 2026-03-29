@@ -1712,31 +1712,31 @@ const saveRecentSong = async (newSong: any) => {
         const vocalDesign = "Main vocal with harmonies";
         const vocalStyle = isEnergetic ? "Powerful, dynamic" : isCalm ? "Soft, breathy" : "Clear, expressive";
         
-        return `[GENRE & BPM]
+        return `STYLE:
 ${genreStr}, ${bpm}
 
-[SOUND - DRUMS]
+DRUMS:
 ${drums}
 
-[SOUND - BASS]
+BASS:
 ${bass}
 
-[SOUND - SYNTH & FX]
+SOUND:
 ${synth}
 
-[TEXTURE]
+TEXTURE:
 ${texture}
 
-[VOCAL DESIGN]
+VOCAL:
 ${vocalDesign}
 
-[VOCAL STYLE]
+VOCAL STYLE:
 ${vocalStyle}
 
-[MOOD]
+MOOD:
 ${moodStr}
 
-[STRUCTURE]
+STRUCTURE:
 ${structureMode === 'basic' ? "Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Final Chorus → Outro" : "Free-form structure based on the song's narrative."}`.trim();
       };
 

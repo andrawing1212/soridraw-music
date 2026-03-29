@@ -240,7 +240,7 @@ export async function generateSong(
 
 export async function translateLyrics(
   lyrics: string,
-  targetLanguage: 'korean' | 'english'
+  targetLanguage:'korean'|'english'
 ): Promise<string> {
   const model = "gemini-3-flash-preview";
   const systemInstruction = `

@@ -1,6 +1,6 @@
 export type Category = 'genre' | 'mood' | 'theme';
 export type LyricsLength = 'very-short' | 'short' | 'normal';
-export type DrumStyle = 'none' | 'half-time' | 'double-time';
+export type SongDuration = '1' | '2' | '3' | '4' | '5' | '6';
 export type VocalType = string;
 
 export interface SongResult {
@@ -18,7 +18,7 @@ export interface SongResult {
     tempo?: string;
     vocalType?: VocalType;
     lyricsLength?: LyricsLength;
-    drumStyle?: DrumStyle;
+    songDuration?: SongDuration;
     maleCount?: number;
     femaleCount?: number;
     rapEnabled?: boolean;

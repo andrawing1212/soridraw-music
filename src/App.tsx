@@ -52,7 +52,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { GENRES, MOODS, THEMES } from './constants';
-import { CategoryItem, SongResult, LyricsLength, DrumStyle } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongDuration } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
@@ -770,7 +770,7 @@ function App() {
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
-  const [drumStyle, setDrumStyle] = useState<DrumStyle>('none');
+  const [songDuration, setSongDuration] = useState<SongDuration>('3');
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
@@ -798,6 +798,7 @@ function App() {
   }, [pinnedThemes]);
   const [isGenreExpanded, setIsGenreExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
+  const [structureMode, setStructureMode] = useState<'auto' | 'basic' | 'custom'>('auto');
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
@@ -1138,7 +1139,7 @@ function App() {
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
-    if (appliedKeywords.drumStyle) setDrumStyle(appliedKeywords.drumStyle);
+    if (appliedKeywords.songDuration) setSongDuration(appliedKeywords.songDuration);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
@@ -1440,7 +1441,7 @@ function App() {
 
     setUserInput('');
     setLyricsLength('normal');
-    setDrumStyle('none');
+    setSongDuration('3');
     setMaleCount(0);
     setFemaleCount(0);
     setRapEnabled(false);
@@ -1695,19 +1696,68 @@ const saveRecentSong = async (newSong: any) => {
         return [GENRES.find(g => g.id === id)?.label || id];
       });
 
+      const buildSongPrompt = () => {
+        const genreStr = genreLabels.length > 0 ? genreLabels.join(", ") : "Pop";
+        const moodStr = finalMoods.length > 0 ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(", ") : "Emotional";
+        
+        // Default value logic
+        const isEnergetic = finalMoods.includes('upbeat') || finalMoods.includes('powerful') || finalGenres.includes('dance') || finalGenres.includes('rock');
+        const isCalm = finalMoods.includes('calm') || finalMoods.includes('peaceful') || finalGenres.includes('ambient') || finalGenres.includes('ballad');
+        
+        const bpm = tempoInfo || (isEnergetic ? "120-140 BPM" : isCalm ? "60-80 BPM" : "90-110 BPM");
+        const drums = isEnergetic ? "Driving, energetic drums" : isCalm ? "Minimal, soft percussion" : "Standard pop drums";
+        const bass = isEnergetic ? "Punchy, synth bass" : isCalm ? "Deep, sub bass" : "Warm, melodic bass";
+        const synth = isEnergetic ? "Bright, saw-wave synths" : isCalm ? "Atmospheric pads" : "Subtle synth textures";
+        const texture = isEnergetic ? "High-energy, polished" : isCalm ? "Soft, organic, airy" : "Balanced, clear";
+        const vocalDesign = "Main vocal with harmonies";
+        const vocalStyle = isEnergetic ? "Powerful, dynamic" : isCalm ? "Soft, breathy" : "Clear, expressive";
+        
+        return `[GENRE & BPM]
+${genreStr}, ${bpm}
+
+[SOUND - DRUMS]
+${drums}
+
+[SOUND - BASS]
+${bass}
+
+[SOUND - SYNTH & FX]
+${synth}
+
+[TEXTURE]
+${texture}
+
+[VOCAL DESIGN]
+${vocalDesign}
+
+[VOCAL STYLE]
+${vocalStyle}
+
+[MOOD]
+${moodStr}
+
+[STRUCTURE]
+${structureMode === 'basic' ? "Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Final Chorus → Outro" : "Free-form structure based on the song's narrative."}`.trim();
+      };
+
+      const songPrompt = buildSongPrompt();
+
       const song = await generateSong(
         genreLabels,
         finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         finalThemes.map(id => THEMES.find(t => t.id === id)?.label || id),
         userInput,
+        songPrompt,
         lyricsLength,
-        drumStyle,
+        songDuration,
+        false, // useAutoDuration
         maleCount,
         femaleCount,
         rapEnabled,
         tempoInfo,
         specialPrompt,
-        kpopMode
+        kpopMode,
+        structureMode
       );
 
       // Check if aborted before updating state
@@ -1716,10 +1766,11 @@ const saveRecentSong = async (newSong: any) => {
       const newResult: SongResult = {
         ...song,
         title: song.title, // Explicitly ensure title is from the new song
+        prompt: songPrompt, // Use the client-constructed songPrompt
         appliedKeywords: {
           ...song.appliedKeywords,
           lyricsLength,
-          drumStyle,
+          songDuration,
           maleCount,
           femaleCount,
           rapEnabled,
@@ -1947,33 +1998,43 @@ ${result.prompt}
         </div>
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <LyricsLengthControl 
-            value={lyricsLength}
-            onChange={setLyricsLength}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-          />
-          <DrumStyleControl 
-            lyricsLength={lyricsLength}
-            value={drumStyle}
-            onChange={setDrumStyle}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-          />
-          <SingerControl 
-            maleCount={maleCount}
-            femaleCount={femaleCount}
-            rapEnabled={rapEnabled}
-            onMaleChange={setMaleCount}
-            onFemaleChange={setFemaleCount}
-            onRapChange={setRapEnabled}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-          />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SongStructureControl 
+              mode={structureMode}
+              onModeChange={setStructureMode}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+            />
+            <SingerControl 
+              maleCount={maleCount}
+              femaleCount={femaleCount}
+              rapEnabled={rapEnabled}
+              onMaleChange={setMaleCount}
+              onFemaleChange={setFemaleCount}
+              onRapChange={setRapEnabled}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <LyricsLengthControl 
+              value={lyricsLength}
+              onChange={setLyricsLength}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+            />
+            <SongDurationControl 
+              value={songDuration}
+              onChange={setSongDuration}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+            />
+          </div>
         </div>
 
         {/* Tempo Control Bar */}
@@ -2371,66 +2432,75 @@ ${result.prompt}
               </div>
 
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-                {/* English Lyrics Section */}
-                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                  <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
-                    <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                      <Music className="w-4 h-4 text-brand-orange" />
-                      영어 가사
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
-                        onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
-                      >
-                        {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                        <span className="hidden md:block text-sm font-bold">복사</span>
-                      </button>
+              <div className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* English Lyrics Section */}
+                  <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                    <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
+                      <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                        <Music className="w-4 h-4 text-brand-orange" />
+                        영어 가사
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
+                          onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                          className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                        >
+                          {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                          <span className="hidden md:block text-sm font-bold">복사</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                      <div className="flex-1" />
+                      <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
+                        {result.lyrics.english
+                          .replace(/\\n/g, '\n')
+                          .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
+                          .replace(/\n{3,}/g, '\n\n')
+                          .trim()}
+                      </pre>
+                      <div className="flex-1" />
                     </div>
                   </div>
-                  <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                    <div className="flex-1" />
-                    <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                      {result.lyrics.english}
-                    </pre>
-                    <div className="flex-1" />
-                  </div>
-                </div>
 
-                {/* Korean Lyrics Section */}
-                <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                  <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
-                    <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                      <Music className="w-4 h-4 text-brand-orange" />
-                      한글 가사
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
-                        onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
-                      >
-                        {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                        <span className="hidden md:block text-sm font-bold">복사</span>
-                      </button>
+                  {/* Korean Lyrics Section */}
+                  <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                    <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                      <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                        <Music className="w-4 h-4 text-brand-orange" />
+                        한글 가사
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
+                          onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                          className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                        >
+                          {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                          <span className="hidden md:block text-sm font-bold">복사</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                    <div className="flex-1" />
-                    <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                      {result.lyrics.korean}
-                    </pre>
-                    <div className="flex-1" />
+                    <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                      <div className="flex-1" />
+                      <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
+                        {result.lyrics.korean
+                          .replace(/\\n/g, '\n')
+                          .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
+                          .replace(/\n{3,}/g, '\n\n')
+                          .trim()}
+                      </pre>
+                      <div className="flex-1" />
+                    </div>
                   </div>
                 </div>
 
                 {/* Prompt Section */}
-                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col aspect-square md:col-span-2 lg:col-span-1 shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col h-[400px] shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
                   <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                     <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                       <Sparkles className="w-4 h-4 text-brand-orange" />
@@ -2448,14 +2518,12 @@ ${result.prompt}
                       </button>
                     </div>
                   </div>
-                  <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col h-full">
-                    <div className="flex-1" />
+                  <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
                     <div className="bg-[var(--input-bg)] rounded-2xl p-6 border border-[var(--border-color)]">
-                      <p className="text-[var(--text-secondary)] leading-relaxed text-sm font-mono">
+                      <p className="text-[var(--text-secondary)] leading-relaxed text-sm font-mono whitespace-pre-wrap">
                         {result.prompt}
                       </p>
                     </div>
-                    <div className="flex-1" />
                   </div>
                 </div>
               </div>
@@ -2920,23 +2988,24 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
   );
 }
 
-interface DrumStyleControlProps {
-  lyricsLength: LyricsLength;
-  value: DrumStyle;
-  onChange: (val: DrumStyle) => void;
+interface SongDurationControlProps {
+  value: SongDuration;
+  onChange: (val: SongDuration) => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressStart, onLongPressEnd }: DrumStyleControlProps) {
+function SongDurationControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: SongDurationControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
   const options = [
-    { id: 'none', label: '기본', description: '표준 드럼 비트를 사용합니다.', recommendation: '모든 가사 길이에 적합' },
-    { id: 'half-time', label: 'Half', description: '드럼 비트를 절반 속도로 연주하여 여유로운 느낌을 줍니다.', recommendation: '빠른템포' },
-    { id: 'double-time', label: 'Double', description: '드럼 비트를 2배 빠르게 연주하여 긴박감을 줍니다.', recommendation: '느린템포' }
+    { id: '1', label: '1분' },
+    { id: '2', label: '2분' },
+    { id: '3', label: '3분' },
+    { id: '4', label: '4분' },
+    { id: '5', label: '5분' },
+    { id: '6', label: '6분' }
   ];
 
   return (
@@ -2948,7 +3017,7 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
           className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          드럼 스타일
+          곡 길이
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (
@@ -2958,37 +3027,36 @@ function DrumStyleControl({ lyricsLength, value, onChange, onHover, onLongPressS
               exit={{ opacity: 0, y: 10 }}
               className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">드럼의 연주 방식을 선택합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 전체 길이를 설정합니다.</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="flex gap-2 mt-auto">
+      <div className="grid grid-cols-3 gap-2 mt-auto">
         {options.map((opt) => (
-          <div key={opt.id} className="relative flex-1">
-            <button
-              onClick={() => {
-                onChange(opt.id as DrumStyle);
-                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
-              }}
-              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
-              }}
-              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "w-full py-3 rounded-xl text-sm font-bold transition-all border",
-                value === opt.id
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
-              {opt.label}
-            </button>
-          </div>
+          <button
+            key={opt.id}
+            onClick={() => {
+              onChange(opt.id as SongDuration);
+              onHover({ id: opt.id, label: opt.label, description: `곡 길이를 ${opt.label}로 설정합니다.` });
+            }}
+            onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: `곡 길이를 ${opt.label}로 설정합니다.` })}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: `곡 길이를 ${opt.label}로 설정합니다.` })}
+            onTouchEnd={onLongPressEnd}
+            className={cn(
+              "py-3 rounded-xl text-sm font-bold transition-all border",
+              value === opt.id
+                ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+            )}
+          >
+            {opt.label}
+          </button>
         ))}
       </div>
     </div>
@@ -3149,6 +3217,118 @@ function SingerControl({
       </div>
     </div>
   );
+}
+
+function SongStructureControl({ mode, onModeChange, onHover, onLongPressStart, onLongPressEnd }: SongStructureControlProps) {
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [customSections, setCustomSections] = useState<{ id: string; type: string; style: null }[]>([]);
+  
+  const basicSections = [
+    "[Intro]", "[Verse 1]", "[Pre-Chorus]", "[Chorus / Drop]", 
+    "[Verse 2]", "[Pre-Chorus]", "[Chorus / Drop]", "[Bridge]", 
+    "[Final Chorus / Drop]", "[Outro]"
+  ];
+
+  const availableBlocks = [
+    "Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", 
+    "Outro", "Rap", "Hook", "Drop", "Final Chorus / Final Hook"
+  ];
+
+  const addSection = (type: string) => {
+    setCustomSections([...customSections, { id: Date.now().toString(), type, style: null }]);
+  };
+
+  const removeSection = (id: string) => {
+    setCustomSections(customSections.filter(s => s.id !== id));
+  };
+
+  const moveSection = (index: number, direction: 'up' | 'down') => {
+    const newSections = [...customSections];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex >= 0 && targetIndex < newSections.length) {
+      [newSections[index], newSections[targetIndex]] = [newSections[targetIndex], newSections[index]];
+      setCustomSections(newSections);
+    }
+  };
+
+  return (
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
+      <div className="relative mb-6 flex items-center justify-between">
+        <h3 
+          onMouseEnter={() => setShowTitleTooltip(true)}
+          onMouseLeave={() => setShowTitleTooltip(false)}
+          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+        >
+          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+          곡 구조
+        </h3>
+        <div className="flex gap-1 bg-[var(--hover-bg)] p-1 rounded-xl">
+          <button 
+            onClick={() => onModeChange('auto')}
+            className={cn("px-3 py-1 rounded-lg text-[11px] font-bold transition-all", mode === 'auto' ? "bg-[var(--card-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)]")}
+          >
+            자동
+          </button>
+          <button 
+            onClick={() => onModeChange('basic')}
+            className={cn("px-3 py-1 rounded-lg text-[11px] font-bold transition-all", mode === 'basic' ? "bg-[var(--card-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)]")}
+          >
+            기본
+          </button>
+          <button 
+            onClick={() => onModeChange('custom')}
+            className={cn("px-3 py-1 rounded-lg text-[11px] font-bold transition-all", mode === 'custom' ? "bg-[var(--card-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)]")}
+          >
+            커스텀
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto max-h-[200px] pr-2">
+        {mode === 'auto' ? (
+          <div className="text-[12px] text-[var(--text-secondary)] bg-[var(--hover-bg)]/50 p-4 rounded-lg border border-[var(--border-color)] text-center">
+            곡의 장르와 분위기에 맞춰 자동으로 구조가 생성됩니다.
+          </div>
+        ) : mode === 'basic' ? (
+          <div className="space-y-1">
+            {basicSections.map((section, i) => (
+              <div key={i} className="text-[11px] text-[var(--text-secondary)] bg-[var(--hover-bg)]/50 px-3 py-1.5 rounded-lg border border-[var(--border-color)]">
+                {section}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-1">
+              {availableBlocks.map(block => (
+                <button key={block} onClick={() => addSection(block)} className="text-[10px] bg-[var(--hover-bg)] hover:bg-brand-orange/10 text-[var(--text-secondary)] hover:text-brand-orange px-2 py-1 rounded border border-[var(--border-color)] transition-all">
+                  + {block}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-1 mt-4">
+              {customSections.map((section, i) => (
+                <div key={section.id} className="flex items-center gap-1 text-[11px] text-[var(--text-primary)] bg-[var(--card-bg)] px-2 py-1.5 rounded-lg border border-[var(--border-color)]">
+                  <span className="flex-1">{section.type}</span>
+                  <button onClick={() => moveSection(i, 'up')} className="text-[var(--text-secondary)] hover:text-brand-orange">▲</button>
+                  <button onClick={() => moveSection(i, 'down')} className="text-[var(--text-secondary)] hover:text-brand-orange">▼</button>
+                  <button onClick={() => removeSection(section.id)} className="text-red-500 hover:text-red-600">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface SongStructureControlProps {
+  mode: 'auto' | 'basic' | 'custom';
+  onModeChange: (mode: 'auto' | 'basic' | 'custom') => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
 }
 
 

@@ -1246,19 +1246,17 @@ function App() {
           return timeB - timeA;
         });
         
-        // If no createdAt, reverse
-        const finalSongs = sortedSongs.length > 0 && !sortedSongs[0].createdAt ? [...songs].reverse() : sortedSongs;
+        // If no createdAt, keep original order
+        const finalSongs = sortedSongs;
 
         setHistory(finalSongs);
 
-        if (songs.length > 0) {
-          const lastIndex = historyIndexRef.current;
-          const currentIndex = (lastIndex >= 0 && lastIndex < songs.length) 
-            ? lastIndex 
-            : Math.max(0, songs.length - 1);
-          
-          setHistoryIndex(currentIndex);
-          setResult(songs[currentIndex]);
+        if (finalSongs.length > 0) {
+          // Set to the first song (newest) on initial load/reconnect
+          const firstIndex = 0;
+          setHistoryIndex(firstIndex);
+          historyIndexRef.current = firstIndex;
+          setResult(finalSongs[firstIndex]);
         } else {
           setHistoryIndex(-1);
           setResult(null);
@@ -2313,7 +2311,7 @@ ${result.prompt}
                         <ArrowLeft className="w-4 h-4" />
                       </button>
                       <span className="text-sm font-mono font-bold text-[var(--text-secondary)] min-w-[80px] text-center">
-                        {history.length - historyIndex} / {history.length}
+                        {historyIndex + 1} / {history.length}
                       </span>
                       <button
                         onClick={() => navigateHistory('next')}

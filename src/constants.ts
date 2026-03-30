@@ -1,6 +1,10 @@
+import { CategoryItem, GenreGroup, SoundStyleItem } from './types';
 
-import { CategoryItem } from './types';
-
+/**
+ * 현재 App.tsx 호환용 평면 장르 목록
+ * - 기존 화면 안 깨지게 유지
+ * - 다음 단계에서 App.tsx를 바꾼 뒤 GENRE_GROUPS 중심으로 전환
+ */
 export const GENRES: CategoryItem[] = [
   { id: 'indie', label: 'Indie', description: '독창적이고 비주류적인 사운드를 가진 독립 음악입니다.' },
   { id: 'rnb', label: 'R&B', description: '소울풀한 보컬과 그루브에 집중한 리듬 앤 블루스입니다.' },
@@ -38,6 +42,331 @@ export const GENRES: CategoryItem[] = [
   { id: 'country', label: 'Country', description: '미국 전통 음악에 뿌리를 둔 소박하고 진솔한 음악입니다.' },
   { id: 'traditional-trot', label: 'Traditional Trot', description: '한국 전통 트로트의 깊은 감성과 꺾기 창법이 특징입니다.' },
   { id: 'semi-trot', label: 'Semi-Trot', description: '현대적인 감각이 더해진 경쾌하고 대중적인 트로트입니다.' },
+];
+
+/**
+ * 다음 단계용 장르 피라미드 구조
+ * - 아직 App.tsx가 직접 쓰진 않음
+ * - 다음 App.tsx 전체 수정본에서 사용
+ */
+export const GENRE_GROUPS: GenreGroup[] = [
+  {
+    id: 'pop',
+    label: 'Pop',
+    description: '대중적인 멜로디와 현대적인 구조 중심',
+    children: [
+      {
+        id: 'pop',
+        label: 'Pop',
+        description: '대중적이고 캐치한 멜로디의 현대적인 음악입니다.',
+        promptCore: 'A modern pop track built around catchy melodic hooks, clean structure, and broad mainstream appeal.'
+      },
+      {
+        id: 'kpop',
+        label: 'K-Pop',
+        description: '세련된 한국형 팝',
+        promptCore: 'A polished K-pop track with strong hook design, tight rhythmic control, and sleek contemporary production.'
+      },
+      {
+        id: 'jpop',
+        label: 'J-Pop',
+        description: '감성적인 일본 팝',
+        promptCore: 'A melodic J-pop track with expressive phrasing, colorful arrangement, and polished pop structure.'
+      },
+      {
+        id: 'citypop',
+        label: 'City Pop',
+        description: '레트로 도시 감성',
+        promptCore: 'A city pop track with retro Japanese pop influence, groovy rhythm, smooth bass movement, and glossy nostalgia.'
+      }
+    ]
+  },
+  {
+    id: 'rock',
+    label: 'Rock',
+    description: '밴드 중심 에너지',
+    children: [
+      {
+        id: 'rock',
+        label: 'Rock',
+        description: '기타 중심 록',
+        promptCore: 'A rock track driven by electric guitars, live drums, dynamic movement, and band-focused energy.'
+      },
+      {
+        id: 'punk',
+        label: 'Punk',
+        description: '빠르고 거친 에너지',
+        promptCore: 'A punk-inspired track with raw urgency, brisk momentum, and stripped-down rebellious energy.'
+      },
+      {
+        id: 'metal',
+        label: 'Metal',
+        description: '강한 사운드',
+        promptCore: 'A metal-oriented track with heavy guitar presence, forceful rhythm, and dense high-impact energy.'
+      },
+      {
+        id: 'indie',
+        label: 'Indie',
+        description: '감각적 인디',
+        promptCore: 'An indie-leaning track with characterful textures, tasteful restraint, and a less formulaic melodic approach.'
+      }
+    ]
+  },
+  {
+    id: 'rnb-soul',
+    label: 'R&B / Soul',
+    description: '보컬 중심 그루브',
+    children: [
+      {
+        id: 'rnb',
+        label: 'R&B',
+        description: 'R&B',
+        promptCore: 'A modern R&B track with smooth groove, intimate vocal focus, and refined rhythmic flow.'
+      },
+      {
+        id: 'soul',
+        label: 'Soul',
+        description: 'Soul',
+        promptCore: 'A soul-driven track with expressive vocal delivery, warm instrumentation, and emotionally rich movement.'
+      },
+      {
+        id: 'neosoul',
+        label: 'Neo Soul',
+        description: 'Neo Soul',
+        promptCore: 'A neo-soul track with warm chords, deep groove, jazz-influenced harmony, and a relaxed but sophisticated flow.'
+      },
+      {
+        id: 'funk',
+        label: 'Funk',
+        description: 'Funk',
+        promptCore: 'A funk-rooted track with tight bass groove, syncopated rhythm, and energetic motion.'
+      }
+    ]
+  },
+  {
+    id: 'hiphop',
+    label: 'Hip-Hop',
+    description: '비트 중심',
+    children: [
+      {
+        id: 'hiphop',
+        label: 'Hip-Hop',
+        description: 'Hip-Hop',
+        promptCore: 'A hip-hop track led by rhythm-forward beat design, strong groove, and confident modern attitude.'
+      },
+      {
+        id: 'rap',
+        label: 'Rap',
+        description: 'Rap',
+        promptCore: 'A rap-centered track focused on rhythmic vocal delivery, beat clarity, and direct lyrical momentum.'
+      }
+    ]
+  },
+  {
+    id: 'electronic',
+    label: 'Electronic',
+    description: '전자 사운드',
+    children: [
+      {
+        id: 'electronic',
+        label: 'Electronic',
+        description: 'Electronic',
+        promptCore: 'An electronic track shaped by synthetic textures, precise production, and modern digital sound design.'
+      },
+      {
+        id: 'edm',
+        label: 'EDM',
+        description: 'EDM',
+        promptCore: 'An EDM track with high-energy build, impactful drops, and strong dance-floor momentum.'
+      },
+      {
+        id: 'house',
+        label: 'House',
+        description: 'House',
+        promptCore: 'A house track with steady four-on-the-floor pulse, club-ready groove, and polished electronic movement.'
+      },
+      {
+        id: 'techno',
+        label: 'Techno',
+        description: 'Techno',
+        promptCore: 'A techno-focused track with repetitive drive, hypnotic pulse, and sleek mechanical energy.'
+      },
+      {
+        id: 'synth',
+        label: 'Synthwave',
+        description: 'Synthwave',
+        promptCore: 'A synthwave track with retro synthesizers, cinematic neon texture, and nostalgic electronic atmosphere.'
+      },
+      {
+        id: 'dance',
+        label: 'Dance',
+        description: 'Dance',
+        promptCore: 'A dance-focused track with immediate rhythmic energy, clean beat emphasis, and crowd-moving momentum.'
+      }
+    ]
+  },
+  {
+    id: 'jazz-blues',
+    label: 'Jazz / Blues',
+    description: '화성과 연주 감성 중심',
+    children: [
+      {
+        id: 'jazz',
+        label: 'Jazz',
+        description: 'Jazz',
+        promptCore: 'A jazz-rooted track with rich harmony, fluid rhythm, and expressive musical phrasing.'
+      },
+      {
+        id: 'blues',
+        label: 'Blues',
+        description: 'Blues',
+        promptCore: 'A blues-influenced track with soulful phrasing, earthy feel, and emotionally grounded movement.'
+      },
+      {
+        id: 'bossanova',
+        label: 'Bossanova',
+        description: 'Bossanova',
+        promptCore: 'A bossa nova track with soft Brazilian rhythm, gentle jazz harmony, and smooth intimate flow.'
+      }
+    ]
+  },
+  {
+    id: 'folk-acoustic',
+    label: 'Folk / Acoustic',
+    description: '자연스러운 악기와 서정성',
+    children: [
+      {
+        id: 'folk',
+        label: 'Folk',
+        description: 'Folk',
+        promptCore: 'A folk track with organic instrumentation, narrative warmth, and an intimate singer-led feel.'
+      },
+      {
+        id: 'acoustic',
+        label: 'Acoustic',
+        description: 'Acoustic',
+        promptCore: 'An acoustic-centered track with natural tone, soft instrumental warmth, and uncluttered arrangement.'
+      },
+      {
+        id: 'country',
+        label: 'Country',
+        description: 'Country',
+        promptCore: 'A country-influenced track with grounded storytelling, organic rhythm, and warm roots-inspired texture.'
+      }
+    ]
+  },
+  {
+    id: 'latin',
+    label: 'Latin',
+    description: '라틴 리듬 중심',
+    children: [
+      {
+        id: 'latin',
+        label: 'Latin',
+        description: 'Latin',
+        promptCore: 'A Latin-inspired track with rhythmic vitality, danceable movement, and colorful percussive energy.'
+      }
+    ]
+  },
+  {
+    id: 'reggae',
+    label: 'Reggae',
+    description: '엇박자와 여유로운 흐름',
+    children: [
+      {
+        id: 'reggae',
+        label: 'Reggae',
+        description: 'Reggae',
+        promptCore: 'A reggae track with offbeat groove, laid-back rhythm, and relaxed but steady motion.'
+      }
+    ]
+  },
+  {
+    id: 'traditional',
+    label: 'Traditional',
+    description: '트로트 계열',
+    children: [
+      {
+        id: 'traditional-trot',
+        label: 'Traditional Trot',
+        description: 'Traditional Trot',
+        promptCore: 'A traditional trot track with strong emotional delivery, classic Korean melodic turns, and nostalgic dramatic phrasing.'
+      },
+      {
+        id: 'semi-trot',
+        label: 'Semi-Trot',
+        description: 'Semi-Trot',
+        promptCore: 'A semi-trot track with upbeat trot influence, mainstream accessibility, and bright lively momentum.'
+      }
+    ]
+  },
+  {
+    id: 'ambient',
+    label: 'Ambient',
+    description: '공간감과 정서 중심',
+    children: [
+      {
+        id: 'ambient',
+        label: 'Ambient',
+        description: 'Ambient',
+        promptCore: 'An ambient track centered on spacious atmosphere, slow emotional movement, and immersive sonic depth.'
+      },
+      {
+        id: 'newage',
+        label: 'New Age',
+        description: 'New Age',
+        promptCore: 'A new-age inspired track with calm flow, meditative pacing, and serene restorative atmosphere.'
+      }
+    ]
+  }
+];
+
+/**
+ * 다음 단계용 선택형 사운드 스타일
+ */
+export const SOUND_STYLES: SoundStyleItem[] = [
+  {
+    id: 'piano-centered',
+    label: 'Piano 중심',
+    description: '피아노가 전체 사운드를 이끄는 구성',
+    promptCore: 'The arrangement is piano-centered, with expressive piano carrying the main emotional movement.'
+  },
+  {
+    id: 'guitar-centered',
+    label: 'Guitar 중심',
+    description: '기타가 전체 사운드를 이끄는 구성',
+    promptCore: 'The arrangement is guitar-centered, with warm guitar texture shaping the song from the front.'
+  },
+  {
+    id: 'acoustic-centered',
+    label: 'Acoustic 중심',
+    description: '어쿠스틱 악기 중심의 따뜻한 구성',
+    promptCore: 'The arrangement is acoustic-centered, using organic instruments and warm natural texture.'
+  },
+  {
+    id: 'band-driven',
+    label: 'Band 중심',
+    description: '밴드 사운드 위주의 생동감 있는 구성',
+    promptCore: 'The arrangement is band-driven, with live instrumental energy and clear ensemble interaction.'
+  },
+  {
+    id: 'synth-led',
+    label: 'Synth 중심',
+    description: '신스와 전자 질감이 전면에 오는 구성',
+    promptCore: 'The arrangement is synth-led, with electronic textures taking the lead in the sonic identity.'
+  },
+  {
+    id: 'minimal',
+    label: 'Minimal',
+    description: '과한 요소를 줄인 절제된 구성',
+    promptCore: 'The arrangement stays minimal and restrained, avoiding unnecessary layering or overproduction.'
+  },
+  {
+    id: 'ambient-textured',
+    label: 'Ambient texture',
+    description: '공간감과 질감이 강조되는 구성',
+    promptCore: 'The arrangement emphasizes ambient texture, spatial depth, and gently evolving sonic layers.'
+  }
 ];
 
 export const MOODS: CategoryItem[] = [

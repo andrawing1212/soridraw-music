@@ -51,7 +51,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { GENRES, MOODS, THEMES } from './constants';
+import { GENRES, MOODS, THEMES, GENRE_GROUPS } from './constants';
 import { CategoryItem, SongResult, LyricsLength, SongDuration } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
@@ -769,6 +769,7 @@ function App() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [isBallad, setIsBallad] = useState(false);
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songDuration, setSongDuration] = useState<SongDuration>('3');
   const [maleCount, setMaleCount] = useState(0);
@@ -800,6 +801,8 @@ function App() {
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
 
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
+  const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
+  const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
@@ -1143,6 +1146,7 @@ function App() {
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
+    if ((appliedKeywords as any).isBallad !== undefined) setIsBallad(Boolean((appliedKeywords as any).isBallad));
     
     if (appliedKeywords.tempoConfig) {
       setTempoEnabled(appliedKeywords.tempoConfig.enabled);
@@ -1203,6 +1207,39 @@ function App() {
       setSelectedThemes(final);
       setIsThemeRandomized(true);
     }
+  };
+
+
+  const openGenreModal = (groupId: string) => {
+    setActiveGenreGroupId(groupId);
+    setIsGenreModalOpen(true);
+  };
+
+  const handleGenreSelect = (genreId: string) => {
+    setSelectedGenres([genreId]);
+    setIsGenreRandomized(false);
+
+    if (genreId === 'kpop') {
+      setKpopMode(1);
+    } else {
+      setKpopMode(0);
+    }
+
+    if (genreId === 'citypop') {
+      setCitypopMode(1);
+    } else {
+      setCitypopMode(0);
+    }
+
+    setIsGenreModalOpen(false);
+  };
+
+  const randomizeSingleGenre = () => {
+    const allSubGenres = GENRE_GROUPS.flatMap(group => group.children);
+    const random = allSubGenres[Math.floor(Math.random() * allSubGenres.length)];
+    if (!random) return;
+    handleGenreSelect(random.id);
+    setIsGenreRandomized(true);
   };
 
   const handleLogin = async () => {
@@ -1438,6 +1475,7 @@ function App() {
     }
 
     setSelectedGenres([]);
+    setIsBallad(false);
     setKpopMode(0);
     setCitypopMode(0);
     setSelectedMoods([]);
@@ -1724,7 +1762,7 @@ const saveRecentSong = async (newSong: any) => {
           finalMoods.includes('calm') ||
           finalMoods.includes('peaceful') ||
           finalGenres.includes('ambient') ||
-          finalGenres.includes('ballad');
+          isBallad;
 
         const bpm = tempoInfo || (isEnergetic ? "120-140 BPM" : isCalm ? "60-80 BPM" : "90-110 BPM");
         const drums = isEnergetic
@@ -1755,7 +1793,7 @@ const saveRecentSong = async (newSong: any) => {
           : "Clear, expressive";
 
         return `STYLE:
-${genreStr}, ${bpm}
+${isBallad ? `Ballad-style ${genreStr}` : genreStr}, ${bpm}
 
 DRUMS:
 ${drums}
@@ -1774,6 +1812,10 @@ ${vocalDesign}
 
 VOCAL STYLE:
 ${vocalStyle}
+${isBallad ? `
+
+STRUCTURE:
+Slower emotional pacing, vocal-centered ballad flow` : ''}
 
 MOOD:
 ${moodStr}`.trim();
@@ -1781,22 +1823,25 @@ ${moodStr}`.trim();
 
       const songPrompt = buildSongPrompt();
 
-      const song = await generateSong(
-        genreLabels,
-        finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
-        finalThemes.map(id => THEMES.find(t => t.id === id)?.label || id),
+      const song = await generateSong({
+        genre: finalGenres[0] ?? null,
+        moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
+        theme: finalThemes[0] ? (THEMES.find(t => t.id === finalThemes[0])?.label || finalThemes[0]) : null,
         userInput,
         songPrompt,
         lyricsLength,
         songDuration,
-        false,
-        maleCount,
-        femaleCount,
-        rapEnabled,
-        tempoInfo,
+        useAutoDuration: false,
+        vocal: {
+          male: maleCount,
+          female: femaleCount,
+          rap: rapEnabled,
+        },
+        tempo: tempoInfo,
         specialPrompt,
-        kpopMode
-      );
+        kpopMode,
+        isBallad,
+      });
 
       if (abortControllerRef.current?.signal.aborted) return;
 
@@ -1811,6 +1856,7 @@ ${moodStr}`.trim();
           maleCount,
           femaleCount,
           rapEnabled,
+          isBallad,
           tempoConfig: {
             enabled: tempoEnabled,
             min: minBPM,
@@ -1970,27 +2016,18 @@ ${result.prompt}
             <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
               {/* Selection Sections */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <CategorySection 
-            title="장르" 
+          <GenreCategorySection
+            title="장르"
             description="곡의 전반적인 음악 스타일을 결정합니다. (프롬프트에 영향)"
-            items={GENRES} 
-            selected={selectedGenres} 
-            pinned={pinnedGenres}
-            onToggle={(id) => toggleSelection(id, 'genre')}
-            onTogglePin={(id) => togglePin(id, 'genre')}
+            groups={GENRE_GROUPS}
+            selectedGenreId={selectedGenres[0] ?? null}
+            isRandomized={isGenreRandomized}
+            onOpenGroup={openGenreModal}
             onClear={() => clearCategory('genre')}
-            onUnpinAll={() => unpinAll('genre')}
-            onRandom={() => randomizeCategory('genre')}
+            onRandom={randomizeSingleGenre}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
-            hoveredItem={hoveredItem}
-            isExpanded={isGenreExpanded}
-            onToggleExpand={() => setIsGenreExpanded(!isGenreExpanded)}
-            allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
-            kpopMode={kpopMode}
-            citypopMode={citypopMode}
-            isRandomized={isGenreRandomized}
           />
           <CategorySection 
             title="분위기" 
@@ -2032,6 +2069,47 @@ ${result.prompt}
             allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
             isRandomized={isThemeRandomized}
           />
+        </div>
+
+        <AnimatePresence>
+          {isGenreModalOpen && activeGenreGroupId && (
+            <GenreSelectModal
+              group={GENRE_GROUPS.find((item) => item.id === activeGenreGroupId) ?? null}
+              selectedGenreId={selectedGenres[0] ?? null}
+              onClose={() => setIsGenreModalOpen(false)}
+              onSelect={handleGenreSelect}
+            />
+          )}
+        </AnimatePresence>
+
+        <div className="bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--border-color)] shadow-[var(--shadow-md)]">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h3 className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+                Ballad
+              </h3>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-1">
+                장르는 유지하고, 느린 템포와 감정 중심의 곡 구조를 적용합니다.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsBallad((prev) => !prev)}
+              onMouseEnter={() => setHoveredItem({ id: 'ballad-toggle', label: 'Ballad', description: '느린 템포와 감정 중심의 발라드 구조를 적용합니다.' })}
+              onMouseLeave={() => setHoveredItem(null)}
+              onTouchStart={() => handleLongPressStart({ id: 'ballad-toggle', label: 'Ballad', description: '느린 템포와 감정 중심의 발라드 구조를 적용합니다.' })}
+              onTouchEnd={handleLongPressEnd}
+              className={cn(
+                "px-5 py-3 rounded-2xl border font-bold transition-all min-w-[140px]",
+                isBallad
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+              )}
+            >
+              {isBallad ? 'Ballad ON' : 'Ballad OFF'}
+            </button>
+          </div>
         </div>
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
@@ -2092,8 +2170,11 @@ ${result.prompt}
               )}
             >
               <AnimatePresence>
-                {[...selectedGenres, ...selectedMoods, ...selectedThemes].map((id) => {
-                  const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
+                {[...selectedGenres, ...selectedMoods, ...selectedThemes, ...(isBallad ? ['ballad-toggle-chip'] : [])].map((id) => {
+                  const item =
+                    id === 'ballad-toggle-chip'
+                      ? { id: 'ballad-toggle-chip', label: 'Ballad', description: '발라드 구조 적용' }
+                      : [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
                   return (
                     <motion.span
                       key={id}
@@ -2105,7 +2186,8 @@ ${result.prompt}
                       {item?.label}
                       <button 
                         onClick={() => {
-                          if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
+                          if (id === 'ballad-toggle-chip') setIsBallad(false);
+                          else if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
                           else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
                           else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
                         }}
@@ -2420,6 +2502,20 @@ ${result.prompt}
                       </div>
                     </div>
                   ))}
+                  {(result.appliedKeywords as any).isBallad && (
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">style</p>
+                      <div className="flex flex-wrap gap-1">
+                        <span
+                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-brand-orange/20 text-brand-orange font-bold border border-brand-orange/30 cursor-help"
+                          onMouseEnter={() => setHoveredItem({ id: 'kw-ballad', label: 'Ballad', description: '느린 템포와 감정 중심의 발라드 구조가 적용되었습니다.' })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                        >
+                          Ballad
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {result.appliedKeywords.vocalType && (
                     <div className="space-y-0.5">
                       <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>
@@ -2667,6 +2763,237 @@ ${result.prompt}
         }
       `}</style>
     </div>
+  );
+}
+
+
+interface GenreCategorySectionProps {
+  title: string;
+  description: string;
+  groups: typeof GENRE_GROUPS;
+  selectedGenreId: string | null;
+  isRandomized: boolean;
+  onOpenGroup: (groupId: string) => void;
+  onClear: () => void;
+  onRandom: () => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
+}
+
+function GenreCategorySection({
+  title,
+  description,
+  groups,
+  selectedGenreId,
+  isRandomized,
+  onOpenGroup,
+  onClear,
+  onRandom,
+  onHover,
+  onLongPressStart,
+  onLongPressEnd,
+}: GenreCategorySectionProps) {
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+
+  const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
+  const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
+
+  return (
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+      <div className="flex items-center justify-between mb-4">
+        <div className="relative">
+          <h3
+            onMouseEnter={() => setShowTitleTooltip(true)}
+            onMouseLeave={() => setShowTitleTooltip(false)}
+            className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+          >
+            <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+            {title}
+            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
+          </h3>
+          <AnimatePresence>
+            {showTitleTooltip && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+              >
+                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRandom}
+            onMouseEnter={() => onHover({ id: 'genre-random', label: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'genre-random', label: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
+            onTouchEnd={onLongPressEnd}
+            className={cn(
+              "p-2.5 rounded-xl transition-all border",
+              isRandomized
+                ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20"
+                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+            )}
+          >
+            <Dices className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Clear all', description: '선택한 장르를 초기화합니다.' })}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: 'Clear all', description: '선택한 장르를 초기화합니다.' })}
+            onTouchEnd={onLongPressEnd}
+            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {groups.map((group) => {
+          const isSelectedGroup = selectedGroup?.id === group.id;
+          return (
+            <button
+              key={group.id}
+              onClick={() => onOpenGroup(group.id)}
+              onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description })}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: group.id, label: group.label, description: group.description })}
+              onTouchEnd={onLongPressEnd}
+              className={cn(
+                "px-3.5 py-3 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[52px]",
+                isSelectedGroup
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span>{group.label}</span>
+                <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
+              </div>
+              {isSelectedGroup && selectedChild && (
+                <div className="mt-1 text-[11px] text-white/80 font-medium">
+                  {selectedChild.label}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
+        {selectedChild ? (
+          <p className="text-sm font-semibold text-brand-orange">
+            {selectedGroup?.label} / {selectedChild.label}
+          </p>
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">
+            대분류를 누른 뒤 팝업에서 세부 장르 1개를 선택하세요.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GenreSelectModal({
+  group,
+  selectedGenreId,
+  onClose,
+  onSelect,
+}: {
+  group: (typeof GENRE_GROUPS)[number] | null;
+  selectedGenreId: string | null;
+  onClose: () => void;
+  onSelect: (genreId: string) => void;
+}) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  if (!group) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 24, scale: 0.96 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+        className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">{group.label}</h3>
+            <p className="text-xs text-[var(--text-secondary)] mt-1">{group.description}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-2 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          {group.children.map((item) => {
+            const isSelected = selectedGenreId === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onSelect(item.id)}
+                className={cn(
+                  "w-full text-left rounded-2xl border px-4 py-3 transition-all",
+                  isSelected
+                    ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]"
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-bold text-sm">{item.label}</div>
+                    <div className={cn("text-xs mt-1", isSelected ? "text-white/80" : "text-[var(--text-secondary)]")}>
+                      {item.description}
+                    </div>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

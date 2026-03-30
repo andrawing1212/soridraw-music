@@ -2008,13 +2008,6 @@ ${result.prompt}
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SongStructureControl 
-              mode={structureMode}
-              onModeChange={setStructureMode}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-            />
             <SingerControl 
               maleCount={maleCount}
               femaleCount={femaleCount}

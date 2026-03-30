@@ -798,7 +798,7 @@ function App() {
   }, [pinnedThemes]);
   const [isGenreExpanded, setIsGenreExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
-  const [structureMode, setStructureMode] = useState<'auto' | 'basic' | 'custom'>('auto');
+
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
@@ -1611,7 +1611,6 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     if (isGenerating) {
-      // Cancel logic
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -1621,8 +1620,7 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     setIsGenerating(true);
-    // Clear previous title if it exists to ensure the new one is noticeable
-    setResult(prev => prev ? { ...prev, title: '생성 중...' } : null);
+    setResult(prev => (prev ? { ...prev, title: '생성 중...' } : null));
     abortControllerRef.current = new AbortController();
 
     try {
@@ -1635,9 +1633,9 @@ const saveRecentSong = async (newSong: any) => {
       const hasMood = finalMoods.length > 0;
       const hasTheme = finalThemes.length > 0;
 
-      // If exactly two are selected, pick one random for the third
       const selectedCount = [hasGenre, hasMood, hasTheme].filter(Boolean).length;
 
+      // If exactly two are selected, pick one random for the third
       if (selectedCount === 2) {
         if (!hasGenre) {
           const random = GENRES[Math.floor(Math.random() * GENRES.length)];
@@ -1652,17 +1650,18 @@ const saveRecentSong = async (newSong: any) => {
           finalThemes = [random.id];
           randomKeywords.push(random.label);
         }
-      } 
+      }
       // If nothing selected, pick random (5-15 total)
       else if (selectedCount === 0) {
         const allItems = [
-          ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' })),
-          ...MOODS.map(i => ({ ...i, cat: 'mood' })),
-          ...THEMES.map(i => ({ ...i, cat: 'theme' }))
+          ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
+          ...MOODS.map(i => ({ ...i, cat: 'mood' as const })),
+          ...THEMES.map(i => ({ ...i, cat: 'theme' as const }))
         ];
+
         const count = Math.floor(Math.random() * 11) + 5; // 5-15
         const picked = allItems.sort(() => 0.5 - Math.random()).slice(0, count);
-        
+
         picked.forEach(p => {
           if (p.cat === 'genre') finalGenres.push(p.id);
           if (p.cat === 'mood') finalMoods.push(p.id);
@@ -1681,19 +1680,23 @@ const saveRecentSong = async (newSong: any) => {
         currentMaxBPM = max;
         setMinBPM(min);
         setMaxBPM(max);
-        // Keep tempoEnabled true as requested by user
       }
 
-      const tempoInfo = tempoEnabled && (currentMinBPM !== 40 || currentMaxBPM !== 160)
-        ? (currentMinBPM === currentMaxBPM ? `Exactly ${currentMinBPM} BPM` : `Between ${currentMinBPM} and ${currentMaxBPM} BPM`)
-        : undefined;
+      const tempoInfo =
+        tempoEnabled && (currentMinBPM !== 40 || currentMaxBPM !== 160)
+          ? currentMinBPM === currentMaxBPM
+            ? `Exactly ${currentMinBPM} BPM`
+            : `Between ${currentMinBPM} and ${currentMaxBPM} BPM`
+          : undefined;
 
-      // Trot Specific Prompt Logic
+      // Trot specific prompt logic
       let specialPrompt = "";
       if (finalGenres.includes('traditional-trot')) {
-        specialPrompt = "Heartbreaking / Sorrowful, Deep Vibrato, Crying Vocal style, Accordion-led, Nostalgic / Yearning.";
+        specialPrompt =
+          "Heartbreaking / Sorrowful, Deep Vibrato, Crying Vocal style, Accordion-led, Nostalgic / Yearning.";
       } else if (finalGenres.includes('semi-trot')) {
-        specialPrompt = "Infectious Rhythm, Upbeat & Cheerful, Driving 2-beat / 4-beat, Bright Brass section, Festive / Celebratory.";
+        specialPrompt =
+          "Infectious Rhythm, Upbeat & Cheerful, Driving 2-beat / 4-beat, Bright Brass section, Festive / Celebratory.";
       }
 
       const genreLabels = finalGenres.flatMap(id => {
@@ -1706,20 +1709,51 @@ const saveRecentSong = async (newSong: any) => {
 
       const buildSongPrompt = () => {
         const genreStr = genreLabels.length > 0 ? genreLabels.join(", ") : "Pop";
-        const moodStr = finalMoods.length > 0 ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(", ") : "Emotional";
-        
-        // Default value logic
-        const isEnergetic = finalMoods.includes('upbeat') || finalMoods.includes('powerful') || finalGenres.includes('dance') || finalGenres.includes('rock');
-        const isCalm = finalMoods.includes('calm') || finalMoods.includes('peaceful') || finalGenres.includes('ambient') || finalGenres.includes('ballad');
-        
+        const moodStr =
+          finalMoods.length > 0
+            ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(", ")
+            : "Emotional";
+
+        const isEnergetic =
+          finalMoods.includes('upbeat') ||
+          finalMoods.includes('powerful') ||
+          finalGenres.includes('dance') ||
+          finalGenres.includes('rock');
+
+        const isCalm =
+          finalMoods.includes('calm') ||
+          finalMoods.includes('peaceful') ||
+          finalGenres.includes('ambient') ||
+          finalGenres.includes('ballad');
+
         const bpm = tempoInfo || (isEnergetic ? "120-140 BPM" : isCalm ? "60-80 BPM" : "90-110 BPM");
-        const drums = isEnergetic ? "Driving, energetic drums" : isCalm ? "Minimal, soft percussion" : "Standard pop drums";
-        const bass = isEnergetic ? "Punchy, synth bass" : isCalm ? "Deep, sub bass" : "Warm, melodic bass";
-        const synth = isEnergetic ? "Bright, saw-wave synths" : isCalm ? "Atmospheric pads" : "Subtle synth textures";
-        const texture = isEnergetic ? "High-energy, polished" : isCalm ? "Soft, organic, airy" : "Balanced, clear";
+        const drums = isEnergetic
+          ? "Driving, energetic drums"
+          : isCalm
+          ? "Minimal, soft percussion"
+          : "Standard pop drums";
+        const bass = isEnergetic
+          ? "Punchy, synth bass"
+          : isCalm
+          ? "Deep, sub bass"
+          : "Warm, melodic bass";
+        const synth = isEnergetic
+          ? "Bright, saw-wave synths"
+          : isCalm
+          ? "Atmospheric pads"
+          : "Subtle synth textures";
+        const texture = isEnergetic
+          ? "High-energy, polished"
+          : isCalm
+          ? "Soft, organic, airy"
+          : "Balanced, clear";
         const vocalDesign = "Main vocal with harmonies";
-        const vocalStyle = isEnergetic ? "Powerful, dynamic" : isCalm ? "Soft, breathy" : "Clear, expressive";
-        
+        const vocalStyle = isEnergetic
+          ? "Powerful, dynamic"
+          : isCalm
+          ? "Soft, breathy"
+          : "Clear, expressive";
+
         return `STYLE:
 ${genreStr}, ${bpm}
 
@@ -1742,10 +1776,7 @@ VOCAL STYLE:
 ${vocalStyle}
 
 MOOD:
-${moodStr}
-
-STRUCTURE:
-${structureMode === 'basic' ? "Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Final Chorus → Outro" : "Free-form structure based on the song's narrative."}`.trim();
+${moodStr}`.trim();
       };
 
       const songPrompt = buildSongPrompt();
@@ -1758,23 +1789,21 @@ ${structureMode === 'basic' ? "Intro → Verse → Pre-Chorus → Chorus → Ver
         songPrompt,
         lyricsLength,
         songDuration,
-        false, // useAutoDuration
+        false,
         maleCount,
         femaleCount,
         rapEnabled,
         tempoInfo,
         specialPrompt,
-        kpopMode,
-        structureMode
+        kpopMode
       );
 
-      // Check if aborted before updating state
       if (abortControllerRef.current?.signal.aborted) return;
 
       const newResult: SongResult = {
         ...song,
-        title: song.title, // Explicitly ensure title is from the new song
-        prompt: songPrompt, // Use the client-constructed songPrompt
+        title: song.title,
+        prompt: songPrompt,
         appliedKeywords: {
           ...song.appliedKeywords,
           lyricsLength,
@@ -1793,7 +1822,7 @@ ${structureMode === 'basic' ? "Intro → Verse → Pre-Chorus → Chorus → Ver
 
       setResult(newResult);
       setHistory(prev => [newResult, ...prev].slice(0, 10));
-saveRecentSong(newResult); // 🔥 추가
+      saveRecentSong(newResult);
       setHistoryIndex(0);
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -2007,7 +2036,7 @@ ${result.prompt}
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SingerControl 
               maleCount={maleCount}
               femaleCount={femaleCount}
@@ -2019,8 +2048,6 @@ ${result.prompt}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
             />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <LyricsLengthControl 
               value={lyricsLength}
               onChange={setLyricsLength}
@@ -3219,119 +3246,6 @@ function SingerControl({
     </div>
   );
 }
-
-function SongStructureControl({ mode, onModeChange, onHover, onLongPressStart, onLongPressEnd }: SongStructureControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [customSections, setCustomSections] = useState<{ id: string; type: string; style: null }[]>([]);
-  
-  const basicSections = [
-    "[Intro]", "[Verse 1]", "[Pre-Chorus]", "[Chorus / Drop]", 
-    "[Verse 2]", "[Pre-Chorus]", "[Chorus / Drop]", "[Bridge]", 
-    "[Final Chorus / Drop]", "[Outro]"
-  ];
-
-  const availableBlocks = [
-    "Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", 
-    "Outro", "Rap", "Hook", "Drop", "Final Chorus / Final Hook"
-  ];
-
-  const addSection = (type: string) => {
-    setCustomSections([...customSections, { id: Date.now().toString(), type, style: null }]);
-  };
-
-  const removeSection = (id: string) => {
-    setCustomSections(customSections.filter(s => s.id !== id));
-  };
-
-  const moveSection = (index: number, direction: 'up' | 'down') => {
-    const newSections = [...customSections];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex >= 0 && targetIndex < newSections.length) {
-      [newSections[index], newSections[targetIndex]] = [newSections[targetIndex], newSections[index]];
-      setCustomSections(newSections);
-    }
-  };
-
-  return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6 flex items-center justify-between">
-        <h3 
-          onMouseEnter={() => setShowTitleTooltip(true)}
-          onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-        >
-          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          곡 구조
-        </h3>
-        <div className="flex gap-1 bg-[var(--hover-bg)] p-1 rounded-xl">
-          <button 
-            onClick={() => onModeChange('auto')}
-            className={cn("px-3 py-1 rounded-lg text-[11px] font-bold transition-all", mode === 'auto' ? "bg-[var(--card-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)]")}
-          >
-            자동
-          </button>
-          <button 
-            onClick={() => onModeChange('basic')}
-            className={cn("px-3 py-1 rounded-lg text-[11px] font-bold transition-all", mode === 'basic' ? "bg-[var(--card-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)]")}
-          >
-            기본
-          </button>
-          <button 
-            onClick={() => onModeChange('custom')}
-            className={cn("px-3 py-1 rounded-lg text-[11px] font-bold transition-all", mode === 'custom' ? "bg-[var(--card-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)]")}
-          >
-            커스텀
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto max-h-[200px] pr-2">
-        {mode === 'auto' ? (
-          <div className="text-[12px] text-[var(--text-secondary)] bg-[var(--hover-bg)]/50 p-4 rounded-lg border border-[var(--border-color)] text-center">
-            곡의 장르와 분위기에 맞춰 자동으로 구조가 생성됩니다.
-          </div>
-        ) : mode === 'basic' ? (
-          <div className="space-y-1">
-            {basicSections.map((section, i) => (
-              <div key={i} className="text-[11px] text-[var(--text-secondary)] bg-[var(--hover-bg)]/50 px-3 py-1.5 rounded-lg border border-[var(--border-color)]">
-                {section}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-1">
-              {availableBlocks.map(block => (
-                <button key={block} onClick={() => addSection(block)} className="text-[10px] bg-[var(--hover-bg)] hover:bg-brand-orange/10 text-[var(--text-secondary)] hover:text-brand-orange px-2 py-1 rounded border border-[var(--border-color)] transition-all">
-                  + {block}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-1 mt-4">
-              {customSections.map((section, i) => (
-                <div key={section.id} className="flex items-center gap-1 text-[11px] text-[var(--text-primary)] bg-[var(--card-bg)] px-2 py-1.5 rounded-lg border border-[var(--border-color)]">
-                  <span className="flex-1">{section.type}</span>
-                  <button onClick={() => moveSection(i, 'up')} className="text-[var(--text-secondary)] hover:text-brand-orange">▲</button>
-                  <button onClick={() => moveSection(i, 'down')} className="text-[var(--text-secondary)] hover:text-brand-orange">▼</button>
-                  <button onClick={() => removeSection(section.id)} className="text-red-500 hover:text-red-600">×</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface SongStructureControlProps {
-  mode: 'auto' | 'basic' | 'custom';
-  onModeChange: (mode: 'auto' | 'basic' | 'custom') => void;
-  onHover: (item: CategoryItem | null) => void;
-  onLongPressStart: (item: CategoryItem) => void;
-  onLongPressEnd: () => void;
-}
-
 
 interface TempoControlProps {
   enabled: boolean;

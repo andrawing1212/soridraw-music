@@ -4,6 +4,7 @@ import {
   GENRE_GROUPS,
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
+  BASIC_STRUCTURE,
 } from "../constants";
 import {
   LyricsLength,
@@ -34,7 +35,6 @@ interface GenerateSongParams {
   tempo?: string;
   specialPrompt?: string;
   kpopMode?: 0 | 1 | 2;
-  isBallad?: boolean;
 }
 
 type GenerateSongInput =
@@ -62,7 +62,6 @@ function buildLyricGuidancePrompt(): string {
 - The lyrics should primarily follow the user's story/intention.
 - Provide both English and Korean versions.
 - Do not translate Korean literally; keep it natural and lyrical.
-- Keep the Korean version emotionally natural rather than word-for-word.
 `.trim();
 }
 
@@ -177,7 +176,6 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       tempo: first.tempo,
       specialPrompt: first.specialPrompt,
       kpopMode: first.kpopMode ?? 0,
-      isBallad: first.isBallad ?? false,
     };
   }
 
@@ -231,7 +229,6 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     tempo,
     specialPrompt,
     kpopMode,
-    isBallad: themes?.includes?.("ballad") ?? false,
   };
 }
 
@@ -273,34 +270,6 @@ function buildAppliedKeywordPayload(
   };
 }
 
-function buildPromptDiscipline(): string {
-  return `
-PROMPT WRITING RULES:
-- The "prompt" field must read like a polished real production brief.
-- Do NOT output a lazy keyword dump.
-- Do NOT just repeat category names like "Ballad, Anime" without turning them into arrangement language.
-- Explicitly describe arrangement, instrumentation, texture, vocal tone, pacing, and emotional lift.
-- If style layers are selected, weave them into the body of the prompt naturally.
-- If instrument / sound layers are selected, reflect them in SOUND, BASS, DRUMS, TEXTURE, or ARRANGEMENT sections naturally.
-- Keep the prompt structured and readable.
-- Use exactly one line per section in the final prompt output.
-- Every section label must begin with the bullet dot character.
-- Do not insert blank lines between sections.
-- Preferred structure (one line per section):
-  ·STYLE: ...
-  ·DRUMS: ...
-  ·BASS: ...
-  ·SOUND: ...
-  ·TEXTURE: ...
-  ·VOCAL: ...
-  ·VOCAL STYLE: ...
-  ·ARRANGEMENT: ...
-  ·MOOD: ...
-- Avoid generic placeholders such as "standard pop drums" unless the request is truly generic.
-- Make the output feel specific to the user's exact combination.
-`.trim();
-}
-
 export async function generateSong(...args: GenerateSongInput): Promise<SongResult> {
   const params = normalizeArgs(args);
   const model = "gemini-3-flash-preview";
@@ -327,7 +296,6 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
     params.vocal ?? { male: 0, female: 0, rap: false }
   );
   const basePromptSeed = BASE_PROMPTS.join("\n");
-  const promptDiscipline = buildPromptDiscipline();
 
   const kpopInstruction =
     params.kpopMode === 2
@@ -382,16 +350,14 @@ Lyrics rules:
 ${lyricGuidancePrompt}
 - The lyrics should primarily follow the user's story/intention.
 - Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
+- Use this default song structure unless the user clearly asks for a different structure: ${BASIC_STRUCTURE}
+- Do not invent a random structure when no custom structure was requested.
 - Intended duration: about ${resolvedDuration} minutes.
 
 Prompt rules:
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 - ${params.tempo ? `TEMPO CONSTRAINT: ${params.tempo}` : "Tempo should be appropriate for the chosen direction."}
-- Respect the requested vocal formation and rap setting.
-- If a display prompt draft is provided below, treat it as a formatting and specificity target, not as text to copy mechanically.
-${params.songPrompt ? `\nDISPLAY PROMPT TARGET:\n${params.songPrompt}` : ""}
-
-${promptDiscipline}
+- Make the production prompt read like a real creative brief, not a keyword dump.
 `.trim();
 
   const response = await ai.models.generateContent({
@@ -444,7 +410,7 @@ ${promptDiscipline}
   };
 
   if (!result.prompt || typeof result.prompt !== "string") {
-    result.prompt = params.songPrompt || [
+    result.prompt = [
       genrePromptCore,
       ...stylePromptCores,
       ...instrumentSoundPromptCores,

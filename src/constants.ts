@@ -16,8 +16,7 @@ export const GENRES: CategoryItem[] = [
   { id: 'teen-pop', label: 'Teen Pop', description: '밝고 접근성이 높은 틴 팝 스타일입니다.' },
   { id: 'k-pop', label: 'K-Pop', description: '한국 대중음악 기반의 세련된 사운드입니다.' },
   { id: 'j-pop', label: 'J-Pop', description: '일본 대중음악 특유의 멜로디와 편곡이 특징입니다.' },
-  { id: 'latin-pop', label: 'Latin Pop', description: '라틴 리듬이 가미된 대중적인 팝 스타일입니다.' },
-  { id: 'soulful-pop', label: 'Soulful Pop', description: '소울 감성이 섞인 보컬 중심 팝입니다.' },
+  { id: 'city-pop', label: 'City Pop', description: '도시적이고 세련된 레트로 팝 감성의 장르입니다.' },
   { id: 'piano-ballad', label: 'Piano Ballad', description: '피아노 중심의 감성적인 발라드입니다.' },
   { id: 'adult-contemporary', label: 'Adult Contemporary', description: '부드럽고 안정적인 성인 취향의 팝입니다.' },
   { id: 'indie-pop', label: 'Indie Pop', description: '감각적인 인디 팝 스타일입니다.' },
@@ -80,6 +79,9 @@ export const GENRES: CategoryItem[] = [
   { id: 'honky-tonk', label: 'Honky-Tonk', description: '경쾌한 피아노와 컨트리 감성이 특징입니다.' },
   { id: 'southern-rock', label: 'Southern Rock', description: '남부 록 감성과 블루스가 결합된 스타일입니다.' },
 
+  { id: 'traditional-trot', label: 'Traditional Trot', description: '전통 트로트의 깊은 감성이 살아 있는 스타일입니다.' },
+  { id: 'semi-trot', label: 'Semi-Trot', description: '현대적으로 다듬어진 대중적 트로트 스타일입니다.' },
+
   { id: 'film-score', label: 'Film Score', description: '영화 음악 스타일의 서사적 구성입니다.' },
   { id: 'game-bgm', label: 'Game BGM', description: '게임 배경음악 스타일입니다.' },
   { id: 'drama-theme', label: 'Drama Theme', description: '드라마 OST 스타일의 감성적인 테마곡입니다.' },
@@ -89,8 +91,6 @@ export const GENRES: CategoryItem[] = [
   { id: 'healing-music', label: 'Healing Music', description: '휴식과 안정감을 위한 기능성 음악입니다.' },
   { id: 'meditation-music', label: 'Meditation Music', description: '명상과 집중을 위한 기능성 음악입니다.' },
   { id: 'ambient-newage', label: 'Ambient New Age', description: '앰비언트/뉴에이지 계열의 평온한 음악입니다.' },
-  { id: 'traditional-trot', label: 'Traditional Trot', description: '전통 트로트의 깊은 감성이 살아 있는 스타일입니다.' },
-  { id: 'semi-trot', label: 'Semi-Trot', description: '현대적으로 다듬어진 대중적 트로트 스타일입니다.' },
 ];
 
 function groupChildren(ids: string[]) {
@@ -100,17 +100,14 @@ function groupChildren(ids: string[]) {
   }));
 }
 
-/**
- * 장르 대분류 → 실제 선택 장르 구조
- */
 export const GENRE_GROUPS: GenreGroup[] = [
   {
     id: 'pop',
     label: 'Pop',
     description: '가장 대중적이며 상업적인 성공을 목적으로 하는 음악군입니다.',
     children: groupChildren([
-      'pop','dance-pop','synth-pop','teen-pop','k-pop','j-pop','latin-pop',
-      'soulful-pop','piano-ballad','adult-contemporary','indie-pop','chamber-pop'
+      'pop','dance-pop','synth-pop','teen-pop','k-pop','j-pop','city-pop',
+      'piano-ballad','adult-contemporary','indie-pop','chamber-pop'
     ]),
   },
   {
@@ -159,13 +156,18 @@ export const GENRE_GROUPS: GenreGroup[] = [
     ]),
   },
   {
+    id: 'trot',
+    label: 'Trot',
+    description: '전통 트로트와 현대적인 세미 트로트 계열입니다.',
+    children: groupChildren(['traditional-trot','semi-trot']),
+  },
+  {
     id: 'soundtrack-ost',
     label: 'Soundtrack / OST',
-    description: '영상음악, 기능성 음악, 트로트 등 용도 기반 음악 분류입니다.',
+    description: '영상음악과 기능성 음악 등 용도 기반 음악 분류입니다.',
     children: groupChildren([
       'film-score','game-bgm','drama-theme','piano-instrumental','guitar-instrumental',
-      'lofi-instrumental','healing-music','meditation-music','ambient-newage',
-      'traditional-trot','semi-trot'
+      'lofi-instrumental','healing-music','meditation-music','ambient-newage'
     ]),
   },
 ];
@@ -298,10 +300,6 @@ export const STYLE_CYCLES = [
   },
 ] as const;
 
-/**
- * 스타일 레이어
- * - FavoritesPage / appliedKeywords 호환용 평면 구조 유지
- */
 export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   cycle.variants.map((variant) => ({
     id: variant.id,
@@ -311,9 +309,6 @@ export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   }))
 );
 
-/**
- * 악기 / 사운드 레이어
- */
 export const INSTRUMENT_SOUNDS: InstrumentSoundItem[] = [
   { id: 'piano', label: 'Piano', description: '피아노 중심의 선율과 질감', promptCore: 'Instrument/sound layer: piano-centered arrangement with expressive melodic support.' },
   { id: 'guitar', label: 'Guitar', description: '기타 중심의 질감과 리듬', promptCore: 'Instrument/sound layer: guitar-led arrangement with clear string texture and rhythmic support.' },
@@ -362,10 +357,6 @@ export const MOODS: CategoryItem[] = [
   { id: 'relaxing', label: 'Relaxing', description: '긴장을 풀고 편안하게 쉴 수 있는 휴식의 사운드입니다.' },
 ];
 
-/**
- * FavoritesPage 호환용
- * - 현재는 style을 theme에도 같이 저장해서 기존 UI 유지
- */
 export const THEMES: CategoryItem[] = SOUND_STYLES.map((style) => ({
   id: style.id,
   label: style.label,

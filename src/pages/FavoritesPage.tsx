@@ -838,7 +838,7 @@ ${song.prompt}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-2xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all"
+              className="w-full bg-white/15 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-white/40"
             />
             {!searchQuery && !isSearchFocused && (
               <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">

@@ -864,10 +864,6 @@ function App() {
     const saved = sessionStorage.getItem('soridraw_pinned_genres');
     return saved ? JSON.parse(saved) : [];
   });
-  const [pinnedMoods, setPinnedMoods] = useState<string[]>(() => {
-    const saved = sessionStorage.getItem('soridraw_pinned_moods');
-    return saved ? JSON.parse(saved) : [];
-  });
   const [pinnedThemes, setPinnedThemes] = useState<string[]>(() => {
     const saved = sessionStorage.getItem('soridraw_pinned_themes');
     return saved ? JSON.parse(saved) : [];
@@ -884,9 +880,6 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_genres', JSON.stringify(pinnedGenres));
   }, [pinnedGenres]);
-  useEffect(() => {
-    sessionStorage.setItem('soridraw_pinned_moods', JSON.stringify(pinnedMoods));
-  }, [pinnedMoods]);
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_themes', JSON.stringify(pinnedThemes));
   }, [pinnedThemes]);
@@ -1308,7 +1301,6 @@ function App() {
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
-    setPinnedMoods([]);
     setPinnedThemes([]);
 
     setSelectedGenres(genreIds);
@@ -1358,17 +1350,17 @@ function App() {
 
   const randomizeCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     const all = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : (category === 'theme' ? THEMES : (category === 'style' ? SOUND_STYLES : INSTRUMENT_SOUNDS)));
-    const pinned = category === 'genre' ? pinnedGenres : (category === 'mood' ? pinnedMoods : (category === 'theme' ? pinnedThemes : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds)));
+    const pinned = category === 'genre' ? pinnedGenres : (category === 'theme' ? pinnedThemes : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds));
     const isGenre = category === 'genre';
     
-    const result = [...pinned];
+    const result = category === 'mood' ? [] : [...pinned];
     const remainingPool = all.filter(item => 
-      !pinned.includes(item.id) && 
+      (category === 'mood' ? true : !pinned.includes(item.id)) && 
       (!isGenre || !TROT_GENRES.includes(item.id))
     );
     
     // Choose a random number of additional items (up to 5 total)
-    const currentCount = pinned.length;
+    const currentCount = category === 'mood' ? 0 : pinned.length;
     const maxTotal = 5;
     const additionalCount = Math.max(1, Math.floor(Math.random() * (maxTotal - currentCount + 1)));
     const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, additionalCount);
@@ -1495,7 +1487,7 @@ function App() {
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     const setters = {
       genre: { state: selectedGenres, set: setSelectedGenres, pinned: pinnedGenres },
-      mood: { state: selectedMoods, set: setSelectedMoods, pinned: pinnedMoods },
+      mood: { state: selectedMoods, set: setSelectedMoods, pinned: [] },
       theme: { state: selectedThemes, set: setSelectedThemes, pinned: pinnedThemes },
       style: { state: selectedStyles, set: setSelectedStyles, pinned: pinnedStyles },
       sound: { state: selectedInstrumentSounds, set: setSelectedInstrumentSounds, pinned: pinnedInstrumentSounds }
@@ -1611,15 +1603,15 @@ function App() {
   };
 
   const togglePin = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
+    if (category === 'mood') return;
     const setters = {
       genre: { pinned: pinnedGenres, setPinned: setPinnedGenres, selected: selectedGenres, setSelected: setSelectedGenres },
-      mood: { pinned: pinnedMoods, setPinned: setPinnedMoods, selected: selectedMoods, setSelected: setSelectedMoods },
       theme: { pinned: pinnedThemes, setPinned: setPinnedThemes, selected: selectedThemes, setSelected: setSelectedThemes },
       style: { pinned: pinnedStyles, setPinned: setPinnedStyles, selected: selectedStyles, setSelected: setSelectedStyles },
       sound: { pinned: pinnedInstrumentSounds, setPinned: setPinnedInstrumentSounds, selected: selectedInstrumentSounds, setSelected: setSelectedInstrumentSounds }
     };
 
-    const { pinned, setPinned, selected, setSelected } = setters[category];
+    const { pinned, setPinned, selected, setSelected } = setters[category as Exclude<typeof category, 'mood'>];
     const isPinned = pinned.includes(id);
 
     if (isPinned) {
@@ -1645,7 +1637,7 @@ function App() {
       setIsGenreRandomized(false);
     }
     if (category === 'mood') {
-      setSelectedMoods(pinnedMoods);
+      setSelectedMoods([]);
       setIsMoodRandomized(false);
     }
     if (category === 'theme') {
@@ -1667,14 +1659,13 @@ function App() {
 
     if (!preservePinned) {
       setPinnedGenres([]);
-      setPinnedMoods([]);
       setPinnedThemes([]);
       setPinnedStyles([]);
       setPinnedInstrumentSounds([]);
     }
 
     setSelectedGenres(preservePinned ? pinnedGenres : []);
-    setSelectedMoods(preservePinned ? pinnedMoods : []);
+    setSelectedMoods([]);
     setSelectedThemes(preservePinned ? pinnedThemes : []);
     setSelectedStyles(preservePinned ? pinnedStyles : []);
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSounds : []);
@@ -1767,7 +1758,6 @@ function App() {
       setIsGenreRandomized(false);
     }
     if (category === 'mood') {
-      setPinnedMoods([]);
       setIsMoodRandomized(false);
     }
     if (category === 'theme') {
@@ -1804,7 +1794,7 @@ function App() {
     counts.sort(() => 0.5 - Math.random());
 
     let g = getRandomForCategory(GENRES, pinnedGenres, counts[0], true);
-    let m = getRandomForCategory(MOODS, pinnedMoods, counts[1]);
+    let m = getRandomForCategory(MOODS, [], counts[1]);
     let t = getRandomForCategory(THEMES, pinnedThemes, counts[2]);
     let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, counts[3]);
     let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, counts[4]);
@@ -2325,11 +2315,8 @@ ${result.prompt}
               description="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
               items={MOODS} 
               selected={selectedMoods} 
-              pinned={pinnedMoods}
               onToggle={(id) => toggleSelection(id, 'mood')}
-              onTogglePin={(id) => togglePin(id, 'mood')}
               onClear={() => clearCategory('mood')}
-              onUnpinAll={() => unpinAll('mood')}
               onRandom={() => randomizeCategory('mood')}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -2339,6 +2326,7 @@ ${result.prompt}
               onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
+              hidePin={true}
             />
             <LyricsControl 
               value={lyricsLength}
@@ -2474,7 +2462,7 @@ ${result.prompt}
                 setIsInputFocused(true);
               }}
               onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative shadow-[var(--shadow-lg)]"
+              className="w-full bg-white/15 border border-white/20 rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative shadow-[var(--shadow-lg)] placeholder:text-white/40"
               rows={1}
             />
             {!userInput && !isInputFocused && (
@@ -3486,11 +3474,11 @@ interface CategorySectionProps {
   description: string;
   items: CategoryItem[];
   selected: string[];
-  pinned: string[];
+  pinned?: string[];
   onToggle: (id: string) => void;
-  onTogglePin: (id: string) => void;
+  onTogglePin?: (id: string) => void;
   onClear: () => void;
-  onUnpinAll: () => void;
+  onUnpinAll?: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
@@ -3502,6 +3490,7 @@ interface CategorySectionProps {
   kpopMode?: 0 | 1 | 2;
   citypopMode?: 0 | 1 | 2;
   isRandomized?: boolean;
+  hidePin?: boolean;
 }
 
 function CategorySection({ 
@@ -3509,7 +3498,7 @@ function CategorySection({
   description,
   items, 
   selected, 
-  pinned,
+  pinned = [],
   onToggle, 
   onTogglePin,
   onClear, 
@@ -3524,7 +3513,8 @@ function CategorySection({
   allExpanded,
   kpopMode = 0,
   citypopMode = 0,
-  isRandomized = false
+  isRandomized = false,
+  hidePin = false
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
@@ -3593,27 +3583,29 @@ function CategorySection({
           >
             <Dices className="w-4 h-4" />
           </button>
-          <button 
-            onClick={onUnpinAll}
-            onMouseEnter={() => onHover({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
-            onTouchEnd={onLongPressEnd}
-            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
-          >
-            <PinOff className="w-4 h-4" />
-          </button>
+          {!hidePin && onUnpinAll && (
+            <button 
+              onClick={onUnpinAll}
+              onMouseEnter={() => onHover({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+              onTouchEnd={onLongPressEnd}
+              className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
+            >
+              <PinOff className="w-4 h-4" />
+            </button>
+          )}
           <button 
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
+            onMouseEnter={() => onHover({ id: 'clear', label: 'Clear all', description: hidePin ? '모든 선택 삭제' : '핀을 제외한 모든 선택 삭제' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: '핀을 제외한 모든 선택 삭제' })}
+            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: hidePin ? '모든 선택 삭제' : '핀을 제외한 모든 선택 삭제' })}
             onTouchEnd={onLongPressEnd}
             className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
           >
@@ -3735,20 +3727,22 @@ function CategorySection({
               </AnimatePresence>
               
               {/* Pin Toggle Button - Top Right Corner Only */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTogglePin(item.id);
-                }}
-                className={cn(
-                  "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
-                  isPinned 
-                    ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
-                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
-                )}
-              >
-                <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
-              </button>
+              {!hidePin && onTogglePin && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePin(item.id);
+                  }}
+                  className={cn(
+                    "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
+                    isPinned 
+                      ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
+                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                  )}
+                >
+                  <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
+                </button>
+              )}
             </div>
           );
         })}

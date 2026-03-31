@@ -1406,9 +1406,11 @@ ${song.prompt}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              layout
               className="relative w-full max-w-2xl bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-[var(--shadow-md)] flex flex-col max-h-[90vh]"
             >
-              <div className="p-8 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30 relative flex flex-col items-center">
+              <div layout
+                className="p-8 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30 relative flex flex-col items-center">
                 <button 
                   onClick={() => closeSelectedSong()} 
                   className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors z-10"
@@ -1445,27 +1447,35 @@ ${song.prompt}
                         className="w-full bg-[var(--input-bg)] border border-brand-orange/30 rounded-xl px-4 py-3 text-[var(--text-primary)] font-bold text-xl focus:outline-none"
                       />
                     ) : (
-                      <div className="flex flex-col items-center">
-                        <AnimatePresence mode="wait">
+                      <motion.div
+                        layout
+                        className="flex flex-col items-center overflow-hidden"
+                        transition={{ layout: { duration: 0.24, ease: 'easeOut' } }}
+                      >
+                        <AnimatePresence initial={false}>
                           {isTitleExpanded && (
-                            <motion.h2 
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="text-[19px] font-bold text-[var(--text-primary)] leading-tight text-left w-full overflow-hidden"
+                            <motion.div
+                              key="song-title-expanded"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.24, ease: 'easeOut' }}
+                              className="w-full overflow-hidden"
                             >
-                              {selectedSong.title.includes(']') ? (
-                                <>
-                                  <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
-                                  <span>{selectedSong.title.split(']')[1].trim()}</span>
-                                </>
-                              ) : (
-                                selectedSong.title
-                              )}
-                            </motion.h2>
+                              <h2 className="text-[19px] font-bold text-[var(--text-primary)] leading-tight text-left w-full">
+                                {selectedSong.title.includes(']') ? (
+                                  <>
+                                    <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
+                                    <span>{selectedSong.title.split(']')[1].trim()}</span>
+                                  </>
+                                ) : (
+                                  selectedSong.title
+                                )}
+                              </h2>
+                            </motion.div>
                           )}
                         </AnimatePresence>
-                      </div>
+                      </motion.div>
                     )}
                   </div>
 

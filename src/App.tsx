@@ -902,7 +902,34 @@ function App() {
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
+  const genreModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
+
+  const openGenreModal = (groupId: string) => {
+    setActiveGenreGroupId(groupId);
+    setIsGenreModalOpen(true);
+    window.history.pushState({ modal: 'genre' }, '');
+    genreModalHistoryPushedRef.current = true;
+  };
+
+  const closeGenreModal = (source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && genreModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setIsGenreModalOpen(false);
+    genreModalHistoryPushedRef.current = false;
+  };
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (isGenreModalOpen) {
+        closeGenreModal('history');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isGenreModalOpen]);
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
@@ -1371,11 +1398,6 @@ function App() {
   };
 
 
-  const openGenreModal = (groupId: string) => {
-    setActiveGenreGroupId(groupId);
-    setIsGenreModalOpen(true);
-  };
-
   const handleGenreSelect = (genreId: string) => {
     setSelectedGenres([genreId]);
     setIsGenreRandomized(false);
@@ -1392,7 +1414,7 @@ function App() {
       setCitypopMode(0);
     }
 
-    setIsGenreModalOpen(false);
+    closeGenreModal('ui');
   };
 
   const randomizeSingleGenre = () => {
@@ -2278,7 +2300,7 @@ ${result.prompt}
             <GenreSelectModal
               group={GENRE_GROUPS.find((item) => item.id === activeGenreGroupId) ?? null}
               selectedGenreId={selectedGenres[0] ?? null}
-              onClose={() => setIsGenreModalOpen(false)}
+              onClose={() => closeGenreModal('ui')}
               onSelect={handleGenreSelect}
             />
           )}
@@ -3068,6 +3090,15 @@ function GenreCategorySection({
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        >
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </button>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -3093,15 +3124,6 @@ function GenreCategorySection({
               )}
             </AnimatePresence>
           </div>
-
-          {onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-brand-orange hover:bg-[var(--hover-bg)] transition-all shadow-sm"
-            >
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -3163,7 +3185,7 @@ function GenreCategorySection({
                 onTouchStart={() => onLongPressStart({ id: group.id, label: group.label, description: group.description })}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
-                  "px-3.5 py-3 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[52px]",
+                  "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[44px]",
                   isSelectedGroup
                     ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
@@ -3215,8 +3237,14 @@ function GenreSelectModal({
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
+    
+    // Lock body scroll
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+    
     return () => {
       window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = originalStyle;
     };
   }, [onClose]);
 
@@ -3251,7 +3279,11 @@ function GenreSelectModal({
           </button>
         </div>
 
-        <div className="p-4 space-y-2 max-h-[70vh] overflow-y-auto custom-scrollbar">
+        <div 
+          className="p-4 space-y-2 max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-behavior-contain"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           {group.children.map((item) => {
             const isSelected = selectedGenreId === item.id;
             return (
@@ -3259,7 +3291,7 @@ function GenreSelectModal({
                 key={item.id}
                 onClick={() => onSelect(item.id)}
                 className={cn(
-                  "w-full text-left rounded-2xl border px-4 py-3 transition-all",
+                  "w-full text-left rounded-2xl border px-4 py-2 transition-all",
                   isSelected
                     ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]"
@@ -3330,6 +3362,15 @@ function CycleSection({
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        >
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </button>
+      )}
+
       <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="relative min-w-0">
@@ -3355,15 +3396,6 @@ function CycleSection({
               )}
             </AnimatePresence>
           </div>
-
-          {onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-brand-orange hover:bg-[var(--hover-bg)] transition-all shrink-0 shadow-sm"
-            >
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -3419,7 +3451,7 @@ function CycleSection({
                 onTouchStart={() => onLongPressStart(hoverItem)}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
-                  "min-h-[58px] rounded-xl border px-3 py-2.5 text-left transition-all flex items-center",
+                  "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center",
                   activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
                 )}
               >
@@ -3507,6 +3539,15 @@ function CategorySection({
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        >
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </button>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -3532,15 +3573,6 @@ function CategorySection({
               )}
             </AnimatePresence>
           </div>
-
-          {onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-brand-orange hover:bg-[var(--hover-bg)] transition-all shadow-sm"
-            >
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <button 

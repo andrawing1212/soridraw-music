@@ -5,18 +5,14 @@ import {
   SoundStyleItem,
 } from './types';
 
-/**
- * FavoritesPage 호환용 평면 장르 목록
- * - 기존 저장 구조 / 검색 / 상세보기와 호환 유지
- */
 export const GENRES: CategoryItem[] = [
   { id: 'pop', label: 'Pop', description: '가장 보편적이고 대중적인 팝 사운드입니다.' },
   { id: 'dance-pop', label: 'Dance Pop', description: '강한 훅과 리듬감이 있는 대중적인 댄스 팝입니다.' },
   { id: 'synth-pop', label: 'Synth Pop', description: '신디사이저 중심의 세련된 팝 사운드입니다.' },
   { id: 'teen-pop', label: 'Teen Pop', description: '밝고 접근성이 높은 틴 팝 스타일입니다.' },
-  { id: 'k-pop', label: 'K-Pop', description: '한국 대중음악 기반의 세련된 사운드입니다.' },
+  { id: 'kpop', label: 'K-Pop', description: '한국 대중음악 기반의 세련된 사운드입니다.' },
   { id: 'j-pop', label: 'J-Pop', description: '일본 대중음악 특유의 멜로디와 편곡이 특징입니다.' },
-  { id: 'city-pop', label: 'City Pop', description: '도시적이고 세련된 레트로 팝 감성의 장르입니다.' },
+  { id: 'citypop', label: 'City Pop', description: '도시적인 레트로 감성과 세련된 그루브가 중심인 시티팝입니다.' },
   { id: 'piano-ballad', label: 'Piano Ballad', description: '피아노 중심의 감성적인 발라드입니다.' },
   { id: 'adult-contemporary', label: 'Adult Contemporary', description: '부드럽고 안정적인 성인 취향의 팝입니다.' },
   { id: 'indie-pop', label: 'Indie Pop', description: '감각적인 인디 팝 스타일입니다.' },
@@ -94,9 +90,9 @@ export const GENRES: CategoryItem[] = [
 ];
 
 function groupChildren(ids: string[]) {
-  return GENRES.filter(item => ids.includes(item.id)).map(item => ({
+  return GENRES.filter((item) => ids.includes(item.id)).map((item) => ({
     ...item,
-    promptCore: `Base genre identity: ${item.label}. ${item.description}`
+    promptCore: `Base genre identity: ${item.label}. ${item.description}`,
   }));
 }
 
@@ -106,8 +102,7 @@ export const GENRE_GROUPS: GenreGroup[] = [
     label: 'Pop',
     description: '가장 대중적이며 상업적인 성공을 목적으로 하는 음악군입니다.',
     children: groupChildren([
-      'pop','dance-pop','synth-pop','teen-pop','k-pop','j-pop','city-pop',
-      'piano-ballad','adult-contemporary','indie-pop','chamber-pop'
+      'pop','dance-pop','synth-pop','teen-pop','kpop','j-pop','citypop','piano-ballad','adult-contemporary','indie-pop','chamber-pop',
     ]),
   },
   {
@@ -115,8 +110,7 @@ export const GENRE_GROUPS: GenreGroup[] = [
     label: 'Rock & Metal',
     description: '기타, 베이스, 드럼의 강렬한 사운드와 저항 정신을 기반으로 합니다.',
     children: groupChildren([
-      'grunge','britpop','shoegaze','post-rock','punk-rock',
-      'heavy-metal','thrash-metal','death-metal','progressive-rock','psychedelic-rock'
+      'grunge','britpop','shoegaze','post-rock','punk-rock','heavy-metal','thrash-metal','death-metal','progressive-rock','psychedelic-rock',
     ]),
   },
   {
@@ -124,8 +118,7 @@ export const GENRE_GROUPS: GenreGroup[] = [
     label: 'Hip-hop & R&B',
     description: '리듬과 그루브, 라임과 비트를 강조하는 블랙 뮤직의 핵심입니다.',
     children: groupChildren([
-      'boom-bap','trap','drill','gangsta-rap','lofi-hiphop',
-      'contemporary-rnb','motown','gospel','funk-rnb','pb-rnb','jazz-hiphop','neo-soul'
+      'boom-bap','trap','drill','gangsta-rap','lofi-hiphop','contemporary-rnb','motown','gospel','funk-rnb','pb-rnb','jazz-hiphop','neo-soul',
     ]),
   },
   {
@@ -133,8 +126,7 @@ export const GENRE_GROUPS: GenreGroup[] = [
     label: 'Electronic / EDM',
     description: '컴퓨터와 신디사이저를 활용한 사운드 디자인 중심의 음악입니다.',
     children: groupChildren([
-      'house','techno','trance','dubstep','drum-and-bass',
-      'future-bass','ambient-electronic','vaporwave','electro-pop','eurobeat'
+      'house','techno','trance','dubstep','drum-and-bass','future-bass','ambient-electronic','vaporwave','electro-pop','eurobeat',
     ]),
   },
   {
@@ -142,8 +134,7 @@ export const GENRE_GROUPS: GenreGroup[] = [
     label: 'Jazz & Blues',
     description: '즉흥 연주와 독특한 화성 체계를 가진 현대 대중음악의 뿌리입니다.',
     children: groupChildren([
-      'swing','bebop','cool-jazz','hard-bop','free-jazz',
-      'fusion-jazz','bossanova','acid-jazz','delta-blues','chicago-blues'
+      'swing','bebop','cool-jazz','hard-bop','free-jazz','fusion-jazz','bossanova','acid-jazz','delta-blues','chicago-blues',
     ]),
   },
   {
@@ -151,23 +142,21 @@ export const GENRE_GROUPS: GenreGroup[] = [
     label: 'Folk & Country',
     description: '전통적인 악기와 서사적인 가사를 중시하는 음악군입니다.',
     children: groupChildren([
-      'modern-folk','anti-folk','folk-rock','singer-songwriter','world-music',
-      'country-pop','bluegrass','americana','honky-tonk','southern-rock'
+      'modern-folk','anti-folk','folk-rock','singer-songwriter','world-music','country-pop','bluegrass','americana','honky-tonk','southern-rock',
     ]),
   },
   {
     id: 'trot',
     label: 'Trot',
-    description: '전통 트로트와 현대적인 세미 트로트 계열입니다.',
+    description: '트로트 고유의 꺾기와 감정선, 대중적인 흥을 중심으로 한 음악군입니다.',
     children: groupChildren(['traditional-trot','semi-trot']),
   },
   {
     id: 'soundtrack-ost',
     label: 'Soundtrack / OST',
-    description: '영상음악과 기능성 음악 등 용도 기반 음악 분류입니다.',
+    description: '영상음악과 기능성 음악 등 용도 기반 분류입니다.',
     children: groupChildren([
-      'film-score','game-bgm','drama-theme','piano-instrumental','guitar-instrumental',
-      'lofi-instrumental','healing-music','meditation-music','ambient-newage'
+      'film-score','game-bgm','drama-theme','piano-instrumental','guitar-instrumental','lofi-instrumental','healing-music','meditation-music','ambient-newage',
     ]),
   },
 ];
@@ -309,17 +298,156 @@ export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   }))
 );
 
-export const INSTRUMENT_SOUNDS: InstrumentSoundItem[] = [
-  { id: 'piano', label: 'Piano', description: '피아노 중심의 선율과 질감', promptCore: 'Instrument/sound layer: piano-centered arrangement with expressive melodic support.' },
-  { id: 'guitar', label: 'Guitar', description: '기타 중심의 질감과 리듬', promptCore: 'Instrument/sound layer: guitar-led arrangement with clear string texture and rhythmic support.' },
-  { id: 'acoustic-sound', label: 'Acoustic', description: '어쿠스틱 악기 중심의 따뜻한 톤', promptCore: 'Instrument/sound layer: organic acoustic instrumentation and warm natural tone.' },
-  { id: 'synth-sound', label: 'Synth', description: '신스 중심의 전자적 질감', promptCore: 'Instrument/sound layer: synth-led sonics with modern electronic color.' },
-  { id: 'band', label: 'Band', description: '밴드 편성 중심', promptCore: 'Instrument/sound layer: full band arrangement with live ensemble interaction.' },
-  { id: 'strings', label: 'Strings', description: '현악기 중심의 서정성', promptCore: 'Instrument/sound layer: string presence adding warmth, lift, and emotional contour.' },
-  { id: 'orchestral-sound', label: 'Orchestral', description: '오케스트라적 스케일', promptCore: 'Instrument/sound layer: orchestral color and cinematic depth.' },
-  { id: 'lofi-texture', label: 'Lo-fi Texture', description: '질감 중심의 빈티지 톤', promptCore: 'Instrument/sound layer: lo-fi texture, softened detail, and warm grain.' },
-  { id: 'minimal', label: 'Minimal', description: '절제된 편곡', promptCore: 'Instrument/sound layer: minimal arrangement with restrained layering and space.' },
-];
+export const SOUND_TEXTURE_CYCLES = [
+  {
+    id: 'band-family',
+    title: 'Band',
+    variants: [
+      { id: 'band', label: 'Band', description: '기본 밴드 편성 중심', promptCore: 'Sound/texture layer: balanced live band foundation with drums, bass, guitar, and keys supporting the arrangement.' },
+      { id: 'pop-band', label: 'Pop Band', description: '대중적인 팝 밴드 편성', promptCore: 'Sound/texture layer: pop-band arrangement with clean ensemble balance and hook-friendly support.' },
+      { id: 'funk-band', label: 'Funk Band', description: '펑크 밴드의 그루브 중심 편성', promptCore: 'Sound/texture layer: funk-band interplay with tight rhythm section and groove-led movement.' },
+      { id: 'rock-band', label: 'Rock Band', description: '록 밴드 중심의 에너지', promptCore: 'Sound/texture layer: rock-band drive with live drums, electric guitar push, and band-sized impact.' },
+      { id: 'jazz-band', label: 'Jazz Band', description: '재즈 밴드 중심의 유기적 편성', promptCore: 'Sound/texture layer: jazz-band interaction with live rhythm section and flexible musical conversation.' },
+    ],
+  },
+  {
+    id: 'bass-family',
+    title: 'Bass',
+    variants: [
+      { id: 'bass', label: 'Bass', description: '기본 베이스 중심감', promptCore: 'Sound/texture layer: defined bass foundation supporting harmony and pulse.' },
+      { id: '808-bass', label: '808 Bass', description: '808 중심의 저역', promptCore: 'Sound/texture layer: 808 bass weight with modern sub impact and sustained low-end pressure.' },
+      { id: 'smooth-bass', label: 'Smooth Bass', description: '부드럽고 매끈한 베이스', promptCore: 'Sound/texture layer: smooth bass flow with rounded tone and melodic support.' },
+      { id: 'funky-bassline', label: 'Funky Bassline', description: '리듬을 주도하는 펑키 베이스라인', promptCore: 'Sound/texture layer: funky bassline movement with rhythmic articulation and playful groove.' },
+      { id: 'sharp-synth-bass', label: 'Sharp Synth Bass', description: '선명한 신스 베이스', promptCore: 'Sound/texture layer: sharp synth bass with defined attack and modern electronic contour.' },
+    ],
+  },
+  {
+    id: 'drums-family',
+    title: 'Drums',
+    variants: [
+      { id: 'drums', label: 'Drums', description: '기본 드럼 중심', promptCore: 'Sound/texture layer: steady drum backbone shaping the groove and arrangement energy.' },
+      { id: 'brushed-drums', label: 'Brushed drums', description: '브러시 드럼의 부드러운 질감', promptCore: 'Sound/texture layer: brushed drums with soft attack and intimate live feel.' },
+      { id: 'double-time', label: 'Double-time', description: '더블타임 리듬감', promptCore: 'Sound/texture layer: double-time rhythmic motion creating urgency and forward momentum.' },
+      { id: 'half-time', label: 'Half-time', description: '하프타임 리듬감', promptCore: 'Sound/texture layer: half-time pocket with heavier space and deeper weight.' },
+      { id: 'driving-rhythm', label: 'Driving rhythm', description: '밀어주는 추진형 리듬', promptCore: 'Sound/texture layer: driving rhythm with clear forward push and energetic pulse.' },
+    ],
+  },
+  {
+    id: 'pad-family',
+    title: 'Pad',
+    variants: [
+      { id: 'pad', label: 'Pad', description: '기본 패드 레이어', promptCore: 'Sound/texture layer: supportive pad bed adding width and harmonic atmosphere.' },
+      { id: 'glassy-pad', label: 'Glassy Pad', description: '투명하고 맑은 패드', promptCore: 'Sound/texture layer: glassy pad shimmer with airy high-end and transparent lift.' },
+      { id: 'warm-pad', label: 'Warm Pad', description: '따뜻한 패드 질감', promptCore: 'Sound/texture layer: warm pad support with soft body and comforting width.' },
+      { id: 'ethereal-pad', label: 'Ethereal Pad', description: '몽환적인 패드', promptCore: 'Sound/texture layer: ethereal pad bloom with floating atmosphere and dreamlike space.' },
+      { id: 'deep-pad', label: 'Deep Pad', description: '깊게 깔리는 패드', promptCore: 'Sound/texture layer: deep pad foundation with darker ambience and immersive depth.' },
+    ],
+  },
+  {
+    id: 'synths-family',
+    title: 'Synths',
+    variants: [
+      { id: 'synths', label: 'Synths', description: '기본 신스 레이어', promptCore: 'Sound/texture layer: synth presence shaping the melodic color and modern tone.' },
+      { id: 'bright-synth', label: 'Bright Synth', description: '밝고 선명한 신스', promptCore: 'Sound/texture layer: bright synth tone with vivid top-end and catchy presence.' },
+      { id: 'dreamy-synth', label: 'Dreamy Synth', description: '몽환적인 신스', promptCore: 'Sound/texture layer: dreamy synth wash with soft blur and floating melodic glow.' },
+      { id: 'dark-synth', label: 'Dark Synth', description: '어두운 신스 질감', promptCore: 'Sound/texture layer: dark synth color with moody tone and shadowed atmosphere.' },
+      { id: 'deep-synth', label: 'Deep Synth', description: '깊고 묵직한 신스', promptCore: 'Sound/texture layer: deep synth body with rich weight and immersive depth.' },
+    ],
+  },
+  {
+    id: 'snare-family',
+    title: 'Snare',
+    variants: [
+      { id: 'snare', label: 'Snare', description: '기본 스네어 톤', promptCore: 'Sound/texture layer: clear snare definition anchoring the backbeat.' },
+      { id: 'sharp-snare', label: 'Sharp snare', description: '날카로운 스네어', promptCore: 'Sound/texture layer: sharp snare crack with precise transient edge.' },
+      { id: 'warm-snare', label: 'Warm snare', description: '따뜻한 스네어', promptCore: 'Sound/texture layer: warm snare body with rounded tone and softer edge.' },
+      { id: 'hard-hitting-snare', label: 'Hard-hitting snare', description: '강하게 치는 스네어', promptCore: 'Sound/texture layer: hard-hitting snare impact with bold attack and punch.' },
+      { id: 'big-reverb-snare', label: 'Big reverb snare', description: '큰 리버브가 걸린 스네어', promptCore: 'Sound/texture layer: big reverb snare with wide tail and dramatic space.' },
+    ],
+  },
+  {
+    id: 'hihats-family',
+    title: 'Hi-hats',
+    variants: [
+      { id: 'hi-hats', label: 'Hi-hats', description: '기본 하이햇 패턴', promptCore: 'Sound/texture layer: hi-hat detail maintaining rhythmic definition and motion.' },
+      { id: 'crisp-hi-hats', label: 'Crisp hi-hats', description: '또렷한 하이햇', promptCore: 'Sound/texture layer: crisp hi-hats adding clarity and fast rhythmic sparkle.' },
+      { id: 'soft-hi-hats', label: 'Soft hi-hats', description: '부드러운 하이햇', promptCore: 'Sound/texture layer: soft hi-hats with smoother articulation and lighter touch.' },
+      { id: 'fast-triplet-hi-hats', label: 'Fast triplet hi-hats', description: '빠른 트리플렛 하이햇', promptCore: 'Sound/texture layer: fast triplet hi-hats creating agile, rolling rhythmic tension.' },
+      { id: 'distanced-hi-hats', label: 'Distanced hi-hats', description: '멀리 있는 하이햇 질감', promptCore: 'Sound/texture layer: distanced hi-hats with softened presence and atmospheric placement.' },
+    ],
+  },
+  {
+    id: 'guitar-family',
+    title: 'Guitar',
+    variants: [
+      { id: 'guitar', label: 'Guitar', description: '기본 기타 레이어', promptCore: 'Sound/texture layer: guitar support adding rhythmic shape and harmonic texture.' },
+      { id: 'acoustic', label: 'Acoustic', description: '어쿠스틱 기타 중심', promptCore: 'Sound/texture layer: acoustic guitar warmth with natural strum texture and organic support.' },
+      { id: 'electric', label: 'Electric', description: '일렉 기타 중심', promptCore: 'Sound/texture layer: electric guitar presence with modern bite and clear rhythmic edge.' },
+      { id: 'overdriven', label: 'Overdriven', description: '오버드라이브 기타', promptCore: 'Sound/texture layer: overdriven guitar tone with grit, sustain, and emotional push.' },
+      { id: 'ambient-electric', label: 'Ambient Electric', description: '공간감 있는 일렉 기타', promptCore: 'Sound/texture layer: ambient electric guitar with spacious tails and atmospheric motion.' },
+    ],
+  },
+  {
+    id: 'trumpet-family',
+    title: 'Trumpet',
+    variants: [
+      { id: 'trumpet', label: 'Trumpet', description: '기본 트럼펫 컬러', promptCore: 'Sound/texture layer: trumpet color adding melodic accent and brass brightness.' },
+      { id: 'bright-trumpet', label: 'Bright Trumpet', description: '밝게 치고 나오는 트럼펫', promptCore: 'Sound/texture layer: bright trumpet accent with vivid tone and energetic lift.' },
+      { id: 'muted-trumpet', label: 'Muted Trumpet', description: '뮤트 트럼펫의 차분한 색감', promptCore: 'Sound/texture layer: muted trumpet character with restrained, intimate brass color.' },
+      { id: 'soft-trumpet-solo', label: 'Soft Trumpet solo', description: '부드러운 트럼펫 솔로', promptCore: 'Sound/texture layer: soft trumpet solo phrasing with lyrical warmth and airy elegance.' },
+      { id: 'funky-trumpet-hits', label: 'Funky Trumpet hits', description: '펑키한 트럼펫 히트', promptCore: 'Sound/texture layer: funky trumpet hits delivering rhythmic brass punches and groove accents.' },
+    ],
+  },
+  {
+    id: 'heritage-plucks-family',
+    title: 'Gayageum',
+    variants: [
+      { id: 'gayageum', label: 'Gayageum', description: '가야금의 섬세한 전통 현악 질감', promptCore: 'Sound/texture layer: gayageum texture with delicate Korean plucked-string expression.' },
+      { id: 'haegeum', label: 'Haegeum', description: '해금의 애절한 선율감', promptCore: 'Sound/texture layer: haegeum voice with expressive bowed Korean timbre and emotional contour.' },
+      { id: 'kalimba-pluck', label: 'Kalimba pluck', description: '칼림바의 맑고 또렷한 플럭 질감', promptCore: 'Sound/texture layer: kalimba pluck sparkle with clean transient charm and intimate detail.' },
+    ],
+  },
+  {
+    id: 'strings-family',
+    title: 'Strings',
+    variants: [
+      { id: 'strings', label: 'Strings', description: '기본 스트링 레이어', promptCore: 'Sound/texture layer: strings adding lift, warmth, and emotional contour.' },
+      { id: 'full-orchestral-strings', label: 'Full Orchestral Strings', description: '풍성한 오케스트라 스트링', promptCore: 'Sound/texture layer: full orchestral strings creating cinematic breadth and dramatic support.' },
+      { id: 'soft-legato-strings', label: 'Soft legato strings', description: '부드럽게 이어지는 레가토 스트링', promptCore: 'Sound/texture layer: soft legato strings with flowing sustained warmth.' },
+      { id: 'pizzicato-strings', label: 'Pizzicato strings', description: '피치카토 스트링의 경쾌한 질감', promptCore: 'Sound/texture layer: pizzicato strings adding plucked motion and playful articulation.' },
+      { id: 'staccato-strings', label: 'Staccato strings', description: '스타카토 스트링의 분명한 어택', promptCore: 'Sound/texture layer: staccato strings delivering rhythmic precision and pointed emphasis.' },
+    ],
+  },
+  {
+    id: 'texture-family',
+    title: 'Minimalist texture',
+    variants: [
+      { id: 'minimalist-texture', label: 'Minimalist texture', description: '절제된 텍스쳐 중심', promptCore: 'Sound/texture layer: minimalist texture with wide spacing and deliberate restraint.' },
+      { id: 'rich-texture', label: 'Rich texture', description: '풍성하고 조밀한 텍스쳐', promptCore: 'Sound/texture layer: rich texture with layered detail and dense harmonic support.' },
+      { id: 'evolving-texture', label: 'Evolving texture', description: '시간에 따라 변화하는 텍스쳐', promptCore: 'Sound/texture layer: evolving texture that gradually shifts and blooms across sections.' },
+      { id: 'granular-texture', label: 'Granular texture', description: '입자감 있는 실험적 텍스쳐', promptCore: 'Sound/texture layer: granular texture with fragmented detail and experimental atmosphere.' },
+    ],
+  },
+  {
+    id: 'ambience-family',
+    title: 'Nature textures',
+    variants: [
+      { id: 'nature-textures', label: 'Nature textures', description: '자연스러운 환경 질감', promptCore: 'Sound/texture layer: subtle nature textures adding organic ambience and breathing space.' },
+      { id: 'rainy-textures', label: 'Rainy textures', description: '비 오는 듯한 서정적 질감', promptCore: 'Sound/texture layer: rainy textures with gentle droplets and reflective ambience.' },
+      { id: 'urban-ambience', label: 'Urban ambience', description: '도시적 공간감', promptCore: 'Sound/texture layer: urban ambience with modern environmental depth and nocturnal color.' },
+      { id: 'mechanical-textures', label: 'Mechanical textures', description: '기계적이고 산업적인 질감', promptCore: 'Sound/texture layer: mechanical textures with industrial pulse and cold textural detail.' },
+    ],
+  },
+] as const;
+
+export const INSTRUMENT_SOUNDS: InstrumentSoundItem[] = SOUND_TEXTURE_CYCLES.flatMap((cycle) =>
+  cycle.variants.map((variant) => ({
+    id: variant.id,
+    label: variant.label,
+    description: variant.description,
+    promptCore: variant.promptCore,
+  }))
+);
 
 export const MOODS: CategoryItem[] = [
   { id: 'cool', label: 'Cool', description: '시원하고 세련된 분위기입니다.' },

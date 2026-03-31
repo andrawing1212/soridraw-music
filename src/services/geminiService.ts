@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import {
   BASE_PROMPTS,
+  BASIC_STRUCTURE,
   GENRE_GROUPS,
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
-  BASIC_STRUCTURE,
 } from "../constants";
 import {
   LyricsLength,
@@ -350,8 +350,6 @@ Lyrics rules:
 ${lyricGuidancePrompt}
 - The lyrics should primarily follow the user's story/intention.
 - Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
-- Use this default song structure unless the user clearly asks for a different structure: ${BASIC_STRUCTURE}
-- Do not invent a random structure when no custom structure was requested.
 - Intended duration: about ${resolvedDuration} minutes.
 
 Prompt rules:

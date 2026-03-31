@@ -59,6 +59,7 @@ import {
   SOUND_STYLES,
   INSTRUMENT_SOUNDS,
   STYLE_CYCLES,
+  SOUND_TEXTURE_CYCLES,
 } from './constants';
 import { CategoryItem, SongResult, LyricsLength, SongDuration } from './types';
 import { generateSong } from './services/geminiService';
@@ -439,6 +440,51 @@ const MOOD_BPM: Record<string, { min: number; max: number }> = {
   'loneliness': { min: 40, max: 75 }
 };
 
+const CYCLE_VARIANT_COLORS = [
+  "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20",
+  "bg-violet-600 border-violet-400 text-white shadow-lg shadow-violet-500/20",
+  "bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-500/20",
+  "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20",
+  "bg-fuchsia-600 border-fuchsia-400 text-white shadow-lg shadow-fuchsia-500/20",
+] as const;
+
+function buildCycleLookup<T extends { variants: readonly { id: string }[] }>(cycles: readonly T[]) {
+  return cycles.reduce<Record<string, T>>((acc, cycle) => {
+    cycle.variants.forEach((variant) => {
+      acc[variant.id] = cycle;
+    });
+    return acc;
+  }, {});
+}
+
+const SOUND_TEXTURE_CYCLE_LOOKUP = buildCycleLookup(SOUND_TEXTURE_CYCLES);
+
+function getCycleVariantLabel(cycles: readonly { id: string; title: string; variants: readonly { id: string; label: string }[] }[], selectedIds: string[]) {
+  return cycles
+    .map((cycle) => cycle.variants.find((variant) => selectedIds.includes(variant.id)))
+    .filter(Boolean)
+    .map((variant) => variant!.label);
+}
+
+function getNextCycleHoverItem(
+  cycle: { id: string; title: string; variants: readonly { id: string; label: string; description: string }[] },
+  selected: string[]
+): CategoryItem {
+  const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
+  const nextVariant =
+    activeIndex === -1
+      ? cycle.variants[0]
+      : activeIndex < cycle.variants.length - 1
+        ? cycle.variants[activeIndex + 1]
+        : cycle.variants[0];
+
+  return {
+    id: cycle.id,
+    label: nextVariant.label,
+    description: `${cycle.title} · ${nextVariant.label}: ${nextVariant.description}`,
+  };
+}
+
 const calculateOptimalBPM = (genres: string[], moods: string[]) => {
   let sumMin = 0;
   let sumMax = 0;
@@ -474,29 +520,6 @@ const calculateOptimalBPM = (genres: string[], moods: string[]) => {
 
   return { min: finalMin, max: finalMax };
 };
-
-
-const STYLE_VARIANT_COLORS = [
-  "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20",
-  "bg-violet-600 border-violet-400 text-white shadow-lg shadow-violet-500/20",
-  "bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-500/20",
-  "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20",
-] as const;
-
-const STYLE_FAMILY_LOOKUP = STYLE_CYCLES.reduce<Record<string, (typeof STYLE_CYCLES)[number]>>((acc, cycle) => {
-  cycle.variants.forEach((variant) => {
-    acc[variant.id] = cycle;
-  });
-  return acc;
-}, {});
-
-function findStyleCycleByVariantId(variantId: string) {
-  return STYLE_FAMILY_LOOKUP[variantId] ?? null;
-}
-
-function getSelectedStyleVariant(cycle: (typeof STYLE_CYCLES)[number], selected: string[]) {
-  return cycle.variants.find((variant) => selected.includes(variant.id)) ?? null;
-}
 
 export default function AppWrapper() {
   return (
@@ -877,7 +900,7 @@ function App() {
     id: string,
     selected: string[],
     setSelected: React.Dispatch<React.SetStateAction<string[]>>,
-    limit = 2
+    limit = Number.POSITIVE_INFINITY
   ) => {
     setSelected((prev) => {
       if (prev.includes(id)) return prev.filter((item) => item !== id);
@@ -886,37 +909,40 @@ function App() {
     });
   };
 
-  const cycleStyleSelection = (cycleId: string) => {
-    setSelectedStyles((prev) => {
-      const cycle = STYLE_CYCLES.find((item) => item.id === cycleId);
+  const cycleFamilySelection = (
+    cycleId: string,
+    selected: string[],
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+    cycles: readonly { id: string; variants: readonly { id: string }[] }[]
+  ) => {
+    setSelected((prev) => {
+      const cycle = cycles.find((item) => item.id === cycleId);
       if (!cycle) return prev;
-
       const activeIndex = cycle.variants.findIndex((variant) => prev.includes(variant.id));
       const withoutFamily = prev.filter((id) => !cycle.variants.some((variant) => variant.id === id));
-
-      if (activeIndex === -1) {
-        if (withoutFamily.length >= 2) return prev;
-        return [...withoutFamily, cycle.variants[0].id];
-      }
-
-      if (activeIndex < cycle.variants.length - 1) {
-        return [...withoutFamily, cycle.variants[activeIndex + 1].id];
-      }
-
+      if (activeIndex === -1) return [...withoutFamily, cycle.variants[0].id];
+      if (activeIndex < cycle.variants.length - 1) return [...withoutFamily, cycle.variants[activeIndex + 1].id];
       return withoutFamily;
     });
   };
 
-  const randomizeStyles = () => {
-    const familyCount = Math.floor(Math.random() * 2) + 1;
-    const shuffledCycles = [...STYLE_CYCLES].sort(() => 0.5 - Math.random()).slice(0, familyCount);
-    const picked = shuffledCycles.map((cycle) => {
-      const randomVariant = cycle.variants[Math.floor(Math.random() * cycle.variants.length)];
-      return randomVariant.id;
-    });
+  const randomizeStyleFamilies = () => {
+    const familyCount = Math.max(1, Math.floor(Math.random() * 4) + 1);
+    const picked = [...STYLE_CYCLES]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, familyCount)
+      .map((cycle) => cycle.variants[Math.floor(Math.random() * cycle.variants.length)].id);
     setSelectedStyles(picked);
   };
 
+  const randomizeSoundTextureFamilies = () => {
+    const familyCount = Math.max(2, Math.floor(Math.random() * 5) + 2);
+    const picked = [...SOUND_TEXTURE_CYCLES]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, familyCount)
+      .map((cycle) => cycle.variants[Math.floor(Math.random() * cycle.variants.length)].id);
+    setSelectedInstrumentSounds(picked);
+  };
 
   useEffect(() => {
     if (keywordsContainerRef.current) {
@@ -1192,35 +1218,23 @@ function App() {
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
 
   const applyKeywordsToNext = (appliedKeywords: SongResult['appliedKeywords']) => {
-    const normalizeId = (id: string) => {
-      if (id === 'kpop') return 'k-pop';
-      return id;
-    };
-
-    const mapLabelsToIds = (values: string[] = [], category: CategoryItem[]) => {
-      return values
-        .map((value) => {
-          const normalizedValue = normalizeId(value);
-          const byId = category.find((item) => item.id === normalizedValue);
-          if (byId) return byId.id;
-
-          const byLabel = category.find((item) => item.label === value);
-          if (byLabel) return byLabel.id;
-
-          return null;
-        })
-        .filter(Boolean) as string[];
+    const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
+      return labels.map(label => {
+        // Special case for City Pop and K-Pop which might have extra labels
+        if (label.includes('City Pop') || label === '80s Japanese Pop' || label === 'Funk' || label === 'Groovy' || label === 'Retro' || label === 'Nu-Disco' || label === 'Synth-pop') {
+          return 'citypop';
+        }
+        if (label.includes('K-Pop')) {
+          return 'kpop';
+        }
+        const item = category.find(c => c.label === label);
+        return item ? item.id : null;
+      }).filter(Boolean) as string[];
     };
 
     const genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
-    const styleIds = Array.from(
-      new Set(mapLabelsToIds(appliedKeywords.style ?? appliedKeywords.theme ?? [], SOUND_STYLES))
-    );
-    const instrumentSoundIds = Array.from(
-      new Set(mapLabelsToIds(appliedKeywords.instrumentSound ?? [], INSTRUMENT_SOUNDS))
-    );
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
@@ -1230,11 +1244,6 @@ function App() {
     setSelectedGenres(genreIds);
     setSelectedMoods(moodIds);
     setSelectedThemes(themeIds);
-    setSelectedStyles(styleIds);
-    setSelectedInstrumentSounds(instrumentSoundIds);
-
-    setKpopMode(genreIds.includes('k-pop') ? 1 : 0);
-    setCitypopMode(genreIds.includes('citypop') ? 1 : 0);
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
@@ -1254,7 +1263,7 @@ function App() {
           const bpm = parseInt(bpmMatch[0]);
           setMinBPM(bpm);
           setMaxBPM(bpm);
-        } else if (bpmMatch.length >= 2) {
+        } else if (bpmMatch.length === 2) {
           setMinBPM(parseInt(bpmMatch[0]));
           setMaxBPM(parseInt(bpmMatch[1]));
         }
@@ -1265,7 +1274,6 @@ function App() {
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -1547,7 +1555,7 @@ function App() {
   const clearCategory = (category: 'genre' | 'mood' | 'theme') => {
     if (category === 'genre') {
       setSelectedGenres(pinnedGenres);
-      if (!pinnedGenres.includes('k-pop')) setKpopMode(0);
+      if (!pinnedGenres.includes('kpop')) setKpopMode(0);
       if (!pinnedGenres.includes('citypop')) setCitypopMode(0);
       setIsGenreRandomized(false);
     }
@@ -1840,8 +1848,9 @@ const saveRecentSong = async (newSong: any) => {
       }
 
       const effectiveStyleIds = Array.from(new Set([...(finalStyles ?? []), ...(finalThemes ?? [])]));
-      const styleLabels = effectiveStyleIds.map(id => SOUND_STYLES.find(style => style.id === id)?.label || THEMES.find(theme => theme.id === id)?.label || id);
-      const hasBalladStyle = effectiveStyleIds.includes('ballad') || effectiveStyleIds.includes('classic-ballad');
+      const styleLabels = getCycleVariantLabel(STYLE_CYCLES, effectiveStyleIds);
+      const soundTextureLabels = getCycleVariantLabel(SOUND_TEXTURE_CYCLES, finalInstrumentSounds);
+      const hasBalladStyle = effectiveStyleIds.some((id) => ['ballad', 'classic-ballad'].includes(id));
 
       const genreLabels = finalGenres.flatMap(id => {
         if (id === 'citypop') {
@@ -1852,179 +1861,84 @@ const saveRecentSong = async (newSong: any) => {
       });
 
       const buildSongPrompt = () => {
-        const genreStr = genreLabels.length > 0 ? genreLabels.join(", ") : "Pop";
-        const moodLabels =
-          finalMoods.length > 0
-            ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id)
-            : ["Emotional"];
-        const moodStr = moodLabels.join(", ");
+        const genreStr = genreLabels.length > 0 ? genreLabels.join(', ') : 'Pop';
+        const moodStr = finalMoods.length > 0
+          ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(', ')
+          : 'Emotional';
 
-        const styleItems = effectiveStyleIds
-          .map(id => SOUND_STYLES.find(style => style.id === id))
-          .filter(Boolean);
-        const instrumentItems = finalInstrumentSounds
-          .map(id => INSTRUMENT_SOUNDS.find(sound => sound.id === id))
-          .filter(Boolean);
-
-        const styleDesc = styleItems.map(item => item!.description.toLowerCase());
-        const instrumentLabels = instrumentItems.map(item => item!.label);
-        const instrumentDesc = instrumentItems.map(item => item!.description.toLowerCase());
-
-        const hasStyle = (...ids: string[]) => ids.some((id) => effectiveStyleIds.includes(id));
-        const hasBalladFamily = hasStyle('ballad', 'classic-ballad');
-        const hasDanceFamily = hasStyle('dance', 'classic-disco', 'modern-edm');
-        const hasRnbFamily = hasStyle('rnb', 'neo-soul-style', 'pb-rnb-style');
-        const hasRockFamily = hasStyle('rock', 'classic-rock', 'modern-rock');
-        const hasJazzFamily = hasStyle('jazz', 'classic-jazz', 'jazzhop-style');
-        const hasSoulFamily = hasStyle('soul', 'classic-soul', 'neo-soul');
-        const hasHipHopFamily = hasStyle('hip-hop', 'boom-bap-style', 'trap-style', 'lofi-hip-hop-style');
-        const hasFunkFamily = hasStyle('funk', 'g-funk', 'p-funk');
-        const hasPunkFamily = hasStyle('punk', 'pop-punk');
-        const hasBluesFamily = hasStyle('blues', 'roots-blues');
-        const hasElectronicFamily = hasStyle('electronic', 'techno-style', 'house-style');
-        const hasLatinFamily = hasStyle('latin', 'salsa', 'reggaeton');
-        const hasReggaeFamily = hasStyle('reggae', 'roots-reggae', 'dancehall');
-        const hasGlobalFamily = hasStyle('global-pop-style', 'k-style', 'anime-style', 'game-bgm-style');
-        const hasInstrument = (id: string) => finalInstrumentSounds.includes(id);
-        const hasMood = (id: string) => finalMoods.includes(id);
-        const hasGenreId = (id: string) => finalGenres.includes(id);
+        const selectedStyleText = styleLabels.length > 0 ? styleLabels.join(', ') : 'Core style kept close to the root genre';
+        const selectedSoundText = soundTextureLabels.length > 0 ? soundTextureLabels.join(', ') : 'Balanced mainstream arrangement with tasteful detail';
+        const selectedStyleIds = new Set(effectiveStyleIds);
+        const selectedSoundFamilies = new Set(finalInstrumentSounds.map((id) => SOUND_TEXTURE_CYCLE_LOOKUP[id]?.id).filter(Boolean));
+        const hasStyleId = (...ids: string[]) => ids.some((id) => selectedStyleIds.has(id));
+        const hasSoundFamily = (...ids: string[]) => ids.some((id) => selectedSoundFamilies.has(id));
 
         const bpm = tempoInfo
-          ? tempoInfo.replace("Between ", "").replace("Exactly ", "").replace(" and ", "–")
-          : hasMood('upbeat') || hasMood('powerful') || hasDanceFamily || hasElectronicFamily
-            ? "118–132 BPM"
-            : hasBalladStyle || hasMood('calm') || hasMood('healing')
-              ? "72–96 BPM"
-              : "90–112 BPM";
+          ? tempoInfo.replace('Between ', '').replace('Exactly ', '').replace(' and ', '–')
+          : (finalMoods.includes('upbeat') || finalMoods.includes('powerful') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
+            ? '118–132 BPM'
+            : (hasBalladStyle || finalMoods.includes('calm') || finalMoods.includes('healing'))
+              ? '72–96 BPM'
+              : '90–112 BPM';
 
-        const styleHeadlineParts = [
-          genreStr,
-          hasBalladFamily ? "ballad pacing" : null,
-          hasStyle('anime-style') ? "anime OST lift" : null,
-          hasGlobalFamily && !hasStyle('anime-style') ? "global pop polish" : null,
-          hasElectronicFamily ? "electronic drive" : null,
-          hasSoulFamily || hasRnbFamily ? "smooth groove contour" : null,
-          hasFunkFamily ? "groove-led pulse" : null,
-          hasPunkFamily || hasRockFamily ? "band-driven attack" : null,
-          hasLatinFamily ? "Latin rhythmic color" : null,
-          hasStyle('lofi-hip-hop-style') ? "lo-fi softness" : null,
-        ].filter(Boolean);
+        const drums = [
+          hasSoundFamily('drums-family') ? `Primary drum character shaped by ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'drums-family'), finalInstrumentSounds).join(', ') || 'Drums'}` : null,
+          hasSoundFamily('snare-family') ? `Snare detail using ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'snare-family'), finalInstrumentSounds).join(', ')}` : null,
+          hasSoundFamily('hihats-family') ? `Hi-hat motion using ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'hihats-family'), finalInstrumentSounds).join(', ')}` : null,
+          !hasSoundFamily('drums-family', 'snare-family', 'hihats-family') && hasBalladStyle ? 'Soft live-pop drums with restrained movement and emotional pacing' : null,
+          !hasSoundFamily('drums-family', 'snare-family', 'hihats-family') && !hasBalladStyle ? 'Clean modern drums supporting the topline without overcrowding the mix' : null,
+        ].filter(Boolean).join(', ');
 
-        const drums = (() => {
-          const parts: string[] = [];
+        const bass = [
+          hasSoundFamily('bass-family')
+            ? `Bass focus built around ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'bass-family'), finalInstrumentSounds).join(', ')}`
+            : (hasBalladStyle ? 'Warm supportive low end following the emotional chord movement' : 'Warm melodic bass supporting the harmony'),
+          hasStyleId('g-funk', 'funk', 'p-funk') ? 'keep the groove elastic and rhythm-led' : null,
+          hasStyleId('trap-style', 'hip-hop', 'boom-bap-style') ? 'let the low end lock firmly with the beat' : null,
+        ].filter(Boolean).join(', ');
 
-          if (hasBalladStyle) parts.push("Soft live-pop kit with restrained kick and light snare presence");
-          else if (hasDanceFamily) parts.push("Tight dance-pop drums with a clear pulse and punchy momentum");
-          else if (hasHipHopFamily) parts.push("Beat-led drum programming with crisp hats and a defined pocket");
-          else if (hasPunkFamily || hasRockFamily) parts.push("Fast live drums with urgent attack and raw energy");
-          else if (hasLatinFamily) parts.push("Rhythm-forward percussion with lively syncopation");
-          else if (hasMood('calm') || hasMood('healing') || hasMood('peaceful')) parts.push("Minimal soft percussion with wide space between hits");
-          else parts.push("Clean contemporary pop drums supporting the topline without overcrowding the mix");
+        const sound = [
+          selectedSoundText,
+          hasStyleId('anime-style', 'game-bgm-style') ? 'with melodic lift and scene-like transitions' : null,
+          hasStyleId('classic-disco', 'modern-edm', 'electronic', 'house-style') ? 'while keeping a polished commercial finish' : null,
+        ].filter(Boolean).join(', ');
 
-          if (hasStyle('anime-style', 'game-bgm-style') || hasGlobalFamily) parts.push("Cymbal swells and controlled fills to support emotional lift");
-          if (hasStyle('lofi-hip-hop-style')) parts.push("Softer transient edges and slightly relaxed impact");
+        const texture = [
+          hasSoundFamily('texture-family') ? getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'texture-family'), finalInstrumentSounds).join(', ') : null,
+          hasSoundFamily('ambience-family') ? getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'ambience-family'), finalInstrumentSounds).join(', ') : null,
+          !hasSoundFamily('texture-family', 'ambience-family') && hasBalladStyle ? 'Emotion-first, gently rising, and spacious' : null,
+          !hasSoundFamily('texture-family', 'ambience-family') && !hasBalladStyle ? 'Balanced, clear, and commercially polished' : null,
+        ].filter(Boolean).join(', ');
 
-          return parts.join(", ");
-        })();
+        const vocalDesign = maleCount > 0 || femaleCount > 0
+          ? (maleCount > 0 && femaleCount > 0
+              ? 'Mixed lead arrangement with layered harmonies'
+              : maleCount > 1 || femaleCount > 1
+                ? 'Stacked ensemble lead with supportive harmonies'
+                : 'Main lead vocal with harmony support where needed')
+          : 'Main lead vocal with harmony support where needed';
 
-        const bass = (() => {
-          const parts: string[] = [];
+        const vocalStyle = [
+          hasBalladStyle ? 'Tender and emotionally clear' : null,
+          hasStyleId('anime-style', 'k-style') ? 'slightly dramatic with melodic lift' : null,
+          finalMoods.includes('bright') ? 'youthful and open' : null,
+          finalMoods.includes('healing') || finalMoods.includes('peaceful') ? 'gentle and reassuring' : null,
+          finalMoods.includes('powerful') ? 'focused and dynamically assertive' : null,
+          !hasBalladStyle && !finalMoods.includes('bright') && !finalMoods.includes('healing') && !finalMoods.includes('powerful') ? 'clear, expressive, and melody-led' : null,
+        ].filter(Boolean).join(', ');
 
-          if (hasDanceFamily || hasElectronicFamily || hasMood('upbeat') || hasMood('powerful')) parts.push("Punchy rounded bass driving the chorus forward");
-          else if (hasBalladStyle || hasMood('calm') || hasMood('healing')) parts.push("Warm supportive low end following the emotional chord movement");
-          else if (hasFunkFamily) parts.push("Elastic groove-aware bass with rhythmic articulation");
-          else if (hasHipHopFamily || hasRnbFamily) parts.push("Solid low-end foundation with modern weight and pocket");
-          else parts.push("Warm melodic bass supporting the harmony");
+        const arrangement = [
+          'Base structure: Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro',
+          hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
+          selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
+        ].filter(Boolean).join(', ');
 
-          if (hasInstrument('bass')) parts[0] = "More exposed bass presence with clearer melodic movement";
-          if (hasInstrument('minimal')) parts.push("Kept controlled rather than oversized");
-          if (hasInstrument('acoustic-sound')) parts.push("Natural warmth over synthetic aggression");
-
-          return parts.join(", ");
-        })();
-
-        const sound = (() => {
-          const parts: string[] = [];
-
-          if (hasInstrument('piano')) parts.push("Piano-led foundation shaping the harmony");
-          if (hasInstrument('guitar')) parts.push(hasInstrument('acoustic-sound') ? "Acoustic guitar texture adding warmth and rhythmic support" : "Guitar-led texture adding edge and movement");
-          if (hasInstrument('strings') || hasStyle('anime-style', 'game-bgm-style') || hasGlobalFamily) parts.push("String lift and cinematic support in key transitions");
-          if (hasInstrument('synth-sound') || hasElectronicFamily) parts.push("Airy synth pads and modern electronic color");
-          if (hasInstrument('band')) parts.push("Full band interaction with drums, bass, keys, and guitar moving together");
-          if (hasInstrument('lofi-texture') || hasStyle('lofi-hip-hop-style')) parts.push("Softened top end with subtle grain and vintage blur");
-          if (hasInstrument('orchestral-sound')) parts.push("Wider orchestral depth behind the lead melody");
-          if (hasInstrument('minimal')) parts.push("Selective layering with deliberate empty space");
-
-          if (parts.length === 0) {
-            parts.push(
-              hasBalladStyle
-                ? "Piano, pads, and restrained support layers building emotional depth"
-                : "Balanced modern pop instrumentation with clear melodic support"
-            );
-          }
-
-          return parts.join(", ");
-        })();
-
-        const texture = (() => {
-          const parts: string[] = [];
-
-          if (hasBalladFamily) parts.push("Emotion-first, clean, and gently rising");
-          if (hasStyle('anime-style')) parts.push("Youthful, dramatic, and slightly cinematic");
-          if (hasSoulFamily || hasBluesFamily) parts.push("Organic and naturally warm");
-          if (hasElectronicFamily) parts.push("Polished and modern without losing melody focus");
-          if (hasStyle('lofi-hip-hop-style')) parts.push("Softened and cozy with rounded edges");
-          if (hasMood('bright')) parts.push("Bright-toned and open");
-          if (hasMood('healing') || hasMood('peaceful')) parts.push("Comforting and spacious");
-          if (hasMood('powerful')) parts.push("Confident and expansive");
-
-          return Array.from(new Set(parts)).join(", ") || "Balanced, clear, and commercially polished";
-        })();
-
-        const vocal = (() => {
-          if (maleCount > 0 && femaleCount > 0) return "Mixed lead arrangement with layered harmonies and contrast between male and female tones";
-          if (maleCount >= 2) return "Male ensemble lead with stacked harmonies";
-          if (femaleCount >= 2) return "Female ensemble lead with stacked harmonies";
-          if (maleCount === 1) return "Male lead vocal with supportive harmonies";
-          if (femaleCount === 1) return "Female lead vocal with supportive harmonies";
-          return "Main lead vocal with harmony support where needed";
-        })();
-
-        const vocalStyle = (() => {
-          const parts: string[] = [];
-
-          if (hasBalladFamily) parts.push("Tender and emotionally clear");
-          if (hasStyle('anime-style', 'game-bgm-style')) parts.push("Slightly dramatic with melodic lift");
-          if (hasMood('bright')) parts.push("Youthful and open");
-          if (hasMood('healing') || hasMood('peaceful')) parts.push("Gentle and reassuring");
-          if (hasMood('powerful')) parts.push("Focused and dynamically assertive");
-          if (hasPunkFamily || hasRockFamily) parts.push("Raw and direct");
-          if (hasJazzFamily || hasSoulFamily) parts.push("Fluid and expressive");
-
-          return Array.from(new Set(parts)).join(", ") || "Clear, expressive, and melody-led";
-        })();
-
-        const arrangement = (() => {
-          const parts: string[] = [];
-
-          if (hasBalladFamily) parts.push("Verse-to-chorus growth with slower emotional pacing");
-          else parts.push("Clear commercial flow with memorable sectional contrast");
-
-          if (hasStyle('anime-style', 'game-bgm-style')) parts.push("Pre-chorus lift and a strong melodic payoff");
-          if (hasGlobalFamily) parts.push("Expanded transitions and a wider final section");
-          if (hasDanceFamily || hasElectronicFamily) parts.push("Rhythmic clarity that keeps the chorus immediately playable");
-          if (hasInstrument('minimal')) parts.push("Arrangement stays selective and avoids unnecessary clutter");
-          if (hasMood('healing') || hasMood('peaceful')) parts.push("Keep the emotional arc smooth rather than explosive");
-
-          return parts.join(", ");
-        })();
-
-        return `·STYLE: ${styleHeadlineParts.join(", ")}, ${bpm}
+        return `·STYLE: ${genreStr}, ${selectedStyleText}, ${bpm}
 ·DRUMS: ${drums}
 ·BASS: ${bass}
 ·SOUND: ${sound}
 ·TEXTURE: ${texture}
-·VOCAL: ${vocal}
+·VOCAL: ${vocalDesign}
 ·VOCAL STYLE: ${vocalStyle}
 ·ARRANGEMENT: ${arrangement}
 ·MOOD: ${moodStr}`.trim();
@@ -2240,38 +2154,30 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />            
-          <StyleCycleSection 
+          <CycleSection 
             title="스타일" 
-            description="첫 스타일 버튼부터 시작해서 클릭할 때마다 같은 계열 안에서 순환합니다. 최대 2개까지 선택됩니다."
+            description="첫 버튼이 기본 선택이며, 클릭할 때마다 같은 계열 안에서 순환합니다. 현재는 선택 제한을 두지 않습니다."
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
-            onCycleToggle={cycleStyleSelection}
+            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
             onClear={() => setSelectedStyles([])}
-            onRandom={randomizeStyles}
+            onRandom={randomizeStyleFamilies}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />
-
-          <CategorySection 
-            title="악기 / 사운드" 
-            description="편곡의 중심이 되는 악기와 질감을 선택합니다. (최대 2개)"
-            items={INSTRUMENT_SOUNDS} 
-            selected={selectedInstrumentSounds} 
-            pinned={[]}
-            onToggle={(id) => toggle(id, selectedInstrumentSounds, setSelectedInstrumentSounds, 2)}
-            onTogglePin={() => {}}
+          <CycleSection 
+            title="사운드/텍스쳐" 
+            titleClassName="text-[16px] md:text-[18px]"
+            description="첫 버튼은 상위 카테고리의 기본 사운드입니다. 클릭할 때마다 같은 계열 안에서 순환하며, 현재는 선택 제한을 두지 않습니다."
+            cycles={SOUND_TEXTURE_CYCLES}
+            selected={selectedInstrumentSounds}
+            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES)}
             onClear={() => setSelectedInstrumentSounds([])}
-            onUnpinAll={() => {}}
-            onRandom={() => {}}
+            onRandom={randomizeSoundTextureFamilies}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
-            hoveredItem={hoveredItem}
-            isExpanded={true}
-            onToggleExpand={() => {}}
-            allExpanded={true}
-            isRandomized={false}
           />
           <CategorySection 
             title="분위기" 
@@ -2364,8 +2270,8 @@ ${result.prompt}
               )}
             >
               <AnimatePresence>
-                {[...selectedGenres, ...selectedThemes, ...selectedStyles, ...selectedInstrumentSounds, ...selectedMoods].map((id) => {
-                  const item = [...GENRES, ...THEMES, ...SOUND_STYLES, ...INSTRUMENT_SOUNDS, ...MOODS].find(i => i.id === id);
+                {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
+                  const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
                   return (
                     <motion.span
                       key={id}
@@ -2379,8 +2285,6 @@ ${result.prompt}
                         onClick={() => {
                           if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
                           else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
-                          else if (selectedStyles.includes(id)) toggle(id, selectedStyles, setSelectedStyles, 2);
-                          else if (selectedInstrumentSounds.includes(id)) toggle(id, selectedInstrumentSounds, setSelectedInstrumentSounds, 2);
                           else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
                         }}
                         className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
@@ -2661,15 +2565,15 @@ ${result.prompt}
                   animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
                 >
-                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'style', 'instrumentSound', 'mood'] as const).map((cat) => (
+                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'mood'] as const).map((cat) => (
                     <div key={cat} className="space-y-0.5 group/cat">
                       <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat === 'theme' ? 'style' : cat}</p>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {(result.appliedKeywords[cat] ?? []).map((kw, idx) => {
+                        {result.appliedKeywords[cat].map((kw, idx) => {
                           const isRandom = result.randomKeywords?.includes(kw);
-                          const description = [...GENRES, ...MOODS, ...THEMES, ...SOUND_STYLES, ...INSTRUMENT_SOUNDS].find(item => item.label === kw)?.description;
+                          const description = [...GENRES, ...MOODS, ...THEMES].find(item => item.label === kw)?.description;
                           
                           return (
                             <span 
@@ -3105,10 +3009,8 @@ function GenreSelectModal({
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
-    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = '';
     };
   }, [onClose]);
 
@@ -3175,11 +3077,10 @@ function GenreSelectModal({
   );
 }
 
-
-interface StyleCycleSectionProps {
+interface CycleSectionProps {
   title: string;
   description: string;
-  cycles: typeof STYLE_CYCLES;
+  cycles: readonly { id: string; title: string; variants: readonly { id: string; label: string; description: string }[] }[];
   selected: string[];
   onCycleToggle: (cycleId: string) => void;
   onClear: () => void;
@@ -3187,36 +3088,25 @@ interface StyleCycleSectionProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  titleClassName?: string;
 }
 
-function StyleCycleSection({
-  title,
-  description,
-  cycles,
-  selected,
-  onCycleToggle,
-  onClear,
-  onRandom,
-  onHover,
-  onLongPressStart,
-  onLongPressEnd,
-}: StyleCycleSectionProps) {
+function CycleSection({ title, description, cycles, selected, onCycleToggle, onClear, onRandom, onHover, onLongPressStart, onLongPressEnd, titleClassName }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-
-  const selectedCount = cycles.filter((cycle) => getSelectedStyleVariant(cycle, selected)).length;
+  const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
-      <div className="flex items-center justify-between mb-4">
-        <div className="relative">
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="relative min-w-0">
           <h3
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+            className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
           >
-            <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-            {title}
-            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedCount}/2)</span>
+            <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+            <span className="truncate">{title}</span>
+            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
           </h3>
           <AnimatePresence>
             {showTitleTooltip && (
@@ -3231,88 +3121,53 @@ function StyleCycleSection({
             )}
           </AnimatePresence>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'style-random', label: '랜덤 선택', description: '스타일 계열을 무작위로 최대 2개 선택합니다.' })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: 'style-random', label: '랜덤 선택', description: '스타일 계열을 무작위로 최대 2개 선택합니다.' })}
-            onTouchEnd={onLongPressEnd}
-            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
-          >
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={onRandom} className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all">
             <Dices className="w-4 h-4" />
           </button>
-          <button
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'style-clear', label: 'Clear all', description: '선택한 스타일을 모두 초기화합니다.' })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: 'style-clear', label: 'Clear all', description: '선택한 스타일을 모두 초기화합니다.' })}
-            onTouchEnd={onLongPressEnd}
-            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
-          >
+          <button onClick={onClear} className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 md:gap-2.5">
         {cycles.map((cycle) => {
-          const selectedVariant = getSelectedStyleVariant(cycle, selected);
-          const activeIndex = selectedVariant ? cycle.variants.findIndex((variant) => variant.id === selectedVariant.id) : -1;
-          const displayVariant = selectedVariant ?? cycle.variants[0];
-          const nextVariant = !selectedVariant
-            ? cycle.variants[0]
-            : activeIndex < cycle.variants.length - 1
-              ? cycle.variants[activeIndex + 1]
-              : null;
-          const buttonDescription = selectedVariant
-            ? `${displayVariant.description} · 다시 누르면 ${nextVariant ? nextVariant.label : '해제'}`
-            : `${displayVariant.description} · 클릭하면 ${displayVariant.label} 활성화`;
-
+          const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
+          const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
+          const hoverItem: CategoryItem = activeVariant
+            ? {
+                id: cycle.id,
+                label: activeVariant.label,
+                description: `${cycle.title} · ${activeVariant.label}: ${activeVariant.description}`,
+              }
+            : {
+                id: cycle.id,
+                label: cycle.title,
+                description: `${cycle.title}의 기본 버튼입니다. 클릭할 때마다 같은 계열 안에서 순환합니다.`,
+              };
+          const nextHoverItem = getNextCycleHoverItem(cycle, selected);
           return (
             <button
               key={cycle.id}
-              onClick={() => onCycleToggle(cycle.id)}
-              onMouseEnter={() => onHover({ id: cycle.id, label: displayVariant.label, description: buttonDescription })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
+              onClick={() => {
+                onCycleToggle(cycle.id);
+                onHover({ ...nextHoverItem, _ts: Date.now() } as CategoryItem);
               }}
-              onTouchStart={() => onLongPressStart({ id: cycle.id, label: displayVariant.label, description: buttonDescription })}
+              onMouseEnter={() => onHover(hoverItem)}
+              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+              onTouchStart={() => onLongPressStart(hoverItem)}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "min-w-[140px] px-4 py-2.5 rounded-xl text-[13px] font-bold transition-colors border flex items-center justify-center text-center",
-                selectedVariant
-                  ? STYLE_VARIANT_COLORS[Math.max(0, activeIndex)]
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                "min-h-[58px] rounded-xl border px-3 py-2.5 text-left transition-all flex items-center",
+                activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
               )}
             >
-              {displayVariant.label}
+              <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
+                {activeVariant ? activeVariant.label : cycle.title}
+              </span>
             </button>
           );
         })}
-      </div>
-
-      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
-        {selectedCount > 0 ? (
-          <p className="text-xs text-brand-orange font-semibold">
-            {cycles
-              .map((cycle) => getSelectedStyleVariant(cycle, selected)?.label)
-              .filter(Boolean)
-              .join(' / ')}
-          </p>
-        ) : (
-          <p className="text-xs text-[var(--text-secondary)]">
-            첫 버튼부터 시작해서 클릭할 때마다 같은 계열 안에서 순환합니다. 최대 2개까지 선택됩니다.
-          </p>
-        )}
       </div>
     </div>
   );

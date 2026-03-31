@@ -1,7 +1,9 @@
 import {
   CategoryItem,
   GenreGroup,
+  InstrumentSoundCycle,
   InstrumentSoundItem,
+  SoundStyleCycle,
   SoundStyleItem,
 } from './types';
 
@@ -161,7 +163,7 @@ export const GENRE_GROUPS: GenreGroup[] = [
   },
 ];
 
-export const STYLE_CYCLES = [
+export const STYLE_CYCLES: SoundStyleCycle[] = [
   {
     id: 'ballad-family',
     title: 'Ballad',
@@ -298,7 +300,7 @@ export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   }))
 );
 
-export const SOUND_TEXTURE_CYCLES = [
+export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
   {
     id: 'band-family',
     title: 'Band',

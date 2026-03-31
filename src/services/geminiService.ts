@@ -23,6 +23,7 @@ type LegacyThemeInput = string[];
 
 interface GenerateSongParams {
   genre: string | null;
+  isKpopSelected?: boolean;
   moods: string[];
   styles?: string[];
   instrumentSounds?: string[];
@@ -35,6 +36,7 @@ interface GenerateSongParams {
   tempo?: string;
   specialPrompt?: string;
   kpopMode?: 0 | 1 | 2;
+  customStructure?: string[];
 }
 
 type GenerateSongInput =
@@ -52,7 +54,7 @@ type GenerateSongInput =
       boolean?,
       string?,
       string?,
-      0 | 1 | 2?
+      (0 | 1 | 2)?
     ]
   | [GenerateSongParams];
 
@@ -176,6 +178,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       tempo: first.tempo,
       specialPrompt: first.specialPrompt,
       kpopMode: first.kpopMode ?? 0,
+      isKpopSelected: first.isKpopSelected ?? false,
     };
   }
 
@@ -208,7 +211,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     boolean?,
     string?,
     string?,
-    0 | 1 | 2?
+    (0 | 1 | 2)?
   ];
 
   return {
@@ -229,6 +232,66 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     tempo,
     specialPrompt,
     kpopMode,
+    isKpopSelected: genres?.includes('kpop') ?? false,
+  };
+}
+
+
+function containsLatin(text: string): boolean {
+  return /[A-Za-z]/.test(text);
+}
+
+function containsHangul(text: string): boolean {
+  return /[가-힣]/.test(text);
+}
+
+function injectMixedPhrases(
+  text: string,
+  phrases: string[],
+  detector: (text: string) => boolean
+): string {
+  if (!text.trim() || detector(text)) return text;
+
+  const lines = text.split("\n");
+  let phraseIndex = 0;
+  let injected = 0;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line || /^\[.*\]$/.test(line)) continue;
+
+    const phrase = phrases[phraseIndex % phrases.length];
+    phraseIndex += 1;
+
+    if (!lines[i].includes(phrase)) {
+      lines[i] = `${lines[i]} ${phrase}`.trim();
+      injected += 1;
+    }
+
+    if (injected >= 3) break;
+  }
+
+  return lines.join("\n");
+}
+
+function enforceKpopMixedLyrics(
+  lyrics: { english: string; korean: string }
+): { english: string; korean: string } {
+  const koreanMixed = injectMixedPhrases(
+    lyrics.korean ?? "",
+    ["(Stay tonight)", "(You and I)", "(Feel alive)"],
+    containsLatin
+  );
+
+  const englishMixed = injectMixedPhrases(
+    lyrics.english ?? "",
+    ["(이 밤에)", "(너와 나)", "(괜찮아)"],
+    containsHangul
+  );
+
+  return {
+    korean: koreanMixed,
+    english: englishMixed,
   };
 }
 
@@ -297,10 +360,27 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   );
   const basePromptSeed = BASE_PROMPTS.join("\n");
 
-  const kpopInstruction =
-    params.kpopMode === 2
-      ? "Use Korean and English naturally mixed in the lyrics when it supports the request."
-      : "";
+  const isKpopMixedMode = params.isKpopSelected && params.kpopMode === 2;
+
+  const kpopInstruction = isKpopMixedMode
+    ? `K-POP MIXED LANGUAGE MODE (MANDATORY):
+- This request is specifically for K-Pop with Korean/English mixed lyrics.
+- Ratio: 70-75% Korean, 25-30% English.
+- Focus: English should be used primarily in choruses, hooks, and key points for impact.
+- Style: Natural K-Pop style, not forced.
+- For lyrics.korean: keep Korean as the main language, but include natural English words or short phrases in MULTIPLE sections.
+- For lyrics.english: keep English as the main language, but include natural Korean words or short phrases in MULTIPLE sections.
+- The chorus MUST contain visible code-switching.
+- Do not keep the two versions fully separated by language. The mixed-language feel must be obvious at a glance.
+- Keep the code-switching natural and melodic, like commercial K-Pop toplines and hooks.`
+    : "";
+
+  const structureInstruction = params.customStructure && params.customStructure.length > 0
+    ? `SONG STRUCTURE (MANDATORY):
+- You MUST follow this structure exactly: ${params.customStructure.join(' → ')}.
+- Do not add, remove, or change any sections.`
+    : `SONG STRUCTURE (DEFAULT):
+- ${BASIC_STRUCTURE}`;
 
   const systemInstruction = `
 You are a professional music composer and lyricist.
@@ -331,6 +411,8 @@ REFERENCE PRINCIPLES:
 ${basePromptSeed}
 
 ${kpopInstruction}
+
+${structureInstruction}
 
 Return JSON:
 {
@@ -396,6 +478,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   const result = JSON.parse(response.text || "{}");
 
+  if (isKpopMixedMode && result.lyrics) {
+    result.lyrics = enforceKpopMixedLyrics(result.lyrics);
+  }
+
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedDuration),
     ...(result.appliedKeywords ?? {}),
@@ -405,6 +491,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     style: params.styles ?? [],
     instrumentSound: params.instrumentSounds ?? [],
     tempo: result?.appliedKeywords?.tempo ?? params.tempo,
+    kpopMode: params.kpopMode ?? 0,
   };
 
   if (!result.prompt || typeof result.prompt !== "string") {

@@ -466,6 +466,42 @@ function getCycleVariantLabel(cycles: readonly { id: string; title: string; vari
     .map((variant) => variant!.label);
 }
 
+const STYLE_VARIANT_LOOKUP = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; description: string }>>((acc, variant) => {
+  acc[variant.id] = variant;
+  return acc;
+}, {});
+
+const STYLE_LABEL_TO_ID = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, string>>((acc, variant) => {
+  acc[variant.label] = variant.id;
+  return acc;
+}, {});
+
+const SOUND_VARIANT_LOOKUP = SOUND_TEXTURE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; description: string }>>((acc, variant) => {
+  acc[variant.id] = variant;
+  return acc;
+}, {});
+
+const SOUND_LABEL_TO_ID = SOUND_TEXTURE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, string>>((acc, variant) => {
+  acc[variant.label] = variant.id;
+  return acc;
+}, {});
+
+function resolveStyleIds(labelsOrIds: string[] = []) {
+  return Array.from(new Set(labelsOrIds.map((value) => STYLE_LABEL_TO_ID[value] ?? (STYLE_VARIANT_LOOKUP[value] ? value : null)).filter(Boolean) as string[]));
+}
+
+function resolveSoundTextureIds(labelsOrIds: string[] = []) {
+  return Array.from(new Set(labelsOrIds.map((value) => SOUND_LABEL_TO_ID[value] ?? (SOUND_VARIANT_LOOKUP[value] ? value : null)).filter(Boolean) as string[]));
+}
+
+function getStyleVariantLabelById(id: string) {
+  return STYLE_VARIANT_LOOKUP[id]?.label ?? id;
+}
+
+function getSoundVariantLabelById(id: string) {
+  return SOUND_VARIANT_LOOKUP[id]?.label ?? id;
+}
+
 
 const calculateOptimalBPM = (genres: string[], moods: string[]) => {
   let sumMin = 0;
@@ -826,6 +862,14 @@ function App() {
     const saved = sessionStorage.getItem('soridraw_pinned_themes');
     return saved ? JSON.parse(saved) : [];
   });
+  const [pinnedStyles, setPinnedStyles] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem('soridraw_pinned_styles');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [pinnedInstrumentSounds, setPinnedInstrumentSounds] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem('soridraw_pinned_instrument_sounds');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_genres', JSON.stringify(pinnedGenres));
@@ -836,6 +880,12 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_themes', JSON.stringify(pinnedThemes));
   }, [pinnedThemes]);
+  useEffect(() => {
+    sessionStorage.setItem('soridraw_pinned_styles', JSON.stringify(pinnedStyles));
+  }, [pinnedStyles]);
+  useEffect(() => {
+    sessionStorage.setItem('soridraw_pinned_instrument_sounds', JSON.stringify(pinnedInstrumentSounds));
+  }, [pinnedInstrumentSounds]);
   const [isGenreExpanded, setIsGenreExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
 
@@ -864,7 +914,7 @@ function App() {
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
   const [keywordsContentHeight, setKeywordsContentHeight] = useState(84);
   const collapsedKeywordsHeight = 84;
-  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length;
+  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length;
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleLongPressStart = (item: CategoryItem) => {
@@ -909,24 +959,6 @@ function App() {
       if (activeIndex < cycle.variants.length - 1) return [...withoutFamily, cycle.variants[activeIndex + 1].id];
       return withoutFamily;
     });
-  };
-
-  const randomizeStyleFamilies = () => {
-    const familyCount = Math.max(1, Math.floor(Math.random() * 4) + 1);
-    const picked = [...STYLE_CYCLES]
-      .sort(() => 0.5 - Math.random())
-      .slice(0, familyCount)
-      .map((cycle) => cycle.variants[Math.floor(Math.random() * cycle.variants.length)].id);
-    setSelectedStyles(picked);
-  };
-
-  const randomizeSoundTextureFamilies = () => {
-    const familyCount = Math.max(2, Math.floor(Math.random() * 5) + 2);
-    const picked = [...SOUND_TEXTURE_CYCLES]
-      .sort(() => 0.5 - Math.random())
-      .slice(0, familyCount)
-      .map((cycle) => cycle.variants[Math.floor(Math.random() * cycle.variants.length)].id);
-    setSelectedInstrumentSounds(picked);
   };
 
   useEffect(() => {
@@ -994,6 +1026,7 @@ function App() {
 
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
+  const [customStructure, setCustomStructure] = useState<string[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -1224,6 +1257,9 @@ function App() {
     const genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
+    const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
+    const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
+    const resolvedKpopMode = appliedKeywords.kpopMode ?? (genreIds.includes('kpop') ? 1 : 0);
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
@@ -1233,6 +1269,10 @@ function App() {
     setSelectedGenres(genreIds);
     setSelectedMoods(moodIds);
     setSelectedThemes(themeIds);
+    setSelectedStyles(styleIds);
+    setSelectedInstrumentSounds(instrumentSoundIds);
+    setKpopMode(genreIds.includes('kpop') ? resolvedKpopMode : 0);
+    setCitypopMode(genreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
@@ -1268,10 +1308,12 @@ function App() {
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
   const [isMoodRandomized, setIsMoodRandomized] = useState(false);
   const [isThemeRandomized, setIsThemeRandomized] = useState(false);
+  const [isStyleRandomized, setIsStyleRandomized] = useState(false);
+  const [isSoundTextureRandomized, setIsSoundTextureRandomized] = useState(false);
 
-  const randomizeCategory = (category: 'genre' | 'mood' | 'theme') => {
-    const all = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : THEMES);
-    const pinned = category === 'genre' ? pinnedGenres : (category === 'mood' ? pinnedMoods : pinnedThemes);
+  const randomizeCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
+    const all = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : (category === 'theme' ? THEMES : (category === 'style' ? SOUND_STYLES : INSTRUMENT_SOUNDS)));
+    const pinned = category === 'genre' ? pinnedGenres : (category === 'mood' ? pinnedMoods : (category === 'theme' ? pinnedThemes : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds)));
     const isGenre = category === 'genre';
     
     const result = [...pinned];
@@ -1299,6 +1341,14 @@ function App() {
     if (category === 'theme') {
       setSelectedThemes(final);
       setIsThemeRandomized(true);
+    }
+    if (category === 'style') {
+      setSelectedStyles(final);
+      setIsStyleRandomized(true);
+    }
+    if (category === 'sound') {
+      setSelectedInstrumentSounds(final);
+      setIsSoundTextureRandomized(true);
     }
   };
 
@@ -1402,11 +1452,13 @@ function App() {
   }, [user]);
 
 
-  const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme') => {
+  const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     const setters = {
       genre: { state: selectedGenres, set: setSelectedGenres, pinned: pinnedGenres },
       mood: { state: selectedMoods, set: setSelectedMoods, pinned: pinnedMoods },
-      theme: { state: selectedThemes, set: setSelectedThemes, pinned: pinnedThemes }
+      theme: { state: selectedThemes, set: setSelectedThemes, pinned: pinnedThemes },
+      style: { state: selectedStyles, set: setSelectedStyles, pinned: pinnedStyles },
+      sound: { state: selectedInstrumentSounds, set: setSelectedInstrumentSounds, pinned: pinnedInstrumentSounds }
     };
     
     const { state, set, pinned } = setters[category];
@@ -1418,6 +1470,8 @@ function App() {
     if (category === 'genre') setIsGenreRandomized(false);
     if (category === 'mood') setIsMoodRandomized(false);
     if (category === 'theme') setIsThemeRandomized(false);
+    if (category === 'style') setIsStyleRandomized(false);
+    if (category === 'sound') setIsSoundTextureRandomized(false);
 
     // K-Pop Special Logic
     if (category === 'genre' && id === 'kpop') {
@@ -1516,11 +1570,13 @@ function App() {
     }
   };
 
-  const togglePin = (id: string, category: 'genre' | 'mood' | 'theme') => {
+  const togglePin = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     const setters = {
       genre: { pinned: pinnedGenres, setPinned: setPinnedGenres, selected: selectedGenres, setSelected: setSelectedGenres },
       mood: { pinned: pinnedMoods, setPinned: setPinnedMoods, selected: selectedMoods, setSelected: setSelectedMoods },
-      theme: { pinned: pinnedThemes, setPinned: setPinnedThemes, selected: selectedThemes, setSelected: setSelectedThemes }
+      theme: { pinned: pinnedThemes, setPinned: setPinnedThemes, selected: selectedThemes, setSelected: setSelectedThemes },
+      style: { pinned: pinnedStyles, setPinned: setPinnedStyles, selected: selectedStyles, setSelected: setSelectedStyles },
+      sound: { pinned: pinnedInstrumentSounds, setPinned: setPinnedInstrumentSounds, selected: selectedInstrumentSounds, setSelected: setSelectedInstrumentSounds }
     };
 
     const { pinned, setPinned, selected, setSelected } = setters[category];
@@ -1541,7 +1597,7 @@ function App() {
     }
   };
 
-  const clearCategory = (category: 'genre' | 'mood' | 'theme') => {
+  const clearCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     if (category === 'genre') {
       setSelectedGenres(pinnedGenres);
       if (!pinnedGenres.includes('kpop')) setKpopMode(0);
@@ -1556,6 +1612,14 @@ function App() {
       setSelectedThemes(pinnedThemes);
       setIsThemeRandomized(false);
     }
+    if (category === 'style') {
+      setSelectedStyles(pinnedStyles);
+      setIsStyleRandomized(false);
+    }
+    if (category === 'sound') {
+      setSelectedInstrumentSounds(pinnedInstrumentSounds);
+      setIsSoundTextureRandomized(false);
+    }
   };
 
   const clearAll = async (options: ClearAllOptions = {}) => {
@@ -1565,18 +1629,24 @@ function App() {
       setPinnedGenres([]);
       setPinnedMoods([]);
       setPinnedThemes([]);
+      setPinnedStyles([]);
+      setPinnedInstrumentSounds([]);
     }
 
-    setSelectedGenres([]);
+    setSelectedGenres(preservePinned ? pinnedGenres : []);
+    setSelectedMoods(preservePinned ? pinnedMoods : []);
+    setSelectedThemes(preservePinned ? pinnedThemes : []);
+    setSelectedStyles(preservePinned ? pinnedStyles : []);
+    setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSounds : []);
 
     setKpopMode(0);
     setCitypopMode(0);
-    setSelectedMoods([]);
-    setSelectedThemes([]);
 
     setIsGenreRandomized(false);
     setIsMoodRandomized(false);
     setIsThemeRandomized(false);
+    setIsStyleRandomized(false);
+    setIsSoundTextureRandomized(false);
 
     setUserInput('');
     setLyricsLength('normal');
@@ -1682,10 +1752,10 @@ function App() {
 
     // Random selection: Total 5-15, balanced across categories
     const totalTarget = Math.floor(Math.random() * 11) + 5; // 5-15
-    const basePerCat = Math.floor(totalTarget / 3);
-    const extra = totalTarget % 3;
+    const basePerCat = Math.floor(totalTarget / 5);
+    const extra = totalTarget % 5;
 
-    const counts = [basePerCat, basePerCat, basePerCat];
+    const counts = [basePerCat, basePerCat, basePerCat, basePerCat, basePerCat];
     for (let i = 0; i < extra; i++) {
       counts[i]++;
     }
@@ -1696,14 +1766,20 @@ function App() {
     let g = getRandomForCategory(GENRES, pinnedGenres, counts[0], true);
     let m = getRandomForCategory(MOODS, pinnedMoods, counts[1]);
     let t = getRandomForCategory(THEMES, pinnedThemes, counts[2]);
+    let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, counts[3]);
+    let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, counts[4]);
 
     setSelectedGenres(g);
     setSelectedMoods(m);
     setSelectedThemes(t);
+    setSelectedStyles(s);
+    setSelectedInstrumentSounds(snd);
 
     setIsGenreRandomized(true);
     setIsMoodRandomized(true);
     setIsThemeRandomized(true);
+    setIsStyleRandomized(true);
+    setIsSoundTextureRandomized(true);
 
     // Random tempo logic
     if (tempoEnabled) {
@@ -1765,27 +1841,13 @@ const saveRecentSong = async (newSong: any) => {
       const hasGenre = finalGenres.length > 0;
       const hasMood = finalMoods.length > 0;
       const hasTheme = finalThemes.length > 0;
+      const hasStyle = finalStyles.length > 0;
+      const hasSound = finalInstrumentSounds.length > 0;
 
-      const selectedCount = [hasGenre, hasMood, hasTheme].filter(Boolean).length;
+      const selectedCount = [hasGenre, hasMood, hasTheme, hasStyle, hasSound].filter(Boolean).length;
 
-      // If exactly two are selected, pick one random for the third
-      if (selectedCount === 2) {
-        if (!hasGenre) {
-          const random = GENRES[Math.floor(Math.random() * GENRES.length)];
-          finalGenres = [random.id];
-          randomKeywords.push(random.label);
-        } else if (!hasMood) {
-          const random = MOODS[Math.floor(Math.random() * MOODS.length)];
-          finalMoods = [random.id];
-          randomKeywords.push(random.label);
-        } else if (!hasTheme) {
-          const random = THEMES[Math.floor(Math.random() * THEMES.length)];
-          finalThemes = [random.id];
-          randomKeywords.push(random.label);
-        }
-      }
       // If nothing selected, pick random (5-15 total)
-      else if (selectedCount === 0) {
+      if (selectedCount === 0) {
         const allItems = [
           ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
           ...MOODS.map(i => ({ ...i, cat: 'mood' as const })),
@@ -1937,6 +1999,7 @@ const saveRecentSong = async (newSong: any) => {
 
       const song = await generateSong({
         genre: finalGenres[0] ?? null,
+        isKpopSelected: selectedGenres.includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
 
         styles: styleLabels,
@@ -1954,7 +2017,7 @@ const saveRecentSong = async (newSong: any) => {
         tempo: tempoInfo,
         specialPrompt,
         kpopMode,
-        isBallad: hasBalladStyle,
+        customStructure,
       });
 
       if (abortControllerRef.current?.signal.aborted) return;
@@ -1965,6 +2028,11 @@ const saveRecentSong = async (newSong: any) => {
         prompt: songPrompt,
         appliedKeywords: {
           ...song.appliedKeywords,
+          theme: song.appliedKeywords.theme ?? styleLabels,
+          style: song.appliedKeywords.style ?? styleLabels,
+          instrumentSound: song.appliedKeywords.instrumentSound ?? finalInstrumentSounds,
+          kpopMode,
+          customStructure,
           lyricsLength,
           songDuration,
           maleCount,
@@ -2014,7 +2082,8 @@ const saveRecentSong = async (newSong: any) => {
     const keywords = [
       `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
       `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
-      `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+      result.appliedKeywords.style?.length ? `[Styles] ${result.appliedKeywords.style.join(', ')}` : `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+      result.appliedKeywords.instrumentSound?.length ? `[Sound / Texture] ${result.appliedKeywords.instrumentSound.map(getSoundVariantLabelById).join(', ')}` : '',
       result.appliedKeywords.vocalType ? `[Vocal] ${result.appliedKeywords.vocalType}` : '',
       result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
     ].filter(Boolean).join('\n');
@@ -2145,15 +2214,16 @@ ${result.prompt}
           />            
           <CycleSection 
             title="스타일" 
-            description="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이끕니다."
+            description="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
-            onClear={() => setSelectedStyles([])}
-            onRandom={randomizeStyleFamilies}
+            onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
+            onRandom={() => randomizeCategory('style')}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
+            isRandomized={isStyleRandomized}
           />
           <CycleSection 
             title="사운드/텍스쳐" 
@@ -2162,11 +2232,12 @@ ${result.prompt}
             cycles={SOUND_TEXTURE_CYCLES}
             selected={selectedInstrumentSounds}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES)}
-            onClear={() => setSelectedInstrumentSounds([])}
-            onRandom={randomizeSoundTextureFamilies}
+            onClear={() => { setSelectedInstrumentSounds([]); setIsSoundTextureRandomized(false); }}
+            onRandom={() => randomizeCategory('sound')}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
+            isRandomized={isSoundTextureRandomized}
           />
         </div>
 
@@ -2282,21 +2353,33 @@ ${result.prompt}
                 ref={keywordsContainerRef}
                 className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start"
               >
-                {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
-                    const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
+                {[
+                  ...selectedGenres.map((id) => ({ id, type: 'genre' as const, label: GENRES.find((item) => item.id === id)?.label ?? id })),
+                  ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.label ?? id })),
+                  ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.label ?? id })),
+                  ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
+                  ...selectedInstrumentSounds.map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })),
+                ].map((item) => {
+                    const chipClassName = item.type === 'style'
+                      ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
+                      : item.type === 'sound'
+                        ? 'px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
+                        : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
                     return (
                       <span
-                        key={id}
-                        className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                        key={`${item.type}-${item.id}`}
+                        className={chipClassName}
                       >
-                        {item?.label}
+                        {item.label}
                         <button 
                           onClick={() => {
-                            if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
-                            else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
-                            else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
+                            if (item.type === 'genre') toggleSelection(item.id, 'genre');
+                            else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+                            else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+                            else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
+                            else if (item.type === 'sound') setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
                           }}
-                          className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
+                          className="hover:bg-white/10 rounded-full p-0.5 transition-colors"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -2349,14 +2432,14 @@ ${result.prompt}
               <button
                 onClick={() => {
                   applyRandom();
-                  setHoveredItem({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' });
+                  setHoveredItem({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' });
                 }}
-                onMouseEnter={() => setHoveredItem({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
+                onMouseEnter={() => setHoveredItem({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
                 onMouseLeave={() => {
                   setHoveredItem(null);
                   handleLongPressEnd();
                 }}
-                onTouchStart={() => handleLongPressStart({ id: 'random', label: '랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
+                onTouchStart={() => handleLongPressStart({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
                 onTouchEnd={handleLongPressEnd}
                 className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
               >
@@ -2574,33 +2657,71 @@ ${result.prompt}
                   animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
                 >
-                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'mood'] as const).map((cat) => (
-                    <div key={cat} className="space-y-0.5 group/cat">
+                  {isAppliedKeywordsExpanded && [
+                    {
+                      key: 'genre',
+                      title: 'genre',
+                      values: result.appliedKeywords.genre ?? [],
+                      accent: 'default' as const,
+                      getDescription: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.description,
+                      getLabel: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
+                    },
+                    {
+                      key: 'style',
+                      title: 'style',
+                      values: result.appliedKeywords.style ?? result.appliedKeywords.theme ?? [],
+                      accent: 'violet' as const,
+                      getDescription: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.description,
+                      getLabel: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,
+                    },
+                    {
+                      key: 'mood',
+                      title: 'mood',
+                      values: result.appliedKeywords.mood ?? [],
+                      accent: 'default' as const,
+                      getDescription: (kw: string) => MOODS.find((item) => item.label === kw || item.id === kw)?.description,
+                      getLabel: (kw: string) => MOODS.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
+                    },
+                    {
+                      key: 'instrumentSound',
+                      title: 'sound / texture',
+                      values: result.appliedKeywords.instrumentSound ?? [],
+                      accent: 'sky' as const,
+                      getDescription: (kw: string) => SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw]?.description,
+                      getLabel: (kw: string) => SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,
+                    },
+                  ].filter((section) => section.values.length > 0).map((section) => (
+                    <div key={section.key} className="space-y-0.5 group/cat">
                       <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat === 'theme' ? 'style' : cat}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{section.title}</p>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {result.appliedKeywords[cat].map((kw, idx) => {
-                          const isRandom = result.randomKeywords?.includes(kw);
-                          const description = [...GENRES, ...MOODS, ...THEMES].find(item => item.label === kw)?.description;
+                        {section.values.map((kw, idx) => {
+                          const displayLabel = section.getLabel(kw);
+                          const description = section.getDescription(kw);
+                          const isRandom = result.randomKeywords?.includes(displayLabel) || result.randomKeywords?.includes(kw);
                           
                           return (
                             <span 
                               key={idx} 
                               onMouseEnter={() => {
                                 if (description) {
-                                  setHoveredItem({ id: `kw-${cat}-${idx}`, label: kw, description });
+                                  setHoveredItem({ id: `kw-${section.key}-${idx}`, label: displayLabel, description });
                                 }
                               }}
                               onMouseLeave={() => setHoveredItem(null)}
                               className={cn(
-                                "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help",
-                                isRandom 
-                                  ? "bg-brand-orange/20 text-brand-orange font-bold border border-brand-orange/30" 
-                                  : "bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)]"
+                                "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help border",
+                                section.accent === 'violet'
+                                  ? "bg-violet-500/10 text-violet-300 border-violet-400/20"
+                                  : section.accent === 'sky'
+                                    ? "bg-sky-500/10 text-sky-300 border-sky-400/20"
+                                    : isRandom 
+                                      ? "bg-brand-orange/20 text-brand-orange font-bold border-brand-orange/30" 
+                                      : "bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
                               )}
                             >
-                              {kw}
+                              {displayLabel}
                             </span>
                           );
                         })}
@@ -3098,9 +3219,10 @@ interface CycleSectionProps {
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
   titleClassName?: string;
+  isRandomized?: boolean;
 }
 
-function CycleSection({ title, description, cycles, selected, onCycleToggle, onClear, onRandom, onHover, onLongPressStart, onLongPressEnd, titleClassName }: CycleSectionProps) {
+function CycleSection({ title, description, cycles, selected, onCycleToggle, onClear, onRandom, onHover, onLongPressStart, onLongPressEnd, titleClassName, isRandomized }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
@@ -3131,7 +3253,7 @@ function CycleSection({ title, description, cycles, selected, onCycleToggle, onC
           </AnimatePresence>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={onRandom} className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all">
+          <button onClick={onRandom} className={`p-2.5 rounded-xl border border-[var(--border-color)] transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'}`}>
             <Dices className="w-4 h-4" />
           </button>
           <button onClick={onClear} className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all">

@@ -738,6 +738,7 @@ ${song.prompt}
       maleCount: song.appliedKeywords.maleCount ?? 0,
       femaleCount: song.appliedKeywords.femaleCount ?? 0,
       rapEnabled: song.appliedKeywords.rapEnabled ?? false,
+      kpopMode: song.appliedKeywords.kpopMode ?? 0,
       tempoConfig: song.appliedKeywords.tempoConfig ?? null
     }));
     navigate('/');

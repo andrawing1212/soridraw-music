@@ -862,6 +862,8 @@ function App() {
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(true);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
+  const [keywordsContentHeight, setKeywordsContentHeight] = useState(84);
+  const collapsedKeywordsHeight = 84;
   const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length;
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -929,10 +931,14 @@ function App() {
 
   useEffect(() => {
     if (keywordsContainerRef.current) {
-      const { scrollHeight, clientHeight } = keywordsContainerRef.current;
-      setHasKeywordsOverflow(scrollHeight > clientHeight + 5); // Small buffer
+      const fullHeight = keywordsContainerRef.current.scrollHeight;
+      setKeywordsContentHeight(Math.max(collapsedKeywordsHeight, fullHeight));
+      setHasKeywordsOverflow(fullHeight > collapsedKeywordsHeight + 5);
+    } else {
+      setKeywordsContentHeight(collapsedKeywordsHeight);
+      setHasKeywordsOverflow(false);
     }
-  }, [selectedGenres, selectedThemes, selectedMoods, selectedStyles, selectedInstrumentSounds]);
+  }, [selectedGenres, selectedThemes, selectedMoods, selectedStyles, selectedInstrumentSounds, collapsedKeywordsHeight]);
 
   useEffect(() => {
     if (hoveredItem) {
@@ -2268,34 +2274,36 @@ ${result.prompt}
         <div className="space-y-6">
           {/* Applied Keywords Display */}
           <div className="relative">
-            <div 
-              ref={keywordsContainerRef}
-              className={cn(
-                "flex flex-wrap gap-2 justify-center overflow-hidden min-h-[84px] content-start",
-                !isKeywordsExpanded ? "max-h-[84px]" : "max-h-none"
-              )}
+            <div
+              className="overflow-hidden transition-[max-height] duration-300 ease-out"
+              style={{ maxHeight: isKeywordsExpanded ? `${keywordsContentHeight}px` : `${collapsedKeywordsHeight}px` }}
             >
-              {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
-                  const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
-                  return (
-                    <span
-                      key={id}
-                      className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
-                    >
-                      {item?.label}
-                      <button 
-                        onClick={() => {
-                          if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
-                          else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
-                          else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
-                        }}
-                        className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
+              <div 
+                ref={keywordsContainerRef}
+                className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start"
+              >
+                {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
+                    const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  );
-                })}
+                        {item?.label}
+                        <button 
+                          onClick={() => {
+                            if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
+                            else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
+                            else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
+                          }}
+                          className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+              </div>
             </div>
             
             {selectedKeywordCount > 0 && (hasKeywordsOverflow || !isKeywordsExpanded) && (

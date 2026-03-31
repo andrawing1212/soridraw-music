@@ -861,9 +861,7 @@ function App() {
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(true);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
-  const keywordsInnerRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
-  const [keywordsExpandedHeight, setKeywordsExpandedHeight] = useState(84);
   const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length;
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -930,29 +928,10 @@ function App() {
   };
 
   useEffect(() => {
-    const updateKeywordLayout = () => {
-      const el = keywordsInnerRef.current;
-      if (!el) return;
-      const contentHeight = el.scrollHeight;
-      setKeywordsExpandedHeight(Math.max(84, contentHeight));
-      setHasKeywordsOverflow(contentHeight > 84 + 4);
-    };
-
-    updateKeywordLayout();
-
-    const resizeObserver = typeof ResizeObserver !== 'undefined' && keywordsInnerRef.current
-      ? new ResizeObserver(() => updateKeywordLayout())
-      : null;
-
-    if (resizeObserver && keywordsInnerRef.current) {
-      resizeObserver.observe(keywordsInnerRef.current);
+    if (keywordsContainerRef.current) {
+      const { scrollHeight, clientHeight } = keywordsContainerRef.current;
+      setHasKeywordsOverflow(scrollHeight > clientHeight + 5); // Small buffer
     }
-
-    window.addEventListener('resize', updateKeywordLayout);
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', updateKeywordLayout);
-    };
   }, [selectedGenres, selectedThemes, selectedMoods, selectedStyles, selectedInstrumentSounds]);
 
   useEffect(() => {
@@ -2233,6 +2212,29 @@ ${result.prompt}
             <LyricsControl 
               value={lyricsLength}
               onChange={setLyricsLength}
+              kpopMode={kpopMode}
+              isKpopSelected={selectedGenres.includes('kpop')}
+              onToggleMixedLyrics={() => {
+                if (!selectedGenres.includes('kpop')) {
+                  setHoveredItem({
+                    id: 'lyrics-mix-disabled',
+                    label: '한/영 혼합',
+                    description: '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.',
+                    _ts: Date.now(),
+                  });
+                  return;
+                }
+                const nextMode = kpopMode === 2 ? 1 : 2;
+                setKpopMode(nextMode);
+                setHoveredItem({
+                  id: 'lyrics-mix-toggle',
+                  label: '한/영 혼합',
+                  description: nextMode === 2
+                    ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용합니다.'
+                    : 'K-Pop 가사를 기본 한국어 중심 흐름으로 되돌립니다.',
+                  _ts: Date.now(),
+                });
+              }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
@@ -2266,37 +2268,34 @@ ${result.prompt}
         <div className="space-y-6">
           {/* Applied Keywords Display */}
           <div className="relative">
-            <div
+            <div 
               ref={keywordsContainerRef}
-              className="overflow-hidden transition-[max-height] duration-300 ease-out"
-              style={{ maxHeight: isKeywordsExpanded ? `${keywordsExpandedHeight}px` : '84px' }}
+              className={cn(
+                "flex flex-wrap gap-2 justify-center overflow-hidden min-h-[84px] content-start",
+                !isKeywordsExpanded ? "max-h-[84px]" : "max-h-none"
+              )}
             >
-              <div
-                ref={keywordsInnerRef}
-                className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start"
-              >
-                {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
-                    const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
-                    return (
-                      <span
-                        key={id}
-                        className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
+                  const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
+                  return (
+                    <span
+                      key={id}
+                      className="px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                    >
+                      {item?.label}
+                      <button 
+                        onClick={() => {
+                          if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
+                          else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
+                          else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
+                        }}
+                        className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
                       >
-                        {item?.label}
-                        <button 
-                          onClick={() => {
-                            if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
-                            else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
-                            else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
-                          }}
-                          className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    );
-                  })}
-              </div>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
             </div>
             
             {selectedKeywordCount > 0 && (hasKeywordsOverflow || !isKeywordsExpanded) && (
@@ -3456,12 +3455,15 @@ function CategorySection({
 interface LyricsControlProps {
   value: LyricsLength;
   onChange: (val: LyricsLength) => void;
+  kpopMode: 0 | 1 | 2;
+  isKpopSelected: boolean;
+  onToggleMixedLyrics: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function LyricsControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
+function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixedLyrics, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -3474,7 +3476,7 @@ function LyricsControl({ value, onChange, onHover, onLongPressStart, onLongPress
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6">
+      <div className="relative mb-6 flex items-center justify-between gap-3">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
           onMouseLeave={() => setShowTitleTooltip(false)}
@@ -3483,15 +3485,56 @@ function LyricsControl({ value, onChange, onHover, onLongPressStart, onLongPress
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
           가사
         </h3>
+
+        <button
+          onClick={onToggleMixedLyrics}
+          onMouseEnter={() => onHover({
+            id: 'lyrics-mix',
+            label: '한/영 혼합',
+            description: !isKpopSelected
+              ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
+              : kpopMode === 2
+                ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
+                : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
+          })}
+          onMouseLeave={() => {
+            onHover(null);
+            onLongPressEnd();
+          }}
+          onTouchStart={() => onLongPressStart({
+            id: 'lyrics-mix',
+            label: '한/영 혼합',
+            description: !isKpopSelected
+              ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
+              : kpopMode === 2
+                ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
+                : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
+          })}
+          onTouchEnd={onLongPressEnd}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+            !isKpopSelected
+              ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)]/60"
+              : kpopMode === 2
+                ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
+                : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)]"
+          )}
+        >
+          <span className={cn(
+            "w-2 h-2 rounded-full",
+            !isKpopSelected ? "bg-[var(--text-secondary)]/40" : kpopMode === 2 ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
+          )} />
+          한/영 혼합 {isKpopSelected ? (kpopMode === 2 ? 'ON' : 'OFF') : '대기'}
+        </button>
         <AnimatePresence>
           {showTitleTooltip && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
+              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-56 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다. K-Pop 선택 시 오른쪽 토글로 한글/영어 혼합 가사도 설정할 수 있습니다.</p>
             </motion.div>
           )}
         </AnimatePresence>

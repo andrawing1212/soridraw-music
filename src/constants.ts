@@ -1,9 +1,13 @@
-import { CategoryItem, GenreGroup, SoundStyleItem } from './types';
+import {
+  CategoryItem,
+  GenreGroup,
+  InstrumentSoundItem,
+  SoundStyleItem,
+} from './types';
 
 /**
- * 기존 화면 / FavoritesPage 호환용 평면 장르 목록
- * - FavoritesPage, 기존 appliedKeywords 표시용
- * - 새 App 구조에서도 선택 결과 표시용 fallback 으로 유지
+ * FavoritesPage 호환용 평면 장르 목록
+ * - 기존 저장 구조 / 검색 / 상세보기와 호환 유지
  */
 export const GENRES: CategoryItem[] = [
   { id: 'dance-pop', label: 'Dance Pop', description: '강한 훅과 리듬감이 있는 대중적인 댄스 팝입니다.' },
@@ -88,157 +92,116 @@ export const GENRES: CategoryItem[] = [
   { id: 'semi-trot', label: 'Semi-Trot', description: '현대적으로 다듬어진 대중적 트로트 스타일입니다.' },
 ];
 
+function groupChildren(ids: string[]) {
+  return GENRES.filter(item => ids.includes(item.id)).map(item => ({
+    ...item,
+    promptCore: `Base genre identity: ${item.label}. ${item.description}`
+  }));
+}
+
 /**
- * 새 장르 선택 UI용
- * - 대분류 7개를 먼저 노출
- * - 클릭하면 실제 장르(중분류) 목록을 보여줌
+ * 장르 대분류 → 실제 선택 장르 구조
  */
 export const GENRE_GROUPS: GenreGroup[] = [
   {
     id: 'pop',
     label: 'Pop',
     description: '가장 대중적이며 상업적인 성공을 목적으로 하는 음악군입니다.',
-    children: [
-      { id: 'dance-pop', label: 'Dance Pop', description: '강한 훅과 리듬감의 팝', promptCore: 'A dance-pop track with strong hooks, polished production, and mainstream energy.' },
-      { id: 'synth-pop', label: 'Synth Pop', description: '신스 중심 팝', promptCore: 'A synth-pop track with bright synthesizers, catchy melody, and sleek pop arrangement.' },
-      { id: 'teen-pop', label: 'Teen Pop', description: '밝은 틴 팝', promptCore: 'A teen-pop track with youthful energy, catchy chorus, and clean mainstream arrangement.' },
-      { id: 'k-pop', label: 'K-Pop', description: '한국형 팝', promptCore: 'A polished K-pop track with strong hook design, sleek production, and dynamic pop structure.' },
-      { id: 'j-pop', label: 'J-Pop', description: '일본형 팝', promptCore: 'A melodic J-pop track with expressive phrasing, colorful arrangement, and polished pop structure.' },
-      { id: 'latin-pop', label: 'Latin Pop', description: '라틴 팝', promptCore: 'A Latin pop track with rhythmic vitality, catchy vocals, and a bright commercial pop feel.' },
-      { id: 'soulful-pop', label: 'Soulful Pop', description: '소울풀 팝', promptCore: 'A soulful pop track with expressive vocals, warm harmony, and polished mainstream accessibility.' },
-      { id: 'piano-ballad', label: 'Piano Ballad', description: '피아노 발라드', promptCore: 'A piano ballad with emotional pacing, strong vocal focus, and heartfelt melodic flow.' },
-      { id: 'adult-contemporary', label: 'Adult Contemporary', description: '어덜트 컨템포러리', promptCore: 'An adult contemporary track with polished vocals, emotional clarity, and refined mainstream softness.' },
-      { id: 'indie-pop', label: 'Indie Pop', description: '인디 팝', promptCore: 'An indie-pop track with tasteful restraint, melodic charm, and an intimate modern feel.' },
-      { id: 'chamber-pop', label: 'Chamber Pop', description: '챔버 팝', promptCore: 'A chamber pop track with refined orchestration, delicate textures, and elegant melodic writing.' },
-    ],
+    children: groupChildren([
+      'dance-pop','synth-pop','teen-pop','k-pop','j-pop','latin-pop',
+      'soulful-pop','piano-ballad','adult-contemporary','indie-pop','chamber-pop'
+    ]),
   },
   {
     id: 'rock',
     label: 'Rock & Metal',
     description: '기타, 베이스, 드럼의 강렬한 사운드와 저항 정신을 기반으로 합니다.',
-    children: [
-      { id: 'grunge', label: 'Grunge', description: '거칠고 무거운 록', promptCore: 'A grunge track with raw guitar texture, heavy band energy, and emotionally rough-edged movement.' },
-      { id: 'britpop', label: 'Britpop', description: '영국식 팝 록', promptCore: 'A Britpop track with melodic guitar hooks, confident attitude, and bright band-led momentum.' },
-      { id: 'shoegaze', label: 'Shoegaze', description: '공간감 중심 록', promptCore: 'A shoegaze track with layered guitars, dreamy haze, and immersive wall-of-sound atmosphere.' },
-      { id: 'post-rock', label: 'Post Rock', description: '서사적 록', promptCore: 'A post-rock track with gradual cinematic build, expansive texture, and instrumental emotional lift.' },
-      { id: 'punk-rock', label: 'Punk Rock', description: '펑크 록', promptCore: 'A punk rock track with brisk momentum, rebellious energy, and stripped-down band force.' },
-      { id: 'heavy-metal', label: 'Heavy Metal', description: '헤비 메탈', promptCore: 'A heavy metal track with strong guitar riffs, forceful rhythm, and intense heavy energy.' },
-      { id: 'thrash-metal', label: 'Thrash Metal', description: '스래시 메탈', promptCore: 'A thrash metal track with aggressive speed, sharp riffing, and relentless power.' },
-      { id: 'death-metal', label: 'Death Metal', description: '데스 메탈', promptCore: 'A death metal track with crushing heaviness, dark aggression, and extreme sonic density.' },
-      { id: 'progressive-rock', label: 'Progressive Rock', description: '프로그레시브 록', promptCore: 'A progressive rock track with complex structure, dynamic transitions, and ambitious musical scope.' },
-      { id: 'psychedelic-rock', label: 'Psychedelic Rock', description: '사이키델릭 록', promptCore: 'A psychedelic rock track with swirling textures, altered-space atmosphere, and exploratory guitar movement.' },
-    ],
+    children: groupChildren([
+      'grunge','britpop','shoegaze','post-rock','punk-rock',
+      'heavy-metal','thrash-metal','death-metal','progressive-rock','psychedelic-rock'
+    ]),
   },
   {
     id: 'hiphop',
     label: 'Hip-hop & R&B',
     description: '리듬과 그루브, 라임과 비트를 강조하는 블랙 뮤직의 핵심입니다.',
-    children: [
-      { id: 'boom-bap', label: 'Boom Bap', description: '클래식 힙합', promptCore: 'A boom bap track with classic drum groove, sample-led texture, and grounded hip-hop attitude.' },
-      { id: 'trap', label: 'Trap', description: '트랩', promptCore: 'A trap track with deep 808 bass, tight hi-hat rolls, and modern rhythmic aggression.' },
-      { id: 'drill', label: 'Drill', description: '드릴', promptCore: 'A drill track with dark pulse, tense rhythm, and sharp urban energy.' },
-      { id: 'gangsta-rap', label: 'Gangsta Rap', description: '갱스터 랩', promptCore: 'A gangsta rap track with direct attitude, heavy groove, and hard-edged rhythmic flow.' },
-      { id: 'lofi-hiphop', label: 'Lo-fi Hip-Hop', description: '로파이 힙합', promptCore: 'A lo-fi hip-hop track with dusty texture, mellow beat, and relaxed head-nod groove.' },
-      { id: 'contemporary-rnb', label: 'Contemporary R&B', description: '컨템포러리 R&B', promptCore: 'A contemporary R&B track with smooth vocals, refined groove, and modern urban polish.' },
-      { id: 'motown', label: 'Motown', description: '모타운', promptCore: 'A Motown-inspired track with classic soul rhythm, melodic warmth, and rich vocal energy.' },
-      { id: 'gospel', label: 'Gospel', description: '가스펠', promptCore: 'A gospel-inspired track with uplifting harmony, emotional vocal power, and spiritual warmth.' },
-      { id: 'funk-rnb', label: 'Funk', description: '펑크', promptCore: 'A funk-driven track with tight bass groove, syncopated rhythm, and lively movement.' },
-      { id: 'pb-rnb', label: 'PBR&B', description: 'PBR&B', promptCore: 'A PBR&B track with dark atmospheric texture, moody space, and modern alternative R&B mood.' },
-      { id: 'jazz-hiphop', label: 'Jazz Hip-Hop', description: '재즈 힙합', promptCore: 'A jazz hip-hop track with laid-back groove, jazzy harmony, and refined rhythmic flow.' },
-      { id: 'neo-soul', label: 'Neo Soul', description: '네오 소울', promptCore: 'A neo-soul track with warm harmony, deep groove, and soulful modern sophistication.' },
-    ],
+    children: groupChildren([
+      'boom-bap','trap','drill','gangsta-rap','lofi-hiphop',
+      'contemporary-rnb','motown','gospel','funk-rnb','pb-rnb','jazz-hiphop','neo-soul'
+    ]),
   },
   {
     id: 'electronic',
     label: 'Electronic / EDM',
     description: '컴퓨터와 신디사이저를 활용한 사운드 디자인 중심의 음악입니다.',
-    children: [
-      { id: 'house', label: 'House', description: '하우스', promptCore: 'A house track with four-on-the-floor pulse, polished club groove, and dance-floor energy.' },
-      { id: 'techno', label: 'Techno', description: '테크노', promptCore: 'A techno track with repetitive drive, hypnotic pulse, and sleek mechanical intensity.' },
-      { id: 'trance', label: 'Trance', description: '트랜스', promptCore: 'A trance track with uplifting progression, immersive build, and expansive electronic emotion.' },
-      { id: 'dubstep', label: 'Dubstep', description: '덥스텝', promptCore: 'A dubstep track with aggressive bass motion, strong drops, and high-impact electronic tension.' },
-      { id: 'drum-and-bass', label: 'Drum & Bass', description: '드럼 앤 베이스', promptCore: 'A drum and bass track with fast breakbeats, driving low-end, and kinetic momentum.' },
-      { id: 'future-bass', label: 'Future Bass', description: '퓨처 베이스', promptCore: 'A future bass track with emotional synth swells, modern drops, and vibrant melodic lift.' },
-      { id: 'ambient-electronic', label: 'Ambient', description: '앰비언트 일렉트로닉', promptCore: 'An ambient electronic track with spacious texture, slow movement, and immersive atmosphere.' },
-      { id: 'vaporwave', label: 'Vaporwave', description: '베이퍼웨이브', promptCore: 'A vaporwave track with nostalgic digital haze, retro texture, and dreamy synthetic drift.' },
-      { id: 'electro-pop', label: 'Electro Pop', description: '일렉트로 팝', promptCore: 'An electro-pop track with catchy melody, crisp synth production, and radio-friendly energy.' },
-      { id: 'eurobeat', label: 'Eurobeat', description: '유로비트', promptCore: 'A eurobeat track with fast tempo, dramatic melodic drive, and high-octane dance energy.' },
-    ],
+    children: groupChildren([
+      'house','techno','trance','dubstep','drum-and-bass',
+      'future-bass','ambient-electronic','vaporwave','electro-pop','eurobeat'
+    ]),
   },
   {
     id: 'jazz-blues',
     label: 'Jazz & Blues',
     description: '즉흥 연주와 독특한 화성 체계를 가진 현대 대중음악의 뿌리입니다.',
-    children: [
-      { id: 'swing', label: 'Swing', description: '스윙', promptCore: 'A swing track with lively rhythm, brass-friendly momentum, and classic jazz elegance.' },
-      { id: 'bebop', label: 'Bebop', description: '비밥', promptCore: 'A bebop-inspired track with brisk harmonic motion, agile phrasing, and sophisticated jazz attitude.' },
-      { id: 'cool-jazz', label: 'Cool Jazz', description: '쿨 재즈', promptCore: 'A cool jazz track with understated sophistication, smooth phrasing, and relaxed elegance.' },
-      { id: 'hard-bop', label: 'Hard Bop', description: '하드 밥', promptCore: 'A hard bop track with soulful intensity, rich rhythm section interplay, and jazz drive.' },
-      { id: 'free-jazz', label: 'Free Jazz', description: '프리 재즈', promptCore: 'A free jazz-inspired track with open structure, experimental movement, and expressive unpredictability.' },
-      { id: 'fusion-jazz', label: 'Fusion Jazz', description: '퓨전 재즈', promptCore: 'A fusion jazz track with modern energy, rhythmic sophistication, and expanded instrumental color.' },
-      { id: 'bossanova', label: 'Bossanova', description: '보사노바', promptCore: 'A bossa nova track with soft Brazilian rhythm, gentle jazz harmony, and intimate elegance.' },
-      { id: 'acid-jazz', label: 'Acid Jazz', description: '애시드 재즈', promptCore: 'An acid jazz track with groove-forward rhythm, jazzy color, and stylish urban motion.' },
-      { id: 'delta-blues', label: 'Delta Blues', description: '델타 블루스', promptCore: 'A delta blues track with raw roots feeling, earthy phrasing, and stripped emotional weight.' },
-      { id: 'chicago-blues', label: 'Chicago Blues', description: '시카고 블루스', promptCore: 'A Chicago blues track with electric blues energy, soulful phrasing, and urban grit.' },
-    ],
+    children: groupChildren([
+      'swing','bebop','cool-jazz','hard-bop','free-jazz',
+      'fusion-jazz','bossanova','acid-jazz','delta-blues','chicago-blues'
+    ]),
   },
   {
     id: 'folk-country',
     label: 'Folk & Country',
     description: '전통적인 악기와 서사적인 가사를 중시하는 음악군입니다.',
-    children: [
-      { id: 'modern-folk', label: 'Modern Folk', description: '모던 포크', promptCore: 'A modern folk track with organic warmth, narrative intimacy, and natural acoustic flow.' },
-      { id: 'anti-folk', label: 'Anti-Folk', description: '안티 포크', promptCore: 'An anti-folk track with rough honesty, direct storytelling, and unpolished charm.' },
-      { id: 'folk-rock', label: 'Folk Rock', description: '포크 록', promptCore: 'A folk rock track with acoustic roots, band support, and narrative melodic lift.' },
-      { id: 'singer-songwriter', label: 'Singer-Songwriter', description: '싱어송라이터', promptCore: 'A singer-songwriter track with intimate lyric focus, organic arrangement, and personal emotional clarity.' },
-      { id: 'world-music', label: 'World Music', description: '월드 뮤직', promptCore: 'A world-music-inspired track with global rhythmic color, organic texture, and cross-cultural flavor.' },
-      { id: 'country-pop', label: 'Country Pop', description: '컨트리 팝', promptCore: 'A country pop track with accessible melody, warm roots texture, and broad mainstream appeal.' },
-      { id: 'bluegrass', label: 'Bluegrass', description: '블루그래스', promptCore: 'A bluegrass track with lively string work, acoustic drive, and traditional rural energy.' },
-      { id: 'americana', label: 'Americana', description: '아메리카나', promptCore: 'An Americana track with roots authenticity, warm storytelling, and earthy instrumental character.' },
-      { id: 'honky-tonk', label: 'Honky-Tonk', description: '혼키통크', promptCore: 'A honky-tonk track with rhythmic bounce, classic country piano flavor, and lively barroom energy.' },
-      { id: 'southern-rock', label: 'Southern Rock', description: '서던 록', promptCore: 'A southern rock track with bluesy guitar spirit, grounded swagger, and band-led drive.' },
-    ],
+    children: groupChildren([
+      'modern-folk','anti-folk','folk-rock','singer-songwriter','world-music',
+      'country-pop','bluegrass','americana','honky-tonk','southern-rock'
+    ]),
   },
   {
     id: 'functional',
     label: 'Functional / OST / Trot',
     description: '용도나 제작 방식에 따른 분류입니다.',
-    children: [
-      { id: 'film-score', label: 'Film Score', description: '영화 음악', promptCore: 'A film score-style track with cinematic pacing, emotional lift, and strong visual storytelling tone.' },
-      { id: 'game-bgm', label: 'Game BGM', description: '게임 BGM', promptCore: 'A game BGM-style track with loop-friendly movement, immersive atmosphere, and supportive energy.' },
-      { id: 'drama-theme', label: 'Drama Theme', description: '드라마 테마', promptCore: 'A drama theme track with emotional pacing, strong motif, and cinematic television-style mood.' },
-      { id: 'piano-instrumental', label: 'Piano', description: '피아노 연주곡', promptCore: 'A piano instrumental track with clear melodic focus, expressive dynamics, and emotional intimacy.' },
-      { id: 'guitar-instrumental', label: 'Guitar', description: '기타 연주곡', promptCore: 'A guitar instrumental track with organic warmth, melodic clarity, and natural expressive movement.' },
-      { id: 'lofi-instrumental', label: 'Lo-fi', description: '로파이 연주곡', promptCore: 'A lo-fi instrumental track with dusty texture, mellow looped groove, and cozy atmosphere.' },
-      { id: 'healing-music', label: 'Healing Music', description: '힐링 음악', promptCore: 'A healing track with calm flow, soothing texture, and restful emotional atmosphere.' },
-      { id: 'meditation-music', label: 'Meditation Music', description: '명상 음악', promptCore: 'A meditation track with minimal movement, spacious calm, and deeply restorative stillness.' },
-      { id: 'ambient-newage', label: 'Ambient New Age', description: '뉴에이지/앰비언트', promptCore: 'An ambient new-age track with serene flow, meditative pacing, and peaceful spacious tone.' },
-      { id: 'traditional-trot', label: 'Traditional Trot', description: '전통 트로트', promptCore: 'A traditional trot track with dramatic Korean melodic phrasing, emotional vocal style, and classic sentiment.' },
-      { id: 'semi-trot', label: 'Semi-Trot', description: '세미 트로트', promptCore: 'A semi-trot track with bright mainstream trot energy, lively rhythm, and accessible modern polish.' },
-    ],
+    children: groupChildren([
+      'film-score','game-bgm','drama-theme','piano-instrumental','guitar-instrumental',
+      'lofi-instrumental','healing-music','meditation-music','ambient-newage',
+      'traditional-trot','semi-trot'
+    ]),
   },
 ];
 
 /**
- * 스타일 = 장르에 추가로 입히는 중간 레이어
- * - 최대 2개 선택 권장
- * - FavoritesPage 호환을 위해 theme에도 함께 기록 예정
+ * 스타일 레이어
  */
 export const SOUND_STYLES: SoundStyleItem[] = [
-  { id: 'ballad', label: 'Ballad', description: '느린 전개와 감정 중심 구조', promptCore: 'The track follows a ballad-style structure with slower pacing, emotional focus, and a vocal-centered arrangement.' },
-  { id: 'dance', label: 'Dance', description: '리듬과 퍼포먼스 중심', promptCore: 'The track emphasizes danceable rhythm, performance energy, and clear beat-driven motion.' },
-  { id: 'hiphop', label: 'Hip-Hop', description: '비트와 랩 감성', promptCore: 'The track incorporates hip-hop rhythmic attitude, beat focus, and urban motion.' },
-  { id: 'jazz', label: 'Jazz', description: '재즈 화성과 스윙 감성', promptCore: 'The track incorporates jazz harmony, fluid phrasing, and sophisticated rhythmic feel.' },
-  { id: 'acoustic', label: 'Acoustic', description: '자연 악기 중심', promptCore: 'The arrangement is acoustic-centered, using organic instruments and warm natural texture.' },
-  { id: 'lofi', label: 'Lo-fi', description: '빈티지 질감과 편안함', promptCore: 'The track uses lo-fi texture, softened transients, and a warm slightly dusty atmosphere.' },
-  { id: 'orchestral', label: 'Orchestral', description: '현악/오케스트라 확장감', promptCore: 'The arrangement includes orchestral color, cinematic lift, and expanded instrumental depth.' },
-  { id: 'synth', label: 'Synth', description: '신스 중심 질감', promptCore: 'The arrangement is synth-led, with electronic textures shaping the song identity.' },
-  { id: 'funk', label: 'Funk', description: '그루브 중심 리듬감', promptCore: 'The arrangement emphasizes tight funk groove, syncopation, and rhythmic movement.' },
-  { id: 'punk', label: 'Punk', description: '거칠고 빠른 에너지', promptCore: 'The track carries punk-like urgency, speed, and direct raw energy.' },
-  { id: 'latin', label: 'Latin', description: '라틴 리듬 컬러', promptCore: 'The track incorporates Latin rhythmic flavor, lively percussion motion, and colorful energy.' },
-  { id: 'reggae', label: 'Reggae', description: '엇박자와 여유로운 흐름', promptCore: 'The track incorporates reggae-style offbeat rhythm and laid-back motion.' },
-  { id: 'opera', label: 'Opera', description: '극적이고 성악적인 웅장함', promptCore: 'The track includes operatic drama, grand emotional projection, and theatrical scale.' },
-  { id: 'anime', label: 'Anime', description: '애니메이션 OST 같은 전개감', promptCore: 'The track carries anime-style emotional intensity, melodic drama, and dynamic theme-song energy.' },
+  { id: 'ballad', label: 'Ballad', description: '느린 전개와 감정 중심 구조', promptCore: 'Style layer: ballad structure with slower pacing, emotional emphasis, and vocal-centered development.' },
+  { id: 'dance', label: 'Dance', description: '리듬과 퍼포먼스 중심', promptCore: 'Style layer: dance-focused energy, clear pulse, and performance-ready rhythmic drive.' },
+  { id: 'hiphop', label: 'Hip-Hop', description: '비트와 랩 감성', promptCore: 'Style layer: hip-hop rhythmic attitude, groove emphasis, and urban movement.' },
+  { id: 'jazz', label: 'Jazz', description: '재즈 화성과 스윙 감성', promptCore: 'Style layer: jazz-inflected harmony, fluid phrasing, and refined rhythmic sophistication.' },
+  { id: 'acoustic', label: 'Acoustic', description: '자연 악기 중심', promptCore: 'Style layer: acoustic-led arrangement with organic texture and natural instrumental warmth.' },
+  { id: 'lofi', label: 'Lo-fi', description: '빈티지 질감과 편안함', promptCore: 'Style layer: lo-fi texture with softened transients, warm grain, and cozy imperfection.' },
+  { id: 'orchestral', label: 'Orchestral', description: '현악/오케스트라 확장감', promptCore: 'Style layer: orchestral expansion with strings, cinematic lift, and wider arrangement depth.' },
+  { id: 'synth', label: 'Synth', description: '신스 중심 질감', promptCore: 'Style layer: synth-forward sonics with electronic tone-shaping and modern texture.' },
+  { id: 'funk', label: 'Funk', description: '그루브 중심 리듬감', promptCore: 'Style layer: funk groove, syncopation, and rhythm-section-led movement.' },
+  { id: 'punk', label: 'Punk', description: '거칠고 빠른 에너지', promptCore: 'Style layer: punk urgency, stripped-down attack, and brisk raw momentum.' },
+  { id: 'latin', label: 'Latin', description: '라틴 리듬 컬러', promptCore: 'Style layer: Latin rhythmic color, lively percussion feel, and danceable movement.' },
+  { id: 'reggae', label: 'Reggae', description: '엇박자와 여유로운 흐름', promptCore: 'Style layer: reggae offbeat groove and laid-back rhythmic motion.' },
+  { id: 'opera', label: 'Opera', description: '극적이고 성악적인 웅장함', promptCore: 'Style layer: operatic drama, theatrical scale, and grand vocal projection.' },
+  { id: 'anime', label: 'Anime', description: '애니메이션 OST 같은 전개감', promptCore: 'Style layer: anime-theme intensity, melodic drama, and emotionally dynamic lift.' },
+];
+
+/**
+ * 악기 / 사운드 레이어
+ */
+export const INSTRUMENT_SOUNDS: InstrumentSoundItem[] = [
+  { id: 'piano', label: 'Piano', description: '피아노 중심의 선율과 질감', promptCore: 'Instrument/sound layer: piano-centered arrangement with expressive melodic support.' },
+  { id: 'guitar', label: 'Guitar', description: '기타 중심의 질감과 리듬', promptCore: 'Instrument/sound layer: guitar-led arrangement with clear string texture and rhythmic support.' },
+  { id: 'acoustic-sound', label: 'Acoustic', description: '어쿠스틱 악기 중심의 따뜻한 톤', promptCore: 'Instrument/sound layer: organic acoustic instrumentation and warm natural tone.' },
+  { id: 'synth-sound', label: 'Synth', description: '신스 중심의 전자적 질감', promptCore: 'Instrument/sound layer: synth-led sonics with modern electronic color.' },
+  { id: 'band', label: 'Band', description: '밴드 편성 중심', promptCore: 'Instrument/sound layer: full band arrangement with live ensemble interaction.' },
+  { id: 'strings', label: 'Strings', description: '현악기 중심의 서정성', promptCore: 'Instrument/sound layer: string presence adding warmth, lift, and emotional contour.' },
+  { id: 'orchestral-sound', label: 'Orchestral', description: '오케스트라적 스케일', promptCore: 'Instrument/sound layer: orchestral color and cinematic depth.' },
+  { id: 'lofi-texture', label: 'Lo-fi Texture', description: '질감 중심의 빈티지 톤', promptCore: 'Instrument/sound layer: lo-fi texture, softened detail, and warm grain.' },
+  { id: 'minimal', label: 'Minimal', description: '절제된 편곡', promptCore: 'Instrument/sound layer: minimal arrangement with restrained layering and space.' },
 ];
 
 export const MOODS: CategoryItem[] = [
@@ -248,7 +211,7 @@ export const MOODS: CategoryItem[] = [
   { id: 'cheerful', label: 'Cheerful', description: '밝고 쾌활하며 즐거운 분위기입니다.' },
   { id: 'cinematic', label: 'Cinematic', description: '영화의 한 장면 같은 웅장하거나 서사적인 느낌입니다.' },
   { id: 'mellow', label: 'Mellow', description: '부드럽고 풍부하며 편안한 사운드입니다.' },
-  { id: 'coziness', label: 'Coziness', description: '포근하고 아늑한 느낌을 줍니다.' },
+  { id: 'coziness', label: 'Coziness', description: '포근하고 아늑한 느낌입니다.' },
   { id: 'nostalgic', label: 'Nostalgic', description: '과거에 대한 향수와 그리움을 불러일으킵니다.' },
   { id: 'dreamy', label: 'Dreamy', description: '꿈결 같은 몽환적이고 신비로운 분위기입니다.' },
   { id: 'romantic', label: 'Romantic', description: '낭만적이고 사랑스러운 감정을 담았습니다.' },
@@ -278,8 +241,8 @@ export const MOODS: CategoryItem[] = [
 ];
 
 /**
- * 기존 FavoritesPage 호환용 유지
- * - 새로운 구조에서는 스타일 표시를 theme에도 같이 저장
+ * FavoritesPage 호환용
+ * - 현재는 style을 theme에도 같이 저장해서 기존 UI 유지
  */
 export const THEMES: CategoryItem[] = SOUND_STYLES.map((style) => ({
   id: style.id,
@@ -288,10 +251,10 @@ export const THEMES: CategoryItem[] = SOUND_STYLES.map((style) => ({
 }));
 
 export const BASE_PROMPTS = [
-  "Create a musically coherent, commercially usable song prompt with clear genre identity, tasteful arrangement, and emotionally consistent songwriting.",
-  "Keep the arrangement intentional and avoid keyword dumping. The final prompt should read like a real production direction.",
-  "Use the selected genre as the root identity, selected styles as transformation layers, and moods as emotional color."
+  'Create a musically coherent, commercially usable song prompt with clear genre identity, tasteful arrangement, and emotionally consistent songwriting.',
+  'Treat the selected genre as the root identity, selected styles as transformation layers, selected instrument/sound choices as arrangement guidance, and moods as emotional color.',
+  'User free-text intent has the highest priority whenever it conflicts with default assumptions.'
 ];
 
 export const BASIC_STRUCTURE =
-  "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro";
+  'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro';

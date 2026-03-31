@@ -1,9 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { BASE_PROMPTS, GENRE_GROUPS } from "../constants";
-import { SongResult, LyricsLength, SongDuration, VocalConfig } from "../types";
+import {
+  BASE_PROMPTS,
+  GENRE_GROUPS,
+  INSTRUMENT_SOUNDS,
+  SOUND_STYLES,
+} from "../constants";
+import {
+  LyricsLength,
+  SongDuration,
+  SongResult,
+  VocalConfig,
+} from "../types";
 
 const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY,
 });
 
 type LegacyGenreInput = string[];
@@ -13,8 +23,8 @@ type LegacyThemeInput = string[];
 interface GenerateSongParams {
   genre: string | null;
   moods: string[];
-  theme: string | null;
   styles?: string[];
+  instrumentSounds?: string[];
   userInput: string;
   songPrompt?: string;
   lyricsLength?: LyricsLength;
@@ -48,62 +58,126 @@ type GenerateSongInput =
 
 function buildLyricGuidancePrompt(): string {
   return `
-- CRITICAL: Ensure clear line breaks between sections if sections are used.
-- CRITICAL: The content of the lyrics MUST be influenced ONLY by the selected styles and user story.
+- Ensure clear line breaks between sections if sections are used.
+- The lyrics should primarily follow the user's story/intention.
 - Provide both English and Korean versions.
-- Do NOT translate Korean literally from English. Make it feel natural and lyrical.
+- Do not translate Korean literally; keep it natural and lyrical.
+- Keep the Korean version emotionally natural rather than word-for-word.
 `.trim();
-}
-
-function buildVocalPrompt(vocal: VocalConfig): string {
-  const parts: string[] = [];
-  if (vocal.male > 0) parts.push(vocal.male === 1 ? 'male solo vocal' : 'male vocal team');
-  if (vocal.female > 0) parts.push(vocal.female === 1 ? 'female solo vocal' : 'female vocal team');
-  if (vocal.rap) parts.push('rap section included');
-  return parts.join(', ') || 'default vocal setup';
 }
 
 function calculateSongDuration(
   genres: string[],
   moods: string[],
   lyricsLength: LyricsLength
-): SongDuration {
+): "1" | "2" | "3" | "4" | "5" | "6" {
   let duration = 3;
-  if (genres.some(g => ['trap', 'drill', 'film-score'].includes(g))) duration += 1;
-  if (moods.some(m => ['calm', 'peaceful', 'healing'].includes(m.toLowerCase()))) duration -= 0.5;
-  if (moods.some(m => ['powerful', 'upbeat'].includes(m.toLowerCase()))) duration += 0.5;
-  if (lyricsLength === 'very-short') duration -= 0.5;
-  if (lyricsLength === 'normal') duration += 0.5;
-  return String(Math.max(1, Math.min(6, Math.round(duration)))) as SongDuration;
+
+  const rapGenres = [
+    "trap",
+    "drill",
+    "boom-bap",
+    "gangsta-rap",
+    "lofi-hiphop",
+  ];
+  const ambientGenres = [
+    "ambient-electronic",
+    "ambient-newage",
+    "meditation-music",
+  ];
+
+  if (genres.some((g) => rapGenres.includes(g.toLowerCase()))) duration += 1;
+  if (genres.some((g) => ambientGenres.includes(g.toLowerCase()))) duration -= 1;
+
+  const energeticMoods = ["energetic", "dramatic", "bright", "upbeat", "powerful"];
+  const calmMoods = [
+    "calm",
+    "dreamy",
+    "loneliness",
+    "peaceful",
+    "healing",
+    "relaxing",
+  ];
+
+  if (moods.some((m) => energeticMoods.includes(m.toLowerCase()))) duration += 0.5;
+  if (moods.some((m) => calmMoods.includes(m.toLowerCase()))) duration -= 0.5;
+
+  if (lyricsLength === "normal") duration += 0.5;
+  if (lyricsLength === "very-short") duration -= 0.5;
+
+  const clamped = Math.max(1, Math.min(6, Math.round(duration)));
+  return clamped.toString() as "1" | "2" | "3" | "4" | "5" | "6";
 }
 
 function getGenrePromptCore(genreId: string | null): string {
-  if (!genreId) return '';
+  if (!genreId) return "";
+
   for (const group of GENRE_GROUPS) {
-    const found = group.children.find((item) => item.id === genreId);
+    const found = group.children.find((child) => child.id === genreId);
     if (found) return found.promptCore;
   }
-  return '';
+
+  return "";
+}
+
+function getStylePromptCores(styleIds: string[] = []): string[] {
+  return styleIds
+    .map((id) => SOUND_STYLES.find((item) => item.id === id)?.promptCore ?? "")
+    .filter(Boolean);
+}
+
+function getInstrumentSoundPromptCores(ids: string[] = []): string[] {
+  return ids
+    .map((id) => INSTRUMENT_SOUNDS.find((item) => item.id === id)?.promptCore ?? "")
+    .filter(Boolean);
+}
+
+function buildMoodPrompt(moods: string[]): string {
+  return moods.length ? `Mood direction: ${moods.join(", ")}.` : "";
+}
+
+function buildVocalPrompt(vocal: VocalConfig): string {
+  const lines: string[] = [];
+  const total = (vocal.male ?? 0) + (vocal.female ?? 0);
+
+  if (total <= 1) lines.push("Vocal formation: solo.");
+  else if (total === 2) lines.push("Vocal formation: duo.");
+  else lines.push("Vocal formation: group.");
+
+  if ((vocal.male ?? 0) > 0 && (vocal.female ?? 0) > 0) {
+    lines.push(`Vocal gender mix: ${vocal.male} male, ${vocal.female} female.`);
+  } else if ((vocal.male ?? 0) > 0) {
+    lines.push(`Use male vocals only (${vocal.male}). Do not use female vocals.`);
+  } else if ((vocal.female ?? 0) > 0) {
+    lines.push(`Use female vocals only (${vocal.female}). Do not use male vocals.`);
+  } else {
+    lines.push("No strong vocal restriction; default to the arrangement that best fits the request.");
+  }
+
+  lines.push(vocal.rap ? "Rap is included." : "Do not include rap unless the user explicitly asks for it.");
+
+  return lines.join(" ");
 }
 
 function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
   const first = args[0];
-  if (typeof first === 'object' && first !== null && !Array.isArray(first)) {
+
+  if (typeof first === "object" && first !== null && !Array.isArray(first)) {
     return {
       genre: first.genre ?? null,
       moods: first.moods ?? [],
-      theme: first.theme ?? null,
-      styles: first.styles ?? (first.theme ? [first.theme] : []),
-      userInput: first.userInput ?? '',
+      styles: first.styles ?? [],
+      instrumentSounds: first.instrumentSounds ?? [],
+      userInput: first.userInput ?? "",
       songPrompt: first.songPrompt,
-      lyricsLength: first.lyricsLength ?? 'normal',
-      songDuration: first.songDuration ?? '3',
+      lyricsLength: first.lyricsLength ?? "normal",
+      songDuration: first.songDuration ?? "3",
       useAutoDuration: first.useAutoDuration ?? true,
       vocal: first.vocal ?? { male: 0, female: 0, rap: false },
       tempo: first.tempo,
       specialPrompt: first.specialPrompt,
       kpopMode: first.kpopMode ?? 0,
-      isBallad: first.isBallad ?? Boolean(first.styles?.includes('Ballad')),
+      isBallad: first.isBallad ?? false,
     };
   }
 
@@ -112,9 +186,9 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     moods,
     themes,
     userInput,
-    songPrompt = '',
-    lyricsLength = 'normal',
-    songDuration = '3',
+    songPrompt = "",
+    lyricsLength = "normal",
+    songDuration = "3",
     useAutoDuration = true,
     maleCount = 0,
     femaleCount = 0,
@@ -122,94 +196,199 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     tempo,
     specialPrompt,
     kpopMode = 0,
-  ] = args as any;
+  ] = args as [
+    LegacyGenreInput,
+    LegacyMoodInput,
+    LegacyThemeInput,
+    string,
+    string?,
+    LyricsLength?,
+    SongDuration?,
+    boolean?,
+    number?,
+    number?,
+    boolean?,
+    string?,
+    string?,
+    0 | 1 | 2?
+  ];
 
-  const styleLabels = (themes ?? []).filter(Boolean);
   return {
     genre: genres?.[0] ?? null,
     moods: moods ?? [],
-    theme: styleLabels[0] ?? null,
-    styles: styleLabels,
-    userInput: userInput ?? '',
-    songPrompt,
+    styles: themes ?? [],
+    instrumentSounds: [],
+    userInput: userInput ?? "",
+    songPrompt: songPrompt ?? "",
     lyricsLength,
     songDuration,
     useAutoDuration,
-    vocal: { male: maleCount, female: femaleCount, rap: rapEnabled },
+    vocal: {
+      male: maleCount,
+      female: femaleCount,
+      rap: rapEnabled,
+    },
     tempo,
     specialPrompt,
     kpopMode,
-    isBallad: styleLabels.some((s: string) => String(s).toLowerCase().includes('ballad')),
+    isBallad: themes?.includes?.("ballad") ?? false,
   };
+}
+
+function buildAppliedKeywordPayload(
+  params: GenerateSongParams,
+  resolvedDuration: SongDuration
+) {
+  const styles = params.styles ?? [];
+  const vocalDescription: string[] = [];
+
+  const getDesc = (gender: string, count: number) => {
+    if (count === 1) return `${gender} Solo`;
+    if (count === 2) return `${gender} Duo`;
+    if (count >= 3) return `${gender} Group`;
+    return null;
+  };
+
+  const maleDesc = getDesc("Male", params.vocal?.male ?? 0);
+  const femaleDesc = getDesc("Female", params.vocal?.female ?? 0);
+
+  if (maleDesc) vocalDescription.push(maleDesc);
+  if (femaleDesc) vocalDescription.push(femaleDesc);
+  if (params.vocal?.rap) vocalDescription.push("Rap");
+
+  return {
+    genre: params.genre ? [params.genre] : [],
+    mood: params.moods ?? [],
+    theme: styles,
+    style: styles,
+    instrumentSound: params.instrumentSounds ?? [],
+    tempo: params.tempo,
+    vocalType: vocalDescription.join(" + ") || "Default",
+    lyricsLength: params.lyricsLength,
+    songDuration: resolvedDuration,
+    maleCount: params.vocal?.male ?? 0,
+    femaleCount: params.vocal?.female ?? 0,
+    rapEnabled: params.vocal?.rap ?? false,
+    vocal: params.vocal ?? { male: 0, female: 0, rap: false },
+  };
+}
+
+function buildPromptDiscipline(): string {
+  return `
+PROMPT WRITING RULES:
+- The "prompt" field must read like a polished real production brief.
+- Do NOT output a lazy keyword dump.
+- Do NOT just repeat category names like "Ballad, Anime" without turning them into arrangement language.
+- Explicitly describe arrangement, instrumentation, texture, vocal tone, pacing, and emotional lift.
+- If style layers are selected, weave them into the body of the prompt naturally.
+- If instrument / sound layers are selected, reflect them in SOUND, BASS, DRUMS, TEXTURE, or ARRANGEMENT sections naturally.
+- Keep the prompt structured and readable.
+- Preferred structure:
+  STYLE:
+  DRUMS:
+  BASS:
+  SOUND:
+  TEXTURE:
+  VOCAL:
+  VOCAL STYLE:
+  ARRANGEMENT:
+  MOOD:
+- Avoid generic placeholders such as "standard pop drums" unless the request is truly generic.
+- Make the output feel specific to the user's exact combination.
+`.trim();
 }
 
 export async function generateSong(...args: GenerateSongInput): Promise<SongResult> {
   const params = normalizeArgs(args);
   const model = "gemini-3-flash-preview";
-  const resolvedDuration = (params.useAutoDuration ?? true)
-    ? calculateSongDuration(params.genre ? [params.genre] : [], params.moods, params.lyricsLength ?? 'normal')
-    : (params.songDuration ?? '3');
 
-  const genrePromptCore = getGenrePromptCore(params.genre);
-  const styleText = (params.styles ?? []).join(', ');
-  const balladText = params.isBallad ? 'Ballad structure with slower emotional pacing and vocal-centered flow.' : '';
-  const vocalPrompt = buildVocalPrompt(params.vocal ?? { male: 0, female: 0, rap: false });
+  const genresForDuration = params.genre ? [params.genre] : [];
+  const resolvedDuration = (
+    (params.useAutoDuration ?? true)
+      ? calculateSongDuration(
+          genresForDuration,
+          params.moods ?? [],
+          params.lyricsLength ?? "normal"
+        )
+      : (params.songDuration ?? "3")
+  ) as SongDuration;
+
   const lyricGuidancePrompt = buildLyricGuidancePrompt();
-  const fallbackPrompt = params.songPrompt && params.songPrompt.trim().length > 0
-    ? params.songPrompt
-    : [genrePromptCore, styleText ? `Style layer: ${styleText}` : '', balladText, params.tempo ? `Tempo: ${params.tempo}` : '', BASE_PROMPTS[0] ?? '']
-        .filter(Boolean)
-        .join('\n');
+  const genrePromptCore = getGenrePromptCore(params.genre);
+  const stylePromptCores = getStylePromptCores(params.styles ?? []);
+  const instrumentSoundPromptCores = getInstrumentSoundPromptCores(
+    params.instrumentSounds ?? []
+  );
+  const moodPrompt = buildMoodPrompt(params.moods ?? []);
+  const vocalPrompt = buildVocalPrompt(
+    params.vocal ?? { male: 0, female: 0, rap: false }
+  );
+  const basePromptSeed = BASE_PROMPTS.join("\n");
+  const promptDiscipline = buildPromptDiscipline();
+
+  const kpopInstruction =
+    params.kpopMode === 2
+      ? "Use Korean and English naturally mixed in the lyrics when it supports the request."
+      : "";
 
   const systemInstruction = `
-${fallbackPrompt}
-
 You are a professional music composer and lyricist.
-Create a song using:
-- one core genre
-- multiple style layers
-- multiple moods
-- the user's story
 
-Rules for lyrics:
-${lyricGuidancePrompt}
-- The lyrics must be influenced by the selected styles and user story.
-- Genre and moods should shape the music prompt and atmosphere.
-- Keep the lyrics natural and singable.
-- Intended duration: about ${resolvedDuration} minutes.
+USER CREATIVE INTENT (HIGHEST PRIORITY):
+${params.userInput || "No extra user description."}
 
-Rules for prompt:
-- Genre Core: ${genrePromptCore || params.genre || 'Pop'}
-- Style Layers: ${styleText || 'None'}
-- Mood Layers: ${(params.moods ?? []).join(', ')}
-- ${params.tempo ? `Tempo constraint: ${params.tempo}` : 'Tempo should fit the selected genre and moods.'}
-- Vocal configuration: ${vocalPrompt}
-${params.specialPrompt ? `- Special instruction: ${params.specialPrompt}` : ''}
-${balladText ? `- Ballad option: ${balladText}` : ''}
+IMPORTANT:
+- The user input overrides stylistic assumptions if conflict occurs.
+- Treat user intent as the primary creative direction.
 
-Output JSON:
+ROOT GENRE:
+${genrePromptCore || "Choose an appropriate mainstream-friendly root genre if none is given."}
+
+STYLE LAYERS:
+${stylePromptCores.length ? stylePromptCores.map((s) => `- ${s}`).join("\n") : "- No extra style layer selected."}
+
+INSTRUMENT / SOUND LAYERS:
+${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- ${s}`).join("\n") : "- No extra instrument/sound layer selected."}
+
+MOOD LAYER:
+${moodPrompt || "No explicit mood layer selected."}
+
+VOCAL DIRECTION (HIGH PRIORITY):
+${vocalPrompt}
+
+REFERENCE PRINCIPLES:
+${basePromptSeed}
+
+${kpopInstruction}
+
+Return JSON:
 {
   "title": "[Genre] 'English Title' │ 'Korean Title'",
-  "lyrics": {
-    "english": "Full English lyrics.",
-    "korean": "Full Korean lyrics."
-  },
-  "prompt": "Detailed music production prompt",
+  "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." },
+  "prompt": "A detailed music production prompt",
   "appliedKeywords": {
     "genre": ["genre"],
     "mood": ["mood1", "mood2"],
     "theme": ["style1", "style2"],
-    "style": ["style1", "style2"],
     "tempo": "tempo info if provided",
     "vocalType": "vocal description"
   }
 }
 
-Selected values:
-Genre: ${params.genre ?? 'Pop'}
-Styles: ${styleText}
-Moods: ${(params.moods ?? []).join(', ')}
-User Story: ${params.userInput}
+Lyrics rules:
+${lyricGuidancePrompt}
+- The lyrics should primarily follow the user's story/intention.
+- Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
+- Intended duration: about ${resolvedDuration} minutes.
+
+Prompt rules:
+${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
+- ${params.tempo ? `TEMPO CONSTRAINT: ${params.tempo}` : "Tempo should be appropriate for the chosen direction."}
+- Respect the requested vocal formation and rap setting.
+- If a display prompt draft is provided below, treat it as a formatting and specificity target, not as text to copy mechanically.
+${params.songPrompt ? `\nDISPLAY PROMPT TARGET:\n${params.songPrompt}` : ""}
+
+${promptDiscipline}
 `.trim();
 
   const response = await ai.models.generateContent({
@@ -226,9 +405,9 @@ User Story: ${params.userInput}
             type: Type.OBJECT,
             properties: {
               english: { type: Type.STRING },
-              korean: { type: Type.STRING }
+              korean: { type: Type.STRING },
             },
-            required: ["english", "korean"]
+            required: ["english", "korean"],
           },
           prompt: { type: Type.STRING },
           appliedKeywords: {
@@ -237,37 +416,41 @@ User Story: ${params.userInput}
               genre: { type: Type.ARRAY, items: { type: Type.STRING } },
               mood: { type: Type.ARRAY, items: { type: Type.STRING } },
               theme: { type: Type.ARRAY, items: { type: Type.STRING } },
-              style: { type: Type.ARRAY, items: { type: Type.STRING } },
               tempo: { type: Type.STRING },
-              vocalType: { type: Type.STRING }
+              vocalType: { type: Type.STRING },
             },
-            required: ["genre", "mood", "theme"]
-          }
+            required: ["genre", "mood", "theme"],
+          },
         },
-        required: ["title", "lyrics", "prompt", "appliedKeywords"]
-      }
-    }
+        required: ["title", "lyrics", "prompt", "appliedKeywords"],
+      },
+    },
   });
 
   const result = JSON.parse(response.text || "{}");
-  const vocalType = [
-    params.vocal?.male ? (params.vocal.male === 1 ? 'Male Solo' : 'Male Group') : '',
-    params.vocal?.female ? (params.vocal.female === 1 ? 'Female Solo' : 'Female Group') : '',
-    params.vocal?.rap ? 'Rap' : ''
-  ].filter(Boolean).join(' + ') || 'Default';
 
   result.appliedKeywords = {
+    ...buildAppliedKeywordPayload(params, resolvedDuration),
     ...(result.appliedKeywords ?? {}),
     genre: result?.appliedKeywords?.genre ?? (params.genre ? [params.genre] : []),
     mood: result?.appliedKeywords?.mood ?? (params.moods ?? []),
     theme: result?.appliedKeywords?.theme ?? (params.styles ?? []),
-    style: result?.appliedKeywords?.style ?? (params.styles ?? []),
+    style: params.styles ?? [],
+    instrumentSound: params.instrumentSounds ?? [],
     tempo: result?.appliedKeywords?.tempo ?? params.tempo,
-    vocalType,
   };
 
-  if (!result.prompt || typeof result.prompt !== 'string') {
-    result.prompt = fallbackPrompt;
+  if (!result.prompt || typeof result.prompt !== "string") {
+    result.prompt = params.songPrompt || [
+      genrePromptCore,
+      ...stylePromptCores,
+      ...instrumentSoundPromptCores,
+      moodPrompt,
+      params.tempo ? `Tempo: ${params.tempo}` : "",
+      params.userInput ? `User intent: ${params.userInput}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
 
   return result as SongResult;
@@ -278,18 +461,19 @@ export async function translateLyrics(
   targetLanguage: "korean" | "english"
 ): Promise<string> {
   const model = "gemini-3-flash-preview";
+
   const systemInstruction = `
 You are a professional lyricist and translator.
-Translate the lyrics into ${targetLanguage}.
-Maintain line breaks and structure.
-Do not translate literally; preserve lyrical meaning and naturalness.
-Return only the translated lyrics.
+Translate the provided lyrics into ${targetLanguage}.
+- Maintain the original structure and line breaks.
+- Do not translate literally. Keep it natural and lyrical.
+- Return only the translated lyrics text.
 `.trim();
 
   const response = await ai.models.generateContent({
     model,
     contents: lyrics,
-    config: { systemInstruction }
+    config: { systemInstruction },
   });
 
   return response.text || "";

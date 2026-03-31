@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
-import { GENRES, MOODS, THEMES } from '../constants';
+import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
   Copy,
@@ -34,6 +34,14 @@ import type { User } from 'firebase/auth';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+
+function getKeywordMeta(labelOrId: string) {
+  const allItems = [...GENRES, ...MOODS, ...THEMES, ...SOUND_STYLES, ...INSTRUMENT_SOUNDS];
+  return allItems.find(
+    (item) => item.label === labelOrId || item.id === labelOrId
+  ) ?? null;
 }
 
 export default function FavoritesPage({ 
@@ -658,12 +666,13 @@ export default function FavoritesPage({
 
   const copyAll = (song: any) => {
     const keywords = [
-      `[Genres] ${song.appliedKeywords.genre.join(', ')}`,
-      `[Moods] ${song.appliedKeywords.mood.join(', ')}`,
-      `[Themes] ${song.appliedKeywords.theme.join(', ')}`,
+      `[Genres] ${(song.appliedKeywords.genre ?? []).join(', ')}`,
+      `[Moods] ${(song.appliedKeywords.mood ?? []).join(', ')}`,
+      `[Styles] ${(song.appliedKeywords.style ?? song.appliedKeywords.theme ?? []).join(', ')}`,
+      `[Instruments / Sound] ${(song.appliedKeywords.instrumentSound ?? []).join(', ')}`,
       song.appliedKeywords.vocalType ? `[Vocal] ${song.appliedKeywords.vocalType}` : '',
       song.appliedKeywords.tempo ? `[Tempo] ${song.appliedKeywords.tempo}` : ''
-    ].filter(Boolean).join('\n');
+    ].filter((line) => !line.endsWith('] ')).join('\n');
 
     const text = `
 ${keywords}
@@ -721,6 +730,8 @@ ${song.prompt}
       genre: song.appliedKeywords.genre ?? [],
       mood: song.appliedKeywords.mood ?? [],
       theme: song.appliedKeywords.theme ?? [],
+      style: song.appliedKeywords.style ?? song.appliedKeywords.theme ?? [],
+      instrumentSound: song.appliedKeywords.instrumentSound ?? [],
       tempo: song.appliedKeywords.tempo ?? null,
       lyricsLength: song.appliedKeywords.lyricsLength ?? 'normal',
       drumStyle: song.appliedKeywords.drumStyle ?? 'none',
@@ -736,8 +747,10 @@ ${song.prompt}
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    song.appliedKeywords.genre.some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    song.appliedKeywords.mood.some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase()))
+    (song.appliedKeywords.genre ?? []).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (song.appliedKeywords.mood ?? []).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (song.appliedKeywords.style ?? song.appliedKeywords.theme ?? []).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (song.appliedKeywords.instrumentSound ?? []).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
   ).sort((a, b) => {
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
 
@@ -1233,6 +1246,36 @@ ${song.prompt}
                         #{m}
                       </span>
                     ))}
+                    {(song.appliedKeywords.style ?? song.appliedKeywords.theme ?? []).map((s: string) => {
+                      const item = getKeywordMeta(s);
+                      return (
+                        <span 
+                          key={`style-${s}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onHover({ id: `style-${s}`, label: s, description: item?.description ?? `${s} 스타일입니다.`, _ts: Date.now() });
+                          }}
+                          className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
+                        >
+                          #{s}
+                        </span>
+                      );
+                    })}
+                    {(song.appliedKeywords.instrumentSound ?? []).map((s: string) => {
+                      const item = getKeywordMeta(s);
+                      return (
+                        <span 
+                          key={`sound-${s}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onHover({ id: `sound-${s}`, label: s, description: item?.description ?? `${s} 악기/사운드 설정입니다.`, _ts: Date.now() });
+                          }}
+                          className="text-[8px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 whitespace-nowrap cursor-pointer hover:bg-sky-500/20"
+                        >
+                          #{s}
+                        </span>
+                      );
+                    })}
                     {song.appliedKeywords.vocalType && (
                       <span 
                         onClick={(e) => {
@@ -1608,8 +1651,8 @@ ${song.prompt}
                 <div className="bg-[var(--bg-secondary)]/30 rounded-2xl p-4 border border-[var(--border-color)] relative">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
                     <div className="flex flex-wrap gap-2 pr-12 sm:pr-0">
-                      {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].map((k: string) => {
-                        const item = [...GENRES, ...MOODS, ...THEMES].find(i => i.label === k);
+                      {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...(selectedSong.appliedKeywords.style ?? selectedSong.appliedKeywords.theme ?? []), ...(selectedSong.appliedKeywords.instrumentSound ?? [])].map((k: string) => {
+                        const item = getKeywordMeta(k);
                         return (
                           <span 
                             key={k} 
@@ -1644,7 +1687,7 @@ ${song.prompt}
                           다음 곡에 적용
                         </button>
                         <button 
-                          onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...selectedSong.appliedKeywords.theme].join(', '), 'keywords')}
+                          onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...(selectedSong.appliedKeywords.style ?? selectedSong.appliedKeywords.theme ?? []), ...(selectedSong.appliedKeywords.instrumentSound ?? [])].join(', '), 'keywords')}
                           className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
                         >
                           {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}

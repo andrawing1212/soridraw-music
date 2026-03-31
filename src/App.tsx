@@ -51,7 +51,14 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { GENRES, MOODS, THEMES, GENRE_GROUPS } from './constants';
+import {
+  GENRES,
+  MOODS,
+  THEMES,
+  GENRE_GROUPS,
+  SOUND_STYLES,
+  INSTRUMENT_SOUNDS,
+} from './constants';
 import { CategoryItem, SongResult, LyricsLength, SongDuration } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
@@ -769,6 +776,10 @@ function App() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
+  const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
+  
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songDuration, setSongDuration] = useState<SongDuration>('3');
   const [maleCount, setMaleCount] = useState(0);
@@ -838,12 +849,25 @@ function App() {
     }
   };
 
+  const toggle = (
+    id: string,
+    selected: string[],
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+    limit = 2
+  ) => {
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((item) => item !== id);
+      if (prev.length >= limit) return prev;
+      return [...prev, id];
+    });
+  };
+
   useEffect(() => {
     if (keywordsContainerRef.current) {
       const { scrollHeight, clientHeight } = keywordsContainerRef.current;
       setHasKeywordsOverflow(scrollHeight > clientHeight + 5); // Small buffer
     }
-  }, [selectedGenres, selectedThemes, selectedMoods]);
+  }, [selectedGenres, selectedThemes, selectedMoods, selectedStyles, selectedInstrumentSounds]);
 
   useEffect(() => {
     if (hoveredItem) {
@@ -1112,23 +1136,35 @@ function App() {
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
 
   const applyKeywordsToNext = (appliedKeywords: SongResult['appliedKeywords']) => {
-    const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
-      return labels.map(label => {
-        // Special case for City Pop and K-Pop which might have extra labels
-        if (label.includes('City Pop') || label === '80s Japanese Pop' || label === 'Funk' || label === 'Groovy' || label === 'Retro' || label === 'Nu-Disco' || label === 'Synth-pop') {
-          return 'citypop';
-        }
-        if (label.includes('K-Pop')) {
-          return 'kpop';
-        }
-        const item = category.find(c => c.label === label);
-        return item ? item.id : null;
-      }).filter(Boolean) as string[];
+    const normalizeId = (id: string) => {
+      if (id === 'kpop') return 'k-pop';
+      return id;
+    };
+
+    const mapLabelsToIds = (values: string[] = [], category: CategoryItem[]) => {
+      return values
+        .map((value) => {
+          const normalizedValue = normalizeId(value);
+          const byId = category.find((item) => item.id === normalizedValue);
+          if (byId) return byId.id;
+
+          const byLabel = category.find((item) => item.label === value);
+          if (byLabel) return byLabel.id;
+
+          return null;
+        })
+        .filter(Boolean) as string[];
     };
 
     const genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
+    const styleIds = Array.from(
+      new Set(mapLabelsToIds(appliedKeywords.style ?? appliedKeywords.theme ?? [], SOUND_STYLES))
+    );
+    const instrumentSoundIds = Array.from(
+      new Set(mapLabelsToIds(appliedKeywords.instrumentSound ?? [], INSTRUMENT_SOUNDS))
+    );
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
@@ -1138,6 +1174,11 @@ function App() {
     setSelectedGenres(genreIds);
     setSelectedMoods(moodIds);
     setSelectedThemes(themeIds);
+    setSelectedStyles(styleIds);
+    setSelectedInstrumentSounds(instrumentSoundIds);
+
+    setKpopMode(genreIds.includes('k-pop') ? 1 : 0);
+    setCitypopMode(genreIds.includes('citypop') ? 1 : 0);
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
@@ -1157,7 +1198,7 @@ function App() {
           const bpm = parseInt(bpmMatch[0]);
           setMinBPM(bpm);
           setMaxBPM(bpm);
-        } else if (bpmMatch.length === 2) {
+        } else if (bpmMatch.length >= 2) {
           setMinBPM(parseInt(bpmMatch[0]));
           setMaxBPM(parseInt(bpmMatch[1]));
         }
@@ -1168,6 +1209,7 @@ function App() {
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -1449,7 +1491,7 @@ function App() {
   const clearCategory = (category: 'genre' | 'mood' | 'theme') => {
     if (category === 'genre') {
       setSelectedGenres(pinnedGenres);
-      if (!pinnedGenres.includes('kpop')) setKpopMode(0);
+      if (!pinnedGenres.includes('k-pop')) setKpopMode(0);
       if (!pinnedGenres.includes('citypop')) setCitypopMode(0);
       setIsGenreRandomized(false);
     }
@@ -1663,6 +1705,8 @@ const saveRecentSong = async (newSong: any) => {
       let finalGenres = [...selectedGenres];
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
+      let finalStyles = [...selectedStyles];
+      let finalInstrumentSounds = [...selectedInstrumentSounds];
       let randomKeywords: string[] = [];
 
       const hasGenre = finalGenres.length > 0;
@@ -1692,7 +1736,9 @@ const saveRecentSong = async (newSong: any) => {
         const allItems = [
           ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
           ...MOODS.map(i => ({ ...i, cat: 'mood' as const })),
-          ...THEMES.map(i => ({ ...i, cat: 'theme' as const }))
+          ...THEMES.map(i => ({ ...i, cat: 'theme' as const })),
+          ...SOUND_STYLES.map(i => ({ ...i, cat: 'style' as const })),
+          ...INSTRUMENT_SOUNDS.map(i => ({ ...i, cat: 'sound' as const })),
         ];
 
         const count = Math.floor(Math.random() * 11) + 5; // 5-15
@@ -1702,6 +1748,8 @@ const saveRecentSong = async (newSong: any) => {
           if (p.cat === 'genre') finalGenres.push(p.id);
           if (p.cat === 'mood') finalMoods.push(p.id);
           if (p.cat === 'theme') finalThemes.push(p.id);
+          if (p.cat === 'style') finalStyles.push(p.id);
+          if (p.cat === 'sound') finalInstrumentSounds.push(p.id);
           randomKeywords.push(p.label);
         });
       }
@@ -1735,8 +1783,9 @@ const saveRecentSong = async (newSong: any) => {
           "Infectious Rhythm, Upbeat & Cheerful, Driving 2-beat / 4-beat, Bright Brass section, Festive / Celebratory.";
       }
 
-      const styleLabels = finalThemes.map(id => THEMES.find(t => t.id === id)?.label || id);
-      const hasBalladStyle = finalThemes.includes('ballad');
+      const effectiveStyleIds = Array.from(new Set([...(finalStyles ?? []), ...(finalThemes ?? [])]));
+      const styleLabels = effectiveStyleIds.map(id => SOUND_STYLES.find(style => style.id === id)?.label || THEMES.find(theme => theme.id === id)?.label || id);
+      const hasBalladStyle = effectiveStyleIds.includes('ballad');
 
       const genreLabels = finalGenres.flatMap(id => {
         if (id === 'citypop') {
@@ -1748,54 +1797,160 @@ const saveRecentSong = async (newSong: any) => {
 
       const buildSongPrompt = () => {
         const genreStr = genreLabels.length > 0 ? genreLabels.join(", ") : "Pop";
-        const moodStr =
+        const moodLabels =
           finalMoods.length > 0
-            ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(", ")
-            : "Emotional";
-        const styleStr = styleLabels.length > 0 ? styleLabels.join(', ') : '';
+            ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id)
+            : ["Emotional"];
+        const moodStr = moodLabels.join(", ");
 
-        const isEnergetic =
-          finalMoods.includes('upbeat') ||
-          finalMoods.includes('powerful') ||
-          finalGenres.includes('dance') ||
-          finalGenres.includes('rock');
+        const styleItems = effectiveStyleIds
+          .map(id => SOUND_STYLES.find(style => style.id === id))
+          .filter(Boolean);
+        const instrumentItems = finalInstrumentSounds
+          .map(id => INSTRUMENT_SOUNDS.find(sound => sound.id === id))
+          .filter(Boolean);
 
-        const isCalm =
-          finalMoods.includes('calm') ||
-          finalMoods.includes('peaceful') ||
-          finalGenres.includes('ambient') ||
-          hasBalladStyle;
+        const styleDesc = styleItems.map(item => item!.description.toLowerCase());
+        const instrumentLabels = instrumentItems.map(item => item!.label);
+        const instrumentDesc = instrumentItems.map(item => item!.description.toLowerCase());
 
-        const bpm = tempoInfo || (isEnergetic ? "120-140 BPM" : isCalm ? "60-80 BPM" : "90-110 BPM");
-        const drums = isEnergetic
-          ? "Driving, energetic drums"
-          : isCalm
-          ? "Minimal, soft percussion"
-          : "Standard pop drums";
-        const bass = isEnergetic
-          ? "Punchy, synth bass"
-          : isCalm
-          ? "Deep, sub bass"
-          : "Warm, melodic bass";
-        const synth = isEnergetic
-          ? "Bright, saw-wave synths"
-          : isCalm
-          ? "Atmospheric pads"
-          : "Subtle synth textures";
-        const texture = isEnergetic
-          ? "High-energy, polished"
-          : isCalm
-          ? "Soft, organic, airy"
-          : "Balanced, clear";
-        const vocalDesign = "Main vocal with harmonies";
-        const vocalStyle = isEnergetic
-          ? "Powerful, dynamic"
-          : isCalm
-          ? "Soft, breathy"
-          : "Clear, expressive";
+        const hasStyle = (id: string) => effectiveStyleIds.includes(id);
+        const hasInstrument = (id: string) => finalInstrumentSounds.includes(id);
+        const hasMood = (id: string) => finalMoods.includes(id);
+        const hasGenreId = (id: string) => finalGenres.includes(id);
+
+        const bpm = tempoInfo
+          ? tempoInfo.replace("Between ", "").replace("Exactly ", "").replace(" and ", "–")
+          : hasMood('upbeat') || hasMood('powerful') || hasStyle('dance')
+            ? "118–132 BPM"
+            : hasBalladStyle || hasMood('calm') || hasMood('healing')
+              ? "72–96 BPM"
+              : "90–112 BPM";
+
+        const styleHeadlineParts = [
+          genreStr,
+          hasBalladStyle ? "ballad pacing" : null,
+          hasStyle('anime') ? "anime OST lift" : null,
+          hasStyle('orchestral') ? "cinematic expansion" : null,
+          hasStyle('synth') ? "synth-forward tone" : null,
+          hasStyle('acoustic') ? "organic live feel" : null,
+          hasStyle('funk') ? "groove-led pulse" : null,
+          hasStyle('punk') ? "raw attack" : null,
+          hasStyle('latin') ? "Latin rhythmic color" : null,
+          hasStyle('lofi') ? "lo-fi softness" : null,
+        ].filter(Boolean);
+
+        const drums = (() => {
+          const parts: string[] = [];
+
+          if (hasBalladStyle) parts.push("Soft live-pop kit with restrained kick and light snare presence");
+          else if (hasStyle('dance')) parts.push("Tight dance-pop drums with a clear pulse and punchy momentum");
+          else if (hasStyle('hiphop')) parts.push("Beat-led drum programming with crisp hats and a defined pocket");
+          else if (hasStyle('punk')) parts.push("Fast live drums with urgent attack and raw energy");
+          else if (hasStyle('latin')) parts.push("Rhythm-forward percussion with lively syncopation");
+          else if (hasMood('calm') || hasMood('healing') || hasMood('peaceful')) parts.push("Minimal soft percussion with wide space between hits");
+          else parts.push("Clean contemporary pop drums supporting the topline without overcrowding the mix");
+
+          if (hasStyle('anime') || hasStyle('orchestral')) parts.push("Cymbal swells and controlled fills to support emotional lift");
+          if (hasStyle('lofi')) parts.push("Softer transient edges and slightly relaxed impact");
+
+          return parts.join(", ");
+        })();
+
+        const bass = (() => {
+          const parts: string[] = [];
+
+          if (hasStyle('dance') || hasMood('upbeat') || hasMood('powerful')) parts.push("Punchy rounded bass driving the chorus forward");
+          else if (hasBalladStyle || hasMood('calm') || hasMood('healing')) parts.push("Warm supportive low end following the emotional chord movement");
+          else if (hasStyle('funk')) parts.push("Elastic groove-aware bass with rhythmic articulation");
+          else if (hasStyle('hiphop')) parts.push("Solid low-end foundation with modern weight and pocket");
+          else parts.push("Warm melodic bass supporting the harmony");
+
+          if (hasInstrument('bass')) parts[0] = "More exposed bass presence with clearer melodic movement";
+          if (hasInstrument('minimal')) parts.push("Kept controlled rather than oversized");
+          if (hasInstrument('acoustic-sound')) parts.push("Natural warmth over synthetic aggression");
+
+          return parts.join(", ");
+        })();
+
+        const sound = (() => {
+          const parts: string[] = [];
+
+          if (hasInstrument('piano')) parts.push("Piano-led foundation shaping the harmony");
+          if (hasInstrument('guitar')) parts.push(hasInstrument('acoustic-sound') ? "Acoustic guitar texture adding warmth and rhythmic support" : "Guitar-led texture adding edge and movement");
+          if (hasInstrument('strings') || hasStyle('orchestral') || hasStyle('anime')) parts.push("String lift and cinematic support in key transitions");
+          if (hasInstrument('synth-sound') || hasStyle('synth')) parts.push("Airy synth pads and modern electronic color");
+          if (hasInstrument('band')) parts.push("Full band interaction with drums, bass, keys, and guitar moving together");
+          if (hasInstrument('lofi-texture') || hasStyle('lofi')) parts.push("Softened top end with subtle grain and vintage blur");
+          if (hasInstrument('orchestral-sound')) parts.push("Wider orchestral depth behind the lead melody");
+          if (hasInstrument('minimal')) parts.push("Selective layering with deliberate empty space");
+
+          if (parts.length === 0) {
+            parts.push(
+              hasBalladStyle
+                ? "Piano, pads, and restrained support layers building emotional depth"
+                : "Balanced modern pop instrumentation with clear melodic support"
+            );
+          }
+
+          return parts.join(", ");
+        })();
+
+        const texture = (() => {
+          const parts: string[] = [];
+
+          if (hasBalladStyle) parts.push("Emotion-first, clean, and gently rising");
+          if (hasStyle('anime')) parts.push("Youthful, dramatic, and slightly cinematic");
+          if (hasStyle('acoustic')) parts.push("Organic and naturally warm");
+          if (hasStyle('synth')) parts.push("Polished and modern without losing melody focus");
+          if (hasStyle('lofi')) parts.push("Softened and cozy with rounded edges");
+          if (hasMood('bright')) parts.push("Bright-toned and open");
+          if (hasMood('healing') || hasMood('peaceful')) parts.push("Comforting and spacious");
+          if (hasMood('powerful')) parts.push("Confident and expansive");
+
+          return Array.from(new Set(parts)).join(", ") || "Balanced, clear, and commercially polished";
+        })();
+
+        const vocal = (() => {
+          if (maleCount > 0 && femaleCount > 0) return "Mixed lead arrangement with layered harmonies and contrast between male and female tones";
+          if (maleCount >= 2) return "Male ensemble lead with stacked harmonies";
+          if (femaleCount >= 2) return "Female ensemble lead with stacked harmonies";
+          if (maleCount === 1) return "Male lead vocal with supportive harmonies";
+          if (femaleCount === 1) return "Female lead vocal with supportive harmonies";
+          return "Main lead vocal with harmony support where needed";
+        })();
+
+        const vocalStyle = (() => {
+          const parts: string[] = [];
+
+          if (hasBalladStyle) parts.push("Tender and emotionally clear");
+          if (hasStyle('anime')) parts.push("Slightly dramatic with melodic lift");
+          if (hasMood('bright')) parts.push("Youthful and open");
+          if (hasMood('healing') || hasMood('peaceful')) parts.push("Gentle and reassuring");
+          if (hasMood('powerful')) parts.push("Focused and dynamically assertive");
+          if (hasStyle('punk')) parts.push("Raw and direct");
+          if (hasStyle('jazz')) parts.push("Fluid and expressive");
+
+          return Array.from(new Set(parts)).join(", ") || "Clear, expressive, and melody-led";
+        })();
+
+        const arrangement = (() => {
+          const parts: string[] = [];
+
+          if (hasBalladStyle) parts.push("Verse-to-chorus growth with slower emotional pacing");
+          else parts.push("Clear commercial flow with memorable sectional contrast");
+
+          if (hasStyle('anime')) parts.push("Pre-chorus lift and a strong melodic payoff");
+          if (hasStyle('orchestral')) parts.push("Expanded transitions and a wider final section");
+          if (hasStyle('dance')) parts.push("Rhythmic clarity that keeps the chorus immediately playable");
+          if (hasInstrument('minimal')) parts.push("Arrangement stays selective and avoids unnecessary clutter");
+          if (hasMood('healing') || hasMood('peaceful')) parts.push("Keep the emotional arc smooth rather than explosive");
+
+          return parts.join(", ");
+        })();
 
         return `STYLE:
-${hasBalladStyle ? `Ballad-style ${genreStr}` : genreStr}, ${bpm}
+${styleHeadlineParts.join(", ")}, ${bpm}
 
 DRUMS:
 ${drums}
@@ -1804,17 +1959,19 @@ BASS:
 ${bass}
 
 SOUND:
-${synth}
+${sound}
 
 TEXTURE:
 ${texture}
 
 VOCAL:
-${vocalDesign}
+${vocal}
 
 VOCAL STYLE:
 ${vocalStyle}
-${styleStr ? `\n\nSTYLE LAYER:\n${styleStr}` : ''}${hasBalladStyle ? `\n\nSTRUCTURE:\nSlower emotional pacing, vocal-centered ballad flow` : ''}
+
+ARRANGEMENT:
+${arrangement}
 
 MOOD:
 ${moodStr}`.trim();
@@ -1825,8 +1982,9 @@ ${moodStr}`.trim();
       const song = await generateSong({
         genre: finalGenres[0] ?? null,
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
-        theme: finalThemes[0] ? (THEMES.find(t => t.id === finalThemes[0])?.label || finalThemes[0]) : null,
+
         styles: styleLabels,
+        instrumentSounds: finalInstrumentSounds,
         userInput,
         songPrompt,
         lyricsLength,
@@ -2028,26 +2186,47 @@ ${result.prompt}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
-          />
+          />            
           <CategorySection 
             title="스타일" 
-            description="장르 위에 추가로 입힐 결을 선택합니다. (예: Ballad, Dance, Jazz, Lo-fi)"
-            items={THEMES} 
-            selected={selectedThemes} 
-            pinned={pinnedThemes}
-            onToggle={(id) => toggleSelection(id, 'theme')}
-            onTogglePin={(id) => togglePin(id, 'theme')}
-            onClear={() => clearCategory('theme')}
-            onUnpinAll={() => unpinAll('theme')}
-            onRandom={() => randomizeCategory('theme')}
+            description="장르 위에 추가로 입힐 결을 선택합니다. (최대 2개)"
+            items={SOUND_STYLES} 
+            selected={selectedStyles} 
+            pinned={[]}
+            onToggle={(id) => toggle(id, selectedStyles, setSelectedStyles, 2)}
+            onTogglePin={() => {}}
+            onClear={() => setSelectedStyles([])}
+            onUnpinAll={() => {}}
+            onRandom={() => {}}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
             hoveredItem={hoveredItem}
-            isExpanded={isThemeExpanded}
-            onToggleExpand={() => setIsThemeExpanded(!isThemeExpanded)}
-            allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
-            isRandomized={isThemeRandomized}
+            isExpanded={true}
+            onToggleExpand={() => {}}
+            allExpanded={true}
+            isRandomized={false}
+          />
+
+          <CategorySection 
+            title="악기 / 사운드" 
+            description="편곡의 중심이 되는 악기와 질감을 선택합니다. (최대 2개)"
+            items={INSTRUMENT_SOUNDS} 
+            selected={selectedInstrumentSounds} 
+            pinned={[]}
+            onToggle={(id) => toggle(id, selectedInstrumentSounds, setSelectedInstrumentSounds, 2)}
+            onTogglePin={() => {}}
+            onClear={() => setSelectedInstrumentSounds([])}
+            onUnpinAll={() => {}}
+            onRandom={() => {}}
+            onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
+            hoveredItem={hoveredItem}
+            isExpanded={true}
+            onToggleExpand={() => {}}
+            allExpanded={true}
+            isRandomized={false}
           />
           <CategorySection 
             title="분위기" 
@@ -2140,8 +2319,8 @@ ${result.prompt}
               )}
             >
               <AnimatePresence>
-                {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
-                  const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
+                {[...selectedGenres, ...selectedThemes, ...selectedStyles, ...selectedInstrumentSounds, ...selectedMoods].map((id) => {
+                  const item = [...GENRES, ...THEMES, ...SOUND_STYLES, ...INSTRUMENT_SOUNDS, ...MOODS].find(i => i.id === id);
                   return (
                     <motion.span
                       key={id}
@@ -2155,6 +2334,8 @@ ${result.prompt}
                         onClick={() => {
                           if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
                           else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
+                          else if (selectedStyles.includes(id)) toggle(id, selectedStyles, setSelectedStyles, 2);
+                          else if (selectedInstrumentSounds.includes(id)) toggle(id, selectedInstrumentSounds, setSelectedInstrumentSounds, 2);
                           else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
                         }}
                         className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
@@ -2435,15 +2616,15 @@ ${result.prompt}
                   animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
                 >
-                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'mood'] as const).map((cat) => (
+                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'style', 'instrumentSound', 'mood'] as const).map((cat) => (
                     <div key={cat} className="space-y-0.5 group/cat">
                       <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat === 'theme' ? 'style' : cat}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {result.appliedKeywords[cat].map((kw, idx) => {
+                        {(result.appliedKeywords[cat] ?? []).map((kw, idx) => {
                           const isRandom = result.randomKeywords?.includes(kw);
-                          const description = [...GENRES, ...MOODS, ...THEMES].find(item => item.label === kw)?.description;
+                          const description = [...GENRES, ...MOODS, ...THEMES, ...SOUND_STYLES, ...INSTRUMENT_SOUNDS].find(item => item.label === kw)?.description;
                           
                           return (
                             <span 

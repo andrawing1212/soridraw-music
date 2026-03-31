@@ -769,7 +769,6 @@ function App() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
-  const [isBallad, setIsBallad] = useState(false);
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songDuration, setSongDuration] = useState<SongDuration>('3');
   const [maleCount, setMaleCount] = useState(0);
@@ -844,7 +843,7 @@ function App() {
       const { scrollHeight, clientHeight } = keywordsContainerRef.current;
       setHasKeywordsOverflow(scrollHeight > clientHeight + 5); // Small buffer
     }
-  }, [selectedGenres, selectedMoods, selectedThemes]);
+  }, [selectedGenres, selectedThemes, selectedMoods]);
 
   useEffect(() => {
     if (hoveredItem) {
@@ -1146,7 +1145,6 @@ function App() {
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
-    if ((appliedKeywords as any).isBallad !== undefined) setIsBallad(Boolean((appliedKeywords as any).isBallad));
     
     if (appliedKeywords.tempoConfig) {
       setTempoEnabled(appliedKeywords.tempoConfig.enabled);
@@ -1475,7 +1473,7 @@ function App() {
     }
 
     setSelectedGenres([]);
-    setIsBallad(false);
+
     setKpopMode(0);
     setCitypopMode(0);
     setSelectedMoods([]);
@@ -1737,6 +1735,9 @@ const saveRecentSong = async (newSong: any) => {
           "Infectious Rhythm, Upbeat & Cheerful, Driving 2-beat / 4-beat, Bright Brass section, Festive / Celebratory.";
       }
 
+      const styleLabels = finalThemes.map(id => THEMES.find(t => t.id === id)?.label || id);
+      const hasBalladStyle = finalThemes.includes('ballad');
+
       const genreLabels = finalGenres.flatMap(id => {
         if (id === 'citypop') {
           if (citypopMode === 1) return ["City Pop", "80s Japanese Pop", "Funk", "Groovy", "Retro"];
@@ -1751,6 +1752,7 @@ const saveRecentSong = async (newSong: any) => {
           finalMoods.length > 0
             ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(", ")
             : "Emotional";
+        const styleStr = styleLabels.length > 0 ? styleLabels.join(', ') : '';
 
         const isEnergetic =
           finalMoods.includes('upbeat') ||
@@ -1762,7 +1764,7 @@ const saveRecentSong = async (newSong: any) => {
           finalMoods.includes('calm') ||
           finalMoods.includes('peaceful') ||
           finalGenres.includes('ambient') ||
-          isBallad;
+          hasBalladStyle;
 
         const bpm = tempoInfo || (isEnergetic ? "120-140 BPM" : isCalm ? "60-80 BPM" : "90-110 BPM");
         const drums = isEnergetic
@@ -1793,7 +1795,7 @@ const saveRecentSong = async (newSong: any) => {
           : "Clear, expressive";
 
         return `STYLE:
-${isBallad ? `Ballad-style ${genreStr}` : genreStr}, ${bpm}
+${hasBalladStyle ? `Ballad-style ${genreStr}` : genreStr}, ${bpm}
 
 DRUMS:
 ${drums}
@@ -1812,10 +1814,7 @@ ${vocalDesign}
 
 VOCAL STYLE:
 ${vocalStyle}
-${isBallad ? `
-
-STRUCTURE:
-Slower emotional pacing, vocal-centered ballad flow` : ''}
+${styleStr ? `\n\nSTYLE LAYER:\n${styleStr}` : ''}${hasBalladStyle ? `\n\nSTRUCTURE:\nSlower emotional pacing, vocal-centered ballad flow` : ''}
 
 MOOD:
 ${moodStr}`.trim();
@@ -1827,6 +1826,7 @@ ${moodStr}`.trim();
         genre: finalGenres[0] ?? null,
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         theme: finalThemes[0] ? (THEMES.find(t => t.id === finalThemes[0])?.label || finalThemes[0]) : null,
+        styles: styleLabels,
         userInput,
         songPrompt,
         lyricsLength,
@@ -1840,7 +1840,7 @@ ${moodStr}`.trim();
         tempo: tempoInfo,
         specialPrompt,
         kpopMode,
-        isBallad,
+        isBallad: hasBalladStyle,
       });
 
       if (abortControllerRef.current?.signal.aborted) return;
@@ -1856,7 +1856,7 @@ ${moodStr}`.trim();
           maleCount,
           femaleCount,
           rapEnabled,
-          isBallad,
+          isBallad: hasBalladStyle,
           tempoConfig: {
             enabled: tempoEnabled,
             min: minBPM,
@@ -2018,7 +2018,7 @@ ${result.prompt}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <GenreCategorySection
             title="장르"
-            description="곡의 전반적인 음악 스타일을 결정합니다. (프롬프트에 영향)"
+            description="대분류를 고른 뒤 실제 장르 1개를 선택합니다."
             groups={GENRE_GROUPS}
             selectedGenreId={selectedGenres[0] ?? null}
             isRandomized={isGenreRandomized}
@@ -2030,28 +2030,8 @@ ${result.prompt}
             onLongPressEnd={handleLongPressEnd}
           />
           <CategorySection 
-            title="분위기" 
-            description="곡의 멜로디와 감정선을 결정합니다. (프롬프트에 영향)"
-            items={MOODS} 
-            selected={selectedMoods} 
-            pinned={pinnedMoods}
-            onToggle={(id) => toggleSelection(id, 'mood')}
-            onTogglePin={(id) => togglePin(id, 'mood')}
-            onClear={() => clearCategory('mood')}
-            onUnpinAll={() => unpinAll('mood')}
-            onRandom={() => randomizeCategory('mood')}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-            hoveredItem={hoveredItem}
-            isExpanded={isMoodExpanded}
-            onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
-            allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
-            isRandomized={isMoodRandomized}
-          />
-          <CategorySection 
-            title="주제" 
-            description="가사의 내용과 핵심 메시지를 결정합니다. (가사에 영향)"
+            title="스타일" 
+            description="장르 위에 추가로 입힐 결을 선택합니다. (예: Ballad, Dance, Jazz, Lo-fi)"
             items={THEMES} 
             selected={selectedThemes} 
             pinned={pinnedThemes}
@@ -2069,6 +2049,26 @@ ${result.prompt}
             allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
             isRandomized={isThemeRandomized}
           />
+          <CategorySection 
+            title="분위기" 
+            description="곡의 감정선과 무드를 결정합니다."
+            items={MOODS} 
+            selected={selectedMoods} 
+            pinned={pinnedMoods}
+            onToggle={(id) => toggleSelection(id, 'mood')}
+            onTogglePin={(id) => togglePin(id, 'mood')}
+            onClear={() => clearCategory('mood')}
+            onUnpinAll={() => unpinAll('mood')}
+            onRandom={() => randomizeCategory('mood')}
+            onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
+            hoveredItem={hoveredItem}
+            isExpanded={isMoodExpanded}
+            onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
+            allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+            isRandomized={isMoodRandomized}
+          />
         </div>
 
         <AnimatePresence>
@@ -2081,36 +2081,6 @@ ${result.prompt}
             />
           )}
         </AnimatePresence>
-
-        <div className="bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--border-color)] shadow-[var(--shadow-md)]">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h3 className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-                Ballad
-              </h3>
-              <p className="text-[12px] text-[var(--text-secondary)] mt-1">
-                장르는 유지하고, 느린 템포와 감정 중심의 곡 구조를 적용합니다.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsBallad((prev) => !prev)}
-              onMouseEnter={() => setHoveredItem({ id: 'ballad-toggle', label: 'Ballad', description: '느린 템포와 감정 중심의 발라드 구조를 적용합니다.' })}
-              onMouseLeave={() => setHoveredItem(null)}
-              onTouchStart={() => handleLongPressStart({ id: 'ballad-toggle', label: 'Ballad', description: '느린 템포와 감정 중심의 발라드 구조를 적용합니다.' })}
-              onTouchEnd={handleLongPressEnd}
-              className={cn(
-                "px-5 py-3 rounded-2xl border font-bold transition-all min-w-[140px]",
-                isBallad
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
-              {isBallad ? 'Ballad ON' : 'Ballad OFF'}
-            </button>
-          </div>
-        </div>
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
@@ -2170,11 +2140,8 @@ ${result.prompt}
               )}
             >
               <AnimatePresence>
-                {[...selectedGenres, ...selectedMoods, ...selectedThemes, ...(isBallad ? ['ballad-toggle-chip'] : [])].map((id) => {
-                  const item =
-                    id === 'ballad-toggle-chip'
-                      ? { id: 'ballad-toggle-chip', label: 'Ballad', description: '발라드 구조 적용' }
-                      : [...GENRES, ...MOODS, ...THEMES].find(i => i.id === id);
+                {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
+                  const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
                   return (
                     <motion.span
                       key={id}
@@ -2186,10 +2153,9 @@ ${result.prompt}
                       {item?.label}
                       <button 
                         onClick={() => {
-                          if (id === 'ballad-toggle-chip') setIsBallad(false);
-                          else if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
-                          else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
+                          if (selectedGenres.includes(id)) toggleSelection(id, 'genre');
                           else if (selectedThemes.includes(id)) toggleSelection(id, 'theme');
+                          else if (selectedMoods.includes(id)) toggleSelection(id, 'mood');
                         }}
                         className="hover:bg-brand-orange/20 rounded-full p-0.5 transition-colors"
                       >
@@ -2469,10 +2435,10 @@ ${result.prompt}
                   animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
                 >
-                  {isAppliedKeywordsExpanded && (['genre', 'mood', 'theme'] as const).map((cat) => (
+                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'mood'] as const).map((cat) => (
                     <div key={cat} className="space-y-0.5 group/cat">
                       <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat === 'theme' ? 'style' : cat}</p>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {result.appliedKeywords[cat].map((kw, idx) => {
@@ -2502,20 +2468,6 @@ ${result.prompt}
                       </div>
                     </div>
                   ))}
-                  {(result.appliedKeywords as any).isBallad && (
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">style</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span
-                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-brand-orange/20 text-brand-orange font-bold border border-brand-orange/30 cursor-help"
-                          onMouseEnter={() => setHoveredItem({ id: 'kw-ballad', label: 'Ballad', description: '느린 템포와 감정 중심의 발라드 구조가 적용되었습니다.' })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                        >
-                          Ballad
-                        </span>
-                      </div>
-                    </div>
-                  )}
                   {result.appliedKeywords.vocalType && (
                     <div className="space-y-0.5">
                       <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>

@@ -466,24 +466,6 @@ function getCycleVariantLabel(cycles: readonly { id: string; title: string; vari
     .map((variant) => variant!.label);
 }
 
-function getNextCycleHoverItem(
-  cycle: { id: string; title: string; variants: readonly { id: string; label: string; description: string }[] },
-  selected: string[]
-): CategoryItem {
-  const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
-  const nextVariant =
-    activeIndex === -1
-      ? cycle.variants[0]
-      : activeIndex < cycle.variants.length - 1
-        ? cycle.variants[activeIndex + 1]
-        : cycle.variants[0];
-
-  return {
-    id: cycle.id,
-    label: nextVariant.label,
-    description: `${cycle.title} · ${nextVariant.label}: ${nextVariant.description}`,
-  };
-}
 
 const calculateOptimalBPM = (genres: string[], moods: string[]) => {
   let sumMin = 0;
@@ -2156,7 +2138,7 @@ ${result.prompt}
           />            
           <CycleSection 
             title="스타일" 
-            description="첫 버튼이 기본 선택이며, 클릭할 때마다 같은 계열 안에서 순환합니다. 현재는 선택 제한을 두지 않습니다."
+            description="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이끕니다."
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
@@ -2169,7 +2151,7 @@ ${result.prompt}
           <CycleSection 
             title="사운드/텍스쳐" 
             titleClassName="text-[16px] md:text-[18px]"
-            description="첫 버튼은 상위 카테고리의 기본 사운드입니다. 클릭할 때마다 같은 계열 안에서 순환하며, 현재는 선택 제한을 두지 않습니다."
+            description="악기 톤과 배경 질감을 설정합니다. 소리의 결, 공간감, 무게감, 타격감을 조절하여 음악의 청감 인상을 결정하며, 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
             cycles={SOUND_TEXTURE_CYCLES}
             selected={selectedInstrumentSounds}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES)}
@@ -2178,26 +2160,6 @@ ${result.prompt}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
-          />
-          <CategorySection 
-            title="분위기" 
-            description="곡의 감정선과 무드를 결정합니다."
-            items={MOODS} 
-            selected={selectedMoods} 
-            pinned={pinnedMoods}
-            onToggle={(id) => toggleSelection(id, 'mood')}
-            onTogglePin={(id) => togglePin(id, 'mood')}
-            onClear={() => clearCategory('mood')}
-            onUnpinAll={() => unpinAll('mood')}
-            onRandom={() => randomizeCategory('mood')}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-            hoveredItem={hoveredItem}
-            isExpanded={isMoodExpanded}
-            onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
-            allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
-            isRandomized={isMoodRandomized}
           />
         </div>
 
@@ -2214,7 +2176,7 @@ ${result.prompt}
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <SingerControl 
               maleCount={maleCount}
               femaleCount={femaleCount}
@@ -2226,7 +2188,27 @@ ${result.prompt}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
             />
-            <LyricsLengthControl 
+            <CategorySection 
+              title="분위기" 
+              description="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
+              items={MOODS} 
+              selected={selectedMoods} 
+              pinned={pinnedMoods}
+              onToggle={(id) => toggleSelection(id, 'mood')}
+              onTogglePin={(id) => togglePin(id, 'mood')}
+              onClear={() => clearCategory('mood')}
+              onUnpinAll={() => unpinAll('mood')}
+              onRandom={() => randomizeCategory('mood')}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+              hoveredItem={hoveredItem}
+              isExpanded={isMoodExpanded}
+              onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
+              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+              isRandomized={isMoodRandomized}
+            />
+            <LyricsControl 
               value={lyricsLength}
               onChange={setLyricsLength}
               onHover={setHoveredItem}
@@ -3134,24 +3116,30 @@ function CycleSection({ title, description, cycles, selected, onCycleToggle, onC
         {cycles.map((cycle) => {
           const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
           const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
+          const baseVariant = cycle.variants[0];
           const hoverItem: CategoryItem = activeVariant
             ? {
                 id: cycle.id,
                 label: activeVariant.label,
-                description: `${cycle.title} · ${activeVariant.label}: ${activeVariant.description}`,
+                description: activeVariant.description,
               }
             : {
                 id: cycle.id,
                 label: cycle.title,
-                description: `${cycle.title}의 기본 버튼입니다. 클릭할 때마다 같은 계열 안에서 순환합니다.`,
+                description: baseVariant.description,
               };
-          const nextHoverItem = getNextCycleHoverItem(cycle, selected);
           return (
             <button
               key={cycle.id}
               onClick={() => {
+                const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
                 onCycleToggle(cycle.id);
-                onHover({ ...nextHoverItem, _ts: Date.now() } as CategoryItem);
+                if (nextIndex === -1) {
+                  onHover({ id: cycle.id, label: cycle.title, description: baseVariant.description, _ts: Date.now() } as CategoryItem);
+                } else {
+                  const nextVariant = cycle.variants[nextIndex];
+                  onHover({ id: cycle.id, label: nextVariant.label, description: nextVariant.description, _ts: Date.now() } as CategoryItem);
+                }
               }}
               onMouseEnter={() => onHover(hoverItem)}
               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
@@ -3445,7 +3433,7 @@ function CategorySection({
   );
 }
 
-interface LyricsLengthControlProps {
+interface LyricsControlProps {
   value: LyricsLength;
   onChange: (val: LyricsLength) => void;
   onHover: (item: CategoryItem | null) => void;
@@ -3453,14 +3441,15 @@ interface LyricsLengthControlProps {
   onLongPressEnd: () => void;
 }
 
-function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: LyricsLengthControlProps) {
+function LyricsControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
   const options = [
-    { id: 'normal', label: '기본', description: '일반적인 팝 스타일의 가사 분량' },
+    { id: 'very-short', label: '더짧게', description: '매우 간결하고 함축적인 가사 (2-3줄)' },
     { id: 'short', label: '짧게', description: '함축적이고 간결한 가사 (째즈/발라드 추천)' },
-    { id: 'very-short', label: '더 짧게', description: '매우 간결하고 함축적인 가사 (2-3줄)' }
+    { id: 'normal', label: '기본', description: '일반적인 팝 스타일의 가사 분량' },
+    { id: 'long', label: '길게', description: '서사적이고 풍부한 가사' }
   ];
 
   return (
@@ -3472,7 +3461,7 @@ function LyricsLengthControl({ value, onChange, onHover, onLongPressStart, onLon
           className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가사 길이
+          가사
         </h3>
         <AnimatePresence>
           {showTitleTooltip && (

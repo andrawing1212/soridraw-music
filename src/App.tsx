@@ -147,14 +147,24 @@ class ErrorBoundary extends Component<any, any> {
 
   render() {
     if ((this.state as any).hasError) {
+      const error = (this.state as any).error;
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
-      try {
-        const parsed = JSON.parse((this.state as any).error?.message || "");
-        if (parsed.error && parsed.error.includes("insufficient permissions")) {
-          errorMessage = "권한이 부족합니다. 로그인 상태를 확인해주세요.";
+      
+      if (error?.message) {
+        if (error.message.includes("VITE_GEMINI_API_KEY")) {
+          errorMessage = "Gemini API 키가 설정되지 않았습니다. 설정을 확인해주세요.";
+        } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
+          errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
+        } else {
+          try {
+            const parsed = JSON.parse(error.message);
+            if (parsed.error && parsed.error.includes("insufficient permissions")) {
+              errorMessage = "권한이 부족합니다. 로그인 상태를 확인해주세요.";
+            }
+          } catch (e) {
+            errorMessage = error.message;
+          }
         }
-      } catch (e) {
-        // Not a JSON error
       }
 
       return (
@@ -907,12 +917,15 @@ function App() {
   useEffect(() => {
     historyIndexRef.current = historyIndex;
   }, [historyIndex]);
+  const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(true);
   const keywordsContainerRef = useRef<HTMLDivElement>(null);
+  const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
   const [keywordsContentHeight, setKeywordsContentHeight] = useState(84);
+  const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const collapsedKeywordsHeight = 84;
   const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length;
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -971,6 +984,12 @@ function App() {
       setHasKeywordsOverflow(false);
     }
   }, [selectedGenres, selectedThemes, selectedMoods, selectedStyles, selectedInstrumentSounds, collapsedKeywordsHeight]);
+
+  useEffect(() => {
+    if (appliedKeywordsRef.current) {
+      setAppliedKeywordsHeight(appliedKeywordsRef.current.scrollHeight);
+    }
+  }, [isAppliedKeywordsExpanded, result]);
 
   useEffect(() => {
     if (hoveredItem) {
@@ -1236,8 +1255,6 @@ function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
-
-  const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
 
   const applyKeywordsToNext = (appliedKeywords: SongResult['appliedKeywords']) => {
     const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
@@ -2057,6 +2074,14 @@ const saveRecentSong = async (newSong: any) => {
         console.log('Generation cancelled');
       } else {
         console.error(error);
+        const errorMessage = error.message || '곡 생성 중 오류가 발생했습니다.';
+        if (errorMessage.includes('VITE_GEMINI_API_KEY')) {
+          showToast('API 키가 설정되지 않았습니다. 설정을 확인해주세요.');
+        } else if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
+          showToast('무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.');
+        } else {
+          showToast(errorMessage);
+        }
       }
     } finally {
       setIsGenerating(false);
@@ -2345,9 +2370,14 @@ ${result.prompt}
         <div className="space-y-6">
           {/* Applied Keywords Display */}
           <div className="relative">
-            <div
-              className="overflow-hidden transition-[max-height] duration-300 ease-out"
-              style={{ maxHeight: isKeywordsExpanded ? `${keywordsContentHeight}px` : `${collapsedKeywordsHeight}px` }}
+            <motion.div
+              initial={false}
+              animate={{ 
+                height: isKeywordsExpanded ? keywordsContentHeight : collapsedKeywordsHeight,
+                opacity: 1
+              }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="overflow-hidden min-h-[84px]"
             >
               <div 
                 ref={keywordsContainerRef}
@@ -2387,7 +2417,7 @@ ${result.prompt}
                     );
                   })}
               </div>
-            </div>
+            </motion.div>
             
             {selectedKeywordCount > 0 && (hasKeywordsOverflow || !isKeywordsExpanded) && (
               <button
@@ -2654,108 +2684,114 @@ ${result.prompt}
                 
                 <motion.div 
                   initial={false}
-                  animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
+                  animate={{ 
+                    height: isAppliedKeywordsExpanded ? appliedKeywordsHeight : 0,
+                    opacity: isAppliedKeywordsExpanded ? 1 : 0
+                  }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="overflow-hidden"
                 >
-                  {isAppliedKeywordsExpanded && [
-                    {
-                      key: 'genre',
-                      title: 'genre',
-                      values: result.appliedKeywords.genre ?? [],
-                      accent: 'default' as const,
-                      getDescription: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.description,
-                      getLabel: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
-                    },
-                    {
-                      key: 'style',
-                      title: 'style',
-                      values: result.appliedKeywords.style ?? result.appliedKeywords.theme ?? [],
-                      accent: 'violet' as const,
-                      getDescription: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.description,
-                      getLabel: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,
-                    },
-                    {
-                      key: 'mood',
-                      title: 'mood',
-                      values: result.appliedKeywords.mood ?? [],
-                      accent: 'default' as const,
-                      getDescription: (kw: string) => MOODS.find((item) => item.label === kw || item.id === kw)?.description,
-                      getLabel: (kw: string) => MOODS.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
-                    },
-                    {
-                      key: 'instrumentSound',
-                      title: 'sound / texture',
-                      values: result.appliedKeywords.instrumentSound ?? [],
-                      accent: 'sky' as const,
-                      getDescription: (kw: string) => SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw]?.description,
-                      getLabel: (kw: string) => SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,
-                    },
-                  ].filter((section) => section.values.length > 0).map((section) => (
-                    <div key={section.key} className="space-y-0.5 group/cat">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{section.title}</p>
+                  <div ref={appliedKeywordsRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-2">
+                    {[
+                      {
+                        key: 'genre',
+                        title: 'genre',
+                        values: result.appliedKeywords.genre ?? [],
+                        accent: 'default' as const,
+                        getDescription: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.description,
+                        getLabel: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
+                      },
+                      {
+                        key: 'style',
+                        title: 'style',
+                        values: result.appliedKeywords.style ?? result.appliedKeywords.theme ?? [],
+                        accent: 'violet' as const,
+                        getDescription: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.description,
+                        getLabel: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,
+                      },
+                      {
+                        key: 'mood',
+                        title: 'mood',
+                        values: result.appliedKeywords.mood ?? [],
+                        accent: 'default' as const,
+                        getDescription: (kw: string) => MOODS.find((item) => item.label === kw || item.id === kw)?.description,
+                        getLabel: (kw: string) => MOODS.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
+                      },
+                      {
+                        key: 'instrumentSound',
+                        title: 'sound / texture',
+                        values: result.appliedKeywords.instrumentSound ?? [],
+                        accent: 'sky' as const,
+                        getDescription: (kw: string) => SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw]?.description,
+                        getLabel: (kw: string) => SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,
+                      },
+                    ].filter((section) => section.values.length > 0).map((section) => (
+                      <div key={section.key} className="space-y-0.5 group/cat">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{section.title}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {section.values.map((kw, idx) => {
+                            const displayLabel = section.getLabel(kw);
+                            const description = section.getDescription(kw);
+                            const isRandom = result.randomKeywords?.includes(displayLabel) || result.randomKeywords?.includes(kw);
+                            
+                            return (
+                              <span 
+                                key={idx} 
+                                onMouseEnter={() => {
+                                  if (description) {
+                                    setHoveredItem({ id: `kw-${section.key}-${idx}`, label: displayLabel, description });
+                                  }
+                                }}
+                                onMouseLeave={() => setHoveredItem(null)}
+                                className={cn(
+                                  "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help border",
+                                  section.accent === 'violet'
+                                    ? "bg-violet-500/10 text-violet-300 border-violet-400/20"
+                                    : section.accent === 'sky'
+                                      ? "bg-sky-500/10 text-sky-300 border-sky-400/20"
+                                      : isRandom 
+                                        ? "bg-brand-orange/20 text-brand-orange font-bold border-brand-orange/30" 
+                                        : "bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
+                                )}
+                              >
+                                {displayLabel}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {section.values.map((kw, idx) => {
-                          const displayLabel = section.getLabel(kw);
-                          const description = section.getDescription(kw);
-                          const isRandom = result.randomKeywords?.includes(displayLabel) || result.randomKeywords?.includes(kw);
-                          
-                          return (
-                            <span 
-                              key={idx} 
-                              onMouseEnter={() => {
-                                if (description) {
-                                  setHoveredItem({ id: `kw-${section.key}-${idx}`, label: displayLabel, description });
-                                }
-                              }}
-                              onMouseLeave={() => setHoveredItem(null)}
-                              className={cn(
-                                "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help border",
-                                section.accent === 'violet'
-                                  ? "bg-violet-500/10 text-violet-300 border-violet-400/20"
-                                  : section.accent === 'sky'
-                                    ? "bg-sky-500/10 text-sky-300 border-sky-400/20"
-                                    : isRandom 
-                                      ? "bg-brand-orange/20 text-brand-orange font-bold border-brand-orange/30" 
-                                      : "bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
-                              )}
-                            >
-                              {displayLabel}
-                            </span>
-                          );
-                        })}
+                    ))}
+                    {result.appliedKeywords.vocalType && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>
+                        <div className="flex flex-wrap gap-1">
+                          <span 
+                            className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
+                            onMouseEnter={() => setHoveredItem({ id: 'kw-vocal', label: 'Vocal', description: '곡의 보컬 구성을 나타냅니다.' })}
+                            onMouseLeave={() => setHoveredItem(null)}
+                          >
+                            {result.appliedKeywords.vocalType}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {result.appliedKeywords.vocalType && (
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span 
-                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
-                          onMouseEnter={() => setHoveredItem({ id: 'kw-vocal', label: 'Vocal', description: '곡의 보컬 구성을 나타냅니다.' })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                        >
-                          {result.appliedKeywords.vocalType}
-                        </span>
+                    )}
+                    {result.appliedKeywords.tempo && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">tempo</p>
+                        <div className="flex flex-wrap gap-1">
+                          <span 
+                            className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border border-[var(--border-color)] cursor-help"
+                            onMouseEnter={() => setHoveredItem({ id: 'kw-tempo', label: 'Tempo', description: '곡의 빠르기를 나타내는 BPM 범위입니다.' })}
+                            onMouseLeave={() => setHoveredItem(null)}
+                          >
+                            {result.appliedKeywords.tempo}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {result.appliedKeywords.tempo && (
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">tempo</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span 
-                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border border-[var(--border-color)] cursor-help"
-                          onMouseEnter={() => setHoveredItem({ id: 'kw-tempo', label: 'Tempo', description: '곡의 빠르기를 나타내는 BPM 범위입니다.' })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                        >
-                          {result.appliedKeywords.tempo}
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </motion.div>
 
                 {/* Expand Button at Bottom Center */}
@@ -3357,6 +3393,15 @@ function CategorySection({
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(84);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [items, selected, isExpanded]);
+
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       <div className="flex items-center justify-between mb-4">
@@ -3431,11 +3476,17 @@ function CategorySection({
         </div>
       </div>
       
-      <div className={cn(
-        "flex flex-wrap gap-2 transition-all duration-500",
-        !isExpanded ? "max-h-[40px] md:max-h-[84px] overflow-hidden" : "max-h-[1000px] overflow-visible"
-      )}>
-        {items.map((item) => {
+      <motion.div
+        initial={false}
+        animate={{ 
+          height: isExpanded ? contentHeight : (window.innerWidth < 768 ? 40 : 84),
+          opacity: 1
+        }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="overflow-hidden min-h-[40px] md:min-h-[84px]"
+      >
+        <div ref={contentRef} className="flex flex-wrap gap-2">
+          {items.map((item) => {
           const isPinned = pinned.includes(item.id);
           const isSelected = selected.includes(item.id);
           const isKpop = item.id === 'kpop';
@@ -3555,7 +3606,8 @@ function CategorySection({
             </div>
           );
         })}
-      </div>
+        </div>
+      </motion.div>
 
       {/* Expand/Collapse Button - Unified circular arrow style at bottom center */}
       <button

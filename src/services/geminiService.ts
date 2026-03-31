@@ -13,9 +13,18 @@ import {
   VocalConfig,
 } from "../types";
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY,
-});
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("VITE_GEMINI_API_KEY is not defined. Please set it in your environment variables.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 type LegacyGenreInput = string[];
 type LegacyMoodInput = string[];
@@ -440,6 +449,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 - Make the production prompt read like a real creative brief, not a keyword dump.
 `.trim();
 
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model,
     contents: "Generate a song based on the system instructions.",
@@ -524,6 +534,7 @@ Translate the provided lyrics into ${targetLanguage}.
 - Return only the translated lyrics text.
 `.trim();
 
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model,
     contents: lyrics,

@@ -2149,6 +2149,29 @@ ${result.prompt}
     setTimeout(() => setCopiedType(null), 2000);
   };
 
+  const isGlobalClearable = 
+    selectedGenres.length > 0 ||
+    selectedMoods.length > 0 ||
+    selectedThemes.length > 0 ||
+    selectedStyles.length > 0 ||
+    selectedInstrumentSounds.length > 0 ||
+    userInput !== '' ||
+    lyricsLength !== 'normal' ||
+    songDuration !== '3' ||
+    maleCount > 0 ||
+    femaleCount > 0 ||
+    rapEnabled ||
+    !tempoEnabled ||
+    minBPM !== 90 ||
+    maxBPM !== 110 ||
+    kpopMode !== 0 ||
+    citypopMode !== 0 ||
+    isGenreRandomized ||
+    isMoodRandomized ||
+    isThemeRandomized ||
+    isStyleRandomized ||
+    isSoundTextureRandomized;
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} />
@@ -2299,17 +2322,6 @@ ${result.prompt}
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SingerControl 
-              maleCount={maleCount}
-              femaleCount={femaleCount}
-              rapEnabled={rapEnabled}
-              onMaleChange={setMaleCount}
-              onFemaleChange={setFemaleCount}
-              onRapChange={setRapEnabled}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-            />
             <CategorySection 
               title="분위기" 
               description="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
@@ -2327,6 +2339,22 @@ ${result.prompt}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
+            />
+            <SingerControl 
+              maleCount={maleCount}
+              femaleCount={femaleCount}
+              rapEnabled={rapEnabled}
+              onMaleChange={setMaleCount}
+              onFemaleChange={setFemaleCount}
+              onRapChange={setRapEnabled}
+              onClear={() => {
+                setMaleCount(0);
+                setFemaleCount(0);
+                setRapEnabled(false);
+              }}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
             />
             <LyricsControl 
               value={lyricsLength}
@@ -2354,6 +2382,10 @@ ${result.prompt}
                   _ts: Date.now(),
                 });
               }}
+              onClear={() => {
+                setLyricsLength('normal');
+                setKpopMode(0);
+              }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
@@ -2361,6 +2393,7 @@ ${result.prompt}
             <SongDurationControl 
               value={songDuration}
               onChange={setSongDuration}
+              onClear={() => setSongDuration('3')}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
@@ -2377,6 +2410,11 @@ ${result.prompt}
             max={maxBPM}
             onMinChange={setMinBPM}
             onMaxChange={setMaxBPM}
+            onClear={() => {
+              setTempoEnabled(true);
+              setMinBPM(90);
+              setMaxBPM(110);
+            }}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -2488,7 +2526,7 @@ ${result.prompt}
                 }}
                 onTouchStart={() => handleLongPressStart({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
                 onTouchEnd={handleLongPressEnd}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
+                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-white/10 hover:bg-white/20 text-[var(--text-primary)] transition-all border border-white/30 flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
               >
                 <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
                 <span className="hidden md:block font-bold">랜덤 선택</span>
@@ -2532,9 +2570,15 @@ ${result.prompt}
                 onClick={() => clearAll({ preserveHistory: true })}
                 onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-[var(--border-color)] flex items-center justify-center gap-2 shadow-[var(--shadow-md)]"
+                className={cn(
+                  "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-[var(--shadow-md)]",
+                  isGlobalClearable
+                    ? "bg-white/10 border-white/30 text-[var(--text-primary)] hover:bg-white/20"
+                    : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
+                )}
+                disabled={!isGlobalClearable}
               >
-                <Trash2 className="w-5 h-5 text-red-500" />
+                <Trash2 className={cn("w-5 h-5", isGlobalClearable ? "text-red-500" : "text-red-500/30")} />
                 <span className="hidden md:block font-bold">Clear all</span>
               </button>
             </div>
@@ -2553,7 +2597,7 @@ ${result.prompt}
 
               {/* Title Card */}
               <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[var(--border-color)]/80 shadow-[var(--shadow-lg)] relative overflow-hidden group hover:border-brand-orange/20 transition-all duration-500">
-                  <div className="absolute top-4 right-4 flex items-center gap-3 z-10">
+          <div className="absolute top-4 left-4 flex items-center gap-3 z-10">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -2569,7 +2613,8 @@ ${result.prompt}
                       <HeartIcon className="w-5 h-5" />
                       <span className="text-sm font-bold whitespace-nowrap">보관함</span>
                     </button>
-
+                  </div>
+                  <div className="absolute top-4 right-4 flex items-center gap-3 z-10">
                     <button
                       onClick={() => copyToClipboard(result.title, 'title')}
                       onMouseEnter={() =>
@@ -3125,26 +3170,31 @@ function GenreCategorySection({
             onTouchStart={() => onLongPressStart({ id: 'genre-random', label: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-2.5 rounded-xl transition-all border",
+              "p-2.5 rounded-xl transition-all",
               isRandomized
-                ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20"
-                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+                ? "bg-brand-orange text-white"
+                : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
             )}
           >
             <Dices className="w-4 h-4" />
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Clear all', description: '선택한 장르를 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'genre-clear', label: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: 'Clear all', description: '선택한 장르를 초기화합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
-            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
+            className={cn(
+              "p-2.5 rounded-xl transition-all border",
+              (!!selectedChild || isRandomized)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
           >
-            <Trash2 className="w-4 h-4" />
+            <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -3176,7 +3226,7 @@ function GenreCategorySection({
                   "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[44px]",
                   isSelectedGroup
                     ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -3387,11 +3437,21 @@ function CycleSection({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={onRandom} className={`p-2.5 rounded-xl border border-[var(--border-color)] transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'}`}>
+          <button onClick={onRandom} className={`p-2.5 rounded-xl transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-white/10 text-[var(--text-secondary)] hover:bg-white/20'}`}>
             <Dices className="w-4 h-4" />
           </button>
-          <button onClick={onClear} className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all">
-            <Trash2 className="w-4 h-4" />
+          <button 
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'cycle-clear', label: '초기화', description: `${title} 설정을 초기화합니다.` })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "p-2.5 rounded-xl transition-all border",
+              (selected.length > 0 || isRandomized)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -3440,7 +3500,7 @@ function CycleSection({
                 onTouchEnd={onLongPressEnd}
                 className={cn(
                   "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center",
-                  activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                  activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
                 )}
               >
                 <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
@@ -3575,10 +3635,10 @@ function CategorySection({
             onTouchStart={() => onLongPressStart({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-2.5 rounded-xl transition-all border",
+              "p-2.5 rounded-xl transition-all",
               isRandomized 
-                ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+                ? "bg-brand-orange text-white" 
+                : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
             )}
           >
             <Dices className="w-4 h-4" />
@@ -3593,23 +3653,28 @@ function CategorySection({
               }}
               onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
               onTouchEnd={onLongPressEnd}
-              className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
+              className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
             >
               <PinOff className="w-4 h-4" />
             </button>
           )}
           <button 
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'clear', label: 'Clear all', description: hidePin ? '모든 선택 삭제' : '핀을 제외한 모든 선택 삭제' })}
+            onMouseEnter={() => onHover({ id: 'clear', label: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Clear all', description: hidePin ? '모든 선택 삭제' : '핀을 제외한 모든 선택 삭제' })}
+            onTouchStart={() => onLongPressStart({ id: 'clear', label: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
-            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
+            className={cn(
+              "p-2.5 rounded-xl transition-all border",
+              (selected.length > 0 || isRandomized)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
           >
-            <Trash2 className="w-4 h-4" />
+            <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -3645,7 +3710,7 @@ function CategorySection({
               displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
               displayLabel = "K-Pop";
             } else {
-              kpopStyle = "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]";
+              kpopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
               displayDescription = "K-Pop 장르를 선택하고 스타일(기본/Mix)을 순환하며 선택합니다.";
               displayLabel = "K-Pop";
             }
@@ -3663,7 +3728,7 @@ function CategorySection({
               displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
               displayLabel = "City Pop(O)";
             } else {
-              citypopStyle = "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]";
+              citypopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
               displayDescription = "City Pop 장르를 선택하고 스타일(올드/현대)을 순환하며 선택합니다.";
               displayLabel = "City Pop";
             }
@@ -3692,7 +3757,7 @@ function CategorySection({
                   (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
                   isSelected
                     ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]",
+                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10",
                   isKpop && kpopMode > 0 ? kpopStyle : "",
                   isCitypop && citypopMode > 0 ? citypopStyle : ""
                 )}
@@ -3737,7 +3802,7 @@ function CategorySection({
                     "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                     isPinned 
                       ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
-                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                      : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
                   )}
                 >
                   <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
@@ -3770,12 +3835,13 @@ interface LyricsControlProps {
   kpopMode: 0 | 1 | 2;
   isKpopSelected: boolean;
   onToggleMixedLyrics: () => void;
+  onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixedLyrics, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
+function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixedLyrics, onClear, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -3789,55 +3855,72 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
       <div className="relative mb-6 flex items-center justify-between gap-3">
-        <h3 
-          onMouseEnter={() => setShowTitleTooltip(true)}
-          onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-        >
-          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가사
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 
+            onMouseEnter={() => setShowTitleTooltip(true)}
+            onMouseLeave={() => setShowTitleTooltip(false)}
+            className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+          >
+            <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+            가사
+          </h3>
+        </div>
 
-        <button
-          onClick={onToggleMixedLyrics}
-          onMouseEnter={() => onHover({
-            id: 'lyrics-mix',
-            label: '한/영 혼합',
-            description: !isKpopSelected
-              ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
-              : kpopMode === 2
-                ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
-                : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
-          })}
-          onMouseLeave={() => {
-            onHover(null);
-            onLongPressEnd();
-          }}
-          onTouchStart={() => onLongPressStart({
-            id: 'lyrics-mix',
-            label: '한/영 혼합',
-            description: !isKpopSelected
-              ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
-              : kpopMode === 2
-                ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
-                : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
-          })}
-          onTouchEnd={onLongPressEnd}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-            !isKpopSelected
-              ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)]/60"
-              : kpopMode === 2
-                ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
-                : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)]"
-          )}
-        >
-          <span className={cn(
-            "w-2 h-2 rounded-full",
-            !isKpopSelected ? "bg-[var(--text-secondary)]/40" : kpopMode === 2 ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
-          )} />
-          한/영 혼합 {isKpopSelected ? (kpopMode === 2 ? 'ON' : 'OFF') : '대기'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleMixedLyrics}
+            onMouseEnter={() => onHover({
+              id: 'lyrics-mix',
+              label: '한/영 혼합',
+              description: !isKpopSelected
+                ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
+                : kpopMode === 2
+                  ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
+                  : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
+            })}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({
+              id: 'lyrics-mix',
+              label: '한/영 혼합',
+              description: !isKpopSelected
+                ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
+                : kpopMode === 2
+                  ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
+                  : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
+            })}
+            onTouchEnd={onLongPressEnd}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+              !isKpopSelected
+                ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/60"
+                : kpopMode === 2
+                  ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
+                  : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+            )}
+          >
+            <span className={cn(
+              "w-2 h-2 rounded-full",
+              !isKpopSelected ? "bg-[var(--text-secondary)]/40" : kpopMode === 2 ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
+            )} />
+            한/영 혼합 {isKpopSelected ? (kpopMode === 2 ? 'ON' : 'OFF') : '대기'}
+          </button>
+          <button
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'lyrics-clear', label: '초기화', description: '가사 설정을 초기화합니다.' })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "p-2 rounded-lg transition-all border",
+              (value !== 'normal' || kpopMode !== 0)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <AnimatePresence>
           {showTitleTooltip && (
             <motion.div
@@ -3871,7 +3954,7 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
                 "w-full py-3 rounded-xl text-sm font-bold transition-all border",
                 value === opt.id
                   ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
               )}
             >
               {opt.label}
@@ -3886,12 +3969,13 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
 interface SongDurationControlProps {
   value: SongDuration;
   onChange: (val: SongDuration) => void;
+  onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function SongDurationControl({ value, onChange, onHover, onLongPressStart, onLongPressEnd }: SongDurationControlProps) {
+function SongDurationControl({ value, onChange, onClear, onHover, onLongPressStart, onLongPressEnd }: SongDurationControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
   const options = [
@@ -3905,7 +3989,7 @@ function SongDurationControl({ value, onChange, onHover, onLongPressStart, onLon
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6">
+      <div className="relative mb-6 flex items-center justify-between">
         <h3 
           onMouseEnter={() => setShowTitleTooltip(true)}
           onMouseLeave={() => setShowTitleTooltip(false)}
@@ -3914,6 +3998,19 @@ function SongDurationControl({ value, onChange, onHover, onLongPressStart, onLon
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
           곡 길이
         </h3>
+        <button
+          onClick={onClear}
+          onMouseEnter={() => onHover({ id: 'duration-clear', label: '초기화', description: '곡 길이 설정을 초기화합니다.' })}
+          onMouseLeave={() => onHover(null)}
+          className={cn(
+            "p-2 rounded-lg transition-all border",
+            (value !== '3')
+              ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+              : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+          )}
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+        </button>
         <AnimatePresence>
           {showTitleTooltip && (
             <motion.div
@@ -3947,7 +4044,7 @@ function SongDurationControl({ value, onChange, onHover, onLongPressStart, onLon
               "py-3 rounded-xl text-sm font-bold transition-all border",
               value === opt.id
                 ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
             )}
           >
             {opt.label}
@@ -3965,6 +4062,7 @@ interface SingerControlProps {
   onMaleChange: (count: number) => void;
   onFemaleChange: (count: number) => void;
   onRapChange: (enabled: boolean) => void;
+  onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
@@ -3977,6 +4075,7 @@ function SingerControl({
   onMaleChange, 
   onFemaleChange, 
   onRapChange,
+  onClear,
   onHover, 
   onLongPressStart, 
   onLongPressEnd 
@@ -4036,29 +4135,46 @@ function SingerControl({
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
       <div className="relative mb-6 flex items-center justify-between">
-        <h3 
-          onMouseEnter={() => setShowTitleTooltip(true)}
-          onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-        >
-          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          가수
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 
+            onMouseEnter={() => setShowTitleTooltip(true)}
+            onMouseLeave={() => setShowTitleTooltip(false)}
+            className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+          >
+            <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+            가수
+          </h3>
+        </div>
 
-        <button
-          onClick={() => onRapChange(!rapEnabled)}
-          onMouseEnter={() => onHover({ id: 'rap', label: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
-          onMouseLeave={() => onHover(null)}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-            rapEnabled 
-              ? "bg-brand-orange/10 border-brand-orange text-brand-orange" 
-              : "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)]"
-          )}
-        >
-          <Mic2 className={cn("w-3 h-3", rapEnabled ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
-          랩 {rapEnabled ? 'ON' : 'OFF'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onRapChange(!rapEnabled)}
+            onMouseEnter={() => onHover({ id: 'rap', label: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+              rapEnabled 
+                ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+            )}
+          >
+            <Mic2 className={cn("w-3 h-3", rapEnabled ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
+            랩 {rapEnabled ? 'ON' : 'OFF'}
+          </button>
+          <button
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'singer-clear', label: '초기화', description: '가수 설정을 초기화합니다.' })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "p-2 rounded-lg transition-all border",
+              (maleCount > 0 || femaleCount > 0 || rapEnabled)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
         <AnimatePresence>
           {showTitleTooltip && (
@@ -4087,7 +4203,7 @@ function SingerControl({
               ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
               : maleCount > 1
                 ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
-                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
           )}
         >
           {getMaleLabel()}
@@ -4104,7 +4220,7 @@ function SingerControl({
               ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
               : femaleCount > 1
                 ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
-                : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
           )}
         >
           {getFemaleLabel()}
@@ -4121,12 +4237,13 @@ interface TempoControlProps {
   max: number;
   onMinChange: (val: number) => void;
   onMaxChange: (val: number) => void;
+  onClear: () => void;
   onHover: (item: { id: string; label: string; description: string } | null) => void;
   onLongPressStart: (item: { id: string; label: string; description: string }) => void;
   onLongPressEnd: () => void;
 }
 
-function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
+function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
@@ -4193,32 +4310,18 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <h3 
-                onMouseEnter={() => setShowTitleTooltip(true)}
-                onMouseLeave={() => setShowTitleTooltip(false)}
-                className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-              >
-                <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-                템포(BPM)
-              </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
-                  >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 빠르기를 BPM 단위로 조절합니다.</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <h3 
+              onMouseEnter={() => setShowTitleTooltip(true)}
+              onMouseLeave={() => setShowTitleTooltip(false)}
+              className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+            >
+              <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+              템포(BPM)
+            </h3>
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity",
+                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -4268,10 +4371,10 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-sm font-bold transition-all border flex items-center gap-2",
+                  "px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
                   enabled 
-                    ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                    : "bg-[var(--card-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+                    ? "bg-brand-orange text-white" 
+                    : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
                 )}
               >
               <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
@@ -4280,29 +4383,44 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           </div>
         </div>
 
-        <div className="hidden md:block">
+        <div className="flex items-center gap-2">
+          <div className="hidden md:block">
+            <button
+              onClick={() => {
+                onEnabledChange(!enabled);
+                onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
+              }}
+              onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
+                enabled 
+                  ? "bg-brand-orange text-white" 
+                  : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
+              )}
+            >
+              <Dices className={cn("w-5 h-5", enabled && "animate-pulse")} />
+              <span>랜덤</span>
+            </button>
+          </div>
           <button
-            onClick={() => {
-              onEnabledChange(!enabled);
-              onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
-            }}
-            onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'tempo-clear', label: '초기화', description: '템포 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "px-6 py-3 rounded-xl text-base font-bold transition-all border flex items-center gap-2",
-              enabled 
-                ? "bg-brand-orange text-white border-orange-400 shadow-lg shadow-brand-orange/20" 
-                : "bg-[var(--card-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
+              "p-2 rounded-lg transition-all border",
+              (!enabled || min !== 90 || max !== 110)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
             )}
           >
-            <Dices className={cn("w-5 h-5", enabled && "animate-pulse")} />
-            <span>랜덤</span>
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
+            "md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}

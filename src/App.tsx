@@ -897,8 +897,9 @@ function App() {
     sessionStorage.setItem('soridraw_pinned_instrument_sounds', JSON.stringify(pinnedInstrumentSounds));
   }, [pinnedInstrumentSounds]);
   const [isGenreExpanded, setIsGenreExpanded] = useState(false);
+  const [isStyleExpanded, setIsStyleExpanded] = useState(false);
+  const [isSoundExpanded, setIsSoundExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
-
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
@@ -2236,6 +2237,8 @@ ${result.prompt}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
+            isExpanded={isGenreExpanded}
+            onToggleExpand={() => setIsGenreExpanded(!isGenreExpanded)}
           />            
           <CycleSection 
             title="스타일" 
@@ -2249,6 +2252,8 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
             isRandomized={isStyleRandomized}
+            isExpanded={isStyleExpanded}
+            onToggleExpand={() => setIsStyleExpanded(!isStyleExpanded)}
           />
           <CycleSection 
             title="사운드/텍스쳐" 
@@ -2263,6 +2268,8 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
             isRandomized={isSoundTextureRandomized}
+            isExpanded={isSoundExpanded}
+            onToggleExpand={() => setIsSoundExpanded(!isSoundExpanded)}
           />
         </div>
 
@@ -3027,6 +3034,8 @@ interface GenreCategorySectionProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 function GenreCategorySection({
@@ -3041,8 +3050,18 @@ function GenreCategorySection({
   onHover,
   onLongPressStart,
   onLongPressEnd,
+  isExpanded = false,
+  onToggleExpand,
 }: GenreCategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(0);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [isExpanded, groups]);
 
   const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
@@ -3109,40 +3128,50 @@ function GenreCategorySection({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {groups.map((group) => {
-          const isSelectedGroup = selectedGroup?.id === group.id;
-          return (
-            <button
-              key={group.id}
-              onClick={() => onOpenGroup(group.id)}
-              onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
-              }}
-              onTouchStart={() => onLongPressStart({ id: group.id, label: group.label, description: group.description })}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "px-3.5 py-3 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[52px]",
-                isSelectedGroup
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span>{group.label}</span>
-                <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
-              </div>
-              {isSelectedGroup && selectedChild && (
-                <div className="mt-1 text-[11px] text-white/80 font-medium">
-                  {selectedChild.label}
+      <motion.div
+        initial={false}
+        animate={{ 
+          height: isExpanded ? contentHeight : 120,
+          opacity: 1
+        }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="overflow-hidden"
+      >
+        <div ref={contentRef} className="grid grid-cols-2 gap-2">
+          {groups.map((group) => {
+            const isSelectedGroup = selectedGroup?.id === group.id;
+            return (
+              <button
+                key={group.id}
+                onClick={() => onOpenGroup(group.id)}
+                onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description })}
+                onMouseLeave={() => {
+                  onHover(null);
+                  onLongPressEnd();
+                }}
+                onTouchStart={() => onLongPressStart({ id: group.id, label: group.label, description: group.description })}
+                onTouchEnd={onLongPressEnd}
+                className={cn(
+                  "px-3.5 py-3 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[52px]",
+                  isSelectedGroup
+                    ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span>{group.label}</span>
+                  <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
                 </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                {isSelectedGroup && selectedChild && (
+                  <div className="mt-1 text-[11px] text-white/80 font-medium">
+                    {selectedChild.label}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
 
       <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selectedChild ? (
@@ -3155,6 +3184,16 @@ function GenreCategorySection({
           </p>
         )}
       </div>
+
+      {/* Expand Button at Bottom Center */}
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+        >
+          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -3256,10 +3295,36 @@ interface CycleSectionProps {
   onLongPressEnd: () => void;
   titleClassName?: string;
   isRandomized?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
-function CycleSection({ title, description, cycles, selected, onCycleToggle, onClear, onRandom, onHover, onLongPressStart, onLongPressEnd, titleClassName, isRandomized }: CycleSectionProps) {
+function CycleSection({ 
+  title, 
+  description, 
+  cycles, 
+  selected, 
+  onCycleToggle, 
+  onClear, 
+  onRandom, 
+  onHover, 
+  onLongPressStart, 
+  onLongPressEnd, 
+  titleClassName, 
+  isRandomized,
+  isExpanded = false,
+  onToggleExpand
+}: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(0);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [isExpanded, cycles]);
+
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
   return (
@@ -3297,51 +3362,72 @@ function CycleSection({ title, description, cycles, selected, onCycleToggle, onC
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 md:gap-2.5">
-        {cycles.map((cycle) => {
-          const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
-          const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
-          const baseVariant = cycle.variants[0];
-          const hoverItem: CategoryItem = activeVariant
-            ? {
-                id: cycle.id,
-                label: activeVariant.label,
-                description: activeVariant.description,
-              }
-            : {
-                id: cycle.id,
-                label: cycle.title,
-                description: baseVariant.description,
-              };
-          return (
-            <button
-              key={cycle.id}
-              onClick={() => {
-                const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
-                onCycleToggle(cycle.id);
-                if (nextIndex === -1) {
-                  onHover({ id: cycle.id, label: cycle.title, description: baseVariant.description, _ts: Date.now() } as CategoryItem);
-                } else {
-                  const nextVariant = cycle.variants[nextIndex];
-                  onHover({ id: cycle.id, label: nextVariant.label, description: nextVariant.description, _ts: Date.now() } as CategoryItem);
+
+      <motion.div
+        initial={false}
+        animate={{ 
+          height: isExpanded ? contentHeight : 130,
+          opacity: 1
+        }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="overflow-hidden"
+      >
+        <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+          {cycles.map((cycle) => {
+            const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
+            const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
+            const baseVariant = cycle.variants[0];
+            const hoverItem: CategoryItem = activeVariant
+              ? {
+                  id: cycle.id,
+                  label: activeVariant.label,
+                  description: activeVariant.description,
                 }
-              }}
-              onMouseEnter={() => onHover(hoverItem)}
-              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-              onTouchStart={() => onLongPressStart(hoverItem)}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "min-h-[58px] rounded-xl border px-3 py-2.5 text-left transition-all flex items-center",
-                activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-              )}
-            >
-              <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
-                {activeVariant ? activeVariant.label : cycle.title}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+              : {
+                  id: cycle.id,
+                  label: cycle.title,
+                  description: baseVariant.description,
+                };
+            return (
+              <button
+                key={cycle.id}
+                onClick={() => {
+                  const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
+                  onCycleToggle(cycle.id);
+                  if (nextIndex === -1) {
+                    onHover({ id: cycle.id, label: cycle.title, description: baseVariant.description, _ts: Date.now() } as CategoryItem);
+                  } else {
+                    const nextVariant = cycle.variants[nextIndex];
+                    onHover({ id: cycle.id, label: nextVariant.label, description: nextVariant.description, _ts: Date.now() } as CategoryItem);
+                  }
+                }}
+                onMouseEnter={() => onHover(hoverItem)}
+                onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                onTouchStart={() => onLongPressStart(hoverItem)}
+                onTouchEnd={onLongPressEnd}
+                className={cn(
+                  "min-h-[58px] rounded-xl border px-3 py-2.5 text-left transition-all flex items-center",
+                  activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                )}
+              >
+                <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
+                  {activeVariant ? activeVariant.label : cycle.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Expand Button at Bottom Center */}
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+        >
+          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+      )}
     </div>
   );
 }

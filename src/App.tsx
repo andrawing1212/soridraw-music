@@ -3069,28 +3069,39 @@ function GenreCategorySection({
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       <div className="flex items-center justify-between mb-4">
-        <div className="relative">
-          <h3
-            onMouseEnter={() => setShowTitleTooltip(true)}
-            onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-          >
-            <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-            {title}
-            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
-          </h3>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
-              >
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <h3
+              onMouseEnter={() => setShowTitleTooltip(true)}
+              onMouseLeave={() => setShowTitleTooltip(false)}
+              className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+            >
+              <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+              {title}
+              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
+            </h3>
+            <AnimatePresence>
+              {showTitleTooltip && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                >
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              className="p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-brand-orange hover:bg-[var(--hover-bg)] transition-all shadow-sm"
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -3184,16 +3195,6 @@ function GenreCategorySection({
           </p>
         )}
       </div>
-
-      {/* Expand Button at Bottom Center */}
-      {onToggleExpand && (
-        <button
-          onClick={onToggleExpand}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
-        >
-          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-      )}
     </div>
   );
 }
@@ -3330,29 +3331,41 @@ function CycleSection({
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       <div className="flex items-center justify-between mb-4 gap-3">
-        <div className="relative min-w-0">
-          <h3
-            onMouseEnter={() => setShowTitleTooltip(true)}
-            onMouseLeave={() => setShowTitleTooltip(false)}
-            className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
-          >
-            <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
-            <span className="truncate">{title}</span>
-            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
-          </h3>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
-              >
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative min-w-0">
+            <h3
+              onMouseEnter={() => setShowTitleTooltip(true)}
+              onMouseLeave={() => setShowTitleTooltip(false)}
+              className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
+            >
+              <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+              <span className="truncate">{title}</span>
+              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
+            </h3>
+            <AnimatePresence>
+              {showTitleTooltip && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                >
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              className="p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-brand-orange hover:bg-[var(--hover-bg)] transition-all shrink-0 shadow-sm"
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
         </div>
+
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={onRandom} className={`p-2.5 rounded-xl border border-[var(--border-color)] transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'}`}>
             <Dices className="w-4 h-4" />
@@ -3419,15 +3432,19 @@ function CycleSection({
         </div>
       </motion.div>
 
-      {/* Expand Button at Bottom Center */}
-      {onToggleExpand && (
-        <button
-          onClick={onToggleExpand}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
-        >
-          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-      )}
+      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
+        {selected.length > 0 ? (
+          <p className="text-sm font-semibold text-brand-orange">
+            {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
+              .map(c => c.variants.find(v => selected.includes(v.id))?.label)
+              .join(', ')}
+          </p>
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">
+            {title} 키워드를 선택하세요.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -3491,28 +3508,39 @@ function CategorySection({
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       <div className="flex items-center justify-between mb-4">
-        <div className="relative">
-          <h3 
-            onMouseEnter={() => setShowTitleTooltip(true)}
-            onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-          >
-            <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-            {title}
-            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
-          </h3>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
-              >
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <h3 
+              onMouseEnter={() => setShowTitleTooltip(true)}
+              onMouseLeave={() => setShowTitleTooltip(false)}
+              className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+            >
+              <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+              {title}
+              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
+            </h3>
+            <AnimatePresence>
+              {showTitleTooltip && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
+                >
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              className="p-2 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-brand-orange hover:bg-[var(--hover-bg)] transition-all shadow-sm"
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -3695,27 +3723,17 @@ function CategorySection({
         </div>
       </motion.div>
 
-      {/* Expand/Collapse Button - Unified circular arrow style at bottom center */}
-      <button
-        onClick={() => {
-          onToggleExpand();
-          onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' });
-        }}
-        onMouseEnter={() => onHover({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
-        onMouseLeave={() => {
-          onHover(null);
-          onLongPressEnd();
-        }}
-        onTouchStart={() => onLongPressStart({ id: 'toggle-expand', label: isExpanded ? '접기' : '펼쳐보기', description: isExpanded ? '키워드 목록을 숨깁니다.' : '더 많은 키워드를 보여줍니다.' })}
-        onTouchEnd={onLongPressEnd}
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
-      >
-        {isExpanded ? (
-          <ChevronUp className="w-5 h-5" />
+      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
+        {selected.length > 0 ? (
+          <p className="text-sm font-semibold text-brand-orange">
+            {selected.map(id => items.find(i => i.id === id)?.label).join(', ')}
+          </p>
         ) : (
-          <ChevronDown className="w-5 h-5" />
+          <p className="text-xs text-[var(--text-secondary)]">
+            키워드를 선택하여 곡의 {title}를 설정하세요.
+          </p>
         )}
-      </button>
+      </div>
     </div>
   );
 }

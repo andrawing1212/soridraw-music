@@ -283,16 +283,19 @@ PROMPT WRITING RULES:
 - If style layers are selected, weave them into the body of the prompt naturally.
 - If instrument / sound layers are selected, reflect them in SOUND, BASS, DRUMS, TEXTURE, or ARRANGEMENT sections naturally.
 - Keep the prompt structured and readable.
-- Preferred structure:
-  STYLE:
-  DRUMS:
-  BASS:
-  SOUND:
-  TEXTURE:
-  VOCAL:
-  VOCAL STYLE:
-  ARRANGEMENT:
-  MOOD:
+- Use exactly one line per section in the final prompt output.
+- Every section label must begin with the bullet dot character.
+- Do not insert blank lines between sections.
+- Preferred structure (one line per section):
+  ·STYLE: ...
+  ·DRUMS: ...
+  ·BASS: ...
+  ·SOUND: ...
+  ·TEXTURE: ...
+  ·VOCAL: ...
+  ·VOCAL STYLE: ...
+  ·ARRANGEMENT: ...
+  ·MOOD: ...
 - Avoid generic placeholders such as "standard pop drums" unless the request is truly generic.
 - Make the output feel specific to the user's exact combination.
 `.trim();

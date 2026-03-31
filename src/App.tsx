@@ -58,6 +58,7 @@ import {
   GENRE_GROUPS,
   SOUND_STYLES,
   INSTRUMENT_SOUNDS,
+  STYLE_CYCLES,
 } from './constants';
 import { CategoryItem, SongResult, LyricsLength, SongDuration } from './types';
 import { generateSong } from './services/geminiService';
@@ -474,6 +475,29 @@ const calculateOptimalBPM = (genres: string[], moods: string[]) => {
   return { min: finalMin, max: finalMax };
 };
 
+
+const STYLE_VARIANT_COLORS = [
+  "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20",
+  "bg-violet-600 border-violet-400 text-white shadow-lg shadow-violet-500/20",
+  "bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-500/20",
+  "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20",
+] as const;
+
+const STYLE_FAMILY_LOOKUP = STYLE_CYCLES.reduce<Record<string, (typeof STYLE_CYCLES)[number]>>((acc, cycle) => {
+  cycle.variants.forEach((variant) => {
+    acc[variant.id] = cycle;
+  });
+  return acc;
+}, {});
+
+function findStyleCycleByVariantId(variantId: string) {
+  return STYLE_FAMILY_LOOKUP[variantId] ?? null;
+}
+
+function getSelectedStyleVariant(cycle: (typeof STYLE_CYCLES)[number], selected: string[]) {
+  return cycle.variants.find((variant) => selected.includes(variant.id)) ?? null;
+}
+
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
@@ -861,6 +885,38 @@ function App() {
       return [...prev, id];
     });
   };
+
+  const cycleStyleSelection = (cycleId: string) => {
+    setSelectedStyles((prev) => {
+      const cycle = STYLE_CYCLES.find((item) => item.id === cycleId);
+      if (!cycle) return prev;
+
+      const activeIndex = cycle.variants.findIndex((variant) => prev.includes(variant.id));
+      const withoutFamily = prev.filter((id) => !cycle.variants.some((variant) => variant.id === id));
+
+      if (activeIndex === -1) {
+        if (withoutFamily.length >= 2) return prev;
+        return [...withoutFamily, cycle.variants[0].id];
+      }
+
+      if (activeIndex < cycle.variants.length - 1) {
+        return [...withoutFamily, cycle.variants[activeIndex + 1].id];
+      }
+
+      return withoutFamily;
+    });
+  };
+
+  const randomizeStyles = () => {
+    const familyCount = Math.floor(Math.random() * 2) + 1;
+    const shuffledCycles = [...STYLE_CYCLES].sort(() => 0.5 - Math.random()).slice(0, familyCount);
+    const picked = shuffledCycles.map((cycle) => {
+      const randomVariant = cycle.variants[Math.floor(Math.random() * cycle.variants.length)];
+      return randomVariant.id;
+    });
+    setSelectedStyles(picked);
+  };
+
 
   useEffect(() => {
     if (keywordsContainerRef.current) {
@@ -1785,7 +1841,7 @@ const saveRecentSong = async (newSong: any) => {
 
       const effectiveStyleIds = Array.from(new Set([...(finalStyles ?? []), ...(finalThemes ?? [])]));
       const styleLabels = effectiveStyleIds.map(id => SOUND_STYLES.find(style => style.id === id)?.label || THEMES.find(theme => theme.id === id)?.label || id);
-      const hasBalladStyle = effectiveStyleIds.includes('ballad');
+      const hasBalladStyle = effectiveStyleIds.includes('ballad') || effectiveStyleIds.includes('classic-ballad');
 
       const genreLabels = finalGenres.flatMap(id => {
         if (id === 'citypop') {
@@ -1814,14 +1870,28 @@ const saveRecentSong = async (newSong: any) => {
         const instrumentLabels = instrumentItems.map(item => item!.label);
         const instrumentDesc = instrumentItems.map(item => item!.description.toLowerCase());
 
-        const hasStyle = (id: string) => effectiveStyleIds.includes(id);
+        const hasStyle = (...ids: string[]) => ids.some((id) => effectiveStyleIds.includes(id));
+        const hasBalladFamily = hasStyle('ballad', 'classic-ballad');
+        const hasDanceFamily = hasStyle('dance', 'classic-disco', 'modern-edm');
+        const hasRnbFamily = hasStyle('rnb', 'neo-soul-style', 'pb-rnb-style');
+        const hasRockFamily = hasStyle('rock', 'classic-rock', 'modern-rock');
+        const hasJazzFamily = hasStyle('jazz', 'classic-jazz', 'jazzhop-style');
+        const hasSoulFamily = hasStyle('soul', 'classic-soul', 'neo-soul');
+        const hasHipHopFamily = hasStyle('hip-hop', 'boom-bap-style', 'trap-style', 'lofi-hip-hop-style');
+        const hasFunkFamily = hasStyle('funk', 'g-funk', 'p-funk');
+        const hasPunkFamily = hasStyle('punk', 'pop-punk');
+        const hasBluesFamily = hasStyle('blues', 'roots-blues');
+        const hasElectronicFamily = hasStyle('electronic', 'techno-style', 'house-style');
+        const hasLatinFamily = hasStyle('latin', 'salsa', 'reggaeton');
+        const hasReggaeFamily = hasStyle('reggae', 'roots-reggae', 'dancehall');
+        const hasGlobalFamily = hasStyle('global-pop-style', 'k-style', 'anime-style', 'game-bgm-style');
         const hasInstrument = (id: string) => finalInstrumentSounds.includes(id);
         const hasMood = (id: string) => finalMoods.includes(id);
         const hasGenreId = (id: string) => finalGenres.includes(id);
 
         const bpm = tempoInfo
           ? tempoInfo.replace("Between ", "").replace("Exactly ", "").replace(" and ", "–")
-          : hasMood('upbeat') || hasMood('powerful') || hasStyle('dance')
+          : hasMood('upbeat') || hasMood('powerful') || hasDanceFamily || hasElectronicFamily
             ? "118–132 BPM"
             : hasBalladStyle || hasMood('calm') || hasMood('healing')
               ? "72–96 BPM"
@@ -1829,30 +1899,30 @@ const saveRecentSong = async (newSong: any) => {
 
         const styleHeadlineParts = [
           genreStr,
-          hasBalladStyle ? "ballad pacing" : null,
-          hasStyle('anime') ? "anime OST lift" : null,
-          hasStyle('orchestral') ? "cinematic expansion" : null,
-          hasStyle('synth') ? "synth-forward tone" : null,
-          hasStyle('acoustic') ? "organic live feel" : null,
-          hasStyle('funk') ? "groove-led pulse" : null,
-          hasStyle('punk') ? "raw attack" : null,
-          hasStyle('latin') ? "Latin rhythmic color" : null,
-          hasStyle('lofi') ? "lo-fi softness" : null,
+          hasBalladFamily ? "ballad pacing" : null,
+          hasStyle('anime-style') ? "anime OST lift" : null,
+          hasGlobalFamily && !hasStyle('anime-style') ? "global pop polish" : null,
+          hasElectronicFamily ? "electronic drive" : null,
+          hasSoulFamily || hasRnbFamily ? "smooth groove contour" : null,
+          hasFunkFamily ? "groove-led pulse" : null,
+          hasPunkFamily || hasRockFamily ? "band-driven attack" : null,
+          hasLatinFamily ? "Latin rhythmic color" : null,
+          hasStyle('lofi-hip-hop-style') ? "lo-fi softness" : null,
         ].filter(Boolean);
 
         const drums = (() => {
           const parts: string[] = [];
 
           if (hasBalladStyle) parts.push("Soft live-pop kit with restrained kick and light snare presence");
-          else if (hasStyle('dance')) parts.push("Tight dance-pop drums with a clear pulse and punchy momentum");
-          else if (hasStyle('hiphop')) parts.push("Beat-led drum programming with crisp hats and a defined pocket");
-          else if (hasStyle('punk')) parts.push("Fast live drums with urgent attack and raw energy");
-          else if (hasStyle('latin')) parts.push("Rhythm-forward percussion with lively syncopation");
+          else if (hasDanceFamily) parts.push("Tight dance-pop drums with a clear pulse and punchy momentum");
+          else if (hasHipHopFamily) parts.push("Beat-led drum programming with crisp hats and a defined pocket");
+          else if (hasPunkFamily || hasRockFamily) parts.push("Fast live drums with urgent attack and raw energy");
+          else if (hasLatinFamily) parts.push("Rhythm-forward percussion with lively syncopation");
           else if (hasMood('calm') || hasMood('healing') || hasMood('peaceful')) parts.push("Minimal soft percussion with wide space between hits");
           else parts.push("Clean contemporary pop drums supporting the topline without overcrowding the mix");
 
-          if (hasStyle('anime') || hasStyle('orchestral')) parts.push("Cymbal swells and controlled fills to support emotional lift");
-          if (hasStyle('lofi')) parts.push("Softer transient edges and slightly relaxed impact");
+          if (hasStyle('anime-style', 'game-bgm-style') || hasGlobalFamily) parts.push("Cymbal swells and controlled fills to support emotional lift");
+          if (hasStyle('lofi-hip-hop-style')) parts.push("Softer transient edges and slightly relaxed impact");
 
           return parts.join(", ");
         })();
@@ -1860,10 +1930,10 @@ const saveRecentSong = async (newSong: any) => {
         const bass = (() => {
           const parts: string[] = [];
 
-          if (hasStyle('dance') || hasMood('upbeat') || hasMood('powerful')) parts.push("Punchy rounded bass driving the chorus forward");
+          if (hasDanceFamily || hasElectronicFamily || hasMood('upbeat') || hasMood('powerful')) parts.push("Punchy rounded bass driving the chorus forward");
           else if (hasBalladStyle || hasMood('calm') || hasMood('healing')) parts.push("Warm supportive low end following the emotional chord movement");
-          else if (hasStyle('funk')) parts.push("Elastic groove-aware bass with rhythmic articulation");
-          else if (hasStyle('hiphop')) parts.push("Solid low-end foundation with modern weight and pocket");
+          else if (hasFunkFamily) parts.push("Elastic groove-aware bass with rhythmic articulation");
+          else if (hasHipHopFamily || hasRnbFamily) parts.push("Solid low-end foundation with modern weight and pocket");
           else parts.push("Warm melodic bass supporting the harmony");
 
           if (hasInstrument('bass')) parts[0] = "More exposed bass presence with clearer melodic movement";
@@ -1878,10 +1948,10 @@ const saveRecentSong = async (newSong: any) => {
 
           if (hasInstrument('piano')) parts.push("Piano-led foundation shaping the harmony");
           if (hasInstrument('guitar')) parts.push(hasInstrument('acoustic-sound') ? "Acoustic guitar texture adding warmth and rhythmic support" : "Guitar-led texture adding edge and movement");
-          if (hasInstrument('strings') || hasStyle('orchestral') || hasStyle('anime')) parts.push("String lift and cinematic support in key transitions");
-          if (hasInstrument('synth-sound') || hasStyle('synth')) parts.push("Airy synth pads and modern electronic color");
+          if (hasInstrument('strings') || hasStyle('anime-style', 'game-bgm-style') || hasGlobalFamily) parts.push("String lift and cinematic support in key transitions");
+          if (hasInstrument('synth-sound') || hasElectronicFamily) parts.push("Airy synth pads and modern electronic color");
           if (hasInstrument('band')) parts.push("Full band interaction with drums, bass, keys, and guitar moving together");
-          if (hasInstrument('lofi-texture') || hasStyle('lofi')) parts.push("Softened top end with subtle grain and vintage blur");
+          if (hasInstrument('lofi-texture') || hasStyle('lofi-hip-hop-style')) parts.push("Softened top end with subtle grain and vintage blur");
           if (hasInstrument('orchestral-sound')) parts.push("Wider orchestral depth behind the lead melody");
           if (hasInstrument('minimal')) parts.push("Selective layering with deliberate empty space");
 
@@ -1899,11 +1969,11 @@ const saveRecentSong = async (newSong: any) => {
         const texture = (() => {
           const parts: string[] = [];
 
-          if (hasBalladStyle) parts.push("Emotion-first, clean, and gently rising");
-          if (hasStyle('anime')) parts.push("Youthful, dramatic, and slightly cinematic");
-          if (hasStyle('acoustic')) parts.push("Organic and naturally warm");
-          if (hasStyle('synth')) parts.push("Polished and modern without losing melody focus");
-          if (hasStyle('lofi')) parts.push("Softened and cozy with rounded edges");
+          if (hasBalladFamily) parts.push("Emotion-first, clean, and gently rising");
+          if (hasStyle('anime-style')) parts.push("Youthful, dramatic, and slightly cinematic");
+          if (hasSoulFamily || hasBluesFamily) parts.push("Organic and naturally warm");
+          if (hasElectronicFamily) parts.push("Polished and modern without losing melody focus");
+          if (hasStyle('lofi-hip-hop-style')) parts.push("Softened and cozy with rounded edges");
           if (hasMood('bright')) parts.push("Bright-toned and open");
           if (hasMood('healing') || hasMood('peaceful')) parts.push("Comforting and spacious");
           if (hasMood('powerful')) parts.push("Confident and expansive");
@@ -1923,13 +1993,13 @@ const saveRecentSong = async (newSong: any) => {
         const vocalStyle = (() => {
           const parts: string[] = [];
 
-          if (hasBalladStyle) parts.push("Tender and emotionally clear");
-          if (hasStyle('anime')) parts.push("Slightly dramatic with melodic lift");
+          if (hasBalladFamily) parts.push("Tender and emotionally clear");
+          if (hasStyle('anime-style', 'game-bgm-style')) parts.push("Slightly dramatic with melodic lift");
           if (hasMood('bright')) parts.push("Youthful and open");
           if (hasMood('healing') || hasMood('peaceful')) parts.push("Gentle and reassuring");
           if (hasMood('powerful')) parts.push("Focused and dynamically assertive");
-          if (hasStyle('punk')) parts.push("Raw and direct");
-          if (hasStyle('jazz')) parts.push("Fluid and expressive");
+          if (hasPunkFamily || hasRockFamily) parts.push("Raw and direct");
+          if (hasJazzFamily || hasSoulFamily) parts.push("Fluid and expressive");
 
           return Array.from(new Set(parts)).join(", ") || "Clear, expressive, and melody-led";
         })();
@@ -1937,44 +2007,27 @@ const saveRecentSong = async (newSong: any) => {
         const arrangement = (() => {
           const parts: string[] = [];
 
-          if (hasBalladStyle) parts.push("Verse-to-chorus growth with slower emotional pacing");
+          if (hasBalladFamily) parts.push("Verse-to-chorus growth with slower emotional pacing");
           else parts.push("Clear commercial flow with memorable sectional contrast");
 
-          if (hasStyle('anime')) parts.push("Pre-chorus lift and a strong melodic payoff");
-          if (hasStyle('orchestral')) parts.push("Expanded transitions and a wider final section");
-          if (hasStyle('dance')) parts.push("Rhythmic clarity that keeps the chorus immediately playable");
+          if (hasStyle('anime-style', 'game-bgm-style')) parts.push("Pre-chorus lift and a strong melodic payoff");
+          if (hasGlobalFamily) parts.push("Expanded transitions and a wider final section");
+          if (hasDanceFamily || hasElectronicFamily) parts.push("Rhythmic clarity that keeps the chorus immediately playable");
           if (hasInstrument('minimal')) parts.push("Arrangement stays selective and avoids unnecessary clutter");
           if (hasMood('healing') || hasMood('peaceful')) parts.push("Keep the emotional arc smooth rather than explosive");
 
           return parts.join(", ");
         })();
 
-        return `STYLE:
-${styleHeadlineParts.join(", ")}, ${bpm}
-
-DRUMS:
-${drums}
-
-BASS:
-${bass}
-
-SOUND:
-${sound}
-
-TEXTURE:
-${texture}
-
-VOCAL:
-${vocal}
-
-VOCAL STYLE:
-${vocalStyle}
-
-ARRANGEMENT:
-${arrangement}
-
-MOOD:
-${moodStr}`.trim();
+        return `·STYLE: ${styleHeadlineParts.join(", ")}, ${bpm}
+·DRUMS: ${drums}
+·BASS: ${bass}
+·SOUND: ${sound}
+·TEXTURE: ${texture}
+·VOCAL: ${vocal}
+·VOCAL STYLE: ${vocalStyle}
+·ARRANGEMENT: ${arrangement}
+·MOOD: ${moodStr}`.trim();
       };
 
       const songPrompt = buildSongPrompt();
@@ -2187,25 +2240,17 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />            
-          <CategorySection 
+          <StyleCycleSection 
             title="스타일" 
-            description="장르 위에 추가로 입힐 결을 선택합니다. (최대 2개)"
-            items={SOUND_STYLES} 
-            selected={selectedStyles} 
-            pinned={[]}
-            onToggle={(id) => toggle(id, selectedStyles, setSelectedStyles, 2)}
-            onTogglePin={() => {}}
+            description="첫 스타일 버튼부터 시작해서 클릭할 때마다 같은 계열 안에서 순환합니다. 최대 2개까지 선택됩니다."
+            cycles={STYLE_CYCLES}
+            selected={selectedStyles}
+            onCycleToggle={cycleStyleSelection}
             onClear={() => setSelectedStyles([])}
-            onUnpinAll={() => {}}
-            onRandom={() => {}}
+            onRandom={randomizeStyles}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
-            hoveredItem={hoveredItem}
-            isExpanded={true}
-            onToggleExpand={() => {}}
-            allExpanded={true}
-            isRandomized={false}
           />
 
           <CategorySection 
@@ -3127,6 +3172,149 @@ function GenreSelectModal({
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+
+interface StyleCycleSectionProps {
+  title: string;
+  description: string;
+  cycles: typeof STYLE_CYCLES;
+  selected: string[];
+  onCycleToggle: (cycleId: string) => void;
+  onClear: () => void;
+  onRandom: () => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
+}
+
+function StyleCycleSection({
+  title,
+  description,
+  cycles,
+  selected,
+  onCycleToggle,
+  onClear,
+  onRandom,
+  onHover,
+  onLongPressStart,
+  onLongPressEnd,
+}: StyleCycleSectionProps) {
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+
+  const selectedCount = cycles.filter((cycle) => getSelectedStyleVariant(cycle, selected)).length;
+
+  return (
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+      <div className="flex items-center justify-between mb-4">
+        <div className="relative">
+          <h3
+            onMouseEnter={() => setShowTitleTooltip(true)}
+            onMouseLeave={() => setShowTitleTooltip(false)}
+            className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+          >
+            <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+            {title}
+            <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedCount}/2)</span>
+          </h3>
+          <AnimatePresence>
+            {showTitleTooltip && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+              >
+                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRandom}
+            onMouseEnter={() => onHover({ id: 'style-random', label: '랜덤 선택', description: '스타일 계열을 무작위로 최대 2개 선택합니다.' })}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'style-random', label: '랜덤 선택', description: '스타일 계열을 무작위로 최대 2개 선택합니다.' })}
+            onTouchEnd={onLongPressEnd}
+            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-all"
+          >
+            <Dices className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'style-clear', label: 'Clear all', description: '선택한 스타일을 모두 초기화합니다.' })}
+            onMouseLeave={() => {
+              onHover(null);
+              onLongPressEnd();
+            }}
+            onTouchStart={() => onLongPressStart({ id: 'style-clear', label: 'Clear all', description: '선택한 스타일을 모두 초기화합니다.' })}
+            onTouchEnd={onLongPressEnd}
+            className="p-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-red-500/20 hover:text-red-400 transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {cycles.map((cycle) => {
+          const selectedVariant = getSelectedStyleVariant(cycle, selected);
+          const activeIndex = selectedVariant ? cycle.variants.findIndex((variant) => variant.id === selectedVariant.id) : -1;
+          const displayVariant = selectedVariant ?? cycle.variants[0];
+          const nextVariant = !selectedVariant
+            ? cycle.variants[0]
+            : activeIndex < cycle.variants.length - 1
+              ? cycle.variants[activeIndex + 1]
+              : null;
+          const buttonDescription = selectedVariant
+            ? `${displayVariant.description} · 다시 누르면 ${nextVariant ? nextVariant.label : '해제'}`
+            : `${displayVariant.description} · 클릭하면 ${displayVariant.label} 활성화`;
+
+          return (
+            <button
+              key={cycle.id}
+              onClick={() => onCycleToggle(cycle.id)}
+              onMouseEnter={() => onHover({ id: cycle.id, label: displayVariant.label, description: buttonDescription })}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: cycle.id, label: displayVariant.label, description: buttonDescription })}
+              onTouchEnd={onLongPressEnd}
+              className={cn(
+                "min-w-[140px] px-4 py-2.5 rounded-xl text-[13px] font-bold transition-colors border flex items-center justify-center text-center",
+                selectedVariant
+                  ? STYLE_VARIANT_COLORS[Math.max(0, activeIndex)]
+                  : "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+              )}
+            >
+              {displayVariant.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
+        {selectedCount > 0 ? (
+          <p className="text-xs text-brand-orange font-semibold">
+            {cycles
+              .map((cycle) => getSelectedStyleVariant(cycle, selected)?.label)
+              .filter(Boolean)
+              .join(' / ')}
+          </p>
+        ) : (
+          <p className="text-xs text-[var(--text-secondary)]">
+            첫 버튼부터 시작해서 클릭할 때마다 같은 계열 안에서 순환합니다. 최대 2개까지 선택됩니다.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

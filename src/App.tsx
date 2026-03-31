@@ -2244,18 +2244,22 @@ ${result.prompt}
         <div className="space-y-6">
           {/* Applied Keywords Display */}
           <div className="relative">
-            <div 
+            <motion.div 
               ref={keywordsContainerRef}
-              className={cn(
-                "flex flex-wrap gap-2 justify-center transition-all duration-300 overflow-hidden",
-                !isKeywordsExpanded ? "max-h-[42px]" : "max-h-[500px]"
-              )}
+              initial={false}
+              animate={{
+                height: isKeywordsExpanded ? 'auto' : 42,
+                opacity: 1,
+              }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              className="flex flex-wrap gap-2 justify-center overflow-hidden will-change-[height]"
             >
-              <AnimatePresence>
+              <AnimatePresence mode="popLayout">
                 {[...selectedGenres, ...selectedThemes, ...selectedMoods].map((id) => {
                   const item = [...GENRES, ...THEMES, ...MOODS].find(i => i.id === id);
                   return (
                     <motion.span
+                      layout
                       key={id}
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -2277,7 +2281,7 @@ ${result.prompt}
                   );
                 })}
               </AnimatePresence>
-            </div>
+            </motion.div>
             
             {(hasKeywordsOverflow || isKeywordsExpanded) && (
               <button
@@ -2544,10 +2548,16 @@ ${result.prompt}
                 
                 <motion.div 
                   initial={false}
-                  animate={{ height: isAppliedKeywordsExpanded ? 'auto' : '0px' }}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 overflow-hidden"
+                  animate={{ 
+                    height: isAppliedKeywordsExpanded ? 'auto' : 0,
+                    opacity: isAppliedKeywordsExpanded ? 1 : 0,
+                    marginTop: isAppliedKeywordsExpanded ? 4 : 0,
+                  }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden will-change-[height,opacity]"
                 >
-                  {isAppliedKeywordsExpanded && (['genre', 'theme', 'mood'] as const).map((cat) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+                  {(['genre', 'theme', 'mood'] as const).map((cat) => (
                     <div key={cat} className="space-y-0.5 group/cat">
                       <div className="flex items-center justify-between">
                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">{cat === 'theme' ? 'style' : cat}</p>
@@ -2608,6 +2618,7 @@ ${result.prompt}
                       </div>
                     </div>
                   )}
+                  </div>
                 </motion.div>
 
                 {/* Expand Button at Bottom Center */}
@@ -3282,10 +3293,16 @@ function CategorySection({
         </div>
       </div>
       
-      <div className={cn(
-        "flex flex-wrap gap-2 transition-all duration-500",
-        !isExpanded ? "max-h-[40px] md:max-h-[84px] overflow-hidden" : "max-h-[1000px] overflow-visible"
-      )}>
+      <motion.div
+        layout
+        initial={false}
+        animate={{
+          height: isExpanded ? 'auto' : 88,
+          opacity: 1,
+        }}
+        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+        className="flex flex-wrap gap-2 overflow-hidden will-change-[height]"
+      >
         {items.map((item) => {
           const isPinned = pinned.includes(item.id);
           const isSelected = selected.includes(item.id);
@@ -3332,7 +3349,7 @@ function CategorySection({
           }
 
           return (
-            <div key={item.id} className="relative group/btn">
+            <motion.div layout key={item.id} className="relative group/btn">
               <button
                 onMouseEnter={() => onHover({ ...item, description: displayDescription })}
                 onMouseLeave={() => {
@@ -3403,10 +3420,10 @@ function CategorySection({
               >
                 <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
               </button>
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Expand/Collapse Button - Unified circular arrow style at bottom center */}
       <button

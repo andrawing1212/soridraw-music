@@ -18,9 +18,7 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey =
-      import.meta.env.VITE_GEMINI_API_KEY ||
-      import.meta.env.GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
       throw new Error(

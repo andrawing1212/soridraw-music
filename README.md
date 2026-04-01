@@ -6,8 +6,6 @@ To use the Gemini API for song generation, you must set the following environmen
 
 - `VITE_GEMINI_API_KEY`: Your Gemini API key.
 
-Note: The application is configured to fallback to `GEMINI_API_KEY` if `VITE_GEMINI_API_KEY` is not explicitly set, but using the `VITE_` prefix is recommended for client-side Vite applications.
-
 ## Development
 
 1. Install dependencies:

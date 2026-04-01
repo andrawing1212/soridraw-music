@@ -64,6 +64,37 @@ import {
   SOUND_TEXTURE_CYCLES,
 } from './constants';
 import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem } from './types';
+
+const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
+  if (!input || !Array.isArray(input)) return [];
+  
+  try {
+    return input.map((item: any) => {
+      // If it's already an object with the right structure
+      if (typeof item === 'object' && item !== null && 'section' in item) {
+        return {
+          id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          section: item.section || 'Unknown',
+          tags: Array.isArray(item.tags) ? item.tags : []
+        };
+      }
+      // If it's the old string format
+      if (typeof item === 'string') {
+        return {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          section: item,
+          tags: []
+        };
+      }
+      // Fallback for unexpected items
+      return null;
+    }).filter((item): item is CustomSectionItem => item !== null);
+  } catch (error) {
+    console.error('Failed to normalize custom structure:', error);
+    return [];
+  }
+};
+
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
@@ -1319,7 +1350,7 @@ function App() {
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
-    if (appliedKeywords.customStructure) setCustomStructure(appliedKeywords.customStructure);
+    if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
     
     if (appliedKeywords.tempoConfig) {
       setTempoEnabled(appliedKeywords.tempoConfig.enabled);
@@ -2859,7 +2890,7 @@ ${result.prompt}
                         </div>
                       </div>
                     )}
-                    {result.appliedKeywords.customStructure && result.appliedKeywords.customStructure.length > 0 && (
+                    {result.appliedKeywords.customStructure && (result.appliedKeywords.customStructure ?? []).length > 0 && (
                       <div className="space-y-0.5">
                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">structure</p>
                         <div className="flex flex-wrap gap-1">
@@ -2868,7 +2899,7 @@ ${result.prompt}
                             onMouseEnter={() => setHoveredItem({ id: 'kw-structure', label: 'Structure', description: '곡의 전체 구성입니다.' })}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
-                            {result.appliedKeywords.customStructure.map(s => `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`).join(' → ')}
+                            {(result.appliedKeywords.customStructure ?? []).map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`).join(' → ')}
                           </span>
                         </div>
                       </div>
@@ -4200,7 +4231,11 @@ function SongStructureControl({
         const ref = doc(db, 'user_structures', user.uid);
         const snap = await getDoc(ref);
         if (snap.exists()) {
-          setSavedStructures(snap.data().structures || []);
+          const normalized = (snap.data().structures || []).map((s: any) => ({
+            ...s,
+            sections: normalizeCustomStructure(s.sections)
+          }));
+          setSavedStructures(normalized);
         }
       } catch (error) {
         console.error('Failed to load saved song structures:', error);
@@ -4239,13 +4274,14 @@ function SongStructureControl({
   };
 
   const openCustomModal = () => {
-    setDraftStructure(customStructure.length > 0 ? [...customStructure] : []);
+    setDraftStructure(normalizeCustomStructure(customStructure));
     setPresetName('');
     setIsCustomModalOpen(true);
   };
 
   const formatStructureText = (structure: CustomSectionItem[]) => {
-    return structure.map(s => `${s.section}${s.tags.length > 0 ? ` · ${s.tags.join(' · ')}` : ''}`).join(' → ');
+    const normalized = normalizeCustomStructure(structure);
+    return normalized.map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` · ${(s.tags ?? []).join(' · ')}` : ''}`).join(' → ');
   };
 
   const handleSelectOption = (optionId: SongStructure) => {
@@ -4329,7 +4365,7 @@ function SongStructureControl({
   };
 
   const handleLoadPreset = (preset: SavedStructurePreset) => {
-    setDraftStructure(preset.sections);
+    setDraftStructure(normalizeCustomStructure(preset.sections));
   };
 
   const handleDeletePreset = (presetId: string) => {
@@ -4406,7 +4442,7 @@ function SongStructureControl({
           ))}
         </div>
 
-        {value === 'custom' && customStructure.length > 0 && (
+        {value === 'custom' && (customStructure ?? []).length > 0 && (
           <div className="mt-4 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3">
             <p className="text-[11px] font-bold text-brand-orange mb-2">현재 커스텀 구조</p>
             <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
@@ -4472,23 +4508,23 @@ function SongStructureControl({
                         onClick={() => setDraftStructure([])}
                         className={cn(
                           "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all",
-                          draftStructure.length > 0
+                          (draftStructure ?? []).length > 0
                             ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
                             : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
-                        disabled={draftStructure.length === 0}
+                        disabled={(draftStructure ?? []).length === 0}
                       >
                         전체 초기화
                       </button>
                     </div>
 
                     <div className="min-h-[180px] rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2">
-                      {draftStructure.length === 0 ? (
+                      {(draftStructure ?? []).length === 0 ? (
                         <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
                           구조가 비어 있습니다. 위의 섹션 버튼을 눌러 추가하세요.
                         </div>
                       ) : (
-                        draftStructure.map((item, index) => (
+                        (draftStructure ?? []).map((item, index) => (
                           <div
                             key={item.id}
                             className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5"
@@ -4498,9 +4534,9 @@ function SongStructureControl({
                             </span>
                             <div className="flex-1 min-w-0">
                               <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
-                              {item.tags.length > 0 && (
+                              {(item.tags ?? []).length > 0 && (
                                 <p className="text-[10px] text-brand-orange/80 font-medium mt-0.5 truncate">
-                                  {item.tags.join(' · ')}
+                                  {(item.tags ?? []).join(' · ')}
                                 </p>
                               )}
                             </div>
@@ -4525,11 +4561,11 @@ function SongStructureControl({
                                 onMouseLeave={() => onHover(null)}
                                 className={cn(
                                   "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
-                                  index === draftStructure.length - 1
+                                  index === (draftStructure ?? []).length - 1
                                     ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
                                     : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
                                 )}
-                                disabled={index === draftStructure.length - 1}
+                                disabled={index === (draftStructure ?? []).length - 1}
                               >
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
@@ -4555,7 +4591,7 @@ function SongStructureControl({
                       )}
                     </div>
 
-                    {draftStructure.length > 0 && (
+                    {(draftStructure ?? []).length > 0 && (
                       <div className="rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3">
                         <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
                         <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
@@ -4577,10 +4613,10 @@ function SongStructureControl({
                       />
                       <button
                         onClick={handleSavePreset}
-                        disabled={!presetName.trim() || draftStructure.length === 0}
+                        disabled={!presetName.trim() || (draftStructure ?? []).length === 0}
                         className={cn(
                           "w-full py-2.5 rounded-xl font-bold text-sm transition-all border",
-                          presetName.trim() && draftStructure.length > 0
+                          presetName.trim() && (draftStructure ?? []).length > 0
                             ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
                             : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
@@ -4640,10 +4676,10 @@ function SongStructureControl({
                   </button>
                   <button
                     onClick={handleApplyCustomStructure}
-                    disabled={draftStructure.length === 0}
+                    disabled={(draftStructure ?? []).length === 0}
                     className={cn(
                       "px-5 py-2.5 rounded-xl font-bold transition-all border",
-                      draftStructure.length > 0
+                      (draftStructure ?? []).length > 0
                         ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
                         : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                     )}
@@ -4662,12 +4698,14 @@ function SongStructureControl({
           <TagEditModal
             isOpen={true}
             onClose={() => setEditingSectionIndex(null)}
-            section={draftStructure[editingSectionIndex].section}
-            tags={draftStructure[editingSectionIndex].tags}
+            section={draftStructure[editingSectionIndex]?.section || ''}
+            tags={draftStructure[editingSectionIndex]?.tags || []}
             onSave={(newTags) => {
               setDraftStructure(prev => {
                 const next = [...prev];
-                next[editingSectionIndex] = { ...next[editingSectionIndex], tags: newTags };
+                if (next[editingSectionIndex]) {
+                  next[editingSectionIndex] = { ...next[editingSectionIndex], tags: newTags };
+                }
                 return next;
               });
               setEditingSectionIndex(null);

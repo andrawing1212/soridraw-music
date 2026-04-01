@@ -40,6 +40,7 @@ interface GenerateSongParams {
   genre: string | null;
   isKpopSelected?: boolean;
   moods: string[];
+  themes?: string[];
   styles?: string[];
   instrumentSounds?: string[];
   userInput: string;
@@ -147,14 +148,14 @@ function calculateSongStructure(
   if (genres.some((g) => rapGenres.includes(g.toLowerCase()))) structure += 1;
   if (genres.some((g) => ambientGenres.includes(g.toLowerCase()))) structure -= 1;
 
-  const energeticMoods = ["energetic", "dramatic", "bright", "upbeat", "powerful"];
+  const energeticMoods = ["bright", "hopeful", "tense"];
   const calmMoods = [
     "calm",
     "dreamy",
-    "loneliness",
+    "lonely",
     "peaceful",
-    "healing",
-    "relaxing",
+    "sad",
+    "warm",
   ];
 
   if (moods.some((m) => energeticMoods.includes(m.toLowerCase()))) structure += 0.5;
@@ -194,6 +195,13 @@ function buildMoodPrompt(moods: string[]): string {
   return moods.length ? `Mood direction: ${moods.join(", ")}.` : "";
 }
 
+function buildThemePrompt(themes: string[]): string {
+  if (!themes.length) return "";
+  if (themes.length === 1) return `Story concept: ${themes[0]}.`;
+  if (themes.length === 2) return `Story concept: ${themes[0]} and ${themes[1]}.`;
+  return `Story concept: ${themes.slice(0, -1).join(", ")}, and ${themes[themes.length - 1]}.`;
+}
+
 function buildVocalPrompt(vocal: VocalConfig): string {
   const lines: string[] = [];
   const total = (vocal.male ?? 0) + (vocal.female ?? 0);
@@ -224,6 +232,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     return {
       genre: first.genre ?? null,
       moods: first.moods ?? [],
+      themes: first.themes ?? [],
       styles: first.styles ?? [],
       instrumentSounds: first.instrumentSounds ?? [],
       userInput: first.userInput ?? "",
@@ -275,7 +284,8 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
   return {
     genre: genres?.[0] ?? null,
     moods: moods ?? [],
-    styles: themes ?? [],
+    themes: themes ?? [],
+    styles: [],
     instrumentSounds: [],
     userInput: userInput ?? "",
     songPrompt: songPrompt ?? "",
@@ -357,6 +367,7 @@ function buildAppliedKeywordPayload(
   params: GenerateSongParams,
   resolvedStructure: SongStructure
 ) {
+  const themes = params.themes ?? [];
   const styles = params.styles ?? [];
   const vocalDescription: string[] = [];
 
@@ -377,7 +388,7 @@ function buildAppliedKeywordPayload(
   return {
     genre: params.genre ? [params.genre] : [],
     mood: params.moods ?? [],
-    theme: styles,
+    theme: themes,
     style: styles,
     instrumentSound: params.instrumentSounds ?? [],
     tempo: params.tempo,
@@ -414,6 +425,7 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
     params.instrumentSounds ?? []
   );
   const moodPrompt = buildMoodPrompt(params.moods ?? []);
+  const themePrompt = buildThemePrompt(params.themes ?? []);
   const vocalPrompt = buildVocalPrompt(
     params.vocal ?? { male: 0, female: 0, rap: false }
   );
@@ -486,8 +498,14 @@ ${stylePromptCores.length ? stylePromptCores.map((s) => `- ${s}`).join("\n") : "
 INSTRUMENT / SOUND LAYERS:
 ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- ${s}`).join("\n") : "- No extra instrument/sound layer selected."}
 
-MOOD LAYER:
+MOOD LAYER (EMOTIONAL COLOR ONLY):
 ${moodPrompt || "No explicit mood layer selected."}
+
+THEME / STORY CONCEPT (SITUATION, MESSAGE, OR NARRATIVE):
+${themePrompt || "No explicit theme/story concept selected."}
+
+PRODUCTION BLUEPRINT FROM UI:
+${params.songPrompt || "No extra production blueprint was supplied."}
 
 VOCAL DIRECTION (HIGH PRIORITY):
 ${vocalPrompt}
@@ -507,7 +525,9 @@ Return JSON:
   "appliedKeywords": {
     "genre": ["genre"],
     "mood": ["mood1", "mood2"],
-    "theme": ["style1", "style2"],
+    "theme": ["theme1", "theme2"],
+    "style": ["style1", "style2"],
+    "instrumentSound": ["sound1", "sound2"],
     "tempo": "tempo info if provided",
     "vocalType": "vocal description"
   }
@@ -515,7 +535,9 @@ Return JSON:
 
 Lyrics rules:
 ${lyricGuidancePrompt}
-- The lyrics should primarily follow the user's story/intention.
+- The lyrics should primarily follow the user's story/intention and the selected theme(s).
+- Themes define the situation, message, scene, or story.
+- Moods define only the emotional tone or feeling around that story.
 - Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
 - Respect the selected lyricsLength strictly.
 - This lyricsLength rule applies to every genre.
@@ -555,6 +577,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
               genre: { type: Type.ARRAY, items: { type: Type.STRING } },
               mood: { type: Type.ARRAY, items: { type: Type.STRING } },
               theme: { type: Type.ARRAY, items: { type: Type.STRING } },
+              style: { type: Type.ARRAY, items: { type: Type.STRING } },
+              instrumentSound: { type: Type.ARRAY, items: { type: Type.STRING } },
               tempo: { type: Type.STRING },
               vocalType: { type: Type.STRING },
             },
@@ -577,9 +601,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     ...(result.appliedKeywords ?? {}),
     genre: result?.appliedKeywords?.genre ?? (params.genre ? [params.genre] : []),
     mood: result?.appliedKeywords?.mood ?? (params.moods ?? []),
-    theme: result?.appliedKeywords?.theme ?? (params.styles ?? []),
-    style: params.styles ?? [],
-    instrumentSound: params.instrumentSounds ?? [],
+    theme: result?.appliedKeywords?.theme ?? (params.themes ?? []),
+    style: result?.appliedKeywords?.style ?? (params.styles ?? []),
+    instrumentSound: result?.appliedKeywords?.instrumentSound ?? (params.instrumentSounds ?? []),
     tempo: result?.appliedKeywords?.tempo ?? params.tempo,
     kpopMode: params.kpopMode ?? 0,
   };
@@ -590,6 +614,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       ...stylePromptCores,
       ...instrumentSoundPromptCores,
       moodPrompt,
+      themePrompt,
       params.tempo ? `Tempo: ${params.tempo}` : "",
       params.userInput ? `User intent: ${params.userInput}` : "",
     ]

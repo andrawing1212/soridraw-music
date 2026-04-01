@@ -452,35 +452,18 @@ const GENRE_BPM: Record<string, { min: number; max: number }> = {
 };
 
 const MOOD_BPM: Record<string, { min: number; max: number }> = {
-  'cool': { min: 90, max: 120 },
-  'chill': { min: 60, max: 90 },
-  'calm': { min: 40, max: 75 },
-  'cheerful': { min: 110, max: 140 },
-  'cinematic': { min: 60, max: 140 },
-  'mellow': { min: 65, max: 95 },
-  'coziness': { min: 60, max: 85 },
-  'nostalgic': { min: 50, max: 85 },
-  'dreamy': { min: 55, max: 90 },
-  'romantic': { min: 60, max: 90 },
-  'peaceful': { min: 40, max: 75 },
-  'healing': { min: 40, max: 80 },
+  'emotional': { min: 55, max: 90 },
+  'sad': { min: 50, max: 82 },
+  'warm': { min: 70, max: 105 },
+  'calm': { min: 45, max: 78 },
+  'dark': { min: 60, max: 100 },
   'bright': { min: 105, max: 135 },
-  'emotional': { min: 50, max: 90 },
-  'minimalist': { min: 70, max: 110 },
-  'melancholic': { min: 40, max: 70 },
-  'bittersweet': { min: 50, max: 85 },
-  'groovy': { min: 95, max: 125 },
-  'upbeat': { min: 120, max: 150 },
-  'funky': { min: 100, max: 130 },
-  'powerful': { min: 115, max: 155 },
-  'urban': { min: 90, max: 120 },
-  'sophisticated': { min: 80, max: 115 },
-  'atmospheric': { min: 60, max: 130 },
-  'moody': { min: 70, max: 100 },
-  'infectious': { min: 110, max: 140 },
-  'hypnotic': { min: 80, max: 130 },
-  'zen': { min: 40, max: 70 },
-  'loneliness': { min: 40, max: 75 }
+  'hopeful': { min: 80, max: 118 },
+  'lonely': { min: 45, max: 80 },
+  'nostalgic': { min: 55, max: 88 },
+  'dreamy': { min: 55, max: 92 },
+  'tense': { min: 85, max: 125 },
+  'peaceful': { min: 45, max: 76 }
 };
 
 const CYCLE_VARIANT_COLORS = [
@@ -543,6 +526,16 @@ function getStyleVariantLabelById(id: string) {
 
 function getSoundVariantLabelById(id: string) {
   return SOUND_VARIANT_LOOKUP[id]?.label ?? id;
+}
+
+function buildThemeSentence(themeLabels: string[] = []): string {
+  if (!themeLabels.length) return '';
+  if (themeLabels.length === 1) return `Focused on ${themeLabels[0].toLowerCase()}.`;
+  if (themeLabels.length === 2) {
+    return `Focused on ${themeLabels[0].toLowerCase()} and ${themeLabels[1].toLowerCase()}.`;
+  }
+  const lowered = themeLabels.map((label) => label.toLowerCase());
+  return `Focused on ${lowered.slice(0, -1).join(', ')}, and ${lowered[lowered.length - 1]}.`;
 }
 
 
@@ -1601,10 +1594,10 @@ function App() {
       // Trot Logic: Auto-unselect moods
       if (category === 'genre') {
         if (id === 'traditional-trot') {
-          const moodsToRemove = ['melancholic', 'nostalgic', 'bittersweet', 'loneliness', 'emotional', 'cinematic'];
+          const moodsToRemove = ['sad', 'nostalgic', 'lonely', 'emotional', 'dark'];
           setSelectedMoods(prev => prev.filter(m => !moodsToRemove.includes(m)));
         } else if (id === 'semi-trot') {
-          const moodsToRemove = ['urban', 'infectious', 'groovy', 'upbeat', 'cheerful', 'bright'];
+          const moodsToRemove = ['bright', 'hopeful', 'warm', 'tense'];
           setSelectedMoods(prev => prev.filter(m => !moodsToRemove.includes(m)));
         }
       }
@@ -1614,13 +1607,13 @@ function App() {
       // Trot Logic: Auto-select moods
       if (category === 'genre') {
         if (id === 'traditional-trot') {
-          const moodsToAdd = ['melancholic', 'nostalgic', 'bittersweet', 'loneliness', 'emotional', 'cinematic'];
+          const moodsToAdd = ['sad', 'nostalgic', 'lonely', 'emotional', 'dark'];
           setSelectedMoods(prev => {
             const combined = Array.from(new Set([...prev, ...moodsToAdd]));
             return combined.slice(0, 9);
           });
         } else if (id === 'semi-trot') {
-          const moodsToAdd = ['urban', 'infectious', 'groovy', 'upbeat', 'cheerful', 'bright'];
+          const moodsToAdd = ['bright', 'hopeful', 'warm', 'tense'];
           setSelectedMoods(prev => {
             const combined = Array.from(new Set([...prev, ...moodsToAdd]));
             return combined.slice(0, 9);
@@ -1962,8 +1955,9 @@ const saveRecentSong = async (newSong: any) => {
           "Infectious Rhythm, Upbeat & Cheerful, Driving 2-beat / 4-beat, Bright Brass section, Festive / Celebratory.";
       }
 
-      const effectiveStyleIds = Array.from(new Set([...(finalStyles ?? []), ...(finalThemes ?? [])]));
+      const effectiveStyleIds = Array.from(new Set(finalStyles ?? []));
       const styleLabels = getCycleVariantLabel(STYLE_CYCLES, effectiveStyleIds);
+      const themeLabels = finalThemes.map((id) => THEMES.find((item) => item.id === id)?.label || id);
       const soundTextureLabels = getCycleVariantLabel(SOUND_TEXTURE_CYCLES, finalInstrumentSounds);
       const hasBalladStyle = effectiveStyleIds.some((id) => ['ballad', 'classic-ballad'].includes(id));
 
@@ -1980,6 +1974,7 @@ const saveRecentSong = async (newSong: any) => {
         const moodStr = finalMoods.length > 0
           ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(', ')
           : 'Emotional';
+        const themeStr = buildThemeSentence(themeLabels);
 
         const selectedStyleText = styleLabels.length > 0 ? styleLabels.join(', ') : 'Core style kept close to the root genre';
         const selectedSoundText = soundTextureLabels.length > 0 ? soundTextureLabels.join(', ') : 'Balanced mainstream arrangement with tasteful detail';
@@ -1990,9 +1985,9 @@ const saveRecentSong = async (newSong: any) => {
 
         const bpm = tempoInfo
           ? tempoInfo.replace('Between ', '').replace('Exactly ', '').replace(' and ', '–')
-          : (finalMoods.includes('upbeat') || finalMoods.includes('powerful') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
+          : (finalMoods.includes('bright') || finalMoods.includes('hopeful') || finalMoods.includes('tense') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
             ? '118–132 BPM'
-            : (hasBalladStyle || finalMoods.includes('calm') || finalMoods.includes('healing'))
+            : (hasBalladStyle || finalMoods.includes('calm') || finalMoods.includes('peaceful') || finalMoods.includes('sad') || finalMoods.includes('lonely'))
               ? '72–96 BPM'
               : '90–112 BPM';
 
@@ -2037,9 +2032,9 @@ const saveRecentSong = async (newSong: any) => {
           hasBalladStyle ? 'Tender and emotionally clear' : null,
           hasStyleId('anime-style', 'k-style') ? 'slightly dramatic with melodic lift' : null,
           finalMoods.includes('bright') ? 'youthful and open' : null,
-          finalMoods.includes('healing') || finalMoods.includes('peaceful') ? 'gentle and reassuring' : null,
-          finalMoods.includes('powerful') ? 'focused and dynamically assertive' : null,
-          !hasBalladStyle && !finalMoods.includes('bright') && !finalMoods.includes('healing') && !finalMoods.includes('powerful') ? 'clear, expressive, and melody-led' : null,
+          finalMoods.includes('warm') || finalMoods.includes('peaceful') ? 'gentle and reassuring' : null,
+          finalMoods.includes('tense') ? 'focused and dynamically assertive' : null,
+          !hasBalladStyle && !finalMoods.includes('bright') && !finalMoods.includes('warm') && !finalMoods.includes('tense') ? 'clear, expressive, and melody-led' : null,
         ].filter(Boolean).join(', ');
 
         const arrangement = [
@@ -2056,7 +2051,8 @@ const saveRecentSong = async (newSong: any) => {
 ·VOCAL: ${vocalDesign}
 ·VOCAL STYLE: ${vocalStyle}
 ·ARRANGEMENT: ${arrangement}
-·MOOD: ${moodStr}`.trim();
+·MOOD: ${moodStr}
+·THEME: ${themeStr || 'No explicit story theme selected.'}`.trim();
       };
 
       const songPrompt = buildSongPrompt();
@@ -2065,8 +2061,8 @@ const saveRecentSong = async (newSong: any) => {
         genre: finalGenres[0] ?? null,
         isKpopSelected: selectedGenres.includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
-
-        styles: styleLabels,
+        themes: themeLabels,
+        styles: finalStyles,
         instrumentSounds: finalInstrumentSounds,
         userInput,
         songPrompt,
@@ -2092,7 +2088,7 @@ const saveRecentSong = async (newSong: any) => {
         prompt: songPrompt,
         appliedKeywords: {
           ...song.appliedKeywords,
-          theme: song.appliedKeywords.theme ?? styleLabels,
+          theme: song.appliedKeywords.theme ?? themeLabels,
           style: song.appliedKeywords.style ?? styleLabels,
           instrumentSound: song.appliedKeywords.instrumentSound ?? finalInstrumentSounds,
           kpopMode,
@@ -2154,7 +2150,8 @@ const saveRecentSong = async (newSong: any) => {
     const keywords = [
       `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
       `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
-      result.appliedKeywords.style?.length ? `[Styles] ${result.appliedKeywords.style.join(', ')}` : `[Themes] ${result.appliedKeywords.theme.join(', ')}`,
+      result.appliedKeywords.theme?.length ? `[Themes] ${result.appliedKeywords.theme.join(', ')}` : '',
+      result.appliedKeywords.style?.length ? `[Styles] ${result.appliedKeywords.style.join(', ')}` : '',
       result.appliedKeywords.instrumentSound?.length ? `[Sound / Texture] ${result.appliedKeywords.instrumentSound.map(getSoundVariantLabelById).join(', ')}` : '',
       result.appliedKeywords.vocalType ? `[Vocal] ${result.appliedKeywords.vocalType}` : '',
       result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
@@ -2373,6 +2370,26 @@ ${result.prompt}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
+            />
+            <CategorySection 
+              title="곡 주제" 
+              description="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
+              items={THEMES} 
+              selected={selectedThemes} 
+              pinned={pinnedThemes}
+              onToggle={(id) => toggleSelection(id, 'theme')}
+              onTogglePin={(id) => togglePin(id, 'theme')}
+              onClear={() => clearCategory('theme')}
+              onUnpinAll={() => unpinAll('theme')}
+              onRandom={() => randomizeCategory('theme')}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+              hoveredItem={hoveredItem}
+              isExpanded={isThemeExpanded}
+              onToggleExpand={() => setIsThemeExpanded(!isThemeExpanded)}
+              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+              isRandomized={isThemeRandomized}
             />
             <SingerControl 
               maleCount={maleCount}
@@ -2801,9 +2818,17 @@ ${result.prompt}
                         getLabel: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
                       },
                       {
+                        key: 'theme',
+                        title: 'theme',
+                        values: result.appliedKeywords.theme ?? [],
+                        accent: 'default' as const,
+                        getDescription: (kw: string) => THEMES.find((item) => item.label === kw || item.id === kw)?.description,
+                        getLabel: (kw: string) => THEMES.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
+                      },
+                      {
                         key: 'style',
                         title: 'style',
-                        values: result.appliedKeywords.style ?? result.appliedKeywords.theme ?? [],
+                        values: result.appliedKeywords.style ?? [],
                         accent: 'violet' as const,
                         getDescription: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.description,
                         getLabel: (kw: string) => STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw]?.label ?? kw,

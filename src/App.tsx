@@ -61,7 +61,7 @@ import {
   STYLE_CYCLES,
   SOUND_TEXTURE_CYCLES,
 } from './constants';
-import { CategoryItem, SongResult, LyricsLength, SongDuration } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
@@ -151,7 +151,7 @@ class ErrorBoundary extends Component<any, any> {
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
       
       if (error?.message) {
-        if (error.message.includes("VITE_GEMINI_API_KEY")) {
+        if (error.message.includes("GEMINI_API_KEY")) {
           errorMessage = "Gemini API 키가 설정되지 않았습니다. 설정을 확인해주세요.";
         } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
           errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
@@ -856,7 +856,7 @@ function App() {
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
-  const [songDuration, setSongDuration] = useState<SongDuration>('3');
+  const [songStructure, setSongStructure] = useState<SongStructure>('2');
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
@@ -1313,7 +1313,7 @@ function App() {
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
-    if (appliedKeywords.songDuration) setSongDuration(appliedKeywords.songDuration);
+    if (appliedKeywords.songStructure) setSongStructure(appliedKeywords.songStructure);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
@@ -1681,7 +1681,7 @@ function App() {
 
     setUserInput('');
     setLyricsLength('normal');
-    setSongDuration('3');
+    setSongStructure('2');
     setMaleCount(0);
     setFemaleCount(0);
     setRapEnabled(false);
@@ -2037,7 +2037,7 @@ const saveRecentSong = async (newSong: any) => {
         userInput,
         songPrompt,
         lyricsLength,
-        songDuration,
+        songStructure,
         useAutoDuration: false,
         vocal: {
           male: maleCount,
@@ -2064,7 +2064,7 @@ const saveRecentSong = async (newSong: any) => {
           kpopMode,
           customStructure,
           lyricsLength,
-          songDuration,
+          songStructure,
           maleCount,
           femaleCount,
           rapEnabled,
@@ -2088,7 +2088,7 @@ const saveRecentSong = async (newSong: any) => {
       } else {
         console.error(error);
         const errorMessage = error.message || '곡 생성 중 오류가 발생했습니다.';
-        if (errorMessage.includes('VITE_GEMINI_API_KEY')) {
+        if (errorMessage.includes('GEMINI_API_KEY')) {
           showToast('API 키가 설정되지 않았습니다. 설정을 확인해주세요.');
         } else if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
           showToast('무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.');
@@ -2157,7 +2157,7 @@ ${result.prompt}
     selectedInstrumentSounds.length > 0 ||
     userInput !== '' ||
     lyricsLength !== 'normal' ||
-    songDuration !== '3' ||
+    songStructure !== '2' ||
     maleCount > 0 ||
     femaleCount > 0 ||
     rapEnabled ||
@@ -2390,10 +2390,11 @@ ${result.prompt}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
             />
-            <SongDurationControl 
-              value={songDuration}
-              onChange={setSongDuration}
-              onClear={() => setSongDuration('3')}
+            <SongStructureControl 
+              value={songStructure}
+              customStructure={customStructure}
+              onChange={setSongStructure}
+              onClear={() => { setSongStructure('2'); setCustomStructure([]); }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
@@ -3966,26 +3967,25 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
   );
 }
 
-interface SongDurationControlProps {
-  value: SongDuration;
-  onChange: (val: SongDuration) => void;
+interface SongStructureControlProps {
+  value: SongStructure;
+  customStructure: string[];
+  onChange: (val: SongStructure) => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function SongDurationControl({ value, onChange, onClear, onHover, onLongPressStart, onLongPressEnd }: SongDurationControlProps) {
+function SongStructureControl({ value, customStructure, onChange, onClear, onHover, onLongPressStart, onLongPressEnd }: SongStructureControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
   const options = [
-    { id: '1', label: '1분' },
-    { id: '2', label: '2분' },
-    { id: '3', label: '3분' },
-    { id: '4', label: '4분' },
-    { id: '5', label: '5분' },
-    { id: '6', label: '6분' }
-  ];
+    { id: '1', label: '1', description: '짧고 간결한 구조 · 추천 길이 1~2분' },
+    { id: '2', label: '2', description: '가장 일반적인 기본 구조 · 추천 길이 2~4분' },
+    { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분' },
+    { id: 'custom', label: '커스텀', description: customStructure.length > 0 ? `직접 지정한 구조 적용 · ${customStructure.join(' → ')}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
+  ] as const;
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
@@ -3996,15 +3996,15 @@ function SongDurationControl({ value, onChange, onClear, onHover, onLongPressSta
           className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
         >
           <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          곡 길이
+          곡 구조
         </h3>
         <button
           onClick={onClear}
-          onMouseEnter={() => onHover({ id: 'duration-clear', label: '초기화', description: '곡 길이 설정을 초기화합니다.' })}
+          onMouseEnter={() => onHover({ id: 'structure-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
           onMouseLeave={() => onHover(null)}
           className={cn(
             "p-2 rounded-lg transition-all border",
-            (value !== '3')
+            (value !== '2')
               ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
               : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
           )}
@@ -4019,26 +4019,26 @@ function SongDurationControl({ value, onChange, onClear, onHover, onLongPressSta
               exit={{ opacity: 0, y: 10 }}
               className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 전체 길이를 설정합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 전개 방식과 전체 흐름을 설정합니다. 1은 짧은 구조, 2는 기본 구조, 3은 확장 구조이며 커스텀은 직접 정한 섹션을 따릅니다.</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mt-auto">
+      <div className="grid grid-cols-4 gap-2 mt-auto">
         {options.map((opt) => (
           <button
             key={opt.id}
             onClick={() => {
-              onChange(opt.id as SongDuration);
-              onHover({ id: opt.id, label: opt.label, description: `곡 길이를 ${opt.label}로 설정합니다.` });
+              onChange(opt.id as SongStructure);
+              onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description });
             }}
-            onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: `곡 길이를 ${opt.label}로 설정합니다.` })}
+            onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: `곡 길이를 ${opt.label}로 설정합니다.` })}
+            onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "py-3 rounded-xl text-sm font-bold transition-all border",

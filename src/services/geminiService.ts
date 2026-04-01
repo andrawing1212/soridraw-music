@@ -8,7 +8,7 @@ import {
 } from "../constants";
 import {
   LyricsLength,
-  SongDuration,
+  SongStructure,
   SongResult,
   VocalConfig,
 } from "../types";
@@ -17,9 +17,9 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("VITE_GEMINI_API_KEY is not defined. Please set it in your environment variables.");
+      throw new Error("GEMINI_API_KEY is not defined. Please set it in your environment variables.");
     }
     aiInstance = new GoogleGenAI({ apiKey });
   }
@@ -39,7 +39,7 @@ interface GenerateSongParams {
   userInput: string;
   songPrompt?: string;
   lyricsLength?: LyricsLength;
-  songDuration?: SongDuration;
+  songStructure?: SongStructure;
   useAutoDuration?: boolean;
   vocal?: VocalConfig;
   tempo?: string;
@@ -56,7 +56,7 @@ type GenerateSongInput =
       string,
       string?,
       LyricsLength?,
-      SongDuration?,
+      SongStructure?,
       boolean?,
       number?,
       number?,
@@ -118,12 +118,12 @@ ${buildLyricsLengthInstruction(lyricsLength)}
 `.trim();
 }
 
-function calculateSongDuration(
+function calculateSongStructure(
   genres: string[],
   moods: string[],
   lyricsLength: LyricsLength
-): "1" | "2" | "3" | "4" | "5" | "6" {
-  let duration = 3;
+): "1" | "2" | "3" {
+  let structure = 2;
 
   const rapGenres = [
     "trap",
@@ -138,8 +138,8 @@ function calculateSongDuration(
     "meditation-music",
   ];
 
-  if (genres.some((g) => rapGenres.includes(g.toLowerCase()))) duration += 1;
-  if (genres.some((g) => ambientGenres.includes(g.toLowerCase()))) duration -= 1;
+  if (genres.some((g) => rapGenres.includes(g.toLowerCase()))) structure += 1;
+  if (genres.some((g) => ambientGenres.includes(g.toLowerCase()))) structure -= 1;
 
   const energeticMoods = ["energetic", "dramatic", "bright", "upbeat", "powerful"];
   const calmMoods = [
@@ -151,15 +151,14 @@ function calculateSongDuration(
     "relaxing",
   ];
 
-  if (moods.some((m) => energeticMoods.includes(m.toLowerCase()))) duration += 0.5;
-  if (moods.some((m) => calmMoods.includes(m.toLowerCase()))) duration -= 0.5;
+  if (moods.some((m) => energeticMoods.includes(m.toLowerCase()))) structure += 0.5;
+  if (moods.some((m) => calmMoods.includes(m.toLowerCase()))) structure -= 0.5;
 
-  if (lyricsLength === "normal") duration += 0.5;
-  if (lyricsLength === "very-short") duration -= 0.5;
-  if (lyricsLength === "long") duration += 1;
+  if (lyricsLength === "very-short") structure -= 0.5;
+  if (lyricsLength === "long") structure += 0.5;
 
-  const clamped = Math.max(1, Math.min(6, Math.round(duration)));
-  return clamped.toString() as "1" | "2" | "3" | "4" | "5" | "6";
+  const clamped = Math.max(1, Math.min(3, Math.round(structure)));
+  return clamped.toString() as "1" | "2" | "3";
 }
 
 function getGenrePromptCore(genreId: string | null): string {
@@ -224,7 +223,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       userInput: first.userInput ?? "",
       songPrompt: first.songPrompt,
       lyricsLength: first.lyricsLength ?? "normal",
-      songDuration: first.songDuration ?? "3",
+      songStructure: first.songStructure ?? "2",
       useAutoDuration: first.useAutoDuration ?? true,
       vocal: first.vocal ?? { male: 0, female: 0, rap: false },
       tempo: first.tempo,
@@ -242,7 +241,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     userInput,
     songPrompt = "",
     lyricsLength = "normal",
-    songDuration = "3",
+    songStructure = "2",
     useAutoDuration = true,
     maleCount = 0,
     femaleCount = 0,
@@ -257,7 +256,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     string,
     string?,
     LyricsLength?,
-    SongDuration?,
+    SongStructure?,
     boolean?,
     number?,
     number?,
@@ -275,7 +274,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     userInput: userInput ?? "",
     songPrompt: songPrompt ?? "",
     lyricsLength,
-    songDuration,
+    songStructure,
     useAutoDuration,
     vocal: {
       male: maleCount,
@@ -350,7 +349,7 @@ function enforceKpopMixedLyrics(
 
 function buildAppliedKeywordPayload(
   params: GenerateSongParams,
-  resolvedDuration: SongDuration
+  resolvedStructure: SongStructure
 ) {
   const styles = params.styles ?? [];
   const vocalDescription: string[] = [];
@@ -378,7 +377,8 @@ function buildAppliedKeywordPayload(
     tempo: params.tempo,
     vocalType: vocalDescription.join(" + ") || "Default",
     lyricsLength: params.lyricsLength,
-    songDuration: resolvedDuration,
+    songStructure: params.songStructure === "custom" ? "custom" : resolvedStructure,
+    customStructure: params.songStructure === "custom" ? (params.customStructure ?? []) : undefined,
     maleCount: params.vocal?.male ?? 0,
     femaleCount: params.vocal?.female ?? 0,
     rapEnabled: params.vocal?.rap ?? false,
@@ -391,15 +391,15 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   const model = "gemini-3-flash-preview";
 
   const genresForDuration = params.genre ? [params.genre] : [];
-  const resolvedDuration = (
+  const resolvedStructure = (
     (params.useAutoDuration ?? true)
-      ? calculateSongDuration(
+      ? calculateSongStructure(
           genresForDuration,
           params.moods ?? [],
           params.lyricsLength ?? "normal"
         )
-      : (params.songDuration ?? "3")
-  ) as SongDuration;
+      : (params.songStructure ?? "2")
+  ) as SongStructure;
 
   const lyricGuidancePrompt = buildLyricGuidancePrompt(params.lyricsLength ?? "normal");
   const genrePromptCore = getGenrePromptCore(params.genre);
@@ -428,12 +428,37 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
 - Keep the code-switching natural and melodic, like commercial K-Pop toplines and hooks.`
     : "";
 
-  const structureInstruction = params.customStructure && params.customStructure.length > 0
-    ? `SONG STRUCTURE (MANDATORY):
+  const structureTemplateMap: Record<Exclude<SongStructure, "custom">, { label: string; recommendedLength: string; instruction: string }> = {
+    "1": {
+      label: "Structure 1",
+      recommendedLength: "about 1-2 minutes",
+      instruction: "Use a short and concise song form: Intro → Verse 1 → Chorus / Drop → Outro. Avoid Verse 2 and Bridge unless absolutely necessary.",
+    },
+    "2": {
+      label: "Structure 2",
+      recommendedLength: "about 2-4 minutes",
+      instruction: `Use a standard mainstream form: ${BASIC_STRUCTURE}`,
+    },
+    "3": {
+      label: "Structure 3",
+      recommendedLength: "about 4-6 minutes",
+      instruction: "Use an extended song form with a fuller build-up: Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro. Allow a larger emotional build and extra repetition where musically appropriate.",
+    },
+  };
+
+  const structureInstruction = params.songStructure === "custom"
+    ? (params.customStructure && params.customStructure.length > 0
+      ? `SONG STRUCTURE (MANDATORY):
+- Selected mode: Custom.
 - You MUST follow this structure exactly: ${params.customStructure.join(" → ")}.
 - Do not add, remove, or change any sections.`
-    : `SONG STRUCTURE (DEFAULT):
-- ${BASIC_STRUCTURE}`;
+      : `SONG STRUCTURE (FALLBACK):
+- Selected mode: Custom, but no custom section order was provided.
+- Fallback to the standard structure: ${BASIC_STRUCTURE}`)
+    : `SONG STRUCTURE (MANDATORY):
+- Selected mode: ${structureTemplateMap[resolvedStructure].label}.
+- Recommended song length: ${structureTemplateMap[resolvedStructure].recommendedLength}.
+- ${structureTemplateMap[resolvedStructure].instruction}`;
 
   const systemInstruction = `
 You are a professional music composer and lyricist.
@@ -487,7 +512,7 @@ ${lyricGuidancePrompt}
 - Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
 - Respect the selected lyricsLength strictly.
 - This lyricsLength rule applies to every genre.
-- Intended duration: about ${resolvedDuration} minutes.
+- Respect the selected song structure strictly.
 - Respect the selected lyricsLength strictly. Do not drift longer than the requested lyric size.
 - This lyricsLength rule applies to every genre, not only ballad, jazz, or specific styles.
 
@@ -541,7 +566,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   result.appliedKeywords = {
-    ...buildAppliedKeywordPayload(params, resolvedDuration),
+    ...buildAppliedKeywordPayload(params, resolvedStructure),
     ...(result.appliedKeywords ?? {}),
     genre: result?.appliedKeywords?.genre ?? (params.genre ? [params.genre] : []),
     mood: result?.appliedKeywords?.mood ?? (params.moods ?? []),

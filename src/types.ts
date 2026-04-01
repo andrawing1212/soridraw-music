@@ -1,6 +1,29 @@
+export interface CategoryItem {
+  id: string;
+  label: string;
+  description: string;
+  promptCore?: string;
+  _ts?: number;
+}
+
+export interface GenreGroup {
+  id: string;
+  label: string;
+  description: string;
+  children: CategoryItem[];
+}
+
+export interface SoundStyleItem extends CategoryItem {
+  promptCore?: string;
+}
+
+export interface InstrumentSoundItem extends CategoryItem {
+  promptCore?: string;
+}
+
 export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
-export type SongDuration = '1' | '2' | '3' | '4' | '5' | '6';
+export type SongStructure = '1' | '2' | '3' | 'custom';
 
 export interface VocalConfig {
   male: number;
@@ -24,7 +47,10 @@ export interface AppliedKeywords {
   tempoConfig?: TempoConfig | null;
   vocalType?: string;
   lyricsLength?: LyricsLength;
-  songDuration?: SongDuration;
+  songStructure?: SongStructure;
+  customStructure?: string[];
+  kpopMode?: 0 | 1 | 2;
+  citypopMode?: 0 | 1 | 2;
   maleCount?: number;
   femaleCount?: number;
   rapEnabled?: boolean;

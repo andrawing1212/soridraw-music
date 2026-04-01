@@ -151,7 +151,7 @@ class ErrorBoundary extends Component<any, any> {
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
       
       if (error?.message) {
-        if (error.message.includes("GEMINI_API_KEY")) {
+        if (error.message.includes("VITE_GEMINI_API_KEY")) {
           errorMessage = "Gemini API 키가 설정되지 않았습니다. 설정을 확인해주세요.";
         } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
           errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
@@ -2088,7 +2088,7 @@ const saveRecentSong = async (newSong: any) => {
       } else {
         console.error(error);
         const errorMessage = error.message || '곡 생성 중 오류가 발생했습니다.';
-        if (errorMessage.includes('GEMINI_API_KEY')) {
+        if (errorMessage.includes('VITE_GEMINI_API_KEY')) {
           showToast('API 키가 설정되지 않았습니다. 설정을 확인해주세요.');
         } else if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
           showToast('무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.');
@@ -2394,6 +2394,7 @@ ${result.prompt}
               value={songStructure}
               customStructure={customStructure}
               onChange={setSongStructure}
+              onCustomStructureChange={setCustomStructure}
               onClear={() => { setSongStructure('2'); setCustomStructure([]); }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -3971,14 +3972,179 @@ interface SongStructureControlProps {
   value: SongStructure;
   customStructure: string[];
   onChange: (val: SongStructure) => void;
+  onCustomStructureChange: (sections: string[]) => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
-function SongStructureControl({ value, customStructure, onChange, onClear, onHover, onLongPressStart, onLongPressEnd }: SongStructureControlProps) {
+type SavedStructurePreset = {
+  id: string;
+  name: string;
+  sections: string[];
+  createdAt: number;
+};
+
+const CUSTOM_STRUCTURE_SECTIONS = [
+  'Intro',
+  'Verse 1',
+  'Verse 2',
+  'Pre-Chorus',
+  'Chorus',
+  'Hook',
+  'Drop',
+  'Bridge',
+  'Breakdown',
+  'Instrumental',
+  'Solo',
+  'Rap Verse',
+  'Final Chorus',
+  'Outro',
+] as const;
+
+const SAVED_STRUCTURE_STORAGE_KEY = 'soridraw_saved_structures';
+
+function SongStructureControl({
+  value,
+  customStructure,
+  onChange,
+  onCustomStructureChange,
+  onClear,
+  onHover,
+  onLongPressStart,
+  onLongPressEnd
+}: SongStructureControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [draftStructure, setDraftStructure] = useState<string[]>([]);
+  const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
+  const [presetName, setPresetName] = useState('');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SAVED_STRUCTURE_STORAGE_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        setSavedStructures(parsed);
+      }
+    } catch (error) {
+      console.error('Failed to load saved song structures:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isCustomModalOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsCustomModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeydown);
+    };
+  }, [isCustomModalOpen]);
+
+  const persistSavedStructures = (next: SavedStructurePreset[]) => {
+    setSavedStructures(next);
+    localStorage.setItem(SAVED_STRUCTURE_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const openCustomModal = () => {
+    setDraftStructure(customStructure.length > 0 ? [...customStructure] : []);
+    setPresetName('');
+    setIsCustomModalOpen(true);
+  };
+
+  const handleSelectOption = (optionId: SongStructure) => {
+    const optionDescriptions: Record<SongStructure, string> = {
+      '1': '짧고 간결한 구조 · 추천 길이 1~2분',
+      '2': '가장 일반적인 기본 구조 · 추천 길이 2~4분',
+      '3': '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분',
+      'custom': customStructure.length > 0 ? `직접 지정한 구조 적용 · ${customStructure.join(' → ')}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.',
+    };
+
+    onChange(optionId);
+
+    if (optionId === 'custom') {
+      onHover({
+        id: 'song-structure-custom',
+        label: '구조 커스텀',
+        description: optionDescriptions.custom,
+        _ts: Date.now(),
+      });
+      openCustomModal();
+      return;
+    }
+
+    onHover({
+      id: `song-structure-${optionId}`,
+      label: `구조 ${optionId}`,
+      description: optionDescriptions[optionId],
+      _ts: Date.now(),
+    });
+  };
+
+  const appendSection = (section: string) => {
+    setDraftStructure((prev) => [...prev, section]);
+  };
+
+  const removeSectionAt = (index: number) => {
+    setDraftStructure((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const moveSection = (index: number, direction: 'left' | 'right') => {
+    setDraftStructure((prev) => {
+      const targetIndex = direction === 'left' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  };
+
+  const handleApplyCustomStructure = () => {
+    if (draftStructure.length === 0) return;
+    onCustomStructureChange(draftStructure);
+    onChange('custom');
+    setIsCustomModalOpen(false);
+    onHover({
+      id: 'song-structure-custom-applied',
+      label: '커스텀 구조 적용',
+      description: draftStructure.join(' → '),
+      _ts: Date.now(),
+    });
+  };
+
+  const handleSavePreset = () => {
+    const trimmedName = presetName.trim();
+    if (!trimmedName || draftStructure.length === 0) return;
+
+    const nextPreset: SavedStructurePreset = {
+      id: `${Date.now()}`,
+      name: trimmedName,
+      sections: draftStructure,
+      createdAt: Date.now(),
+    };
+
+    persistSavedStructures([nextPreset, ...savedStructures].slice(0, 20));
+    setPresetName('');
+  };
+
+  const handleLoadPreset = (preset: SavedStructurePreset) => {
+    setDraftStructure(preset.sections);
+  };
+
+  const handleDeletePreset = (presetId: string) => {
+    persistSavedStructures(savedStructures.filter((preset) => preset.id !== presetId));
+  };
 
   const options = [
     { id: '1', label: '1', description: '짧고 간결한 구조 · 추천 길이 1~2분' },
@@ -3988,70 +4154,296 @@ function SongStructureControl({ value, customStructure, onChange, onClear, onHov
   ] as const;
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6 flex items-center justify-between">
-        <h3 
-          onMouseEnter={() => setShowTitleTooltip(true)}
-          onMouseLeave={() => setShowTitleTooltip(false)}
-          className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-        >
-          <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-          곡 구조
-        </h3>
-        <button
-          onClick={onClear}
-          onMouseEnter={() => onHover({ id: 'structure-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
-          onMouseLeave={() => onHover(null)}
-          className={cn(
-            "p-2 rounded-lg transition-all border",
-            (value !== '2')
-              ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-              : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
-          )}
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
-        <AnimatePresence>
-          {showTitleTooltip && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-48 pointer-events-none"
-            >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 전개 방식과 전체 흐름을 설정합니다. 1은 짧은 구조, 2는 기본 구조, 3은 확장 구조이며 커스텀은 직접 정한 섹션을 따릅니다.</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2 mt-auto">
-        {options.map((opt) => (
+    <>
+      <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
+        <div className="relative mb-6 flex items-center justify-between">
+          <h3 
+            onMouseEnter={() => setShowTitleTooltip(true)}
+            onMouseLeave={() => setShowTitleTooltip(false)}
+            className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+          >
+            <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
+            곡 구조
+          </h3>
           <button
-            key={opt.id}
-            onClick={() => {
-              onChange(opt.id as SongStructure);
-              onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description });
-            }}
-            onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
-            onTouchEnd={onLongPressEnd}
+            onClick={onClear}
+            onMouseEnter={() => onHover({ id: 'structure-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
+            onMouseLeave={() => onHover(null)}
             className={cn(
-              "py-3 rounded-xl text-sm font-bold transition-all border",
-              value === opt.id
-                ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+              "p-2 rounded-lg transition-all border",
+              (value !== '2' || customStructure.length > 0)
+                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
             )}
           >
-            {opt.label}
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
-        ))}
+          <AnimatePresence>
+            {showTitleTooltip && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-56 pointer-events-none"
+              >
+                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 전개 방식과 전체 흐름을 설정합니다. 1은 짧은 구조, 2는 기본 구조, 3은 확장 구조이며 커스텀은 팝업에서 직접 섹션 순서를 편집합니다.</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 mt-auto">
+          {options.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => handleSelectOption(opt.id as SongStructure)}
+              onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
+              onTouchEnd={onLongPressEnd}
+              className={cn(
+                "py-3 rounded-xl text-sm font-bold transition-all border",
+                value === opt.id
+                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {value === 'custom' && customStructure.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3">
+            <p className="text-[11px] font-bold text-brand-orange mb-2">현재 커스텀 구조</p>
+            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
+              {customStructure.join(' → ')}
+            </p>
+          </div>
+        )}
       </div>
-    </div>
+
+      <AnimatePresence>
+        {isCustomModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[140] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
+            onClick={() => setIsCustomModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              className="w-full max-w-4xl max-h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">커스텀 곡 구조 편집</h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 곡 구조를 만드세요.</p>
+                </div>
+                <button
+                  onClick={() => setIsCustomModalOpen(false)}
+                  className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto custom-scrollbar max-h-[calc(86vh-82px)] space-y-5">
+                <div>
+                  <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-3">섹션 추가</p>
+                  <div className="flex flex-wrap gap-2">
+                    {CUSTOM_STRUCTURE_SECTIONS.map((section) => (
+                      <button
+                        key={section}
+                        onClick={() => appendSection(section)}
+                        className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-[13px] font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
+                      >
+                        {section}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.9fr] gap-5">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
+                      <button
+                        onClick={() => setDraftStructure([])}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all",
+                          draftStructure.length > 0
+                            ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+                            : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                        )}
+                        disabled={draftStructure.length === 0}
+                      >
+                        전체 초기화
+                      </button>
+                    </div>
+
+                    <div className="min-h-[180px] rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2">
+                      {draftStructure.length === 0 ? (
+                        <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
+                          구조가 비어 있습니다. 위의 섹션 버튼을 눌러 추가하세요.
+                        </div>
+                      ) : (
+                        draftStructure.map((section, index) => (
+                          <div
+                            key={`${section}-${index}`}
+                            className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2"
+                          >
+                            <span className="w-6 h-6 rounded-full bg-brand-orange/10 text-brand-orange text-[11px] font-black flex items-center justify-center shrink-0">
+                              {index + 1}
+                            </span>
+                            <span className="flex-1 text-sm font-bold text-[var(--text-primary)]">{section}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => moveSection(index, 'left')}
+                                className={cn(
+                                  "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
+                                  index === 0
+                                    ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
+                                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                                )}
+                                disabled={index === 0}
+                              >
+                                <ArrowLeft className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => moveSection(index, 'right')}
+                                className={cn(
+                                  "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
+                                  index === draftStructure.length - 1
+                                    ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
+                                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                                )}
+                                disabled={index === draftStructure.length - 1}
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => removeSectionAt(index)}
+                                className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {draftStructure.length > 0 && (
+                      <div className="rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3">
+                        <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
+                        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
+                          {draftStructure.join(' → ')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-[var(--border-color)] p-4 space-y-3">
+                      <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조 저장</p>
+                      <input
+                        type="text"
+                        value={presetName}
+                        onChange={(e) => setPresetName(e.target.value)}
+                        placeholder="예: 감성 발라드형"
+                        className="w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                      />
+                      <button
+                        onClick={handleSavePreset}
+                        disabled={!presetName.trim() || draftStructure.length === 0}
+                        className={cn(
+                          "w-full py-2.5 rounded-xl font-bold text-sm transition-all border",
+                          presetName.trim() && draftStructure.length > 0
+                            ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
+                            : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                        )}
+                      >
+                        구조 저장
+                      </button>
+                    </div>
+
+                    <div className="rounded-2xl border border-[var(--border-color)] p-4">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장된 구조</p>
+                        <span className="text-[11px] text-[var(--text-secondary)]">{savedStructures.length}개</span>
+                      </div>
+
+                      <div className="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
+                        {savedStructures.length === 0 ? (
+                          <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-4 text-center text-[12px] text-[var(--text-secondary)]">
+                            저장된 구조가 없습니다.
+                          </div>
+                        ) : (
+                          savedStructures.map((preset) => (
+                            <div key={preset.id} className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
+                                  <p className="text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed break-words">
+                                    {preset.sections.join(' → ')}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => handleDeletePreset(preset.id)}
+                                  className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center shrink-0"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => handleLoadPreset(preset)}
+                                className="mt-3 w-full py-2 rounded-xl bg-white/10 border border-white/15 text-[12px] font-bold text-[var(--text-primary)] hover:bg-white/15 transition-all"
+                              >
+                                불러오기
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setIsCustomModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 transition-all font-bold"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleApplyCustomStructure}
+                    disabled={draftStructure.length === 0}
+                    className={cn(
+                      "px-5 py-2.5 rounded-xl font-bold transition-all border",
+                      draftStructure.length > 0
+                        ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
+                        : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                    )}
+                  >
+                    적용
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 

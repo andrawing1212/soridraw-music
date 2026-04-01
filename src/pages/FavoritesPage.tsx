@@ -44,6 +44,27 @@ function getKeywordMeta(labelOrId: string) {
   ) ?? null;
 }
 
+
+function getSongGenreValues(song: any): string[] {
+  return song?.appliedKeywords?.genre ?? [];
+}
+
+function getSongMoodValues(song: any): string[] {
+  return song?.appliedKeywords?.mood ?? [];
+}
+
+function getSongThemeValues(song: any): string[] {
+  return song?.appliedKeywords?.theme ?? [];
+}
+
+function getSongStyleValues(song: any): string[] {
+  return song?.appliedKeywords?.style ?? [];
+}
+
+function getSongInstrumentSoundValues(song: any): string[] {
+  return song?.appliedKeywords?.instrumentSound ?? [];
+}
+
 export default function FavoritesPage({ 
   favorites, 
   toggleFavorite, 
@@ -670,10 +691,11 @@ export default function FavoritesPage({
 
   const copyAll = (song: any) => {
     const keywords = [
-      `[Genres] ${(song.appliedKeywords.genre ?? []).join(', ')}`,
-      `[Moods] ${(song.appliedKeywords.mood ?? []).join(', ')}`,
-      `[Styles] ${(song.appliedKeywords.style ?? song.appliedKeywords.theme ?? []).join(', ')}`,
-      `[Instruments / Sound] ${(song.appliedKeywords.instrumentSound ?? []).join(', ')}`,
+      `[Genres] ${getSongGenreValues(song).join(', ')}`,
+      `[Moods] ${getSongMoodValues(song).join(', ')}`,
+      `[Themes] ${getSongThemeValues(song).join(', ')}`,
+      `[Styles] ${getSongStyleValues(song).join(', ')}`,
+      `[Instruments / Sound] ${getSongInstrumentSoundValues(song).join(', ')}`,
       song.appliedKeywords.vocalType ? `[Vocal] ${song.appliedKeywords.vocalType}` : '',
       song.appliedKeywords.tempo ? `[Tempo] ${song.appliedKeywords.tempo}` : ''
     ].filter((line) => !line.endsWith('] ')).join('\n');
@@ -731,11 +753,11 @@ ${song.prompt}
 
   const applyKeywordsToNext = (song: any) => {
     sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify({
-      genre: song.appliedKeywords.genre ?? [],
-      mood: song.appliedKeywords.mood ?? [],
-      theme: song.appliedKeywords.theme ?? [],
-      style: song.appliedKeywords.style ?? song.appliedKeywords.theme ?? [],
-      instrumentSound: song.appliedKeywords.instrumentSound ?? [],
+      genre: getSongGenreValues(song),
+      mood: getSongMoodValues(song),
+      theme: getSongThemeValues(song),
+      style: getSongStyleValues(song),
+      instrumentSound: getSongInstrumentSoundValues(song),
       tempo: song.appliedKeywords.tempo ?? null,
       lyricsLength: song.appliedKeywords.lyricsLength ?? 'normal',
       drumStyle: song.appliedKeywords.drumStyle ?? 'none',
@@ -752,10 +774,11 @@ ${song.prompt}
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
     song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (song.appliedKeywords.genre ?? []).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (song.appliedKeywords.mood ?? []).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (song.appliedKeywords.style ?? song.appliedKeywords.theme ?? []).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (song.appliedKeywords.instrumentSound ?? []).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
+    getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    getSongStyleValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
   ).sort((a, b) => {
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
 
@@ -1227,7 +1250,7 @@ ${song.prompt}
 
                 <div className="flex flex-col flex-grow space-y-4">
                   <div className="flex flex-wrap gap-1.5 overflow-hidden">
-                    {song.appliedKeywords.genre.map((g: string) => (
+                    {getSongGenreValues(song).map((g: string) => (
                       <span 
                         key={g} 
                         onClick={(e) => {
@@ -1239,19 +1262,34 @@ ${song.prompt}
                         #{g}
                       </span>
                     ))}
-                    {song.appliedKeywords.mood.map((m: string) => (
+                    {getSongMoodValues(song).map((m: string) => (
                       <span 
                         key={m} 
                         onClick={(e) => {
                           e.stopPropagation();
-                          onHover({ id: `mood-${m}`, label: m, description: `${m} 분위기입니다.`, _ts: Date.now() });
+                          onHover({ id: `mood-${m}`, label: m, description: `${m} 감정 키워드입니다.`, _ts: Date.now() });
                         }}
                         className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
                       >
                         #{m}
                       </span>
                     ))}
-                    {(song.appliedKeywords.style ?? song.appliedKeywords.theme ?? []).map((s: string) => {
+                    {getSongThemeValues(song).map((t: string) => {
+                      const item = getKeywordMeta(t);
+                      return (
+                        <span 
+                          key={`theme-${t}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onHover({ id: `theme-${t}`, label: t, description: item?.description ?? `${t} 곡 주제입니다.`, _ts: Date.now() });
+                          }}
+                          className="text-[8px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 whitespace-nowrap cursor-pointer hover:bg-emerald-500/20"
+                        >
+                          #{t}
+                        </span>
+                      );
+                    })}
+                    {getSongStyleValues(song).map((s: string) => {
                       const item = getKeywordMeta(s);
                       return (
                         <span 
@@ -1266,7 +1304,7 @@ ${song.prompt}
                         </span>
                       );
                     })}
-                    {(song.appliedKeywords.instrumentSound ?? []).map((s: string) => {
+                    {getSongInstrumentSoundValues(song).map((s: string) => {
                       const item = getKeywordMeta(s);
                       return (
                         <span 
@@ -1655,30 +1693,43 @@ ${song.prompt}
                 {/* Keywords & Tempo */}
                 <div className="bg-[var(--bg-secondary)]/30 rounded-2xl p-4 border border-[var(--border-color)] relative">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
-                    <div className="flex flex-wrap gap-2 pr-12 sm:pr-0">
-                      {[...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...(selectedSong.appliedKeywords.style ?? selectedSong.appliedKeywords.theme ?? []), ...(selectedSong.appliedKeywords.instrumentSound ?? [])].map((k: string) => {
-                        const item = getKeywordMeta(k);
-                        return (
-                          <span 
-                            key={k} 
-                            onMouseEnter={() => {
-                              if (item) {
-                                onHover({ id: `keyword-${k}`, label: k, description: item.description });
-                              }
-                            }}
-                            onMouseLeave={() => onHover(null)}
-                            onTouchStart={() => {
-                              if (item) {
-                                onLongPressStart({ id: `keyword-${k}`, label: k, description: item.description });
-                              }
-                            }}
-                            onTouchEnd={onLongPressEnd}
-                            className="px-2 py-1 rounded-lg bg-brand-orange/10 text-brand-orange text-[10px] font-bold cursor-help transition-all hover:bg-brand-orange/20 active:scale-95"
-                          >
-                            #{k}
-                          </span>
-                        );
-                      })}
+                    <div className="space-y-2 pr-12 sm:pr-0">
+                      {[
+                        { title: 'Genre', values: getSongGenreValues(selectedSong), className: 'bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/80' },
+                        { title: 'Mood', values: getSongMoodValues(selectedSong), className: 'bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/80' },
+                        { title: 'Theme', values: getSongThemeValues(selectedSong), className: 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' },
+                        { title: 'Style', values: getSongStyleValues(selectedSong), className: 'bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20' },
+                        { title: 'Sound', values: getSongInstrumentSoundValues(selectedSong), className: 'bg-sky-500/10 text-sky-400 hover:bg-sky-500/20' },
+                      ].filter((section) => section.values.length > 0).map((section) => (
+                        <div key={section.title} className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)]">{section.title}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {section.values.map((k: string) => {
+                              const item = getKeywordMeta(k);
+                              return (
+                                <span
+                                  key={`${section.title}-${k}`}
+                                  onMouseEnter={() => {
+                                    if (item) {
+                                      onHover({ id: `keyword-${section.title}-${k}`, label: k, description: item.description });
+                                    }
+                                  }}
+                                  onMouseLeave={() => onHover(null)}
+                                  onTouchStart={() => {
+                                    if (item) {
+                                      onLongPressStart({ id: `keyword-${section.title}-${k}`, label: k, description: item.description });
+                                    }
+                                  }}
+                                  onTouchEnd={onLongPressEnd}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-help transition-all active:scale-95 ${section.className}`}
+                                >
+                                  #{k}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                     {!isEditing && (
                       <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -1692,7 +1743,7 @@ ${song.prompt}
                           다음 곡에 적용
                         </button>
                         <button 
-                          onClick={() => copyToClipboard([...selectedSong.appliedKeywords.genre, ...selectedSong.appliedKeywords.mood, ...(selectedSong.appliedKeywords.style ?? selectedSong.appliedKeywords.theme ?? []), ...(selectedSong.appliedKeywords.instrumentSound ?? [])].join(', '), 'keywords')}
+                          onClick={() => copyToClipboard([...getSongGenreValues(selectedSong), ...getSongMoodValues(selectedSong), ...getSongThemeValues(selectedSong), ...getSongStyleValues(selectedSong), ...getSongInstrumentSoundValues(selectedSong)].join(', '), 'keywords')}
                           className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
                         >
                           {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1835,7 +1886,7 @@ ${song.prompt}
                 {/* Prompt */}
                 <div className="pt-8 border-t border-[var(--border-color)]">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest"> 곡 프롬프트 Styles </h3>
+                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">곡 프롬프트 Prompt</h3>
                     {!isEditing && (
                       <button 
                         onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}

@@ -18,14 +18,19 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    // Try VITE_ prefixed first (standard for Vite), then fallback to standard GEMINI_API_KEY
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
-    
+    const apiKey =
+      import.meta.env.VITE_GEMINI_API_KEY ||
+      import.meta.env.GEMINI_API_KEY;
+
     if (!apiKey) {
-      throw new Error("Gemini API key is not defined. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY in your environment variables.");
+      throw new Error(
+        "Gemini API key is not defined. Please set VITE_GEMINI_API_KEY in your environment variables."
+      );
     }
+
     aiInstance = new GoogleGenAI({ apiKey });
   }
+
   return aiInstance;
 }
 

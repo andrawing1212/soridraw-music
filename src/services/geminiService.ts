@@ -67,12 +67,54 @@ type GenerateSongInput =
     ]
   | [GenerateSongParams];
 
-function buildLyricGuidancePrompt(): string {
+function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): string {
+  switch (lyricsLength) {
+    case "very-short":
+      return `LYRICS LENGTH (MANDATORY):
+- Apply this length rule across ALL genres without exception.
+- The selected length is: 더짧게 (very-short).
+- Keep the lyrics extremely concise.
+- Target about 2-3 lyric lines per major section.
+- Avoid extra filler lines, repeated padding, long storytelling passages, and unnecessary ad-libs.
+- Keep verses, pre-chorus, bridge, and outro notably compact.
+- Chorus may repeat hook phrases, but the overall lyric body must still stay short.`;
+    case "short":
+      return `LYRICS LENGTH (MANDATORY):
+- Apply this length rule across ALL genres without exception.
+- The selected length is: 짧게 (short).
+- Keep the lyrics shorter than a standard pop lyric.
+- Target about 3-4 lyric lines per major section.
+- Use concise imagery and tighter phrasing.
+- Avoid long verses, excessive repetition, and over-explaining the story.
+- Chorus can be memorable, but keep the overall lyric count restrained.`;
+    case "long":
+      return `LYRICS LENGTH (MANDATORY):
+- Apply this length rule across ALL genres without exception.
+- The selected length is: 길게 (long).
+- Write noticeably longer lyrics than a standard song.
+- Target about 6-8 lyric lines per major section.
+- Expand the storytelling, imagery, and emotional development.
+- Verses, bridge, and final chorus should feel fuller and more developed.
+- Do not keep the lyric body short or overly minimal.`;
+    case "normal":
+    default:
+      return `LYRICS LENGTH (MANDATORY):
+- Apply this length rule across ALL genres without exception.
+- The selected length is: 기본 (normal).
+- Use a standard mainstream song lyric length.
+- Target about 4-6 lyric lines per major section.
+- Keep a natural balance between storytelling, repetition, and hook development.
+- Do not make the lyrics unusually short or excessively long.`;
+  }
+}
+
+function buildLyricGuidancePrompt(lyricsLength: LyricsLength = "normal"): string {
   return `
 - Ensure clear line breaks between sections if sections are used.
 - The lyrics should primarily follow the user's story/intention.
 - Provide both English and Korean versions.
 - Do not translate Korean literally; keep it natural and lyrical.
+${buildLyricsLengthInstruction(lyricsLength)}
 `.trim();
 }
 
@@ -114,6 +156,7 @@ function calculateSongDuration(
 
   if (lyricsLength === "normal") duration += 0.5;
   if (lyricsLength === "very-short") duration -= 0.5;
+  if (lyricsLength === "long") duration += 1;
 
   const clamped = Math.max(1, Math.min(6, Math.round(duration)));
   return clamped.toString() as "1" | "2" | "3" | "4" | "5" | "6";
@@ -188,6 +231,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       specialPrompt: first.specialPrompt,
       kpopMode: first.kpopMode ?? 0,
       isKpopSelected: first.isKpopSelected ?? false,
+      customStructure: first.customStructure ?? [],
     };
   }
 
@@ -241,10 +285,10 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     tempo,
     specialPrompt,
     kpopMode,
-    isKpopSelected: genres?.includes('kpop') ?? false,
+    isKpopSelected: genres?.includes("kpop") ?? false,
+    customStructure: [],
   };
 }
-
 
 function containsLatin(text: string): boolean {
   return /[A-Za-z]/.test(text);
@@ -357,7 +401,7 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
       : (params.songDuration ?? "3")
   ) as SongDuration;
 
-  const lyricGuidancePrompt = buildLyricGuidancePrompt();
+  const lyricGuidancePrompt = buildLyricGuidancePrompt(params.lyricsLength ?? "normal");
   const genrePromptCore = getGenrePromptCore(params.genre);
   const stylePromptCores = getStylePromptCores(params.styles ?? []);
   const instrumentSoundPromptCores = getInstrumentSoundPromptCores(
@@ -386,7 +430,7 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
 
   const structureInstruction = params.customStructure && params.customStructure.length > 0
     ? `SONG STRUCTURE (MANDATORY):
-- You MUST follow this structure exactly: ${params.customStructure.join(' → ')}.
+- You MUST follow this structure exactly: ${params.customStructure.join(" → ")}.
 - Do not add, remove, or change any sections.`
     : `SONG STRUCTURE (DEFAULT):
 - ${BASIC_STRUCTURE}`;
@@ -441,7 +485,11 @@ Lyrics rules:
 ${lyricGuidancePrompt}
 - The lyrics should primarily follow the user's story/intention.
 - Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
+- Respect the selected lyricsLength strictly.
+- This lyricsLength rule applies to every genre.
 - Intended duration: about ${resolvedDuration} minutes.
+- Respect the selected lyricsLength strictly. Do not drift longer than the requested lyric size.
+- This lyricsLength rule applies to every genre, not only ballad, jazz, or specific styles.
 
 Prompt rules:
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}

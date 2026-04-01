@@ -122,6 +122,10 @@ export default function FavoritesPage({
   ];
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
     }, 4000);
@@ -738,7 +742,6 @@ ${song.prompt}
       maleCount: song.appliedKeywords.maleCount ?? 0,
       femaleCount: song.appliedKeywords.femaleCount ?? 0,
       rapEnabled: song.appliedKeywords.rapEnabled ?? false,
-      kpopMode: song.appliedKeywords.kpopMode ?? 0,
       tempoConfig: song.appliedKeywords.tempoConfig ?? null
     }));
     navigate('/');
@@ -838,7 +841,7 @@ ${song.prompt}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="w-full bg-white/15 border border-white/20 rounded-2xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all placeholder:text-white/40"
+              className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-2xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all"
             />
             {!searchQuery && !isSearchFocused && (
               <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
@@ -1407,11 +1410,9 @@ ${song.prompt}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              layout
               className="relative w-full max-w-2xl bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-[var(--shadow-md)] flex flex-col max-h-[90vh]"
             >
-              <div layout
-                className="p-8 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30 relative flex flex-col items-center">
+              <div className="p-8 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30 relative flex flex-col items-center">
                 <button 
                   onClick={() => closeSelectedSong()} 
                   className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors z-10"
@@ -1448,35 +1449,27 @@ ${song.prompt}
                         className="w-full bg-[var(--input-bg)] border border-brand-orange/30 rounded-xl px-4 py-3 text-[var(--text-primary)] font-bold text-xl focus:outline-none"
                       />
                     ) : (
-                      <motion.div
-                        layout
-                        className="flex flex-col items-center overflow-hidden"
-                        transition={{ layout: { duration: 0.24, ease: 'easeOut' } }}
-                      >
-                        <AnimatePresence initial={false}>
+                      <div className="flex flex-col items-center">
+                        <AnimatePresence mode="wait">
                           {isTitleExpanded && (
-                            <motion.div
-                              key="song-title-expanded"
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.24, ease: 'easeOut' }}
-                              className="w-full overflow-hidden"
+                            <motion.h2 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="text-[19px] font-bold text-[var(--text-primary)] leading-tight text-left w-full overflow-hidden"
                             >
-                              <h2 className="text-[19px] font-bold text-[var(--text-primary)] leading-tight text-left w-full">
-                                {selectedSong.title.includes(']') ? (
-                                  <>
-                                    <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
-                                    <span>{selectedSong.title.split(']')[1].trim()}</span>
-                                  </>
-                                ) : (
-                                  selectedSong.title
-                                )}
-                              </h2>
-                            </motion.div>
+                              {selectedSong.title.includes(']') ? (
+                                <>
+                                  <span className="block mb-1">{selectedSong.title.split(']')[0]}]</span>
+                                  <span>{selectedSong.title.split(']')[1].trim()}</span>
+                                </>
+                              ) : (
+                                selectedSong.title
+                              )}
+                            </motion.h2>
                           )}
                         </AnimatePresence>
-                      </motion.div>
+                      </div>
                     )}
                   </div>
 

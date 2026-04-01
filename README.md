@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# AI Studio Song Generator
 
-# Run and deploy your AI Studio app
+## Environment Variables
 
-This contains everything you need to run your app locally.
+To use the Gemini API for song generation, you must set the following environment variable in the AI Studio Secrets panel:
 
-View your app in AI Studio: https://ai.studio/apps/eb777bec-857a-487c-a6da-030a92ca7285
+- `VITE_GEMINI_API_KEY`: Your Gemini API key.
 
-## Run Locally
+Note: The application is configured to fallback to `GEMINI_API_KEY` if `VITE_GEMINI_API_KEY` is not explicitly set, but using the `VITE_` prefix is recommended for client-side Vite applications.
 
-**Prerequisites:**  Node.js
-
+## Development
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+   ```bash
+   npm install
+   ```
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Deployment
+
+The application is automatically deployed to Cloud Run. Ensure your API keys are configured in the platform settings.

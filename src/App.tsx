@@ -2399,6 +2399,7 @@ ${result.prompt}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
+              user={user}
             />
           </div>
         </div>
@@ -3977,6 +3978,7 @@ interface SongStructureControlProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  user: User | null;
 }
 
 type SavedStructurePreset = {
@@ -4003,8 +4005,6 @@ const CUSTOM_STRUCTURE_SECTIONS = [
   'Outro',
 ] as const;
 
-const SAVED_STRUCTURE_STORAGE_KEY = 'soridraw_saved_structures';
-
 function SongStructureControl({
   value,
   customStructure,
@@ -4013,7 +4013,8 @@ function SongStructureControl({
   onClear,
   onHover,
   onLongPressStart,
-  onLongPressEnd
+  onLongPressEnd,
+  user
 }: SongStructureControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
@@ -4022,17 +4023,24 @@ function SongStructureControl({
   const [presetName, setPresetName] = useState('');
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SAVED_STRUCTURE_STORAGE_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        setSavedStructures(parsed);
-      }
-    } catch (error) {
-      console.error('Failed to load saved song structures:', error);
+    if (!user) {
+      setSavedStructures([]);
+      return;
     }
-  }, []);
+
+    const loadStructures = async () => {
+      try {
+        const ref = doc(db, 'user_structures', user.uid);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setSavedStructures(snap.data().structures || []);
+        }
+      } catch (error) {
+        console.error('Failed to load saved song structures:', error);
+      }
+    };
+    loadStructures();
+  }, [user]);
 
   useEffect(() => {
     if (!isCustomModalOpen) return;
@@ -4052,9 +4060,15 @@ function SongStructureControl({
     };
   }, [isCustomModalOpen]);
 
-  const persistSavedStructures = (next: SavedStructurePreset[]) => {
-    setSavedStructures(next);
-    localStorage.setItem(SAVED_STRUCTURE_STORAGE_KEY, JSON.stringify(next));
+  const persistSavedStructures = async (next: SavedStructurePreset[]) => {
+    if (!user) return;
+    try {
+      const ref = doc(db, 'user_structures', user.uid);
+      await setDoc(ref, { structures: next }, { merge: true });
+      setSavedStructures(next);
+    } catch (error) {
+      console.error('Failed to save song structures:', error);
+    }
   };
 
   const openCustomModal = () => {

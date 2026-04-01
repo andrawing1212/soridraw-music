@@ -11,6 +11,7 @@ import {
   SongStructure,
   SongResult,
   VocalConfig,
+  CustomSectionItem,
 } from "../types";
 
 let aiInstance: GoogleGenAI | null = null;
@@ -45,7 +46,7 @@ interface GenerateSongParams {
   tempo?: string;
   specialPrompt?: string;
   kpopMode?: 0 | 1 | 2;
-  customStructure?: string[];
+  customStructure?: CustomSectionItem[];
 }
 
 type GenerateSongInput =
@@ -450,8 +451,9 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
     ? (params.customStructure && params.customStructure.length > 0
       ? `SONG STRUCTURE (MANDATORY):
 - Selected mode: Custom.
-- You MUST follow this structure exactly: ${params.customStructure.join(" → ")}.
-- Do not add, remove, or change any sections.`
+- You MUST follow this structure exactly: ${params.customStructure.map(s => `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`).join(" → ")}.
+- Do not add, remove, or change any sections.
+- For sections with tags in parentheses, apply those musical directions (e.g., "Verse 1 (Solo)" means Verse 1 should be a solo vocal).`
       : `SONG STRUCTURE (FALLBACK):
 - Selected mode: Custom, but no custom section order was provided.
 - Fallback to the standard structure: ${BASIC_STRUCTURE}`)

@@ -21,6 +21,18 @@ export interface InstrumentSoundItem extends CategoryItem {
   promptCore?: string;
 }
 
+export interface SoundStyleCycle {
+  id: string;
+  title: string;
+  variants: SoundStyleItem[];
+}
+
+export interface InstrumentSoundCycle {
+  id: string;
+  title: string;
+  variants: InstrumentSoundItem[];
+}
+
 export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
 export type SongStructure = '1' | '2' | '3' | 'custom';
@@ -37,6 +49,12 @@ export interface TempoConfig {
   max: number;
 }
 
+export interface CustomSectionItem {
+  id: string;
+  section: string;
+  tags: string[];
+}
+
 export interface AppliedKeywords {
   genre: string[];
   mood: string[];
@@ -48,7 +66,7 @@ export interface AppliedKeywords {
   vocalType?: string;
   lyricsLength?: LyricsLength;
   songStructure?: SongStructure;
-  customStructure?: string[];
+  customStructure?: CustomSectionItem[];
   kpopMode?: 0 | 1 | 2;
   citypopMode?: 0 | 1 | 2;
   maleCount?: number;

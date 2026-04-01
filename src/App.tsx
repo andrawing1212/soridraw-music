@@ -46,7 +46,9 @@ import {
   Filter,
   RefreshCw,
   CheckCircle2,
-  Mic2
+  Mic2,
+  Tag,
+  Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -61,7 +63,7 @@ import {
   STYLE_CYCLES,
   SOUND_TEXTURE_CYCLES,
 } from './constants';
-import { CategoryItem, SongResult, LyricsLength, SongStructure } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem } from './types';
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
@@ -1066,7 +1068,7 @@ function App() {
 
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
-  const [customStructure, setCustomStructure] = useState<string[]>([]);
+  const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -1317,6 +1319,7 @@ function App() {
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
+    if (appliedKeywords.customStructure) setCustomStructure(appliedKeywords.customStructure);
     
     if (appliedKeywords.tempoConfig) {
       setTempoEnabled(appliedKeywords.tempoConfig.enabled);
@@ -2856,6 +2859,20 @@ ${result.prompt}
                         </div>
                       </div>
                     )}
+                    {result.appliedKeywords.customStructure && result.appliedKeywords.customStructure.length > 0 && (
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">structure</p>
+                        <div className="flex flex-wrap gap-1">
+                          <span 
+                            className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border border-[var(--border-color)] cursor-help"
+                            onMouseEnter={() => setHoveredItem({ id: 'kw-structure', label: 'Structure', description: '곡의 전체 구성입니다.' })}
+                            onMouseLeave={() => setHoveredItem(null)}
+                          >
+                            {result.appliedKeywords.customStructure.map(s => `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`).join(' → ')}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
 
@@ -3971,9 +3988,9 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
 
 interface SongStructureControlProps {
   value: SongStructure;
-  customStructure: string[];
+  customStructure: CustomSectionItem[];
   onChange: (val: SongStructure) => void;
-  onCustomStructureChange: (sections: string[]) => void;
+  onCustomStructureChange: (sections: CustomSectionItem[]) => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
@@ -3981,10 +3998,125 @@ interface SongStructureControlProps {
   user: User | null;
 }
 
+function TagEditModal({
+  isOpen,
+  onClose,
+  section,
+  tags,
+  onSave,
+  onHover,
+  onLongPressStart,
+  onLongPressEnd
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  section: string;
+  tags: string[];
+  onSave: (tags: string[]) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
+}) {
+  const [selectedTags, setSelectedTags] = useState<string[]>(tags);
+  const allowedTags = ALLOWED_TAGS_BY_SECTION[section] || [];
+
+  useEffect(() => {
+    if (isOpen) setSelectedTags(tags);
+  }, [isOpen, tags]);
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tag)) {
+        return prev.filter(t => t !== tag);
+      }
+      if (prev.length >= 2) return prev;
+      return [...prev, tag];
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[160] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+          <div>
+            <h4 className="text-lg font-bold text-[var(--text-primary)]">{section} 태그 편집</h4>
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">최대 2개까지 선택 가능합니다.</p>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-secondary)]"
+            onMouseEnter={() => onHover({ id: 'tag-modal-close', label: '닫기', description: '태그 편집 창을 닫습니다.' })}
+            onMouseLeave={() => onHover(null)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {allowedTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                onMouseEnter={() => onHover({ id: `tag-${tag}`, label: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
+                onMouseLeave={() => {
+                  onHover(null);
+                  onLongPressEnd();
+                }}
+                onTouchStart={() => onLongPressStart({ id: `tag-${tag}`, label: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
+                onTouchEnd={onLongPressEnd}
+                className={cn(
+                  "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border",
+                  selectedTags.includes(tag)
+                    ? "bg-brand-orange border-orange-400 text-white"
+                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                )}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={onClose}
+              onMouseEnter={() => onHover({ id: 'tag-modal-cancel', label: '취소', description: '변경사항을 취소하고 닫습니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => onSave(selectedTags)}
+              onMouseEnter={() => onHover({ id: 'tag-modal-save', label: '저장', description: '선택한 태그를 해당 섹션에 적용합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className="flex-1 py-3 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 type SavedStructurePreset = {
   id: string;
   name: string;
-  sections: string[];
+  sections: CustomSectionItem[];
   createdAt: number;
 };
 
@@ -4005,6 +4137,40 @@ const CUSTOM_STRUCTURE_SECTIONS = [
   'Outro',
 ] as const;
 
+const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
+  'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic'],
+  'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
+  'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
+  'Pre-Chorus': ['Soft', 'Emotional', 'Build-up', 'Harmony'],
+  'Chorus': ['Big', 'Harmony', 'Energetic', 'Emotional', 'Rap', 'Group'],
+  'Hook': ['Big', 'Harmony', 'Energetic', 'Minimal', 'Group'],
+  'Drop': ['Big', 'Instrumental', 'Energetic', 'Minimal'],
+  'Bridge': ['Soft', 'Instrumental', 'Emotional', 'Rap', 'Minimal'],
+  'Breakdown': ['Minimal', 'Instrumental', 'Rap', 'Soft'],
+  'Instrumental': ['Instrumental', 'Minimal', 'Emotional', 'Energetic'],
+  'Solo': ['Instrumental', 'Emotional', 'Big'],
+  'Rap Verse': ['Rap', 'Solo', 'Energetic', 'Aggressive'],
+  'Final Chorus': ['Big', 'Harmony', 'Adlib', 'Emotional', 'Energetic', 'Group'],
+  'Outro': ['Soft', 'Instrumental', 'Minimal', 'Emotional'],
+};
+
+const TAG_DESCRIPTIONS: Record<string, string> = {
+  'Solo': '한 명의 보컬이 전면에 드러나는 섹션입니다.',
+  'Duet': '두 명의 보컬이 조화를 이루며 노래하는 섹션입니다.',
+  'Group': '모든 보컬이 함께 참여하여 풍성함을 더하는 섹션입니다.',
+  'Rap': '멜로디보다 리듬과 가사 전달에 집중하는 랩 섹션입니다.',
+  'Harmony': '여러 화성이 겹쳐 더 풍성하게 들리는 섹션입니다.',
+  'Adlib': '정해진 멜로디 외에 자유로운 보컬 표현이 추가되는 섹션입니다.',
+  'Instrumental': '보컬보다 연주가 중심이 되는 구간입니다.',
+  'Soft': '부드럽고 잔잔한 분위기로 감성을 자극하는 섹션입니다.',
+  'Big': '에너지가 크게 확장되어 후렴의 임팩트를 강화합니다.',
+  'Minimal': '악기 수와 밀도를 줄여 간결하게 들리게 합니다.',
+  'Emotional': '감정적인 호소력이 짙게 묻어나는 섹션입니다.',
+  'Energetic': '활기차고 역동적인 에너지가 느껴지는 섹션입니다.',
+  'Build-up': '점진적으로 에너지를 쌓아 올려 다음 섹션을 준비합니다.',
+  'Aggressive': '강렬하고 공격적인 사운드로 긴장감을 높입니다.',
+};
+
 function SongStructureControl({
   value,
   customStructure,
@@ -4018,7 +4184,8 @@ function SongStructureControl({
 }: SongStructureControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
-  const [draftStructure, setDraftStructure] = useState<string[]>([]);
+  const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
+  const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
 
@@ -4077,12 +4244,16 @@ function SongStructureControl({
     setIsCustomModalOpen(true);
   };
 
+  const formatStructureText = (structure: CustomSectionItem[]) => {
+    return structure.map(s => `${s.section}${s.tags.length > 0 ? ` · ${s.tags.join(' · ')}` : ''}`).join(' → ');
+  };
+
   const handleSelectOption = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
       '1': '짧고 간결한 구조 · 추천 길이 1~2분',
       '2': '가장 일반적인 기본 구조 · 추천 길이 2~4분',
       '3': '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분',
-      'custom': customStructure.length > 0 ? `직접 지정한 구조 적용 · ${customStructure.join(' → ')}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.',
+      'custom': customStructure.length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.',
     };
 
     onChange(optionId);
@@ -4107,7 +4278,12 @@ function SongStructureControl({
   };
 
   const appendSection = (section: string) => {
-    setDraftStructure((prev) => [...prev, section]);
+    const newItem: CustomSectionItem = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      section,
+      tags: []
+    };
+    setDraftStructure((prev) => [...prev, newItem]);
   };
 
   const removeSectionAt = (index: number) => {
@@ -4132,7 +4308,7 @@ function SongStructureControl({
     onHover({
       id: 'song-structure-custom-applied',
       label: '커스텀 구조 적용',
-      description: draftStructure.join(' → '),
+      description: formatStructureText(draftStructure),
       _ts: Date.now(),
     });
   };
@@ -4164,7 +4340,7 @@ function SongStructureControl({
     { id: '1', label: '1', description: '짧고 간결한 구조 · 추천 길이 1~2분' },
     { id: '2', label: '2', description: '가장 일반적인 기본 구조 · 추천 길이 2~4분' },
     { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분' },
-    { id: 'custom', label: '커스텀', description: customStructure.length > 0 ? `직접 지정한 구조 적용 · ${customStructure.join(' → ')}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
+    { id: 'custom', label: '커스텀', description: customStructure.length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
   ] as const;
 
   return (
@@ -4234,7 +4410,7 @@ function SongStructureControl({
           <div className="mt-4 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3">
             <p className="text-[11px] font-bold text-brand-orange mb-2">현재 커스텀 구조</p>
             <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
-              {customStructure.join(' → ')}
+              {formatStructureText(customStructure)}
             </p>
           </div>
         )}
@@ -4278,6 +4454,8 @@ function SongStructureControl({
                       <button
                         key={section}
                         onClick={() => appendSection(section)}
+                        onMouseEnter={() => onHover({ id: `section-add-${section}`, label: section, description: `${section} 섹션을 구조에 추가합니다.` })}
+                        onMouseLeave={() => onHover(null)}
                         className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-[13px] font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
                       >
                         {section}
@@ -4310,18 +4488,27 @@ function SongStructureControl({
                           구조가 비어 있습니다. 위의 섹션 버튼을 눌러 추가하세요.
                         </div>
                       ) : (
-                        draftStructure.map((section, index) => (
+                        draftStructure.map((item, index) => (
                           <div
-                            key={`${section}-${index}`}
-                            className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2"
+                            key={item.id}
+                            className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5"
                           >
                             <span className="w-6 h-6 rounded-full bg-brand-orange/10 text-brand-orange text-[11px] font-black flex items-center justify-center shrink-0">
                               {index + 1}
                             </span>
-                            <span className="flex-1 text-sm font-bold text-[var(--text-primary)]">{section}</span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
+                              {item.tags.length > 0 && (
+                                <p className="text-[10px] text-brand-orange/80 font-medium mt-0.5 truncate">
+                                  {item.tags.join(' · ')}
+                                </p>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => moveSection(index, 'left')}
+                                onMouseEnter={() => onHover({ id: 'section-move-left', label: '왼쪽 이동', description: '이 섹션의 순서를 앞으로 당깁니다.' })}
+                                onMouseLeave={() => onHover(null)}
                                 className={cn(
                                   "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
                                   index === 0
@@ -4334,6 +4521,8 @@ function SongStructureControl({
                               </button>
                               <button
                                 onClick={() => moveSection(index, 'right')}
+                                onMouseEnter={() => onHover({ id: 'section-move-right', label: '오른쪽 이동', description: '이 섹션의 순서를 뒤로 미룹니다.' })}
+                                onMouseLeave={() => onHover(null)}
                                 className={cn(
                                   "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
                                   index === draftStructure.length - 1
@@ -4345,7 +4534,17 @@ function SongStructureControl({
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                onClick={() => setEditingSectionIndex(index)}
+                                onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
+                                onMouseLeave={() => onHover(null)}
+                                className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center"
+                              >
+                                <Tag className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => removeSectionAt(index)}
+                                onMouseEnter={() => onHover({ id: 'section-remove', label: '삭제', description: '이 섹션을 구조에서 제거합니다.' })}
+                                onMouseLeave={() => onHover(null)}
                                 className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -4360,7 +4559,7 @@ function SongStructureControl({
                       <div className="rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3">
                         <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
                         <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
-                          {draftStructure.join(' → ')}
+                          {formatStructureText(draftStructure)}
                         </p>
                       </div>
                     )}
@@ -4408,7 +4607,7 @@ function SongStructureControl({
                                 <div className="min-w-0">
                                   <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
                                   <p className="text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed break-words">
-                                    {preset.sections.join(' → ')}
+                                    {formatStructureText(preset.sections)}
                                   </p>
                                 </div>
                                 <button
@@ -4455,6 +4654,28 @@ function SongStructureControl({
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingSectionIndex !== null && (
+          <TagEditModal
+            isOpen={true}
+            onClose={() => setEditingSectionIndex(null)}
+            section={draftStructure[editingSectionIndex].section}
+            tags={draftStructure[editingSectionIndex].tags}
+            onSave={(newTags) => {
+              setDraftStructure(prev => {
+                const next = [...prev];
+                next[editingSectionIndex] = { ...next[editingSectionIndex], tags: newTags };
+                return next;
+              });
+              setEditingSectionIndex(null);
+            }}
+            onHover={onHover}
+            onLongPressStart={onLongPressStart}
+            onLongPressEnd={onLongPressEnd}
+          />
         )}
       </AnimatePresence>
     </>

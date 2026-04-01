@@ -742,7 +742,8 @@ ${song.prompt}
       maleCount: song.appliedKeywords.maleCount ?? 0,
       femaleCount: song.appliedKeywords.femaleCount ?? 0,
       rapEnabled: song.appliedKeywords.rapEnabled ?? false,
-      tempoConfig: song.appliedKeywords.tempoConfig ?? null
+      tempoConfig: song.appliedKeywords.tempoConfig ?? null,
+      customStructure: song.appliedKeywords.customStructure ?? []
     }));
     navigate('/');
   };

@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(geminiApiKey),
       'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(geminiApiKey),
+      'VITE_GEMINI_API_KEY': JSON.stringify(geminiApiKey),
     },
     resolve: {
       alias: {

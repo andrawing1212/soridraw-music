@@ -579,37 +579,52 @@ function buildStyle(params: GenerateSongParams): string {
 
 function buildSound(params: GenerateSongParams): string {
   const selected = getInstrumentSoundLabels(params.instrumentSounds ?? []);
-  const genreId = params.genre || "";
+  const genreId = (params.genre || "pop").toLowerCase();
   const moods = (params.moods ?? []).map((m) => m.toLowerCase());
 
   const GENRE_BASE: Record<string, string[]> = {
-    drill: ["sparse drill drums", "heavy 808 bass", "cold minimal texture"],
+    drill: ["sparse drill drums", "heavy 808 bass"],
     trap: ["tight trap drums", "deep 808 bass"],
-    "piano-ballad": ["soft piano-led texture", "restrained drums"],
-    "lofi-hiphop": ["soft lofi drums", "warm bass", "dusty texture"],
-    kpop: ["polished synth", "punchy drums", "layered bass"],
-    rnb: ["smooth keys", "warm bass", "steady groove"],
-    pop: ["modern synth", "clean drums", "bright texture"],
-    "acid-jazz": ["electric piano", "jazz groove", "warm bass"],
-    "cool-jazz": ["soft trumpet", "brushed drums", "smooth bass"],
-    ballad: ["warm strings", "soft piano", "restrained drums"],
+    "piano-ballad": ["soft piano-led melody", "restrained drums"],
+    "lofi-hiphop": ["soft lofi drums", "warm bass"],
+    kpop: ["polished synth", "punchy drums"],
+    rnb: ["smooth keys", "warm bass"],
+    pop: ["modern synth", "clean drums"],
+    "acid-jazz": ["electric piano", "jazz groove"],
+    "cool-jazz": ["soft trumpet", "brushed drums"],
+    ballad: ["warm strings", "soft piano"],
   };
 
-  const MOOD_TONE_MAP: Record<string, string[]> = {
-    emotional: ["warm", "soft"],
-    dark: ["cold", "heavy"],
-    dreamy: ["airy", "spacious"],
-    calm: ["gentle", "smooth"],
-    tense: ["tight"],
-    energetic: ["bright", "sharp"],
-    sad: ["raw", "intimate"],
-    happy: ["bright", "clean"],
-    aggressive: ["distorted", "heavy"],
+  const TEXTURE_MAP: Record<string, string> = {
+    drill: "cold synth texture",
+    trap: "polished digital texture",
+    ballad: "warm acoustic texture",
+    "piano-ballad": "soft felt-piano texture",
+    pop: "bright modern texture",
+    jazz: "organic vintage texture",
+    rock: "raw gritty texture",
+    rnb: "smooth velvet texture",
+    electronic: "glitchy ambient texture",
+    "lofi-hiphop": "dusty lofi texture",
+    default: "clean balanced texture"
+  };
+
+  const SPACE_MAP: Record<string, string> = {
+    emotional: "spacious reverb",
+    dark: "tight negative space",
+    dreamy: "ethereal atmosphere",
+    calm: "intimate dry space",
+    tense: "claustrophobic pressure",
+    energetic: "wide stereo field",
+    sad: "isolated hollow space",
+    happy: "open airy space",
+    nostalgic: "warm analog space",
+    default: "natural acoustic space"
   };
 
   let result: string[] = [...selected];
 
-  // 1. Tone Correction for selected sounds based on genre/mood
+  // 1. Tone Correction for selected sounds
   const isSoftTone =
     genreId.includes("ballad") ||
     moods.includes("emotional") ||
@@ -620,10 +635,7 @@ function buildSound(params: GenerateSongParams): string {
   if (isSoftTone) {
     result = result.map((s) => {
       const lower = s.toLowerCase();
-      if (
-        (lower.includes("808") || lower.includes("heavy") || lower.includes("bass")) &&
-        !lower.includes("soft")
-      ) {
+      if ((lower.includes("808") || lower.includes("heavy") || lower.includes("bass")) && !lower.includes("soft")) {
         return `soft ${s}`;
       }
       return s;
@@ -642,51 +654,27 @@ function buildSound(params: GenerateSongParams): string {
   const baseSounds = GENRE_BASE[genreId] || [];
   const hasCategory = (cat: string) => result.some((s) => s.toLowerCase().includes(cat));
 
-  let addedCount = 0;
   for (const sound of baseSounds) {
-    if (addedCount >= 2) break;
-
     const lowerSound = sound.toLowerCase();
     const isDrum = lowerSound.includes("drums") || lowerSound.includes("rhythm");
     const isBass = lowerSound.includes("bass") || lowerSound.includes("808");
-    const isTexture =
-      lowerSound.includes("texture") || lowerSound.includes("atmosphere") || lowerSound.includes("pad");
 
-    if (
-      isDrum &&
-      !hasCategory("drum") &&
-      !hasCategory("hi-hat") &&
-      !hasCategory("percussion") &&
-      !hasCategory("rhythm")
-    ) {
+    if (isDrum && !hasCategory("drum") && !hasCategory("hi-hat") && !hasCategory("percussion") && !hasCategory("rhythm")) {
       result.push(sound);
-      addedCount++;
     } else if (isBass && !hasCategory("bass") && !hasCategory("808")) {
       result.push(sound);
-      addedCount++;
-    } else if (isTexture && !hasCategory("texture") && !hasCategory("atmosphere") && !hasCategory("pad")) {
-      result.push(sound);
-      addedCount++;
     }
   }
 
-  // 3. Mood Tone addition
-  let toneAdded = 0;
-  for (const mood of moods) {
-    if (toneAdded >= 2) break;
-    const tones = MOOD_TONE_MAP[mood];
-    if (tones) {
-      tones.forEach((t) => {
-        if (toneAdded < 2 && !result.some((r) => r.toLowerCase().includes(t))) {
-          result.push(t);
-          toneAdded++;
-        }
-      });
-    }
-  }
+  // 3. Add Texture and Space
+  const texture = TEXTURE_MAP[genreId] || Object.entries(TEXTURE_MAP).find(([k]) => genreId.includes(k))?.[1] || TEXTURE_MAP.default;
+  const space = SPACE_MAP[moods[0]] || SPACE_MAP.default;
+
+  result.push(texture);
+  result.push(`with ${space}`);
 
   // 4. Final Compression
-  const final = Array.from(new Set(result)).slice(0, 5);
+  const final = Array.from(new Set(result)).slice(0, 6);
   return `·SOUND: ${final.join(", ")}`;
 }
 
@@ -695,18 +683,31 @@ function buildMoodTexture(params: GenerateSongParams): string {
   if (moods.length === 0) return "·MOOD & TEXTURE: Balanced, clear and polished";
 
   const MOOD_TONE_MAP: Record<string, string[]> = {
-    emotional: ["warm", "soft"],
-    sad: ["soft", "minimal"],
-    warm: ["warm", "gentle"],
-    calm: ["gentle", "smooth"],
-    dark: ["cold", "heavy"],
-    bright: ["bright", "clean"],
-    hopeful: ["uplifting", "open"],
-    lonely: ["isolated", "spacious"],
-    nostalgic: ["warm", "vintage"],
-    dreamy: ["airy", "spacious"],
-    tense: ["tight", "pressured"],
-    peaceful: ["soft", "flowing"],
+    emotional: ["warm", "soft", "emotionally restrained"],
+    sad: ["soft", "minimal", "fragile"],
+    warm: ["warm", "gentle", "comforting"],
+    calm: ["gentle", "smooth", "steady"],
+    dark: ["cold", "heavy", "shadowy"],
+    bright: ["bright", "clean", "vibrant"],
+    hopeful: ["uplifting", "open", "soaring"],
+    lonely: ["isolated", "spacious", "hollow"],
+    nostalgic: ["warm", "vintage", "slightly blurred"],
+    dreamy: ["airy", "spacious", "ethereal"],
+    tense: ["tight", "pressured", "claustrophobic"],
+    peaceful: ["soft", "flowing", "serene"],
+  };
+
+  const ATMOSPHERE_MAP: Record<string, string> = {
+    emotional: "intimate atmosphere",
+    dark: "noir atmosphere",
+    dreamy: "hazy atmosphere",
+    calm: "quiet atmosphere",
+    tense: "high-tension atmosphere",
+    energetic: "dynamic atmosphere",
+    sad: "melancholic atmosphere",
+    happy: "cheerful atmosphere",
+    nostalgic: "late-night atmosphere",
+    default: "polished atmosphere"
   };
 
   const tonesSet = new Set<string>();
@@ -720,10 +721,11 @@ function buildMoodTexture(params: GenerateSongParams): string {
   const lowerMoods = moods.map((m) => m.toLowerCase());
   const filteredTones = Array.from(tonesSet).filter((t) => !lowerMoods.includes(t.toLowerCase()));
 
-  // Limit to 3 tones as per example
-  const limitedTones = filteredTones.slice(0, 3);
+  // Limit to 4 tones for richness
+  const limitedTones = filteredTones.slice(0, 4);
+  const atmosphere = ATMOSPHERE_MAP[lowerMoods[0]] || ATMOSPHERE_MAP.default;
 
-  const combined = [...moods, ...limitedTones];
+  const combined = [...moods, ...limitedTones, atmosphere];
   return `·MOOD & TEXTURE: ${combined.join(", ")}`;
 }
 
@@ -732,65 +734,49 @@ function buildVocal(params: GenerateSongParams): string {
   const parts: string[] = [];
 
   if (v.male > 0 && v.female > 0) parts.push(`${v.male} male & ${v.female} female vocals`);
-  else if (v.male > 0) parts.push(`${v.male === 1 ? "Solo male" : `${v.male} male`} vocal`);
-  else if (v.female > 0) parts.push(`${v.female === 1 ? "Solo female" : `${v.female} female`} vocal`);
-  else parts.push("Vocal configuration open");
+  else if (v.male > 0) parts.push(`${v.male === 1 ? "solo male" : `${v.male} male`} vocal`);
+  else if (v.female > 0) parts.push(`${v.female === 1 ? "solo female" : `${v.female} female`} vocal`);
+  else parts.push("vocal configuration open");
 
   if (v.rap) parts.push("rap included");
 
-  const genreId = (params.genre ?? "").toLowerCase();
+  const genreId = (params.genre ?? "pop").toLowerCase();
   const moods = (params.moods ?? []).map((m) => m.toLowerCase());
 
-  const genreToneMap: Record<string, string[]> = {
-    drill: ["cold", "tight", "aggressive"],
-    trap: ["smooth", "rhythmic"],
-    "boom-bap": ["grounded", "rhythmic"],
-    "gangsta-rap": ["gritty", "direct"],
-    "lofi-hiphop": ["soft", "laid-back"],
-    "contemporary-rnb": ["warm", "breathy"],
-    "neo-soul": ["warm", "textured"],
-    pop: ["clean", "bright"],
-    "dance-pop": ["clean", "bright"],
-    kpop: ["clean", "polished"],
-    "j-pop": ["bright", "clear"],
-    "piano-ballad": ["soft", "emotional"],
-    "adult-contemporary": ["warm", "controlled"],
-    jazz: ["smooth", "expressive"],
-    "cool-jazz": ["soft", "smoky"],
-    rock: ["raw", "driven"],
-    "punk-rock": ["raw", "urgent"],
-    "heavy-metal": ["powerful", "aggressive"],
-    house: ["clean", "energetic"],
-    techno: ["focused", "cool"],
-    "future-bass": ["airy", "bright"],
-    reggae: ["relaxed", "warm"],
-    "roots-reggae": ["grounded", "warm"],
-    ballad: ["soft", "emotional"],
+  const DELIVERY_MAP: Record<string, string> = {
+    drill: "tight delivery",
+    trap: "rhythm-led phrasing",
+    ballad: "soft emotional delivery",
+    pop: "polished melodic phrasing",
+    jazz: "nuanced intimate delivery",
+    rock: "powerful raw delivery",
+    rnb: "smooth breathy delivery",
+    "lofi-hiphop": "laid-back delivery",
+    kpop: "polished high-energy delivery",
+    default: "natural melodic phrasing"
   };
 
-  const moodToneMap: Record<string, string[]> = {
-    emotional: ["emotional"],
-    sad: ["fragile"],
-    warm: ["warm"],
-    calm: ["gentle"],
-    dark: ["dark-toned"],
-    bright: ["bright"],
-    hopeful: ["lifted"],
-    lonely: ["airy"],
-    nostalgic: ["textured"],
-    dreamy: ["dreamy"],
-    tense: ["tight"],
-    peaceful: ["soft"],
+  const TONE_MAP: Record<string, string> = {
+    emotional: "warm tone",
+    sad: "fragile tone",
+    warm: "warm tone",
+    calm: "gentle tone",
+    dark: "cold tone",
+    bright: "bright tone",
+    hopeful: "lifted tone",
+    lonely: "airy tone",
+    nostalgic: "textured tone",
+    dreamy: "dreamy tone",
+    tense: "tight tone",
+    peaceful: "soft tone",
+    default: "natural tone"
   };
 
-  const toneSet = new Set<string>();
-  (genreToneMap[genreId] ?? []).forEach((tone) => toneSet.add(tone));
-  moods.forEach((mood) => (moodToneMap[mood] ?? []).forEach((tone) => toneSet.add(tone)));
+  const delivery = DELIVERY_MAP[genreId] || Object.entries(DELIVERY_MAP).find(([k]) => genreId.includes(k))?.[1] || DELIVERY_MAP.default;
+  const tone = TONE_MAP[moods[0]] || TONE_MAP.default;
 
-  const tones = Array.from(toneSet).slice(0, 3);
-  if (tones.length > 0) {
-    parts.push(`tone: ${tones.join(", ")}`);
-  }
+  parts.push(delivery);
+  parts.push(tone);
 
   return `·VOCAL: ${parts.join(", ")}`;
 }

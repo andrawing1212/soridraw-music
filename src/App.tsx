@@ -62,6 +62,7 @@ import {
   INSTRUMENT_SOUNDS,
   STYLE_CYCLES,
   SOUND_TEXTURE_CYCLES,
+  ERA_CYCLES,
 } from './constants';
 import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem } from './types';
 
@@ -485,6 +486,8 @@ function buildCycleLookup<T extends { variants: readonly { id: string }[] }>(cyc
 
 const SOUND_TEXTURE_CYCLE_LOOKUP = buildCycleLookup(SOUND_TEXTURE_CYCLES);
 
+const STYLE_AND_ERA_CYCLES = [...STYLE_CYCLES, ...ERA_CYCLES] as const;
+
 function getCycleVariantLabel(cycles: readonly { id: string; title: string; variants: readonly { id: string; label: string }[] }[], selectedIds: string[]) {
   return cycles
     .map((cycle) => cycle.variants.find((variant) => selectedIds.includes(variant.id)))
@@ -492,12 +495,12 @@ function getCycleVariantLabel(cycles: readonly { id: string; title: string; vari
     .map((variant) => variant!.label);
 }
 
-const STYLE_VARIANT_LOOKUP = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; description: string }>>((acc, variant) => {
+const STYLE_VARIANT_LOOKUP = STYLE_AND_ERA_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; description: string }>>((acc, variant) => {
   acc[variant.id] = variant;
   return acc;
 }, {});
 
-const STYLE_LABEL_TO_ID = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, string>>((acc, variant) => {
+const STYLE_LABEL_TO_ID = STYLE_AND_ERA_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, string>>((acc, variant) => {
   acc[variant.label] = variant.id;
   return acc;
 }, {});
@@ -1091,8 +1094,7 @@ function App() {
   }, [location.pathname]);
 
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
-  const [isMixedLyrics, setIsMixedLyrics] = useState(false);
+  const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
@@ -1165,14 +1167,45 @@ function App() {
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
   };
 
-  const toggleFavorite = async (song: SongResult) => {
+  const isSongFavorited = (song: any) => {
+    if (!song) return false;
+    const sId = song.songId;
+    return favorites.some((f) => {
+      // Primary check: songId
+      if (sId && f.songId) {
+        return f.songId === sId;
+      }
+      // Fallback: title and prompt (for legacy data)
+      // Use trim() to avoid whitespace issues
+      return f.title?.trim() === song.title?.trim() && f.prompt?.trim() === song.prompt?.trim();
+    });
+  };
+
+  const toggleFavorite = async (song: SongResult | any) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
       return;
     }
 
-    const existingFav = favorites.find(f => f.title === song.title && f.prompt === song.prompt);
+    // Ensure we have a songId for stable identification
+    let targetSongId = song.songId;
+    if (!targetSongId) {
+      targetSongId = `song_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      // Update the song object with the new songId
+      song.songId = targetSongId;
+      // If this is the current result, update it to reflect the new songId
+      if (result && result.title === song.title && result.prompt === song.prompt) {
+        setResult(prev => prev ? { ...prev, songId: targetSongId } : null);
+      }
+    }
+    
+    const existingFav = favorites.find((f) => {
+      if (targetSongId && f.songId) {
+        return f.songId === targetSongId;
+      }
+      return f.title?.trim() === song.title?.trim() && f.prompt?.trim() === song.prompt?.trim();
+    });
 
     try {
       if (existingFav) {
@@ -1183,12 +1216,24 @@ function App() {
         await deleteDoc(doc(db, 'favorites', existingFav.id));
         showToast('곡이 삭제 되었습니다.');
       } else {
+        // Sanitize appliedKeywords to avoid Firestore errors with undefined values
+        const sanitizedAppliedKeywords = JSON.parse(JSON.stringify({
+          ...song.appliedKeywords,
+          genre: song.appliedKeywords?.genre ?? [],
+          mood: song.appliedKeywords?.mood ?? [],
+          theme: song.appliedKeywords?.theme ?? [],
+          style: song.appliedKeywords?.style ?? [],
+          instrumentSound: song.appliedKeywords?.instrumentSound ?? [],
+          customStructure: song.appliedKeywords?.customStructure ?? [],
+        }));
+
         await addDoc(collection(db, 'favorites'), {
           uid: user.uid,
+          songId: targetSongId,
           title: song.title,
           lyrics: song.lyrics,
           prompt: song.prompt,
-          appliedKeywords: song.appliedKeywords,
+          appliedKeywords: sanitizedAppliedKeywords,
           isLocked: false,
           createdAt: serverTimestamp()
         });
@@ -1314,7 +1359,7 @@ function App() {
         if (label.includes('K-Pop')) {
           return 'kpop';
         }
-        const item = category.find(c => c.label === label || c.id === label);
+        const item = category.find(c => c.label === label);
         return item ? item.id : null;
       }).filter(Boolean) as string[];
     };
@@ -1325,7 +1370,6 @@ function App() {
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
     const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (genreIds.includes('kpop') ? 1 : 0);
-    const resolvedMixedLyrics = appliedKeywords.mixedLyrics ?? (appliedKeywords.kpopMode === 2);
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
@@ -1337,7 +1381,6 @@ function App() {
     setSelectedStyles(styleIds);
     setSelectedInstrumentSounds(instrumentSoundIds);
     setKpopMode(genreIds.includes('kpop') ? resolvedKpopMode : 0);
-    setIsMixedLyrics(resolvedMixedLyrics);
     setCitypopMode(genreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -1701,7 +1744,6 @@ function App() {
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSounds : []);
 
     setKpopMode(0);
-    setIsMixedLyrics(false);
     setCitypopMode(0);
 
     setIsGenreRandomized(false);
@@ -1863,7 +1905,28 @@ const saveRecentSong = async (newSong: any) => {
       existingSongs = snap.data().songs || [];
     }
 
-    const updatedSongs = [newSong, ...existingSongs].slice(0, 10);
+    // Deduplicate history using songId or title+prompt
+    const filteredSongs = existingSongs.filter(s => {
+      if (newSong.songId && s.songId) {
+        return s.songId !== newSong.songId;
+      }
+      return !(s.title === newSong.title && s.prompt === newSong.prompt);
+    });
+
+    const sanitizedNewSong = JSON.parse(JSON.stringify({
+      ...newSong,
+      appliedKeywords: {
+        ...newSong.appliedKeywords,
+        genre: newSong.appliedKeywords?.genre ?? [],
+        mood: newSong.appliedKeywords?.mood ?? [],
+        theme: newSong.appliedKeywords?.theme ?? [],
+        style: newSong.appliedKeywords?.style ?? [],
+        instrumentSound: newSong.appliedKeywords?.instrumentSound ?? [],
+        customStructure: newSong.appliedKeywords?.customStructure ?? [],
+      }
+    }));
+
+    const updatedSongs = [sanitizedNewSong, ...filteredSongs].slice(0, 10);
 
     await setDoc(ref, { songs: updatedSongs }, { merge: true });
 
@@ -1960,7 +2023,7 @@ const saveRecentSong = async (newSong: any) => {
       }
 
       const effectiveStyleIds = Array.from(new Set(finalStyles ?? []));
-      const styleLabels = getCycleVariantLabel(STYLE_CYCLES, effectiveStyleIds);
+      const styleLabels = getCycleVariantLabel(STYLE_AND_ERA_CYCLES, effectiveStyleIds);
       const themeLabels = finalThemes.map((id) => THEMES.find((item) => item.id === id)?.label || id);
       const soundTextureLabels = getCycleVariantLabel(SOUND_TEXTURE_CYCLES, finalInstrumentSounds);
       const hasBalladStyle = effectiveStyleIds.some((id) => ['ballad', 'classic-ballad'].includes(id));
@@ -2081,17 +2144,22 @@ const saveRecentSong = async (newSong: any) => {
         tempo: tempoInfo,
         specialPrompt,
         kpopMode,
-        isMixedLyrics,
         customStructure,
       });
 
       if (abortControllerRef.current?.signal.aborted) return;
 
-      const newResult: SongResult = {
+      const newResult = {
         ...song,
         prompt: song.prompt,
         appliedKeywords: {
           ...song.appliedKeywords,
+          genre: song.appliedKeywords?.genre ?? [],
+          mood: song.appliedKeywords?.mood ?? [],
+          theme: song.appliedKeywords?.theme ?? [],
+          style: song.appliedKeywords?.style ?? [],
+          instrumentSound: song.appliedKeywords?.instrumentSound ?? [],
+          customStructure: song.appliedKeywords?.customStructure ?? [],
           kpopMode,
           isBallad: hasBalladStyle,
           tempoConfig: {
@@ -2101,7 +2169,9 @@ const saveRecentSong = async (newSong: any) => {
           }
         },
         randomKeywords
-      };
+      } as SongResult & { songId?: string };
+
+      newResult.songId = (song as any).songId ?? `song_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
       setResult(newResult);
       setHistory(prev => [newResult, ...prev].slice(0, 10));
@@ -2191,7 +2261,6 @@ ${result.prompt}
     minBPM !== 90 ||
     maxBPM !== 110 ||
     kpopMode !== 0 ||
-    isMixedLyrics ||
     citypopMode !== 0 ||
     isGenreRandomized ||
     isMoodRandomized ||
@@ -2304,10 +2373,10 @@ ${result.prompt}
           />            
           <CycleSection 
             title="스타일" 
-            description="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
-            cycles={STYLE_CYCLES}
+            description="곡의 표현 방식, 시대감, 흐름을 결정합니다. 선택한 스타일과 시대감에 따라 곡의 전개, 질감, 레트로 성향이 달라지며 음악의 전체적인 인상을 원하는 방향으로 이끕니다."
+            cycles={STYLE_AND_ERA_CYCLES}
             selected={selectedStyles}
-            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
+            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_AND_ERA_CYCLES)}
             onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
             onRandom={() => randomizeCategory('style')}
             onHover={setHoveredItem}
@@ -2406,22 +2475,32 @@ ${result.prompt}
             <LyricsControl 
               value={lyricsLength}
               onChange={setLyricsLength}
-              isMixedLyrics={isMixedLyrics}
+              kpopMode={kpopMode}
+              isKpopSelected={selectedGenres.includes('kpop')}
               onToggleMixedLyrics={() => {
-                const nextValue = !isMixedLyrics;
-                setIsMixedLyrics(nextValue);
+                if (!selectedGenres.includes('kpop')) {
+                  setHoveredItem({
+                    id: 'lyrics-mix-disabled',
+                    label: '한/영 혼합',
+                    description: '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.',
+                    _ts: Date.now(),
+                  });
+                  return;
+                }
+                const nextMode = kpopMode === 2 ? 1 : 2;
+                setKpopMode(nextMode);
                 setHoveredItem({
                   id: 'lyrics-mix-toggle',
                   label: '한/영 혼합',
-                  description: nextValue
-                    ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                    : '한/영 혼합을 끄고 기본 언어 흐름으로 되돌립니다.',
+                  description: nextMode === 2
+                    ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용합니다.'
+                    : 'K-Pop 가사를 기본 한국어 중심 흐름으로 되돌립니다.',
                   _ts: Date.now(),
                 });
               }}
               onClear={() => {
                 setLyricsLength('normal');
-                setIsMixedLyrics(false);
+                setKpopMode(0);
               }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -2754,7 +2833,7 @@ ${result.prompt}
                       <Heart 
                         className={cn(
                           "w-5 h-5 transition-all",
-                          favorites.some(f => f.title === result.title && f.prompt === result.prompt)
+                          isSongFavorited(result)
                             ? "fill-brand-orange text-brand-orange"
                             : "text-[var(--text-primary)] group-hover/heart:text-brand-orange"
                         )} 
@@ -3536,7 +3615,7 @@ function CycleSection({
         transition={{ duration: 0.25, ease: "easeOut" }}
         className="overflow-hidden"
       >
-        <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+        <div ref={contentRef} className="grid grid-cols-3 gap-2 md:gap-2.5">
           {cycles.map((cycle) => {
             const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
             const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
@@ -3903,7 +3982,8 @@ function CategorySection({
 interface LyricsControlProps {
   value: LyricsLength;
   onChange: (val: LyricsLength) => void;
-  isMixedLyrics: boolean;
+  kpopMode: 0 | 1 | 2;
+  isKpopSelected: boolean;
   onToggleMixedLyrics: () => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
@@ -3911,7 +3991,7 @@ interface LyricsControlProps {
   onLongPressEnd: () => void;
 }
 
-function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, onClear, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
+function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixedLyrics, onClear, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -3942,9 +4022,11 @@ function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, on
             onMouseEnter={() => onHover({
               id: 'lyrics-mix',
               label: '한/영 혼합',
-              description: isMixedLyrics
-                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
+              description: !isKpopSelected
+                ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
+                : kpopMode === 2
+                  ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
+                  : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
             })}
             onMouseLeave={() => {
               onHover(null);
@@ -3953,23 +4035,27 @@ function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, on
             onTouchStart={() => onLongPressStart({
               id: 'lyrics-mix',
               label: '한/영 혼합',
-              description: isMixedLyrics
-                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
+              description: !isKpopSelected
+                ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
+                : kpopMode === 2
+                  ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
+                  : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
             })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-              isMixedLyrics
-                ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+              !isKpopSelected
+                ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/60"
+                : kpopMode === 2
+                  ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
+                  : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
             )}
           >
             <span className={cn(
               "w-2 h-2 rounded-full",
-              isMixedLyrics ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
+              !isKpopSelected ? "bg-[var(--text-secondary)]/40" : kpopMode === 2 ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
             )} />
-            한/영 혼합 {isMixedLyrics ? 'ON' : 'OFF'}
+            한/영 혼합 {isKpopSelected ? (kpopMode === 2 ? 'ON' : 'OFF') : '대기'}
           </button>
           <button
             onClick={onClear}
@@ -3977,7 +4063,7 @@ function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, on
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
-              (value !== 'normal' || isMixedLyrics)
+              (value !== 'normal' || kpopMode !== 0)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
                 : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
             )}
@@ -3993,7 +4079,7 @@ function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, on
               exit={{ opacity: 0, y: 10 }}
               className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-56 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다. 오른쪽 토글을 켜면 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다. K-Pop 선택 시 오른쪽 토글로 한글/영어 혼합 가사도 설정할 수 있습니다.</p>
             </motion.div>
           )}
         </AnimatePresence>

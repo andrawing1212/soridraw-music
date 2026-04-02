@@ -97,6 +97,7 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
 
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
+import { sanitizeForFirestore } from './lib/utils';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { 
   collection, 
@@ -1183,7 +1184,7 @@ function App() {
         await deleteDoc(doc(db, 'favorites', existingFav.id));
         showToast('곡이 삭제 되었습니다.');
       } else {
-        await addDoc(collection(db, 'favorites'), {
+        await addDoc(collection(db, 'favorites'), sanitizeForFirestore({
           uid: user.uid,
           title: song.title,
           lyrics: song.lyrics,
@@ -1191,7 +1192,7 @@ function App() {
           appliedKeywords: song.appliedKeywords,
           isLocked: false,
           createdAt: serverTimestamp()
-        });
+        }));
         showToast('저장되었습니다.');
       }
     } catch (error) {
@@ -1201,7 +1202,7 @@ function App() {
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
     try {
-      await updateDoc(doc(db, 'favorites', id), updates);
+      await updateDoc(doc(db, 'favorites', id), sanitizeForFirestore(updates));
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
       } else {
@@ -1749,7 +1750,7 @@ function App() {
     if (user) {
       try {
         const ref = doc(db, "user_recent_songs", user.uid);
-        await setDoc(ref, { songs: newHistory }, { merge: true });
+        await setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true });
       } catch (e) {
         console.error("Failed to update history in Firestore:", e);
       }
@@ -1865,7 +1866,7 @@ const saveRecentSong = async (newSong: any) => {
 
     const updatedSongs = [newSong, ...existingSongs].slice(0, 10);
 
-    await setDoc(ref, { songs: updatedSongs }, { merge: true });
+    await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
 
   } catch (e) {
     console.error("Failed to save recent songs:", e);
@@ -4279,7 +4280,7 @@ function SongStructureControl({
     if (!user) return;
     try {
       const ref = doc(db, 'user_structures', user.uid);
-      await setDoc(ref, { structures: next }, { merge: true });
+      await setDoc(ref, sanitizeForFirestore({ structures: next }), { merge: true });
       setSavedStructures(next);
     } catch (error) {
       console.error('Failed to save song structures:', error);

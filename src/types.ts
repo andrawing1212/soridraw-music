@@ -33,7 +33,7 @@ export interface InstrumentSoundCycle {
   variants: InstrumentSoundItem[];
 }
 
-export type Category = 'genre' | 'style' | 'mood';
+export type Category = 'genre' | 'style' | 'mood' | 'theme';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
 export type SongStructure = '1' | '2' | '3' | 'custom';
 
@@ -68,7 +68,6 @@ export interface AppliedKeywords {
   songStructure?: SongStructure;
   customStructure?: CustomSectionItem[];
   kpopMode?: 0 | 1 | 2;
-  mixedLyrics?: boolean;
   citypopMode?: 0 | 1 | 2;
   maleCount?: number;
   femaleCount?: number;

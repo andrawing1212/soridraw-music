@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "start": "node server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf build",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

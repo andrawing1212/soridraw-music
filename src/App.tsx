@@ -1091,7 +1091,8 @@ function App() {
   }, [location.pathname]);
 
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: basic, 2: mixed
+  const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
+  const [isMixedLyrics, setIsMixedLyrics] = useState(false);
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
@@ -1313,7 +1314,7 @@ function App() {
         if (label.includes('K-Pop')) {
           return 'kpop';
         }
-        const item = category.find(c => c.label === label);
+        const item = category.find(c => c.label === label || c.id === label);
         return item ? item.id : null;
       }).filter(Boolean) as string[];
     };
@@ -1324,6 +1325,7 @@ function App() {
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
     const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (genreIds.includes('kpop') ? 1 : 0);
+    const resolvedMixedLyrics = appliedKeywords.mixedLyrics ?? (appliedKeywords.kpopMode === 2);
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
@@ -1335,6 +1337,7 @@ function App() {
     setSelectedStyles(styleIds);
     setSelectedInstrumentSounds(instrumentSoundIds);
     setKpopMode(genreIds.includes('kpop') ? resolvedKpopMode : 0);
+    setIsMixedLyrics(resolvedMixedLyrics);
     setCitypopMode(genreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -1698,6 +1701,7 @@ function App() {
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSounds : []);
 
     setKpopMode(0);
+    setIsMixedLyrics(false);
     setCitypopMode(0);
 
     setIsGenreRandomized(false);
@@ -2077,6 +2081,7 @@ const saveRecentSong = async (newSong: any) => {
         tempo: tempoInfo,
         specialPrompt,
         kpopMode,
+        isMixedLyrics,
         customStructure,
       });
 
@@ -2084,20 +2089,10 @@ const saveRecentSong = async (newSong: any) => {
 
       const newResult: SongResult = {
         ...song,
-        title: song.title,
-        prompt: songPrompt,
+        prompt: song.prompt,
         appliedKeywords: {
           ...song.appliedKeywords,
-          theme: song.appliedKeywords.theme ?? themeLabels,
-          style: song.appliedKeywords.style ?? styleLabels,
-          instrumentSound: song.appliedKeywords.instrumentSound ?? finalInstrumentSounds,
           kpopMode,
-          customStructure,
-          lyricsLength,
-          songStructure,
-          maleCount,
-          femaleCount,
-          rapEnabled,
           isBallad: hasBalladStyle,
           tempoConfig: {
             enabled: tempoEnabled,
@@ -2196,6 +2191,7 @@ ${result.prompt}
     minBPM !== 90 ||
     maxBPM !== 110 ||
     kpopMode !== 0 ||
+    isMixedLyrics ||
     citypopMode !== 0 ||
     isGenreRandomized ||
     isMoodRandomized ||
@@ -2410,32 +2406,22 @@ ${result.prompt}
             <LyricsControl 
               value={lyricsLength}
               onChange={setLyricsLength}
-              kpopMode={kpopMode}
-              isKpopSelected={selectedGenres.includes('kpop')}
+              isMixedLyrics={isMixedLyrics}
               onToggleMixedLyrics={() => {
-                if (!selectedGenres.includes('kpop')) {
-                  setHoveredItem({
-                    id: 'lyrics-mix-disabled',
-                    label: '한/영 혼합',
-                    description: '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.',
-                    _ts: Date.now(),
-                  });
-                  return;
-                }
-                const nextMode = kpopMode === 2 ? 1 : 2;
-                setKpopMode(nextMode);
+                const nextValue = !isMixedLyrics;
+                setIsMixedLyrics(nextValue);
                 setHoveredItem({
                   id: 'lyrics-mix-toggle',
                   label: '한/영 혼합',
-                  description: nextMode === 2
-                    ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용합니다.'
-                    : 'K-Pop 가사를 기본 한국어 중심 흐름으로 되돌립니다.',
+                  description: nextValue
+                    ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
+                    : '한/영 혼합을 끄고 기본 언어 흐름으로 되돌립니다.',
                   _ts: Date.now(),
                 });
               }}
               onClear={() => {
                 setLyricsLength('normal');
-                setKpopMode(0);
+                setIsMixedLyrics(false);
               }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -2915,7 +2901,7 @@ ${result.prompt}
                         </div>
                       </div>
                     )}
-                    {result.appliedKeywords.customStructure && (result.appliedKeywords.customStructure ?? []).length > 0 && (
+                    {(result.appliedKeywords.songStructure && result.appliedKeywords.songStructure !== 'custom') || (result.appliedKeywords.customStructure && (result.appliedKeywords.customStructure ?? []).length > 0) ? (
                       <div className="space-y-0.5">
                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">structure</p>
                         <div className="flex flex-wrap gap-1">
@@ -2924,11 +2910,20 @@ ${result.prompt}
                             onMouseEnter={() => setHoveredItem({ id: 'kw-structure', label: 'Structure', description: '곡의 전체 구성입니다.' })}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
-                            {(result.appliedKeywords.customStructure ?? []).map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`).join(' → ')}
+                            {result.appliedKeywords.songStructure === 'custom' 
+                              ? (result.appliedKeywords.customStructure ?? []).map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`).join(' → ')
+                              : result.appliedKeywords.songStructure === '1'
+                                ? 'Intro → Verse 1 → Chorus / Drop → Outro'
+                                : result.appliedKeywords.songStructure === '2'
+                                  ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
+                                  : result.appliedKeywords.songStructure === '3'
+                                    ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'
+                                    : ''
+                            }
                           </span>
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </motion.div>
 
@@ -3908,8 +3903,7 @@ function CategorySection({
 interface LyricsControlProps {
   value: LyricsLength;
   onChange: (val: LyricsLength) => void;
-  kpopMode: 0 | 1 | 2;
-  isKpopSelected: boolean;
+  isMixedLyrics: boolean;
   onToggleMixedLyrics: () => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
@@ -3917,7 +3911,7 @@ interface LyricsControlProps {
   onLongPressEnd: () => void;
 }
 
-function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixedLyrics, onClear, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
+function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, onClear, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
 
@@ -3948,11 +3942,9 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
             onMouseEnter={() => onHover({
               id: 'lyrics-mix',
               label: '한/영 혼합',
-              description: !isKpopSelected
-                ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
-                : kpopMode === 2
-                  ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
-                  : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
+              description: isMixedLyrics
+                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
+                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
             })}
             onMouseLeave={() => {
               onHover(null);
@@ -3961,27 +3953,23 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
             onTouchStart={() => onLongPressStart({
               id: 'lyrics-mix',
               label: '한/영 혼합',
-              description: !isKpopSelected
-                ? '이 기능은 K-Pop 장르를 선택했을 때 적용됩니다.'
-                : kpopMode === 2
-                  ? 'K-Pop 가사에 한국어와 영어가 자연스럽게 섞이도록 적용됩니다.'
-                  : 'K-Pop 가사를 기본 한국어 중심 흐름으로 생성합니다.',
+              description: isMixedLyrics
+                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
+                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
             })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-              !isKpopSelected
-                ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/60"
-                : kpopMode === 2
-                  ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
-                  : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+              isMixedLyrics
+                ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
             )}
           >
             <span className={cn(
               "w-2 h-2 rounded-full",
-              !isKpopSelected ? "bg-[var(--text-secondary)]/40" : kpopMode === 2 ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
+              isMixedLyrics ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
             )} />
-            한/영 혼합 {isKpopSelected ? (kpopMode === 2 ? 'ON' : 'OFF') : '대기'}
+            한/영 혼합 {isMixedLyrics ? 'ON' : 'OFF'}
           </button>
           <button
             onClick={onClear}
@@ -3989,7 +3977,7 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
-              (value !== 'normal' || kpopMode !== 0)
+              (value !== 'normal' || isMixedLyrics)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
                 : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
             )}
@@ -4005,7 +3993,7 @@ function LyricsControl({ value, onChange, kpopMode, isKpopSelected, onToggleMixe
               exit={{ opacity: 0, y: 10 }}
               className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-56 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다. K-Pop 선택 시 오른쪽 토글로 한글/영어 혼합 가사도 설정할 수 있습니다.</p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다. 오른쪽 토글을 켜면 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.</p>
             </motion.div>
           )}
         </AnimatePresence>

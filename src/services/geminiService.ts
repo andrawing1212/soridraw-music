@@ -1,3 +1,4 @@
+console.log("🔥 NEW GEMINI ACTIVE");
 import { GoogleGenAI, Type } from "@google/genai";
 import {
   BASE_PROMPTS,
@@ -39,6 +40,7 @@ type LegacyThemeInput = string[];
 interface GenerateSongParams {
   genre: string | null;
   isKpopSelected?: boolean;
+  isMixedLyrics?: boolean;
   moods: string[];
   themes?: string[];
   styles?: string[];
@@ -73,6 +75,75 @@ type GenerateSongInput =
       (0 | 1 | 2)?
     ]
   | [GenerateSongParams];
+
+const NON_EMPTY = (value: string | null | undefined): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+function sentenceCase(value: string): string {
+  return value
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function resolveStyleItem(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return SOUND_STYLES.find(
+    (item) =>
+      item.id.toLowerCase() === normalized || item.label.toLowerCase() === normalized
+  );
+}
+
+function resolveInstrumentSoundItem(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return INSTRUMENT_SOUNDS.find(
+    (item) =>
+      item.id.toLowerCase() === normalized || item.label.toLowerCase() === normalized
+  );
+}
+
+function getGenreMeta(genreId: string | null) {
+  if (!genreId) return null;
+
+  for (const group of GENRE_GROUPS) {
+    const found = group.children.find((child) => child.id === genreId);
+    if (found) {
+      return {
+        id: found.id,
+        label: found.label,
+        description: found.description,
+        promptCore: found.promptCore ?? "",
+      };
+    }
+  }
+
+  return null;
+}
+
+function getStylePromptCores(styleValues: string[] = []): string[] {
+  return styleValues
+    .map((value) => resolveStyleItem(value)?.promptCore ?? "")
+    .filter(NON_EMPTY);
+}
+
+function getStyleLabels(styleValues: string[] = []): string[] {
+  return styleValues
+    .map((value) => resolveStyleItem(value)?.label ?? sentenceCase(value))
+    .filter(NON_EMPTY);
+}
+
+function getInstrumentSoundPromptCores(values: string[] = []): string[] {
+  return values
+    .map((value) => resolveInstrumentSoundItem(value)?.promptCore ?? "")
+    .filter(NON_EMPTY);
+}
+
+function getInstrumentSoundLabels(values: string[] = []): string[] {
+  return values
+    .map((value) => resolveInstrumentSoundItem(value)?.label ?? sentenceCase(value))
+    .filter(NON_EMPTY);
+}
 
 function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): string {
   switch (lyricsLength) {
@@ -132,31 +203,14 @@ function calculateSongStructure(
 ): "1" | "2" | "3" {
   let structure = 2;
 
-  const rapGenres = [
-    "trap",
-    "drill",
-    "boom-bap",
-    "gangsta-rap",
-    "lofi-hiphop",
-  ];
-  const ambientGenres = [
-    "ambient-electronic",
-    "ambient-newage",
-    "meditation-music",
-  ];
+  const rapGenres = ["trap", "drill", "boom-bap", "gangsta-rap", "lofi-hiphop"];
+  const ambientGenres = ["ambient-electronic", "ambient-newage", "meditation-music"];
 
   if (genres.some((g) => rapGenres.includes(g.toLowerCase()))) structure += 1;
   if (genres.some((g) => ambientGenres.includes(g.toLowerCase()))) structure -= 1;
 
   const energeticMoods = ["bright", "hopeful", "tense"];
-  const calmMoods = [
-    "calm",
-    "dreamy",
-    "lonely",
-    "peaceful",
-    "sad",
-    "warm",
-  ];
+  const calmMoods = ["calm", "dreamy", "lonely", "peaceful", "sad", "warm"];
 
   if (moods.some((m) => energeticMoods.includes(m.toLowerCase()))) structure += 0.5;
   if (moods.some((m) => calmMoods.includes(m.toLowerCase()))) structure -= 0.5;
@@ -168,33 +222,6 @@ function calculateSongStructure(
   return clamped.toString() as "1" | "2" | "3";
 }
 
-function getGenrePromptCore(genreId: string | null): string {
-  if (!genreId) return "";
-
-  for (const group of GENRE_GROUPS) {
-    const found = group.children.find((child) => child.id === genreId);
-    if (found) return found.promptCore;
-  }
-
-  return "";
-}
-
-function getStylePromptCores(styleIds: string[] = []): string[] {
-  return styleIds
-    .map((id) => SOUND_STYLES.find((item) => item.id === id)?.promptCore ?? "")
-    .filter(Boolean);
-}
-
-function getInstrumentSoundPromptCores(ids: string[] = []): string[] {
-  return ids
-    .map((id) => INSTRUMENT_SOUNDS.find((item) => item.id === id)?.promptCore ?? "")
-    .filter(Boolean);
-}
-
-function buildMoodPrompt(moods: string[]): string {
-  return moods.length ? `Mood direction: ${moods.join(", ")}.` : "";
-}
-
 function buildThemePrompt(themes: string[]): string {
   if (!themes.length) return "";
   if (themes.length === 1) return `Story concept: ${themes[0]}.`;
@@ -202,22 +229,63 @@ function buildThemePrompt(themes: string[]): string {
   return `Story concept: ${themes.slice(0, -1).join(", ")}, and ${themes[themes.length - 1]}.`;
 }
 
+function buildThemeSentence(themes: string[]): string {
+  const normalized = themes.map((theme) => theme.trim()).filter(NON_EMPTY);
+  if (normalized.length === 0) return "No explicit story theme selected.";
+
+  const set = new Set(normalized.map((theme) => theme.toLowerCase()));
+
+  if (set.has("breakup") && set.has("memories")) {
+    return "A reflective story after a breakup, replaying memories, unresolved love, and the emotional aftermath.";
+  }
+  if (set.has("youth") && set.has("dream")) {
+    return "A story about youth chasing dreams, balancing fragile hope, uncertainty, and emotional growth.";
+  }
+  if (set.has("love") && set.has("night")) {
+    return "A late-night love story shaped by intimacy, quiet tension, and emotional vulnerability.";
+  }
+  if (set.has("daily life") && set.has("healing")) {
+    return "A healing story drawn from everyday life, finding comfort in ordinary moments and emotional recovery.";
+  }
+  if (set.has("travel") && set.has("memories")) {
+    return "A nostalgic travel story, revisiting places, memories, and the emotions left behind.";
+  }
+  if (set.has("comfort") && set.has("loneliness")) {
+    return "A story of loneliness seeking comfort, warmth, and a sense of emotional shelter.";
+  }
+
+  if (normalized.length === 1) {
+    return `A story centered on ${normalized[0].toLowerCase()}, with clear narrative focus and emotional detail.`;
+  }
+
+  if (normalized.length === 2) {
+    return `A story connecting ${normalized[0].toLowerCase()} and ${normalized[1].toLowerCase()}, turning them into one clear emotional situation.`;
+  }
+
+  return `A story shaped by ${normalized
+    .slice(0, -1)
+    .map((theme) => theme.toLowerCase())
+    .join(", ")}, and ${normalized[normalized.length - 1].toLowerCase()}, expressed as one coherent emotional scene rather than separate tags.`;
+}
+
 function buildVocalPrompt(vocal: VocalConfig): string {
   const lines: string[] = [];
-  const total = (vocal.male ?? 0) + (vocal.female ?? 0);
+  const male = vocal.male ?? 0;
+  const female = vocal.female ?? 0;
+  const total = male + female;
 
   if (total <= 1) lines.push("Vocal formation: solo.");
   else if (total === 2) lines.push("Vocal formation: duo.");
-  else lines.push("Vocal formation: group.");
+  else lines.push("Vocal formation: group ensemble.");
 
-  if ((vocal.male ?? 0) > 0 && (vocal.female ?? 0) > 0) {
-    lines.push(`Vocal gender mix: ${vocal.male} male, ${vocal.female} female.`);
-  } else if ((vocal.male ?? 0) > 0) {
-    lines.push(`Use male vocals only (${vocal.male}). Do not use female vocals.`);
-  } else if ((vocal.female ?? 0) > 0) {
-    lines.push(`Use female vocals only (${vocal.female}). Do not use male vocals.`);
+  if (male > 0 && female > 0) {
+    lines.push(`Vocal gender mix: ${male} male and ${female} female.`);
+  } else if (male > 0) {
+    lines.push(`Use male vocals only (${male}). Do not use female vocals.`);
+  } else if (female > 0) {
+    lines.push(`Use female vocals only (${female}). Do not use male vocals.`);
   } else {
-    lines.push("No strong vocal restriction; default to the arrangement that best fits the request.");
+    lines.push("No strong gender restriction; default to the arrangement that best fits the request.");
   }
 
   lines.push(vocal.rap ? "Rap is included." : "Do not include rap unless the user explicitly asks for it.");
@@ -245,6 +313,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       specialPrompt: first.specialPrompt,
       kpopMode: first.kpopMode ?? 0,
       isKpopSelected: first.isKpopSelected ?? false,
+      isMixedLyrics: first.isMixedLyrics ?? false,
       customStructure: first.customStructure ?? [],
     };
   }
@@ -301,6 +370,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     specialPrompt,
     kpopMode,
     isKpopSelected: genres?.includes("kpop") ?? false,
+    isMixedLyrics: false,
     customStructure: [],
   };
 }
@@ -368,7 +438,8 @@ function buildAppliedKeywordPayload(
   resolvedStructure: SongStructure
 ) {
   const themes = params.themes ?? [];
-  const styles = params.styles ?? [];
+  const styles = getStyleLabels(params.styles ?? []);
+  const instrumentSounds = getInstrumentSoundLabels(params.instrumentSounds ?? []);
   const vocalDescription: string[] = [];
 
   const getDesc = (gender: string, count: number) => {
@@ -390,7 +461,7 @@ function buildAppliedKeywordPayload(
     mood: params.moods ?? [],
     theme: themes,
     style: styles,
-    instrumentSound: params.instrumentSounds ?? [],
+    instrumentSound: instrumentSounds,
     tempo: params.tempo,
     vocalType: vocalDescription.join(" + ") || "Default",
     lyricsLength: params.lyricsLength,
@@ -401,6 +472,356 @@ function buildAppliedKeywordPayload(
     rapEnabled: params.vocal?.rap ?? false,
     vocal: params.vocal ?? { male: 0, female: 0, rap: false },
   };
+}
+
+function buildStructureText(
+  songStructure: SongStructure | undefined,
+  resolvedStructure: SongStructure,
+  customStructure: CustomSectionItem[] = []
+): string {
+  if (songStructure === "custom" && customStructure.length > 0) {
+    return customStructure
+      .map((section) =>
+        `${section.section}${section.tags.length > 0 ? ` (${section.tags.join(", ")})` : ""}`
+      )
+      .join(" → ");
+  }
+
+  const structureMap: Record<Exclude<SongStructure, "custom">, string> = {
+    "1": "Intro → Verse 1 → Chorus / Drop → Outro",
+    "2": BASIC_STRUCTURE,
+    "3": "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
+  };
+
+  const selected = (songStructure === "custom" ? resolvedStructure : songStructure) ?? resolvedStructure;
+  return structureMap[(selected as Exclude<SongStructure, "custom">) || "2"];
+}
+
+function buildStyle(params: GenerateSongParams): string {
+  const genreMeta = getGenreMeta(params.genre);
+  const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Pop");
+  const genreId = params.genre || "pop";
+
+  // Get up to 3 selected styles
+  const selectedStyleIds = (params.styles ?? []).slice(0, 3);
+
+  // Compatibility mapping (Genre ID -> Compatible Style IDs)
+  const COMPATIBLE_MAP: Record<string, string[]> = {
+    pop: ["pop", "dance", "modern-edm", "global-pop-style", "k-style"],
+    "dance-pop": ["dance", "classic-disco", "modern-edm", "global-pop-style", "k-style"],
+    "synth-pop": ["dance", "modern-edm", "electronic", "techno-style", "house-style"],
+    kpop: ["dance", "modern-edm", "global-pop-style", "k-style", "hip-hop", "trap-style"],
+    trap: ["hip-hop", "trap-style", "boom-bap-style"],
+    drill: ["hip-hop", "trap-style"],
+    "contemporary-rnb": ["rnb", "neo-soul-style", "pb-rnb-style", "soul", "classic-soul"],
+    "neo-soul": ["rnb", "neo-soul-style", "soul", "classic-soul", "jazz"],
+    jazz: ["jazz", "classic-jazz", "jazzhop-style", "swing", "bebop", "cool-jazz"],
+    rock: ["rock", "classic-rock", "modern-rock", "punk", "pop-punk"],
+    "heavy-metal": ["rock", "classic-rock", "modern-rock", "punk"],
+    house: ["electronic", "house-style", "techno-style", "dance", "modern-edm"],
+    techno: ["electronic", "techno-style", "house-style", "modern-edm"],
+    "lofi-hiphop": ["hip-hop", "lofi-hip-hop-style", "jazzhop-style", "rnb"],
+    "piano-ballad": ["ballad", "classic-ballad", "soul", "classic-soul"],
+  };
+
+  // Semi-compatible mapping (Genre ID -> Semi-compatible Style IDs)
+  const SEMI_COMPATIBLE_MAP: Record<string, string[]> = {
+    "piano-ballad": ["trap-style", "modern-edm", "rnb"],
+    drill: ["global-pop-style", "modern-edm", "rnb"],
+    jazz: ["modern-edm", "electronic", "hip-hop", "trap-style"],
+    rock: ["electronic", "modern-edm", "hip-hop"],
+    pop: ["rock", "classic-rock", "punk"],
+    "folk-rock": ["electronic", "modern-edm"],
+    "traditional-trot": ["modern-edm", "dance", "electronic"],
+  };
+
+  const processedStyles: string[] = [];
+
+  selectedStyleIds.forEach((styleId, index) => {
+    const styleItem = resolveStyleItem(styleId);
+    if (!styleItem) return;
+
+    const compatibleStyles = COMPATIBLE_MAP[genreId] || [];
+    const semiCompatibleStyles = SEMI_COMPATIBLE_MAP[genreId] || [];
+
+    const isCompatible = compatibleStyles.includes(styleId);
+    const isSemiCompatible = semiCompatibleStyles.includes(styleId);
+
+    let label = styleItem.label;
+
+    // First style is main
+    if (index === 0) {
+      if (isSemiCompatible) {
+        label = `${label} influence`;
+      } else if (!isCompatible && !isSemiCompatible) {
+        // If totally incompatible, still keep it but as influence
+        label = `${label} influence`;
+      }
+    } else {
+      // Second and third styles are support
+      if (!isCompatible) {
+        label = `${label} influence`;
+      }
+    }
+
+    processedStyles.push(label);
+  });
+
+  const tempoText = params.tempo
+    ? params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")
+    : "";
+
+  const parts = [genreLabel, ...processedStyles];
+  if (tempoText) parts.push(tempoText);
+
+  return `·STYLE: ${parts.join(", ")}`;
+}
+
+function buildSound(params: GenerateSongParams): string {
+  const selected = getInstrumentSoundLabels(params.instrumentSounds ?? []);
+  const genreId = params.genre || "";
+  const moods = (params.moods ?? []).map((m) => m.toLowerCase());
+
+  const GENRE_BASE: Record<string, string[]> = {
+    drill: ["sparse drill drums", "heavy 808 bass", "cold minimal texture"],
+    trap: ["tight trap drums", "deep 808 bass"],
+    "piano-ballad": ["soft piano-led texture", "restrained drums"],
+    "lofi-hiphop": ["soft lofi drums", "warm bass", "dusty texture"],
+    kpop: ["polished synth", "punchy drums", "layered bass"],
+    rnb: ["smooth keys", "warm bass", "steady groove"],
+    pop: ["modern synth", "clean drums", "bright texture"],
+    "acid-jazz": ["electric piano", "jazz groove", "warm bass"],
+    "cool-jazz": ["soft trumpet", "brushed drums", "smooth bass"],
+    ballad: ["warm strings", "soft piano", "restrained drums"],
+  };
+
+  const MOOD_TONE_MAP: Record<string, string[]> = {
+    emotional: ["warm", "soft"],
+    dark: ["cold", "heavy"],
+    dreamy: ["airy", "spacious"],
+    calm: ["gentle", "smooth"],
+    tense: ["tight"],
+    energetic: ["bright", "sharp"],
+    sad: ["raw", "intimate"],
+    happy: ["bright", "clean"],
+    aggressive: ["distorted", "heavy"],
+  };
+
+  let result: string[] = [...selected];
+
+  // 1. Tone Correction for selected sounds based on genre/mood
+  const isSoftTone =
+    genreId.includes("ballad") ||
+    moods.includes("emotional") ||
+    moods.includes("calm") ||
+    moods.includes("sad");
+  const isCleanTone = moods.includes("energetic") || moods.includes("happy");
+
+  if (isSoftTone) {
+    result = result.map((s) => {
+      const lower = s.toLowerCase();
+      if (
+        (lower.includes("808") || lower.includes("heavy") || lower.includes("bass")) &&
+        !lower.includes("soft")
+      ) {
+        return `soft ${s}`;
+      }
+      return s;
+    });
+  } else if (isCleanTone) {
+    result = result.map((s) => {
+      const lower = s.toLowerCase();
+      if (lower.includes("heavy bass") && !lower.includes("clean")) {
+        return `clean ${s}`;
+      }
+      return s;
+    });
+  }
+
+  // 2. Supplement from GENRE_BASE
+  const baseSounds = GENRE_BASE[genreId] || [];
+  const hasCategory = (cat: string) => result.some((s) => s.toLowerCase().includes(cat));
+
+  let addedCount = 0;
+  for (const sound of baseSounds) {
+    if (addedCount >= 2) break;
+
+    const lowerSound = sound.toLowerCase();
+    const isDrum = lowerSound.includes("drums") || lowerSound.includes("rhythm");
+    const isBass = lowerSound.includes("bass") || lowerSound.includes("808");
+    const isTexture =
+      lowerSound.includes("texture") || lowerSound.includes("atmosphere") || lowerSound.includes("pad");
+
+    if (
+      isDrum &&
+      !hasCategory("drum") &&
+      !hasCategory("hi-hat") &&
+      !hasCategory("percussion") &&
+      !hasCategory("rhythm")
+    ) {
+      result.push(sound);
+      addedCount++;
+    } else if (isBass && !hasCategory("bass") && !hasCategory("808")) {
+      result.push(sound);
+      addedCount++;
+    } else if (isTexture && !hasCategory("texture") && !hasCategory("atmosphere") && !hasCategory("pad")) {
+      result.push(sound);
+      addedCount++;
+    }
+  }
+
+  // 3. Mood Tone addition
+  let toneAdded = 0;
+  for (const mood of moods) {
+    if (toneAdded >= 2) break;
+    const tones = MOOD_TONE_MAP[mood];
+    if (tones) {
+      tones.forEach((t) => {
+        if (toneAdded < 2 && !result.some((r) => r.toLowerCase().includes(t))) {
+          result.push(t);
+          toneAdded++;
+        }
+      });
+    }
+  }
+
+  // 4. Final Compression
+  const final = Array.from(new Set(result)).slice(0, 5);
+  return `·SOUND: ${final.join(", ")}`;
+}
+
+function buildMoodTexture(params: GenerateSongParams): string {
+  const moods = params.moods ?? [];
+  if (moods.length === 0) return "·MOOD & TEXTURE: Balanced, clear and polished";
+
+  const MOOD_TONE_MAP: Record<string, string[]> = {
+    emotional: ["warm", "soft"],
+    sad: ["soft", "minimal"],
+    warm: ["warm", "gentle"],
+    calm: ["gentle", "smooth"],
+    dark: ["cold", "heavy"],
+    bright: ["bright", "clean"],
+    hopeful: ["uplifting", "open"],
+    lonely: ["isolated", "spacious"],
+    nostalgic: ["warm", "vintage"],
+    dreamy: ["airy", "spacious"],
+    tense: ["tight", "pressured"],
+    peaceful: ["soft", "flowing"],
+  };
+
+  const tonesSet = new Set<string>();
+  moods.forEach((mood) => {
+    const tones = MOOD_TONE_MAP[mood.toLowerCase()];
+    if (tones) {
+      tones.forEach((t) => tonesSet.add(t));
+    }
+  });
+
+  const lowerMoods = moods.map((m) => m.toLowerCase());
+  const filteredTones = Array.from(tonesSet).filter((t) => !lowerMoods.includes(t.toLowerCase()));
+
+  // Limit to 3 tones as per example
+  const limitedTones = filteredTones.slice(0, 3);
+
+  const combined = [...moods, ...limitedTones];
+  return `·MOOD & TEXTURE: ${combined.join(", ")}`;
+}
+
+function buildVocal(params: GenerateSongParams): string {
+  const v = params.vocal ?? { male: 0, female: 0, rap: false };
+  const parts: string[] = [];
+
+  if (v.male > 0 && v.female > 0) parts.push(`${v.male} male & ${v.female} female vocals`);
+  else if (v.male > 0) parts.push(`${v.male === 1 ? "Solo male" : `${v.male} male`} vocal`);
+  else if (v.female > 0) parts.push(`${v.female === 1 ? "Solo female" : `${v.female} female`} vocal`);
+  else parts.push("Vocal configuration open");
+
+  if (v.rap) parts.push("rap included");
+
+  const genreId = (params.genre ?? "").toLowerCase();
+  const moods = (params.moods ?? []).map((m) => m.toLowerCase());
+
+  const genreToneMap: Record<string, string[]> = {
+    drill: ["cold", "tight", "aggressive"],
+    trap: ["smooth", "rhythmic"],
+    "boom-bap": ["grounded", "rhythmic"],
+    "gangsta-rap": ["gritty", "direct"],
+    "lofi-hiphop": ["soft", "laid-back"],
+    "contemporary-rnb": ["warm", "breathy"],
+    "neo-soul": ["warm", "textured"],
+    pop: ["clean", "bright"],
+    "dance-pop": ["clean", "bright"],
+    kpop: ["clean", "polished"],
+    "j-pop": ["bright", "clear"],
+    "piano-ballad": ["soft", "emotional"],
+    "adult-contemporary": ["warm", "controlled"],
+    jazz: ["smooth", "expressive"],
+    "cool-jazz": ["soft", "smoky"],
+    rock: ["raw", "driven"],
+    "punk-rock": ["raw", "urgent"],
+    "heavy-metal": ["powerful", "aggressive"],
+    house: ["clean", "energetic"],
+    techno: ["focused", "cool"],
+    "future-bass": ["airy", "bright"],
+    reggae: ["relaxed", "warm"],
+    "roots-reggae": ["grounded", "warm"],
+    ballad: ["soft", "emotional"],
+  };
+
+  const moodToneMap: Record<string, string[]> = {
+    emotional: ["emotional"],
+    sad: ["fragile"],
+    warm: ["warm"],
+    calm: ["gentle"],
+    dark: ["dark-toned"],
+    bright: ["bright"],
+    hopeful: ["lifted"],
+    lonely: ["airy"],
+    nostalgic: ["textured"],
+    dreamy: ["dreamy"],
+    tense: ["tight"],
+    peaceful: ["soft"],
+  };
+
+  const toneSet = new Set<string>();
+  (genreToneMap[genreId] ?? []).forEach((tone) => toneSet.add(tone));
+  moods.forEach((mood) => (moodToneMap[mood] ?? []).forEach((tone) => toneSet.add(tone)));
+
+  const tones = Array.from(toneSet).slice(0, 3);
+  if (tones.length > 0) {
+    parts.push(`tone: ${tones.join(", ")}`);
+  }
+
+  return `·VOCAL: ${parts.join(", ")}`;
+}
+
+function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStructure): string {
+  const genreId = params.genre;
+  let flow = "dynamic progression with clear sectional contrast";
+
+  if (genreId === "drill") flow = "cold and sparse with hard-hitting rhythmic shifts";
+  if (genreId?.includes("jazz")) flow = "fluid and groove-led with organic transitions";
+  if (genreId?.includes("ballad")) flow = "gradual emotional build-up towards a powerful climax";
+
+  return `·ARRANGEMENT: ${flow}`;
+}
+
+function buildTheme(params: GenerateSongParams): string {
+  const themeSentence = buildThemeSentence(params.themes ?? []);
+  return `·THEME: ${themeSentence}`;
+}
+
+function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure): string {
+  return [
+    buildStyle(params),
+    buildSound(params),
+    buildMoodTexture(params),
+    buildVocal(params),
+    buildArrangement(params, resolvedStructure),
+    buildTheme(params),
+  ]
+    .filter(NON_EMPTY)
+    .join("\n\n");
 }
 
 export async function generateSong(...args: GenerateSongInput): Promise<SongResult> {
@@ -419,65 +840,49 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   ) as SongStructure;
 
   const lyricGuidancePrompt = buildLyricGuidancePrompt(params.lyricsLength ?? "normal");
-  const genrePromptCore = getGenrePromptCore(params.genre);
+  const genreMeta = getGenreMeta(params.genre);
+  const genrePromptCore = genreMeta?.promptCore ?? "";
   const stylePromptCores = getStylePromptCores(params.styles ?? []);
-  const instrumentSoundPromptCores = getInstrumentSoundPromptCores(
-    params.instrumentSounds ?? []
-  );
-  const moodPrompt = buildMoodPrompt(params.moods ?? []);
+  const instrumentSoundPromptCores = getInstrumentSoundPromptCores(params.instrumentSounds ?? []);
   const themePrompt = buildThemePrompt(params.themes ?? []);
-  const vocalPrompt = buildVocalPrompt(
-    params.vocal ?? { male: 0, female: 0, rap: false }
-  );
+  const themeSentence = buildThemeSentence(params.themes ?? []);
+  const vocalPrompt = buildVocalPrompt(params.vocal ?? { male: 0, female: 0, rap: false });
   const basePromptSeed = BASE_PROMPTS.join("\n");
+  const finalPrompt = buildFinalPrompt(params, resolvedStructure);
+  console.log("🔥 generateSong called");
+  console.log("🔥 FINAL PROMPT:", finalPrompt);
+  const exactStructureText = buildStructureText(
+    params.songStructure,
+    resolvedStructure,
+    params.customStructure ?? []
+  );
 
-  const isKpopMixedMode = params.isKpopSelected && params.kpopMode === 2;
+  const shouldUseMixedLyrics = Boolean(params.isMixedLyrics || (params.isKpopSelected && params.kpopMode === 2));
 
-  const kpopInstruction = isKpopMixedMode
-    ? `K-POP MIXED LANGUAGE MODE (MANDATORY):
-- This request is specifically for K-Pop with Korean/English mixed lyrics.
-- Ratio: 70-75% Korean, 25-30% English.
-- Focus: English should be used primarily in choruses, hooks, and key points for impact.
-- Style: Natural K-Pop style, not forced.
+  const mixedLyricsInstruction = shouldUseMixedLyrics
+    ? `MIXED LANGUAGE MODE (MANDATORY):
+- Use natural Korean/English mixed lyrics.
+- Ratio: about 70-75% primary language flow and 25-30% mixed-language accents.
 - For lyrics.korean: keep Korean as the main language, but include natural English words or short phrases in MULTIPLE sections.
 - For lyrics.english: keep English as the main language, but include natural Korean words or short phrases in MULTIPLE sections.
-- The chorus MUST contain visible code-switching.
-- Do not keep the two versions fully separated by language. The mixed-language feel must be obvious at a glance.
-- Keep the code-switching natural and melodic, like commercial K-Pop toplines and hooks.`
+- The chorus or hook MUST contain visible code-switching.
+- Do not keep the two versions fully separated by language.
+- Keep the code-switching natural and melodic, not forced.`
     : "";
 
-  const structureTemplateMap: Record<Exclude<SongStructure, "custom">, { label: string; recommendedLength: string; instruction: string }> = {
-    "1": {
-      label: "Structure 1",
-      recommendedLength: "about 1-2 minutes",
-      instruction: "Use a short and concise song form: Intro → Verse 1 → Chorus / Drop → Outro. Avoid Verse 2 and Bridge unless absolutely necessary.",
-    },
-    "2": {
-      label: "Structure 2",
-      recommendedLength: "about 2-4 minutes",
-      instruction: `Use a standard mainstream form: ${BASIC_STRUCTURE}`,
-    },
-    "3": {
-      label: "Structure 3",
-      recommendedLength: "about 4-6 minutes",
-      instruction: "Use an extended song form with a fuller build-up: Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro. Allow a larger emotional build and extra repetition where musically appropriate.",
-    },
-  };
-
-  const structureInstruction = params.songStructure === "custom"
-    ? (params.customStructure && params.customStructure.length > 0
+  const structureInstruction =
+    params.songStructure === "custom" && (params.customStructure ?? []).length > 0
       ? `SONG STRUCTURE (MANDATORY):
 - Selected mode: Custom.
-- You MUST follow this structure exactly: ${params.customStructure.map(s => `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`).join(" → ")}.
-- Do not add, remove, or change any sections.
-- For sections with tags in parentheses, apply those musical directions (e.g., "Verse 1 (Solo)" means Verse 1 should be a solo vocal).`
-      : `SONG STRUCTURE (FALLBACK):
-- Selected mode: Custom, but no custom section order was provided.
-- Fallback to the standard structure: ${BASIC_STRUCTURE}`)
-    : `SONG STRUCTURE (MANDATORY):
-- Selected mode: ${structureTemplateMap[resolvedStructure].label}.
-- Recommended song length: ${structureTemplateMap[resolvedStructure].recommendedLength}.
-- ${structureTemplateMap[resolvedStructure].instruction}`;
+- Use this exact section order without omission or replacement:
+${exactStructureText}
+- Each tag in parentheses is a real arrangement instruction. Apply it musically, not just as a label.
+- Do not collapse this into a generic pop structure.`
+      : `SONG STRUCTURE (MANDATORY):
+- Selected mode: ${resolvedStructure}.
+- Use this exact structure:
+${exactStructureText}
+- Do not substitute a different default structure.`;
 
   const systemInstruction = `
 You are a professional music composer and lyricist.
@@ -488,6 +893,8 @@ ${params.userInput || "No extra user description."}
 IMPORTANT:
 - The user input overrides stylistic assumptions if conflict occurs.
 - Treat user intent as the primary creative direction.
+- Do NOT simplify, generalize, or replace the selected arrangement with a default pop form.
+- Treat the final production prompt below as a locked blueprint, not a loose reference.
 
 ROOT GENRE:
 ${genrePromptCore || "Choose an appropriate mainstream-friendly root genre if none is given."}
@@ -499,13 +906,14 @@ INSTRUMENT / SOUND LAYERS:
 ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- ${s}`).join("\n") : "- No extra instrument/sound layer selected."}
 
 MOOD LAYER (EMOTIONAL COLOR ONLY):
-${moodPrompt || "No explicit mood layer selected."}
+${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
 
 THEME / STORY CONCEPT (SITUATION, MESSAGE, OR NARRATIVE):
 ${themePrompt || "No explicit theme/story concept selected."}
+Expanded story direction: ${themeSentence}
 
-PRODUCTION BLUEPRINT FROM UI:
-${params.songPrompt || "No extra production blueprint was supplied."}
+LOCKED FINAL PRODUCTION PROMPT:
+${finalPrompt}
 
 VOCAL DIRECTION (HIGH PRIORITY):
 ${vocalPrompt}
@@ -513,24 +921,14 @@ ${vocalPrompt}
 REFERENCE PRINCIPLES:
 ${basePromptSeed}
 
-${kpopInstruction}
+${mixedLyricsInstruction}
 
 ${structureInstruction}
 
 Return JSON:
 {
   "title": "[Genre] 'English Title' │ 'Korean Title'",
-  "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." },
-  "prompt": "A detailed music production prompt",
-  "appliedKeywords": {
-    "genre": ["genre"],
-    "mood": ["mood1", "mood2"],
-    "theme": ["theme1", "theme2"],
-    "style": ["style1", "style2"],
-    "instrumentSound": ["sound1", "sound2"],
-    "tempo": "tempo info if provided",
-    "vocalType": "vocal description"
-  }
+  "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }
 }
 
 Lyrics rules:
@@ -538,23 +936,19 @@ ${lyricGuidancePrompt}
 - The lyrics should primarily follow the user's story/intention and the selected theme(s).
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
-- Genre, style, instrument/sound, and mood should strongly shape the music-production prompt and overall atmosphere.
+- The lyrics must clearly reflect the exact arrangement and section order provided above.
+- If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role.
 - Respect the selected lyricsLength strictly.
-- This lyricsLength rule applies to every genre.
 - Respect the selected song structure strictly.
-- Respect the selected lyricsLength strictly. Do not drift longer than the requested lyric size.
-- This lyricsLength rule applies to every genre, not only ballad, jazz, or specific styles.
-
-Prompt rules:
+- Do not drift longer than the requested lyric size.
+- Do not invent a new structure that conflicts with the locked blueprint.
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
-- ${params.tempo ? `TEMPO CONSTRAINT: ${params.tempo}` : "Tempo should be appropriate for the chosen direction."}
-- Make the production prompt read like a real creative brief, not a keyword dump.
 `.trim();
 
   const ai = getAI();
   const response = await ai.models.generateContent({
     model,
-    contents: "Generate a song based on the system instructions.",
+    contents: "Generate the song title and lyrics based on the locked instructions.",
     config: {
       systemInstruction,
       responseMimeType: "application/json",
@@ -570,56 +964,33 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
             },
             required: ["english", "korean"],
           },
-          prompt: { type: Type.STRING },
-          appliedKeywords: {
-            type: Type.OBJECT,
-            properties: {
-              genre: { type: Type.ARRAY, items: { type: Type.STRING } },
-              mood: { type: Type.ARRAY, items: { type: Type.STRING } },
-              theme: { type: Type.ARRAY, items: { type: Type.STRING } },
-              style: { type: Type.ARRAY, items: { type: Type.STRING } },
-              instrumentSound: { type: Type.ARRAY, items: { type: Type.STRING } },
-              tempo: { type: Type.STRING },
-              vocalType: { type: Type.STRING },
-            },
-            required: ["genre", "mood", "theme"],
-          },
         },
-        required: ["title", "lyrics", "prompt", "appliedKeywords"],
+        required: ["title", "lyrics"],
       },
     },
   });
 
   const result = JSON.parse(response.text || "{}");
 
-  if (isKpopMixedMode && result.lyrics) {
+  if (shouldUseMixedLyrics && result.lyrics) {
     result.lyrics = enforceKpopMixedLyrics(result.lyrics);
   }
 
+  result.prompt = finalPrompt;
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
-    ...(result.appliedKeywords ?? {}),
-    genre: result?.appliedKeywords?.genre ?? (params.genre ? [params.genre] : []),
-    mood: result?.appliedKeywords?.mood ?? (params.moods ?? []),
-    theme: result?.appliedKeywords?.theme ?? (params.themes ?? []),
-    style: result?.appliedKeywords?.style ?? (params.styles ?? []),
-    instrumentSound: result?.appliedKeywords?.instrumentSound ?? (params.instrumentSounds ?? []),
-    tempo: result?.appliedKeywords?.tempo ?? params.tempo,
+    genre: params.genre ? [params.genre] : [],
+    mood: params.moods ?? [],
+    theme: params.themes ?? [],
+    style: getStyleLabels(params.styles ?? []),
+    instrumentSound: getInstrumentSoundLabels(params.instrumentSounds ?? []),
+    tempo: params.tempo,
     kpopMode: params.kpopMode ?? 0,
   };
 
-  if (!result.prompt || typeof result.prompt !== "string") {
-    result.prompt = [
-      genrePromptCore,
-      ...stylePromptCores,
-      ...instrumentSoundPromptCores,
-      moodPrompt,
-      themePrompt,
-      params.tempo ? `Tempo: ${params.tempo}` : "",
-      params.userInput ? `User intent: ${params.userInput}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+  if (!result.title || typeof result.title !== "string") {
+    const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Song");
+    result.title = `[${genreLabel}] 'Untitled' │ '무제'`;
   }
 
   return result as SongResult;

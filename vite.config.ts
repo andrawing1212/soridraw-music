@@ -14,7 +14,6 @@ export default defineConfig({
     hmr: process.env.DISABLE_HMR !== 'true',
   },
   build: {
-    outDir: 'build',
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {

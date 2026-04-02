@@ -393,7 +393,7 @@ function buildAppliedKeywordPayload(
     genre: params.genre ? [params.genre] : [],
     mood: params.moods ?? [],
     theme: themes,
-    era: eras,
+    era: params.eras ?? [],
     style: styles,
     instrumentSound: params.instrumentSounds ?? [],
     tempo: params.tempo,

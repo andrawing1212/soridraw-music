@@ -33,7 +33,7 @@ export interface InstrumentSoundCycle {
   variants: InstrumentSoundItem[];
 }
 
-export type Category = 'genre' | 'style' | 'mood' | 'theme' | 'era';
+export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
 export type SongStructure = '1' | '2' | '3' | 'custom';
 
@@ -59,7 +59,6 @@ export interface AppliedKeywords {
   genre: string[];
   mood: string[];
   theme: string[];
-  era?: string[];
   style?: string[];
   instrumentSound?: string[];
   tempo?: string;

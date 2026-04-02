@@ -291,23 +291,6 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
   },
 ] as const;
 
-
-
-export const ERA_CYCLES: SoundStyleCycle[] = [
-  {
-    id: 'era-family',
-    title: '시대감',
-    variants: [
-      { id: '50s', label: '50s', description: '1950년대 특유의 빈티지한 초기 팝, 로큰롤, 스윙 감성입니다.', promptCore: 'Era layer: 1950s-inspired vintage character with early pop, rock and roll energy, warm mono-style balance, and classic retro phrasing.' },
-      { id: '60s', label: '60s', description: '1960년대의 밝고 클래식한 밴드/소울/팝 감성입니다.', promptCore: 'Era layer: 1960s-inspired classic pop and soul character with bright live-band movement, vintage charm, and timeless melodic writing.' },
-      { id: '70s', label: '70s', description: '1970년대의 아날로그 질감, 소울, 디스코, 록의 시대감입니다.', promptCore: 'Era layer: 1970s-inspired analog warmth with soulful groove, vintage live instrumentation, and rich retro musicality.' },
-      { id: '80s', label: '80s', description: '1980년대의 레트로 신스, 드럼머신, 네온 감성입니다.', promptCore: 'Era layer: 1980s-inspired retro synth character with drum-machine pulse, glossy hooks, and bright nostalgic sheen.' },
-      { id: '90s', label: '90s', description: '1990년대의 거칠고 빈티지한 힙합/R&B/록 감성입니다.', promptCore: 'Era layer: 1990s-inspired character with vintage groove, rawer texture, and distinct old-school emotional color.' },
-      { id: '00s', label: '00s', description: '2000년대의 팝/R&B/댄스 중심의 세련된 상업 감성입니다.', promptCore: 'Era layer: 2000s-inspired mainstream polish with catchy pop structure, sleek production, and modern commercial energy.' },
-    ],
-  },
-] as const;
-
 export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   cycle.variants.map((variant) => ({
     id: variant.id,

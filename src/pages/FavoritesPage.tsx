@@ -65,6 +65,38 @@ function getSongInstrumentSoundValues(song: any): string[] {
   return song?.appliedKeywords?.instrumentSound ?? [];
 }
 
+function getTimestampMs(value: any): number {
+  if (!value) return 0;
+
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  if (typeof value?.toDate === 'function') {
+    const ms = value.toDate().getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  if (typeof value?.seconds === 'number') {
+    const millis = typeof value?.nanoseconds === 'number'
+      ? value.seconds * 1000 + Math.floor(value.nanoseconds / 1_000_000)
+      : value.seconds * 1000;
+    return Number.isFinite(millis) ? millis : 0;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  return 0;
+}
+
 export default function FavoritesPage({ 
   favorites, 
   toggleFavorite, 
@@ -730,10 +762,11 @@ ${song.prompt}
   }
 
   const getRelativeTime = (timestamp: any) => {
-    if (!timestamp) return '';
-    const now = new Date();
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000 || timestamp);
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    const ms = getTimestampMs(timestamp);
+    if (!ms) return '방금 전';
+
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - ms) / 1000);
 
     if (diffInSeconds < 60) return '방금 전';
     const diffInMinutes = Math.floor(diffInSeconds / 60);
@@ -784,9 +817,9 @@ ${song.prompt}
 
     switch (sortBy) {
       case 'latest':
-        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+        return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       case 'oldest':
-        return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+        return getTimestampMs(a.createdAtMs || a.createdAt) - getTimestampMs(b.createdAtMs || b.createdAt);
       case 'genre-1':
         return (a.appliedKeywords.genre[0] || '').localeCompare(b.appliedKeywords.genre[0] || '');
       case 'genre-2':
@@ -801,10 +834,10 @@ ${song.prompt}
         return a.title.localeCompare(b.title);
       case 'locked-top':
         if (a.isLocked !== b.isLocked) return a.isLocked ? -1 : 1;
-        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+        return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       case 'locked-bottom':
         if (a.isLocked !== b.isLocked) return a.isLocked ? 1 : -1;
-        return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+        return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       default:
         return 0;
     }
@@ -935,7 +968,7 @@ ${song.prompt}
 
       {/* Unified Sticky Action Popup */}
       <AnimatePresence mode="wait">
-        {!selectedSong && !showSortPopup && (
+        {!selectedSong && (
           isSelectionMode ? (
             <motion.div
               key="selection-popup"

@@ -576,6 +576,25 @@ const calculateOptimalBPM = (genres: string[], moods: string[]) => {
   return { min: finalMin, max: finalMax };
 };
 
+
+function getTimestampMs(value: any): number {
+  if (!value) return 0;
+  if (typeof value?.toDate === 'function') {
+    const ms = value.toDate().getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  if (typeof value?.seconds === 'number') {
+    return value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1000000);
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  return 0;
+}
+
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
@@ -1145,7 +1164,13 @@ function App() {
         // Fetch favorites for the user
         const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
         unsubFavs = onSnapshot(q, (snapshot) => {
-          const favs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const favs = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a: any, b: any) => {
+              const aTime = a.createdAtMs || getTimestampMs(a.createdAt);
+              const bTime = b.createdAtMs || getTimestampMs(b.createdAt);
+              return bTime - aTime;
+            });
           setFavorites(favs);
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, 'favorites');
@@ -1191,7 +1216,8 @@ function App() {
           prompt: song.prompt,
           appliedKeywords: song.appliedKeywords,
           isLocked: false,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          createdAtMs: Date.now()
         }));
         showToast('저장되었습니다.');
       }
@@ -1872,6 +1898,7 @@ const saveRecentSong = async (newSong: any) => {
     console.error("Failed to save recent songs:", e);
   }
 };
+
   const handleGenerate = async () => {
     if (!user) {
       showToast('로그인이 필요합니다.');
@@ -2106,7 +2133,7 @@ const saveRecentSong = async (newSong: any) => {
 
       setResult(newResult);
       setHistory(prev => [newResult, ...prev].slice(0, 10));
-      saveRecentSong(newResult);
+      await saveRecentSong(newResult);
       setHistoryIndex(0);
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -2649,10 +2676,10 @@ ${result.prompt}
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-brand-orange/10 text-brand-orange border border-brand-orange/30 hover:border-brand-orange/40 transition-all active:scale-95 shadow-sm"
+                      className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-brand-orange/10 text-brand-orange border border-brand-orange/30 hover:border-brand-orange/40 transition-all active:scale-95 shadow-sm"
                     >
                       <HeartIcon className="w-5 h-5" />
-                      <span className="text-sm font-bold whitespace-nowrap">보관함</span>
+                      <span className="text-xs md:text-sm font-bold whitespace-nowrap">보관함</span>
                     </button>
                   </div>
                   <div className="absolute top-4 right-4 flex items-center gap-3 z-10">

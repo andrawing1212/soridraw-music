@@ -8,6 +8,7 @@ import {
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
   MID_GENRE_PROMPTS,
+  SUB_GENRE_PROMPTS,
 } from "../constants";
 import {
   LyricsLength,
@@ -369,7 +370,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
 
   return {
     genre: genres?.[0] ?? null,
-    subGenre: [],
+    subGenre: genres?.slice(1) ?? [],
     moods: moods ?? [],
     themes: themes ?? [],
     styles: [],
@@ -519,13 +520,14 @@ function buildStructureText(
 function buildStyle(params: GenerateSongParams): string {
   const genreMeta = getGenreMeta(params.genre);
   const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Pop");
-  const subGenreLabels = getSubGenreLabels(params.subGenre ?? []);
+  const subGenreIds = params.subGenre ?? [];
   const genreId = (params.genre || "pop").toLowerCase();
 
-  // Get up to 3 selected styles
+  console.log("SUB GENRE IDS:", params.subGenre);
+  console.log("SUB GENRE DATA:", subGenreIds.map(id => SUB_GENRE_PROMPTS[id]));
+
   const selectedStyleIds = (params.styles ?? []).slice(0, 3);
 
-  // Compatibility mapping (Genre ID -> Compatible Style IDs)
   const COMPATIBLE_MAP: Record<string, string[]> = {
     pop: ["pop", "dance", "modern-edm", "global-pop-style", "k-style"],
     "dance-pop": ["dance", "classic-disco", "modern-edm", "global-pop-style", "k-style"],
@@ -544,7 +546,6 @@ function buildStyle(params: GenerateSongParams): string {
     "piano-ballad": ["ballad", "classic-ballad", "soul", "classic-soul"],
   };
 
-  // Semi-compatible mapping (Genre ID -> Semi-compatible Style IDs)
   const SEMI_COMPATIBLE_MAP: Record<string, string[]> = {
     "piano-ballad": ["trap-style", "modern-edm", "rnb"],
     drill: ["global-pop-style", "modern-edm", "rnb"],
@@ -569,16 +570,13 @@ function buildStyle(params: GenerateSongParams): string {
 
     let label = styleItem.label;
 
-    // First style is main
     if (index === 0) {
       if (isSemiCompatible) {
         label = `${label} influence`;
       } else if (!isCompatible && !isSemiCompatible) {
-        // If totally incompatible, still keep it but as influence
         label = `${label} influence`;
       }
     } else {
-      // Second and third styles are support
       if (!isCompatible) {
         label = `${label} influence`;
       }
@@ -587,13 +585,21 @@ function buildStyle(params: GenerateSongParams): string {
     processedStyles.push(label);
   });
 
-  const tempoText = params.tempo
-    ? params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")
-    : "";
+    const tempoText = params.tempo
+      ? params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")
+      : "";
 
   const mid = MID_GENRE_PROMPTS[genreId];
+  const subGenreStyleLayers = subGenreIds
+    .map((id) => SUB_GENRE_PROMPTS[id]?.style)
+    .filter(NON_EMPTY);
 
-  const parts = [mid?.style || genreLabel, ...subGenreLabels, ...processedStyles];
+  const parts = [
+    ...subGenreStyleLayers,      // 🔥 1순위: 소분류 스타일
+    mid?.style || genreLabel,    // 2순위: 중분류 스타일
+    ...processedStyles,          // 3순위: 기타 스타일
+  ].filter(NON_EMPTY);
+
   if (tempoText) parts.push(tempoText);
 
   return `·STYLE: ${parts.join(", ")}`;
@@ -603,6 +609,10 @@ function buildSound(params: GenerateSongParams): string {
   const selected = getInstrumentSoundLabels(params.instrumentSounds ?? []);
   const genreId = (params.genre || "pop").toLowerCase();
   const moods = (params.moods ?? []).map((m) => m.toLowerCase());
+  const subGenreIds = params.subGenre ?? [];
+
+  console.log("SUB GENRE IDS:", params.subGenre);
+  console.log("SUB GENRE DATA:", subGenreIds.map(id => SUB_GENRE_PROMPTS[id]));
 
   const GENRE_BASE: Record<string, string[]> = {
     drill: ["sparse drill drums", "heavy 808 bass"],
@@ -647,7 +657,6 @@ function buildSound(params: GenerateSongParams): string {
   let result: string[] = [...selected];
   const mid = MID_GENRE_PROMPTS[genreId];
 
-  // 1. Tone Correction for selected sounds
   const isSoftTone =
     genreId.includes("ballad") ||
     moods.includes("emotional") ||
@@ -673,7 +682,6 @@ function buildSound(params: GenerateSongParams): string {
     });
   }
 
-  // 2. Supplement from GENRE_BASE
   const baseSounds = GENRE_BASE[genreId] || [];
   const hasCategory = (cat: string) => result.some((s) => s.toLowerCase().includes(cat));
 
@@ -689,19 +697,48 @@ function buildSound(params: GenerateSongParams): string {
     }
   }
 
-  // 3. Add Texture and Space
   const texture = TEXTURE_MAP[genreId] || Object.entries(TEXTURE_MAP).find(([k]) => genreId.includes(k))?.[1] || TEXTURE_MAP.default;
   const space = SPACE_MAP[moods[0]] || SPACE_MAP.default;
 
   result.push(texture);
   result.push(`with ${space}`);
 
-  // 4. Final Compression
+  const subGenreSoundLayers = subGenreIds
+    .map((id) => SUB_GENRE_PROMPTS[id]?.sound)
+    .filter(NON_EMPTY);
+
+  // Reconstruct result to ensure priority: Sub-genre > Mid-genre > Base > Selected
+  const prioritizedResult: string[] = [
+    ...subGenreSoundLayers,
+  ];
+
   if (mid?.sound) {
-    result.unshift(mid.sound);
+    prioritizedResult.push(mid.sound);
   }
 
-  const final = Array.from(new Set(result)).slice(0, 6);
+  // Add base sounds if not already covered
+  for (const sound of baseSounds) {
+    const lowerSound = sound.toLowerCase();
+    const isDrum = lowerSound.includes("drums") || lowerSound.includes("rhythm");
+    const isBass = lowerSound.includes("bass") || lowerSound.includes("808");
+
+    const hasCategoryInResult = (cat: string) => prioritizedResult.some((s) => s.toLowerCase().includes(cat));
+
+    if (isDrum && !hasCategoryInResult("drum") && !hasCategoryInResult("hi-hat") && !hasCategoryInResult("percussion") && !hasCategoryInResult("rhythm")) {
+      prioritizedResult.push(sound);
+    } else if (isBass && !hasCategoryInResult("bass") && !hasCategoryInResult("808")) {
+      prioritizedResult.push(sound);
+    }
+  }
+
+  // Add selected sounds
+  prioritizedResult.push(...result);
+
+  // Add texture and space
+  prioritizedResult.push(texture);
+  prioritizedResult.push(`with ${space}`);
+
+  const final = Array.from(new Set(prioritizedResult.filter(NON_EMPTY))).slice(0, 8);
   return `·SOUND: ${final.join(", ")}`;
 }
 
@@ -759,7 +796,12 @@ function buildMoodTexture(params: GenerateSongParams): string {
 function buildVocal(params: GenerateSongParams): string {
   const v = params.vocal ?? { male: 0, female: 0, rap: false };
   const parts: string[] = [];
-  const mid = MID_GENRE_PROMPTS[(params.genre ?? "pop").toLowerCase()];
+  const genreId = (params.genre ?? "pop").toLowerCase();
+  const mid = MID_GENRE_PROMPTS[genreId];
+  const subGenreIds = params.subGenre ?? [];
+
+  console.log("SUB GENRE IDS:", params.subGenre);
+  console.log("SUB GENRE DATA:", subGenreIds.map(id => SUB_GENRE_PROMPTS[id]));
 
   if (v.male > 0 && v.female > 0) parts.push(`${v.male} male & ${v.female} female vocals`);
   else if (v.male > 0) parts.push(`${v.male === 1 ? "solo male" : `${v.male} male`} vocal`);
@@ -768,7 +810,6 @@ function buildVocal(params: GenerateSongParams): string {
 
   if (v.rap) parts.push("rap included");
 
-  const genreId = (params.genre ?? "pop").toLowerCase();
   const moods = (params.moods ?? []).map((m) => m.toLowerCase());
 
   const DELIVERY_MAP: Record<string, string> = {
@@ -802,6 +843,12 @@ function buildVocal(params: GenerateSongParams): string {
 
   const delivery = DELIVERY_MAP[genreId] || Object.entries(DELIVERY_MAP).find(([k]) => genreId.includes(k))?.[1] || DELIVERY_MAP.default;
   const tone = TONE_MAP[moods[0]] || TONE_MAP.default;
+
+  const subGenreVocalLayers = subGenreIds
+    .map((id) => SUB_GENRE_PROMPTS[id]?.vocal)
+    .filter(NON_EMPTY);
+
+  parts.push(...subGenreVocalLayers); // 🔥 먼저
 
   if (mid?.vocal) {
     parts.push(mid.vocal);

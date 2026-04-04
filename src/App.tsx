@@ -2118,8 +2118,9 @@ const saveRecentSong = async (newSong: any) => {
 
       const songPrompt = buildSongPrompt();
 
-      const song = await generateSong({
+      const payload = {
         genre: finalGenres[0] ?? null,
+        subGenre: subGenre ?? [],
         isKpopSelected: (selectedGenres ?? []).includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         themes: themeLabels,
@@ -2140,7 +2141,13 @@ const saveRecentSong = async (newSong: any) => {
         kpopMode,
         isMixedLyrics,
         customStructure,
-      });
+      };
+
+      console.log("SELECTED GENRE:", selectedGenres);
+      console.log("SELECTED SUB GENRE:", subGenre);
+      console.log("GENERATE PAYLOAD:", payload);
+
+      const song = await generateSong(payload);
 
       if (abortControllerRef.current?.signal.aborted) return;
 

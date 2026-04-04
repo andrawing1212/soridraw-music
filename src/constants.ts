@@ -835,3 +835,47 @@ export const MID_GENRE_PROMPTS: Record<
     vocal: "Native phrasing", // 특정 문화권의 독특한 창법과 느낌
   },
 };
+export const SUB_GENRE_PROMPTS: Record<
+  string,
+  {
+    style?: string;
+    sound?: string;
+    vocal?: string;
+  }
+> = {
+  /* ===================== 1. 팝 & 글로벌 ===================== */
+  // pop 소분류
+  synth_pop: { style: "80s Retro, Synth-wave", sound: "Analog synths, DX7 bells", vocal: "Reverb-drenched, Ethereal tone" },
+  disco: { style: "Nu-Disco, Groovy", sound: "Funky bassline, Four-on-the-floor beat", vocal: "High-pitched, Rhythmic delivery" },
+  electropop: { style: "Electronic, Digital", sound: "Heavy saw synths, Glitchy textures", vocal: "Slightly processed, Auto-tuned vibe" },
+  teen_pop: { style: "Bubblegum, Upbeat", sound: "Bright handclaps, Sweet melodies", vocal: "Youthful, Energetic, Sweet tone" },
+  britpop: { style: "UK Indie, 90s Britpop", sound: "Strummed electric guitar, Raw band sound", vocal: "Raw, Casual delivery, UK style" },
+  indie_pop: { style: "Lo-fi, Dreamy", sound: "Mellow guitar, Reverb-drenched pads", vocal: "Breathy, Soft, Whispering tone" },
+  city_pop: { style: "Urban, Nostalgic", sound: "Fretless bass, Sophisticated jazz chords", vocal: "Sophisticated, Smooth delivery" },
+  funk_pop: { style: "Funk, Danceable", sound: "Slap bass, Rhythmic guitar scratching", vocal: "Syncopated, Rhythmic ad-libs" },
+  dance_pop: { style: "Club, High Energy", sound: "Heavy kick drum, Side-chained pads", vocal: "Powerful, Tuned, Wide-stereo harmonies" },
+  acoustic_pop: { style: "Unplugged, Soft", sound: "Acoustic focus, Minimalist percussion", vocal: "Intimate, Pure, Raw recording feel" },
+
+  // kpop 소분류
+  idol_dance: { style: "Idol Style, High Energy", sound: "Punchy beats, Wide stereo mix", vocal: "Synchronized harmonies, High-pitched hooks" },
+  k_ballad: { style: "Emotional Ballad", sound: "Grand piano, Lush string section", vocal: "Vulnerable, Soulful, Powerful high notes" },
+  k_synth_pop: { style: "Retro K-Pop", sound: "Vintage synths, Dreamy atmosphere", vocal: "Sweet, Nostalgic phrasing" },
+  k_trap: { style: "K-Hip-hop, Trap rhythm", sound: "Rapid hi-hats, Booming 808", vocal: "Rap-singing mix, Melodic rap" },
+  k_new_jack_swing: { style: "90s Swing beat", sound: "Vintage sampler hits, New jack rhythm", vocal: "Soulful, Rhythmic swing delivery" },
+  k_indie: { style: "Indie, Airy", sound: "Warm guitar, Lo-fi texture", vocal: "Natural, Breath-heavy tone" },
+  k_folk: { style: "Sincere, Acoustic", sound: "Steel-string guitar, Raw recording", vocal: "Simple, Storytelling style" },
+  k_rock: { style: "Band Sound, Energetic", sound: "Driving electric guitar, Rock drums", vocal: "Belting, Powerful rock energy" },
+  gugak_fusion: { style: "Traditional Fusion", sound: "Gayageum, Haegeum, Traditional percussion", vocal: "Traditional Korean phrasing style" },
+
+  // jpop 소분류
+  j_idol_pop: { style: "High Energy, Upbeat", sound: "Group vocal layers, Fast tempo", vocal: "Group chorus, Youthful high-energy" },
+  shibuya_kei: { style: "Jazzy, Bossa Nova", sound: "Retro samples, Sophisticated arrangement", vocal: "Soft, Wispy, French-pop style" },
+  anime_rock: { style: "Anisong Rock, Fast", sound: "Distorted guitar riffs, Double-time drums", vocal: "Intense, High-pitched anime rock tone" },
+  j_city_pop: { style: "80s Japanese City Pop", sound: "Yamaha DX7, Funky bass, Saxophone", vocal: "Cool, Smooth, J-pop phrasing" },
+  visual_kei: { style: "Dramatic, Gothic", sound: "Heavy rock, Orchestral elements", vocal: "Vibrato-heavy, Operatic rock style" },
+  utaite_style: { style: "High-speed, Digital", sound: "Hyper-active melody, Intense production", vocal: "High-speed delivery, Sharp digital tone" },
+  vocaloid_style: { style: "Synthesized, Glitchy", sound: "Digital vocal texture, Tech-pop beat", vocal: "Robotic, Synthesized, Artificial tone" },
+  j_jazz_pop: { style: "Jazz Fusion", sound: "Piano solo, Walking bassline", vocal: "Jazzy, Laid-back, Melodic" },
+  j_electro: { style: "Techno-pop", sound: "Trance synths, Electronic focus", vocal: "Vocoder-like, Ethereal, Filtered" },
+  j_ballad: { style: "Melodic, Emotional", sound: "Soft piano, Warm strings", vocal: "Passionate, Tender, Melodic focus" },
+};

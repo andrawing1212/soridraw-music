@@ -944,6 +944,21 @@ function App() {
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isSingerExpanded, setIsSingerExpanded] = useState(false);
+
+  const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
+    const isPC = window.innerWidth >= 1024;
+    if (isPC) {
+      const nextState = !isGenreExpanded;
+      setIsGenreExpanded(nextState);
+      setIsStyleExpanded(nextState);
+      setIsSoundExpanded(nextState);
+    } else {
+      if (section === 'genre') setIsGenreExpanded(!isGenreExpanded);
+      else if (section === 'style') setIsStyleExpanded(!isStyleExpanded);
+      else if (section === 'sound') setIsSoundExpanded(!isSoundExpanded);
+    }
+  };
+
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
@@ -2357,6 +2372,9 @@ ${result.prompt}
                   setIsGenreRandomized(true);
                 }}
                 onHover={setHoveredItem}
+                isExpanded={isGenreExpanded}
+                onToggleExpand={() => toggleMainSections('genre')}
+                isRandomized={isGenreRandomized}
               />
           <CycleSection 
             title="스타일" 
@@ -2371,7 +2389,7 @@ ${result.prompt}
             onLongPressEnd={handleLongPressEnd}
             isRandomized={isStyleRandomized}
             isExpanded={isStyleExpanded}
-            onToggleExpand={() => setIsStyleExpanded(!isStyleExpanded)}
+            onToggleExpand={() => toggleMainSections('style')}
           />
           <CycleSection 
             title="사운드/텍스쳐" 
@@ -2387,7 +2405,7 @@ ${result.prompt}
             onLongPressEnd={handleLongPressEnd}
             isRandomized={isSoundTextureRandomized}
             isExpanded={isSoundExpanded}
-            onToggleExpand={() => setIsSoundExpanded(!isSoundExpanded)}
+            onToggleExpand={() => toggleMainSections('sound')}
           />
         </div>
 
@@ -3560,13 +3578,13 @@ function CycleSection({
           </button>
           <button 
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'cycle-clear', label: '초기화', description: `${title} 설정을 초기화합니다.` })}
+            onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', description: `${title} 설정을 초기화합니다.` })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
               (selected.length > 0 || isRandomized)
-                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
           >
             <RotateCcw className="w-4 h-4" />
@@ -3778,18 +3796,18 @@ function CategorySection({
           )}
           <button 
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'clear', label: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'clear', label: 'Reset', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'clear', label: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
               (selected.length > 0 || isRandomized)
-                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
           >
             <RotateCcw className="w-4 h-4" />
@@ -4029,13 +4047,13 @@ function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, on
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'lyrics-clear', label: '초기화', description: '가사 설정을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'lyrics-clear', label: 'Reset', description: '가사 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
               (value !== 'normal' || isMixedLyrics)
-                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -4897,13 +4915,13 @@ function SingerControl({
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'singer-clear', label: '초기화', description: '가수 설정을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'singer-clear', label: 'Reset', description: '가수 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
               (maleCount > 0 || femaleCount > 0 || rapEnabled)
-                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -5139,13 +5157,13 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           </div>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'tempo-clear', label: '초기화', description: '템포 설정을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'tempo-clear', label: 'Reset', description: '템포 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
               (!enabled || min !== 90 || max !== 110)
-                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
           >
             <RotateCcw className="w-3.5 h-3.5" />

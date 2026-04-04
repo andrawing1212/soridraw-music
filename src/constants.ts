@@ -756,75 +756,82 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
 ];
 /* ===================== MID GENRE PROMPTS ===================== */
 
-export const MID_GENRE_PROMPTS = {
+export const MID_GENRE_PROMPTS: Record<
+  string,
+  {
+    style: string;
+    sound: string;
+    vocal: string;
+  }
+> = {
   pop: {
-    style: "Modern Pop",
-    sound: "Electric guitar, Layered synths",
-    vocal: "Melodic delivery",
+    style: "Modern Pop", // 세련된 현대 팝의 정석
+    sound: "Layered synths, Electric guitar", // 화려한 신스와 팝 기타 사운드
+    vocal: "Melodic delivery", // 멜로디 위주의 깔끔한 가창
   },
   kpop: {
-    style: "K-Pop, Idol Style",
-    sound: "Electronic beats, Hybrid synths",
-    vocal: "Dynamic vocal mix",
+    style: "Modern Korean Pop", // 아이돌부터 인디까지 아우르는 한국 대중음악
+    sound: "Polished production, Hybrid beats", // 정교한 믹싱과 전자음/리얼 사운드의 조화
+    vocal: "Expressive vocals", // 한국적 감성이 담긴 풍부한 가창력
   },
-  "j-pop": {
-    style: "J-Pop",
-    sound: "Electric guitar, Bright digital synths",
-    vocal: "Bright tone",
+  jpop: {
+    style: "Modern Japanese Pop", // J-팝 특유의 청량하고 속도감 있는 느낌
+    sound: "Bright digital synths, Electric guitar", // 밝은 디지털 신스와 찰랑거리는 기타
+    vocal: "Clear J-pop style tone", // 맑고 선명한 일본 팝 특유의 발성
   },
   hiphop: {
-    style: "Hiphop, Urban",
-    sound: "Heavy 808 bass, Punchy snare",
-    vocal: "Rap flow",
+    style: "Hiphop, Urban", // 리듬과 비트 중심의 거리 감성
+    sound: "Heavy 808 bass, Punchy snare", // 가슴을 울리는 베이스와 타격감 있는 스네어
+    vocal: "Rhythmic rap flow", // 박자감이 살아있는 랩 전달력
   },
   rnb: {
-    style: "Contemporary R&B",
-    sound: "Electric piano, Silky bass",
-    vocal: "Soulful, Smooth",
+    style: "R&B, Soul", // 부드럽고 그루비한 도심형 사운드
+    sound: "Electric piano, Silky bass", // 따뜻한 건반과 매끄러운 베이스 라인
+    vocal: "Soulful, Smooth", // 소울풀하고 기교 섞인 부드러운 목소리
   },
   trot: {
-    style: "Trot",
-    sound: "Accordion, Brass section",
-    vocal: "Trot vibrato",
+    style: "Trot", // 한국 성인가요의 흥과 한
+    sound: "Accordion, Bright brass", // 트로트의 상징인 아코디언과 화려한 관악기
+    vocal: "Trot vibrato phrasing", // 특유의 꺾기와 기교가 섞인 창법
   },
   "7080_gayo": {
-    style: "7080 Korean Retro Pop",
-    sound: "Acoustic guitar, Retro Organ",
-    vocal: "Warm, Nostalgic tone",
+    style: "7080 Korean Retro Pop", // 70~80년대 그리운 그 시절의 감성
+    sound: "Acoustic guitar, Vintage Organ, Analog texture", // 아날로그 질감의 통기타와 오르간
+    vocal: "Warm, Nostalgic storyteller tone", // 서사적이고 따뜻한 이야기꾼의 목소리
   },
   ost: {
-    style: "Cinematic Score",
-    sound: "Full strings, Cinematic piano",
-    vocal: "Atmospheric vocals",
+    style: "Cinematic Score", // 영화나 드라마 속 서사적인 배경 음악
+    sound: "Orchestral strings, Dramatic piano", // 웅장한 현악기와 극적인 피아노 선율
+    vocal: "Atmospheric textures", // 몽환적이고 공간감 있는 보컬 질감
   },
-  rock: {
-    style: "Rock, Metal",
-    sound: "Overdriven guitar, Real drum kit",
-    vocal: "Powerful, Raw tone",
+  rockmetal: {
+    style: "Rock, Metal", // 강렬한 밴드 사운드의 에너지
+    sound: "Distorted guitar, Power drums", // 거친 일렉 기타와 파워풀한 드럼 사운드
+    vocal: "Powerful, Raw tone", // 꾸밈없는 거칠고 폭발적인 가창
   },
   edm: {
-    style: "EDM, Electronic",
-    sound: "Digital lead synths, Sub-bass",
-    vocal: "Processed texture",
+    style: "EDM, Electronic", // 클럽과 페스티벌의 화려한 전자 음악
+    sound: "Lead synths, Sub-bass drop", // 강렬한 리드 신스와 저음역대 드랍
+    vocal: "Processed texture", // 기계적인 효과가 가미된 전자적 질감
   },
   jazz: {
-    style: "Jazz",
-    sound: "Upright bass, Jazz piano",
-    vocal: "Jazzy phrasing",
+    style: "Jazz", // 고급스럽고 자유로운 즉흥 음악의 느낌
+    sound: "Upright bass, Jazz piano", // 콘트라베이스와 재즈 피아노의 조화
+    vocal: "Jazzy phrasing", // 박자를 밀고 당기는 특유의 재즈 가창
   },
   classical: {
-    style: "Classical",
-    sound: "Symphony orchestra, Grand piano",
-    vocal: "Classical technique",
+    style: "Classical", // 정통 서양 고전 음악의 품격
+    sound: "Symphonic orchestra, Grand piano", // 풀 오케스트라와 그랜드 피아노의 협연
+    vocal: "Classical technique", // 성악적 기교가 담긴 클래식 발성
   },
-  acoustic_folk: {
-    style: "Acoustic, Folk",
-    sound: "Steel-string acoustic guitar",
-    vocal: "Natural tone",
+  acoustic: {
+    style: "Acoustic, Folk", // 인위적이지 않은 자연스러운 소리
+    sound: "Steel-string acoustic guitar", // 쇠줄 통기타 특유의 찰랑거리는 울림
+    vocal: "Natural, Pure tone", // 꾸밈없고 맑은 자연스러운 목소리
   },
-  world_music_folk: {
-    style: "World Music",
-    sound: "Ethnic percussion, Traditional flute",
-    vocal: "Native phrasing",
+  world: {
+    style: "World Music", // 전 세계 각지의 전통과 리듬
+    sound: "Traditional ethnic instruments", // 민속 악기 특유의 독특한 음색
+    vocal: "Native phrasing", // 특정 문화권의 독특한 창법과 느낌
   },
 };

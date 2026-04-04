@@ -40,11 +40,68 @@ interface Props {
   onClear: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  isRandomized?: boolean;
 }
 
 const DEFAULT_GROUP_DESCRIPTION = '대분류를 선택한 뒤 메인 장르와 세부 장르를 고를 수 있습니다.';
 const DEFAULT_MAIN_DESCRIPTION = '메인 장르를 선택한 뒤 세부장르를 더 구체적으로 고를 수 있습니다.';
 const DEFAULT_SUB_DESCRIPTION = '세부 장르를 선택해 장르의 방향을 더 구체적으로 설정하세요.';
+
+const GENRE_TITLE_MAP: Record<string, string> = {
+  'group_pop_global': 'Pop & Global',
+  'group_hiphop_rnb': 'Hip-hop & R&B',
+  'group_rock_band': 'Rock & Band',
+  'group_edm_dance': 'Electronic & Dance',
+  'group_jazz_classical': 'Jazz & Classical',
+  'group_folk_world': 'Folk & World',
+  'group_trot_adult': 'Trot & Adult',
+  'group_cinematic_bgm': 'Cinematic & BGM',
+  'pop': 'Pop',
+  'kpop': 'K-Pop',
+  'jpop_style': 'J-Style',
+  'hiphop': 'Hip-hop',
+  'rnb': 'R&B',
+  'rock': 'Rock',
+  'metal': 'Metal',
+  'edm': 'EDM',
+  'jazz': 'Jazz',
+  'classical': 'Classical',
+  'acoustic_folk': 'Acoustic/Folk',
+  'world_music_folk': 'World Music',
+  'trot': 'Trot',
+  '7080_gayo': '7080 Gayo',
+  'ost': 'OST',
+  'dance_pop': 'Dance Pop',
+  'synth_pop': 'Synth Pop',
+  'teen_pop': 'Teen Pop',
+  'ballad_pop': 'Ballad Pop',
+  'city_pop': 'City Pop',
+  'indie_pop': 'Indie Pop',
+  'boom_bap': 'Boom Bap',
+  'trap': 'Trap',
+  'drill': 'Drill',
+  'lofi_hiphop': 'Lo-fi Hip-hop',
+  'contemporary_rnb': 'Contemporary R&B',
+  'neo_soul': 'Neo Soul',
+  'alternative_rock': 'Alternative Rock',
+  'punk_rock': 'Punk Rock',
+  'heavy_metal': 'Heavy Metal',
+  'house': 'House',
+  'techno': 'Techno',
+  'trance': 'Trance',
+  'swing_jazz': 'Swing Jazz',
+  'bossa_nova': 'Bossa Nova',
+  'traditional_folk': 'Traditional Folk',
+  'country': 'Country',
+  'reggae': 'Reggae',
+  'traditional_trot': 'Traditional Trot',
+  'semi_trot': 'Semi Trot',
+  'orchestral_score': 'Orchestral Score',
+  'piano_solo': 'Piano Solo',
+  'ambient': 'Ambient',
+};
 
 export default function GenreHierarchySelector({
   selectedGenre,
@@ -52,9 +109,12 @@ export default function GenreHierarchySelector({
   onSelectGenre,
   onSelectSubGenre,
   onClear,
+  onRandom,
   onHover,
+  isExpanded,
+  onToggleExpand,
+  isRandomized = false
 }: Props) {
-  const [isExpanded, setIsExpanded] = useState(true);
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
@@ -327,21 +387,26 @@ export default function GenreHierarchySelector({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleRandom}
-            onMouseEnter={() => onHover({ id: 'genre-random', label: '랜덤 선택', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
+            onClick={onRandom}
+            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
             onMouseLeave={() => onHover(null)}
-            className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
+            className={cn(
+              "p-2.5 rounded-xl transition-all",
+              isRandomized
+                ? "bg-brand-orange text-white"
+                : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
+            )}
             title="랜덤 선택"
           >
             <Dices className="w-4 h-4" />
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'genre-clear', label: '초기화', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
+            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
-              selectedCount > 0 
+              selectedCount > 0 || isRandomized
                 ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                 : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
@@ -368,7 +433,7 @@ export default function GenreHierarchySelector({
               <button
                 key={group.id}
                 onClick={() => openMainModal(group)}
-                onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description || DEFAULT_GROUP_DESCRIPTION, _ts: Date.now() })}
+                onMouseEnter={() => onHover({ id: group.id, label: GENRE_TITLE_MAP[group.id] || group.label, description: group.description || DEFAULT_GROUP_DESCRIPTION, _ts: Date.now() })}
                 onMouseLeave={() => onHover(null)}
                 className={[
                   'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
@@ -400,7 +465,7 @@ export default function GenreHierarchySelector({
       </div>
 
       <button
-        onClick={() => setIsExpanded((prev) => !prev)}
+        onClick={onToggleExpand}
         className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
         title={isExpanded ? '접기' : '펼치기'}
       >
@@ -475,7 +540,7 @@ export default function GenreHierarchySelector({
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => handleMainClick(main)}
-                              onMouseEnter={() => onHover({ id: main.id, label: main.label, description: main.description || DEFAULT_MAIN_DESCRIPTION, _ts: Date.now() })}
+                              onMouseEnter={() => onHover({ id: main.id, label: GENRE_TITLE_MAP[main.id] || main.label, description: main.description || DEFAULT_MAIN_DESCRIPTION, _ts: Date.now() })}
                               onMouseLeave={() => onHover(null)}
                               className={[
                                 'flex-1 text-left rounded-xl border px-4 py-3 transition-all',
@@ -528,24 +593,24 @@ export default function GenreHierarchySelector({
                         const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
 
                         return (
-                          <button
-                            key={sub.id}
-                            onClick={() => handleSubClick(sub.id)}
-                            onMouseEnter={() => onHover({ id: sub.id, label: sub.label, description: sub.description || DEFAULT_SUB_DESCRIPTION, _ts: Date.now() })}
-                            onMouseLeave={() => onHover(null)}
-                            className={[
-                              'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
-                              isActiveVisual
-                                ? 'bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20'
-                                : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
-                            ].join(' ')}
-                            title={sub.description || DEFAULT_SUB_DESCRIPTION}
-                          >
-                            <div className="font-bold text-sm">{sub.label}</div>
-                            <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                              {sub.description || DEFAULT_SUB_DESCRIPTION}
-                            </div>
-                          </button>
+                        <button
+                          key={sub.id}
+                          onClick={() => handleSubClick(sub.id)}
+                          onMouseEnter={() => onHover({ id: sub.id, label: sub.label, description: sub.description || DEFAULT_SUB_DESCRIPTION, _ts: Date.now() })}
+                          onMouseLeave={() => onHover(null)}
+                          className={[
+                            'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
+                            isActiveVisual
+                              ? 'bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20'
+                              : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
+                          ].join(' ')}
+                          title={sub.description || DEFAULT_SUB_DESCRIPTION}
+                        >
+                          <div className="font-bold text-sm">{sub.label}</div>
+                          <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
+                            {sub.description || DEFAULT_SUB_DESCRIPTION}
+                          </div>
+                        </button>
                         );
                       })}
                     </div>

@@ -40,6 +40,10 @@
   --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 @layer base {
   body {
     @apply font-sans transition-colors duration-300;

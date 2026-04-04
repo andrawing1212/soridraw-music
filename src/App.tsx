@@ -2458,8 +2458,6 @@ ${result.prompt}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              isExpanded={isSingerExpanded}
-              onToggleExpand={() => setIsSingerExpanded(!isSingerExpanded)}
             />
             <LyricsControl 
               value={lyricsLength}
@@ -3143,7 +3141,7 @@ ${result.prompt}
             exit={{ opacity: 0, x: '-50%' }}
             onMouseEnter={() => setIsTooltipHovered(true)}
             onMouseLeave={() => setIsTooltipHovered(false)}
-            className="fixed bottom-10 left-1/2 z-[100] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"
+            className="fixed bottom-10 left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center"
           >
             <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
             <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
@@ -3422,7 +3420,7 @@ function GenreSelectModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4"
+      className="fixed inset-0 z-[120] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
       onClick={onClose}
     >
       <motion.div
@@ -4143,7 +4141,7 @@ function TagEditModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[160] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
+      className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
       onClick={onClose}
     >
       <motion.div
@@ -4529,7 +4527,7 @@ function SongStructureControl({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[140] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4"
+            className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
             onClick={() => setIsCustomModalOpen(false)}
           >
             <motion.div
@@ -4802,8 +4800,6 @@ interface SingerControlProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
-  isExpanded?: boolean;
-  onToggleExpand?: () => void;
 }
 
 function SingerControl({ 
@@ -4817,8 +4813,6 @@ function SingerControl({
   onHover, 
   onLongPressStart, 
   onLongPressEnd,
-  isExpanded = true,
-  onToggleExpand
 }: SingerControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
@@ -4930,53 +4924,42 @@ function SingerControl({
         </AnimatePresence>
       </div>
 
-      {isExpanded && (
-        <div className="grid grid-cols-2 gap-2 mt-auto">
-          <button
-            onClick={handleMaleClick}
-            onMouseEnter={() => onHover({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
-            onMouseLeave={() => onHover(null)}
-            onTouchStart={() => onLongPressStart({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
-            onTouchEnd={onLongPressEnd}
-            className={cn(
-              "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
-              maleCount === 1 
-                ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                : maleCount > 1
-                  ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
-                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-            )}
-          >
-            {getMaleLabel()}
-          </button>
-          <button
-            onClick={handleFemaleClick}
-            onMouseEnter={() => onHover({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
-            onMouseLeave={() => onHover(null)}
-            onTouchStart={() => onLongPressStart({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
-            onTouchEnd={onLongPressEnd}
-            className={cn(
-              "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
-              femaleCount === 1 
-                ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                : femaleCount > 1
-                  ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
-                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-            )}
-          >
-            {getFemaleLabel()}
-          </button>
-        </div>
-      )}
-
-      {onToggleExpand && (
+      <div className="grid grid-cols-2 gap-2 mt-auto">
         <button
-          onClick={onToggleExpand}
-          className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+          onClick={handleMaleClick}
+          onMouseEnter={() => onHover({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
+          onMouseLeave={() => onHover(null)}
+          onTouchStart={() => onLongPressStart({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
+          onTouchEnd={onLongPressEnd}
+          className={cn(
+            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
+            maleCount === 1 
+              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+              : maleCount > 1
+                ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+          )}
         >
-          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          {getMaleLabel()}
         </button>
-      )}
+        <button
+          onClick={handleFemaleClick}
+          onMouseEnter={() => onHover({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
+          onMouseLeave={() => onHover(null)}
+          onTouchStart={() => onLongPressStart({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
+          onTouchEnd={onLongPressEnd}
+          className={cn(
+            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
+            femaleCount === 1 
+              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+              : femaleCount > 1
+                ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
+                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+          )}
+        >
+          {getFemaleLabel()}
+        </button>
+      </div>
     </div>
   );
 }

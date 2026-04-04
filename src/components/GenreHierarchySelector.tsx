@@ -91,6 +91,15 @@ export default function GenreHierarchySelector({
     }));
   }, []);
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(0);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [groups, isExpanded]);
+
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
       return count + group.children.length + group.children.reduce((subCount, main) => subCount + main.children.length, 0);
@@ -343,29 +352,39 @@ export default function GenreHierarchySelector({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:gap-2.5">
-        {groups.slice(0, isExpanded ? groups.length : 2).map((group) => {
-          const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
-          return (
-            <button
-              key={group.id}
-              onClick={() => openMainModal(group)}
-              onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description || DEFAULT_GROUP_DESCRIPTION, _ts: Date.now() })}
-              onMouseLeave={() => onHover(null)}
-              className={[
-                'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
-                hasSelectedMain
-                  ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
-                  : 'bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10',
-              ].join(' ')}
-            >
-              <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
-                {group.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <motion.div
+        initial={false}
+        animate={{ 
+          height: isExpanded ? contentHeight : 48,
+          opacity: 1
+        }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="overflow-hidden"
+      >
+        <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+          {groups.map((group) => {
+            const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
+            return (
+              <button
+                key={group.id}
+                onClick={() => openMainModal(group)}
+                onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description || DEFAULT_GROUP_DESCRIPTION, _ts: Date.now() })}
+                onMouseLeave={() => onHover(null)}
+                className={[
+                  'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
+                  hasSelectedMain
+                    ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
+                    : 'bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10',
+                ].join(' ')}
+              >
+                <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                  {group.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
 
       <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selectedMainLabel ? (
@@ -395,7 +414,7 @@ export default function GenreHierarchySelector({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => closeModal()}
             />
             <motion.div

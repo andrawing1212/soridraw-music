@@ -4,6 +4,7 @@ import {
   BASE_PROMPTS,
   BASIC_STRUCTURE,
   GENRE_GROUPS,
+  GENRE_HIERARCHY,
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
 } from "../constants";
@@ -39,6 +40,7 @@ type LegacyThemeInput = string[];
 
 interface GenerateSongParams {
   genre: string | null;
+  subGenre?: string[];
   isKpopSelected?: boolean;
   isMixedLyrics?: boolean;
   moods: string[];
@@ -101,6 +103,19 @@ function resolveInstrumentSoundItem(value: string) {
     (item) =>
       item.id.toLowerCase() === normalized || item.label.toLowerCase() === normalized
   );
+}
+
+function getSubGenreLabels(subGenreIds: string[] = []): string[] {
+  if (!subGenreIds.length) return [];
+
+  return subGenreIds
+    .map((subGenreId) =>
+      GENRE_HIERARCHY
+        .flatMap((group) => group.children)
+        .flatMap((main) => main.children)
+        .find((item) => item.id === subGenreId)?.label ?? sentenceCase(subGenreId)
+    )
+    .filter(NON_EMPTY);
 }
 
 function getGenreMeta(genreId: string | null) {
@@ -299,6 +314,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
   if (typeof first === "object" && first !== null && !Array.isArray(first)) {
     return {
       genre: first.genre ?? null,
+      subGenre: first.subGenre ?? [],
       moods: first.moods ?? [],
       themes: first.themes ?? [],
       styles: first.styles ?? [],
@@ -352,6 +368,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
 
   return {
     genre: genres?.[0] ?? null,
+    subGenre: [],
     moods: moods ?? [],
     themes: themes ?? [],
     styles: [],
@@ -458,6 +475,7 @@ function buildAppliedKeywordPayload(
 
   return {
     genre: params.genre ? [params.genre] : [],
+    subGenre: params.subGenre ?? [],
     mood: params.moods ?? [],
     theme: themes,
     style: styles,
@@ -500,6 +518,7 @@ function buildStructureText(
 function buildStyle(params: GenerateSongParams): string {
   const genreMeta = getGenreMeta(params.genre);
   const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Pop");
+  const subGenreLabels = getSubGenreLabels(params.subGenre ?? []);
   const genreId = params.genre || "pop";
 
   // Get up to 3 selected styles
@@ -571,7 +590,7 @@ function buildStyle(params: GenerateSongParams): string {
     ? params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")
     : "";
 
-  const parts = [genreLabel, ...processedStyles];
+  const parts = [genreLabel, ...subGenreLabels, ...processedStyles];
   if (tempoText) parts.push(tempoText);
 
   return `·STYLE: ${parts.join(", ")}`;
@@ -966,6 +985,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
     genre: params.genre ? [params.genre] : [],
+    subGenre: params.subGenre ?? [],
     mood: params.moods ?? [],
     theme: params.themes ?? [],
     style: getStyleLabels(params.styles ?? []),

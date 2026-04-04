@@ -5,6 +5,7 @@ import {
   InstrumentSoundItem,
   SoundStyleCycle,
   SoundStyleItem,
+  GenreGroupItem,
 } from './types';
 
 export const GENRES: CategoryItem[] = [
@@ -489,3 +490,243 @@ export const BASE_PROMPTS = [
 
 export const BASIC_STRUCTURE =
   'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro';
+
+export const GENRE_HIERARCHY: GenreGroupItem[] = [
+  {
+    id: 'group_pop_global',
+    label: '팝 & 글로벌',
+    children: [
+      {
+        id: 'pop',
+        label: '팝',
+        children: [
+          { id: 'synth_pop', label: '신스팝' },
+          { id: 'disco', label: '디스코' },
+          { id: 'electropop', label: '일렉트로팝' },
+          { id: 'teen_pop', label: '틴팝' },
+          { id: 'britpop', label: '브릿팝' },
+          { id: 'indie_pop', label: '인디팝' },
+          { id: 'city_pop', label: '시티팝' },
+          { id: 'funk_pop', label: '펑크팝' },
+          { id: 'dance_pop', label: '댄스팝' },
+          { id: 'acoustic_pop', label: '어쿠스틱팝' },
+        ]
+      },
+      {
+        id: 'kpop',
+        label: 'K-Pop',
+        children: [
+          { id: 'idol_dance', label: '아이돌 댄스' },
+          { id: 'k_ballad', label: 'K-발라드' },
+          { id: 'k_synth_pop', label: 'K-신스팝' },
+          { id: 'k_trap', label: 'K-트랩' },
+          { id: 'k_new_jack_swing', label: 'K-뉴잭스윙' },
+          { id: 'k_indie', label: 'K-인디' },
+          { id: 'k_folk', label: 'K-포크' },
+          { id: 'k_rock', label: 'K-록' },
+          { id: 'gugak_fusion', label: '국악 퓨전' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_hiphop_rnb',
+    label: '힙합 & 알앤비',
+    children: [
+      {
+        id: 'hiphop',
+        label: '힙합',
+        children: [
+          { id: 'trap', label: '트랩' },
+          { id: 'drill', label: '드릴' },
+          { id: 'boombap', label: '붐뱁' },
+          { id: 'lofi', label: '로파이' },
+          { id: 'jazz_hiphop', label: '재즈힙합' },
+          { id: 'emo_rap', label: '이모랩' },
+          { id: 'old_school', label: '올드스쿨' },
+          { id: 'g_funk', label: 'G-펑크' },
+          { id: 'cloud_rap', label: '클라우드 랩' },
+        ]
+      },
+      {
+        id: 'rnb',
+        label: '알앤비',
+        children: [
+          { id: 'contemporary_rnb', label: '컨템퍼러리 R&B' },
+          { id: 'neo_soul', label: '네오 소울' },
+          { id: 'soul', label: '소울' },
+          { id: 'funk', label: '펑크' },
+          { id: 'alternative_rnb', label: '얼터너티브 R&B' },
+          { id: 'new_jack_swing', label: '뉴잭스윙' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_trot_adult',
+    label: '트로트 & 성인가요',
+    children: [
+      {
+        id: 'trot',
+        label: '트로트',
+        children: [
+          { id: 'traditional_trot', label: '정통 트로트' },
+          { id: 'semi_trot', label: '세미 트로트' },
+          { id: 'disco_trot', label: '디스코 트로트' },
+          { id: 'rock_trot', label: '락 트로트' },
+          { id: 'ballad_trot', label: '발라드 트로트' },
+          { id: 'blues_trot', label: '블루스 트로트' },
+          { id: 'shuffle_trot', label: '셔플 트로트' },
+          { id: 'gugak_trot', label: '국악 트로트' },
+        ]
+      },
+      {
+        id: '7080_gayo',
+        label: '7080 가요',
+        children: [
+          { id: '7080_folk', label: '7080 포크' },
+          { id: 'adult_ballad', label: '성인 발라드' },
+          { id: 'campus_band_sound', label: '캠퍼스 밴드 사운드' },
+          { id: 'enka_style', label: '엔카 스타일' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_cinematic_bgm',
+    label: '시네마틱 & 배경음악',
+    children: [
+      {
+        id: 'ost',
+        label: 'OST',
+        children: [
+          { id: 'orchestral_score', label: '오케스트럴 스코어' },
+          { id: 'hybrid_epic', label: '하이브리드 에픽' },
+          { id: 'synth_score', label: '신시사이저 스코어' },
+          { id: 'piano_solo', label: '피아노 솔로' },
+          { id: 'string_ensemble', label: '스트링 합주' },
+          { id: 'chiptune', label: '칩튠' },
+          { id: 'world_music', label: '월드 뮤직' },
+          { id: 'minimalism', label: '미니멀리즘' },
+          { id: 'ambient', label: '앰비언트' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_rock_band',
+    label: '록 & 밴드',
+    children: [
+      {
+        id: 'rock',
+        label: '록',
+        children: [
+          { id: 'alternative_rock', label: '얼터너티브 록' },
+          { id: 'modern_rock', label: '모던 록' },
+          { id: 'punk_rock', label: '펑크 록' },
+          { id: 'hard_rock', label: '하드 록' },
+          { id: 'soft_rock', label: '소프트 록' },
+          { id: 'garage_rock', label: '개러지 록' },
+          { id: 'shoegazing', label: '슈게이징' },
+          { id: 'folk_rock', label: '포크 록' },
+          { id: 'blues_rock', label: '블루스 록' },
+        ]
+      },
+      {
+        id: 'metal',
+        label: '메탈',
+        children: [
+          { id: 'heavy_metal', label: '헤비메탈' },
+          { id: 'death_metal', label: '데스메탈' },
+          { id: 'thrash_metal', label: '스래시메탈' },
+          { id: 'metalcore', label: '메탈코어' },
+          { id: 'nu_metal', label: '뉴메탈' },
+          { id: 'symphonic_metal', label: '심포닉 메탈' },
+          { id: 'power_metal', label: '파워 메탈' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_edm_dance',
+    label: '전자음악 & 댄스',
+    children: [
+      {
+        id: 'edm',
+        label: 'EDM',
+        children: [
+          { id: 'house', label: '하우스' },
+          { id: 'techno', label: '테크노' },
+          { id: 'trance', label: '트랜스' },
+          { id: 'future_bass', label: '퓨처 베이스' },
+          { id: 'dubstep', label: '덥스텝' },
+          { id: 'deep_house', label: '딥 하우스' },
+          { id: 'tropical_house', label: '트로피컬 하우스' },
+          { id: 'eurobeat', label: '유로비트' },
+          { id: 'drum_and_bass', label: '드럼앤베이스' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_jazz_classical',
+    label: '재즈 & 클래식',
+    children: [
+      {
+        id: 'jazz',
+        label: '재즈',
+        children: [
+          { id: 'swing_jazz', label: '스윙 재즈' },
+          { id: 'bossa_nova', label: '보사노바' },
+          { id: 'fusion_jazz', label: '퓨전 재즈' },
+          { id: 'cool_jazz', label: '쿨 재즈' },
+          { id: 'big_band', label: '빅밴드' },
+          { id: 'latin_jazz', label: '라틴 재즈' },
+          { id: 'jazz_vocal', label: '재즈 보컬' },
+          { id: 'hard_bop', label: '하드 밥' },
+        ]
+      },
+      {
+        id: 'classical',
+        label: '클래식',
+        children: [
+          { id: 'full_orchestra', label: '풀 오케스트라' },
+          { id: 'piano_solo_classical', label: '피아노 독주' },
+          { id: 'string_ensemble_classical', label: '현악 합주' },
+          { id: 'choral', label: '합창' },
+          { id: 'baroque', label: '바로크' },
+          { id: 'opera', label: '오페라' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_folk_world',
+    label: '포크 & 월드',
+    children: [
+      {
+        id: 'acoustic_folk',
+        label: '어쿠스틱/포크',
+        children: [
+          { id: 'traditional_folk', label: '정통 포크' },
+          { id: 'country', label: '컨트리' },
+          { id: 'bluegrass', label: '블루그래스' },
+          { id: 'singer_songwriter', label: '싱어송라이터' },
+          { id: 'acoustic_session', label: '어쿠스틱 세션' },
+          { id: 'fingerstyle', label: '핑거스타일' },
+        ]
+      },
+      {
+        id: 'world_music_folk',
+        label: '월드 뮤직',
+        children: [
+          { id: 'reggae', label: '레게' },
+          { id: 'afrobeat', label: '아프로비트' },
+          { id: 'celtic', label: '켈틱' },
+          { id: 'latin_salsa', label: '라틴(살사)' },
+          { id: 'flamenco', label: '플라멩코' },
+        ]
+      }
+    ]
+  }
+];

@@ -58,6 +58,7 @@ import {
   MOODS,
   THEMES,
   GENRE_GROUPS,
+  GENRE_HIERARCHY,
   SOUND_STYLES,
   INSTRUMENT_SOUNDS,
   STYLE_CYCLES,
@@ -98,6 +99,7 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
 import { generateSong } from './services/geminiService';
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
+import GenreHierarchySelector from './components/GenreHierarchySelector';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { 
   collection, 
@@ -895,6 +897,7 @@ function App() {
   };
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [subGenre, setSubGenre] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
 
@@ -2002,7 +2005,17 @@ const saveRecentSong = async (newSong: any) => {
       });
 
       const buildSongPrompt = () => {
-        const genreStr = genreLabels.length > 0 ? genreLabels.join(', ') : 'Pop';
+        const subGenreLabels = subGenre.map((id) => {
+          const matched = GENRE_HIERARCHY
+            .flatMap((group) => group.children)
+            .flatMap((main) => main.children)
+            .find((item) => item.id === id);
+          return matched?.label || id;
+        });
+
+        const genreStr = [...genreLabels, ...subGenreLabels].length > 0
+          ? [...genreLabels, ...subGenreLabels].join(', ')
+          : 'Pop';
         const moodStr = finalMoods.length > 0
           ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(', ')
           : 'Emotional';
@@ -2091,7 +2104,7 @@ const saveRecentSong = async (newSong: any) => {
 
       const song = await generateSong({
         genre: finalGenres[0] ?? null,
-        isKpopSelected: selectedGenres.includes('kpop'),
+        isKpopSelected: (selectedGenres ?? []).includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         themes: themeLabels,
         styles: finalStyles,
@@ -2120,6 +2133,8 @@ const saveRecentSong = async (newSong: any) => {
         prompt: song.prompt,
         appliedKeywords: {
           ...song.appliedKeywords,
+          genre: selectedGenres,
+          subGenre: subGenre,
           kpopMode,
           isBallad: hasBalladStyle,
           tempoConfig: {
@@ -2315,21 +2330,36 @@ ${result.prompt}
             <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
               {/* Selection Sections */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <GenreCategorySection
-            title="장르"
-            description="대분류를 고른 뒤 실제 장르 1개를 선택합니다."
-            groups={GENRE_GROUPS}
-            selectedGenreId={selectedGenres[0] ?? null}
-            isRandomized={isGenreRandomized}
-            onOpenGroup={openGenreModal}
-            onClear={() => clearCategory('genre')}
-            onRandom={randomizeSingleGenre}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-            isExpanded={isGenreExpanded}
-            onToggleExpand={() => setIsGenreExpanded(!isGenreExpanded)}
-          />            
+              <GenreHierarchySelector
+                selectedGenre={selectedGenres}
+                selectedSubGenre={subGenre}
+                onSelectGenre={(id) => {
+                  setSelectedGenres([id]);
+                  setIsGenreRandomized(false);
+                }}
+                onSelectSubGenre={(id) =>
+                  setSubGenre((prev) =>
+                    prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                  )
+                }
+                onClear={() => {
+                  setSelectedGenres([]);
+                  setSubGenre([]);
+                  setIsGenreRandomized(false);
+                }}
+                onRandom={() => {
+                  const allMainGenres = GENRE_HIERARCHY.flatMap((g) => g.children);
+                  const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
+                  if (!randomMain) return;
+                  setSelectedGenres([randomMain.id]);
+                  setSubGenre([]);
+                  setIsGenreRandomized(true);
+                }}
+                onHover={setHoveredItem}
+                onLongPressStart={handleLongPressStart}
+                onLongPressEnd={handleLongPressEnd}
+                isRandomized={isGenreRandomized}
+              />
           <CycleSection 
             title="스타일" 
             description="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."

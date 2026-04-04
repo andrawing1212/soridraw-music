@@ -55,8 +55,26 @@ export interface CustomSectionItem {
   tags: string[];
 }
 
+export type GenreSubItem = {
+  id: string;
+  label: string;
+};
+
+export type GenreMainItem = {
+  id: string;
+  label: string;
+  children: GenreSubItem[];
+};
+
+export type GenreGroupItem = {
+  id: string;
+  label: string;
+  children: GenreMainItem[];
+};
+
 export interface AppliedKeywords {
   genre: string[];
+  subGenre?: string[];
   mood: string[];
   theme: string[];
   style?: string[];

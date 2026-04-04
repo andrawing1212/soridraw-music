@@ -2355,10 +2355,6 @@ ${result.prompt}
                   setSubGenre([]);
                   setIsGenreRandomized(true);
                 }}
-                onHover={setHoveredItem}
-                onLongPressStart={handleLongPressStart}
-                onLongPressEnd={handleLongPressEnd}
-                isRandomized={isGenreRandomized}
               />
           <CycleSection 
             title="스타일" 

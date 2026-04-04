@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { GENRE_HIERARCHY } from '../constants';
-import { ChevronDown, ChevronUp, RotateCcw, Dices, X, Check } from 'lucide-react';
+import { ChevronDown, ChevronUp, RotateCcw, Dices, X, Check, ArrowLeft } from 'lucide-react';
 
 type ModalStep = 'main' | 'sub';
 
@@ -34,7 +34,7 @@ interface Props {
 }
 
 const DEFAULT_GROUP_DESCRIPTION = '대분류를 선택한 뒤 메인 장르와 세부 장르를 고를 수 있습니다.';
-const DEFAULT_MAIN_DESCRIPTION = '메인 장르를 선택하거나 세부장르 버튼으로 더 세부적으로 설정하세요.';
+const DEFAULT_MAIN_DESCRIPTION = '메인 장르를 선택한 뒤 세부장르를 더 구체적으로 고를 수 있습니다.';
 const DEFAULT_SUB_DESCRIPTION = '세부 장르를 선택해 장르의 방향을 더 구체적으로 설정하세요.';
 
 export default function GenreHierarchySelector({
@@ -43,15 +43,19 @@ export default function GenreHierarchySelector({
   onSelectGenre,
   onSelectSubGenre,
   onClear,
-  onRandom,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
 
-  const safeSelectedGenre = selectedGenre ?? [];
-  const safeSelectedSubGenre = selectedSubGenre ?? [];
+  // committed selections from parent
+  const committedGenre = selectedGenre ?? [];
+  const committedSubGenre = selectedSubGenre ?? [];
+
+  // pending selections inside modal
+  const [pendingMainId, setPendingMainId] = useState<string | null>(null);
+  const [pendingSubId, setPendingSubId] = useState<string | null>(null);
 
   const groups = useMemo<GroupItem[]>(() => {
     return GENRE_HIERARCHY.map((group) => ({
@@ -72,46 +76,113 @@ export default function GenreHierarchySelector({
   }, []);
 
   const totalCount = useMemo(() => {
-    return groups.reduce((count, group) => count + group.children.length, 0);
+    return groups.reduce((count, group) => {
+      return count + group.children.length + group.children.reduce((subCount, main) => subCount + main.children.length, 0);
+    }, 0);
   }, [groups]);
 
-  const selectedCount = safeSelectedGenre.length;
+  const selectedCount = committedGenre.length + committedSubGenre.length;
 
   const selectedMainLabel = useMemo(() => {
     for (const group of groups) {
-      const matched = group.children.find((main) => safeSelectedGenre.includes(main.id));
+      const matched = group.children.find((main) => committedGenre.includes(main.id));
       if (matched) return matched.label;
     }
     return null;
-  }, [groups, safeSelectedGenre]);
+  }, [groups, committedGenre]);
 
   const selectedSubLabels = useMemo(() => {
     const labels: string[] = [];
     for (const group of groups) {
       for (const main of group.children) {
         for (const sub of main.children) {
-          if (safeSelectedSubGenre.includes(sub.id)) labels.push(sub.label);
+          if (committedSubGenre.includes(sub.id)) labels.push(sub.label);
         }
       }
     }
     return labels;
-  }, [groups, safeSelectedSubGenre]);
+  }, [groups, committedSubGenre]);
 
   const openMainModal = (group: GroupItem) => {
+    const currentMainId = committedGenre[0] ?? null;
+    const currentMain =
+      group.children.find((main) => main.id === currentMainId) ?? null;
+
+    const currentSubId =
+      currentMain?.children.find((sub) => committedSubGenre.includes(sub.id))?.id ?? null;
+
     setActiveGroup(group);
     setActiveMain(null);
     setModalStep('main');
-  };
-
-  const openSubModal = (main: MainGenreItem) => {
-    setActiveMain(main);
-    setModalStep('sub');
+    setPendingMainId(currentMainId);
+    setPendingSubId(currentSubId);
   };
 
   const closeModal = () => {
     setActiveGroup(null);
     setActiveMain(null);
+    setPendingMainId(null);
+    setPendingSubId(null);
     setModalStep('main');
+  };
+
+  const handleBack = () => {
+    if (modalStep === 'sub') {
+      setModalStep('main');
+      setActiveMain(null);
+      return;
+    }
+    closeModal();
+  };
+
+  const handleMainClick = (main: MainGenreItem) => {
+    setPendingMainId(main.id);
+    setPendingSubId(null);
+  };
+
+  const handleOpenSub = (main: MainGenreItem) => {
+    setPendingMainId(main.id);
+    if (!main.children.some((sub) => sub.id === pendingSubId)) {
+      setPendingSubId(null);
+    }
+    setActiveMain(main);
+    setModalStep('sub');
+  };
+
+  const handleSubClick = (subId: string) => {
+    setPendingSubId((prev) => (prev === subId ? null : subId));
+  };
+
+  const commitSelection = (mainId: string | null, subId: string | null) => {
+    committedGenre.forEach((genreId) => onSelectGenre(genreId));
+    committedSubGenre.forEach((subGenreId) => onSelectSubGenre(subGenreId));
+
+    if (mainId) onSelectGenre(mainId);
+    if (subId) onSelectSubGenre(subId);
+  };
+
+  const applyMain = () => {
+    if (!pendingMainId) return;
+    commitSelection(pendingMainId, null);
+    closeModal();
+  };
+
+  const applySub = () => {
+    if (!pendingMainId) return;
+    commitSelection(pendingMainId, pendingSubId);
+    closeModal();
+  };
+
+  const handleRandom = () => {
+    const allMainGenres = groups.flatMap((group) => group.children);
+    if (allMainGenres.length === 0) return;
+
+    const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
+    const randomSub = randomMain.children.length > 0
+      ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
+      : null;
+
+    commitSelection(randomMain.id, randomSub?.id ?? null);
   };
 
   return (
@@ -119,6 +190,7 @@ export default function GenreHierarchySelector({
       <button
         onClick={() => setIsExpanded((prev) => !prev)}
         className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        title={isExpanded ? '접기' : '펼치기'}
       >
         {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
       </button>
@@ -134,7 +206,7 @@ export default function GenreHierarchySelector({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={onRandom}
+            onClick={handleRandom}
             className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
             title="랜덤 선택"
           >
@@ -154,11 +226,12 @@ export default function GenreHierarchySelector({
         <>
           <div className="grid grid-cols-2 gap-2 md:gap-2.5">
             {groups.map((group) => {
-              const hasSelectedMain = group.children.some((main) => safeSelectedGenre.includes(main.id));
+              const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
               return (
                 <button
                   key={group.id}
                   onClick={() => openMainModal(group)}
+                  title={group.description || DEFAULT_GROUP_DESCRIPTION}
                   className={[
                     'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
                     hasSelectedMain
@@ -166,7 +239,7 @@ export default function GenreHierarchySelector({
                       : 'bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10',
                   ].join(' ')}
                 >
-                  <span className="text-[13px] md:text-[13.5px] font-bold leading-tight text-center break-keep">
+                  <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.label}
                   </span>
                 </button>
@@ -199,19 +272,29 @@ export default function GenreHierarchySelector({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-[var(--text-primary)]">
-                  {modalStep === 'main' ? activeGroup.label : activeMain?.label}
-                </h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1">
-                  {modalStep === 'main'
-                    ? activeGroup.description || DEFAULT_GROUP_DESCRIPTION
-                    : activeMain?.description || DEFAULT_SUB_DESCRIPTION}
-                </p>
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  onClick={handleBack}
+                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                  title="뒤로가기"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold text-[var(--text-primary)] truncate">
+                    {modalStep === 'main' ? activeGroup.label : activeMain?.label}
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
+                    {modalStep === 'main'
+                      ? activeGroup.description || DEFAULT_GROUP_DESCRIPTION
+                      : activeMain?.description || DEFAULT_SUB_DESCRIPTION}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={closeModal}
                 className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center"
+                title="닫기"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -221,40 +304,59 @@ export default function GenreHierarchySelector({
               {modalStep === 'main' && (
                 <div className="space-y-2">
                   {activeGroup.children.map((main) => {
-                    const isSelected = safeSelectedGenre.includes(main.id);
+                    const isCommitted = committedGenre.includes(main.id);
+                    const isPending = pendingMainId === main.id;
+                    const isActiveVisual = pendingMainId ? isPending : isCommitted;
+
                     return (
                       <div
                         key={main.id}
                         className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/40 p-3"
+                        title={main.description || DEFAULT_MAIN_DESCRIPTION}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <button
-                            onClick={() => onSelectGenre(main.id)}
+                            onClick={() => handleMainClick(main)}
                             className={[
                               'flex-1 text-left rounded-xl border px-4 py-3 transition-all',
-                              isSelected
+                              isActiveVisual
                                 ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
                                 : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]',
                             ].join(' ')}
+                            title={main.description || DEFAULT_MAIN_DESCRIPTION}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <div className="font-bold text-sm">{main.label}</div>
-                                <div className={['text-xs mt-1', isSelected ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
+                                <div className={['text-xs mt-1', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
                                   {main.description || DEFAULT_MAIN_DESCRIPTION}
                                 </div>
                               </div>
-                              {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                              {isActiveVisual && <Check className="w-4 h-4 shrink-0" />}
                             </div>
                           </button>
 
-                          {main.children.length > 0 && (
-                            <button
-                              onClick={() => openSubModal(main)}
-                              className="shrink-0 px-3 py-3 rounded-xl border border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 transition-all text-xs font-bold"
-                            >
-                              세부장르
-                            </button>
+                          {isActiveVisual && (
+                            <div className="shrink-0 flex flex-col gap-2">
+                              <button
+                                onClick={applyMain}
+                                className="px-3 py-3 rounded-xl border border-brand-orange bg-brand-orange text-white hover:brightness-110 transition-all text-xs font-bold whitespace-nowrap"
+                                title="적용"
+                              >
+                                적용
+                              </button>
+                              {main.children.length > 0 && (
+                                <button
+                                  onClick={() => handleOpenSub(main)}
+                                  className="px-3 py-3 rounded-xl border border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 transition-all text-xs font-bold leading-tight"
+                                  title="세부장르 더보기"
+                                >
+                                  세부장르
+                                  <br />
+                                  더보기
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -264,32 +366,42 @@ export default function GenreHierarchySelector({
               )}
 
               {modalStep === 'sub' && activeMain && (
-                <div className="space-y-2">
-                  {activeMain.children.map((sub) => {
-                    const isSelected = safeSelectedSubGenre.includes(sub.id);
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => onSelectSubGenre(sub.id)}
-                        className={[
-                          'w-full text-left rounded-2xl border px-4 py-3 transition-all',
-                          isSelected
-                            ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
-                            : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]',
-                        ].join(' ')}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="font-bold text-sm">{sub.label}</div>
-                            <div className={['text-xs mt-1', isSelected ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                              {sub.description || DEFAULT_SUB_DESCRIPTION}
-                            </div>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeMain.children.map((sub) => {
+                      const isCommitted = committedSubGenre.includes(sub.id) && committedGenre.includes(activeMain.id);
+                      const isPending = pendingSubId === sub.id;
+                      const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
+
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => handleSubClick(sub.id)}
+                          className={[
+                            'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
+                            isActiveVisual
+                              ? 'bg-brand-orange text-white border-brand-orange'
+                              : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
+                          ].join(' ')}
+                          title={sub.description || DEFAULT_SUB_DESCRIPTION}
+                        >
+                          <div className="font-bold text-sm">{sub.label}</div>
+                          <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
+                            {sub.description || DEFAULT_SUB_DESCRIPTION}
                           </div>
-                          {isSelected && <Check className="w-4 h-4 shrink-0" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-1">
+                    <button
+                      onClick={applySub}
+                      className="w-full px-4 py-3 rounded-xl border border-brand-orange bg-brand-orange text-white hover:brightness-110 transition-all text-sm font-bold"
+                    >
+                      적용
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

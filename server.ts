@@ -40,7 +40,7 @@ async function startServer() {
       }
     });
   } else {
-    const buildPath = path.join(process.cwd(), 'build');
+    const buildPath = path.join(process.cwd(), 'dist');
     app.use(express.static(buildPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(buildPath, 'index.html'));

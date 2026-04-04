@@ -520,7 +520,7 @@ function buildStyle(params: GenerateSongParams): string {
   const genreMeta = getGenreMeta(params.genre);
   const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Pop");
   const subGenreLabels = getSubGenreLabels(params.subGenre ?? []);
-  const genreId = params.genre || "pop";
+  const genreId = (params.genre || "pop").toLowerCase();
 
   // Get up to 3 selected styles
   const selectedStyleIds = (params.styles ?? []).slice(0, 3);

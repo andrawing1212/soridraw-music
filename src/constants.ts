@@ -529,8 +529,8 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
         ]
       },
       {
-        id: 'jpop_style',
-        label: 'J-스타일 (J-Pop)',
+        id: 'jpop',
+        label: 'J-Pop',
         children: [
           { id: 'j_idol_pop', label: 'J-아이돌 팝' },
           { id: 'shibuya_kei', label: '시부야계' },

@@ -58,17 +58,20 @@ export interface CustomSectionItem {
 export type GenreSubItem = {
   id: string;
   label: string;
+  description?: string;
 };
 
 export type GenreMainItem = {
   id: string;
   label: string;
+  description?: string;
   children: GenreSubItem[];
 };
 
 export type GenreGroupItem = {
   id: string;
   label: string;
+  description?: string;
   children: GenreMainItem[];
 };
 

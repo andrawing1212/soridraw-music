@@ -495,6 +495,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
     id: 'group_pop_global',
     label: '팝 & 글로벌',
+    description: '전 세계적으로 사랑받는 대중적인 팝 사운드와 K-Pop, J-Pop 등 글로벌 스타일을 포함합니다.',
     children: [
       {
         id: 'pop',
@@ -548,6 +549,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
     id: 'group_hiphop_rnb',
     label: '힙합 & 알앤비',
+    description: '강렬한 비트의 힙합과 감미로운 그루브의 R&B, 소울 음악을 아우르는 카테고리입니다.',
     children: [
       {
         id: 'hiphop',
@@ -579,59 +581,9 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
     ]
   },
   {
-    id: 'group_trot_adult',
-    label: '트로트 & 성인가요',
-    children: [
-      {
-        id: 'trot',
-        label: '트로트',
-        children: [
-          { id: 'traditional_trot', label: '정통 트로트' },
-          { id: 'semi_trot', label: '세미 트로트' },
-          { id: 'disco_trot', label: '디스코 트로트' },
-          { id: 'rock_trot', label: '락 트로트' },
-          { id: 'ballad_trot', label: '발라드 트로트' },
-          { id: 'blues_trot', label: '블루스 트로트' },
-          { id: 'shuffle_trot', label: '셔플 트로트' },
-          { id: 'gugak_trot', label: '국악 트로트' },
-        ]
-      },
-      {
-        id: '7080_gayo',
-        label: '7080 가요',
-        children: [
-          { id: '7080_folk', label: '7080 포크' },
-          { id: 'adult_ballad', label: '성인 발라드' },
-          { id: 'campus_band_sound', label: '캠퍼스 밴드 사운드' },
-          { id: 'enka_style', label: '엔카 스타일' },
-        ]
-      }
-    ]
-  },
-  {
-    id: 'group_cinematic_bgm',
-    label: '시네마틱 & 배경음악',
-    children: [
-      {
-        id: 'ost',
-        label: 'OST',
-        children: [
-          { id: 'orchestral_score', label: '오케스트럴 스코어' },
-          { id: 'hybrid_epic', label: '하이브리드 에픽' },
-          { id: 'synth_score', label: '신시사이저 스코어' },
-          { id: 'piano_solo', label: '피아노 솔로' },
-          { id: 'string_ensemble', label: '스트링 합주' },
-          { id: 'chiptune', label: '칩튠' },
-          { id: 'world_music', label: '월드 뮤직' },
-          { id: 'minimalism', label: '미니멀리즘' },
-          { id: 'ambient', label: '앰비언트' },
-        ]
-      }
-    ]
-  },
-  {
     id: 'group_rock_band',
     label: '록 & 밴드',
+    description: '에너지 넘치는 록 사운드부터 묵직한 메탈까지, 밴드 악기 중심의 강렬한 음악들을 제공합니다.',
     children: [
       {
         id: 'rock',
@@ -666,6 +618,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
     id: 'group_edm_dance',
     label: '전자음악 & 댄스',
+    description: '신디사이저와 디지털 비트가 주도하는 클럽 사운드와 현대적인 일렉트로닉 댄스 음악입니다.',
     children: [
       {
         id: 'edm',
@@ -687,6 +640,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
     id: 'group_jazz_classical',
     label: '재즈 & 클래식',
+    description: '예술적 깊이가 있는 재즈의 즉흥성과 클래식의 우아한 선율을 담은 고품격 음악 카테고리입니다.',
     children: [
       {
         id: 'jazz',
@@ -719,6 +673,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
     id: 'group_folk_world',
     label: '포크 & 월드',
+    description: '어쿠스틱 악기의 따뜻한 감성과 세계 각국의 전통적인 색채를 담은 이국적인 음악들입니다.',
     children: [
       {
         id: 'acoustic_folk',
@@ -744,5 +699,132 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
         ]
       }
     ]
+  },
+  {
+    id: 'group_trot_adult',
+    label: '트로트 & 성인가요',
+    description: '한국 특유의 정서와 흥이 담긴 트로트와 전 세대가 즐길 수 있는 성인 가요 스타일입니다.',
+    children: [
+      {
+        id: 'trot',
+        label: '트로트',
+        children: [
+          { id: 'traditional_trot', label: '정통 트로트' },
+          { id: 'semi_trot', label: '세미 트로트' },
+          { id: 'disco_trot', label: '디스코 트로트' },
+          { id: 'rock_trot', label: '락 트로트' },
+          { id: 'ballad_trot', label: '발라드 트로트' },
+          { id: 'blues_trot', label: '블루스 트로트' },
+          { id: 'shuffle_trot', label: '셔플 트로트' },
+          { id: 'gugak_trot', label: '국악 트로트' },
+        ]
+      },
+      {
+        id: '7080_gayo',
+        label: '7080 가요',
+        children: [
+          { id: '7080_folk', label: '7080 포크' },
+          { id: 'adult_ballad', label: '성인 발라드' },
+          { id: 'campus_band_sound', label: '캠퍼스 밴드 사운드' },
+          { id: 'enka_style', label: '엔카 스타일' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 'group_cinematic_bgm',
+    label: '시네마틱 & 배경음악',
+    description: '영화나 드라마의 서사를 완성하는 배경음악과 공간의 분위기를 채우는 기능성 사운드입니다.',
+    children: [
+      {
+        id: 'ost',
+        label: 'OST',
+        children: [
+          { id: 'orchestral_score', label: '오케스트럴 스코어' },
+          { id: 'hybrid_epic', label: '하이브리드 에픽' },
+          { id: 'synth_score', label: '신시사이저 스코어' },
+          { id: 'piano_solo', label: '피아노 솔로' },
+          { id: 'string_ensemble', label: '스트링 합주' },
+          { id: 'chiptune', label: '칩튠' },
+          { id: 'world_music', label: '월드 뮤직' },
+          { id: 'minimalism', label: '미니멀리즘' },
+          { id: 'ambient', label: '앰비언트' },
+        ]
+      }
+    ]
   }
 ];
+/* ===================== MID GENRE PROMPTS ===================== */
+
+export const MID_GENRE_PROMPTS = {
+  pop: {
+    style: "Modern Pop",
+    sound: "Electric guitar, Layered synths",
+    vocal: "Melodic delivery",
+  },
+  kpop: {
+    style: "K-Pop, Idol Style",
+    sound: "Electronic beats, Hybrid synths",
+    vocal: "Dynamic vocal mix",
+  },
+  "j-pop": {
+    style: "J-Pop",
+    sound: "Electric guitar, Bright digital synths",
+    vocal: "Bright tone",
+  },
+  hiphop: {
+    style: "Hiphop, Urban",
+    sound: "Heavy 808 bass, Punchy snare",
+    vocal: "Rap flow",
+  },
+  rnb: {
+    style: "Contemporary R&B",
+    sound: "Electric piano, Silky bass",
+    vocal: "Soulful, Smooth",
+  },
+  trot: {
+    style: "Trot",
+    sound: "Accordion, Brass section",
+    vocal: "Trot vibrato",
+  },
+  "7080_gayo": {
+    style: "7080 Korean Retro Pop",
+    sound: "Acoustic guitar, Retro Organ",
+    vocal: "Warm, Nostalgic tone",
+  },
+  ost: {
+    style: "Cinematic Score",
+    sound: "Full strings, Cinematic piano",
+    vocal: "Atmospheric vocals",
+  },
+  rock: {
+    style: "Rock, Metal",
+    sound: "Overdriven guitar, Real drum kit",
+    vocal: "Powerful, Raw tone",
+  },
+  edm: {
+    style: "EDM, Electronic",
+    sound: "Digital lead synths, Sub-bass",
+    vocal: "Processed texture",
+  },
+  jazz: {
+    style: "Jazz",
+    sound: "Upright bass, Jazz piano",
+    vocal: "Jazzy phrasing",
+  },
+  classical: {
+    style: "Classical",
+    sound: "Symphony orchestra, Grand piano",
+    vocal: "Classical technique",
+  },
+  acoustic_folk: {
+    style: "Acoustic, Folk",
+    sound: "Steel-string acoustic guitar",
+    vocal: "Natural tone",
+  },
+  world_music_folk: {
+    style: "World Music",
+    sound: "Ethnic percussion, Traditional flute",
+    vocal: "Native phrasing",
+  },
+};

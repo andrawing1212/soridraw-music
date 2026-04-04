@@ -7,6 +7,7 @@ import {
   GENRE_HIERARCHY,
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
+  MID_GENRE_PROMPTS,
 } from "../constants";
 import {
   LyricsLength,
@@ -590,7 +591,9 @@ function buildStyle(params: GenerateSongParams): string {
     ? params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")
     : "";
 
-  const parts = [genreLabel, ...subGenreLabels, ...processedStyles];
+  const mid = MID_GENRE_PROMPTS[genreId];
+
+  const parts = [mid?.style || genreLabel, ...subGenreLabels, ...processedStyles];
   if (tempoText) parts.push(tempoText);
 
   return `·STYLE: ${parts.join(", ")}`;
@@ -642,6 +645,7 @@ function buildSound(params: GenerateSongParams): string {
   };
 
   let result: string[] = [...selected];
+  const mid = MID_GENRE_PROMPTS[genreId];
 
   // 1. Tone Correction for selected sounds
   const isSoftTone =
@@ -693,6 +697,10 @@ function buildSound(params: GenerateSongParams): string {
   result.push(`with ${space}`);
 
   // 4. Final Compression
+  if (mid?.sound) {
+    result.unshift(mid.sound);
+  }
+
   const final = Array.from(new Set(result)).slice(0, 6);
   return `·SOUND: ${final.join(", ")}`;
 }
@@ -751,6 +759,7 @@ function buildMoodTexture(params: GenerateSongParams): string {
 function buildVocal(params: GenerateSongParams): string {
   const v = params.vocal ?? { male: 0, female: 0, rap: false };
   const parts: string[] = [];
+  const mid = MID_GENRE_PROMPTS[(params.genre ?? "pop").toLowerCase()];
 
   if (v.male > 0 && v.female > 0) parts.push(`${v.male} male & ${v.female} female vocals`);
   else if (v.male > 0) parts.push(`${v.male === 1 ? "solo male" : `${v.male} male`} vocal`);
@@ -794,6 +803,9 @@ function buildVocal(params: GenerateSongParams): string {
   const delivery = DELIVERY_MAP[genreId] || Object.entries(DELIVERY_MAP).find(([k]) => genreId.includes(k))?.[1] || DELIVERY_MAP.default;
   const tone = TONE_MAP[moods[0]] || TONE_MAP.default;
 
+  if (mid?.vocal) {
+    parts.push(mid.vocal);
+  }
   parts.push(delivery);
   parts.push(tone);
 

@@ -943,6 +943,7 @@ function App() {
   const [isSoundExpanded, setIsSoundExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
+  const [isSingerExpanded, setIsSingerExpanded] = useState(false);
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
@@ -2355,6 +2356,7 @@ ${result.prompt}
                   setSubGenre([]);
                   setIsGenreRandomized(true);
                 }}
+                onHover={setHoveredItem}
               />
           <CycleSection 
             title="스타일" 
@@ -2456,6 +2458,8 @@ ${result.prompt}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
+              isExpanded={isSingerExpanded}
+              onToggleExpand={() => setIsSingerExpanded(!isSingerExpanded)}
             />
             <LyricsControl 
               value={lyricsLength}
@@ -3524,16 +3528,7 @@ function CycleSection({
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
-      {onToggleExpand && (
-        <button
-          onClick={onToggleExpand}
-          className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
-        >
-          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-        </button>
-      )}
-
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="relative min-w-0">
@@ -3584,7 +3579,7 @@ function CycleSection({
       <motion.div
         initial={false}
         animate={{ 
-          height: isExpanded ? contentHeight : 130,
+          height: isExpanded ? contentHeight : 56,
           opacity: 1
         }}
         transition={{ duration: 0.25, ease: "easeOut" }}
@@ -3650,6 +3645,15 @@ function CycleSection({
           </p>
         )}
       </div>
+
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        >
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -3713,16 +3717,7 @@ function CategorySection({
   }, [items, selected, isExpanded]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
-      {onToggleExpand && (
-        <button
-          onClick={onToggleExpand}
-          className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
-        >
-          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-        </button>
-      )}
-
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -3950,6 +3945,15 @@ function CategorySection({
           </p>
         )}
       </div>
+
+      {onToggleExpand && (
+        <button
+          onClick={onToggleExpand}
+          className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        >
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -4798,6 +4802,8 @@ interface SingerControlProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 function SingerControl({ 
@@ -4810,7 +4816,9 @@ function SingerControl({
   onClear,
   onHover, 
   onLongPressStart, 
-  onLongPressEnd 
+  onLongPressEnd,
+  isExpanded = true,
+  onToggleExpand
 }: SingerControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
@@ -4865,7 +4873,7 @@ function SingerControl({
   };
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12">
       <div className="relative mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 
@@ -4922,42 +4930,53 @@ function SingerControl({
         </AnimatePresence>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-auto">
+      {isExpanded && (
+        <div className="grid grid-cols-2 gap-2 mt-auto">
+          <button
+            onClick={handleMaleClick}
+            onMouseEnter={() => onHover({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
+            onMouseLeave={() => onHover(null)}
+            onTouchStart={() => onLongPressStart({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
+            onTouchEnd={onLongPressEnd}
+            className={cn(
+              "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
+              maleCount === 1 
+                ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                : maleCount > 1
+                  ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
+                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+            )}
+          >
+            {getMaleLabel()}
+          </button>
+          <button
+            onClick={handleFemaleClick}
+            onMouseEnter={() => onHover({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
+            onMouseLeave={() => onHover(null)}
+            onTouchStart={() => onLongPressStart({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
+            onTouchEnd={onLongPressEnd}
+            className={cn(
+              "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
+              femaleCount === 1 
+                ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                : femaleCount > 1
+                  ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
+                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+            )}
+          >
+            {getFemaleLabel()}
+          </button>
+        </div>
+      )}
+
+      {onToggleExpand && (
         <button
-          onClick={handleMaleClick}
-          onMouseEnter={() => onHover({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
-          onMouseLeave={() => onHover(null)}
-          onTouchStart={() => onLongPressStart({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
-          onTouchEnd={onLongPressEnd}
-          className={cn(
-            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
-            maleCount === 1 
-              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-              : maleCount > 1
-                ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-          )}
+          onClick={onToggleExpand}
+          className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
         >
-          {getMaleLabel()}
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
         </button>
-        <button
-          onClick={handleFemaleClick}
-          onMouseEnter={() => onHover({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
-          onMouseLeave={() => onHover(null)}
-          onTouchStart={() => onLongPressStart({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
-          onTouchEnd={onLongPressEnd}
-          className={cn(
-            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
-            femaleCount === 1 
-              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-              : femaleCount > 1
-                ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-          )}
-        >
-          {getFemaleLabel()}
-        </button>
-      </div>
+      )}
     </div>
   );
 }

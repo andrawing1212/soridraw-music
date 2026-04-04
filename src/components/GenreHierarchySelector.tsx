@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GENRE_HIERARCHY } from '../constants';
 import { ChevronDown, ChevronUp, RotateCcw, Dices, X, Check, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 type ModalStep = 'main' | 'sub';
 
@@ -48,6 +49,9 @@ export default function GenreHierarchySelector({
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
+
+  const modalHistoryDepthRef = useRef(0);
+  const modalScrollYRef = useRef(0);
 
   // committed selections from parent
   const committedGenre = selectedGenre ?? [];
@@ -103,6 +107,14 @@ export default function GenreHierarchySelector({
     return labels;
   }, [groups, committedSubGenre]);
 
+  const closeModalStateOnly = () => {
+    setActiveGroup(null);
+    setActiveMain(null);
+    setPendingMainId(null);
+    setPendingSubId(null);
+    setModalStep('main');
+  };
+
   const openMainModal = (group: GroupItem) => {
     const currentMainId = committedGenre[0] ?? null;
     const currentMain =
@@ -116,26 +128,40 @@ export default function GenreHierarchySelector({
     setModalStep('main');
     setPendingMainId(currentMainId);
     setPendingSubId(currentSubId);
+
+    window.history.pushState({ genreModal: 'main' }, '');
+    modalHistoryDepthRef.current = 1;
   };
 
-  const closeModal = () => {
-    setActiveGroup(null);
-    setActiveMain(null);
-    setPendingMainId(null);
-    setPendingSubId(null);
-    setModalStep('main');
+  const closeModal = (source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && modalHistoryDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
+    closeModalStateOnly();
+    modalHistoryDepthRef.current = 0;
   };
 
   const handleBack = () => {
+    if (modalHistoryDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
+
     if (modalStep === 'sub') {
       setModalStep('main');
       setActiveMain(null);
       return;
     }
-    closeModal();
+
+    closeModalStateOnly();
   };
 
   const handleMainClick = (main: MainGenreItem) => {
+    if (pendingMainId === main.id) {
+      applyMain();
+      return;
+    }
     setPendingMainId(main.id);
     setPendingSubId(null);
   };
@@ -147,10 +173,17 @@ export default function GenreHierarchySelector({
     }
     setActiveMain(main);
     setModalStep('sub');
+
+    window.history.pushState({ genreModal: 'sub' }, '');
+    modalHistoryDepthRef.current = 2;
   };
 
   const handleSubClick = (subId: string) => {
-    setPendingSubId((prev) => (prev === subId ? null : subId));
+    if (pendingSubId === subId) {
+      applySub();
+      return;
+    }
+    setPendingSubId(subId);
   };
 
   const commitSelection = (mainId: string | null, subId: string | null) => {
@@ -164,13 +197,15 @@ export default function GenreHierarchySelector({
   const applyMain = () => {
     if (!pendingMainId) return;
     commitSelection(pendingMainId, null);
-    closeModal();
+    closeModalStateOnly();
+    modalHistoryDepthRef.current = 0;
   };
 
   const applySub = () => {
     if (!pendingMainId) return;
     commitSelection(pendingMainId, pendingSubId);
-    closeModal();
+    closeModalStateOnly();
+    modalHistoryDepthRef.current = 0;
   };
 
   const handleRandom = () => {
@@ -184,6 +219,59 @@ export default function GenreHierarchySelector({
 
     commitSelection(randomMain.id, randomSub?.id ?? null);
   };
+
+  useEffect(() => {
+    if (!activeGroup) return;
+
+    modalScrollYRef.current = window.scrollY;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyPosition = document.body.style.position;
+    const originalBodyTop = document.body.style.top;
+    const originalBodyWidth = document.body.style.width;
+    const originalBodyTouchAction = document.body.style.touchAction;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${modalScrollYRef.current}px`;
+    document.body.style.width = '100%';
+    document.body.style.touchAction = 'none';
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.position = originalBodyPosition;
+      document.body.style.top = originalBodyTop;
+      document.body.style.width = originalBodyWidth;
+      document.body.style.touchAction = originalBodyTouchAction;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscroll;
+
+      window.scrollTo(0, modalScrollYRef.current);
+    };
+  }, [activeGroup]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!activeGroup) return;
+
+      if (modalStep === 'sub') {
+        setModalStep('main');
+        setActiveMain(null);
+        modalHistoryDepthRef.current = 1;
+        return;
+      }
+
+      closeModalStateOnly();
+      modalHistoryDepthRef.current = 0;
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeGroup, modalStep]);
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
@@ -262,152 +350,149 @@ export default function GenreHierarchySelector({
         </>
       )}
 
-      {activeGroup && (
-        <div
-          className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4"
-          onClick={closeModal}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
+      <AnimatePresence>
+        {activeGroup && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 overscroll-none">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => closeModal()}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
+              className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    onClick={handleBack}
+                    className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                    title="뒤로가기"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-[var(--text-primary)] truncate">
+                      {modalStep === 'main' ? activeGroup.label : activeMain?.label}
+                    </h3>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">
+                      {modalStep === 'main'
+                        ? activeGroup.description || DEFAULT_GROUP_DESCRIPTION
+                        : activeMain?.description || DEFAULT_SUB_DESCRIPTION}
+                    </p>
+                  </div>
+                </div>
                 <button
-                  onClick={handleBack}
-                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
-                  title="뒤로가기"
+                  onClick={() => closeModal()}
+                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center"
+                  title="닫기"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </button>
-                <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-[var(--text-primary)] truncate">
-                    {modalStep === 'main' ? activeGroup.label : activeMain?.label}
-                  </h3>
-                  <p className="text-xs text-[var(--text-secondary)] mt-1">
-                    {modalStep === 'main'
-                      ? activeGroup.description || DEFAULT_GROUP_DESCRIPTION
-                      : activeMain?.description || DEFAULT_SUB_DESCRIPTION}
-                  </p>
-                </div>
               </div>
-              <button
-                onClick={closeModal}
-                className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center"
-                title="닫기"
+
+              <div
+                className="p-4 space-y-3 max-h-[70vh] overflow-y-auto overscroll-contain custom-scrollbar"
+                onWheel={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              {modalStep === 'main' && (
-                <div className="space-y-2">
-                  {activeGroup.children.map((main) => {
-                    const isCommitted = committedGenre.includes(main.id);
-                    const isPending = pendingMainId === main.id;
-                    const isActiveVisual = pendingMainId ? isPending : isCommitted;
-
-                    return (
-                      <div
-                        key={main.id}
-                        className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/40 p-3"
-                        title={main.description || DEFAULT_MAIN_DESCRIPTION}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <button
-                            onClick={() => handleMainClick(main)}
-                            className={[
-                              'flex-1 text-left rounded-xl border px-4 py-3 transition-all',
-                              isActiveVisual
-                                ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
-                                : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]',
-                            ].join(' ')}
-                            title={main.description || DEFAULT_MAIN_DESCRIPTION}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="font-bold text-sm">{main.label}</div>
-                                <div className={['text-xs mt-1', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                                  {main.description || DEFAULT_MAIN_DESCRIPTION}
-                                </div>
-                              </div>
-                              {isActiveVisual && <Check className="w-4 h-4 shrink-0" />}
-                            </div>
-                          </button>
-
-                          {isActiveVisual && (
-                            <div className="shrink-0 flex flex-col gap-2">
-                              <button
-                                onClick={applyMain}
-                                className="px-3 py-3 rounded-xl border border-brand-orange bg-brand-orange text-white hover:brightness-110 transition-all text-xs font-bold whitespace-nowrap"
-                                title="적용"
-                              >
-                                적용
-                              </button>
-                              {main.children.length > 0 && (
-                                <button
-                                  onClick={() => handleOpenSub(main)}
-                                  className="px-3 py-3 rounded-xl border border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 transition-all text-xs font-bold leading-tight"
-                                  title="세부장르 더보기"
-                                >
-                                  세부장르
-                                  <br />
-                                  더보기
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {modalStep === 'sub' && activeMain && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    {activeMain.children.map((sub) => {
-                      const isCommitted = committedSubGenre.includes(sub.id) && committedGenre.includes(activeMain.id);
-                      const isPending = pendingSubId === sub.id;
-                      const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
+                {modalStep === 'main' && (
+                  <div className="space-y-2">
+                    {activeGroup.children.map((main) => {
+                      const isCommitted = committedGenre.includes(main.id);
+                      const isPending = pendingMainId === main.id;
+                      const isActiveVisual = pendingMainId ? isPending : isCommitted;
 
                       return (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleSubClick(sub.id)}
-                          className={[
-                            'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
-                            isActiveVisual
-                              ? 'bg-brand-orange text-white border-brand-orange'
-                              : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
-                          ].join(' ')}
-                          title={sub.description || DEFAULT_SUB_DESCRIPTION}
+                        <div
+                          key={main.id}
+                          className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/40 p-3"
+                          title={main.description || DEFAULT_MAIN_DESCRIPTION}
                         >
-                          <div className="font-bold text-sm">{sub.label}</div>
-                          <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                            {sub.description || DEFAULT_SUB_DESCRIPTION}
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => handleMainClick(main)}
+                              className={[
+                                'flex-1 text-left rounded-xl border px-4 py-3 transition-all',
+                                isActiveVisual
+                                  ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
+                                  : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]',
+                              ].join(' ')}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="font-bold text-sm">{main.label}</div>
+                                  <div className={['text-xs mt-1', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
+                                    {main.description || DEFAULT_MAIN_DESCRIPTION}
+                                  </div>
+                                </div>
+                                {isActiveVisual && <Check className="w-4 h-4 shrink-0" />}
+                              </div>
+                            </button>
+
+                            {main.children.length > 0 && (
+                              <button
+                                onClick={() => handleOpenSub(main)}
+                                className={[
+                                  'shrink-0 px-3 py-3 rounded-xl border transition-all text-xs font-bold leading-tight flex flex-col items-center justify-center gap-1 min-w-[70px]',
+                                  isActiveVisual
+                                    ? 'border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10'
+                                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                                ].join(' ')}
+                                title="세부장르 더보기"
+                              >
+                                <span>세부장르</span>
+                                <span>더보기</span>
+                              </button>
+                            )}
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
+                )}
 
-                  <div className="pt-1">
-                    <button
-                      onClick={applySub}
-                      className="w-full px-4 py-3 rounded-xl border border-brand-orange bg-brand-orange text-white hover:brightness-110 transition-all text-sm font-bold"
-                    >
-                      적용
-                    </button>
+                {modalStep === 'sub' && activeMain && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {activeMain.children.map((sub) => {
+                        const isCommitted = committedSubGenre.includes(sub.id) && committedGenre.includes(activeMain.id);
+                        const isPending = pendingSubId === sub.id;
+                        const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
+
+                        return (
+                          <button
+                            key={sub.id}
+                            onClick={() => handleSubClick(sub.id)}
+                            className={[
+                              'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
+                              isActiveVisual
+                                ? 'bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20'
+                                : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
+                            ].join(' ')}
+                            title={sub.description || DEFAULT_SUB_DESCRIPTION}
+                          >
+                            <div className="font-bold text-sm">{sub.label}</div>
+                            <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
+                              {sub.description || DEFAULT_SUB_DESCRIPTION}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

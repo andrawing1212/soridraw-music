@@ -526,6 +526,22 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'k_rock', label: 'K-록' },
           { id: 'gugak_fusion', label: '국악 퓨전' },
         ]
+      },
+      {
+        id: 'jpop_style',
+        label: 'J-스타일 (J-Pop)',
+        children: [
+          { id: 'j_idol_pop', label: 'J-아이돌 팝' },
+          { id: 'shibuya_kei', label: '시부야계' },
+          { id: 'anime_rock', label: '애니메이션 록' },
+          { id: 'j_city_pop', label: 'J-시티팝' },
+          { id: 'visual_kei', label: '비주얼계' },
+          { id: 'utaite_style', label: '우타이테 스타일' },
+          { id: 'vocaloid_style', label: '보컬로이드 스타일' },
+          { id: 'j_jazz_pop', label: 'J-재즈팝' },
+          { id: 'j_electro', label: 'J-일렉트로' },
+          { id: 'j_ballad', label: 'J-발라드' },
+        ]
       }
     ]
   },

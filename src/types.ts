@@ -1,7 +1,9 @@
 export interface CategoryItem {
   id: string;
   label: string;
+  labelKo?: string;
   description: string;
+  descriptionKo?: string;
   promptCore?: string;
   _ts?: number;
 }
@@ -9,7 +11,9 @@ export interface CategoryItem {
 export interface GenreGroup {
   id: string;
   label: string;
+  labelKo?: string;
   description: string;
+  descriptionKo?: string;
   children: CategoryItem[];
 }
 
@@ -24,12 +28,14 @@ export interface InstrumentSoundItem extends CategoryItem {
 export interface SoundStyleCycle {
   id: string;
   title: string;
+  titleKo?: string;
   variants: SoundStyleItem[];
 }
 
 export interface InstrumentSoundCycle {
   id: string;
   title: string;
+  titleKo?: string;
   variants: InstrumentSoundItem[];
 }
 
@@ -37,10 +43,46 @@ export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
 export type SongStructure = '1' | '2' | '3' | 'custom';
 
+export type VocalMode = 'solo' | 'duo' | 'group';
+
+export type VocalRole = 'main' | 'lead' | 'sub' | 'rapper';
+
+export interface VocalMember {
+  id: string;
+  gender: 'male' | 'female';
+  roles: VocalRole[];
+  toneId?: string;
+  tonePrompt?: string;
+}
+
+export interface VocalTone {
+  id: string;
+  label: string;
+  labelKo?: string;
+  description: string;
+  descriptionKo?: string;
+  genderTarget: 'male' | 'female' | 'unisex' | 'group' | 'any';
+  toneType?: string;
+  genreTags: string[];
+  isActive: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+  promptCore?: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 export interface VocalConfig {
   male: number;
   female: number;
   rap: boolean;
+  mode?: VocalMode;
+  globalToneId?: string;
+  tonePrompt?: string;
+  isToneSelected?: boolean;
+  // Future expansion fields
+  members?: VocalMember[];
+  isGroup?: boolean;
 }
 
 export interface TempoConfig {
@@ -58,20 +100,26 @@ export interface CustomSectionItem {
 export type GenreSubItem = {
   id: string;
   label: string;
+  labelKo?: string;
   description?: string;
+  descriptionKo?: string;
 };
 
 export type GenreMainItem = {
   id: string;
   label: string;
+  labelKo?: string;
   description?: string;
+  descriptionKo?: string;
   children: GenreSubItem[];
 };
 
 export type GenreGroupItem = {
   id: string;
   label: string;
+  labelKo?: string;
   description?: string;
+  descriptionKo?: string;
   children: GenreMainItem[];
 };
 
@@ -89,8 +137,9 @@ export interface AppliedKeywords {
   songStructure?: SongStructure;
   customStructure?: CustomSectionItem[];
   kpopMode?: 0 | 1 | 2;
-  mixedLyrics?: boolean;
+  isKoreanEnglishMix?: boolean;
   citypopMode?: 0 | 1 | 2;
+  vocal?: VocalConfig;
   maleCount?: number;
   femaleCount?: number;
   rapEnabled?: boolean;

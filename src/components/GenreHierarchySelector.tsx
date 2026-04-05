@@ -15,20 +15,26 @@ type ModalStep = 'main' | 'sub';
 type SubGenreItem = {
   id: string;
   label: string;
+  labelKo?: string;
   description?: string;
+  descriptionKo?: string;
 };
 
 type MainGenreItem = {
   id: string;
   label: string;
+  labelKo?: string;
   description?: string;
+  descriptionKo?: string;
   children: SubGenreItem[];
 };
 
 type GroupItem = {
   id: string;
   label: string;
+  labelKo?: string;
   description?: string;
+  descriptionKo?: string;
   children: MainGenreItem[];
 };
 
@@ -137,15 +143,21 @@ export default function GenreHierarchySelector({
     return GENRE_HIERARCHY.map((group) => ({
       id: group.id,
       label: group.label,
+      labelKo: group.labelKo,
       description: (group as any).description ?? DEFAULT_GROUP_DESCRIPTION,
+      descriptionKo: (group as any).descriptionKo,
       children: group.children.map((main) => ({
         id: main.id,
         label: main.label,
+        labelKo: main.labelKo,
         description: (main as any).description ?? genreDescMap.get(main.id) ?? DEFAULT_MAIN_DESCRIPTION,
+        descriptionKo: (main as any).descriptionKo,
         children: main.children.map((sub) => ({
           id: sub.id,
           label: sub.label,
+          labelKo: sub.labelKo,
           description: (sub as any).description ?? genreDescMap.get(sub.id) ?? DEFAULT_SUB_DESCRIPTION,
+          descriptionKo: (sub as any).descriptionKo,
         })),
       })),
     }));
@@ -171,7 +183,7 @@ export default function GenreHierarchySelector({
   const selectedMainLabel = useMemo(() => {
     for (const group of groups) {
       const matched = group.children.find((main) => committedGenre.includes(main.id));
-      if (matched) return matched.label;
+      if (matched) return matched.labelKo || matched.label;
     }
     return null;
   }, [groups, committedGenre]);
@@ -181,7 +193,7 @@ export default function GenreHierarchySelector({
     for (const group of groups) {
       for (const main of group.children) {
         for (const sub of main.children) {
-          if (committedSubGenre.includes(sub.id)) labels.push(sub.label);
+          if (committedSubGenre.includes(sub.id)) labels.push(sub.labelKo || sub.label);
         }
       }
     }
@@ -388,7 +400,7 @@ export default function GenreHierarchySelector({
         <div className="flex items-center gap-2">
           <button
             onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
+            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', labelKo: '랜덤 선택', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2.5 rounded-xl transition-all",
@@ -402,7 +414,7 @@ export default function GenreHierarchySelector({
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
+            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
@@ -433,7 +445,7 @@ export default function GenreHierarchySelector({
               <button
                 key={group.id}
                 onClick={() => openMainModal(group)}
-                onMouseEnter={() => onHover({ id: group.id, label: GENRE_TITLE_MAP[group.id] || group.label, description: group.description || DEFAULT_GROUP_DESCRIPTION, _ts: Date.now() })}
+                onMouseEnter={() => onHover({ id: group.id, label: group.label, labelKo: group.labelKo, description: group.description || DEFAULT_GROUP_DESCRIPTION, descriptionKo: group.descriptionKo, _ts: Date.now() } as CategoryItem)}
                 onMouseLeave={() => onHover(null)}
                 className={[
                   'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
@@ -443,7 +455,7 @@ export default function GenreHierarchySelector({
                 ].join(' ')}
               >
                 <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
-                  {group.label}
+                  {group.labelKo || group.label}
                 </span>
               </button>
             );
@@ -501,12 +513,12 @@ export default function GenreHierarchySelector({
                   </button>
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold text-[var(--text-primary)] truncate">
-                      {modalStep === 'main' ? activeGroup.label : activeMain?.label}
+                      {modalStep === 'main' ? (activeGroup.labelKo || activeGroup.label) : (activeMain?.labelKo || activeMain?.label)}
                     </h3>
                     <p className="text-xs text-[var(--text-secondary)] mt-1">
                       {modalStep === 'main'
-                        ? activeGroup.description || DEFAULT_GROUP_DESCRIPTION
-                        : activeMain?.description || DEFAULT_SUB_DESCRIPTION}
+                        ? activeGroup.descriptionKo || activeGroup.description || DEFAULT_GROUP_DESCRIPTION
+                        : activeMain?.descriptionKo || activeMain?.description || DEFAULT_SUB_DESCRIPTION}
                     </p>
                   </div>
                 </div>
@@ -540,7 +552,7 @@ export default function GenreHierarchySelector({
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => handleMainClick(main)}
-                              onMouseEnter={() => onHover({ id: main.id, label: GENRE_TITLE_MAP[main.id] || main.label, description: main.description || DEFAULT_MAIN_DESCRIPTION, _ts: Date.now() })}
+                              onMouseEnter={() => onHover({ id: main.id, label: main.label, labelKo: main.labelKo, description: main.description || DEFAULT_MAIN_DESCRIPTION, descriptionKo: main.descriptionKo, _ts: Date.now() } as CategoryItem)}
                               onMouseLeave={() => onHover(null)}
                               className={[
                                 'flex-1 text-left rounded-xl border px-4 py-3 transition-all',
@@ -551,9 +563,9 @@ export default function GenreHierarchySelector({
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <div className="font-bold text-sm">{main.label}</div>
+                                  <div className="font-bold text-sm">{main.labelKo || main.label}</div>
                                   <div className={['text-xs mt-1', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                                    {main.description || DEFAULT_MAIN_DESCRIPTION}
+                                    {main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION}
                                   </div>
                                 </div>
                                 {isActiveVisual && <Check className="w-4 h-4 shrink-0" />}
@@ -563,7 +575,7 @@ export default function GenreHierarchySelector({
                             {main.children.length > 0 && (
                               <button
                                 onClick={() => handleOpenSub(main)}
-                                onMouseEnter={() => onHover({ id: `${main.id}-sub`, label: `${main.label} 세부장르`, description: DEFAULT_SUB_DESCRIPTION, _ts: Date.now() })}
+                                onMouseEnter={() => onHover({ id: `${main.id}-sub`, label: `${main.label} Details`, labelKo: `${main.labelKo || main.label} 세부장르`, description: DEFAULT_SUB_DESCRIPTION, _ts: Date.now() } as CategoryItem)}
                                 onMouseLeave={() => onHover(null)}
                                 className={[
                                   'shrink-0 px-3 py-3 rounded-xl border transition-all text-xs font-bold leading-tight flex flex-col items-center justify-center gap-1 min-w-[70px]',
@@ -596,7 +608,7 @@ export default function GenreHierarchySelector({
                         <button
                           key={sub.id}
                           onClick={() => handleSubClick(sub.id)}
-                          onMouseEnter={() => onHover({ id: sub.id, label: sub.label, description: sub.description || DEFAULT_SUB_DESCRIPTION, _ts: Date.now() })}
+                          onMouseEnter={() => onHover({ id: sub.id, label: sub.label, labelKo: sub.labelKo, description: sub.description || DEFAULT_SUB_DESCRIPTION, descriptionKo: sub.descriptionKo, _ts: Date.now() } as CategoryItem)}
                           onMouseLeave={() => onHover(null)}
                           className={[
                             'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
@@ -604,11 +616,11 @@ export default function GenreHierarchySelector({
                               ? 'bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20'
                               : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
                           ].join(' ')}
-                          title={sub.description || DEFAULT_SUB_DESCRIPTION}
+                          title={sub.descriptionKo || sub.description || DEFAULT_SUB_DESCRIPTION}
                         >
-                          <div className="font-bold text-sm">{sub.label}</div>
+                          <div className="font-bold text-sm">{sub.labelKo || sub.label}</div>
                           <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                            {sub.description || DEFAULT_SUB_DESCRIPTION}
+                            {sub.descriptionKo || sub.description || DEFAULT_SUB_DESCRIPTION}
                           </div>
                         </button>
                         );

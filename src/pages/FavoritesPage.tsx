@@ -117,9 +117,9 @@ export default function FavoritesPage({
   unlockAllFavorites: () => void;
   lockAllFavorites: () => void;
   user: User | null;
-  onHover: (item: { id: string; label: string; description: string; _ts?: number } | null) => void;
-  hoveredItem: { id: string; label: string; description: string; _ts?: number } | null;
-  onLongPressStart: (item: { id: string; label: string; description: string }) => void;
+  onHover: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string; _ts?: number } | null) => void;
+  hoveredItem: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string; _ts?: number } | null;
+  onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
   onLongPressEnd: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
@@ -1283,30 +1283,48 @@ ${song.prompt}
 
                 <div className="flex flex-col flex-grow space-y-4">
                   <div className="flex flex-wrap gap-1.5 overflow-hidden">
-                    {getSongGenreValues(song).map((g: string) => (
-                      <span 
-                        key={g} 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onHover({ id: `genre-${g}`, label: g, description: `${g} 장르입니다.`, _ts: Date.now() });
-                        }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
-                      >
-                        #{g}
-                      </span>
-                    ))}
-                    {getSongMoodValues(song).map((m: string) => (
-                      <span 
-                        key={m} 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onHover({ id: `mood-${m}`, label: m, description: `${m} 감정 키워드입니다.`, _ts: Date.now() });
-                        }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
-                      >
-                        #{m}
-                      </span>
-                    ))}
+                    {getSongGenreValues(song).map((g: string) => {
+                      const item = getKeywordMeta(g);
+                      return (
+                        <span 
+                          key={g} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onHover({ 
+                              id: `genre-${g}`, 
+                              label: g, 
+                              labelKo: item?.labelKo,
+                              description: item?.descriptionKo || item?.description || `${g} 장르입니다.`, 
+                              _ts: Date.now() 
+                            });
+                          }}
+                          className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
+                        >
+                          #{item?.labelKo || g}
+                        </span>
+                      );
+                    })}
+                    {getSongMoodValues(song).map((m: string) => {
+                      const item = getKeywordMeta(m);
+                      return (
+                        <span 
+                          key={m} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onHover({ 
+                              id: `mood-${m}`, 
+                              label: m, 
+                              labelKo: item?.labelKo,
+                              description: item?.descriptionKo || item?.description || `${m} 감정 키워드입니다.`, 
+                              _ts: Date.now() 
+                            });
+                          }}
+                          className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
+                        >
+                          #{item?.labelKo || m}
+                        </span>
+                      );
+                    })}
                     {getSongThemeValues(song).map((t: string) => {
                       const item = getKeywordMeta(t);
                       return (
@@ -1314,11 +1332,17 @@ ${song.prompt}
                           key={`theme-${t}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onHover({ id: `theme-${t}`, label: t, description: item?.description ?? `${t} 곡 주제입니다.`, _ts: Date.now() });
+                            onHover({ 
+                              id: `theme-${t}`, 
+                              label: t, 
+                              labelKo: item?.labelKo,
+                              description: item?.descriptionKo || item?.description || `${t} 곡 주제입니다.`, 
+                              _ts: Date.now() 
+                            });
                           }}
                           className="text-[8px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 whitespace-nowrap cursor-pointer hover:bg-emerald-500/20"
                         >
-                          #{t}
+                          #{item?.labelKo || t}
                         </span>
                       );
                     })}
@@ -1329,11 +1353,17 @@ ${song.prompt}
                           key={`style-${s}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onHover({ id: `style-${s}`, label: s, description: item?.description ?? `${s} 스타일입니다.`, _ts: Date.now() });
+                            onHover({ 
+                              id: `style-${s}`, 
+                              label: s, 
+                              labelKo: item?.labelKo,
+                              description: item?.descriptionKo || item?.description || `${s} 스타일입니다.`, 
+                              _ts: Date.now() 
+                            });
                           }}
                           className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
                         >
-                          #{s}
+                          #{item?.labelKo || s}
                         </span>
                       );
                     })}
@@ -1344,11 +1374,17 @@ ${song.prompt}
                           key={`sound-${s}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onHover({ id: `sound-${s}`, label: s, description: item?.description ?? `${s} 악기/사운드 설정입니다.`, _ts: Date.now() });
+                            onHover({ 
+                              id: `sound-${s}`, 
+                              label: s, 
+                              labelKo: item?.labelKo,
+                              description: item?.descriptionKo || item?.description || `${s} 악기/사운드 설정입니다.`, 
+                              _ts: Date.now() 
+                            });
                           }}
                           className="text-[8px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 whitespace-nowrap cursor-pointer hover:bg-sky-500/20"
                         >
-                          #{s}
+                          #{item?.labelKo || s}
                         </span>
                       );
                     })}
@@ -1744,19 +1780,29 @@ ${song.prompt}
                                   key={`${section.title}-${k}`}
                                   onMouseEnter={() => {
                                     if (item) {
-                                      onHover({ id: `keyword-${section.title}-${k}`, label: k, description: item.description });
+                                      onHover({ 
+                                        id: `keyword-${section.title}-${k}`, 
+                                        label: k, 
+                                        labelKo: item.labelKo,
+                                        description: item.descriptionKo || item.description 
+                                      });
                                     }
                                   }}
                                   onMouseLeave={() => onHover(null)}
                                   onTouchStart={() => {
                                     if (item) {
-                                      onLongPressStart({ id: `keyword-${section.title}-${k}`, label: k, description: item.description });
+                                      onLongPressStart({ 
+                                        id: `keyword-${section.title}-${k}`, 
+                                        label: k, 
+                                        labelKo: item.labelKo,
+                                        description: item.descriptionKo || item.description 
+                                      });
                                     }
                                   }}
                                   onTouchEnd={onLongPressEnd}
                                   className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-help transition-all active:scale-95 ${section.className}`}
                                 >
-                                  #{k}
+                                  #{item?.labelKo || k}
                                 </span>
                               );
                             })}

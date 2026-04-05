@@ -29,6 +29,7 @@ import {
   Maximize2,
   Minimize2,
   Plus,
+  Minus,
   Shuffle,
   Dices,
   Menu,
@@ -48,6 +49,7 @@ import {
   CheckCircle2,
   Mic2,
   Tag,
+  Languages,
   Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -64,7 +66,8 @@ import {
   STYLE_CYCLES,
   SOUND_TEXTURE_CYCLES,
 } from './constants';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem } from './types';
+import { VOCAL_TONES } from './constants/vocalTones';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole } from './types';
 
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   if (!input || !Array.isArray(input)) return [];
@@ -97,27 +100,29 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
 };
 
 import { generateSong } from './services/geminiService';
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  where,
+  limit,
+  addDoc,
+  writeBatch,
+  getDocs,
+  getDocFromServer,
+  query as firestoreQuery
+} from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  updateDoc,
-  writeBatch,
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc,
-  setDoc,
-  onSnapshot,
-  serverTimestamp,
-  getDocFromServer,
-  query as firestoreQuery
-} from 'firebase/firestore';
 
 enum OperationType {
   CREATE = 'create',
@@ -430,6 +435,7 @@ function SecondaryScrollControl() {
 }
 
 const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));
+const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -495,7 +501,7 @@ function getCycleVariantLabel(cycles: readonly { id: string; title: string; vari
     .map((variant) => variant!.label);
 }
 
-const STYLE_VARIANT_LOOKUP = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; description: string }>>((acc, variant) => {
+const STYLE_VARIANT_LOOKUP = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }>>((acc, variant) => {
   acc[variant.id] = variant;
   return acc;
 }, {});
@@ -505,7 +511,7 @@ const STYLE_LABEL_TO_ID = STYLE_CYCLES.flatMap((cycle) => cycle.variants).reduce
   return acc;
 }, {});
 
-const SOUND_VARIANT_LOOKUP = SOUND_TEXTURE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; description: string }>>((acc, variant) => {
+const SOUND_VARIANT_LOOKUP = SOUND_TEXTURE_CYCLES.flatMap((cycle) => cycle.variants).reduce<Record<string, { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }>>((acc, variant) => {
   acc[variant.id] = variant;
   return acc;
 }, {});
@@ -524,11 +530,13 @@ function resolveSoundTextureIds(labelsOrIds: string[] = []) {
 }
 
 function getStyleVariantLabelById(id: string) {
-  return STYLE_VARIANT_LOOKUP[id]?.label ?? id;
+  const variant = STYLE_VARIANT_LOOKUP[id];
+  return variant?.labelKo || variant?.label || id;
 }
 
 function getSoundVariantLabelById(id: string) {
-  return SOUND_VARIANT_LOOKUP[id]?.label ?? id;
+  const variant = SOUND_VARIANT_LOOKUP[id];
+  return variant?.labelKo || variant?.label || id;
 }
 
 function buildThemeSentence(themeLabels: string[] = []): string {
@@ -762,6 +770,19 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }:
                       <div className="px-3 py-2 border-b border-[var(--border-color)]/50 mb-1">
                         <p className="text-[10px] md:text-[12px] text-[var(--text-secondary)] truncate font-medium">{user.displayName}</p>
                       </div>
+                      {user?.email === 'andrawing1212@gmail.com' && (
+                        <button 
+                          onClick={() => {
+                            navigate('/admin/vocals');
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                        >
+                          <Settings className="w-3 h-3" />
+                          보컬 관리
+                        </button>
+                      )}
                       <button 
                         onClick={() => {
                           handleLogout();
@@ -906,9 +927,75 @@ function App() {
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songStructure, setSongStructure] = useState<SongStructure>('2');
+  const [vocalMode, setVocalMode] = useState<VocalMode>('solo');
+  const [vocalTones, setVocalTones] = useState<VocalTone[]>(VOCAL_TONES);
+  const [selectedVocalToneId, setSelectedVocalToneId] = useState<string | undefined>(undefined);
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
+  const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([]);
   const [rapEnabled, setRapEnabled] = useState(false);
+  useEffect(() => {
+    const total = maleCount + femaleCount;
+    if (total === 0) {
+      if (vocalMembers.length > 0) setVocalMembers([]);
+      return;
+    }
+
+    // If counts match members, do nothing (preserve custom order/settings)
+    const currentM = vocalMembers.filter(m => m.gender === 'male').length;
+    const currentF = vocalMembers.filter(m => m.gender === 'female').length;
+    if (currentM === maleCount && currentF === femaleCount && vocalMembers.length === total) return;
+
+    setVocalMembers(prev => {
+      const newMembers: VocalMember[] = [];
+      let mRemaining = maleCount;
+      let fRemaining = femaleCount;
+
+      // Try to preserve existing members' roles and tones if gender matches
+      // In group mode, we might have a custom order, so we try to match by index first
+      for (let i = 0; i < total; i++) {
+        const existing = prev[i];
+        let gender: 'male' | 'female' = 'male';
+        
+        if (mRemaining > 0) {
+          gender = 'male';
+          mRemaining--;
+        } else {
+          gender = 'female';
+          fRemaining--;
+        }
+
+        if (existing && existing.gender === gender) {
+          newMembers.push(existing);
+        } else {
+          // Assign default roles
+          let roles: VocalRole[] = [];
+          if (vocalMode === 'solo') {
+            roles = ['main'];
+          } else if (vocalMode === 'duo') {
+            roles = i === 0 ? ['main'] : ['sub'];
+          } else {
+            if (i === 0) roles = ['main'];
+            else if (i === 1) roles = ['lead'];
+            else roles = ['sub'];
+          }
+
+          // If rap is enabled and it's a solo or we need a rapper in group
+          if (rapEnabled && (vocalMode === 'solo' || (vocalMode === 'group' && i === total - 1) || (vocalMode === 'duo' && i === 1))) {
+            if (!roles.includes('rapper')) roles.push('rapper');
+          }
+
+          newMembers.push({
+            id: `member_${Date.now()}_${i}`,
+            gender,
+            roles,
+          });
+        }
+      }
+      return newMembers;
+    });
+  }, [maleCount, femaleCount, vocalMode, rapEnabled]);
+
   const [pinnedGenres, setPinnedGenres] = useState<string[]>(() => {
     const saved = sessionStorage.getItem('soridraw_pinned_genres');
     return saved ? JSON.parse(saved) : [];
@@ -942,8 +1029,9 @@ function App() {
   const [isStyleExpanded, setIsStyleExpanded] = useState(false);
   const [isSoundExpanded, setIsSoundExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
+  const [isVocalExpanded, setIsVocalExpanded] = useState(false);
+  const [isSongStructureExpanded, setIsSongStructureExpanded] = useState(false);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
-  const [isSingerExpanded, setIsSingerExpanded] = useState(false);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
     const isPC = window.innerWidth >= 1024;
@@ -1131,7 +1219,7 @@ function App() {
 
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
-  const [isMixedLyrics, setIsMixedLyrics] = useState(false);
+  const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
@@ -1371,7 +1459,7 @@ function App() {
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
     const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (genreIds.includes('kpop') ? 1 : 0);
-    const resolvedMixedLyrics = appliedKeywords.mixedLyrics ?? (appliedKeywords.kpopMode === 2);
+    const resolvedMixedLyrics = appliedKeywords.isKoreanEnglishMix ?? (appliedKeywords.kpopMode === 2);
 
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
@@ -1383,7 +1471,7 @@ function App() {
     setSelectedStyles(styleIds);
     setSelectedInstrumentSounds(instrumentSoundIds);
     setKpopMode(genreIds.includes('kpop') ? resolvedKpopMode : 0);
-    setIsMixedLyrics(resolvedMixedLyrics);
+    setIsKoreanEnglishMix(resolvedMixedLyrics);
     setCitypopMode(genreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -1747,7 +1835,7 @@ function App() {
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSounds : []);
 
     setKpopMode(0);
-    setIsMixedLyrics(false);
+    setIsKoreanEnglishMix(false);
     setCitypopMode(0);
 
     setIsGenreRandomized(false);
@@ -1917,6 +2005,29 @@ const saveRecentSong = async (newSong: any) => {
     console.error("Failed to save recent songs:", e);
   }
 };
+
+  /* 
+  useEffect(() => {
+    const q = query(collection(db, 'vocalTones'), orderBy('sortOrder', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tones = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as VocalTone[];
+      setVocalTones(tones.filter(t => t.isActive));
+      
+      // Set default tone if available
+      const defaultTone = tones.find(t => t.isDefault && t.isActive);
+      if (defaultTone && !selectedVocalToneId) {
+        setSelectedVocalToneId(defaultTone.id);
+      }
+    }, (err) => {
+      console.error("Error fetching vocal tones:", err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+  */
 
   const handleGenerate = async () => {
     if (!user) {
@@ -2116,6 +2227,37 @@ const saveRecentSong = async (newSong: any) => {
 ·THEME: ${themeStr || 'No explicit story theme selected.'}`.trim();
       };
 
+      const getRecommendedVocalTone = (m: number, f: number, genres: string[]) => {
+        if (vocalTones.length === 0) return null;
+        
+        // 1. If nothing selected (m=0, f=0), return balanced_group
+        if (m === 0 && f === 0) {
+          return vocalTones.find(t => t.id === 'balanced_group') || vocalTones.find(t => t.isDefault) || vocalTones[0];
+        }
+
+        // 2. Filter by gender if selected
+        let candidates = vocalTones;
+        if (m > 0 && f > 0) {
+          candidates = vocalTones.filter(t => t.genderTarget === 'unisex' || t.genderTarget === 'any' || t.genderTarget === 'group');
+        } else if (m > 0) {
+          candidates = vocalTones.filter(t => t.genderTarget === 'male' || t.genderTarget === 'any');
+        } else if (f > 0) {
+          candidates = vocalTones.filter(t => t.genderTarget === 'female' || t.genderTarget === 'any');
+        }
+        
+        // 3. Filter by genre
+        const genreId = genres[0];
+        if (genreId) {
+          const genreMatch = candidates.find(t => t.genreTags.includes(genreId));
+          if (genreMatch) return genreMatch;
+        }
+        
+        // 4. Fallback to first candidate of that gender (as requested: "해당 성별 첫 번째 tone 자동 선택")
+        return candidates[0] || vocalTones.find(t => t.isDefault) || vocalTones[0];
+      };
+
+      const recommendedTone = getRecommendedVocalTone(maleCount, femaleCount, selectedGenres);
+
       const songPrompt = buildSongPrompt();
 
       const payload = {
@@ -2135,11 +2277,18 @@ const saveRecentSong = async (newSong: any) => {
           male: maleCount,
           female: femaleCount,
           rap: rapEnabled,
+          mode: vocalMode,
+          globalToneId: selectedVocalToneId || recommendedTone?.id,
+          isToneSelected: !!selectedVocalToneId,
+          tonePrompt: selectedVocalToneId 
+            ? vocalTones.find(t => t.id === selectedVocalToneId)?.promptCore
+            : recommendedTone?.promptCore,
+          members: vocalMembers,
         },
         tempo: tempoInfo,
         specialPrompt,
         kpopMode,
-        isMixedLyrics,
+        isKoreanEnglishMix,
         customStructure,
       };
 
@@ -2158,6 +2307,7 @@ const saveRecentSong = async (newSong: any) => {
           ...song.appliedKeywords,
           genre: selectedGenres,
           subGenre: subGenre,
+          vocal: payload.vocal,
           kpopMode,
           isBallad: hasBalladStyle,
           tempoConfig: {
@@ -2257,7 +2407,7 @@ ${result.prompt}
     minBPM !== 90 ||
     maxBPM !== 110 ||
     kpopMode !== 0 ||
-    isMixedLyrics ||
+    isKoreanEnglishMix ||
     citypopMode !== 0 ||
     isGenreRandomized ||
     isMoodRandomized ||
@@ -2384,8 +2534,10 @@ ${result.prompt}
                 isRandomized={isGenreRandomized}
               />
           <CycleSection 
-            title="스타일" 
-            description="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
+            title="Style" 
+            titleKo="스타일"
+            description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
+            descriptionKo="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
@@ -2399,9 +2551,11 @@ ${result.prompt}
             onToggleExpand={() => toggleMainSections('style')}
           />
           <CycleSection 
-            title="사운드/텍스쳐" 
+            title="Sound/Texture" 
+            titleKo="사운드/텍스쳐"
             titleClassName="text-[16px] md:text-[18px]"
-            description="악기 톤과 배경 질감을 설정합니다. 소리의 결, 공간감, 무게감, 타격감을 조절하여 음악의 청감 인상을 결정하며, 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
+            description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
+            descriptionKo="악기 톤과 배경 질감을 설정합니다. 소리의 결, 공간감, 무게감, 타격감을 조절하여 음악의 청감 인상을 결정하며, 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
             cycles={SOUND_TEXTURE_CYCLES}
             selected={selectedInstrumentSounds}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES)}
@@ -2431,8 +2585,10 @@ ${result.prompt}
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <CategorySection 
-              title="분위기" 
-              description="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
+              title="Mood" 
+              titleKo="분위기"
+              description="Determines the emotional curve and mood of the song. By setting the emotional core the music aims to convey, such as sadness, joy, or tension, it decides the overall emotional tone of the generated music."
+              descriptionKo="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
               items={MOODS} 
               selected={selectedMoods} 
               onToggle={(id) => toggleSelection(id, 'mood')}
@@ -2449,8 +2605,10 @@ ${result.prompt}
               hidePin={true}
             />
             <CategorySection 
-              title="곡 주제" 
-              description="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
+              title="Theme" 
+              titleKo="곡 주제"
+              description="Determines the situation, story, and message of the song. Like love, breakup, night, or travel, it sets what the song talks about and what scene it paints."
+              descriptionKo="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
               items={THEMES} 
               selected={selectedThemes} 
               pinned={pinnedThemes}
@@ -2468,29 +2626,24 @@ ${result.prompt}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
             />
-            <SingerControl 
+            <VocalControl 
               maleCount={maleCount}
               femaleCount={femaleCount}
+              vocalMode={vocalMode}
+              vocalTones={vocalTones}
+              vocalMembers={vocalMembers}
+              selectedToneId={selectedVocalToneId}
               rapEnabled={rapEnabled}
               onMaleChange={setMaleCount}
               onFemaleChange={setFemaleCount}
+              onModeChange={setVocalMode}
+              onMembersChange={setVocalMembers}
+              onToneChange={setSelectedVocalToneId}
               onRapChange={setRapEnabled}
-              onClear={() => {
-                setMaleCount(0);
-                setFemaleCount(0);
-                setRapEnabled(false);
-              }}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-            />
-            <LyricsControl 
-              value={lyricsLength}
-              onChange={setLyricsLength}
-              isMixedLyrics={isMixedLyrics}
-              onToggleMixedLyrics={() => {
-                const nextValue = !isMixedLyrics;
-                setIsMixedLyrics(nextValue);
+              isKoreanEnglishMix={isKoreanEnglishMix}
+              onToggleKoreanEnglishMix={() => {
+                const nextValue = !isKoreanEnglishMix;
+                setIsKoreanEnglishMix(nextValue);
                 setHoveredItem({
                   id: 'lyrics-mix-toggle',
                   label: '한/영 혼합',
@@ -2501,22 +2654,37 @@ ${result.prompt}
                 });
               }}
               onClear={() => {
-                setLyricsLength('normal');
-                setIsMixedLyrics(false);
+                setMaleCount(0);
+                setFemaleCount(0);
+                setVocalMode('solo');
+                setRapEnabled(false);
+                setSelectedVocalToneId(undefined);
+                setVocalMembers([]);
+                setIsKoreanEnglishMix(false);
               }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
+              isExpanded={isVocalExpanded}
+              onToggleExpand={() => setIsVocalExpanded(!isVocalExpanded)}
             />
-            <SongStructureControl 
-              value={songStructure}
+            <SongStructureIntegratedControl
+              lyricsLength={lyricsLength}
+              onLyricsLengthChange={setLyricsLength}
+              songStructure={songStructure}
               customStructure={customStructure}
-              onChange={setSongStructure}
+              onSongStructureChange={setSongStructure}
               onCustomStructureChange={setCustomStructure}
-              onClear={() => { setSongStructure('2'); setCustomStructure([]); }}
+              onClear={() => {
+                setLyricsLength('normal');
+                setSongStructure('2');
+                setCustomStructure([]);
+              }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
+              isExpanded={isSongStructureExpanded}
+              onToggleExpand={() => setIsSongStructureExpanded(!isSongStructureExpanded)}
               user={user}
             />
           </div>
@@ -2560,9 +2728,9 @@ ${result.prompt}
                 className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start"
               >
                 {[
-                  ...selectedGenres.map((id) => ({ id, type: 'genre' as const, label: GENRES.find((item) => item.id === id)?.label ?? id })),
-                  ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.label ?? id })),
-                  ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.label ?? id })),
+                  ...selectedGenres.map((id) => ({ id, type: 'genre' as const, label: GENRES.find((item) => item.id === id)?.labelKo || GENRES.find((item) => item.id === id)?.label || id })),
+                  ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
+                  ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
                   ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
                   ...selectedInstrumentSounds.map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })),
                 ].map((item) => {
@@ -3152,6 +3320,11 @@ ${result.prompt}
         />
         <Route path="/archive" element={<Navigate to="/history" replace />} />
         <Route path="/library" element={<Navigate to="/history" replace />} />
+        <Route path="/admin/vocals" element={
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+            <AdminVocalTonesPageLazy />
+          </Suspense>
+        } />
       </Routes>
 
       {/* Tooltip / Description Overlay */}
@@ -3314,12 +3487,12 @@ function GenreCategorySection({
         <div className="flex items-center gap-2">
           <button
             onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'genre-random', label: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
+            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random', labelKo: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'genre-random', label: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'genre-random', label: 'Random', labelKo: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all",
@@ -3332,12 +3505,12 @@ function GenreCategorySection({
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'genre-clear', label: '초기화', description: '선택한 장르를 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: '초기화', description: '선택한 장르를 초기화합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
@@ -3367,12 +3540,22 @@ function GenreCategorySection({
               <button
                 key={group.id}
                 onClick={() => onOpenGroup(group.id)}
-                onMouseEnter={() => onHover({ id: group.id, label: group.label, description: group.description })}
+                onMouseEnter={() => onHover({ 
+                  id: group.id, 
+                  label: group.label, 
+                  labelKo: group.labelKo,
+                  description: group.descriptionKo || group.description 
+                })}
                 onMouseLeave={() => {
                   onHover(null);
                   onLongPressEnd();
                 }}
-                onTouchStart={() => onLongPressStart({ id: group.id, label: group.label, description: group.description })}
+                onTouchStart={() => onLongPressStart({ 
+                  id: group.id, 
+                  label: group.label, 
+                  labelKo: group.labelKo,
+                  description: group.descriptionKo || group.description 
+                })}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
                   "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[44px]",
@@ -3382,12 +3565,12 @@ function GenreCategorySection({
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span>{group.label}</span>
+                  <span>{group.labelKo || group.label}</span>
                   <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
                 </div>
                 {isSelectedGroup && selectedChild && (
                   <div className="mt-1 text-[11px] text-white/80 font-medium">
-                    {selectedChild.label}
+                    {selectedChild.labelKo || selectedChild.label}
                   </div>
                 )}
               </button>
@@ -3399,7 +3582,7 @@ function GenreCategorySection({
       <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selectedChild ? (
           <p className="text-sm font-semibold text-brand-orange">
-            {selectedGroup?.label} / {selectedChild.label}
+            {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
           <p className="text-xs text-[var(--text-secondary)]">
@@ -3458,8 +3641,8 @@ function GenreSelectModal({
       >
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-[var(--text-primary)]">{group.label}</h3>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">{group.description}</p>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">{group.labelKo || group.label}</h3>
+            <p className="text-xs text-[var(--text-secondary)] mt-1">{group.descriptionKo || group.description}</p>
           </div>
           <button
             onClick={onClose}
@@ -3489,9 +3672,9 @@ function GenreSelectModal({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="font-bold text-sm">{item.label}</div>
+                    <div className="font-bold text-sm">{item.labelKo || item.label}</div>
                     <div className={cn("text-xs mt-1", isSelected ? "text-white/80" : "text-[var(--text-secondary)]")}>
-                      {item.description}
+                      {item.descriptionKo || item.description}
                     </div>
                   </div>
                   {isSelected && <Check className="w-4 h-4 shrink-0" />}
@@ -3507,8 +3690,21 @@ function GenreSelectModal({
 
 interface CycleSectionProps {
   title: string;
+  titleKo?: string;
   description: string;
-  cycles: readonly { id: string; title: string; variants: readonly { id: string; label: string; description: string }[] }[];
+  descriptionKo?: string;
+  cycles: readonly { 
+    id: string; 
+    title: string; 
+    titleKo?: string;
+    variants: readonly { 
+      id: string; 
+      label: string; 
+      labelKo?: string;
+      description: string;
+      descriptionKo?: string;
+    }[] 
+  }[];
   selected: string[];
   onCycleToggle: (cycleId: string) => void;
   onClear: () => void;
@@ -3524,7 +3720,9 @@ interface CycleSectionProps {
 
 function CycleSection({ 
   title, 
+  titleKo,
   description, 
+  descriptionKo,
   cycles, 
   selected, 
   onCycleToggle, 
@@ -3561,7 +3759,7 @@ function CycleSection({
               className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
             >
               <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
-              <span className="truncate">{title}</span>
+              <span className="truncate">{titleKo || title}</span>
               <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
             </h3>
             <AnimatePresence>
@@ -3572,7 +3770,7 @@ function CycleSection({
                   exit={{ opacity: 0, y: 10 }}
                   className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
                 >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -3585,7 +3783,7 @@ function CycleSection({
           </button>
           <button 
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', description: `${title} 설정을 초기화합니다.` })}
+            onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', labelKo: '초기화', description: `${title} 설정을 초기화합니다.` })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
@@ -3617,12 +3815,14 @@ function CycleSection({
               ? {
                   id: cycle.id,
                   label: activeVariant.label,
-                  description: activeVariant.description,
+                  labelKo: activeVariant.labelKo,
+                  description: activeVariant.descriptionKo ?? activeVariant.description,
                 }
               : {
                   id: cycle.id,
                   label: cycle.title,
-                  description: baseVariant.description,
+                  labelKo: cycle.titleKo,
+                  description: baseVariant.descriptionKo ?? baseVariant.description,
                 };
             return (
               <button
@@ -3631,10 +3831,22 @@ function CycleSection({
                   const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
                   onCycleToggle(cycle.id);
                   if (nextIndex === -1) {
-                    onHover({ id: cycle.id, label: cycle.title, description: baseVariant.description, _ts: Date.now() } as CategoryItem);
+                    onHover({ 
+                      id: cycle.id, 
+                      label: cycle.title, 
+                      labelKo: cycle.titleKo,
+                      description: baseVariant.descriptionKo ?? baseVariant.description, 
+                      _ts: Date.now() 
+                    } as CategoryItem);
                   } else {
                     const nextVariant = cycle.variants[nextIndex];
-                    onHover({ id: cycle.id, label: nextVariant.label, description: nextVariant.description, _ts: Date.now() } as CategoryItem);
+                    onHover({ 
+                      id: cycle.id, 
+                      label: nextVariant.label, 
+                      labelKo: nextVariant.labelKo,
+                      description: nextVariant.descriptionKo ?? nextVariant.description, 
+                      _ts: Date.now() 
+                    } as CategoryItem);
                   }
                 }}
                 onMouseEnter={() => onHover(hoverItem)}
@@ -3647,7 +3859,7 @@ function CycleSection({
                 )}
               >
                 <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
-                  {activeVariant ? activeVariant.label : cycle.title}
+                  {activeVariant ? (activeVariant.labelKo ?? activeVariant.label) : (cycle.titleKo ?? cycle.title)}
                 </span>
               </button>
             );
@@ -3659,12 +3871,15 @@ function CycleSection({
         {selected.length > 0 ? (
           <p className="text-sm font-semibold text-brand-orange">
             {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
-              .map(c => c.variants.find(v => selected.includes(v.id))?.label)
+              .map(c => {
+                const v = c.variants.find(v => selected.includes(v.id));
+                return v?.labelKo || v?.label;
+              })
               .join(', ')}
           </p>
         ) : (
           <p className="text-xs text-[var(--text-secondary)]">
-            {title} 키워드를 선택하세요.
+            {titleKo || title} 키워드를 선택하세요.
           </p>
         )}
       </div>
@@ -3683,7 +3898,9 @@ function CycleSection({
 
 interface CategorySectionProps {
   title: string;
+  titleKo?: string;
   description: string;
+  descriptionKo?: string;
   items: CategoryItem[];
   selected: string[];
   pinned?: string[];
@@ -3707,7 +3924,9 @@ interface CategorySectionProps {
 
 function CategorySection({ 
   title, 
+  titleKo,
   description,
+  descriptionKo,
   items, 
   selected, 
   pinned = [],
@@ -3750,7 +3969,7 @@ function CategorySection({
               className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
             >
               <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-              {title}
+              {titleKo || title}
               <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
             </h3>
             <AnimatePresence>
@@ -3761,7 +3980,7 @@ function CategorySection({
                   exit={{ opacity: 0, y: 10 }}
                   className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
                 >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -3770,12 +3989,12 @@ function CategorySection({
         <div className="flex items-center gap-2">
           <button 
             onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
+            onMouseEnter={() => onHover({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'random-cat', label: '랜덤 선택', description: `${title} 키워드를 무작위로 선택합니다.` })}
+            onTouchStart={() => onLongPressStart({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all",
@@ -3789,12 +4008,12 @@ function CategorySection({
           {!hidePin && onUnpinAll && (
             <button 
               onClick={onUnpinAll}
-              onMouseEnter={() => onHover({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+              onMouseEnter={() => onHover({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
               onMouseLeave={() => {
                 onHover(null);
                 onLongPressEnd();
               }}
-              onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+              onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
               onTouchEnd={onLongPressEnd}
               className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
             >
@@ -3803,12 +4022,12 @@ function CategorySection({
           )}
           <button 
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'clear', label: 'Reset', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all border",
@@ -3840,8 +4059,8 @@ function CategorySection({
           
           // K-Pop specific styles
           let kpopStyle = "";
-          let displayLabel = item.label;
-          let displayDescription = item.description;
+          let displayLabel = item.labelKo ?? item.label;
+          let displayDescription = item.descriptionKo ?? item.description;
 
           if (isKpop) {
             if (kpopMode === 2) {
@@ -3880,19 +4099,35 @@ function CategorySection({
           return (
             <div key={item.id} className="relative group/btn">
               <button
-                onMouseEnter={() => onHover({ ...item, description: displayDescription })}
+                onMouseEnter={() => onHover({ 
+                  ...item, 
+                  label: item.label,
+                  labelKo: item.labelKo,
+                  description: displayDescription 
+                })}
                 onMouseLeave={() => {
                   onHover(null);
                   onLongPressEnd();
                 }}
-                onTouchStart={() => onLongPressStart({ ...item, description: displayDescription })}
+                onTouchStart={() => onLongPressStart({ 
+                  ...item, 
+                  label: item.label,
+                  labelKo: item.labelKo,
+                  description: displayDescription 
+                })}
                 onTouchEnd={onLongPressEnd}
                 onClick={() => {
                   onToggle(item.id);
                   // Show description on click for mobile/touch users
                   // For K-Pop and City Pop, toggleSelection already updates the hover state with the correct next description
                   if (!isKpop && !isCitypop) {
-                    onHover({ ...item, description: displayDescription, _ts: Date.now() });
+                    onHover({ 
+                      ...item, 
+                      label: item.label,
+                      labelKo: item.labelKo,
+                      description: displayDescription, 
+                      _ts: Date.now() 
+                    });
                   }
                 }}
                 className={cn(
@@ -3960,11 +4195,14 @@ function CategorySection({
       <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selected.length > 0 ? (
           <p className="text-sm font-semibold text-brand-orange">
-            {selected.map(id => items.find(i => i.id === id)?.label).join(', ')}
+            {selected.map(id => {
+              const item = items.find(i => i.id === id);
+              return item?.labelKo || item?.label;
+            }).join(', ')}
           </p>
         ) : (
           <p className="text-xs text-[var(--text-secondary)]">
-            키워드를 선택하여 곡의 {title}를 설정하세요.
+            키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
         )}
       </div>
@@ -3972,347 +4210,76 @@ function CategorySection({
       {onToggleExpand && (
         <button
           onClick={onToggleExpand}
-          className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+          onMouseEnter={() => onHover({ id: 'category-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
+          onMouseLeave={() => onHover(null)}
+          className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
         >
-          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
       )}
     </div>
   );
 }
 
-interface LyricsControlProps {
-  value: LyricsLength;
-  onChange: (val: LyricsLength) => void;
-  isMixedLyrics: boolean;
-  onToggleMixedLyrics: () => void;
-  onClear: () => void;
-  onHover: (item: CategoryItem | null) => void;
-  onLongPressStart: (item: CategoryItem) => void;
-  onLongPressEnd: () => void;
-}
-
-function LyricsControl({ value, onChange, isMixedLyrics, onToggleMixedLyrics, onClear, onHover, onLongPressStart, onLongPressEnd }: LyricsControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
-
-  const options = [
-    { id: 'very-short', label: '더짧게', description: '매우 간결하고 함축적인 가사 (2-3줄)' },
-    { id: 'short', label: '짧게', description: '함축적이고 간결한 가사 (째즈/발라드 추천)' },
-    { id: 'normal', label: '기본', description: '일반적인 팝 스타일의 가사 분량' },
-    { id: 'long', label: '길게', description: '서사적이고 풍부한 가사' }
-  ];
-
-  return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
-      <div className="relative mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h3 
-            onMouseEnter={() => setShowTitleTooltip(true)}
-            onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-          >
-            <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-            가사
-          </h3>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onToggleMixedLyrics}
-            onMouseEnter={() => onHover({
-              id: 'lyrics-mix',
-              label: '한/영 혼합',
-              description: isMixedLyrics
-                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
-            })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({
-              id: 'lyrics-mix',
-              label: '한/영 혼합',
-              description: isMixedLyrics
-                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
-            })}
-            onTouchEnd={onLongPressEnd}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-              isMixedLyrics
-                ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
-            )}
-          >
-            <span className={cn(
-              "w-2 h-2 rounded-full",
-              isMixedLyrics ? "bg-brand-orange" : "bg-[var(--text-secondary)]"
-            )} />
-            한/영 혼합 {isMixedLyrics ? 'ON' : 'OFF'}
-          </button>
-          <button
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'lyrics-clear', label: 'Reset', description: '가사 설정을 초기화합니다.' })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "p-2 rounded-lg transition-all border",
-              (value !== 'normal' || isMixedLyrics)
-                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
-            )}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        <AnimatePresence>
-          {showTitleTooltip && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-56 pointer-events-none"
-            >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사의 전체적인 분량을 조절합니다. 오른쪽 토글을 켜면 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="flex gap-2 mt-auto">
-        {options.map((opt) => (
-          <div key={opt.id} className="relative flex-1">
-            <button
-              onClick={() => {
-                onChange(opt.id as LyricsLength);
-                onHover({ id: opt.id, label: opt.label, description: opt.description, _ts: Date.now() });
-              }}
-              onMouseEnter={() => onHover({ id: opt.id, label: opt.label, description: opt.description })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
-              }}
-              onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, description: opt.description })}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "w-full py-3 rounded-xl text-sm font-bold transition-all border",
-                value === opt.id
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-              )}
-            >
-              {opt.label}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-interface SongStructureControlProps {
-  value: SongStructure;
+interface SongStructureIntegratedControlProps {
+  lyricsLength: LyricsLength;
+  onLyricsLengthChange: (val: LyricsLength) => void;
+  songStructure: SongStructure;
   customStructure: CustomSectionItem[];
-  onChange: (val: SongStructure) => void;
-  onCustomStructureChange: (sections: CustomSectionItem[]) => void;
+  onSongStructureChange: (val: SongStructure) => void;
+  onCustomStructureChange: (val: CustomSectionItem[]) => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   user: User | null;
 }
 
-function TagEditModal({
-  isOpen,
-  onClose,
-  section,
-  tags,
-  onSave,
-  onHover,
-  onLongPressStart,
-  onLongPressEnd
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  section: string;
-  tags: string[];
-  onSave: (tags: string[]) => void;
-  onHover: (item: CategoryItem | null) => void;
-  onLongPressStart: (item: CategoryItem) => void;
-  onLongPressEnd: () => void;
-}) {
-  const [selectedTags, setSelectedTags] = useState<string[]>(tags);
-  const allowedTags = ALLOWED_TAGS_BY_SECTION[section] || [];
-
-  useEffect(() => {
-    if (isOpen) setSelectedTags(tags);
-  }, [isOpen, tags]);
-
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev => {
-      if (prev.includes(tag)) {
-        return prev.filter(t => t !== tag);
-      }
-      if (prev.length >= 2) return prev;
-      return [...prev, tag];
-    });
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
-          <div>
-            <h4 className="text-lg font-bold text-[var(--text-primary)]">{section} 태그 편집</h4>
-            <p className="text-xs text-[var(--text-secondary)] mt-0.5">최대 2개까지 선택 가능합니다.</p>
-          </div>
-          <button 
-            onClick={onClose} 
-            className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-secondary)]"
-            onMouseEnter={() => onHover({ id: 'tag-modal-close', label: '닫기', description: '태그 편집 창을 닫습니다.' })}
-            onMouseLeave={() => onHover(null)}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {allowedTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                onMouseEnter={() => onHover({ id: `tag-${tag}`, label: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
-                onMouseLeave={() => {
-                  onHover(null);
-                  onLongPressEnd();
-                }}
-                onTouchStart={() => onLongPressStart({ id: `tag-${tag}`, label: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
-                onTouchEnd={onLongPressEnd}
-                className={cn(
-                  "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border",
-                  selectedTags.includes(tag)
-                    ? "bg-brand-orange border-orange-400 text-white"
-                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-                )}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={onClose}
-              onMouseEnter={() => onHover({ id: 'tag-modal-cancel', label: '취소', description: '변경사항을 취소하고 닫습니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
-            >
-              취소
-            </button>
-            <button
-              onClick={() => onSave(selectedTags)}
-              onMouseEnter={() => onHover({ id: 'tag-modal-save', label: '저장', description: '선택한 태그를 해당 섹션에 적용합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className="flex-1 py-3 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
-            >
-              저장
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-type SavedStructurePreset = {
-  id: string;
-  name: string;
-  sections: CustomSectionItem[];
-  createdAt: number;
-};
-
-const CUSTOM_STRUCTURE_SECTIONS = [
-  'Intro',
-  'Verse 1',
-  'Verse 2',
-  'Pre-Chorus',
-  'Chorus',
-  'Hook',
-  'Drop',
-  'Bridge',
-  'Breakdown',
-  'Instrumental',
-  'Solo',
-  'Rap Verse',
-  'Final Chorus',
-  'Outro',
-] as const;
-
-const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
-  'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic'],
-  'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
-  'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
-  'Pre-Chorus': ['Soft', 'Emotional', 'Build-up', 'Harmony'],
-  'Chorus': ['Big', 'Harmony', 'Energetic', 'Emotional', 'Rap', 'Group'],
-  'Hook': ['Big', 'Harmony', 'Energetic', 'Minimal', 'Group'],
-  'Drop': ['Big', 'Instrumental', 'Energetic', 'Minimal'],
-  'Bridge': ['Soft', 'Instrumental', 'Emotional', 'Rap', 'Minimal'],
-  'Breakdown': ['Minimal', 'Instrumental', 'Rap', 'Soft'],
-  'Instrumental': ['Instrumental', 'Minimal', 'Emotional', 'Energetic'],
-  'Solo': ['Instrumental', 'Emotional', 'Big'],
-  'Rap Verse': ['Rap', 'Solo', 'Energetic', 'Aggressive'],
-  'Final Chorus': ['Big', 'Harmony', 'Adlib', 'Emotional', 'Energetic', 'Group'],
-  'Outro': ['Soft', 'Instrumental', 'Minimal', 'Emotional'],
-};
-
-const TAG_DESCRIPTIONS: Record<string, string> = {
-  'Solo': '한 명의 보컬이 전면에 드러나는 섹션입니다.',
-  'Duet': '두 명의 보컬이 조화를 이루며 노래하는 섹션입니다.',
-  'Group': '모든 보컬이 함께 참여하여 풍성함을 더하는 섹션입니다.',
-  'Rap': '멜로디보다 리듬과 가사 전달에 집중하는 랩 섹션입니다.',
-  'Harmony': '여러 화성이 겹쳐 더 풍성하게 들리는 섹션입니다.',
-  'Adlib': '정해진 멜로디 외에 자유로운 보컬 표현이 추가되는 섹션입니다.',
-  'Instrumental': '보컬보다 연주가 중심이 되는 구간입니다.',
-  'Soft': '부드럽고 잔잔한 분위기로 감성을 자극하는 섹션입니다.',
-  'Big': '에너지가 크게 확장되어 후렴의 임팩트를 강화합니다.',
-  'Minimal': '악기 수와 밀도를 줄여 간결하게 들리게 합니다.',
-  'Emotional': '감정적인 호소력이 짙게 묻어나는 섹션입니다.',
-  'Energetic': '활기차고 역동적인 에너지가 느껴지는 섹션입니다.',
-  'Build-up': '점진적으로 에너지를 쌓아 올려 다음 섹션을 준비합니다.',
-  'Aggressive': '강렬하고 공격적인 사운드로 긴장감을 높입니다.',
-};
-
-function SongStructureControl({
-  value,
+function SongStructureIntegratedControl({
+  lyricsLength,
+  onLyricsLengthChange,
+  songStructure,
   customStructure,
-  onChange,
+  onSongStructureChange,
   onCustomStructureChange,
   onClear,
   onHover,
   onLongPressStart,
   onLongPressEnd,
+  isExpanded,
+  onToggleExpand,
   user
-}: SongStructureControlProps) {
+}: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(120);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [lyricsLength, songStructure, customStructure, isExpanded]);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
+
+  const lyricsOptions = [
+    { id: 'very-short', label: 'Very Short', labelKo: '더짧게', description: '매우 간결하고 함축적인 가사 (2-3줄)' },
+    { id: 'short', label: 'Short', labelKo: '짧게', description: '함축적이고 간결한 가사 (째즈/발라드 추천)' },
+    { id: 'normal', label: 'Normal', labelKo: '기본', description: '일반적인 팝 스타일의 가사 분량' },
+    { id: 'long', label: 'Long', labelKo: '길게', description: '서사적이고 풍부한 가사' }
+  ];
+
+  const structureOptions = [
+    { id: '1', label: '1', description: '짧고 간결한 구조 · 추천 길이 1~2분' },
+    { id: '2', label: '2', description: '가장 일반적인 기본 구조 · 추천 길이 2~4분' },
+    { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분' },
+    { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
+  ] as const;
 
   useEffect(() => {
     if (!user) {
@@ -4373,20 +4340,20 @@ function SongStructureControl({
     setIsCustomModalOpen(true);
   };
 
-  const formatStructureText = (structure: CustomSectionItem[]) => {
+  function formatStructureText(structure: CustomSectionItem[]) {
     const normalized = normalizeCustomStructure(structure);
     return normalized.map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` · ${(s.tags ?? []).join(' · ')}` : ''}`).join(' → ');
-  };
+  }
 
-  const handleSelectOption = (optionId: SongStructure) => {
+  const handleSelectStructure = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
       '1': '짧고 간결한 구조 · 추천 길이 1~2분',
       '2': '가장 일반적인 기본 구조 · 추천 길이 2~4분',
       '3': '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분',
-      'custom': customStructure.length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.',
+      'custom': (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.',
     };
 
-    onChange(optionId);
+    onSongStructureChange(optionId);
 
     if (optionId === 'custom') {
       onHover({
@@ -4431,9 +4398,9 @@ function SongStructureControl({
   };
 
   const handleApplyCustomStructure = () => {
-    if (draftStructure.length === 0) return;
+    if ((draftStructure ?? []).length === 0) return;
     onCustomStructureChange(draftStructure);
-    onChange('custom');
+    onSongStructureChange('custom');
     setIsCustomModalOpen(false);
     onHover({
       id: 'song-structure-custom-applied',
@@ -4445,7 +4412,7 @@ function SongStructureControl({
 
   const handleSavePreset = () => {
     const trimmedName = presetName.trim();
-    if (!trimmedName || draftStructure.length === 0) return;
+    if (!trimmedName || (draftStructure ?? []).length === 0) return;
 
     const nextPreset: SavedStructurePreset = {
       id: `${Date.now()}`,
@@ -4466,16 +4433,9 @@ function SongStructureControl({
     persistSavedStructures(savedStructures.filter((preset) => preset.id !== presetId));
   };
 
-  const options = [
-    { id: '1', label: '1', description: '짧고 간결한 구조 · 추천 길이 1~2분' },
-    { id: '2', label: '2', description: '가장 일반적인 기본 구조 · 추천 길이 2~4분' },
-    { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분' },
-    { id: 'custom', label: '커스텀', description: customStructure.length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
-  ] as const;
-
   return (
     <>
-      <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)]">
+      <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12">
         <div className="relative mb-6 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
@@ -4487,12 +4447,12 @@ function SongStructureControl({
           </h3>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'structure-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
-              (value !== '2' || customStructure.length > 0)
-                ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
+              (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0)
+                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                 : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
             )}
           >
@@ -4506,44 +4466,105 @@ function SongStructureControl({
                 exit={{ opacity: 0, y: 10 }}
                 className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-56 pointer-events-none"
               >
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">곡의 전개 방식과 전체 흐름을 설정합니다. 1은 짧은 구조, 2는 기본 구조, 3은 확장 구조이며 커스텀은 팝업에서 직접 섹션 순서를 편집합니다.</p>
+                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 mt-auto">
-          {options.map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => handleSelectOption(opt.id as SongStructure)}
-              onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
-              onMouseLeave={() => {
-                onHover(null);
-                onLongPressEnd();
-              }}
-              onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
-              onTouchEnd={onLongPressEnd}
-              className={cn(
-                "py-3 rounded-xl text-sm font-bold transition-all border",
-                value === opt.id
-                  ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                  : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        <motion.div
+          initial={false}
+          animate={{ 
+            height: isExpanded ? contentHeight : 120,
+            opacity: 1
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="overflow-hidden"
+        >
+          <div ref={contentRef} className="space-y-8 flex-1 flex flex-col justify-between">
+            {/* 1. 가사 길이 */}
+            <div className="space-y-3">
+              <p className="text-base font-bold text-brand-orange uppercase tracking-wider">│가사 길이</p>
+              <div className="flex gap-2">
+                {lyricsOptions.map((opt) => (
+                  <div key={opt.id} className="relative flex-1">
+                    <button
+                      onClick={() => {
+                        onLyricsLengthChange(opt.id as LyricsLength);
+                        onHover({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description, _ts: Date.now() });
+                      }}
+                      onMouseEnter={() => onHover({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
+                      onMouseLeave={() => {
+                        onHover(null);
+                        onLongPressEnd();
+                      }}
+                      onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
+                      onTouchEnd={onLongPressEnd}
+                      className={cn(
+                        "w-full py-3 rounded-xl text-sm font-bold transition-all border",
+                        lyricsLength === opt.id
+                          ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                          : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                      )}
+                    >
+                      {opt.labelKo || opt.label}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        {value === 'custom' && (customStructure ?? []).length > 0 && (
-          <div className="mt-4 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3">
-            <p className="text-[11px] font-bold text-brand-orange mb-2">현재 커스텀 구조</p>
-            <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
-              {formatStructureText(customStructure)}
-            </p>
+            {/* Separator */}
+            <div className="flex justify-center">
+              <div className="w-1/2 h-[1px] bg-white/10" />
+            </div>
+
+            {/* 3. 섹션 구조 */}
+            <div className="space-y-3">
+              <p className="text-base font-bold text-brand-orange uppercase tracking-wider">│섹션 구조</p>
+              <div className="grid grid-cols-4 gap-2">
+                {structureOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleSelectStructure(opt.id as SongStructure)}
+                    onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
+                    onMouseLeave={() => {
+                      onHover(null);
+                      onLongPressEnd();
+                    }}
+                    onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
+                    onTouchEnd={onLongPressEnd}
+                    className={cn(
+                      "py-3 rounded-xl text-sm font-bold transition-all border",
+                      songStructure === opt.id
+                        ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                        : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {songStructure === 'custom' && (customStructure ?? []).length > 0 && (
+                <div className="mt-2 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3">
+                  <p className="text-[11px] font-bold text-brand-orange mb-1">현재 커스텀 구조</p>
+                  <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
+                    {formatStructureText(customStructure)}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </motion.div>
+
+        <button
+          onClick={onToggleExpand}
+          onMouseEnter={() => onHover({ id: 'song-structure-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
+          onMouseLeave={() => onHover(null)}
+          className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        >
+          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
       </div>
 
       <AnimatePresence>
@@ -4814,82 +4835,376 @@ function SongStructureControl({
   );
 }
 
-interface SingerControlProps {
-  maleCount: number;
-  femaleCount: number;
-  rapEnabled: boolean;
-  onMaleChange: (count: number) => void;
-  onFemaleChange: (count: number) => void;
-  onRapChange: (enabled: boolean) => void;
+interface SongStructureControlProps {
+  value: SongStructure;
+  customStructure: CustomSectionItem[];
+  onChange: (val: SongStructure) => void;
+  onCustomStructureChange: (sections: CustomSectionItem[]) => void;
   onClear: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  user: User | null;
 }
 
-function SingerControl({ 
+function TagEditModal({
+  isOpen,
+  onClose,
+  section,
+  tags,
+  onSave,
+  onHover,
+  onLongPressStart,
+  onLongPressEnd
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  section: string;
+  tags: string[];
+  onSave: (tags: string[]) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
+}) {
+  const [selectedTags, setSelectedTags] = useState<string[]>(tags);
+  const allowedTags = ALLOWED_TAGS_BY_SECTION[section] || [];
+
+  useEffect(() => {
+    if (isOpen) setSelectedTags(tags);
+  }, [isOpen, tags]);
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tag)) {
+        return prev.filter(t => t !== tag);
+      }
+      if (prev.length >= 2) return prev;
+      return [...prev, tag];
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+          <div>
+            <h4 className="text-lg font-bold text-[var(--text-primary)]">{section} 태그 편집</h4>
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">최대 2개까지 선택 가능합니다.</p>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-secondary)]"
+            onMouseEnter={() => onHover({ id: 'tag-modal-close', label: 'Close', labelKo: '닫기', description: '태그 편집 창을 닫습니다.' })}
+            onMouseLeave={() => onHover(null)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {allowedTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                onMouseEnter={() => onHover({ id: `tag-${tag}`, label: tag, labelKo: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
+                onMouseLeave={() => {
+                  onHover(null);
+                  onLongPressEnd();
+                }}
+                onTouchStart={() => onLongPressStart({ id: `tag-${tag}`, label: tag, labelKo: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
+                onTouchEnd={onLongPressEnd}
+                className={cn(
+                  "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border",
+                  selectedTags.includes(tag)
+                    ? "bg-brand-orange border-orange-400 text-white"
+                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                )}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={onClose}
+              onMouseEnter={() => onHover({ id: 'tag-modal-cancel', label: 'Cancel', labelKo: '취소', description: '변경사항을 취소하고 닫습니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => onSave(selectedTags)}
+              onMouseEnter={() => onHover({ id: 'tag-modal-save', label: 'Save', labelKo: '저장', description: '선택한 태그를 해당 섹션에 적용합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className="flex-1 py-3 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white hover:brightness-110 transition-all shadow-lg shadow-brand-orange/20"
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+type SavedStructurePreset = {
+  id: string;
+  name: string;
+  sections: CustomSectionItem[];
+  createdAt: number;
+};
+
+const CUSTOM_STRUCTURE_SECTIONS = [
+  'Intro',
+  'Verse 1',
+  'Verse 2',
+  'Pre-Chorus',
+  'Chorus',
+  'Hook',
+  'Drop',
+  'Bridge',
+  'Breakdown',
+  'Instrumental',
+  'Solo',
+  'Rap Verse',
+  'Final Chorus',
+  'Outro',
+] as const;
+
+const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
+  'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic'],
+  'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
+  'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
+  'Pre-Chorus': ['Soft', 'Emotional', 'Build-up', 'Harmony'],
+  'Chorus': ['Big', 'Harmony', 'Energetic', 'Emotional', 'Rap', 'Group'],
+  'Hook': ['Big', 'Harmony', 'Energetic', 'Minimal', 'Group'],
+  'Drop': ['Big', 'Instrumental', 'Energetic', 'Minimal'],
+  'Bridge': ['Soft', 'Instrumental', 'Emotional', 'Rap', 'Minimal'],
+  'Breakdown': ['Minimal', 'Instrumental', 'Rap', 'Soft'],
+  'Instrumental': ['Instrumental', 'Minimal', 'Emotional', 'Energetic'],
+  'Solo': ['Instrumental', 'Emotional', 'Big'],
+  'Rap Verse': ['Rap', 'Solo', 'Energetic', 'Aggressive'],
+  'Final Chorus': ['Big', 'Harmony', 'Adlib', 'Emotional', 'Energetic', 'Group'],
+  'Outro': ['Soft', 'Instrumental', 'Minimal', 'Emotional'],
+};
+
+const TAG_DESCRIPTIONS: Record<string, string> = {
+  'Solo': '한 명의 보컬이 전면에 드러나는 섹션입니다.',
+  'Duet': '두 명의 보컬이 조화를 이루며 노래하는 섹션입니다.',
+  'Group': '모든 보컬이 함께 참여하여 풍성함을 더하는 섹션입니다.',
+  'Rap': '멜로디보다 리듬과 가사 전달에 집중하는 랩 섹션입니다.',
+  'Harmony': '여러 화성이 겹쳐 더 풍성하게 들리는 섹션입니다.',
+  'Adlib': '정해진 멜로디 외에 자유로운 보컬 표현이 추가되는 섹션입니다.',
+  'Instrumental': '보컬보다 연주가 중심이 되는 구간입니다.',
+  'Soft': '부드럽고 잔잔한 분위기로 감성을 자극하는 섹션입니다.',
+  'Big': '에너지가 크게 확장되어 후렴의 임팩트를 강화합니다.',
+  'Minimal': '악기 수와 밀도를 줄여 간결하게 들리게 합니다.',
+  'Emotional': '감정적인 호소력이 짙게 묻어나는 섹션입니다.',
+  'Energetic': '활기차고 역동적인 에너지가 느껴지는 섹션입니다.',
+  'Build-up': '점진적으로 에너지를 쌓아 올려 다음 섹션을 준비합니다.',
+  'Aggressive': '강렬하고 공격적인 사운드로 긴장감을 높입니다.',
+};
+
+interface VocalControlProps {
+  maleCount: number;
+  femaleCount: number;
+  vocalMode: VocalMode;
+  vocalTones: VocalTone[];
+  vocalMembers: VocalMember[];
+  selectedToneId?: string;
+  rapEnabled: boolean;
+  onMaleChange: (count: number) => void;
+  onFemaleChange: (count: number) => void;
+  onModeChange: (mode: VocalMode) => void;
+  onMembersChange: (members: VocalMember[]) => void;
+  onToneChange: (toneId: string | undefined) => void;
+  onRapChange: (enabled: boolean) => void;
+  isKoreanEnglishMix: boolean;
+  onToggleKoreanEnglishMix: () => void;
+  onClear: () => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
+  onLongPressEnd: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+}
+
+function VocalControl({ 
   maleCount, 
   femaleCount, 
+  vocalMode,
+  vocalTones,
+  vocalMembers,
+  selectedToneId,
   rapEnabled,
+  isKoreanEnglishMix,
+  onToggleKoreanEnglishMix,
   onMaleChange, 
   onFemaleChange, 
+  onModeChange,
+  onMembersChange,
+  onToneChange,
   onRapChange,
   onClear,
   onHover, 
   onLongPressStart, 
   onLongPressEnd,
-}: SingerControlProps) {
+  isExpanded,
+  onToggleExpand,
+}: VocalControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(120);
 
-  const getMaleDescription = (count: number) => {
-    if (count === 0) return "남성 보컬 미선택";
-    if (count === 1) return "남성 솔로 보컬";
-    if (count === 2) return "남성 듀오 보컬";
-    return "남성 그룹 보컬";
-  };
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [maleCount, femaleCount, vocalMode, vocalMembers, selectedToneId, rapEnabled, isKoreanEnglishMix, isExpanded]);
+  const [showToneSelector, setShowToneSelector] = useState(false);
+  const [activeMemberToneSelector, setActiveMemberToneSelector] = useState<string | null>(null);
 
-  const getFemaleDescription = (count: number) => {
-    if (count === 0) return "여성 보컬 미선택";
-    if (count === 1) return "여성 솔로 보컬";
-    if (count === 2) return "여성 듀오 보컬";
-    return "여성 그룹 보컬";
+  const getModeLabel = (mode: VocalMode) => {
+    if (mode === 'solo') return "솔로";
+    if (mode === 'duo') return "듀오";
+    return "그룹";
   };
 
   const getCombinedDescription = () => {
-    if (maleCount === 0 && femaleCount === 0) return "가수의 성별과 인원 구성을 선택합니다.";
+    if (maleCount === 0 && femaleCount === 0) return "보컬의 구성과 성별을 선택합니다.";
     
     const parts = [];
-    if (maleCount > 0) parts.push(getMaleDescription(maleCount));
-    if (femaleCount > 0) parts.push(getFemaleDescription(femaleCount));
-    if (rapEnabled) parts.push("랩 섹션 포함");
-    return parts.join(" + ");
+    parts.push(getModeLabel(vocalMode));
+    
+    if (maleCount > 0 && femaleCount > 0) parts.push("혼성");
+    else if (maleCount > 0) parts.push("남성");
+    else if (femaleCount > 0) parts.push("여성");
+    
+    if (rapEnabled) parts.push("랩 포함");
+    return parts.join(" ");
   };
 
-  const handleMaleClick = () => {
-    const next = (maleCount + 1) % 4;
-    onMaleChange(next);
-    const label = next === 0 ? "남자" : next === 3 ? "남자 그룹" : `남자 ${next}인`;
-    onHover({ id: 'male', label, description: getMaleDescription(next), _ts: Date.now() });
+  const handleModeClick = (mode: VocalMode) => {
+    onModeChange(mode);
+    
+    // Reset counts when mode changes to keep it consistent
+    if (mode === 'solo') {
+      if (maleCount > 0) { onMaleChange(1); onFemaleChange(0); }
+      else if (femaleCount > 0) { onMaleChange(0); onFemaleChange(1); }
+      else { onMaleChange(1); onFemaleChange(0); } // Default to male solo
+    } else if (mode === 'duo') {
+      if (maleCount > 1) { onMaleChange(2); onFemaleChange(0); }
+      else if (femaleCount > 1) { onMaleChange(0); onFemaleChange(2); }
+      else if (maleCount > 0 && femaleCount > 0) { onMaleChange(1); onFemaleChange(1); }
+      else if (maleCount > 0) { onMaleChange(2); onFemaleChange(0); }
+      else if (femaleCount > 0) { onMaleChange(0); onFemaleChange(2); }
+      else { onMaleChange(1); onFemaleChange(1); } // Default to mixed duo
+    } else if (mode === 'group') {
+      // Start with a reasonable group if empty
+      if (maleCount + femaleCount < 3) {
+        onMaleChange(2); onFemaleChange(1);
+      }
+    }
+    
+    onHover({ id: 'vocal-mode', label: 'Vocal Mode', labelKo: getModeLabel(mode), description: `${getModeLabel(mode)} 모드로 전환합니다.`, _ts: Date.now() });
   };
 
-  const handleFemaleClick = () => {
-    const next = (femaleCount + 1) % 4;
-    onFemaleChange(next);
-    const label = next === 0 ? "여자" : next === 3 ? "여자 그룹" : `여자 ${next}인`;
-    onHover({ id: 'female', label, description: getFemaleDescription(next), _ts: Date.now() });
+  const handleGenderToggle = (gender: 'male' | 'female') => {
+    if (vocalMode === 'solo') {
+      if (gender === 'male') { onMaleChange(1); onFemaleChange(0); }
+      else { onMaleChange(0); onFemaleChange(1); }
+    } else if (vocalMode === 'duo') {
+      if (gender === 'male') {
+        if (maleCount === 2) { onMaleChange(1); onFemaleChange(1); }
+        else if (maleCount === 1 && femaleCount === 1) { onMaleChange(2); onFemaleChange(0); }
+        else { onMaleChange(2); onFemaleChange(0); }
+      } else {
+        if (femaleCount === 2) { onMaleChange(1); onFemaleChange(1); }
+        else if (maleCount === 1 && femaleCount === 1) { onMaleChange(0); onFemaleChange(2); }
+        else { onMaleChange(0); onFemaleChange(2); }
+      }
+    } else if (vocalMode === 'group') {
+      // In group mode, toggle gender buttons can act as "Add" or "Switch"
+      // But let's make it add a member if total < 7
+      if (maleCount + femaleCount < 7) {
+        if (gender === 'male') onMaleChange(maleCount + 1);
+        else onFemaleChange(femaleCount + 1);
+      }
+    }
+    onHover({ 
+      id: gender, 
+      label: gender === 'male' ? 'Male' : 'Female', 
+      labelKo: gender === 'male' ? '남성' : '여성', 
+      description: `${gender === 'male' ? '남성' : '여성'} 보컬 비중을 조절합니다.`, 
+      _ts: Date.now() 
+    });
   };
 
-  const getMaleLabel = () => {
-    if (maleCount === 0) return "남자";
-    if (maleCount === 3) return "남자 그룹";
-    return `남자 ${maleCount}인`;
+  const handleAddMember = (gender: 'male' | 'female') => {
+    if (maleCount + femaleCount >= 7) return;
+    
+    const newMember: VocalMember = {
+      id: `member_${Date.now()}`,
+      gender,
+      roles: ['sub'],
+    };
+    
+    const newMembers = [...vocalMembers, newMember];
+    onMembersChange(newMembers);
+    if (gender === 'male') onMaleChange(maleCount + 1);
+    else onFemaleChange(femaleCount + 1);
   };
 
-  const getFemaleLabel = () => {
-    if (femaleCount === 0) return "여자";
-    if (femaleCount === 3) return "여자 그룹";
-    return `여자 ${femaleCount}인`;
+  const handleRemoveMember = (idx: number) => {
+    if (maleCount + femaleCount <= 1) return; // Minimum 1 member
+    
+    const member = vocalMembers[idx];
+    const newMembers = vocalMembers.filter((_, i) => i !== idx);
+    onMembersChange(newMembers);
+    
+    if (member.gender === 'male') onMaleChange(maleCount - 1);
+    else onFemaleChange(femaleCount - 1);
   };
+
+  const handleUpdateMember = (idx: number, updates: Partial<VocalMember>) => {
+    const newMembers = [...vocalMembers];
+    newMembers[idx] = { ...newMembers[idx], ...updates };
+    onMembersChange(newMembers);
+  };
+
+  const filteredTones = vocalTones.filter(t => {
+    const target = t.genderTarget as string;
+    if (target === 'any' || target === 'unisex') return true;
+    
+    if (maleCount > 0 && femaleCount > 0) {
+      return target === 'unisex' || target === 'any' || target === 'group';
+    }
+    if (maleCount > 0) {
+      return target === 'male' || target === 'any' || (vocalMode === 'group' && target === 'group');
+    }
+    if (femaleCount > 0) {
+      return target === 'female' || target === 'any' || (vocalMode === 'group' && target === 'group');
+    }
+    
+    return true;
+  });
+
+  const selectedTone = vocalTones.find(t => t.id === selectedToneId);
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12">
@@ -4901,14 +5216,34 @@ function SingerControl({
             className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
           >
             <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-            가수
+            보컬
           </h3>
         </div>
 
         <div className="flex items-center gap-2">
           <button
+            onClick={onToggleKoreanEnglishMix}
+            onMouseEnter={() => onHover({
+              id: 'lyrics-mix',
+              label: '한/영 혼합',
+              description: isKoreanEnglishMix
+                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
+                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
+            })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+              isKoreanEnglishMix 
+                ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+            )}
+          >
+            <Languages className={cn("w-3 h-3", isKoreanEnglishMix ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
+            한/영 혼합 {isKoreanEnglishMix ? 'ON' : 'OFF'}
+          </button>
+          <button
             onClick={() => onRapChange(!rapEnabled)}
-            onMouseEnter={() => onHover({ id: 'rap', label: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
+            onMouseEnter={() => onHover({ id: 'rap', label: 'Rap', labelKo: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
@@ -4922,11 +5257,11 @@ function SingerControl({
           </button>
           <button
             onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'singer-clear', label: 'Reset', description: '가수 설정을 초기화합니다.' })}
+            onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border",
-              (maleCount > 0 || femaleCount > 0 || rapEnabled)
+              (maleCount > 0 || femaleCount > 0 || rapEnabled || isKoreanEnglishMix)
                 ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                 : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
             )}
@@ -4949,42 +5284,303 @@ function SingerControl({
         </AnimatePresence>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-auto">
-        <button
-          onClick={handleMaleClick}
-          onMouseEnter={() => onHover({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
-          onMouseLeave={() => onHover(null)}
-          onTouchStart={() => onLongPressStart({ id: 'male', label: getMaleLabel(), description: getMaleDescription(maleCount) })}
-          onTouchEnd={onLongPressEnd}
-          className={cn(
-            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
-            maleCount === 1 
-              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-              : maleCount > 1
-                ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-          )}
-        >
-          {getMaleLabel()}
-        </button>
-        <button
-          onClick={handleFemaleClick}
-          onMouseEnter={() => onHover({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
-          onMouseLeave={() => onHover(null)}
-          onTouchStart={() => onLongPressStart({ id: 'female', label: getFemaleLabel(), description: getFemaleDescription(femaleCount) })}
-          onTouchEnd={onLongPressEnd}
-          className={cn(
-            "py-3 px-2 rounded-xl text-xs font-bold transition-all border min-w-[90px] h-[44px] flex items-center justify-center",
-            femaleCount === 1 
-              ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-              : femaleCount > 1
-                ? "bg-pink-600 border-pink-400 text-white shadow-lg shadow-pink-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-          )}
-        >
-          {getFemaleLabel()}
-        </button>
+      <motion.div
+        initial={false}
+        animate={{ 
+          height: isExpanded ? contentHeight : 120,
+          opacity: 1
+        }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className={cn("flex flex-col flex-1", isExpanded ? "overflow-visible" : "overflow-hidden")}
+      >
+        <div ref={contentRef} className="space-y-4 mt-auto">
+          {/* Mode Selection */}
+        <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+          {(['solo', 'duo', 'group'] as VocalMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => handleModeClick(mode)}
+              className={cn(
+                "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all",
+                vocalMode === mode 
+                  ? "bg-brand-orange text-white shadow-sm" 
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              )}
+            >
+              {getModeLabel(mode)}
+            </button>
+          ))}
+        </div>
+
+        {/* Gender Selection */}
+        {vocalMode === 'group' ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => handleAddMember('male')}
+              disabled={maleCount + femaleCount >= 7}
+              onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "py-3 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
+                maleCount + femaleCount < 7
+                  ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
+                  : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
+              )}
+            >
+              <Plus className="w-3 h-3" />
+              남성 멤버 추가
+            </button>
+            <button
+              onClick={() => handleAddMember('female')}
+              disabled={maleCount + femaleCount >= 7}
+              onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "py-3 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
+                maleCount + femaleCount < 7
+                  ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
+                  : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
+              )}
+            >
+              <Plus className="w-3 h-3" />
+              여성 멤버 추가
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => handleGenderToggle('male')}
+              onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "py-3 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
+                maleCount > 0
+                  ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
+                  : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+              )}
+            >
+              <span className={cn("w-1.5 h-1.5 rounded-full", maleCount > 0 ? "bg-blue-400" : "bg-white/20")} />
+              남성
+            </button>
+            <button
+              onClick={() => handleGenderToggle('female')}
+              onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "py-3 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
+                femaleCount > 0
+                  ? "bg-pink-600/20 border-pink-500/40 text-pink-400"
+                  : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+              )}
+            >
+              <span className={cn("w-1.5 h-1.5 rounded-full", femaleCount > 0 ? "bg-pink-400" : "bg-white/20")} />
+              여성
+            </button>
+          </div>
+        )}
+
+        {/* Member Roles */}
+        {vocalMembers.length > 0 && (
+          <div className="space-y-3 pt-2 border-t border-white/5">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버별 설정 ({vocalMembers.length}/7)</p>
+              <span className="text-[9px] text-[var(--text-secondary)] opacity-50">역할 및 톤 개별 설정</span>
+            </div>
+            <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
+              {vocalMembers.map((member, idx) => (
+                <div key={member.id} className="bg-white/5 rounded-xl p-2.5 border border-white/10 relative group/member">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "w-2 h-2 rounded-full",
+                        member.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
+                      )} />
+                      <span className="text-[11px] font-bold text-[var(--text-primary)]">
+                        {member.gender === 'male' ? '남성' : '여성'} {idx + 1}
+                      </span>
+                    </div>
+                    
+                    {vocalMode === 'group' && vocalMembers.length > 1 && (
+                      <button
+                        onClick={() => handleRemoveMember(idx)}
+                        className="p-1 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover/member:opacity-100"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(['main', 'lead', 'sub', 'rapper'] as VocalRole[]).map(role => {
+                        const isActive = member.roles.includes(role);
+                        const roleLabels: Record<VocalRole, { label: string, labelKo: string, description: string }> = {
+                          main: { label: 'Main Vocal', labelKo: '메인보컬', description: '곡의 중심이 되는 메인 보컬 역할을 수행합니다.' },
+                          lead: { label: 'Lead Vocal', labelKo: '리드보컬', description: '메인 보컬을 보조하며 곡의 흐름을 이끄는 역할을 수행합니다.' },
+                          sub: { label: 'Sub Vocal', labelKo: '서브보컬', description: '곡의 풍성함을 더해주는 서브 보컬 역할을 수행합니다.' },
+                          rapper: { label: 'Rapper', labelKo: '래퍼', description: '곡의 랩 파트를 담당하는 래퍼 역할을 수행합니다.' }
+                        };
+                        const info = roleLabels[role];
+                        
+                        return (
+                          <button
+                            key={role}
+                            onClick={() => {
+                              const newRoles = isActive 
+                                ? member.roles.filter(r => r !== role)
+                                : [...member.roles, role];
+                              handleUpdateMember(idx, { roles: newRoles });
+                            }}
+                            onMouseEnter={() => onHover({ id: `role-${role}`, ...info })}
+                            onMouseLeave={() => onHover(null)}
+                            className={cn(
+                              "px-2 py-1 rounded-md text-[9px] font-bold transition-all border",
+                              isActive
+                                ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
+                                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                            )}
+                          >
+                            {info.labelKo}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Member Tone Selector */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setActiveMemberToneSelector(activeMemberToneSelector === member.id ? null : member.id)}
+                        className={cn(
+                          "w-full py-1.5 px-2 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-between",
+                          member.toneId
+                            ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
+                            : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Settings className="w-2.5 h-2.5" />
+                          <span>{member.toneId ? (vocalTones.find(t => t.id === member.toneId)?.labelKo || vocalTones.find(t => t.id === member.toneId)?.label) : "톤 선택 (기본)"}</span>
+                        </div>
+                        <ChevronDown className={cn("w-2.5 h-2.5 transition-transform", activeMemberToneSelector === member.id && "rotate-180")} />
+                      </button>
+
+                      <AnimatePresence>
+                        {activeMemberToneSelector === member.id && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 5 }}
+                            className="absolute bottom-full left-0 w-full mb-1 z-[100] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden"
+                          >
+                            <div className="p-1 max-h-32 overflow-y-auto custom-scrollbar">
+                              <button
+                                onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveMemberToneSelector(null); }}
+                                className={cn(
+                                  "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
+                                  !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                                )}
+                              >
+                                기본 (Default)
+                              </button>
+                              {vocalTones
+                                .filter(t => t.genderTarget === 'any' || t.genderTarget === 'unisex' || t.genderTarget === member.gender || (vocalMode === 'group' && t.genderTarget === 'group'))
+                                .map(tone => (
+                                <button
+                                  key={tone.id}
+                                  onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveMemberToneSelector(null); }}
+                                  className={cn(
+                                    "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
+                                    member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                                  )}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span>{tone.labelKo || tone.label}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Vocal Tone Selection */}
+        <div className="relative">
+          <button
+            onClick={() => setShowToneSelector(!showToneSelector)}
+            className={cn(
+              "w-full py-2.5 px-3 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-between",
+              selectedTone 
+                ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Settings className="w-3 h-3" />
+              <span>{selectedTone ? (selectedTone.labelKo || selectedTone.label) : "보컬 톤 선택 (기본)"}</span>
+            </div>
+            <ChevronDown className={cn("w-3 h-3 transition-transform", showToneSelector && "rotate-180")} />
+          </button>
+
+          <AnimatePresence>
+            {showToneSelector && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute bottom-full left-0 w-full mb-2 z-[100] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden"
+              >
+                <div className="p-2 max-h-48 overflow-y-auto custom-scrollbar">
+                  <button
+                    onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
+                      !selectedToneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                    )}
+                  >
+                    기본 (Default)
+                  </button>
+                  {filteredTones.map(tone => (
+                    <button
+                      key={tone.id}
+                      onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
+                        selectedToneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{tone.labelKo || tone.label}</span>
+                        {tone.isDefault && <span className="text-[8px] opacity-60">DEFAULT</span>}
+                      </div>
+                      <p className="text-[8px] opacity-60 font-normal line-clamp-1">{tone.descriptionKo || tone.description}</p>
+                    </button>
+                  ))}
+                  {filteredTones.length === 0 && (
+                    <p className="text-[9px] text-[var(--text-secondary)] text-center py-4">사용 가능한 톤이 없습니다.</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
+    </motion.div>
+
+      <button
+        onClick={onToggleExpand}
+        onMouseEnter={() => onHover({ id: 'vocal-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
+        onMouseLeave={() => onHover(null)}
+        className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+      >
+        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
     </div>
   );
 }
@@ -4997,8 +5593,8 @@ interface TempoControlProps {
   onMinChange: (val: number) => void;
   onMaxChange: (val: number) => void;
   onClear: () => void;
-  onHover: (item: { id: string; label: string; description: string } | null) => void;
-  onLongPressStart: (item: { id: string; label: string; description: string }) => void;
+  onHover: (item: CategoryItem | null) => void;
+  onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
 }
 
@@ -5083,7 +5679,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 "hidden md:flex items-center gap-1 px-2.5 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
-              onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
+              onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
               onMouseLeave={() => onHover(null)}
             >
               <input
@@ -5121,13 +5717,27 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             </div>
           </div>
 
-          <div className="md:hidden">
+          <div className="flex items-center gap-2">
+            <div className="md:hidden flex items-center gap-2">
+              <button
+                onClick={onClear}
+                onMouseEnter={() => onHover({ id: 'tempo-clear-mobile', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "p-2 rounded-lg transition-all border",
+                  (!enabled || min !== 90 || max !== 110)
+                    ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                    : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                )}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={() => {
                   onEnabledChange(!enabled);
-                  onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
+                  onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
                 }}
-                onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
+                onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
                   "px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
@@ -5136,20 +5746,21 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                     : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
                 )}
               >
-              <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
-              <span>랜덤</span>
-            </button>
+                <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
+                <span>랜덤</span>
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center gap-2">
             <button
               onClick={() => {
                 onEnabledChange(!enabled);
-                onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
+                onHover({ id: 'tempo-random-pc', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
               }}
-              onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
+              onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
@@ -5161,20 +5772,20 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               <Dices className={cn("w-5 h-5", enabled && "animate-pulse")} />
               <span>랜덤</span>
             </button>
+            <button
+              onClick={onClear}
+              onMouseEnter={() => onHover({ id: 'tempo-clear-pc', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2 rounded-lg transition-all border",
+                (!enabled || min !== 90 || max !== 110)
+                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+              )}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'tempo-clear', label: 'Reset', description: '템포 설정을 초기화합니다.' })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "p-2 rounded-lg transition-all border",
-              (!enabled || min !== 90 || max !== 110)
-                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
-            )}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
         </div>
 
         <div 
@@ -5182,7 +5793,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             "md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
-          onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
+          onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
           onMouseLeave={() => onHover(null)}
         >
           <input

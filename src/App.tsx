@@ -2552,7 +2552,7 @@ ${result.prompt}
           />
           <CycleSection 
             title="Sound/Texture" 
-            titleKo="사운드/텍스쳐"
+            titleKo="사운드 텍스쳐"
             titleClassName="text-[16px] md:text-[18px]"
             description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
             descriptionKo="악기 톤과 배경 질감을 설정합니다. 소리의 결, 공간감, 무게감, 타격감을 조절하여 음악의 청감 인상을 결정하며, 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
@@ -2606,7 +2606,7 @@ ${result.prompt}
             />
             <CategorySection 
               title="Theme" 
-              titleKo="곡 주제"
+              titleKo="주제"
               description="Determines the situation, story, and message of the song. Like love, breakup, night, or travel, it sets what the song talks about and what scene it paints."
               descriptionKo="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
               items={THEMES} 

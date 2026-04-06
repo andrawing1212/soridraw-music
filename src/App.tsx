@@ -3892,7 +3892,7 @@ function CycleSection({
               .join(', ')}
           </p>
         ) : (
-          <p className="text-xs text-[var(--text-secondary)]">
+          <p className="text-sm font-medium text-brand-orange">
             {titleKo || title} 키워드를 선택하세요.
           </p>
         )}
@@ -4220,7 +4220,7 @@ function CategorySection({
             }).join(', ')}
           </p>
         ) : (
-          <p className="text-xs text-[var(--text-secondary)]">
+          <p className="text-sm font-medium text-brand-orange">
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
         )}

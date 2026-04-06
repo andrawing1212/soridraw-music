@@ -470,7 +470,7 @@ export default function GenreHierarchySelector({
             {selectedSubLabels.length > 0 ? ` · ${selectedSubLabels.join(', ')}` : ''}
           </p>
         ) : (
-          <p className="text-sm font-semibold text-[var(--text-secondary)]">
+          <p className="text-sm font-medium text-brand-orange">
             대분류를 눌러 메인 장르를 선택하세요.
           </p>
         )}

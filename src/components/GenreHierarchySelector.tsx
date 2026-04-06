@@ -46,6 +46,8 @@ interface Props {
   onClear: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   isRandomized?: boolean;
 }
 
@@ -115,12 +117,15 @@ export default function GenreHierarchySelector({
   onClear,
   onRandom,
   onHover,
+  isExpanded,
+  onToggleExpand,
   isRandomized = false
 }: Props) {
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
   const lastSyncedGenreRef = useRef<string[]>([]);
   const lastSyncedSubGenreRef = useRef<string[]>([]);
 
@@ -210,7 +215,7 @@ export default function GenreHierarchySelector({
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);
     }
-  }, [groups]);
+  }, [groups, isExpanded]);
 
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
@@ -473,7 +478,15 @@ export default function GenreHierarchySelector({
           </div>
         </div>
 
-        <div className="flex flex-col flex-1 overflow-visible">
+        <motion.div
+          initial={false}
+          animate={{ 
+            height: isExpanded ? contentHeight : 56,
+            opacity: 1
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="overflow-hidden"
+        >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {groups.map((group) => {
               const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
@@ -497,23 +510,46 @@ export default function GenreHierarchySelector({
               );
             })}
           </div>
-        </div>
+        </motion.div>
       </div>
 
       <div 
-        className="mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center transition-all duration-200 hover:bg-white/5"
+        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
+        className={cn(
+          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
+          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
+        )}
       >
         {selectedMainLabel ? (
-          <p className="text-sm font-semibold text-brand-orange leading-tight w-full whitespace-normal break-words">
+          <p className={cn(
+            "text-sm font-semibold text-brand-orange leading-tight w-full",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             {selectedMainLabel}
             {selectedSubLabels.length > 0 ? ` · ${selectedSubLabels.join(', ')}` : ''}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange leading-tight w-full whitespace-normal break-words">
+          <p className={cn(
+            "text-sm font-medium text-brand-orange leading-tight w-full",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             대분류를 눌러 메인 장르를 선택하세요.
           </p>
         )}
       </div>
+
+      <button
+        onClick={onToggleExpand}
+        className={cn(
+          "absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+          isExpanded
+            ? "bg-brand-orange text-white border-brand-orange"
+            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+        )}
+        title={isExpanded ? '접기' : '펼치기'}
+      >
+        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
 
       <AnimatePresence>
         {activeGroup && (

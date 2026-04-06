@@ -2605,7 +2605,7 @@ ${result.prompt}
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -4503,8 +4503,8 @@ function SongStructureIntegratedControl({
 
   return (
     <>
-      <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12 overflow-visible">
-        <div className="relative mb-6 flex items-center justify-between">
+      <div className="bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12 overflow-visible">
+        <div className="relative mb-4 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
@@ -4546,7 +4546,7 @@ function SongStructureIntegratedControl({
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <div ref={contentRef} className="space-y-4 flex-1 flex flex-col justify-start">
+            <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
                 <p className="text-[13px] font-bold text-brand-orange uppercase tracking-wider">│가사 길이</p>
@@ -4566,7 +4566,7 @@ function SongStructureIntegratedControl({
                         onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "w-full py-2 rounded-xl text-[13px] font-bold transition-all border",
+                          "w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border",
                           lyricsLength === opt.id
                             ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
                             : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
@@ -4600,7 +4600,7 @@ function SongStructureIntegratedControl({
                       onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        "py-2 rounded-xl text-[13px] font-bold transition-all border",
+                        "py-1.5 rounded-xl text-[13px] font-bold transition-all border",
                         songStructure === opt.id
                           ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
                           : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
@@ -4617,10 +4617,12 @@ function SongStructureIntegratedControl({
                     {songStructure === 'custom' ? '현재 커스텀 구조' : `구조 ${songStructure} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === 'custom' 
-                      ? ((customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '직접 구조를 지정하는 모드입니다.')
-                      : structureOptions.find(opt => opt.id === songStructure)?.description
-                    }
+                    {songStructure === '1' && "Intro → Verse 1 → Chorus / Drop → Outro"}
+                    {songStructure === '2' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
+                    {songStructure === '3' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
+                    {songStructure === 'custom' && (
+                      (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '직접 구조를 지정하는 모드입니다.'
+                    )}
                   </p>
                 </div>
               </div>
@@ -5132,7 +5134,20 @@ function VocalControl({
     // Height is now handled by overflow-visible
   }, [maleCount, femaleCount, vocalMode, vocalMembers, selectedToneId, rapEnabled, isKoreanEnglishMix]);
   const [showToneSelector, setShowToneSelector] = useState(false);
-  const [activeMemberToneSelector, setActiveMemberToneSelector] = useState<string | null>(null);
+  const [activeVocalTonePopup, setActiveVocalTonePopup] = useState<string | null>(null);
+  const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0 });
+
+  const handleVocalToneClick = (e: React.MouseEvent, id: string) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollY = window.scrollY || window.pageYOffset;
+    const scrollX = window.scrollX || window.pageXOffset;
+    
+    setVocalTonePopupPos({
+      top: rect.bottom + scrollY + 4,
+      left: rect.left + scrollX
+    });
+    setActiveVocalTonePopup(activeVocalTonePopup === id ? null : id);
+  };
 
   const getModeLabel = (mode: VocalMode) => {
     if (mode === 'solo') return "솔로";
@@ -5270,8 +5285,8 @@ function VocalControl({
   const selectedTone = vocalTones.find(t => t.id === selectedToneId);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl pt-4 px-6 pb-12 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
-      <div className="relative mb-4 flex items-center justify-between">
+    <div className="bg-[var(--card-bg)] rounded-3xl pt-3 px-5 pb-10 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
+      <div className="relative mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
@@ -5347,19 +5362,31 @@ function VocalControl({
         </AnimatePresence>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-visible">
+      <div className={cn(
+        "flex flex-col flex-1 overflow-visible transition-all duration-500 ease-in-out",
+        (vocalMembers.length > 0 || maleCount > 0 || femaleCount > 0 || vocalMode === 'group') ? "justify-start" : "justify-center"
+      )}>
         <motion.div 
           animate={{ height: contentHeight }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="overflow-hidden"
         >
-          <div ref={contentRef} className="space-y-3 mt-0">
+          <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}
           <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
             {(['solo', 'duo', 'group'] as VocalMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleModeClick(mode)}
+                onMouseEnter={() => {
+                  const modeInfo = {
+                    solo: { label: 'Solo', labelKo: '솔로', description: '혼자서 노래하는 솔로 보컬을 선택합니다.' },
+                    duo: { label: 'Duo', labelKo: '듀오', description: '두 명이서 노래하는 듀오 보컬을 선택합니다.' },
+                    group: { label: 'Group', labelKo: '그룹', description: '여러 명이서 노래하는 그룹 보컬을 선택합니다.' }
+                  };
+                  onHover({ id: `vocal-mode-${mode}`, ...modeInfo[mode] });
+                }}
+                onMouseLeave={() => onHover(null)}
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all",
                   vocalMode === mode 
@@ -5381,7 +5408,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2.5 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-2 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
                   maleCount + femaleCount < 7
                     ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
                     : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
@@ -5396,7 +5423,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2.5 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-2 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
                   maleCount + femaleCount < 7
                     ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
                     : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
@@ -5413,7 +5440,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2.5 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
                   maleCount > 0
                     ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
                     : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
@@ -5427,7 +5454,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2.5 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
                   femaleCount > 0
                     ? "bg-pink-600/20 border-pink-500/40 text-pink-400"
                     : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
@@ -5441,7 +5468,7 @@ function VocalControl({
 
           {/* Member Roles */}
           {vocalMembers.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-white/5">
+            <div className="space-y-1.5 pt-1.5 border-t border-white/5">
               <div className="flex items-center justify-between px-1">
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버별 설정 ({vocalMembers.length}/7)</p>
                 <span className="text-[9px] text-[var(--text-secondary)] opacity-50">역할 및 톤 개별 설정</span>
@@ -5509,7 +5536,7 @@ function VocalControl({
                           <div className="relative">
                             <button
                               data-tone-trigger={member.id}
-                              onClick={() => setActiveMemberToneSelector(activeMemberToneSelector === member.id ? null : member.id)}
+                              onClick={(e) => handleVocalToneClick(e, member.id)}
                           className={cn(
                             "w-full py-1 px-2 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-between",
                             member.toneId
@@ -5521,21 +5548,28 @@ function VocalControl({
                             <Settings className="w-2.5 h-2.5" />
                             <span>{member.toneId ? (vocalTones.find(t => t.id === member.toneId)?.labelKo || vocalTones.find(t => t.id === member.toneId)?.label) : "톤 선택 (기본)"}</span>
                           </div>
-                          <ChevronDown className={cn("w-2.5 h-2.5 transition-transform", activeMemberToneSelector === member.id && "rotate-180")} />
+                          <ChevronDown className={cn("w-2.5 h-2.5 transition-transform", activeVocalTonePopup === member.id && "rotate-180")} />
                         </button>
 
                       <AnimatePresence>
-                        {activeMemberToneSelector === member.id && (
-                          <>
+                        {activeVocalTonePopup === member.id && (
+                          <Portal>
                             <motion.div
                               initial={{ opacity: 0, y: 10, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute bottom-full left-0 mb-2 z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden w-48"
+                              style={{ 
+                                position: 'absolute',
+                                top: vocalTonePopupPos.top,
+                                left: vocalTonePopupPos.left,
+                                zIndex: 10000,
+                                pointerEvents: 'auto'
+                              }}
+                              className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden w-48"
                             >
-                              <div className="p-1 max-h-32 overflow-y-auto custom-scrollbar">
+                              <div className="p-1 max-h-40 overflow-y-auto custom-scrollbar">
                                 <button
-                                  onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveMemberToneSelector(null); }}
+                                  onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveVocalTonePopup(null); }}
                                   className={cn(
                                     "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
                                     !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
@@ -5548,7 +5582,7 @@ function VocalControl({
                                   .map(tone => (
                                   <button
                                     key={tone.id}
-                                    onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveMemberToneSelector(null); }}
+                                    onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveVocalTonePopup(null); }}
                                     className={cn(
                                       "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
                                       member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
@@ -5561,8 +5595,8 @@ function VocalControl({
                                 ))}
                               </div>
                             </motion.div>
-                            <div className="fixed inset-0 z-[9998]" onClick={() => setActiveMemberToneSelector(null)} />
-                          </>
+                            <div className="fixed inset-0 z-[9999]" onClick={() => setActiveVocalTonePopup(null)} />
+                          </Portal>
                         )}
                       </AnimatePresence>
                     </div>
@@ -5577,7 +5611,16 @@ function VocalControl({
         <div className="relative">
           <button
             data-tone-trigger="global"
-            onClick={() => setShowToneSelector(!showToneSelector)}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const scrollY = window.scrollY || window.pageYOffset;
+              const scrollX = window.scrollX || window.pageXOffset;
+              setVocalTonePopupPos({
+                top: rect.bottom + scrollY + 4,
+                left: rect.left + scrollX
+              });
+              setShowToneSelector(!showToneSelector);
+            }}
             className={cn(
               "w-full py-2.5 px-3 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-between",
               selectedTone 
@@ -5594,12 +5637,19 @@ function VocalControl({
 
           <AnimatePresence>
             {showToneSelector && (
-              <>
+              <Portal>
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute bottom-full left-0 mb-2 z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden w-64"
+                  style={{ 
+                    position: 'absolute',
+                    top: vocalTonePopupPos.top,
+                    left: vocalTonePopupPos.left,
+                    zIndex: 10000,
+                    pointerEvents: 'auto'
+                  }}
+                  className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden w-64"
                 >
                   <div className="p-2 max-h-48 overflow-y-auto custom-scrollbar">
                     <button
@@ -5632,8 +5682,8 @@ function VocalControl({
                     )}
                   </div>
                 </motion.div>
-                <div className="fixed inset-0 z-[9998]" onClick={() => setShowToneSelector(false)} />
-              </>
+                <div className="fixed inset-0 z-[9999]" onClick={() => setShowToneSelector(false)} />
+              </Portal>
             )}
           </AnimatePresence>
           </div>

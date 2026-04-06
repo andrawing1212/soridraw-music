@@ -11,7 +11,14 @@ export default defineConfig({
     },
   },
   server: {
-    hmr: process.env.DISABLE_HMR !== 'true',
+    // HMR 설정을 객체로 명시하여 연결 안정성을 높입니다.
+    hmr: process.env.DISABLE_HMR === 'true' ? false : {
+      protocol: 'ws',
+      host: 'localhost',
+    },
+    // 필요 시 포트 번호를 고정하거나 host를 true로 설정할 수 있습니다.
+    host: true, 
+    strictPort: true,
   },
   build: {
     outDir: 'dist',

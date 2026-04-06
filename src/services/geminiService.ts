@@ -710,6 +710,35 @@ function optimizePromptArray(
   return result;
 }
 
+/**
+ * Specialized optimizer for styles that only removes exact duplicates.
+ */
+function optimizeStyleArray(
+  candidates: { value: string; priority: number }[],
+  maxCount: number = 10
+): string[] {
+  const sorted = [...candidates].sort((a, b) => a.priority - b.priority);
+  const result: string[] = [];
+  const normalizedResult: string[] = [];
+
+  for (const candidate of sorted) {
+    const val = candidate.value.trim();
+    if (!val) continue;
+
+    const lowerVal = val.toLowerCase();
+    
+    // Only remove exact duplicates (normalized)
+    if (normalizedResult.includes(lowerVal)) continue;
+
+    if (result.length >= maxCount) continue;
+
+    result.push(val);
+    normalizedResult.push(lowerVal);
+  }
+
+  return result;
+}
+
 function buildStyle(params: GenerateSongParams): string {
   const genreMeta = getGenreMeta(params.genre);
   const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Pop");
@@ -719,20 +748,26 @@ function buildStyle(params: GenerateSongParams): string {
 
   const candidates: { value: string; priority: number }[] = [];
 
-  // 1. Sub-genre (Priority 1)
+  // 1. Sub-genre (Priority 1) - Split by comma to keep tags independent
   subGenreIds.forEach(id => {
     const prompt = SUB_GENRE_PROMPTS[id];
     if (prompt?.style) {
-      candidates.push({ value: prompt.style, priority: 1 });
+      prompt.style.split(',').forEach(tag => {
+        if (tag.trim()) candidates.push({ value: tag.trim(), priority: 1 });
+      });
     }
   });
 
-  // 2. Mid-genre (Priority 2)
-  const mid = MID_GENRE_PROMPTS[genreId];
-  if (mid?.style) {
-    candidates.push({ value: mid.style, priority: 2 });
-  } else {
-    candidates.push({ value: genreLabel, priority: 2 });
+  // 2. Mid-genre (Priority 2) - Only if no sub-genres are selected
+  if (subGenreIds.length === 0) {
+    const mid = MID_GENRE_PROMPTS[genreId];
+    if (mid?.style) {
+      mid.style.split(',').forEach(tag => {
+        if (tag.trim()) candidates.push({ value: tag.trim(), priority: 2 });
+      });
+    } else {
+      candidates.push({ value: genreLabel, priority: 2 });
+    }
   }
 
   // 3. User Styles (Priority 3)
@@ -785,19 +820,8 @@ function buildStyle(params: GenerateSongParams): string {
     }
   });
 
-  // Filter out sound/vocal/instrument keywords
-  const EXCLUDED_STYLE_KEYWORDS = [
-    "texture", "bass", "drums", "vocal", "sound", "instrument", "synth", "percussion",
-    "beat", "rhythm", "melody", "harmony", "arrangement", "production", "mix", "mastering"
-  ];
-
-  const filteredCandidates = candidates.filter(c => {
-    const lower = c.value.toLowerCase();
-    return !EXCLUDED_STYLE_KEYWORDS.some(kw => lower.includes(kw));
-  });
-
-  // Optimize
-  const optimizedStyles = optimizePromptArray(filteredCandidates, 5).map(s => s.charAt(0).toUpperCase() + s.slice(1));
+  // Optimize using the specialized style optimizer
+  const optimizedStyles = optimizeStyleArray(candidates, 10).map(s => s.charAt(0).toUpperCase() + s.slice(1));
 
   // Tempo (Always last)
   const tempoText = params.tempo

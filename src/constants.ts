@@ -821,74 +821,74 @@ export const MID_GENRE_PROMPTS: Record<
   }
 > = {
   pop: {
-    style: "Modern Pop", // 세련된 현대 팝의 정석
-    sound: "Layered synths, Electric guitar", // 화려한 신스와 팝 기타 사운드
-    vocal: "Melodic delivery", // 멜로디 위주의 깔끔한 가창
+    style: "Modern Global Pop, Radio-friendly style", // 빌보드 지향의 세련되고 대중적인 스타일 정의
+    sound: "Layered synths, Electric guitar, Polished pop drums", // 정교한 신스 레이어와 깔끔하게 정돈된 드럼 사운드
+    vocal: "Clear melodic delivery, Professional pop vocal tone", // 가사 전달력이 명확하고 매끄러운 팝 전문 창법
   },
   kpop: {
-    style: "Modern Korean Pop", // 아이돌부터 인디까지 아우르는 한국 대중음악
-    sound: "Polished production, Hybrid beats", // 정교한 믹싱과 전자음/리얼 사운드의 조화
-    vocal: "Expressive vocals", // 한국적 감성이 담긴 풍부한 가창력
+    style: "Modern K-Pop, Korean Idol Production style", // 한국 아이돌 특유의 화려하고 정교한 제작 방식 강조
+    sound: "Polished hybrid beats, Sophisticated electronic textures", // 전자음과 리얼 악기가 결합된 입체적이고 세련된 질감
+    vocal: "Expressive Korean vocals, Dynamic and melodic phrasing", // 한국적 감정선과 리드미컬한 선율 강조
   },
   jpop: {
-    style: "Modern Japanese Pop", // J-팝 특유의 청량하고 속도감 있는 느낌
-    sound: "Bright digital synths, Electric guitar", // 밝은 디지털 신스와 찰랑거리는 기타
-    vocal: "Clear J-pop style tone", // 맑고 선명한 일본 팝 특유의 발성
+    style: "Modern J-Pop, Japanese Pop aesthetic", // 제이팝 특유의 청량하고 복잡한 구성의 미학 반영
+    sound: "Bright digital synths, Fast-paced arrangement, J-pop guitar", // 하이톤의 디지털 신스와 빠른 속도의 악기 배치
+    vocal: "Clear J-pop style tone, Bright and energetic delivery", // 맑고 선명하며 에너지가 넘치는 일본식 창법
   },
   hiphop: {
-    style: "Hiphop, Urban", // 리듬과 비트 중심의 거리 감성
-    sound: "Heavy 808 bass, Punchy snare", // 가슴을 울리는 베이스와 타격감 있는 스네어
-    vocal: "Rhythmic rap flow", // 박자감이 살아있는 랩 전달력
+    style: "Urban Hip-hop, Street Style, Modern Rap energy", // 도시적인 거리 감성과 현대적인 힙합 에너지 정의
+    sound: "Heavy 808 bass, Punchy snare, Deep low-end groove", // 가슴을 울리는 808 베이스와 타격감 있는 스네어 비트
+    vocal: "Rhythmic rap flow, Confident and charismatic delivery", // 박자감이 살아있는 플로우와 자신감 넘치는 전달력
   },
   rnb: {
-    style: "R&B, Soul", // 부드럽고 그루비한 도심형 사운드
-    sound: "Electric piano, Silky bass", // 따뜻한 건반과 매끄러운 베이스 라인
-    vocal: "Soulful, Smooth", // 소울풀하고 기교 섞인 부드러운 목소리
+    style: "Contemporary R&B, Smooth Soul vibe", // 매끄럽고 부드러운 현대 알앤비와 소울의 분위기
+    sound: "Electric piano, Silky bassline, Groovy R&B percussion", // 일렉 피아노의 따뜻함과 부드러운 베이스 라인의 조화
+    vocal: "Soulful and smooth vocals, R&B riffs and runs", // 소울풀한 감성과 화려한 보컬 기교(애드리브) 강조
   },
   trot: {
-    style: "Trot", // 한국 성인가요의 흥과 한
-    sound: "Accordion, Bright brass", // 트로트의 상징인 아코디언과 화려한 관악기
-    vocal: "Trot vibrato phrasing", // 특유의 꺾기와 기교가 섞인 창법
+    style: "Authentic Korean Trot, Adult Contemporary", // 한국 정통 트로트의 리듬과 성인 가요 스타일 고정
+    sound: "Accordion, Bright brass section, Rhythmic trot beat", // 아코디언과 화려한 관악기가 주도하는 특유의 비트
+    vocal: "Traditional Trot vibrato, Emotional 'Ggeok-gi' phrasing", // 정통 트로트 비브라토와 꺾기 창법 명시
   },
   "7080_gayo": {
-    style: "7080 Korean Retro Pop", // 70~80년대 그리운 그 시절의 감성
-    sound: "Acoustic guitar, Vintage Organ, Analog texture", // 아날로그 질감의 통기타와 오르간
-    vocal: "Warm, Nostalgic storyteller tone", // 서사적이고 따뜻한 이야기꾼의 목소리
+    style: "7080 Korean Retro Pop, Nostalgic Gayo style", // 70~80년대 한국 가요의 아날로그 복고 감성
+    sound: "Acoustic guitar, Vintage Organ, Analog warm texture", // 통기타와 빈티지 오르간의 따뜻하고 포근한 질감
+    vocal: "Warm and nostalgic storytelling tone, Sincere delivery", // 이야기를 들려주는 듯한 따뜻하고 진솔한 창법
   },
   ost: {
-    style: "Cinematic Score", // 영화나 드라마 속 서사적인 배경 음악
-    sound: "Orchestral strings, Dramatic piano", // 웅장한 현악기와 극적인 피아노 선율
-    vocal: "Atmospheric textures", // 몽환적이고 공간감 있는 보컬 질감
+    style: "Cinematic Score, Dramatic Soundtrack vibe", // 영화나 드라마의 서사적이고 극적인 배경음악 스타일
+    sound: "Orchestral strings, Grand piano, Atmospheric pads", // 웅장한 현악기와 공간감이 풍부한 피아노 사운드
+    vocal: "Emotional and atmospheric textures, Cinematic phrasing", // 감정이 깊게 배어 있는 몽환적이고 영화적인 보컬
   },
   rockmetal: {
-    style: "Rock, Metal", // 강렬한 밴드 사운드의 에너지
-    sound: "Distorted guitar, Power drums", // 거친 일렉 기타와 파워풀한 드럼 사운드
-    vocal: "Powerful, Raw tone", // 꾸밈없는 거칠고 폭발적인 가창
+    style: "Rock and Metal, High Energy Band Sound", // 강력한 에너지의 밴드 합주와 록의 거친 느낌 정의
+    sound: "Distorted electric guitar, Driving bass, Power drums", // 왜곡된 일렉 기타 사운드와 폭발적인 드럼 비트
+    vocal: "Powerful and raw tone, Intense rock delivery", // 파워풀하고 날 것 그대로의 거친 가창 스타일
   },
   edm: {
-    style: "EDM, Electronic", // 클럽과 페스티벌의 화려한 전자 음악
-    sound: "Lead synths, Sub-bass drop", // 강렬한 리드 신스와 저음역대 드랍
-    vocal: "Processed texture", // 기계적인 효과가 가미된 전자적 질감
+    style: "Electronic Dance Music, Festival Energy", // 축제와 클럽 지향의 강력한 전자 댄스 음악
+    sound: "Lead synths, Heavy sub-bass, Digital dance percussion", // 강렬한 신스 리드와 바닥을 치는 저음역대 사운드
+    vocal: "Processed vocal textures, Energetic and rhythmic delivery", // 보정된 기계적 질감과 에너지가 넘치는 창법
   },
   jazz: {
-    style: "Jazz", // 고급스럽고 자유로운 즉흥 음악의 느낌
-    sound: "Upright bass, Jazz piano", // 콘트라베이스와 재즈 피아노의 조화
-    vocal: "Jazzy phrasing", // 박자를 밀고 당기는 특유의 재즈 가창
+    style: "Sophisticated Jazz, Classic Lounge style", // 지적이고 세련된 라운지 및 클래식 재즈 분위기
+    sound: "Upright bass, Jazz piano, Brushed drums, Saxophone", // 콘트라베이스와 브러쉬 드럼 등 재즈 전용 악기 구성
+    vocal: "Jazzy phrasing, Laid-back and rhythmic delivery", // 박자를 여유롭게 밀고 당기는 재즈 특유의 가창
   },
   classical: {
-    style: "Classical", // 정통 서양 고전 음악의 품격
-    sound: "Symphonic orchestra, Grand piano", // 풀 오케스트라와 그랜드 피아노의 협연
-    vocal: "Classical technique", // 성악적 기교가 담긴 클래식 발성
+    style: "Classical Orchestral, Symphonic style", // 서양 고전 음악의 정중하고 장엄한 심포니 스타일
+    sound: "Full symphonic orchestra, Grand piano, Woodwinds", // 풀 오케스트라와 그랜드 피아노의 협연 사운드
+    vocal: "Classical technique, Formal and elegant vocal style", // 성악적 기교가 담긴 격조 있고 우아한 창법
   },
   acoustic: {
-    style: "Acoustic, Folk", // 인위적이지 않은 자연스러운 소리
-    sound: "Steel-string acoustic guitar", // 쇠줄 통기타 특유의 찰랑거리는 울림
-    vocal: "Natural, Pure tone", // 꾸밈없고 맑은 자연스러운 목소리
+    style: "Pure Acoustic, Folk and Singer-songwriter style", // 인위적 가공을 뺀 순수한 포크와 싱어송라이터 스타일
+    sound: "Steel-string acoustic guitar, Organic percussion", // 찰랑거리는 어쿠스틱 기타와 자연스러운 타악기 소리
+    vocal: "Natural and pure tone, Sincere acoustic delivery", // 꾸밈없고 맑은 목소리의 진솔한 가창
   },
   world: {
-    style: "World Music", // 전 세계 각지의 전통과 리듬
-    sound: "Traditional ethnic instruments", // 민속 악기 특유의 독특한 음색
-    vocal: "Native phrasing", // 특정 문화권의 독특한 창법과 느낌
+    style: "Global World Music, Ethnic Fusion style", // 세계 각국의 민속적 색채와 현대적 퓨전 스타일의 조화
+    sound: "Traditional ethnic instruments, Native percussion", // 이국적인 전통 악기들과 민속적인 타악 리듬
+    vocal: "Traditional native phrasing, Ethnic vocal style", // 특정 지역 고유의 창법과 이국적인 음색 강조
   },
 };
 export const SUB_GENRE_PROMPTS: Record<
@@ -899,39 +899,601 @@ export const SUB_GENRE_PROMPTS: Record<
     vocal?: string;
   }
 > = {
-  /* ===================== 1. 팝 & 글로벌 ===================== */
-  // pop 소분류
-  synth_pop: { style: "80s Retro, Synth-wave", sound: "Analog synths, DX7 bells", vocal: "Reverb-drenched, Ethereal tone" },
-  disco: { style: "Nu-Disco, Groovy", sound: "Funky bassline, Four-on-the-floor beat", vocal: "High-pitched, Rhythmic delivery" },
-  electropop: { style: "Electronic, Digital", sound: "Heavy saw synths, Glitchy textures", vocal: "Slightly processed, Auto-tuned vibe" },
-  teen_pop: { style: "Bubblegum, Upbeat", sound: "Bright handclaps, Sweet melodies", vocal: "Youthful, Energetic, Sweet tone" },
-  britpop: { style: "UK Indie, 90s Britpop", sound: "Strummed electric guitar, Raw band sound", vocal: "Raw, Casual delivery, UK style" },
-  indie_pop: { style: "Lo-fi, Dreamy", sound: "Mellow guitar, Reverb-drenched pads", vocal: "Breathy, Soft, Whispering tone" },
-  city_pop: { style: "Urban, Nostalgic", sound: "Fretless bass, Sophisticated jazz chords", vocal: "Sophisticated, Smooth delivery" },
-  funk_pop: { style: "Funk, Danceable", sound: "Slap bass, Rhythmic guitar scratching", vocal: "Syncopated, Rhythmic ad-libs" },
-  dance_pop: { style: "Club, High Energy", sound: "Heavy kick drum, Side-chained pads", vocal: "Powerful, Tuned, Wide-stereo harmonies" },
-  acoustic_pop: { style: "Unplugged, Soft", sound: "Acoustic focus, Minimalist percussion", vocal: "Intimate, Pure, Raw recording feel" },
+  /* ===================== 1. Pop & Global (ID 소문자 통일) ===================== */
+  synth_pop: { 
+    style: "80s Retro Synth-pop Style", 
+    sound: "Vintage analog synths, DX7 bells, Classic drum machine", 
+    vocal: "Reverb-drenched, Ethereal pop tone" 
+  }, // 80년대 복고풍 신스 사운드와 몽환적인 보컬 강조
+  disco: { 
+    style: "Modern Nu-Disco, Groovy Dance", 
+    sound: "Funky slap bass, Four-on-the-floor beat", 
+    vocal: "High-pitched rhythmic delivery, Falsetto" 
+  }, // 디스코 특유의 슬랩 베이스와 고음 가성 창법 강조
+  electropop: { 
+    style: "Electronic Pop, Digital Style", 
+    sound: "Heavy saw synths, Glitchy textures", 
+    vocal: "Processed vocals, Auto-tuned vibe" 
+  }, // 강렬한 전자음과 오토튠 등 기계적인 보컬 질감
+  teen_pop: { 
+    style: "Bubblegum Teen-pop, Upbeat", 
+    sound: "Bright handclaps, Sweet catchy melodies", 
+    vocal: "Youthful, Energetic, Sweet pop tone" 
+  }, // 하이틴 스타일의 밝고 청량한 사운드와 에너지
+  britpop: { 
+    style: "UK Indie Rock, 90s Britpop", 
+    sound: "Strummed electric guitar, Raw band sound", 
+    vocal: "Raw, Casual UK style delivery" 
+  }, // 90년대 영국 밴드 특유의 거칠고 자연스러운 창법
+  indie_pop: { 
+    style: "Lo-fi Indie Pop, Dreamy Style", 
+    sound: "Mellow guitar, Reverb-drenched pads", 
+    vocal: "Breathy, Soft, Whispering tone" 
+  }, // 나른하고 부드러운 로파이 인디 감성
+  city_pop: { 
+    style: "Urban City Pop, 80s Nostalgia", 
+    sound: "Fretless bass, Sophisticated jazz chords", 
+    vocal: "Sophisticated, Smooth delivery" 
+  }, // 도회적이고 세련된 80년대 라운지 사운드
+  funk_pop: { 
+    style: "Funk-driven Pop, Rhythmic Style", 
+    sound: "Slap bass, Rhythmic guitar scratching", 
+    vocal: "Syncopated phrasing, Rhythmic ad-libs" 
+  }, // 펑키한 베이스 리듬과 박자를 쪼개는 창법
+  dance_pop: { 
+    style: "Club Dance Pop, High Energy", 
+    sound: "Heavy kick drum, Side-chained synths", 
+    vocal: "Powerful, Tuned, Wide-stereo harmonies" 
+  }, // 클럽 지향의 강렬한 비트와 화려한 코러스 화음
+  acoustic_pop: { 
+    style: "Unplugged Acoustic Pop, Soft", 
+    sound: "Acoustic focus, Minimalist percussion", 
+    vocal: "Intimate, Pure, Raw recording feel" 
+  }, // 어쿠스틱 악기 중심의 진솔하고 가까운 목소리
 
-  // kpop 소분류
-  idol_dance: { style: "Idol Style, High Energy", sound: "Punchy beats, Wide stereo mix", vocal: "Synchronized harmonies, High-pitched hooks" },
-  k_ballad: { style: "Emotional Ballad", sound: "Grand piano, Lush string section", vocal: "Vulnerable, Soulful, Powerful high notes" },
-  k_synth_pop: { style: "Retro K-Pop", sound: "Vintage synths, Dreamy atmosphere", vocal: "Sweet, Nostalgic phrasing" },
-  k_trap: { style: "K-Hip-hop, Trap rhythm", sound: "Rapid hi-hats, Booming 808", vocal: "Rap-singing mix, Melodic rap" },
-  k_new_jack_swing: { style: "90s Swing beat", sound: "Vintage sampler hits, New jack rhythm", vocal: "Soulful, Rhythmic swing delivery" },
-  k_indie: { style: "Indie, Airy", sound: "Warm guitar, Lo-fi texture", vocal: "Natural, Breath-heavy tone" },
-  k_folk: { style: "Sincere, Acoustic", sound: "Steel-string guitar, Raw recording", vocal: "Simple, Storytelling style" },
-  k_rock: { style: "Band Sound, Energetic", sound: "Driving electric guitar, Rock drums", vocal: "Belting, Powerful rock energy" },
-  gugak_fusion: { style: "Traditional Fusion", sound: "Gayageum, Haegeum, Traditional percussion", vocal: "Traditional Korean phrasing style" },
+  idol_dance: { 
+    style: "K-Pop Idol Dance, High Energy", 
+    sound: "Punchy hybrid beats, Wide stereo mix", 
+    vocal: "Synchronized harmonies, Catchy idol hooks" 
+  }, // 화려한 군무 중심의 아이돌 댄스
+  k_ballad: { 
+    style: "Emotional K-Ballad, Dramatic", 
+    sound: "Grand piano, Lush orchestral strings", 
+    vocal: "Vulnerable, Soulful, Powerful high notes" 
+  }, // 한국 정통 발라드의 폭발적인 고음과 감성
+  k_synth_pop: { 
+    style: "Retro K-Pop, Dreamy Synth-pop", 
+    sound: "Vintage synths, Dreamy K-pop atmosphere", 
+    vocal: "Sweet, Melodic K-pop phrasing" 
+  }, // 한국식 세련미를 더한 복고풍 신스팝 사운드
+  k_trap: { 
+    style: "K-Hip-hop Fusion, Trap Style", 
+    sound: "Rapid hi-hats, Booming 808 bass", 
+    vocal: "Rap-singing mix, Melodic rap flow" 
+  }, // 트랩 비트 위에 얹어진 K-힙합의 멜로딕 랩
+  k_new_jack_swing: { 
+    style: "90s Korean New Jack Swing", 
+    sound: "Vintage sampler hits, Swing-beat rhythm", 
+    vocal: "Soulful, Rhythmic swing delivery" 
+  }, // 90년대 가요 감성의 뉴잭스윙
+  k_indie: { 
+    style: "Korean Indie Pop, Airy Style", 
+    sound: "Warm guitar, Lo-fi texture", 
+    vocal: "Natural, Breath-heavy tone" 
+  }, // 담백하고 공기감이 느껴지는 한국 인디 보컬
+  k_folk: { 
+    style: "Modern Korean Folk, Sincere", 
+    sound: "Steel-string guitar, Simple recording", 
+    vocal: "Simple storytelling style, Emotional" 
+  }, // 통기타 한 대와 진솔한 이야기가 담긴 포크
+  k_rock: { 
+    style: "K-Rock Band, Energetic Rock", 
+    sound: "Driving electric guitar, Rock drums", 
+    vocal: "Powerful rock belting, High energy" 
+  }, // 시원하게 뻗는 일렉 기타와 파워풀한 록 발성
+  gugak_fusion: { 
+    style: "Traditional Korean Fusion, Gugak-pop", 
+    sound: "Gayageum, Haegeum, Korean percussion", 
+    vocal: "Traditional Korean phrasing style" 
+  }, // 국악기와 현대 사운드가 결합된 퓨전 음악
 
-  // jpop 소분류
-  j_idol_pop: { style: "High Energy, Upbeat", sound: "Group vocal layers, Fast tempo", vocal: "Group chorus, Youthful high-energy" },
-  shibuya_kei: { style: "Jazzy, Bossa Nova", sound: "Retro samples, Sophisticated arrangement", vocal: "Soft, Wispy, French-pop style" },
-  anime_rock: { style: "Anisong Rock, Fast", sound: "Distorted guitar riffs, Double-time drums", vocal: "Intense, High-pitched anime rock tone" },
-  j_city_pop: { style: "80s Japanese City Pop", sound: "Yamaha DX7, Funky bass, Saxophone", vocal: "Cool, Smooth, J-pop phrasing" },
-  visual_kei: { style: "Dramatic, Gothic", sound: "Heavy rock, Orchestral elements", vocal: "Vibrato-heavy, Operatic rock style" },
-  utaite_style: { style: "High-speed, Digital", sound: "Hyper-active melody, Intense production", vocal: "High-speed delivery, Sharp digital tone" },
-  vocaloid_style: { style: "Synthesized, Glitchy", sound: "Digital vocal texture, Tech-pop beat", vocal: "Robotic, Synthesized, Artificial tone" },
-  j_jazz_pop: { style: "Jazz Fusion", sound: "Piano solo, Walking bassline", vocal: "Jazzy, Laid-back, Melodic" },
-  j_electro: { style: "Techno-pop", sound: "Trance synths, Electronic focus", vocal: "Vocoder-like, Ethereal, Filtered" },
-  j_ballad: { style: "Melodic, Emotional", sound: "Soft piano, Warm strings", vocal: "Passionate, Tender, Melodic focus" },
+  j_idol_pop: { 
+    style: "J-Pop Idol Style, Upbeat", 
+    sound: "Fast tempo, Bright synths, Group layers", 
+    vocal: "Group chorus, Youthful high-energy" 
+  }, // 하이톤 에너지가 돋보이는 일본 아이돌 팝
+  shibuya_kei: { 
+    style: "Jazzy Shibuya-kei, Bossa Nova", 
+    sound: "Retro samples, Sophisticated arrangement", 
+    vocal: "Soft, Wispy, French-pop aesthetic" 
+  }, // 시부야계 특유의 재즈/보사노바풍 편곡
+  anime_rock: { 
+    style: "Fast Anisong Rock, Energetic", 
+    sound: "Distorted guitar riffs, Double-time drums", 
+    vocal: "Intense, High-pitched anime rock tone" 
+  }, // 애니메이션 주제가 특유의 질주감 있는 록
+  j_city_pop: { 
+    style: "80s Japanese City Pop, Urban", 
+    sound: "DX7 Synths, Funky bass, Saxophone", 
+    vocal: "Cool, Smooth, J-pop phrasing" 
+  }, // 80년대 일본 시티팝의 펑키하고 도회적인 사운드
+  visual_kei: { 
+    style: "Dramatic Visual-kei, Gothic", 
+    sound: "Heavy rock, Orchestral elements", 
+    vocal: "Vibrato-heavy, Operatic rock style" 
+  }, // 화려하고 드라마틱한 구성의 비주얼계 록
+  utaite_style: { 
+    style: "High-speed Internet Pop, Utaite", 
+    sound: "Hyper-active melody, Intense production", 
+    vocal: "High-speed delivery, Sharp digital tone" 
+  }, // 일본 우타이테 문화 특유의 빠른 팝 사운드
+  vocaloid_style: { 
+    style: "Synthesized Vocaloid Style", 
+    sound: "Digital vocal texture, Tech-pop beat", 
+    vocal: "Robotic, Synthesized, Artificial tone" 
+  }, // 인위적인 기계 보컬 질감을 의도한 스타일
+  j_jazz_pop: { 
+    style: "Modern J-Jazz Fusion, Melodic", 
+    sound: "Virtuoso piano, Walking bass, Jazz feel", 
+    vocal: "Jazzy, Laid-back, Melodic phrasing" 
+  }, // 여유로운 재즈 리듬과 일본식 멜로디의 결합
+  j_electro: { 
+    style: "Japanese Techno-pop, Electronic", 
+    sound: "Trance synths, Precise digital beats", 
+    vocal: "Vocoder-processed, Ethereal, Filtered" 
+  }, // 정교한 디지털 비트와 기계적 보컬 필터링
+  j_ballad: { 
+    style: "Emotional J-Ballad, Melodic", 
+    sound: "Soft piano, Warm strings", 
+    vocal: "Tender, Passionate, Melodic focus" 
+  }, // 선율미가 강조된 일본식 발라드
+
+  /* ===================== 2. Hip-hop & R&B (ID 소문자 통일) ===================== */
+  trap: { 
+    style: "Modern Trap, Hard-hitting Energy", 
+    sound: "Rapid hi-hats, Booming 808 bass", 
+    vocal: "Aggressive trap flow, Triplets rap" 
+  }, // 강렬한 808 베이스와 현대적인 트랩 비트
+  drill: { 
+    style: "UK/NY Drill Style, Dark Gritty", 
+    sound: "Sliding 808 bass, Complex percussion", 
+    vocal: "Deep-voiced, Intense street flow" 
+  }, // 드릴 특유의 슬라이딩 베이스와 어두운 분위기
+  boombap: { 
+    style: "Classic Boom-bap, Golden Era", 
+    sound: "Dusty vinyl samples, Punchy drums", 
+    vocal: "Raw lyrical delivery, Rhythmic flow" 
+  }, // 90년대 황금기 힙합의 투박한 붐뱁 비트
+  lofi: { 
+    style: "Chill Lo-fi Hip-hop, Relaxing", 
+    sound: "Mellow jazz samples, Vinyl crackle", 
+    vocal: "Laid-back whispering, Dreamy delivery" 
+  }, // 나른하고 편안한 로파이 비트 (ID: lofi)
+  jazz_hiphop: { 
+    style: "Jazz-influenced Hip-hop, Groove", 
+    sound: "Smooth jazz piano, Saxophone, Jazz break", 
+    vocal: "Mellow rhythmic flow, Poetic delivery" 
+  }, // 재즈 선율과 힙합 비트의 세련된 조화
+  emo_rap: { 
+    style: "Emotional Emo-rap, Melancholic", 
+    sound: "Melodic guitar loops, Trap beats", 
+    vocal: "Vulnerable sing-rapping, Raw tone" 
+  }, // 우울한 기타 선율과 감성적인 랩-싱잉
+  old_school: { 
+    style: "Classic Old School Hip-hop", 
+    sound: "Funk samples, Scratching, Basic beats", 
+    vocal: "Storytelling, Clear rhythmic rap" 
+  }, // 초창기 힙합의 펑키한 샘플과 정석적인 래핑
+  g_funk: { 
+    style: "West Coast G-Funk Style", 
+    sound: "Whiny sine synths, Funk groove, Deep bass", 
+    vocal: "Laid-back, Melodic West Coast flow" 
+  }, // 서부 힙합 특유의 지펑크 사운드
+  cloud_rap: { 
+    style: "Cloud Rap, Ambient Hip-hop", 
+    sound: "Atmospheric pads, Slow trap beats", 
+    vocal: "Distant, Reverb-heavy melodic rap" 
+  }, // 몽환적인 패드 사운드와 공간감 있는 래핑
+
+  contemporary_rnb: { 
+    style: "Modern Contemporary R&B", 
+    sound: "Polished synths, Deep sub-bass, Snaps", 
+    vocal: "Smooth silky vocals, Precise R&B runs" 
+  }, // 매끄럽고 트렌디한 현대 알앤비
+  neo_soul: { 
+    style: "Sophisticated Neo-soul, Jazzy", 
+    sound: "Rhodes piano, Groovy live bass", 
+    vocal: "Soulful artistic phrasing, Deep emotion" 
+  }, // 지적이고 예술적인 네오 소울
+  soul: { 
+    style: "Classic Soul, Vintage Motown", 
+    sound: "Brass section, Hammond organ, Vintage drums", 
+    vocal: "Powerful raw soul, Gospel-influenced" 
+  }, // 정통 소울 가창
+  funk: { 
+    style: "Classic Funk, Groovy Dance", 
+    sound: "Slap bass, Wah-wah guitar, Punchy brass", 
+    vocal: "Dynamic rhythmic vocals, Energetic" 
+  }, // 리듬감이 폭발하는 펑크
+  alternative_rnb: { 
+    style: "Alternative PBR&B, Atmospheric", 
+    sound: "Ambient pads, Minimalist moody beats", 
+    vocal: "Dreamy airy vocals, Emotional tone" 
+  }, // 얼터너티브 알앤비 (ID: alternative_rnb)
+  new_jack_swing: { 
+    style: "New Jack Swing, Retro Groove", 
+    sound: "Vintage sampler hits, Swing rhythm", 
+    vocal: "Soulful, Rhythmic swing delivery" 
+  }, // 복고풍 스윙 리듬 (ID: new_jack_swing)
+
+  /* ===================== 3. Rock & Band (ID 소문자 통일) ===================== */
+  alternative_rock: { 
+    style: "Modern Alternative Rock", 
+    sound: "Clean to driven guitar, Band sound", 
+    vocal: "Emotional rock vocals, Melodic" 
+  },
+  modern_rock: { 
+    style: "Modern Rock, Contemporary Band", 
+    sound: "Polished electric guitar, Tight drums", 
+    vocal: "Clear and melodic rock delivery" 
+  },
+  punk_rock: { 
+    style: "Fast Punk Rock, Rebellious", 
+    sound: "Raw overdriven guitar, Fast-paced drums", 
+    vocal: "Rough shouting, Youthful rebellious" 
+  },
+  hard_rock: { 
+    style: "Classic Hard Rock, Heavy Band", 
+    sound: "Distorted riffs, Powerful drums", 
+    vocal: "Powerful belting, High-pitched rock" 
+  },
+  soft_rock: { 
+    style: "Soft Rock, Melodic Band Sound", 
+    sound: "Acoustic guitar, Piano, Clean electric", 
+    vocal: "Tender, Smooth melodic delivery" 
+  },
+  garage_rock: { 
+    style: "Garage Rock, Raw Lo-fi Style", 
+    sound: "Distorted fuzzy guitar, Simple drums", 
+    vocal: "Raw, Energetic, Slightly distorted" 
+  },
+  shoegazing: { 
+    style: "Shoegazing, Dreamy Noise Rock", 
+    sound: "Wall of sound guitar, Deep reverb", 
+    vocal: "Soft, Buried in the mix, Dreamy tone" 
+  },
+  folk_rock: { 
+    style: "Folk Rock, Acoustic-Electric", 
+    sound: "Acoustic guitar, Tambourine, Organ", 
+    vocal: "Sincere storytelling, Warm rock tone" 
+  },
+  blues_rock: { 
+    style: "Blues Rock, Soulful Guitar", 
+    sound: "Bluesy guitar solos, Hammond organ", 
+    vocal: "Gritty, Soulful, Powerful bluesy tone" 
+  },
+
+  heavy_metal: { 
+    style: "Classic Heavy Metal, Powerful", 
+    sound: "Chugging guitar, Double-bass drums", 
+    vocal: "Powerful rock belting, Metal shouting" 
+  },
+  death_metal: { 
+    style: "Death Metal, Aggressive Dark", 
+    sound: "Low-tuned guitar, Blast beats", 
+    vocal: "Deep guttural growls, Harsh vocals" 
+  },
+  thrash_metal: { 
+    style: "Thrash Metal, Fast Aggressive", 
+    sound: "Fast shredding guitar, Intense drums", 
+    vocal: "Aggressive shouting, High-speed rap-like" 
+  },
+  metalcore: { 
+    style: "Metalcore, Modern Aggressive", 
+    sound: "Heavy breakdowns, Melodic guitar riffs", 
+    vocal: "Mixed screaming and melodic clean" 
+  },
+  nu_metal: { 
+    style: "Nu Metal, Hiphop-Metal Fusion", 
+    sound: "Down-tuned guitar, Turntables, Groovy", 
+    vocal: "Rap-singing, Angry energetic delivery" 
+  },
+  symphonic_metal: { 
+    style: "Symphonic Metal, Epic Grand", 
+    sound: "Orchestral elements, Heavy guitar", 
+    vocal: "Operatic female vocals, Dramatic" 
+  },
+  power_metal: { 
+    style: "Power Metal, Epic Fantasy", 
+    sound: "Fast melodic guitar, Double-bass", 
+    vocal: "High-pitched clean vocals, Heroic" 
+  },
+
+  /* ===================== 4. Electronic & Dance (ID 소문자 통일) ===================== */
+  house: { 
+    style: "Classic House, 4/4 Groove", 
+    sound: "Deep bass, Repetitive stabs, Drum machine", 
+    vocal: "Soulful diva vocals, Vocal chops" 
+  },
+  techno: { 
+    style: "Dark Techno, Industrial Style", 
+    sound: "Repetitive rhythmic synths, Dark kick", 
+    vocal: "Minimalist, Monotone rhythmic delivery" 
+  },
+  trance: { 
+    style: "Uplifting Trance, Melodic Journey", 
+    sound: "Saw-tooth leads, Arpeggiated bass", 
+    vocal: "Ethereal, Long sustained melodic notes" 
+  },
+  future_bass: { 
+    style: "Future Bass, Modern Electronic", 
+    sound: "Bright supersaw synths, Vocal chops", 
+    vocal: "Pop-style melodic vocals, Airy tone" 
+  },
+  dubstep: { 
+    style: "Aggressive Dubstep, Bass Drop", 
+    sound: "Wobble bass, Gritty synths, Half-time", 
+    vocal: "Intense shouting, Hype-man delivery" 
+  },
+  deep_house: { 
+    style: "Deep House, Chill Lounge", 
+    sound: "Warm chords, Mellow bass, Smooth beat", 
+    vocal: "Soulful, Laid-back, Sultry vocals" 
+  },
+  tropical_house: { 
+    style: "Tropical House, Summer Vibe", 
+    sound: "Marimba, Steel drums, Flute-like synth", 
+    vocal: "Light, Breezy pop-style vocals" 
+  },
+  eurobeat: { 
+    style: "Eurobeat, Fast High-Energy", 
+    sound: "High-speed digital synths, Fast tempo", 
+    vocal: "High-pitched, Energetic, Flashy" 
+  },
+  drum_and_bass: { 
+    style: "Drum & Bass, Fast Breakbeat", 
+    sound: "Fast broken beats, Deep sub-bass", 
+    vocal: "Rhythmic melodic delivery, MC style" 
+  },
+
+  /* ===================== 5. Jazz & Classical (ID 소문자 통일) ===================== */
+  swing_jazz: { 
+    style: "Classic Swing Jazz, Big Band", 
+    sound: "Walking bass, Bright brass, Ride cymbal", 
+    vocal: "Rhythmic phrasing, Scat singing" 
+  },
+  bossa_nova: { 
+    style: "Bossa Nova, Brazilian Jazz", 
+    sound: "Nylon guitar, Soft shaker, Jazz piano", 
+    vocal: "Soft, Wispy, Portuguese/English" 
+  },
+  fusion_jazz: { 
+    style: "Jazz Fusion, Modern Complex", 
+    sound: "Electric guitar, Keyboards, Complex drums", 
+    vocal: "Instrumental focus, Artistic phrasing" 
+  },
+  cool_jazz: { 
+    style: "Cool Jazz, Relaxed Lounge", 
+    sound: "Muted trumpet, Soft piano, Brushed drums", 
+    vocal: "Laid-back, Whispering, Smooth tone" 
+  },
+  big_band: { 
+    style: "Big Band Era, Grand Jazz", 
+    sound: "Full brass section, Upright bass", 
+    vocal: "Show-tune style, Powerful jazz vocals" 
+  },
+  latin_jazz: { 
+    style: "Latin Jazz, Rhythmic Energy", 
+    sound: "Congas, Timbales, Montuno piano", 
+    vocal: "Energetic, Spanish/English, Rhythmic" 
+  },
+  jazz_vocal: { 
+    style: "Standard Jazz Vocal, Classic", 
+    sound: "Jazz trio (Piano, Bass, Drums)", 
+    vocal: "Sophisticated phrasing, Soulful tone" 
+  },
+  hard_bop: { 
+    style: "Hard Bop, Intense Jazz", 
+    sound: "Aggressive drums, Fast saxophone solos", 
+    vocal: "Energetic, Soulful jazz delivery" 
+  },
+
+  full_orchestra: { 
+    style: "Full Orchestral Symphony", 
+    sound: "Symphonic strings, Woodwinds, Brass", 
+    vocal: "Operatic phrasing, Grand classical" 
+  },
+  piano_solo_classical: { 
+    style: "Pure Piano Solo, Classical", 
+    sound: "Grand piano resonance, Soft pedals", 
+    vocal: "Atmospheric breathing, Pure tone" 
+  }, // ID: piano_solo_classical
+  string_ensemble_classical: { 
+    style: "String Ensemble, Baroque-style", 
+    sound: "Violins, Violas, Cellos, Basses", 
+    vocal: "Choir-like textures, Elegant phrasing" 
+  }, // ID: string_ensemble_classical
+  choral: { 
+    style: "Grand Choral, Sacred Style", 
+    sound: "Pipe organ or Minimalist, Full choir", 
+    vocal: "Soprano, Alto, Tenor, Bass harmony" 
+  },
+  baroque: { 
+    style: "Baroque Classical, Ornate", 
+    sound: "Harpsichord, String chamber, Oboe", 
+    vocal: "Clear, Ornate classical phrasing" 
+  },
+  opera: { 
+    style: "Grand Opera, Dramatic Classical", 
+    sound: "Full orchestra, Dramatic builds", 
+    vocal: "Full operatic projection, Vibrato-heavy" 
+  },
+
+  /* ===================== 6. Folk & World (ID 소문자 통일) ===================== */
+  traditional_folk: { 
+    style: "Traditional Folk, Sincere", 
+    sound: "Acoustic guitar, Banjo, Fiddle", 
+    vocal: "Raw, Storytelling, Natural tone" 
+  },
+  country: { 
+    style: "Classic Country, Nashville Style", 
+    sound: "Steel guitar, Acoustic guitar, Fiddle", 
+    vocal: "Twangy, Sincere storytelling style" 
+  },
+  bluegrass: { 
+    style: "Fast Bluegrass, High Energy", 
+    sound: "Banjo, Mandolin, Upright bass", 
+    vocal: "High-pitched harmonies, Fast phrasing" 
+  },
+  singer_songwriter: { 
+    style: "Singer-Songwriter Style, Intimate", 
+    sound: "Solo guitar or Piano, Pure recording", 
+    vocal: "Honest, Whispering, Personal tone" 
+  },
+  acoustic_session: { 
+    style: "Acoustic Session, Live Vibe", 
+    sound: "Organic instruments, Small percussion", 
+    vocal: "Pure, Unprocessed, Natural delivery" 
+  },
+  fingerstyle: { 
+    style: "Fingerstyle Guitar, Organic", 
+    sound: "Complex acoustic guitar picking", 
+    vocal: "Breath-heavy, Intimate, Soft tone" 
+  },
+
+  reggae: { 
+    style: "Reggae, Jamaican Island Vibe", 
+    sound: "Off-beat guitar, Deep bass, Skank", 
+    vocal: "Rhythmic Patois style, Laid-back" 
+  },
+  afrobeat: { 
+    style: "Afrobeat, Energetic Rhythmic", 
+    sound: "Complex percussion, Funky brass", 
+    vocal: "Call and response, Rhythmic delivery" 
+  },
+  celtic: { 
+    style: "Celtic Folk, Irish Tradition", 
+    sound: "Tin whistle, Bagpipes, Bodhran", 
+    vocal: "Pure, Melodic, Celtic phrasing" 
+  },
+  latin_salsa: { 
+    style: "Latin Salsa, High Energy Dance", 
+    sound: "Piano montuno, Brass, Percussion", 
+    vocal: "Spanish, Rhythmic, Passionate" 
+  },
+  flamenco: { 
+    style: "Flamenco, Passionate Spanish", 
+    sound: "Nylon guitar, Clapping, Cajon", 
+    vocal: "Deep, Emotional, Raspy Spanish vocals" 
+  },
+
+  /* ===================== 7. Trot & Adult (ID 소문자 통일) ===================== */
+  traditional_trot: { 
+    style: "Authentic Traditional Trot", 
+    sound: "Accordion, Brass, Trot rhythm", 
+    vocal: "Deep vibrato, Masterful Ggeok-gi" 
+  },
+  semi_trot: { 
+    style: "Modern Semi-Trot, Danceable", 
+    sound: "Synth-pop beats, Bright brass", 
+    vocal: "Cheerful, Light trot phrasing" 
+  },
+  disco_trot: { 
+    style: "Disco Trot, High Energy", 
+    sound: "4/4 Disco beat, Electronic synths", 
+    vocal: "Energetic, Rhythmic trot delivery" 
+  },
+  rock_trot: { 
+    style: "Rock Trot, Band-style Trot", 
+    sound: "Electric guitar riffs, Rock drums", 
+    vocal: "Powerful rock belting, Trot technique" 
+  },
+  ballad_trot: { 
+    style: "Emotional Ballad Trot, Sad", 
+    sound: "Acoustic guitar, Soft strings", 
+    vocal: "Tearful, Soulful trot vibrato" 
+  },
+  blues_trot: { 
+    style: "Bluesy Trot, Soulful Adult", 
+    sound: "Bluesy guitar, Saxophone, Slow tempo", 
+    vocal: "Gritty, Soulful adult contemporary" 
+  },
+  shuffle_trot: { 
+    style: "Shuffle Trot, Rhythmic", 
+    sound: "Shuffle rhythm, Bright accordion", 
+    vocal: "Bouncy, Rhythmic trot delivery" 
+  },
+  gugak_trot: { 
+    style: "Gugak-fused Trot, Traditional", 
+    sound: "Gayageum, Haegeum, Trot rhythm", 
+    vocal: "Traditional Korean Minyo-style trot" 
+  },
+
+  "7080_folk": { 
+    style: "7080 Folk Gayo, Nostalgic", 
+    sound: "Acoustic guitar, Harmonica, Pure", 
+    vocal: "Sincere storytelling, Warm tone" 
+  },
+  adult_ballad: { 
+    style: "Adult Contemporary Ballad", 
+    sound: "Piano, Strings, Clean production", 
+    vocal: "Mature, Emotional storytelling" 
+  },
+  campus_band_sound: { 
+    style: "Campus Band Sound, 7080 Rock", 
+    sound: "Vintage electric guitar, Combo organ", 
+    vocal: "Powerful vintage rock, Nostalgic" 
+  },
+  enka_style: { 
+    style: "Enka-influenced Gayo, Classic", 
+    sound: "Orchestral strings, Traditional brass", 
+    vocal: "Deep vibrato, Dramatic adult phrasing" 
+  },
+
+  /* ===================== 8. Cinematic & BGM (ID 소문자 통일) ===================== */
+  orchestral_score: { 
+    style: "Epic Orchestral Score", 
+    sound: "Full symphony, Brass, Percussion", 
+    vocal: "Dramatic wordless vocals, Choir" 
+  },
+  hybrid_epic: { 
+    style: "Hybrid Epic Cinematic", 
+    sound: "Orchestral + Modern Synths, Taiko", 
+    vocal: "Intense dramatic textures, Wordless" 
+  },
+  synth_score: { 
+    style: "Electronic Synth Score, Retro", 
+    sound: "Analog synths, Dark atmosphere", 
+    vocal: "Minimalist processed textures" 
+  },
+  piano_solo: { 
+    style: "Emotional Piano Solo, OST", 
+    sound: "Grand piano, Deep resonance", 
+    vocal: "Intimate breathing, Atmospheric" 
+  }, // ID: piano_solo (OST 하위)
+  string_ensemble: { 
+    style: "String Ensemble, Melancholic", 
+    sound: "Lush violins and cellos", 
+    vocal: "Soft choral textures, Wordless" 
+  },
+  chiptune: { 
+    style: "Chiptune, 8-bit Video Game", 
+    sound: "Square waves, Pulse waves, Noise", 
+    vocal: "Digital, Synthesized, Robotic" 
+  },
+  world_music: { 
+    style: "Cinematic World Music, Ethnic", 
+    sound: "Ethnic instruments, World percussion", 
+    vocal: "Native traditional phrasing, Ethnic" 
+  },
+  minimalism: { 
+    style: "Minimalist OST, Repetitive", 
+    sound: "Repetitive patterns, Piano, Marimba", 
+    vocal: "Wordless, Rhythmic breathing" 
+  },
+  ambient: { 
+    style: "Ambient BGM, Atmospheric", 
+    sound: "Distant pads, Field recordings", 
+    vocal: "Ethereal, Distant, Wordless textures" 
+  },
 };

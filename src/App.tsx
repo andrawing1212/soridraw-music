@@ -1946,12 +1946,22 @@ function App() {
       return [...result, ...picked.map(p => p.id)];
     };
 
-    // Random selection: Total 5-15, balanced across categories
-    const totalTarget = Math.floor(Math.random() * 11) + 5; // 5-15
-    const basePerCat = Math.floor(totalTarget / 5);
-    const extra = totalTarget % 5;
+    // 1. Genre Selection (1 Main + 1 Sub from Hierarchy)
+    const allMainGenres = GENRE_HIERARCHY.flatMap((g) => g.children);
+    const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
+    const randomSub = randomMain && randomMain.children.length > 0
+      ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
+      : null;
 
-    const counts = [basePerCat, basePerCat, basePerCat, basePerCat, basePerCat];
+    const g = randomMain ? [randomMain.id] : [];
+    const sg = randomSub ? [randomSub.id] : [];
+
+    // Random selection for other categories: Total 5-15, balanced across categories
+    const totalTarget = Math.floor(Math.random() * 11) + 5; // 5-15
+    const basePerCat = Math.floor(totalTarget / 4); // 4 categories left (Mood, Theme, Style, Sound)
+    const extra = totalTarget % 4;
+
+    const counts = [basePerCat, basePerCat, basePerCat, basePerCat];
     for (let i = 0; i < extra; i++) {
       counts[i]++;
     }
@@ -1959,13 +1969,13 @@ function App() {
     // Shuffle counts to randomize which category gets the extra
     counts.sort(() => 0.5 - Math.random());
 
-    let g = getRandomForCategory(GENRES, pinnedGenres, counts[0], true);
-    let m = getRandomForCategory(MOODS, [], counts[1]);
-    let t = getRandomForCategory(THEMES, pinnedThemes, counts[2]);
-    let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, counts[3]);
-    let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, counts[4]);
+    let m = getRandomForCategory(MOODS, [], counts[0]);
+    let t = getRandomForCategory(THEMES, pinnedThemes, counts[1]);
+    let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, counts[2]);
+    let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, counts[3]);
 
     setSelectedGenres(g);
+    setSubGenre(sg);
     setSelectedMoods(m);
     setSelectedThemes(t);
     setSelectedStyles(s);
@@ -1982,7 +1992,6 @@ function App() {
       const { min, max } = calculateOptimalBPM(g, m);
       setMinBPM(min);
       setMaxBPM(max);
-      // Keep tempoEnabled true to show real-time updates if keywords change
     }
   };
 const saveRecentSong = async (newSong: any) => {
@@ -2525,8 +2534,13 @@ ${result.prompt}
                   const allMainGenres = GENRE_HIERARCHY.flatMap((g) => g.children);
                   const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
                   if (!randomMain) return;
+                  
+                  const randomSub = randomMain.children.length > 0
+                    ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
+                    : null;
+                    
                   setSelectedGenres([randomMain.id]);
-                  setSubGenre([]);
+                  setSubGenre(randomSub ? [randomSub.id] : []);
                   setIsGenreRandomized(true);
                 }}
                 onHover={setHoveredItem}
@@ -3888,12 +3902,12 @@ function CycleSection({
         onClick={() => setIsBottomExpanded(!isBottomExpanded)}
         className={cn(
           "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
-          isBottomExpanded ? "h-auto" : "h-[56px]"
+          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
         )}
       >
         {selected.length > 0 ? (
           <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight",
+            "text-sm font-semibold text-brand-orange leading-tight w-full",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
@@ -3905,7 +3919,7 @@ function CycleSection({
           </p>
         ) : (
           <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight",
+            "text-sm font-medium text-brand-orange leading-tight w-full",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {titleKo || title} 키워드를 선택하세요.
@@ -4233,12 +4247,12 @@ function CategorySection({
         onClick={() => setIsBottomExpanded(!isBottomExpanded)}
         className={cn(
           "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
-          isBottomExpanded ? "h-auto" : "h-[56px]"
+          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
         )}
       >
         {selected.length > 0 ? (
           <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight",
+            "text-sm font-semibold text-brand-orange leading-tight w-full",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {selected.map(id => {
@@ -4248,7 +4262,7 @@ function CategorySection({
           </p>
         ) : (
           <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight",
+            "text-sm font-medium text-brand-orange leading-tight w-full",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.

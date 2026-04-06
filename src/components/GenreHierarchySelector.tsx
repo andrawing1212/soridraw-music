@@ -126,6 +126,8 @@ export default function GenreHierarchySelector({
   const [modalStep, setModalStep] = useState<ModalStep>('main');
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [isBottomExpanded, setIsBottomExpanded] = useState(false);
+  const lastSyncedGenreRef = useRef<string[]>([]);
+  const lastSyncedSubGenreRef = useRef<string[]>([]);
 
   const modalHistoryDepthRef = useRef(0);
   const modalScrollYRef = useRef(0);
@@ -163,6 +165,48 @@ export default function GenreHierarchySelector({
       })),
     }));
   }, []);
+
+  useEffect(() => {
+    const genreChanged = JSON.stringify(committedGenre) !== JSON.stringify(lastSyncedGenreRef.current);
+    const subGenreChanged = JSON.stringify(committedSubGenre) !== JSON.stringify(lastSyncedSubGenreRef.current);
+
+    if (genreChanged || subGenreChanged) {
+      lastSyncedGenreRef.current = committedGenre;
+      lastSyncedSubGenreRef.current = committedSubGenre;
+
+      if (committedGenre.length > 0) {
+        const mainId = committedGenre[0];
+        setPendingMainId(mainId);
+
+        let foundGroup: GroupItem | null = null;
+        let foundMain: MainGenreItem | null = null;
+        let foundSubId: string | null = null;
+
+        for (const group of groups) {
+          const main = group.children.find(m => m.id === mainId);
+          if (main) {
+            foundGroup = group;
+            foundMain = main;
+            foundSubId = main.children.find(s => committedSubGenre.includes(s.id))?.id || null;
+            break;
+          }
+        }
+
+        setPendingSubId(foundSubId);
+
+        // Sync modal view if open
+        if (activeGroup && foundGroup && activeGroup.id !== foundGroup.id) {
+          setActiveGroup(foundGroup);
+        }
+        if (modalStep === 'sub' && foundMain && activeMain?.id !== foundMain.id) {
+          setActiveMain(foundMain);
+        }
+      } else {
+        setPendingMainId(null);
+        setPendingSubId(null);
+      }
+    }
+  }, [committedGenre, committedSubGenre, groups, activeGroup, activeMain, modalStep]);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
@@ -311,7 +355,10 @@ export default function GenreHierarchySelector({
       ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
       : null;
 
-    commitSelection(randomMain.id, randomSub?.id ?? null);
+    onSelectGenre(randomMain.id);
+    if (randomSub) {
+      onSelectSubGenre(randomSub.id);
+    }
   };
 
   useEffect(() => {
@@ -470,12 +517,12 @@ export default function GenreHierarchySelector({
         onClick={() => setIsBottomExpanded(!isBottomExpanded)}
         className={cn(
           "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
-          isBottomExpanded ? "h-auto" : "h-[56px]"
+          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
         )}
       >
         {selectedMainLabel ? (
           <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight",
+            "text-sm font-semibold text-brand-orange leading-tight w-full",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {selectedMainLabel}
@@ -483,7 +530,7 @@ export default function GenreHierarchySelector({
           </p>
         ) : (
           <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight",
+            "text-sm font-medium text-brand-orange leading-tight w-full",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             대분류를 눌러 메인 장르를 선택하세요.

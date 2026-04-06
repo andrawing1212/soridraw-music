@@ -125,6 +125,7 @@ export default function GenreHierarchySelector({
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
 
   const modalHistoryDepthRef = useRef(0);
   const modalScrollYRef = useRef(0);
@@ -367,110 +368,124 @@ export default function GenreHierarchySelector({
   }, [activeGroup, modalStep]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)] pb-12">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <h3 
-              onMouseEnter={() => setShowTitleTooltip(true)}
-              onMouseLeave={() => setShowTitleTooltip(false)}
-              className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-            >
-              <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-              장르
-              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedCount}/{totalCount})</span>
-            </h3>
-            <AnimatePresence>
-              {showTitleTooltip && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
-                >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
-                    곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류를 선택하고 메인 장르와 세부 장르를 조합하여 원하는 음악적 색깔을 만드세요.
-                  </p>
-                </motion.div>
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <h3 
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+              >
+                <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+                장르
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedCount}/{totalCount})</span>
+              </h3>
+              <AnimatePresence>
+                {showTitleTooltip && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                  >
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
+                      곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류를 선택하고 메인 장르와 세부 장르를 조합하여 원하는 음악적 색깔을 만드세요.
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRandom}
+              onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', labelKo: '랜덤 선택', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2.5 rounded-xl transition-all",
+                isRandomized
+                  ? "bg-brand-orange text-white"
+                  : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
               )}
-            </AnimatePresence>
+              title="랜덤 선택"
+            >
+              <Dices className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClear}
+              onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2.5 rounded-xl transition-all border",
+                selectedCount > 0 || isRandomized
+                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+              )}
+              title="초기화"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', labelKo: '랜덤 선택', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "p-2.5 rounded-xl transition-all",
-              isRandomized
-                ? "bg-brand-orange text-white"
-                : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
-            )}
-            title="랜덤 선택"
-          >
-            <Dices className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "p-2.5 rounded-xl transition-all border",
-              selectedCount > 0 || isRandomized
-                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
-            )}
-            title="초기화"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
+        <motion.div
+          initial={false}
+          animate={{ 
+            height: isExpanded ? contentHeight : 48,
+            opacity: 1
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="overflow-hidden"
+        >
+          <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+            {groups.map((group) => {
+              const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
+              return (
+                <button
+                  key={group.id}
+                  onClick={() => openMainModal(group)}
+                  onMouseEnter={() => onHover({ id: group.id, label: group.label, labelKo: group.labelKo, description: group.description || DEFAULT_GROUP_DESCRIPTION, descriptionKo: group.descriptionKo, _ts: Date.now() } as CategoryItem)}
+                  onMouseLeave={() => onHover(null)}
+                  className={[
+                    'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
+                    hasSelectedMain
+                      ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
+                      : 'bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                    {group.labelKo || group.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
       </div>
 
-      <motion.div
-        initial={false}
-        animate={{ 
-          height: isExpanded ? contentHeight : 48,
-          opacity: 1
-        }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="overflow-hidden"
+      <div 
+        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
+        className={cn(
+          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
+          isBottomExpanded ? "h-auto" : "h-[56px]"
+        )}
       >
-        <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
-          {groups.map((group) => {
-            const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
-            return (
-              <button
-                key={group.id}
-                onClick={() => openMainModal(group)}
-                onMouseEnter={() => onHover({ id: group.id, label: group.label, labelKo: group.labelKo, description: group.description || DEFAULT_GROUP_DESCRIPTION, descriptionKo: group.descriptionKo, _ts: Date.now() } as CategoryItem)}
-                onMouseLeave={() => onHover(null)}
-                className={[
-                  'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
-                  hasSelectedMain
-                    ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
-                    : 'bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10',
-                ].join(' ')}
-              >
-                <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
-                  {group.labelKo || group.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </motion.div>
-
-      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selectedMainLabel ? (
-          <p className="text-sm font-semibold text-brand-orange">
+          <p className={cn(
+            "text-sm font-semibold text-brand-orange leading-tight",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             {selectedMainLabel}
             {selectedSubLabels.length > 0 ? ` · ${selectedSubLabels.join(', ')}` : ''}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange">
+          <p className={cn(
+            "text-sm font-medium text-brand-orange leading-tight",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             대분류를 눌러 메인 장르를 선택하세요.
           </p>
         )}

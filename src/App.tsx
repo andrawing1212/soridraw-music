@@ -3751,6 +3751,7 @@ function CycleSection({
   onToggleExpand
 }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
@@ -3763,127 +3764,138 @@ function CycleSection({
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)] pb-12">
-      <div className="flex items-center justify-between mb-4 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative min-w-0">
-            <h3
-              onMouseEnter={() => setShowTitleTooltip(true)}
-              onMouseLeave={() => setShowTitleTooltip(false)}
-              className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
-            >
-              <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
-              <span className="truncate">{titleKo || title}</span>
-              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
-            </h3>
-            <AnimatePresence>
-              {showTitleTooltip && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
-                >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
-                </motion.div>
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative min-w-0">
+              <h3
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
+              >
+                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className="truncate">{titleKo || title}</span>
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
+              </h3>
+              <AnimatePresence>
+                {showTitleTooltip && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                  >
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={onRandom} className={`p-2.5 rounded-xl transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-white/10 text-[var(--text-secondary)] hover:bg-white/20'}`}>
+              <Dices className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={onClear}
+              onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', labelKo: '초기화', description: `${title} 설정을 초기화합니다.` })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2.5 rounded-xl transition-all border",
+                (selected.length > 0 || isRandomized)
+                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
               )}
-            </AnimatePresence>
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={onRandom} className={`p-2.5 rounded-xl transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-white/10 text-[var(--text-secondary)] hover:bg-white/20'}`}>
-            <Dices className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', labelKo: '초기화', description: `${title} 설정을 초기화합니다.` })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "p-2.5 rounded-xl transition-all border",
-              (selected.length > 0 || isRandomized)
-                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
-            )}
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
+        <motion.div
+          initial={false}
+          animate={{ 
+            height: isExpanded ? contentHeight : 56,
+            opacity: 1
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="overflow-hidden"
+        >
+          <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+            {cycles.map((cycle) => {
+              const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
+              const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
+              const baseVariant = cycle.variants[0];
+              const hoverItem: CategoryItem = activeVariant
+                ? {
+                    id: cycle.id,
+                    label: activeVariant.label,
+                    labelKo: activeVariant.labelKo,
+                    description: activeVariant.descriptionKo ?? activeVariant.description,
+                  }
+                : {
+                    id: cycle.id,
+                    label: cycle.title,
+                    labelKo: cycle.titleKo,
+                    description: baseVariant.descriptionKo ?? baseVariant.description,
+                  };
+              return (
+                <button
+                  key={cycle.id}
+                  onClick={() => {
+                    const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
+                    onCycleToggle(cycle.id);
+                    if (nextIndex === -1) {
+                      onHover({ 
+                        id: cycle.id, 
+                        label: cycle.title, 
+                        labelKo: cycle.titleKo,
+                        description: baseVariant.descriptionKo ?? baseVariant.description, 
+                        _ts: Date.now() 
+                      } as CategoryItem);
+                    } else {
+                      const nextVariant = cycle.variants[nextIndex];
+                      onHover({ 
+                        id: cycle.id, 
+                        label: nextVariant.label, 
+                        labelKo: nextVariant.labelKo,
+                        description: nextVariant.descriptionKo ?? nextVariant.description, 
+                        _ts: Date.now() 
+                      } as CategoryItem);
+                    }
+                  }}
+                  onMouseEnter={() => onHover(hoverItem)}
+                  onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                  onTouchStart={() => onLongPressStart(hoverItem)}
+                  onTouchEnd={onLongPressEnd}
+                  className={cn(
+                    "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center",
+                    activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                  )}
+                >
+                  <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
+                    {activeVariant ? (activeVariant.labelKo ?? activeVariant.label) : (cycle.titleKo ?? cycle.title)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
       </div>
 
-      <motion.div
-        initial={false}
-        animate={{ 
-          height: isExpanded ? contentHeight : 56,
-          opacity: 1
-        }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="overflow-hidden"
+      <div 
+        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
+        className={cn(
+          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
+          isBottomExpanded ? "h-auto" : "h-[56px]"
+        )}
       >
-        <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
-          {cycles.map((cycle) => {
-            const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
-            const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
-            const baseVariant = cycle.variants[0];
-            const hoverItem: CategoryItem = activeVariant
-              ? {
-                  id: cycle.id,
-                  label: activeVariant.label,
-                  labelKo: activeVariant.labelKo,
-                  description: activeVariant.descriptionKo ?? activeVariant.description,
-                }
-              : {
-                  id: cycle.id,
-                  label: cycle.title,
-                  labelKo: cycle.titleKo,
-                  description: baseVariant.descriptionKo ?? baseVariant.description,
-                };
-            return (
-              <button
-                key={cycle.id}
-                onClick={() => {
-                  const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
-                  onCycleToggle(cycle.id);
-                  if (nextIndex === -1) {
-                    onHover({ 
-                      id: cycle.id, 
-                      label: cycle.title, 
-                      labelKo: cycle.titleKo,
-                      description: baseVariant.descriptionKo ?? baseVariant.description, 
-                      _ts: Date.now() 
-                    } as CategoryItem);
-                  } else {
-                    const nextVariant = cycle.variants[nextIndex];
-                    onHover({ 
-                      id: cycle.id, 
-                      label: nextVariant.label, 
-                      labelKo: nextVariant.labelKo,
-                      description: nextVariant.descriptionKo ?? nextVariant.description, 
-                      _ts: Date.now() 
-                    } as CategoryItem);
-                  }
-                }}
-                onMouseEnter={() => onHover(hoverItem)}
-                onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                onTouchStart={() => onLongPressStart(hoverItem)}
-                onTouchEnd={onLongPressEnd}
-                className={cn(
-                  "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center",
-                  activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-                )}
-              >
-                <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
-                  {activeVariant ? (activeVariant.labelKo ?? activeVariant.label) : (cycle.titleKo ?? cycle.title)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </motion.div>
-
-      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selected.length > 0 ? (
-          <p className="text-sm font-semibold text-brand-orange">
+          <p className={cn(
+            "text-sm font-semibold text-brand-orange leading-tight",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
               .map(c => {
                 const v = c.variants.find(v => selected.includes(v.id));
@@ -3892,7 +3904,10 @@ function CycleSection({
               .join(', ')}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange">
+          <p className={cn(
+            "text-sm font-medium text-brand-orange leading-tight",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             {titleKo || title} 키워드를 선택하세요.
           </p>
         )}
@@ -3967,6 +3982,7 @@ function CategorySection({
   hidePin = false
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
@@ -3978,249 +3994,263 @@ function CategorySection({
   }, [items, selected, isExpanded]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)] pb-12">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <h3 
-              onMouseEnter={() => setShowTitleTooltip(true)}
-              onMouseLeave={() => setShowTitleTooltip(false)}
-              className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
-            >
-              <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-              {titleKo || title}
-              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
-            </h3>
-            <AnimatePresence>
-              {showTitleTooltip && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
-                >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <h3 
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+              >
+                <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+                {titleKo || title}
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
+              </h3>
+              <AnimatePresence>
+                {showTitleTooltip && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
+                  >
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
-            onTouchEnd={onLongPressEnd}
-            className={cn(
-              "p-2.5 rounded-xl transition-all",
-              isRandomized 
-                ? "bg-brand-orange text-white" 
-                : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
-            )}
-          >
-            <Dices className="w-4 h-4" />
-          </button>
-          {!hidePin && onUnpinAll && (
+          <div className="flex items-center gap-2">
             <button 
-              onClick={onUnpinAll}
-              onMouseEnter={() => onHover({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+              onClick={onRandom}
+              onMouseEnter={() => onHover({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
               onMouseLeave={() => {
                 onHover(null);
                 onLongPressEnd();
               }}
-              onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
+              onTouchStart={() => onLongPressStart({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
               onTouchEnd={onLongPressEnd}
-              className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
+              className={cn(
+                "p-2.5 rounded-xl transition-all",
+                isRandomized 
+                  ? "bg-brand-orange text-white" 
+                  : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
+              )}
             >
-              <PinOff className="w-4 h-4" />
+              <Dices className="w-4 h-4" />
             </button>
-          )}
-          <button 
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
-            onTouchEnd={onLongPressEnd}
-            className={cn(
-              "p-2.5 rounded-xl transition-all border",
-              (selected.length > 0 || isRandomized)
-                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
-            )}
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      
-      <motion.div
-        initial={false}
-        animate={{ 
-          height: isExpanded ? contentHeight : (window.innerWidth < 768 ? 40 : 84),
-          opacity: 1
-        }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="overflow-hidden min-h-[40px] md:min-h-[84px]"
-      >
-        <div ref={contentRef} className="flex flex-wrap gap-2">
-          {items.map((item) => {
-          const isPinned = pinned.includes(item.id);
-          const isSelected = selected.includes(item.id);
-          const isKpop = item.id === 'kpop';
-          const isCitypop = item.id === 'citypop';
-          
-          // K-Pop specific styles
-          let kpopStyle = "";
-          let displayLabel = item.labelKo ?? item.label;
-          let displayDescription = item.descriptionKo ?? item.description;
-
-          if (isKpop) {
-            if (kpopMode === 2) {
-              kpopStyle = "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20";
-              displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
-              displayLabel = "K-Pop (Mix)";
-            } else if (kpopMode === 1) {
-              kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
-              displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
-              displayLabel = "K-Pop";
-            } else {
-              kpopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
-              displayDescription = "K-Pop 장르를 선택하고 스타일(기본/Mix)을 순환하며 선택합니다.";
-              displayLabel = "K-Pop";
-            }
-          }
-
-          // City Pop specific styles
-          let citypopStyle = "";
-          if (isCitypop) {
-            if (citypopMode === 2) {
-              citypopStyle = "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20";
-              displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
-              displayLabel = "City Pop(M)";
-            } else if (citypopMode === 1) {
-              citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
-              displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
-              displayLabel = "City Pop(O)";
-            } else {
-              citypopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
-              displayDescription = "City Pop 장르를 선택하고 스타일(올드/현대)을 순환하며 선택합니다.";
-              displayLabel = "City Pop";
-            }
-          }
-
-          return (
-            <div key={item.id} className="relative group/btn">
-              <button
-                onMouseEnter={() => onHover({ 
-                  ...item, 
-                  label: item.label,
-                  labelKo: item.labelKo,
-                  description: displayDescription 
-                })}
+            {!hidePin && onUnpinAll && (
+              <button 
+                onClick={onUnpinAll}
+                onMouseEnter={() => onHover({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
                 onMouseLeave={() => {
                   onHover(null);
                   onLongPressEnd();
                 }}
-                onTouchStart={() => onLongPressStart({ 
-                  ...item, 
-                  label: item.label,
-                  labelKo: item.labelKo,
-                  description: displayDescription 
-                })}
+                onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
                 onTouchEnd={onLongPressEnd}
-                onClick={() => {
-                  onToggle(item.id);
-                  // Show description on click for mobile/touch users
-                  // For K-Pop and City Pop, toggleSelection already updates the hover state with the correct next description
-                  if (!isKpop && !isCitypop) {
-                    onHover({ 
-                      ...item, 
-                      label: item.label,
-                      labelKo: item.labelKo,
-                      description: displayDescription, 
-                      _ts: Date.now() 
-                    });
-                  }
-                }}
-                className={cn(
-                  "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2",
-                  (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
-                  isSelected
-                    ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10",
-                  isKpop && kpopMode > 0 ? kpopStyle : "",
-                  isCitypop && citypopMode > 0 ? citypopStyle : ""
-                )}
+                className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
               >
-                {isKpop && kpopMode > 0 && (
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    kpopMode === 1 ? "bg-white" : "bg-indigo-200"
-                  )} />
-                )}
-                {isCitypop && citypopMode > 0 && (
-                  <span className={cn(
-                    "w-1.5 h-1.5 rounded-full",
-                    citypopMode === 1 ? "bg-white" : "bg-emerald-200"
-                  )} />
-                )}
-                {displayLabel}
+                <PinOff className="w-4 h-4" />
               </button>
-              
-              {/* Floating Description Tooltip - Only show when expanded */}
-              <AnimatePresence>
-                {isExpanded && hoveredItem?.id === item.id && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-40 pointer-events-none"
-                  >
-                    <p className="text-[10px] text-[var(--text-secondary)] text-center leading-tight">{hoveredItem.description}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              
-              {/* Pin Toggle Button - Top Right Corner Only */}
-              {!hidePin && onTogglePin && (
+            )}
+            <button 
+              onClick={onClear}
+              onMouseEnter={() => onHover({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
+              onMouseLeave={() => {
+                onHover(null);
+                onLongPressEnd();
+              }}
+              onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
+              onTouchEnd={onLongPressEnd}
+              className={cn(
+                "p-2.5 rounded-xl transition-all border",
+                (selected.length > 0 || isRandomized)
+                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+              )}
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        <motion.div
+          initial={false}
+          animate={{ 
+            height: isExpanded ? contentHeight : (window.innerWidth < 768 ? 40 : 84),
+            opacity: 1
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="overflow-hidden min-h-[40px] md:min-h-[84px]"
+        >
+          <div ref={contentRef} className="flex flex-wrap gap-2">
+            {items.map((item) => {
+            const isPinned = pinned.includes(item.id);
+            const isSelected = selected.includes(item.id);
+            const isKpop = item.id === 'kpop';
+            const isCitypop = item.id === 'citypop';
+            
+            // K-Pop specific styles
+            let kpopStyle = "";
+            let displayLabel = item.labelKo ?? item.label;
+            let displayDescription = item.descriptionKo ?? item.description;
+
+            if (isKpop) {
+              if (kpopMode === 2) {
+                kpopStyle = "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20";
+                displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
+                displayLabel = "K-Pop (Mix)";
+              } else if (kpopMode === 1) {
+                kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
+                displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
+                displayLabel = "K-Pop";
+              } else {
+                kpopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
+                displayDescription = "K-Pop 장르를 선택하고 스타일(기본/Mix)을 순환하며 선택합니다.";
+                displayLabel = "K-Pop";
+              }
+            }
+
+            // City Pop specific styles
+            let citypopStyle = "";
+            if (isCitypop) {
+              if (citypopMode === 2) {
+                citypopStyle = "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20";
+                displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
+                displayLabel = "City Pop(M)";
+              } else if (citypopMode === 1) {
+                citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
+                displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
+                displayLabel = "City Pop(O)";
+              } else {
+                citypopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
+                displayDescription = "City Pop 장르를 선택하고 스타일(올드/현대)을 순환하며 선택합니다.";
+                displayLabel = "City Pop";
+              }
+            }
+
+            return (
+              <div key={item.id} className="relative group/btn">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTogglePin(item.id);
+                  onMouseEnter={() => onHover({ 
+                    ...item, 
+                    label: item.label,
+                    labelKo: item.labelKo,
+                    description: displayDescription 
+                  })}
+                  onMouseLeave={() => {
+                    onHover(null);
+                    onLongPressEnd();
+                  }}
+                  onTouchStart={() => onLongPressStart({ 
+                    ...item, 
+                    label: item.label,
+                    labelKo: item.labelKo,
+                    description: displayDescription 
+                  })}
+                  onTouchEnd={onLongPressEnd}
+                  onClick={() => {
+                    onToggle(item.id);
+                    // Show description on click for mobile/touch users
+                    // For K-Pop and City Pop, toggleSelection already updates the hover state with the correct next description
+                    if (!isKpop && !isCitypop) {
+                      onHover({ 
+                        ...item, 
+                        label: item.label,
+                        labelKo: item.labelKo,
+                        description: displayDescription, 
+                        _ts: Date.now() 
+                      });
+                    }
                   }}
                   className={cn(
-                    "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
-                    isPinned 
-                      ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
-                      : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                    "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2",
+                    (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
+                    isSelected
+                      ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                      : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10",
+                    isKpop && kpopMode > 0 ? kpopStyle : "",
+                    isCitypop && citypopMode > 0 ? citypopStyle : ""
                   )}
                 >
-                  <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
+                  {isKpop && kpopMode > 0 && (
+                    <span className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      kpopMode === 1 ? "bg-white" : "bg-indigo-200"
+                    )} />
+                  )}
+                  {isCitypop && citypopMode > 0 && (
+                    <span className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      citypopMode === 1 ? "bg-white" : "bg-emerald-200"
+                    )} />
+                  )}
+                  {displayLabel}
                 </button>
-              )}
-            </div>
-          );
-        })}
-        </div>
-      </motion.div>
+                
+                {/* Floating Description Tooltip - Only show when expanded */}
+                <AnimatePresence>
+                  {isExpanded && hoveredItem?.id === item.id && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-40 pointer-events-none"
+                    >
+                      <p className="text-[10px] text-[var(--text-secondary)] text-center leading-tight">{hoveredItem.description}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                {/* Pin Toggle Button - Top Right Corner Only */}
+                {!hidePin && onTogglePin && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePin(item.id);
+                    }}
+                    className={cn(
+                      "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
+                      isPinned 
+                        ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
+                        : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                    )}
+                  >
+                    <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          </div>
+        </motion.div>
+      </div>
 
-      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
+      <div 
+        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
+        className={cn(
+          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
+          isBottomExpanded ? "h-auto" : "h-[56px]"
+        )}
+      >
         {selected.length > 0 ? (
-          <p className="text-sm font-semibold text-brand-orange">
+          <p className={cn(
+            "text-sm font-semibold text-brand-orange leading-tight",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             {selected.map(id => {
               const item = items.find(i => i.id === id);
               return item?.labelKo || item?.label;
             }).join(', ')}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange">
+          <p className={cn(
+            "text-sm font-medium text-brand-orange leading-tight",
+            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
+          )}>
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
         )}

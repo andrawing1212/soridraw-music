@@ -470,7 +470,7 @@ export default function GenreHierarchySelector({
             {selectedSubLabels.length > 0 ? ` · ${selectedSubLabels.join(', ')}` : ''}
           </p>
         ) : (
-          <p className="text-xs text-brand-orange font-medium">
+          <p className="text-sm font-semibold text-[var(--text-secondary)]">
             대분류를 눌러 메인 장르를 선택하세요.
           </p>
         )}
@@ -478,7 +478,12 @@ export default function GenreHierarchySelector({
 
       <button
         onClick={onToggleExpand}
-        className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        className={cn(
+          "absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+          isExpanded
+            ? "bg-brand-orange text-white border-brand-orange"
+            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+        )}
         title={isExpanded ? '접기' : '펼치기'}
       >
         {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}

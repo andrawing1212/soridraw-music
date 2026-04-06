@@ -1829,6 +1829,7 @@ function App() {
     }
 
     setSelectedGenres(preservePinned ? pinnedGenres : []);
+    setSubGenre([]);
     setSelectedMoods([]);
     setSelectedThemes(preservePinned ? pinnedThemes : []);
     setSelectedStyles(preservePinned ? pinnedStyles : []);
@@ -2552,7 +2553,7 @@ ${result.prompt}
           />
           <CycleSection 
             title="Sound/Texture" 
-            titleKo="사운드 텍스쳐"
+            titleKo="사운드"
             titleClassName="text-[16px] md:text-[18px]"
             description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
             descriptionKo="악기 톤과 배경 질감을 설정합니다. 소리의 결, 공간감, 무게감, 타격감을 조절하여 음악의 청감 인상을 결정하며, 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
@@ -2766,7 +2767,12 @@ ${result.prompt}
             {selectedKeywordCount > 0 && (hasKeywordsOverflow || !isKeywordsExpanded) && (
               <button
                 onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
-                className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+                className={cn(
+                  "absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
+                  isKeywordsExpanded 
+                    ? "bg-brand-orange text-white border-brand-orange" 
+                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange hover:text-white hover:bg-brand-orange"
+                )}
               >
                 {isKeywordsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
               </button>
@@ -3179,11 +3185,45 @@ ${result.prompt}
                 {/* Expand Button at Bottom Center */}
                 <button
                   onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
+                  className={cn(
+                    "absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
+                    isAppliedKeywordsExpanded 
+                      ? "bg-brand-orange text-white border-brand-orange" 
+                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange hover:text-white hover:bg-brand-orange"
+                  )}
                 >
                   {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* Prompt Section */}
+              <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col h-[400px] shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                  <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                    <Sparkles className="w-4 h-4 text-brand-orange" />
+                    음악 프롬프트
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => copyToClipboard(result.prompt, 'prompt')}
+                      onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                    >
+                      {copiedType === 'prompt' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                      <span className="hidden md:block text-sm font-bold">복사</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+                  <div className="bg-[var(--input-bg)] rounded-2xl p-6 border border-[var(--border-color)]">
+                    <p className="text-[var(--text-secondary)] leading-relaxed text-sm font-mono whitespace-pre-wrap">
+                      {result.prompt}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
 
 
               <div className="flex flex-col gap-6">
@@ -3253,33 +3293,7 @@ ${result.prompt}
                   </div>
                 </div>
 
-                {/* Prompt Section */}
-                <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col h-[400px] shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                  <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
-                    <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                      <Sparkles className="w-4 h-4 text-brand-orange" />
-                      음악 프롬프트
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => copyToClipboard(result.prompt, 'prompt')}
-                        onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
-                      >
-                        {copiedType === 'prompt' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                        <span className="hidden md:block text-sm font-bold">복사</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
-                    <div className="bg-[var(--input-bg)] rounded-2xl p-6 border border-[var(--border-color)]">
-                      <p className="text-[var(--text-secondary)] leading-relaxed text-sm font-mono whitespace-pre-wrap">
-                        {result.prompt}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+
               </div>
             </motion.div>
           )}
@@ -3887,7 +3901,12 @@ function CycleSection({
       {onToggleExpand && (
         <button
           onClick={onToggleExpand}
-          className="absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+          className={cn(
+            "absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+            isExpanded
+              ? "bg-brand-orange text-white border-brand-orange"
+              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+          )}
         >
           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
         </button>
@@ -4212,7 +4231,12 @@ function CategorySection({
           onClick={onToggleExpand}
           onMouseEnter={() => onHover({ id: 'category-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+          className={cn(
+            "absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+            isExpanded
+              ? "bg-brand-orange text-white border-brand-orange"
+              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+          )}
         >
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
@@ -4561,7 +4585,12 @@ function SongStructureIntegratedControl({
           onClick={onToggleExpand}
           onMouseEnter={() => onHover({ id: 'song-structure-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+          className={cn(
+            "absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+            isExpanded
+              ? "bg-brand-orange text-white border-brand-orange"
+              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+          )}
         >
           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
@@ -5577,7 +5606,12 @@ function VocalControl({
         onClick={onToggleExpand}
         onMouseEnter={() => onHover({ id: 'vocal-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
         onMouseLeave={() => onHover(null)}
-        className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+        className={cn(
+          "absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+          isExpanded
+            ? "bg-brand-orange text-white border-brand-orange"
+            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+        )}
       >
         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>

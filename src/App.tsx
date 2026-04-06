@@ -53,6 +53,13 @@ import {
   Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { createPortal } from 'react-dom';
+
+// Portal component for top-level rendering
+function Portal({ children }: { children: React.ReactNode }) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
@@ -1025,26 +1032,16 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_instrument_sounds', JSON.stringify(pinnedInstrumentSounds));
   }, [pinnedInstrumentSounds]);
-  const [isGenreExpanded, setIsGenreExpanded] = useState(false);
-  const [isStyleExpanded, setIsStyleExpanded] = useState(false);
-  const [isSoundExpanded, setIsSoundExpanded] = useState(false);
-  const [isMoodExpanded, setIsMoodExpanded] = useState(false);
-  const [isVocalExpanded, setIsVocalExpanded] = useState(false);
-  const [isSongStructureExpanded, setIsSongStructureExpanded] = useState(false);
-  const [isThemeExpanded, setIsThemeExpanded] = useState(false);
+  const [isGenreExpanded, setIsGenreExpanded] = useState(true);
+  const [isStyleExpanded, setIsStyleExpanded] = useState(true);
+  const [isSoundExpanded, setIsSoundExpanded] = useState(true);
+  const [isMoodExpanded, setIsMoodExpanded] = useState(true);
+  const [isVocalExpanded, setIsVocalExpanded] = useState(true);
+  const [isSongStructureExpanded, setIsSongStructureExpanded] = useState(true);
+  const [isThemeExpanded, setIsThemeExpanded] = useState(true);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
-    const isPC = window.innerWidth >= 1024;
-    if (isPC) {
-      const nextState = !isGenreExpanded;
-      setIsGenreExpanded(nextState);
-      setIsStyleExpanded(nextState);
-      setIsSoundExpanded(nextState);
-    } else {
-      if (section === 'genre') setIsGenreExpanded(!isGenreExpanded);
-      else if (section === 'style') setIsStyleExpanded(!isStyleExpanded);
-      else if (section === 'sound') setIsSoundExpanded(!isSoundExpanded);
-    }
+    // No-op for genre, style, sound as they are always expanded
   };
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
@@ -2544,8 +2541,6 @@ ${result.prompt}
                   setIsGenreRandomized(true);
                 }}
                 onHover={setHoveredItem}
-                isExpanded={isGenreExpanded}
-                onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
               />
           <CycleSection 
@@ -2680,8 +2675,6 @@ ${result.prompt}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              isExpanded={isVocalExpanded}
-              onToggleExpand={() => setIsVocalExpanded(!isVocalExpanded)}
             />
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
@@ -2698,8 +2691,6 @@ ${result.prompt}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              isExpanded={isSongStructureExpanded}
-              onToggleExpand={() => setIsSongStructureExpanded(!isSongStructureExpanded)}
               user={user}
             />
           </div>
@@ -4300,8 +4291,6 @@ interface SongStructureIntegratedControlProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
   user: User | null;
 }
 
@@ -4316,19 +4305,10 @@ function SongStructureIntegratedControl({
   onHover,
   onLongPressStart,
   onLongPressEnd,
-  isExpanded,
-  onToggleExpand,
   user
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [contentHeight, setContentHeight] = useState<number | string>(120);
-
-  useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [lyricsLength, songStructure, customStructure, isExpanded]);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
@@ -4540,15 +4520,7 @@ function SongStructureIntegratedControl({
           </AnimatePresence>
         </div>
 
-        <motion.div
-          initial={false}
-          animate={{ 
-            height: isExpanded ? contentHeight : 120,
-            opacity: 1
-          }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="overflow-hidden"
-        >
+        <div className="flex flex-col flex-1 overflow-visible">
           <div ref={contentRef} className="space-y-8 flex-1 flex flex-col justify-between">
             {/* 1. 가사 길이 */}
             <div className="space-y-3">
@@ -4623,21 +4595,7 @@ function SongStructureIntegratedControl({
               )}
             </div>
           </div>
-        </motion.div>
-
-        <button
-          onClick={onToggleExpand}
-          onMouseEnter={() => onHover({ id: 'song-structure-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
-          onMouseLeave={() => onHover(null)}
-          className={cn(
-            "absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
-            isExpanded
-              ? "bg-brand-orange text-white border-brand-orange"
-              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
-          )}
-        >
-          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -5113,8 +5071,6 @@ interface VocalControlProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
 }
 
 function VocalControl({ 
@@ -5137,18 +5093,13 @@ function VocalControl({
   onHover, 
   onLongPressStart, 
   onLongPressEnd,
-  isExpanded,
-  onToggleExpand,
 }: VocalControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [contentHeight, setContentHeight] = useState<number | string>(120);
 
   useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [maleCount, femaleCount, vocalMode, vocalMembers, selectedToneId, rapEnabled, isKoreanEnglishMix, isExpanded]);
+    // Height is now handled by overflow-visible
+  }, [maleCount, femaleCount, vocalMode, vocalMembers, selectedToneId, rapEnabled, isKoreanEnglishMix]);
   const [showToneSelector, setShowToneSelector] = useState(false);
   const [activeMemberToneSelector, setActiveMemberToneSelector] = useState<string | null>(null);
 
@@ -5357,15 +5308,7 @@ function VocalControl({
         </AnimatePresence>
       </div>
 
-      <motion.div
-        initial={false}
-        animate={{ 
-          height: isExpanded ? contentHeight : 120,
-          opacity: 1
-        }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className={cn("flex flex-col flex-1", isExpanded ? "overflow-visible" : "overflow-hidden")}
-      >
+      <div className="flex flex-col flex-1 overflow-visible">
         <div ref={contentRef} className="space-y-4 mt-auto">
           {/* Mode Selection */}
         <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
@@ -5519,10 +5462,10 @@ function VocalControl({
                       })}
                     </div>
 
-                    {/* Member Tone Selector */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setActiveMemberToneSelector(activeMemberToneSelector === member.id ? null : member.id)}
+                        <div className="relative">
+                          <button
+                            data-tone-trigger={member.id}
+                            onClick={() => setActiveMemberToneSelector(activeMemberToneSelector === member.id ? null : member.id)}
                         className={cn(
                           "w-full py-1.5 px-2 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-between",
                           member.toneId
@@ -5539,40 +5482,47 @@ function VocalControl({
 
                       <AnimatePresence>
                         {activeMemberToneSelector === member.id && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 5 }}
-                            className="absolute bottom-full left-0 w-full mb-1 z-[100] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden"
-                          >
-                            <div className="p-1 max-h-32 overflow-y-auto custom-scrollbar">
-                              <button
-                                onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveMemberToneSelector(null); }}
-                                className={cn(
-                                  "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
-                                  !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
-                                )}
-                              >
-                                기본 (Default)
-                              </button>
-                              {vocalTones
-                                .filter(t => t.genderTarget === 'any' || t.genderTarget === 'unisex' || t.genderTarget === member.gender || (vocalMode === 'group' && t.genderTarget === 'group'))
-                                .map(tone => (
+                          <Portal>
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              className="fixed z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden w-48"
+                              style={{
+                                left: document.querySelector(`[data-tone-trigger="${member.id}"]`)?.getBoundingClientRect().left ?? 0,
+                                top: (document.querySelector(`[data-tone-trigger="${member.id}"]`)?.getBoundingClientRect().top ?? 0) - 140,
+                              }}
+                            >
+                              <div className="p-1 max-h-32 overflow-y-auto custom-scrollbar">
                                 <button
-                                  key={tone.id}
-                                  onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveMemberToneSelector(null); }}
+                                  onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveMemberToneSelector(null); }}
                                   className={cn(
                                     "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
-                                    member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                                    !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
                                   )}
                                 >
-                                  <div className="flex items-center justify-between">
-                                    <span>{tone.labelKo || tone.label}</span>
-                                  </div>
+                                  기본 (Default)
                                 </button>
-                              ))}
-                            </div>
-                          </motion.div>
+                                {vocalTones
+                                  .filter(t => t.genderTarget === 'any' || t.genderTarget === 'unisex' || t.genderTarget === member.gender || (vocalMode === 'group' && t.genderTarget === 'group'))
+                                  .map(tone => (
+                                  <button
+                                    key={tone.id}
+                                    onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveMemberToneSelector(null); }}
+                                    className={cn(
+                                      "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
+                                      member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                                    )}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span>{tone.labelKo || tone.label}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </motion.div>
+                            <div className="fixed inset-0 z-[9998]" onClick={() => setActiveMemberToneSelector(null)} />
+                          </Portal>
                         )}
                       </AnimatePresence>
                     </div>
@@ -5586,6 +5536,7 @@ function VocalControl({
         {/* Vocal Tone Selection */}
         <div className="relative">
           <button
+            data-tone-trigger="global"
             onClick={() => setShowToneSelector(!showToneSelector)}
             className={cn(
               "w-full py-2.5 px-3 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-between",
@@ -5603,64 +5554,57 @@ function VocalControl({
 
           <AnimatePresence>
             {showToneSelector && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute bottom-full left-0 w-full mb-2 z-[100] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden"
-              >
-                <div className="p-2 max-h-48 overflow-y-auto custom-scrollbar">
-                  <button
-                    onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
-                    className={cn(
-                      "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
-                      !selectedToneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
-                    )}
-                  >
-                    기본 (Default)
-                  </button>
-                  {filteredTones.map(tone => (
+              <Portal>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="fixed z-[9999] bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden w-64"
+                  style={{
+                    left: document.querySelector('[data-tone-trigger="global"]')?.getBoundingClientRect().left ?? 0,
+                    top: (document.querySelector('[data-tone-trigger="global"]')?.getBoundingClientRect().top ?? 0) - 200,
+                  }}
+                >
+                  <div className="p-2 max-h-48 overflow-y-auto custom-scrollbar">
                     <button
-                      key={tone.id}
-                      onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
+                      onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
                       className={cn(
                         "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
-                        selectedToneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                        !selectedToneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
                       )}
                     >
-                      <div className="flex items-center justify-between">
-                        <span>{tone.labelKo || tone.label}</span>
-                        {tone.isDefault && <span className="text-[8px] opacity-60">DEFAULT</span>}
-                      </div>
-                      <p className="text-[8px] opacity-60 font-normal line-clamp-1">{tone.descriptionKo || tone.description}</p>
+                      기본 (Default)
                     </button>
-                  ))}
-                  {filteredTones.length === 0 && (
-                    <p className="text-[9px] text-[var(--text-secondary)] text-center py-4">사용 가능한 톤이 없습니다.</p>
-                  )}
-                </div>
-              </motion.div>
+                    {filteredTones.map(tone => (
+                      <button
+                        key={tone.id}
+                        onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
+                          selectedToneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>{tone.labelKo || tone.label}</span>
+                          {tone.isDefault && <span className="text-[8px] opacity-60">DEFAULT</span>}
+                        </div>
+                        <p className="text-[8px] opacity-60 font-normal line-clamp-1">{tone.descriptionKo || tone.description}</p>
+                      </button>
+                    ))}
+                    {filteredTones.length === 0 && (
+                      <p className="text-[9px] text-[var(--text-secondary)] text-center py-4">사용 가능한 톤이 없습니다.</p>
+                    )}
+                  </div>
+                </motion.div>
+                <div className="fixed inset-0 z-[9998]" onClick={() => setShowToneSelector(false)} />
+              </Portal>
             )}
           </AnimatePresence>
         </div>
       </div>
-    </motion.div>
-
-      <button
-        onClick={onToggleExpand}
-        onMouseEnter={() => onHover({ id: 'vocal-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
-        onMouseLeave={() => onHover(null)}
-        className={cn(
-          "absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
-          isExpanded
-            ? "bg-brand-orange text-white border-brand-orange"
-            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
-        )}
-      >
-        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </button>
     </div>
-  );
+  </div>
+);
 }
 
 interface TempoControlProps {

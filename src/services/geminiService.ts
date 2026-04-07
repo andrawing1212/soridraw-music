@@ -16,7 +16,6 @@ import {
   SongStructure,
   SongResult,
   VocalConfig,
-  VocalRole,
   CustomSectionItem,
 } from "../types";
 
@@ -619,6 +618,8 @@ function buildStyle(params: GenerateSongParams): string {
   let genreStyle = "";
   if (subGenreIds.length > 0) {
     genreStyle = SUB_GENRE_PROMPTS[subGenreIds[0]]?.style || "";
+  } else if (genreId) {
+    genreStyle = MID_GENRE_PROMPTS[genreId]?.style || "";
   }
   
   if (!genreStyle) {
@@ -631,7 +632,6 @@ function buildStyle(params: GenerateSongParams): string {
   if (selectedStyleIds.length > 0) {
     const styleItem = resolveStyleItem(selectedStyleIds[0]);
     if (styleItem) {
-      // labelKo가 아닌 영문 label을 사용하여 AI 프롬프트 영문화 유지
       userStyleLabel = styleItem.label;
     }
   }
@@ -641,7 +641,7 @@ function buildStyle(params: GenerateSongParams): string {
         .replace(/^Between\s+/i, "")
         .replace(/^Exactly\s+/i, "")
         .replace(/\s+and\s+/i, "–")
-        .replace(/\s*BPM\s*/gi, "") // 기존에 포함된 BPM 단위를 제거하여 중복 방지
+        .replace(/\s*BPM\s*/gi, "")
         .trim()
     : "";
 
@@ -650,7 +650,6 @@ function buildStyle(params: GenerateSongParams): string {
     stylePart = `${userStyleLabel} influenced ${genreStyle}`;
   }
   
-  // 깨끗해진 tempoText 뒤에 단 한 번만 BPM을 붙입니다.
   const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
 
   return `STYLE: ${stylePart}${bpmPart}`;
@@ -658,11 +657,12 @@ function buildStyle(params: GenerateSongParams): string {
 
 function buildSound(params: GenerateSongParams): string {
   const subGenreIds = params.subGenre ?? [];
+  const genreId = (params.genre || "pop").toLowerCase();
   const selectedSoundIds = params.instrumentSounds ?? [];
   
   interface SoundItem {
     label: string;
-    priority: number; // 2: User, 1: SubGenre, 0: Other
+    priority: number; // 2: User, 1: Genre (Sub or Mid), 0: Other
     role: string | null;
   }
 
@@ -684,17 +684,21 @@ function buildSound(params: GenerateSongParams): string {
     soundItems.push({ label, priority: 2, role: getRole(label) });
   });
 
-  // 2. Sub-genre sounds
+  // 2. Genre sounds (SubGenre takes precedence over MidGenre)
+  let genreSoundSource = "";
   if (subGenreIds.length > 0) {
-    const prompt = SUB_GENRE_PROMPTS[subGenreIds[0]];
-    if (prompt?.sound) {
-      prompt.sound.split(",").forEach(s => {
-        const label = s.trim();
-        if (label) {
-          soundItems.push({ label, priority: 1, role: getRole(label) });
-        }
-      });
-    }
+    genreSoundSource = SUB_GENRE_PROMPTS[subGenreIds[0]]?.sound || "";
+  } else if (genreId) {
+    genreSoundSource = MID_GENRE_PROMPTS[genreId]?.sound || "";
+  }
+
+  if (genreSoundSource) {
+    genreSoundSource.split(",").forEach(s => {
+      const label = s.trim();
+      if (label) {
+        soundItems.push({ label, priority: 1, role: getRole(label) });
+      }
+    });
   }
 
   // Deduplicate by role and label
@@ -716,6 +720,11 @@ function buildSound(params: GenerateSongParams): string {
     
     seenLabels.add(lowerLabel);
     finalSoundLabels.push(item.label);
+  }
+
+  // Ensure not empty
+  if (finalSoundLabels.length === 0) {
+    finalSoundLabels.push("Drums", "Bass", "Synthesizer", "Piano");
   }
 
   const limitedSounds = finalSoundLabels.slice(0, 6);
@@ -752,44 +761,79 @@ function buildVocal(params: GenerateSongParams): string {
                    genreId.includes("drill") ||
                    subGenreIds.some(id => id.includes("hiphop") || id.includes("trap") || id.includes("drill") || id.includes("rap"));
   
-  const isIdol = genreId.includes("kpop") || 
-                 genreId.includes("idol") || 
-                 subGenreIds.some(id => id.includes("kpop") || id.includes("idol") || id.includes("dance-pop"));
-
   // 1. Formation
   const formation = getVocalFormation(v);
   if (formation) parts.push(formation);
 
-  // 2. Genre Vocal (Auxiliary, 1 only)
-  let genreVocalPart = "";
+  // Check Tone Selection Status
+  let allTonesSelected = false;
+  const hasGlobalTone = v.isToneSelected && v.globalToneId;
+  const hasMembers = v.members && v.members.length > 0;
+  
+  if (v.isToneSelected) {
+    allTonesSelected = true;
+  } else if (hasMembers) {
+    allTonesSelected = v.members!.every(m => !!m.toneId);
+  } else {
+    allTonesSelected = false;
+  }
+
+  const shouldApplyRecommended = !allTonesSelected;
+  const shouldApplyGenreFixedTones = allTonesSelected;
+
+  // Collect Tones and Auxiliaries from Genre
+  const genreTones: string[] = [];
+  const genreAuxiliaries: string[] = [];
+  
+  let genreVocalSource = "";
   if (subGenreIds.length > 0) {
-    const genreVocal = SUB_GENRE_PROMPTS[subGenreIds[0]]?.vocal;
-    if (genreVocal) {
-      const genreParts = genreVocal.split(",").map(s => s.trim());
-      // K-pop/Idol uses harmonies priority
-      const harmonies = genreParts.find(p => p.toLowerCase().includes("harmonies"));
-      const hooks = genreParts.find(p => p.toLowerCase().includes("hooks"));
-      genreVocalPart = harmonies || hooks || genreParts[0] || "";
-    }
+    genreVocalSource = SUB_GENRE_PROMPTS[subGenreIds[0]]?.vocal || "";
+  } else if (genreId) {
+    genreVocalSource = MID_GENRE_PROMPTS[genreId]?.vocal || "";
   }
 
-  // 3. Tone (Selected or Recommended)
-  if (v.isToneSelected && v.globalToneId) {
+  if (genreVocalSource) {
+    const rawParts = genreVocalSource.split(",").map(p => p.trim()).filter(Boolean);
+    const auxKeywords = ["harmonies", "hooks", "delivery", "phrasing", "scat", "ad-libs", "call and response", "storytelling", "ggeok-gi", "technique"];
+    
+    rawParts.forEach(part => {
+      const lower = part.toLowerCase();
+      if (auxKeywords.some(kw => lower.includes(kw))) {
+        genreAuxiliaries.push(part);
+      } else {
+        genreTones.push(part);
+      }
+    });
+  }
+
+  // 2. Tones (Conditional Application)
+  const toneParts: string[] = [];
+  
+  // A. User Global Tone
+  if (hasGlobalTone) {
     const tone = VOCAL_TONES.find(t => t.id === v.globalToneId);
-    if (tone) parts.push(tone.label);
-  } else if (!genreVocalPart) {
-    // Only add fallback if no genre vocal exists AND no user tone selected
-    parts.push("Genre-based recommended vocal tone");
+    if (tone) toneParts.push(tone.label);
   }
 
-  // Add genre vocal if found
-  if (genreVocalPart) {
-    parts.push(genreVocalPart);
+  // B. Genre Fixed Tones (Only if all tones selected)
+  if (shouldApplyGenreFixedTones) {
+    toneParts.push(...genreTones);
   }
 
-  // 4. Members (if any)
-  if (v.members && v.members.length > 0) {
-    const membersOutput = v.members
+  // C. Recommended Tone (If not all selected)
+  if (shouldApplyRecommended) {
+    toneParts.push("Genre-based recommended vocal tone");
+  }
+
+  // Deduplicate tones (case-insensitive)
+  const uniqueTones = Array.from(new Set(toneParts.map(t => t.toLowerCase())))
+    .map(lower => toneParts.find(t => t.toLowerCase() === lower)!);
+  
+  parts.push(...uniqueTones);
+
+  // 3. Members (if any) - Member tones and roles
+  if (hasMembers) {
+    const membersOutput = v.members!
       .map((m, idx) => {
         const genderLabel = m.gender === 'male' ? 'Male' : 'Female';
         let toneLabel = "";
@@ -804,7 +848,7 @@ function buildVocal(params: GenerateSongParams): string {
         }
 
         // Role Assignment Logic
-        let roles: VocalRole[] = [...(m.roles || [])];
+        let roles = [...(m.roles || [])];
         if (roles.length === 0) {
           if (idx === 0) roles = ["main"];
           else if (idx === 1) roles = ["lead"];
@@ -829,6 +873,18 @@ function buildVocal(params: GenerateSongParams): string {
       })
       .filter((m): m is string => m !== null);
     parts.push(...membersOutput);
+  }
+
+  // 4. Auxiliary Vocal (1 only)
+  if (genreAuxiliaries.length > 0) {
+    // Priority: harmonies > hooks > delivery > phrasing > others
+    const harmonies = genreAuxiliaries.find(p => p.toLowerCase().includes("harmonies"));
+    const hooks = genreAuxiliaries.find(p => p.toLowerCase().includes("hooks"));
+    const delivery = genreAuxiliaries.find(p => p.toLowerCase().includes("delivery"));
+    const phrasing = genreAuxiliaries.find(p => p.toLowerCase().includes("phrasing"));
+    
+    const selectedAux = harmonies || hooks || delivery || phrasing || genreAuxiliaries[0];
+    parts.push(selectedAux);
   }
 
   // 5. Rap
@@ -857,15 +913,20 @@ function buildTheme(params: GenerateSongParams): string {
 }
 
 function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure): string {
-  return [
-    buildStyle(params),
-    buildSound(params),
-    buildMoodTexture(params),
-    buildVocal(params),
-    buildArrangement(params, resolvedStructure),
-    buildTheme(params),
-  ]
-    .filter(NON_EMPTY)
+  const sections = [
+    { label: "STYLE", content: buildStyle(params) },
+    { label: "SOUND", content: buildSound(params) },
+    { label: "MOOD & TEXTURE", content: buildMoodTexture(params) },
+    { label: "VOCAL", content: buildVocal(params) },
+    { label: "ARRANGEMENT", content: buildArrangement(params, resolvedStructure) },
+    { label: "THEME", content: buildTheme(params) },
+  ];
+
+  return sections
+    .map(s => {
+      const value = s.content.replace(new RegExp(`^${s.label}:\\s*`, "i"), "").trim();
+      return `·${s.label}: ${value}`;
+    })
     .join("\n\n");
 }
 

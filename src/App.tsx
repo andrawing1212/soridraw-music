@@ -467,6 +467,108 @@ const GENRE_BPM: Record<string, { min: number; max: number }> = {
   'guitar': { min: 70, max: 130 }
 };
 
+const SUBGENRE_BPM: Record<string, { min: number; max: number }> = {
+  'synth_pop': { min: 110, max: 135 },
+  'disco': { min: 115, max: 130 },
+  'electropop': { min: 120, max: 140 },
+  'teen_pop': { min: 100, max: 130 },
+  'britpop': { min: 110, max: 140 },
+  'indie_pop': { min: 90, max: 125 },
+  'city_pop': { min: 105, max: 125 },
+  'funk_pop': { min: 100, max: 125 },
+  'dance_pop': { min: 120, max: 140 },
+  'acoustic_pop': { min: 70, max: 110 },
+  'idol_dance': { min: 120, max: 145 },
+  'k_ballad': { min: 60, max: 85 },
+  'k_synth_pop': { min: 110, max: 135 },
+  'k_trap': { min: 130, max: 160 },
+  'k_new_jack_swing': { min: 100, max: 115 },
+  'k_indie': { min: 80, max: 115 },
+  'k_folk': { min: 70, max: 100 },
+  'k_rock': { min: 120, max: 155 },
+  'gugak_fusion': { min: 80, max: 130 },
+  'trap': { min: 130, max: 160 },
+  'drill': { min: 140, max: 150 },
+  'boombap': { min: 85, max: 100 },
+  'lofi': { min: 70, max: 95 },
+  'jazz_hiphop': { min: 85, max: 105 },
+  'emo_rap': { min: 120, max: 160 },
+  'old_school': { min: 90, max: 110 },
+  'g_funk': { min: 85, max: 100 },
+  'cloud_rap': { min: 110, max: 150 },
+  'contemporary_rnb': { min: 65, max: 95 },
+  'neo_soul': { min: 70, max: 95 },
+  'soul': { min: 70, max: 110 },
+  'funk': { min: 100, max: 120 },
+  'alternative_rnb': { min: 60, max: 90 },
+  'new_jack_swing': { min: 100, max: 115 },
+  'alternative_rock': { min: 110, max: 150 },
+  'modern_rock': { min: 115, max: 145 },
+  'punk_rock': { min: 140, max: 170 },
+  'hard_rock': { min: 110, max: 140 },
+  'soft_rock': { min: 80, max: 120 },
+  'garage_rock': { min: 120, max: 160 },
+  'shoegazing': { min: 90, max: 130 },
+  'folk_rock': { min: 100, max: 130 },
+  'blues_rock': { min: 90, max: 130 },
+  'heavy_metal': { min: 120, max: 160 },
+  'death_metal': { min: 140, max: 180 },
+  'thrash_metal': { min: 150, max: 190 },
+  'metalcore': { min: 130, max: 170 },
+  'nu_metal': { min: 90, max: 120 },
+  'symphonic_metal': { min: 120, max: 160 },
+  'power_metal': { min: 150, max: 180 },
+  'house': { min: 120, max: 130 },
+  'techno': { min: 125, max: 145 },
+  'trance': { min: 130, max: 145 },
+  'future_bass': { min: 140, max: 170 },
+  'dubstep': { min: 140, max: 150 },
+  'deep_house': { min: 115, max: 125 },
+  'tropical_house': { min: 100, max: 120 },
+  'eurobeat': { min: 150, max: 165 },
+  'drum_and_bass': { min: 165, max: 185 },
+  'swing_jazz': { min: 120, max: 180 },
+  'bossa_nova': { min: 80, max: 120 },
+  'fusion_jazz': { min: 100, max: 140 },
+  'cool_jazz': { min: 70, max: 100 },
+  'big_band': { min: 120, max: 160 },
+  'latin_jazz': { min: 110, max: 150 },
+  'jazz_vocal': { min: 70, max: 120 },
+  'hard_bop': { min: 140, max: 200 },
+  'traditional_folk': { min: 80, max: 120 },
+  'country': { min: 90, max: 130 },
+  'bluegrass': { min: 130, max: 170 },
+  'singer_songwriter': { min: 70, max: 110 },
+  'acoustic_session': { min: 70, max: 120 },
+  'fingerstyle': { min: 70, max: 110 },
+  'reggae': { min: 80, max: 100 },
+  'afrobeat': { min: 110, max: 130 },
+  'celtic': { min: 100, max: 140 },
+  'latin_salsa': { min: 160, max: 200 },
+  'flamenco': { min: 100, max: 160 },
+  'traditional_trot': { min: 60, max: 90 },
+  'semi_trot': { min: 120, max: 150 },
+  'disco_trot': { min: 125, max: 145 },
+  'rock_trot': { min: 120, max: 150 },
+  'ballad_trot': { min: 65, max: 90 },
+  'blues_trot': { min: 70, max: 100 },
+  'shuffle_trot': { min: 110, max: 135 },
+  'gugak_trot': { min: 80, max: 120 },
+  '7080_folk': { min: 80, max: 110 },
+  'adult_ballad': { min: 60, max: 85 },
+  'campus_band_sound': { min: 110, max: 140 },
+  'enka_style': { min: 60, max: 90 },
+  'orchestral_score': { min: 60, max: 140 },
+  'hybrid_epic': { min: 80, max: 150 },
+  'synth_score': { min: 90, max: 130 },
+  'piano_solo': { min: 40, max: 90 },
+  'string_ensemble': { min: 50, max: 110 },
+  'chiptune': { min: 120, max: 160 },
+  'world_music': { min: 80, max: 140 },
+  'minimalism': { min: 90, max: 130 },
+  'ambient': { min: 40, max: 80 },
+};
+
 const MOOD_BPM: Record<string, { min: number; max: number }> = {
   'emotional': { min: 55, max: 90 },
   'sad': { min: 50, max: 82 },
@@ -557,11 +659,21 @@ function buildThemeSentence(themeLabels: string[] = []): string {
 }
 
 
-const calculateOptimalBPM = (genres: string[], moods: string[]) => {
+const calculateOptimalBPM = (genres: string[], moods: string[], subGenre: string[] = []) => {
   let sumMin = 0;
   let sumMax = 0;
   let count = 0;
 
+  // 1. Sub-genres (Highest weight)
+  subGenre.forEach(sg => {
+    if (SUBGENRE_BPM[sg]) {
+      sumMin += SUBGENRE_BPM[sg].min * 2;
+      sumMax += SUBGENRE_BPM[sg].max * 2;
+      count += 2;
+    }
+  });
+
+  // 2. Genres
   genres.forEach(g => {
     if (GENRE_BPM[g]) {
       sumMin += GENRE_BPM[g].min;
@@ -570,6 +682,7 @@ const calculateOptimalBPM = (genres: string[], moods: string[]) => {
     }
   });
 
+  // 3. Moods
   moods.forEach(m => {
     if (MOOD_BPM[m]) {
       sumMin += MOOD_BPM[m].min;
@@ -587,8 +700,8 @@ const calculateOptimalBPM = (genres: string[], moods: string[]) => {
   let avgMax = Math.round(sumMax / count);
 
   const range = avgMax - avgMin;
-  const finalMin = Math.max(40, avgMin + Math.floor(Math.random() * (range / 2)));
-  const finalMax = Math.min(160, finalMin + Math.floor(Math.random() * (range / 2 + 5)));
+  const finalMin = Math.max(40, avgMin + Math.floor(Math.random() * (range / 4)));
+  const finalMax = Math.min(200, finalMin + Math.max(10, Math.floor(Math.random() * (range / 2 + 10))));
 
   return { min: finalMin, max: finalMax };
 };
@@ -1244,12 +1357,12 @@ function App() {
 
   // Real-time tempo calculation when in random mode
   useEffect(() => {
-    if (tempoEnabled && (selectedGenres.length > 0 || selectedMoods.length > 0)) {
-      const { min, max } = calculateOptimalBPM(selectedGenres, selectedMoods);
+    if (tempoEnabled && (selectedGenres.length > 0 || selectedMoods.length > 0 || subGenre.length > 0)) {
+      const { min, max } = calculateOptimalBPM(selectedGenres, selectedMoods, subGenre);
       setMinBPM(min);
       setMaxBPM(max);
     }
-  }, [selectedGenres, selectedMoods, tempoEnabled]);
+  }, [selectedGenres, selectedMoods, subGenre, tempoEnabled]);
 
   useEffect(() => {
     const testConnection = async () => {
@@ -2023,7 +2136,7 @@ function App() {
 
     // Random tempo logic
     if (tempoEnabled) {
-      const { min, max } = calculateOptimalBPM(g, m);
+      const { min, max } = calculateOptimalBPM(g, m, sg);
       setMinBPM(min);
       setMaxBPM(max);
     }
@@ -2137,7 +2250,7 @@ const saveRecentSong = async (newSong: any) => {
 
       // Apply optimal BPM for random selection or when tempo random is enabled
       if (tempoEnabled) {
-        const { min, max } = calculateOptimalBPM(finalGenres, finalMoods);
+        const { min, max } = calculateOptimalBPM(finalGenres, finalMoods, subGenre);
         currentMinBPM = min;
         currentMaxBPM = max;
         setMinBPM(min);

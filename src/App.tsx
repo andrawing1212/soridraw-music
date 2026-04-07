@@ -2172,9 +2172,11 @@ const saveRecentSong = async (newSong: any) => {
         const hasStyleId = (...ids: string[]) => ids.some((id) => selectedStyleIds.has(id));
         const hasSoundFamily = (...ids: string[]) => ids.some((id) => selectedSoundFamilies.has(id));
 
-        const bpm = tempoInfo
-          ? tempoInfo.replace('Between ', '').replace('Exactly ', '').replace(' and ', '–')
-          : (finalMoods.includes('bright') || finalMoods.includes('hopeful') || finalMoods.includes('tense') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
+        const bpm = (tempoInfo || '')
+          .replace('Between ', '')
+          .replace('Exactly ', '')
+          .replace(' and ', '–')
+          || (finalMoods.includes('bright') || finalMoods.includes('hopeful') || finalMoods.includes('tense') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
             ? '118–132 BPM'
             : (hasBalladStyle || finalMoods.includes('calm') || finalMoods.includes('peaceful') || finalMoods.includes('sad') || finalMoods.includes('lonely'))
               ? '72–96 BPM'
@@ -3267,7 +3269,7 @@ ${result.prompt}
                     <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
                       <div className="flex-1" />
                       <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                        {result.lyrics.english
+                        {(result.lyrics.english || '')
                           .replace(/\\n/g, '\n')
                           .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
                           .replace(/\n{3,}/g, '\n\n')
@@ -3299,7 +3301,7 @@ ${result.prompt}
                     <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
                       <div className="flex-1" />
                       <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                        {result.lyrics.korean
+                        {(result.lyrics.korean || '')
                           .replace(/\\n/g, '\n')
                           .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
                           .replace(/\n{3,}/g, '\n\n')

@@ -126,6 +126,7 @@ export type GenreGroupItem = {
 export interface AppliedKeywords {
   genre: string[];
   subGenre?: string[];
+  subGenreIds?: string[];
   mood: string[];
   theme: string[];
   style?: string[];
@@ -145,6 +146,22 @@ export interface AppliedKeywords {
   rapEnabled?: boolean;
   drumStyle?: string;
   isBallad?: boolean;
+}
+
+export interface GenerateSongParams {
+  genre: string;
+  subGenre: string[];
+  moods: string[];
+  themes: string[];
+  styles: string[];
+  instrumentSounds: string[];
+  tempo: string;
+  vocal: VocalConfig;
+  userInput?: string;
+  songStructure?: SongStructure;
+  customStructure?: CustomSectionItem[];
+  lyricsLength?: LyricsLength;
+  kpopMode?: 0 | 1 | 2;
 }
 
 export interface SongResult {

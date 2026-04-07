@@ -130,6 +130,7 @@ function getGenreMeta(genreId: string | null) {
       return {
         id: found.id,
         label: found.label,
+        labelKo: found.labelKo,
         description: found.description,
         promptCore: found.promptCore ?? "",
       };
@@ -168,7 +169,7 @@ function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): st
     case "very-short":
       return `LYRICS LENGTH (MANDATORY):
 - Apply this length rule across ALL genres without exception.
-- The selected length is: 더짧게 (very-short).
+- The selected length is: very-short.
 - Keep the lyrics extremely concise.
 - Target about 2-3 lyric lines per major section.
 - Avoid extra filler lines, repeated padding, long storytelling passages, and unnecessary ad-libs.
@@ -177,7 +178,7 @@ function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): st
     case "short":
       return `LYRICS LENGTH (MANDATORY):
 - Apply this length rule across ALL genres without exception.
-- The selected length is: 짧게 (short).
+- The selected length is: short.
 - Keep the lyrics shorter than a standard pop lyric.
 - Target about 3-4 lyric lines per major section.
 - Use concise imagery and tighter phrasing.
@@ -186,7 +187,7 @@ function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): st
     case "long":
       return `LYRICS LENGTH (MANDATORY):
 - Apply this length rule across ALL genres without exception.
-- The selected length is: 길게 (long).
+- The selected length is: long.
 - Write noticeably longer lyrics than a standard song.
 - Target about 6-8 lyric lines per major section.
 - Expand the storytelling, imagery, and emotional development.
@@ -196,7 +197,7 @@ function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): st
     default:
       return `LYRICS LENGTH (MANDATORY):
 - Apply this length rule across ALL genres without exception.
-- The selected length is: 기본 (normal).
+- The selected length is: normal.
 - Use a standard mainstream song lyric length.
 - Target about 4-6 lyric lines per major section.
 - Keep a natural balance between storytelling, repetition, and hook development.
@@ -305,7 +306,6 @@ function getVocalFormation(vocal: VocalConfig): string | null {
     else if (male > 0) return "All-male group vocal";
     else return "All-female group vocal";
   } else {
-    // Fallback logic
     if (total === 1) return female > 0 ? "Solo female vocal" : "Solo male vocal";
     else if (total === 2) {
       if (male > 0 && female > 0) return "Mixed duo vocal";
@@ -360,7 +360,6 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
         if (m.toneId) {
           const tone = VOCAL_TONES.find((t) => t.id === m.toneId);
           if (tone) {
-            // Check for redundancy
             const label = tone.label;
             const displayLabel = label.toLowerCase().includes(genderStr.toLowerCase())
               ? label
@@ -380,28 +379,11 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
     }
   }
 
-  // Genre vocal auxiliary
-  let stylingRule = "";
-  const genreVocalStrings = subGenres
-    .map((id) => SUB_GENRE_PROMPTS[id]?.vocal)
-    .filter(Boolean);
-
-  if (genreVocalStrings.length > 0) {
-    const firstVocalString = genreVocalStrings[0];
-    const vocalOptions = firstVocalString.split(",").map((s) => s.trim());
-    const harmonies = vocalOptions.find((o) =>
-      o.toLowerCase().includes("harmonies")
-    );
-    const hooks = vocalOptions.find((o) => o.toLowerCase().includes("hooks"));
-    const selectedStyling = harmonies || hooks || vocalOptions[0];
-    stylingRule = `\n- Additional Vocal Styling: ${selectedStyling}`;
-  }
-
   return `
 VOCAL RULE (STRICT):
 - Formation: ${formation}
 - Gender: ${genderRule}${memberRolesRule}
-- ${rapRule}${toneRule}${stylingRule}
+- ${rapRule}${toneRule}
 - Do NOT override these vocal rules under any circumstance.
 `.trim();
 }
@@ -553,10 +535,8 @@ function buildAppliedKeywordPayload(
   resolvedStructure: SongStructure
 ) {
   const themes = params.themes ?? [];
-  const styles = getStyleLabels(params.styles ?? []);
-  const instrumentSounds = getInstrumentSoundLabels(
-    params.instrumentSounds ?? []
-  );
+  const styles = params.styles ?? [];
+  const instrumentSounds = params.instrumentSounds ?? [];
   const vocalDescription: string[] = [];
 
   const formation = getVocalFormation(
@@ -616,403 +596,115 @@ function buildStructureText(
   return structureMap[(selected as Exclude<SongStructure, "custom">) || "2"];
 }
 
-/**
- * Common helper to optimize prompt arrays by priority, deduplication, and conflict removal.
- */
-function optimizePromptArray(
-  candidates: { value: string; priority: number }[],
-  maxCount: number = 5,
-  mustKeepPriority: number = 1
-): string[] {
-  // 1. Sort by priority (lower number = higher priority)
-  const sorted = [...candidates].sort((a, b) => a.priority - b.priority);
-
-  const result: string[] = [];
-  const normalizedResult: string[] = [];
-
-  // Conflict Map (Lower case for comparison)
-  const CONFLICTS: Record<string, string[]> = {
-    soft: ["aggressive", "hard", "heavy", "intense", "powerful", "energetic", "punchy"],
-    aggressive: ["soft", "gentle", "calm", "peaceful", "mellow", "smooth", "relaxed"],
-    minimal: ["rich", "complex", "dense", "layered", "lush", "orchestral", "full", "maximalist"],
-    rich: ["minimal", "sparse", "simple", "stripped-back", "naked"],
-    vintage: ["modern", "contemporary", "futuristic", "cutting-edge", "new-age"],
-    modern: ["vintage", "retro", "old-school", "classic", "antique"],
-    acoustic: ["electronic", "synthesized", "digital", "synth-heavy", "electric", "computerized"],
-    electronic: ["acoustic", "unplugged", "natural", "organic", "live"],
-    dark: ["bright", "cheerful", "happy", "uplifting", "vibrant"],
-    bright: ["dark", "gloomy", "somber", "moody", "melancholic"],
-    fast: ["slow", "relaxed", "chill", "laid-back"],
-    slow: ["fast", "upbeat", "high-energy", "driving"],
-  };
-
-  // Similar Keywords Groups (to keep only 1-2 from a group)
-  const SIMILAR_GROUPS = [
-    ["pop", "modern pop", "contemporary pop", "mainstream pop", "k-pop", "kpop", "idol pop"],
-    ["dance", "club", "disco", "groove", "edm", "house", "techno"],
-    ["electronic", "synth", "synthesized", "digital", "electro"],
-    ["rock", "alternative", "indie", "punk", "metal", "grunge"],
-    ["hip hop", "rap", "trap", "urban", "drill", "boom bap"],
-    ["rnb", "soul", "neo soul", "funk", "motown"],
-    ["ballad", "emotional", "sentimental", "sad", "melancholic"],
-  ];
-
-  for (const candidate of sorted) {
-    const val = candidate.value.trim();
-    if (!val) continue;
-
-    const lowerVal = val.toLowerCase();
-    const isMustKeep = candidate.priority <= mustKeepPriority;
-
-    // 1. Exact duplicate check
-    if (normalizedResult.includes(lowerVal)) continue;
-
-    if (!isMustKeep) {
-      // 2. Limit check
-      if (result.length >= maxCount) continue;
-
-      // 3. Conflict check
-      let hasConflict = false;
-      for (const added of normalizedResult) {
-        if (CONFLICTS[added]?.some(c => lowerVal.includes(c)) || 
-            CONFLICTS[lowerVal]?.some(c => added.includes(c))) {
-          hasConflict = true;
-          break;
-        }
-      }
-      if (hasConflict) continue;
-
-      // 4. Redundancy check (Similar keywords)
-      let isRedundant = false;
-      for (const added of normalizedResult) {
-        // Substring check
-        if (added.includes(lowerVal) || lowerVal.includes(added)) {
-          isRedundant = true;
-          break;
-        }
-        
-        // Group check
-        for (const group of SIMILAR_GROUPS) {
-          if (group.some(g => added.includes(g)) && group.some(g => lowerVal.includes(g))) {
-            isRedundant = true;
-            break;
-          }
-        }
-        if (isRedundant) break;
-      }
-      if (isRedundant) continue;
-    }
-
-    result.push(val);
-    normalizedResult.push(lowerVal);
-  }
-
-  return result;
-}
-
-/**
- * Specialized optimizer for styles that only removes exact duplicates.
- */
-function optimizeStyleArray(
-  candidates: { value: string; priority: number }[],
-  maxCount: number = 10
-): string[] {
-  const sorted = [...candidates].sort((a, b) => a.priority - b.priority);
-  const result: string[] = [];
-  const normalizedResult: string[] = [];
-
-  for (const candidate of sorted) {
-    const val = candidate.value.trim();
-    if (!val) continue;
-
-    const lowerVal = val.toLowerCase();
-    
-    // Only remove exact duplicates (normalized)
-    if (normalizedResult.includes(lowerVal)) continue;
-
-    if (result.length >= maxCount) continue;
-
-    result.push(val);
-    normalizedResult.push(lowerVal);
-  }
-
-  return result;
-}
-
 function buildStyle(params: GenerateSongParams): string {
-  const genreMeta = getGenreMeta(params.genre);
-  const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Pop");
   const subGenreIds = params.subGenre ?? [];
   const genreId = (params.genre || "pop").toLowerCase();
-  const selectedStyleIds = (params.styles ?? []).slice(0, 3);
+  
+  let genreStyle = "";
+  if (subGenreIds.length > 0) {
+    genreStyle = SUB_GENRE_PROMPTS[subGenreIds[0]]?.style || "";
+  }
+  
+  if (!genreStyle) {
+    const genreMeta = getGenreMeta(genreId);
+    genreStyle = genreMeta?.label || "Pop";
+  }
 
-  const candidates: { value: string; priority: number }[] = [];
-
-  // 1. Sub-genre (Priority 1) - Split by comma to keep tags independent
-  subGenreIds.forEach(id => {
-    const prompt = SUB_GENRE_PROMPTS[id];
-    if (prompt?.style) {
-      prompt.style.split(',').forEach(tag => {
-        if (tag.trim()) candidates.push({ value: tag.trim(), priority: 1 });
-      });
-    }
-  });
-
-  // 2. Mid-genre (Priority 2) - Only if no sub-genres are selected
-  if (subGenreIds.length === 0) {
-    const mid = MID_GENRE_PROMPTS[genreId];
-    if (mid?.style) {
-      mid.style.split(',').forEach(tag => {
-        if (tag.trim()) candidates.push({ value: tag.trim(), priority: 2 });
-      });
-    } else {
-      candidates.push({ value: genreLabel, priority: 2 });
+  const selectedStyleIds = params.styles ?? [];
+  let userStyleLabel = "";
+  if (selectedStyleIds.length > 0) {
+    const styleItem = resolveStyleItem(selectedStyleIds[0]);
+    if (styleItem) {
+      // labelKo가 아닌 영문 label을 사용하여 AI 프롬프트 영문화 유지
+      userStyleLabel = styleItem.label;
     }
   }
 
-  // 3. User Styles (Priority 3)
-  const COMPATIBLE_MAP: Record<string, string[]> = {
-    pop: ["pop", "dance", "modern-edm", "global-pop-style", "k-style"],
-    "dance-pop": ["dance", "classic-disco", "modern-edm", "global-pop-style", "k-style"],
-    "synth-pop": ["dance", "modern-edm", "electronic", "techno-style", "house-style"],
-    kpop: ["dance", "modern-edm", "global-pop-style", "k-style", "hip-hop", "trap-style"],
-    trap: ["hip-hop", "trap-style", "boom-bap-style"],
-    drill: ["hip-hop", "trap-style"],
-    "contemporary-rnb": ["rnb", "neo-soul-style", "pb-rnb-style", "soul", "classic-soul"],
-    "neo-soul": ["rnb", "neo-soul-style", "soul", "classic-soul", "jazz"],
-    jazz: ["jazz", "classic-jazz", "jazzhop-style", "swing", "bebop", "cool-jazz"],
-    rock: ["rock", "classic-rock", "modern-rock", "punk", "pop-punk"],
-    "heavy-metal": ["rock", "classic-rock", "modern-rock", "punk"],
-    house: ["electronic", "house-style", "techno-style", "dance", "modern-edm"],
-    techno: ["electronic", "techno-style", "house-style", "modern-edm"],
-    "lofi-hiphop": ["hip-hop", "lofi-hip-hop-style", "jazzhop-style", "rnb"],
-    "piano-ballad": ["ballad", "classic-ballad", "soul", "classic-soul"],
-  };
-
-  const SEMI_COMPATIBLE_MAP: Record<string, string[]> = {
-    "piano-ballad": ["trap-style", "modern-edm", "rnb"],
-    drill: ["global-pop-style", "modern-edm", "rnb"],
-    jazz: ["modern-edm", "electronic", "hip-hop", "trap-style"],
-    rock: ["electronic", "modern-edm", "hip-hop"],
-    pop: ["rock", "classic-rock", "punk"],
-    "folk-rock": ["electronic", "modern-edm"],
-    "traditional-trot": ["modern-edm", "dance", "electronic"],
-  };
-
-  selectedStyleIds.forEach((styleId, index) => {
-    const styleItem = resolveStyleItem(styleId);
-    if (!styleItem) return;
-
-    candidates.push({ value: styleItem.label, priority: 3 });
-
-    // 4. Auto-correction (Priority 4)
-    const compatibleStyles = COMPATIBLE_MAP[genreId] || [];
-    const semiCompatibleStyles = SEMI_COMPATIBLE_MAP[genreId] || [];
-    const isCompatible = compatibleStyles.includes(styleId);
-    const isSemiCompatible = semiCompatibleStyles.includes(styleId);
-
-    if (index === 0) {
-      if (isSemiCompatible || (!isCompatible && !isSemiCompatible)) {
-        candidates.push({ value: `${styleItem.label} influence`, priority: 4 });
-      }
-    } else if (!isCompatible) {
-      candidates.push({ value: `${styleItem.label} influence`, priority: 4 });
-    }
-  });
-
-  // Optimize using the specialized style optimizer
-  const optimizedStyles = optimizeStyleArray(candidates, 10).map(s => s.charAt(0).toUpperCase() + s.slice(1));
-
-  // Tempo (Always last)
   const tempoText = params.tempo
-    ? params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")
+    ? params.tempo
+        .replace(/^Between\s+/i, "")
+        .replace(/^Exactly\s+/i, "")
+        .replace(/\s+and\s+/i, "–")
+        .replace(/\s*BPM\s*/gi, "") // 기존에 포함된 BPM 단위를 제거하여 중복 방지
+        .trim()
     : "";
 
-  const finalParts = [...optimizedStyles];
-  if (tempoText) finalParts.push(tempoText);
+  let stylePart = genreStyle;
+  if (userStyleLabel) {
+    stylePart = `${userStyleLabel} influenced ${genreStyle}`;
+  }
+  
+  // 깨끗해진 tempoText 뒤에 단 한 번만 BPM을 붙입니다.
+  const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
 
-  return `·STYLE: ${finalParts.join(", ")}`;
+  return `STYLE: ${stylePart}${bpmPart}`;
 }
 
 function buildSound(params: GenerateSongParams): string {
-  const genreId = (params.genre || "pop").toLowerCase();
   const subGenreIds = params.subGenre ?? [];
   const selectedSoundIds = params.instrumentSounds ?? [];
-
-  const candidates: { value: string; priority: number; role: string }[] = [];
-
-  const getSoundRole = (text: string): string => {
-    const lower = text.toLowerCase();
-    if (lower.includes("drum") || lower.includes("beat") || lower.includes("rhythm") || lower.includes("groove") || lower.includes("kick") || lower.includes("snare") || lower.includes("hi-hat") || lower.includes("percussion") || (lower.includes("808") && lower.includes("drum"))) return "rhythm";
-    if (lower.includes("bass") || lower.includes("808") || lower.includes("low end") || lower.includes("sub")) return "low-end";
-    if (lower.includes("texture") || lower.includes("ambience") || lower.includes("noise") || lower.includes("layer") || lower.includes("pad") || lower.includes("atmosphere")) return "texture";
-    if (lower.includes("reverb") || lower.includes("delay") || lower.includes("space") || lower.includes("stereo") || lower.includes("mix") || lower.includes("room") || lower.includes("hall") || lower.includes("panning") || lower.includes("field")) return "space";
-    if (lower.includes("piano") || lower.includes("guitar") || lower.includes("synth") || lower.includes("string") || lower.includes("brass") || lower.includes("lead") || lower.includes("keys") || lower.includes("organ") || lower.includes("horn") || lower.includes("bell") || lower.includes("pluck")) return "main-sound";
-    return "support";
-  };
-
-  // 1. Sub-genre (Priority 1)
-  subGenreIds.forEach(id => {
-    const prompt = SUB_GENRE_PROMPTS[id];
+  
+  const soundSet = new Set<string>();
+  
+  // 소분류(subGenre[0]) 데이터 우선 조회
+  if (subGenreIds.length > 0) {
+    const prompt = SUB_GENRE_PROMPTS[subGenreIds[0]];
     if (prompt?.sound) {
       prompt.sound.split(",").forEach(s => {
         const val = s.trim();
-        if (val) candidates.push({ value: val, priority: 1, role: getSoundRole(val) });
+        if (val) soundSet.add(val.toLowerCase());
       });
     }
-  });
-
-  // 2. Mid-genre (Priority 2)
-  const mid = MID_GENRE_PROMPTS[genreId];
-  if (mid?.sound) {
-    mid.sound.split(",").forEach(s => {
-      const val = s.trim();
-      if (val) candidates.push({ value: val, priority: 2, role: getSoundRole(val) });
-    });
   }
-
-  // 3. User Selection (Priority 0.5 - to override for "tuning" while keeping identity)
+  
   const selectedLabels = getInstrumentSoundLabels(selectedSoundIds);
   selectedLabels.forEach(label => {
-    candidates.push({ value: label, priority: 0.5, role: getSoundRole(label) });
+    soundSet.add(label.toLowerCase());
   });
+  
+  const finalSounds = Array.from(soundSet).map(s => s.charAt(0).toUpperCase() + s.slice(1));
+  const limitedSounds = finalSounds.slice(0, 6);
 
-  // 4. Auto-correction (Priority 4)
-  const GENRE_BASE: Record<string, string[]> = {
-    drill: ["sparse drill drums", "heavy 808 bass"],
-    trap: ["tight trap drums", "deep 808 bass"],
-    "piano-ballad": ["soft piano-led melody", "restrained drums"],
-    "lofi-hiphop": ["soft lofi drums", "warm bass"],
-    kpop: ["polished synth", "punchy drums"],
-    rnb: ["smooth keys", "warm bass"],
-    pop: ["modern synth", "clean drums"],
-    ballad: ["warm strings", "soft piano"],
-  };
-  (GENRE_BASE[genreId] || []).forEach(s => {
-    candidates.push({ value: s, priority: 4, role: getSoundRole(s) });
-  });
-
-  const TEXTURE_MAP: Record<string, string> = {
-    drill: "cold synth texture",
-    trap: "polished digital texture",
-    ballad: "warm acoustic texture",
-    pop: "bright modern texture",
-    jazz: "organic vintage texture",
-    rock: "raw gritty texture",
-    electronic: "glitchy ambient texture",
-    "lofi-hiphop": "dusty lofi texture",
-  };
-  if (TEXTURE_MAP[genreId]) {
-    candidates.push({ value: TEXTURE_MAP[genreId], priority: 4, role: "texture" });
-  }
-
-  const SPACE_MAP: Record<string, string> = {
-    emotional: "spacious reverb",
-    dark: "tight negative space",
-    dreamy: "ethereal atmosphere",
-    calm: "intimate dry space",
-    tense: "claustrophobic pressure",
-    energetic: "wide stereo field",
-  };
-  (params.moods ?? []).forEach(mood => {
-    const space = SPACE_MAP[mood.toLowerCase()];
-    if (space) candidates.push({ value: space, priority: 4, role: "space" });
-  });
-
-  // Filter out STYLE and VOCAL keywords
-  const EXCLUDED_KEYWORDS = [
-    "pop", "k-pop", "kpop", "idol", "style", "genre", "vocal", "singing", "voice", "rap",
-    "emotional", "powerful", "high energy", "cheerful", "happy", "sad",
-    "production", "quality", "commercial"
-  ];
-
-  const filteredCandidates = candidates.filter(c => {
-    const lower = c.value.toLowerCase();
-    if (lower.includes("dreamy") && !lower.includes("atmosphere") && !lower.includes("texture")) return false;
-    return !EXCLUDED_KEYWORDS.some(kw => lower === kw || lower.startsWith(kw + " ") || lower.endsWith(" " + kw));
-  });
-
-  // Role-based Deduplication: For each role, pick the best candidate
-  const roleBest: Record<string, { value: string; priority: number }> = {};
-  filteredCandidates.forEach(c => {
-    if (!roleBest[c.role] || c.priority < roleBest[c.role].priority) {
-      roleBest[c.role] = { value: c.value, priority: c.priority };
-    }
-  });
-
-  const finalCandidates = Object.values(roleBest);
-
-  // Optimize (Max 6)
-  const optimizedSounds = optimizePromptArray(finalCandidates, 6, 1).map(s => s.charAt(0).toUpperCase() + s.slice(1));
-
-  return `·SOUND: ${optimizedSounds.join(", ")}`;
+  return `SOUND: ${limitedSounds.join(", ")}`;
 }
 
 function buildMoodTexture(params: GenerateSongParams): string {
   const moods = params.moods ?? [];
-  if (moods.length === 0) return "·MOOD & TEXTURE: Balanced, clear and polished";
-
-  const MOOD_TONE_MAP: Record<string, string[]> = {
-    emotional: ["warm", "soft", "emotionally restrained"],
-    sad: ["soft", "minimal", "fragile"],
-    warm: ["warm", "gentle", "comforting"],
-    calm: ["gentle", "smooth", "steady"],
-    dark: ["cold", "heavy", "shadowy"],
-    bright: ["bright", "clean", "vibrant"],
-    hopeful: ["uplifting", "open", "soaring"],
-    lonely: ["isolated", "spacious", "hollow"],
-    nostalgic: ["warm", "vintage", "slightly blurred"],
-    dreamy: ["airy", "spacious", "ethereal"],
-    tense: ["tight", "pressured", "claustrophobic"],
-    peaceful: ["soft", "flowing", "serene"],
-  };
-
-  const ATMOSPHERE_MAP: Record<string, string> = {
-    emotional: "intimate atmosphere",
-    dark: "noir atmosphere",
-    dreamy: "hazy atmosphere",
-    calm: "quiet atmosphere",
-    tense: "high-tension atmosphere",
-    energetic: "dynamic atmosphere",
-    sad: "melancholic atmosphere",
-    happy: "cheerful atmosphere",
-    nostalgic: "late-night atmosphere",
-    default: "polished atmosphere"
-  };
-
-  const tonesSet = new Set<string>();
-  moods.forEach((mood) => {
-    const tones = MOOD_TONE_MAP[mood.toLowerCase()];
-    if (tones) {
-      tones.forEach((t) => tonesSet.add(t));
+  const moodValue = moods.length > 0 ? moods[0] : "Balanced";
+  
+  const selectedStyleIds = params.styles ?? [];
+  let textureDesc = "clear and polished";
+  
+  if (selectedStyleIds.length > 0) {
+    const styleItem = resolveStyleItem(selectedStyleIds[0]);
+    if (styleItem && styleItem.promptCore) {
+      textureDesc = styleItem.promptCore
+        .replace(/^Style layer:\s*/i, "")
+        .trim();
     }
-  });
+  }
 
-  const lowerMoods = moods.map((m) => m.toLowerCase());
-  const filteredTones = Array.from(tonesSet).filter((t) => !lowerMoods.includes(t.toLowerCase()));
-
-  // Limit to 4 tones for richness
-  const limitedTones = filteredTones.slice(0, 4);
-  const atmosphere = ATMOSPHERE_MAP[lowerMoods[0]] || ATMOSPHERE_MAP.default;
-
-  const combined = [...moods, ...limitedTones, atmosphere];
-  return `·MOOD & TEXTURE: ${combined.join(", ")}`;
+  return `MOOD & TEXTURE: ${moodValue}, ${textureDesc}`;
 }
 
 function buildVocal(params: GenerateSongParams): string {
   const v = params.vocal ?? { male: 0, female: 0, rap: false };
+  const subGenreIds = params.subGenre ?? [];
   const parts: string[] = [];
 
-  // 1. Formation (Solo male vocal, Mixed group vocal, etc.)
-  const formation = getVocalFormation(v);
-  if (formation) {
-    parts.push(formation);
+  // 소분류(subGenre[0]) 데이터 우선 조회
+  if (subGenreIds.length > 0) {
+    const genreVocal = SUB_GENRE_PROMPTS[subGenreIds[0]]?.vocal;
+    if (genreVocal) {
+      parts.push(...genreVocal.split(",").map(s => s.trim()));
+    }
   }
 
-  // 2. Member Roles & Tones
-  let membersOutput: string[] = [];
+  const formation = getVocalFormation(v);
+  if (formation) parts.push(formation);
+
   if (v.members && v.members.length > 0) {
-    membersOutput = v.members
+    const membersOutput = v.members
       .map((m) => {
         const hasRoles = m.roles && m.roles.length > 0;
         const hasTone = !!m.toneId;
@@ -1020,25 +712,14 @@ function buildVocal(params: GenerateSongParams): string {
 
         const genderLabel = m.gender === 'male' ? 'Male' : 'Female';
         let toneLabel = "";
-
         if (m.toneId) {
           const tone = VOCAL_TONES.find((t) => t.id === m.toneId);
           if (tone) toneLabel = tone.label;
-        } else if (v.globalToneId && v.isToneSelected) {
-          const tone = VOCAL_TONES.find((t) => t.id === v.globalToneId);
-          if (tone && (tone.genderTarget === 'any' || tone.genderTarget === m.gender)) {
-            toneLabel = tone.label;
-          }
         }
-
-        // Redundancy check
-        let finalLabel = toneLabel;
-        if (finalLabel) {
-          if (!finalLabel.toLowerCase().includes(genderLabel.toLowerCase())) {
-            finalLabel = `${genderLabel} ${finalLabel}`;
-          }
-        } else {
-          finalLabel = genderLabel;
+        
+        let finalLabel = toneLabel || genderLabel;
+        if (toneLabel && !toneLabel.toLowerCase().includes(genderLabel.toLowerCase())) {
+          finalLabel = `${genderLabel} ${toneLabel}`;
         }
 
         const rolesLabel = hasRoles
@@ -1048,62 +729,15 @@ function buildVocal(params: GenerateSongParams): string {
         return `${finalLabel}${rolesLabel}`;
       })
       .filter((m): m is string => m !== null);
-  }
-
-  if (membersOutput.length > 0) {
     parts.push(...membersOutput);
-  } else if (v.globalToneId) {
-    // 3. Fallback: Selected or Recommended Tone Label
-    const tone = VOCAL_TONES.find((t) => t.id === v.globalToneId);
-    if (tone) {
-      if (!formation) {
-        parts.push("Genre-based recommended vocal tone");
-      } else if (!v.isToneSelected) {
-        parts.push("Genre-based recommended tone");
-      } else {
-        parts.push(tone.label);
-      }
-    }
   }
 
-  // 4. Genre vocal auxiliary (max 1)
-  const subGenreIds = params.subGenre ?? [];
-  const genreVocalStrings = subGenreIds
-    .map((id) => SUB_GENRE_PROMPTS[id]?.vocal)
-    .filter(Boolean);
+  if (v.rap) parts.push("Rap enabled");
 
-  if (genreVocalStrings.length > 0) {
-    const firstVocalString = genreVocalStrings[0];
-    const vocalOptions = firstVocalString.split(",").map((s) => s.trim());
+  const deduplicated = Array.from(new Set(parts.map(p => p.toLowerCase())))
+    .map(s => s.charAt(0).toUpperCase() + s.slice(1));
 
-    // Logic:
-    // tone 있음 -> harmonies
-    // tone 없음 -> hooks 또는 harmonies
-    // harmonies 우선
-    const harmonies = vocalOptions.find((o) =>
-      o.toLowerCase().includes("harmonies")
-    );
-    const hooks = vocalOptions.find((o) => o.toLowerCase().includes("hooks"));
-
-    if (harmonies) {
-      parts.push(harmonies);
-    } else if (hooks) {
-      parts.push(hooks);
-    } else {
-      parts.push(vocalOptions[0]);
-    }
-  }
-
-  // 4. Rap status
-  if (v.rap) {
-    parts.push("Rap enabled");
-  }
-
-  const capitalizedParts = parts
-    .filter(Boolean)
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-
-  return `·VOCAL: ${capitalizedParts.join(", ")}`;
+  return `VOCAL: ${deduplicated.join(", ")}`;
 }
 
 function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStructure): string {
@@ -1114,12 +748,12 @@ function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStr
   if (genreId?.includes("jazz")) flow = "fluid and groove-led with organic transitions";
   if (genreId?.includes("ballad")) flow = "gradual emotional build-up towards a powerful climax";
 
-  return `·ARRANGEMENT: ${flow}`;
+  return `ARRANGEMENT: ${flow}`;
 }
 
 function buildTheme(params: GenerateSongParams): string {
   const themeSentence = buildThemeSentence(params.themes ?? []);
-  return `·THEME: ${themeSentence}`;
+  return `THEME: ${themeSentence}`;
 }
 
 function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure): string {
@@ -1286,7 +920,15 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   const result = JSON.parse(response.text || "{}");
 
-  if (shouldUseMixedLyrics && result.lyrics) {
+  // Ensure lyrics object and properties exist
+  if (!result.lyrics || typeof result.lyrics !== 'object') {
+    result.lyrics = { english: "", korean: "" };
+  } else {
+    result.lyrics.english = typeof result.lyrics.english === 'string' ? result.lyrics.english : "";
+    result.lyrics.korean = typeof result.lyrics.korean === 'string' ? result.lyrics.korean : "";
+  }
+
+  if (shouldUseMixedLyrics) {
     result.lyrics = enforceKpopMixedLyrics(result.lyrics);
   }
 
@@ -1297,8 +939,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     subGenre: params.subGenre ?? [],
     mood: params.moods ?? [],
     theme: params.themes ?? [],
-    style: getStyleLabels(params.styles ?? []),
-    instrumentSound: getInstrumentSoundLabels(params.instrumentSounds ?? []),
+    style: params.styles ?? [],
+    instrumentSound: params.instrumentSounds ?? [],
     tempo: params.tempo,
     kpopMode: params.kpopMode ?? 0,
   };

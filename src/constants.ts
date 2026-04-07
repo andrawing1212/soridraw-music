@@ -176,140 +176,287 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
   {
     id: 'ballad-family',
     title: 'Ballad',
-    titleKo: '발라드',
+    titleKo: '발라드 감성',
     variants: [
-      { id: 'ballad', label: 'Ballad', labelKo: '발라드', description: '감정 중심의 기본 발라드 전개', promptCore: 'Style layer: emotional ballad pacing with clear melodic focus and vocal-forward development.' },
-      { id: 'classic-ballad', label: 'Classic Ballad', labelKo: '클래식 발라드', description: '전통적인 발라드 감성', promptCore: 'Style layer: classic ballad writing with timeless chord flow, heartfelt delivery, and elegant melodic rise.' },
+      { 
+        id: 'ballad', 
+        label: 'Emotional Ballad', 
+        labelKo: '서정적 발라드', 
+        description: '감정 중심의 기본 발라드 전개', 
+        descriptionKo: 'Emotional Ballad: 피아노와 현악기의 부드러운 레가토가 강조된 서정적이고 투명한 공간감을 제공합니다.',
+        promptCore: 'Style layer: emotional ballad pacing with clear melodic focus and vocal-forward development.' 
+      },
+      { 
+        id: 'classic-ballad', 
+        label: 'Classic Ballad', 
+        labelKo: '클래식 발라드', 
+        description: '전통적인 발라드 감성', 
+        descriptionKo: 'Classic Ballad: 전통적인 어쿠스틱 악기들의 조화로운 울림과 따뜻한 아날로그 질감이 돋보이는 사운드입니다.',
+        promptCore: 'Style layer: classic ballad writing with timeless chord flow, heartfelt delivery, and elegant melodic rise.' 
+      },
     ],
   },
   {
     id: 'dance-family',
     title: 'Dance',
-    titleKo: '댄스',
+    titleKo: '댄스 리듬',
     variants: [
-      { id: 'dance', label: 'Dance', labelKo: '댄스', description: '리듬과 퍼포먼스 중심의 기본 댄스 스타일', promptCore: 'Style layer: dance-focused pulse with immediate energy and performance-ready momentum.' },
-      { id: 'classic-disco', label: 'Classic Disco', labelKo: '클래식 디스코', description: '디스코 기반의 클래식 그루브', promptCore: 'Style layer: classic disco groove with four-on-the-floor motion, bright rhythm guitar, and uplifting movement.' },
-      { id: 'modern-edm', label: 'Modern EDM', labelKo: '모던 EDM', description: '현대적인 EDM 감각', promptCore: 'Style layer: modern EDM dynamics with sharp builds, polished drops, and sleek electronic impact.' },
+      { 
+        id: 'dance', 
+        label: 'Dance Oriented', 
+        labelKo: '댄스 지향적', 
+        description: '리듬과 퍼포먼스 중심의 기본 댄스 스타일', 
+        descriptionKo: 'Dance Rhythm: 명확한 킥 드럼의 어택감과 에너제틱한 신스 베이스가 주도하는 추진력 있는 사운드 질감입니다.',
+        promptCore: 'Style layer: dance-focused pulse with immediate energy and performance-ready momentum.' 
+      },
+      { 
+        id: 'classic-disco', 
+        label: 'Disco Groove', 
+        labelKo: '디스코 그루브', 
+        description: '디스코 기반의 클래식 그루브', 
+        descriptionKo: 'Disco Groove: 펑키한 커팅 기타와 옥타브 베이스 라인이 만들어내는 경쾌하고 화려한 레트로 질감입니다.',
+        promptCore: 'Style layer: classic disco groove with four-on-the-floor motion, bright rhythm guitar, and uplifting movement.' 
+      },
+      { 
+        id: 'modern-edm', 
+        label: 'Modern EDM', 
+        labelKo: 'EDM 다이내믹', 
+        description: '현대적인 EDM 감각', 
+        descriptionKo: 'Modern EDM: 날카로운 트랜지언트와 강력한 사이드체인 효과가 적용된 현대적이고 압도적인 전자음 질감입니다.',
+        promptCore: 'Style layer: modern EDM dynamics with sharp builds, polished drops, and sleek electronic impact.' 
+      },
     ],
   },
   {
     id: 'rnb-family',
     title: 'R&B',
-    titleKo: 'R&B',
+    titleKo: 'R&B 소울',
     variants: [
-      { id: 'rnb', label: 'R&B', labelKo: 'R&B', description: '그루브와 보컬 중심의 기본 R&B', promptCore: 'Style layer: contemporary R&B groove with smooth phrasing, sensual rhythm, and polished vocal emphasis.' },
-      { id: 'neo-soul-style', label: 'Neo Soul', labelKo: '네오 소울', description: '네오소울 특유의 유연한 감성', promptCore: 'Style layer: neo-soul warmth with rich harmony, laid-back pocket, and expressive vocal nuance.' },
-      { id: 'pb-rnb-style', label: 'PB R&B', labelKo: 'PB R&B', description: '몽환적이고 어두운 PBR&B 질감', promptCore: 'Style layer: PBR&B mood with dark atmosphere, airy spacing, and intimate modern texture.' },
+      { 
+        id: 'rnb', 
+        label: 'R&B Groove', 
+        labelKo: 'R&B 그루브', 
+        description: '그루브와 보컬 중심의 기본 R&B', 
+        descriptionKo: 'R&B Groove: 매끄러운 보컬 프로세싱과 세련된 코드 진행이 어우러진 부드럽고 유연한 소리 질감입니다.',
+        promptCore: 'Style layer: contemporary R&B groove with smooth phrasing, sensual rhythm, and polished vocal emphasis.' 
+      },
+      { 
+        id: 'neo-soul-style', 
+        label: 'Neo Soul Texture', 
+        labelKo: '네오 소울 질감', 
+        description: '네오소울 특유의 유연한 감성', 
+        descriptionKo: 'Neo Soul Texture: 풍부한 텐션 코드와 레이드백된 리듬감이 특징인 따뜻하고 깊이 있는 소울풀한 질감입니다.',
+        promptCore: 'Style layer: neo-soul warmth with rich harmony, laid-back pocket, and expressive vocal nuance.' 
+      },
+      { 
+        id: 'pb-rnb-style', 
+        label: 'PBR&B Texture', 
+        labelKo: 'PBR&B 텍스처', 
+        description: '몽환적이고 어두운 PBR&B 질감', 
+        descriptionKo: 'PBR&B Texture: 어둡고 몽환적인 리버브와 로우파이한 필터링이 적용된 현대적이고 실험적인 공간감입니다.',
+        promptCore: 'Style layer: PBR&B mood with dark atmosphere, airy spacing, and intimate modern texture.' 
+      },
     ],
   },
   {
     id: 'rock-family',
     title: 'Rock',
-    titleKo: '록',
+    titleKo: '록 지향적',
     variants: [
-      { id: 'rock', label: 'Rock', labelKo: '록', description: '밴드 중심의 기본 록 에너지', promptCore: 'Style layer: modern rock foundation with band energy, guitar drive, and direct emotional lift.' },
-      { id: 'classic-rock', label: 'Classic Rock', labelKo: '클래식 록', description: '전통적인 클래식 록 감성', promptCore: 'Style layer: classic rock character with sturdy riffs, live-band punch, and timeless anthem flow.' },
-      { id: 'modern-rock', label: 'Modern Rock', labelKo: '모던 록', description: '현대적인 록 프로덕션', promptCore: 'Style layer: modern rock production with cleaner impact, wider choruses, and current radio-ready force.' },
+      { 
+        id: 'rock', 
+        label: 'Rock Energy', 
+        labelKo: '록 에너지', 
+        description: '밴드 중심의 기본 록 에너지', 
+        descriptionKo: 'Rock Energy: 디스토션 기타의 거친 배음과 라이브 드럼의 강력한 펀치감이 살아있는 에너제틱한 질감입니다.',
+        promptCore: 'Style layer: modern rock foundation with band energy, guitar drive, and direct emotional lift.' 
+      },
+      { 
+        id: 'classic-rock', 
+        label: 'Classic Rock Texture', 
+        labelKo: '클래식 록 질감', 
+        description: '전통적인 클래식 록 감성', 
+        descriptionKo: 'Classic Rock Texture: 진공관 앰프의 자연스러운 오버드라이브와 빈티지한 밴드 앙상블이 조화로운 사운드입니다.',
+        promptCore: 'Style layer: classic rock character with sturdy riffs, live-band punch, and timeless anthem flow.' 
+      },
+      { 
+        id: 'modern-rock', 
+        label: 'Modern Rock Sound', 
+        labelKo: '모던 록 사운드', 
+        description: '현대적인 록 프로덕션', 
+        descriptionKo: 'Modern Rock Sound: 정교하게 다듬어진 기타 톤과 넓은 스테레오 이미지를 가진 깔끔하고 강력한 록 사운드입니다.',
+        promptCore: 'Style layer: modern rock production with cleaner impact, wider choruses, and current radio-ready force.' 
+      },
     ],
   },
   {
     id: 'jazz-family',
     title: 'Jazz',
-    titleKo: '재즈',
+    titleKo: '재즈풍의',
     variants: [
-      { id: 'jazz', label: 'Jazz', labelKo: '재즈', description: '재즈 화성과 유연한 흐름', promptCore: 'Style layer: jazz-influenced harmony, fluid phrasing, and refined rhythmic sophistication.' },
-      { id: 'classic-jazz', label: 'Classic Jazz', labelKo: '클래식 재즈', description: '전통 재즈 기반의 감각', promptCore: 'Style layer: classic jazz sensibility with elegant chord language, live interplay, and timeless swing-aware detail.' },
-      { id: 'jazzhop-style', label: 'Jazzhop', labelKo: '재즈힙합', description: '재즈와 힙합의 결합', promptCore: 'Style layer: jazzhop blend with mellow groove, dusty rhythm feel, and jazzy melodic color.' },
-    ],
-  },
-  {
-    id: 'soul-family',
-    title: 'Soul',
-    titleKo: '소울',
-    variants: [
-      { id: 'soul', label: 'Soul', labelKo: '소울', description: '보컬과 감정 표현 중심의 기본 소울', promptCore: 'Style layer: soulful vocal emphasis with emotional depth, warm groove, and heartfelt melodic pull.' },
-      { id: 'classic-soul', label: 'Classic Soul', labelKo: '클래식 소울', description: '클래식 소울의 진한 감성', promptCore: 'Style layer: classic soul feeling with vintage groove, expressive lead vocals, and rich emotional conviction.' },
-      { id: 'neo-soul', label: 'Neo Soul', labelKo: '네오 소울', description: '현대적 감각의 네오소울', promptCore: 'Style layer: neo-soul character with nuanced harmony, soft pocket, and contemporary elegance.' },
+      { 
+        id: 'jazz', 
+        label: 'Jazz Harmony', 
+        labelKo: '재즈 화성', 
+        description: '재즈 화성과 유연한 흐름', 
+        descriptionKo: 'Jazz Harmony: 복잡한 화성적 텐션과 악기 간의 유기적인 인터플레이가 돋보이는 지적이고 세련된 질감입니다.',
+        promptCore: 'Style layer: jazz-influenced harmony, fluid phrasing, and refined rhythmic sophistication.' 
+      },
+      { 
+        id: 'classic-jazz', 
+        label: 'Classic Jazz', 
+        labelKo: '클래식 재즈 선율', 
+        description: '전통 재즈 기반의 감각', 
+        descriptionKo: 'Classic Jazz: 어쿠스틱 악기 본연의 울림과 스윙 리듬의 유연한 흐름이 강조된 클래식한 사운드입니다.',
+        promptCore: 'Style layer: classic jazz sensibility with elegant chord language, live interplay, and timeless swing-aware detail.' 
+      },
+      { 
+        id: 'jazzhop-style', 
+        label: 'Jazzhop Beat', 
+        labelKo: '재즈힙합 비트', 
+        description: '재즈와 힙합의 결합', 
+        descriptionKo: 'Jazzhop Beat: 재즈의 따뜻한 샘플링 질감과 힙합의 묵직한 비트가 결합된 칠(Chill)한 감성의 사운드입니다.',
+        promptCore: 'Style layer: jazzhop blend with mellow groove, dusty rhythm feel, and jazzy melodic color.' 
+      },
     ],
   },
   {
     id: 'hiphop-family',
     title: 'Hip-Hop',
-    titleKo: '힙합',
+    titleKo: '힙합 비트',
     variants: [
-      { id: 'hip-hop', label: 'Hip-Hop', labelKo: '힙합', description: '비트 중심의 기본 힙합 결', promptCore: 'Style layer: hip-hop attitude with beat-led motion, urban edge, and rhythmic vocal emphasis.' },
-      { id: 'boom-bap-style', label: 'Boom Bap', labelKo: '붐뱁', description: '클래식 붐뱁 질감', promptCore: 'Style layer: boom bap rhythm with classic drum knock, head-nod groove, and sample-minded movement.' },
-      { id: 'trap-style', label: 'Trap', labelKo: '트랩', description: '현대 트랩 중심의 강한 리듬감', promptCore: 'Style layer: trap energy with heavy low-end, crisp hats, and modern street-level intensity.' },
-      { id: 'lofi-hip-hop-style', label: 'Lofi Hip-hop', labelKo: '로파이 힙합', description: '로파이 힙합의 부드러운 빈티지 감성', promptCore: 'Style layer: lo-fi hip-hop mood with soft beat texture, warm dust, and relaxed groove.' },
-    ],
-  },
-  {
-    id: 'funk-family',
-    title: 'Funk',
-    titleKo: '펑크',
-    variants: [
-      { id: 'funk', label: 'Funk', labelKo: '펑크', description: '그루브 중심의 기본 펑크 스타일', promptCore: 'Style layer: funk groove with syncopated rhythm, lively bass interplay, and contagious motion.' },
-      { id: 'g-funk', label: 'G-Funk', labelKo: 'G-펑크', description: 'G-Funk 특유의 느긋한 웨스트코스트 감성', promptCore: 'Style layer: G-funk glide with smooth synth leads, lowrider groove, and laid-back swagger.' },
-      { id: 'p-funk', label: 'P-Funk', labelKo: 'P-펑크', description: 'P-Funk 특유의 확장된 펑크 감성', promptCore: 'Style layer: P-funk bounce with playful bass, psychedelic color, and larger-than-life groove energy.' },
-    ],
-  },
-  {
-    id: 'punk-family',
-    title: 'Punk',
-    titleKo: '펑크',
-    variants: [
-      { id: 'punk', label: 'Punk', labelKo: '펑크', description: '거칠고 빠른 기본 펑크 에너지', promptCore: 'Style layer: punk urgency with brisk tempo, stripped-down drive, and raw directness.' },
-      { id: 'pop-punk', label: 'Pop-Punk', labelKo: '팝 펑크', description: '멜로디와 훅이 강한 팝펑크', promptCore: 'Style layer: pop-punk punch with melodic hooks, youthful energy, and fast band-driven choruses.' },
-    ],
-  },
-  {
-    id: 'blues-family',
-    title: 'Blues',
-    titleKo: '블루스',
-    variants: [
-      { id: 'blues', label: 'Blues', labelKo: '블루스', description: '블루스 특유의 감정선과 흐름', promptCore: 'Style layer: blues phrasing with expressive bends, earthy groove, and emotionally grounded movement.' },
-      { id: 'roots-blues', label: 'Roots Blues', labelKo: '루츠 블루스', description: '루츠 블루스 기반의 원초적 감성', promptCore: 'Style layer: roots blues tone with raw feel, traditional phrasing, and earthy instrumental honesty.' },
+      { 
+        id: 'hip-hop', 
+        label: 'Hip-Hop Edge', 
+        labelKo: '힙합 엣지', 
+        description: '비트 중심의 기본 힙합 결', 
+        descriptionKo: 'Hip-Hop Edge: 선명한 스네어 어택과 도시적인 긴장감이 느껴지는 날카롭고 리드미컬한 소리 질감입니다.',
+        promptCore: 'Style layer: hip-hop attitude with beat-led motion, urban edge, and rhythmic vocal emphasis.' 
+      },
+      { 
+        id: 'boom-bap-style', 
+        label: 'Boom Bap Texture', 
+        labelKo: '붐뱁 질감', 
+        description: '클래식 붐뱁 질감', 
+        descriptionKo: 'Boom Bap Texture: 거친 질감의 드럼 샘플과 묵직한 킥이 주도하는 클래식하고 투박한 힙합 사운드입니다.',
+        promptCore: 'Style layer: boom bap rhythm with classic drum knock, head-nod groove, and sample-minded movement.' 
+      },
+      { 
+        id: 'trap-style', 
+        label: 'Trap Beat', 
+        labelKo: '트랩 비트', 
+        description: '현대 트랩 중심의 강한 리듬감', 
+        descriptionKo: 'Trap Beat: 빠른 하이햇 롤과 깊은 서브 베이스의 대비가 돋보이는 강력하고 어두운 트랩 질감입니다.',
+        promptCore: 'Style layer: trap energy with heavy low-end, crisp hats, and modern street-level intensity.' 
+      },
+      { 
+        id: 'lofi-hip-hop-style', 
+        label: 'Lo-fi Texture', 
+        labelKo: '로파이 질감', 
+        description: '로파이 힙합의 부드러운 빈티지 감성', 
+        descriptionKo: 'Lo-fi Texture: 아날로그 특유의 따뜻하고 먼지 낀 듯한 빈티지 사운드와 편안한 공간감을 제공합니다.',
+        promptCore: 'Style layer: lo-fi hip-hop mood with soft beat texture, warm dust, and relaxed groove.' 
+      },
     ],
   },
   {
     id: 'electronic-family',
     title: 'Electronic',
-    titleKo: '일렉트로닉',
+    titleKo: '전자적 질감',
     variants: [
-      { id: 'electronic', label: 'Electronic', labelKo: '일렉트로닉', description: '전자 사운드 중심의 기본 일렉트로닉 스타일', promptCore: 'Style layer: electronic production focus with sculpted synth texture and precise rhythmic architecture.' },
-      { id: 'techno-style', label: 'Techno', labelKo: '테크노', description: '반복적 몰입감이 강한 테크노 감성', promptCore: 'Style layer: techno pulse with hypnotic repetition, controlled tension, and club-focused momentum.' },
-      { id: 'house-style', label: 'House', labelKo: '하우스', description: '하우스 특유의 4/4 그루브', promptCore: 'Style layer: house groove with four-on-the-floor rhythm, smooth lift, and dancefloor clarity.' },
+      { 
+        id: 'electronic', 
+        label: 'Electronic Texture', 
+        labelKo: '일렉트로닉 텍스처', 
+        description: '전자 사운드 중심의 기본 일렉트로닉 스타일', 
+        descriptionKo: 'Electronic Texture: 정교하게 설계된 신디사이저 레이어와 디지털적인 선명함이 돋보이는 전자적 질감입니다.',
+        promptCore: 'Style layer: electronic production focus with sculpted synth texture and precise rhythmic architecture.' 
+      },
+      { 
+        id: 'techno-style', 
+        label: 'Techno Pulse', 
+        labelKo: '테크노 펄스', 
+        description: '반복적 몰입감이 강한 테크노 감성', 
+        descriptionKo: 'Techno Pulse: 반복적인 리듬 패턴과 미니멀한 사운드 디자인이 만들어내는 최면적인 전자음 질감입니다.',
+        promptCore: 'Style layer: techno pulse with hypnotic repetition, controlled tension, and club-focused momentum.' 
+      },
+      { 
+        id: 'house-style', 
+        label: 'House Groove', 
+        labelKo: '하우스 그루브', 
+        description: '하우스 특유의 4/4 그루브', 
+        descriptionKo: 'House Groove: 일정한 4/4 박자의 킥과 세련된 피아노/신스 라인이 조화로운 댄서블한 질감입니다.',
+        promptCore: 'Style layer: house groove with four-on-the-floor rhythm, smooth lift, and dancefloor clarity.' 
+      },
     ],
   },
   {
-    id: 'latin-family',
-    title: 'Latin',
-    titleKo: '라틴',
+    id: 'texture-rhythm',
+    title: 'Groove & Impact',
+    titleKo: '그루브 & 타격감',
     variants: [
-      { id: 'latin', label: 'Latin', labelKo: '라틴', description: '라틴 리듬 중심의 기본 스타일', promptCore: 'Style layer: Latin rhythmic color with lively percussion motion and warm danceable energy.' },
-      { id: 'salsa', label: 'Salsa', labelKo: '살사', description: '살사 특유의 생동감과 타악 리듬', promptCore: 'Style layer: salsa motion with bright brass interplay, agile percussion, and celebratory movement.' },
-      { id: 'reggaeton', label: 'Reggaeton', labelKo: '레게톤', description: '레게톤 특유의 리듬과 현대적 감각', promptCore: 'Style layer: reggaeton bounce with infectious rhythm, urban flavor, and club-ready body movement.' },
+      { 
+        id: 'funky-bounce', 
+        label: 'Funky Bounce', 
+        labelKo: '펑키한 탄력', 
+        description: '통통 튀는 베이스 라인과 리드미컬한 그루브',
+        descriptionKo: 'Funky Bounce: 통통 튀는 베이스 라인과 리드미컬한 악기 배열로 경쾌한 탄성감을 줍니다.',
+        promptCore: 'Style layer: syncopated rhythmic bounce, elastic bass groove, and upbeat percussive snap.' 
+      },
+      { 
+        id: 'heavy-lowend', 
+        label: 'Heavy Impact', 
+        labelKo: '묵직한 타격감', 
+        description: '웅장한 서브 베이스와 묵직한 타격음',
+        descriptionKo: 'Heavy Impact: 웅장한 서브 베이스와 가슴을 울리는 단단하고 묵직한 타격음을 강조합니다.',
+        promptCore: 'Style layer: powerful sub-bass presence, heavy thumping kicks, and high-impact sonic weight.' 
+      },
     ],
   },
   {
-    id: 'reggae-family',
-    title: 'Reggae',
-    titleKo: '레게',
+    id: 'OST-family',
+    title: 'OST & BGM',
+    titleKo: '주제가 질감',
     variants: [
-      { id: 'reggae', label: 'Reggae', labelKo: '레게', description: '엇박자와 여유로운 기본 레게 흐름', promptCore: 'Style layer: reggae groove with offbeat emphasis, laid-back pacing, and warm relaxed flow.' },
-      { id: 'roots-reggae', label: 'Roots Reggae', labelKo: '루츠 레게', description: '루츠 레게의 묵직하고 깊은 감성', promptCore: 'Style layer: roots reggae tone with earthy groove, steady pulse, and spiritually grounded warmth.' },
-      { id: 'dancehall', label: 'Dancehall', labelKo: '댄스홀', description: '댄스홀 특유의 강한 리듬과 텐션', promptCore: 'Style layer: dancehall energy with sharper rhythmic snap, club movement, and bold Caribbean flavor.' },
+      { 
+        id: 'anime-style', 
+        label: 'Anime Style', 
+        labelKo: '애니메이션 감성', 
+        description: '애니메이션 OST 같은 상승감과 드라마', 
+        descriptionKo: 'Anime Style: 드라마틱한 곡 전개와 화려한 오케스트레이션이 어우러진 서사적이고 밝은 질감입니다.',
+        promptCore: 'Style layer: anime-style melodic drama with emotional lift, vivid progression, and soaring payoff.' 
+      },
+      { 
+        id: 'game-bgm-style', 
+        label: 'Game BGM Texture', 
+        labelKo: '게임 BGM 질감', 
+        description: '게임 BGM 같은 장면감과 몰입감', 
+        descriptionKo: 'Game BGM Texture: 장면의 몰입감을 극대화하는 선명한 멜로디와 테마 중심의 입체적인 사운드입니다.',
+        promptCore: 'Style layer: game-BGM flavor with scene-driven pacing, vivid motif focus, and immersive motion.' 
+      },
     ],
   },
-  {
+    {
     id: 'global-family',
     title: 'Global pop style',
     titleKo: '글로벌 팝 스타일',
     variants: [
-      { id: 'global-pop-style', label: 'Global Style', labelKo: '글로벌 스타일', description: '국가를 넘나드는 글로벌 팝 감각', promptCore: 'Style layer: global pop approach with broad mainstream appeal, clean hooks, and international polish.' },
-      { id: 'k-style', label: 'K-Style', labelKo: 'K-스타일', description: 'K-Pop 감성의 세련된 전개', promptCore: 'Style layer: K-style polish with sharp sections, addictive hooks, and sleek Korean pop sensibility.' },
-      { id: 'anime-style', label: 'Anime Style', labelKo: '애니 스타일', description: '애니메이션 OST 같은 상승감과 드라마', promptCore: 'Style layer: anime-style melodic drama with emotional lift, vivid progression, and soaring payoff.' },
-      { id: 'game-bgm-style', label: 'Game BGM', labelKo: '게임 BGM', description: '게임 BGM 같은 장면감과 몰입감', promptCore: 'Style layer: game-BGM flavor with scene-driven pacing, vivid motif focus, and immersive motion.' },
+      { 
+        id: 'global-pop-style', 
+        label: 'Global Style', 
+        labelKo: '글로벌 팝 감각', 
+        description: '국가를 넘나드는 글로벌 팝 감각', 
+        descriptionKo: 'Global Style: 세련된 팝 프로덕션과 전 세계적인 트렌드가 반영된 깔끔하고 대중적인 질감입니다.',
+        promptCore: 'Style layer: global pop approach with broad mainstream appeal, clean hooks, and international polish.' 
+      },
+      { 
+        id: 'k-style', 
+        label: 'K-Style Polish', 
+        labelKo: 'K-팝 세련미', 
+        description: 'K-Pop 감성의 세련된 전개', 
+        descriptionKo: 'K-Style Polish: 정교한 트랙 메이킹과 중독성 있는 훅이 돋보이는 화려하고 세련된 K-팝 질감입니다.',
+        promptCore: 'Style layer: K-style polish with sharp sections, addictive hooks, and sleek Korean pop sensibility.' 
+      },
     ],
   },
 ] as const;

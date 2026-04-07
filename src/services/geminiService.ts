@@ -5,6 +5,7 @@ import {
   BASIC_STRUCTURE,
   GENRE_GROUPS,
   GENRE_HIERARCHY,
+  GENRES,
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
   MID_GENRE_PROMPTS,
@@ -1036,7 +1037,7 @@ ${structureInstruction}
 
 Return JSON:
 {
-  "title": "[Genre] 'English Title' │ 'Korean Title'",
+  "title": "[Genre] 'English Title'│'Korean Title'",
   "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }
 }
 
@@ -1081,6 +1082,69 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   const result = JSON.parse(response.text || "{}");
 
+  // Title Post-processing
+  const subGenreIds = (params.subGenre ?? []).map(id => id.toLowerCase());
+  const genreId = (params.genre || "").toLowerCase();
+  
+  let genreTag = "";
+  const keywordsToRemove = new Set([
+    "k-pop", "kpop", "j-pop", "jpop", "hip hop", "hiphop", "r&b", "rnb", "edm", "pop", "rock", "jazz", "ballad", "trot", "dance", "synth", "indie", "folk", "metal", "drill", "trap", "lo-fi", "lofi", "g-funk", "gfunk"
+  ]);
+
+  if (subGenreIds.length > 0) {
+    const subGenreMeta = GENRES.find(g => g.id === subGenreIds[0]);
+    genreTag = subGenreMeta?.label ?? sentenceCase(subGenreIds[0]);
+    if (subGenreMeta) {
+      keywordsToRemove.add(subGenreMeta.label.toLowerCase());
+      if (subGenreMeta.labelKo) keywordsToRemove.add(subGenreMeta.labelKo.toLowerCase());
+    }
+  } else if (genreId) {
+    const genreMeta = GENRES.find(g => g.id === genreId);
+    genreTag = genreMeta?.label ?? sentenceCase(genreId);
+    if (genreMeta) {
+      keywordsToRemove.add(genreMeta.label.toLowerCase());
+      if (genreMeta.labelKo) keywordsToRemove.add(genreMeta.labelKo.toLowerCase());
+    }
+  } else {
+    genreTag = "Song";
+  }
+  keywordsToRemove.add(genreTag.toLowerCase());
+
+  if (typeof result.title === "string") {
+    let title = result.title.trim();
+    
+    // 1. Remove any existing [Genre] tag from the AI
+    title = title.replace(/^\[[^\]]+\]\s*/, "");
+    
+    // 2. Remove leading genre keywords (case-insensitive)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const sortedKeywords = Array.from(keywordsToRemove).filter(Boolean).sort((a, b) => b.length - a.length);
+      for (const kw of sortedKeywords) {
+        const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match keyword at the start, followed by space or punctuation or quote
+        const regex = new RegExp(`^${escapedKw}(?=[\\s'\"│\\-]|$)\\s*[\\-\\s]*`, "i");
+        if (regex.test(title)) {
+          title = title.replace(regex, "").trim();
+          changed = true;
+          break;
+        }
+      }
+    }
+    
+    // 3. Ensure the title has spaces around │ and is properly quoted if possible
+    if (title.includes("│")) {
+      const parts = title.split("│").map(p => p.trim());
+      title = parts.join(" │ ");
+    }
+    
+    // 4. Final assembly
+    result.title = `[${genreTag}] ${title}`;
+  } else {
+    result.title = `[${genreTag}] 'Untitled' │ '무제'`;
+  }
+
   // Ensure lyrics object and properties exist
   if (!result.lyrics || typeof result.lyrics !== 'object') {
     result.lyrics = { english: "", korean: "" };
@@ -1105,11 +1169,6 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     tempo: params.tempo,
     kpopMode: params.kpopMode ?? 0,
   };
-
-  if (!result.title || typeof result.title !== "string") {
-    const genreLabel = genreMeta?.label ?? (params.genre ? sentenceCase(params.genre) : "Song");
-    result.title = `[${genreLabel}] 'Untitled' │ '무제'`;
-  }
 
   return result as SongResult;
 }

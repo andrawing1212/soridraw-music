@@ -1214,7 +1214,7 @@ ${song.prompt}
                         </motion.div>
                       )}
                       <span className="text-[10px] text-[var(--text-secondary)] font-semibold opacity-100">
-                        {getRelativeTime(song.createdAt)}
+                        {getRelativeTime(song.createdAtMs || song.createdAt)}
                       </span>
                     </div>
                     {isSelectionMode ? (

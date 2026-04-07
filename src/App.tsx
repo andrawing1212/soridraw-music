@@ -2559,7 +2559,7 @@ ${result.prompt}
               />
           <CycleSection 
             title="Style" 
-            titleKo="스타일"
+            titleKo="장르-Sub"
             description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
             descriptionKo="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
             cycles={STYLE_CYCLES}

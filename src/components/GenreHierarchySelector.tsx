@@ -426,7 +426,7 @@ export default function GenreHierarchySelector({
                 className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
               >
                 <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-                장르
+                장르-Main
                 <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedCount}/{totalCount})</span>
               </h3>
               <AnimatePresence>

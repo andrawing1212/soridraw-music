@@ -103,6 +103,7 @@ export type GenreSubItem = {
   labelKo?: string;
   description?: string;
   descriptionKo?: string;
+  vocal?: string;
 };
 
 export type GenreMainItem = {
@@ -111,6 +112,7 @@ export type GenreMainItem = {
   labelKo?: string;
   description?: string;
   descriptionKo?: string;
+  vocal?: string;
   children: GenreSubItem[];
 };
 

@@ -1460,7 +1460,35 @@ function App() {
       }).filter(Boolean) as string[];
     };
 
-    const genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
+    let genreIds: string[] = [];
+    if (appliedKeywords.subGenre && appliedKeywords.subGenre.length > 0) {
+      const subId = appliedKeywords.subGenre[0];
+      let parentId = null;
+      for (const group of GENRE_HIERARCHY) {
+        for (const main of group.children) {
+          if (main.children.some(s => s.id === subId)) {
+            parentId = main.id;
+            break;
+          }
+        }
+        if (parentId) break;
+      }
+      
+      if (parentId) {
+        genreIds = [parentId];
+        setSelectedGenres(genreIds);
+        setSubGenre([subId]);
+      } else {
+        genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
+        setSelectedGenres(genreIds);
+        setSubGenre([]);
+      }
+    } else {
+      genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
+      setSelectedGenres(genreIds);
+      setSubGenre([]);
+    }
+
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
@@ -1472,7 +1500,6 @@ function App() {
     setPinnedGenres([]);
     setPinnedThemes([]);
 
-    setSelectedGenres(genreIds);
     setSelectedMoods(moodIds);
     setSelectedThemes(themeIds);
     setSelectedStyles(styleIds);
@@ -2148,6 +2175,64 @@ const saveRecentSong = async (newSong: any) => {
         return [GENRES.find(g => g.id === id)?.label || id];
       });
 
+      const getRecommendedVocalTone = (m: number, f: number, genres: string[], subGenres: string[]) => {
+        if (vocalTones.length === 0) return null;
+        
+        // 1. Determine gender target
+        let genderTarget: 'male' | 'female' | 'group' = 'male';
+        if (m > 0 && f > 0) {
+          genderTarget = 'group';
+        } else if (f > 0) {
+          genderTarget = 'female';
+        } else if (m > 0) {
+          genderTarget = 'male';
+        } else {
+          // Default if nothing selected
+          genderTarget = 'male';
+        }
+
+        // 2. Filter candidates by gender
+        let candidates = vocalTones.filter(t => {
+          if (genderTarget === 'group') {
+            return t.genderTarget === 'group' || t.genderTarget === 'unisex' || t.genderTarget === 'any';
+          } else if (genderTarget === 'male') {
+            return t.genderTarget === 'male' || t.genderTarget === 'any';
+          } else {
+            return t.genderTarget === 'female' || t.genderTarget === 'any';
+          }
+        });
+
+        // 3. Try matching genre (SubGenre first, then MainGenre)
+        const searchGenres = [...(subGenres || []), ...(genres || [])];
+        for (const gId of searchGenres) {
+          const match = candidates.find(t => t.genreTags && t.genreTags.includes(gId));
+          if (match) return match;
+        }
+
+        // 4. Fallback (Strictly defined default values)
+        if (genderTarget === 'group') {
+          return vocalTones.find(t => t.id === 'balanced_group') || candidates[0] || vocalTones[0];
+        } else if (genderTarget === 'female') {
+          return vocalTones.find(t => t.id === 'female_airy') || candidates[0] || vocalTones[0];
+        } else {
+          return vocalTones.find(t => t.id === 'male_husky') || candidates[0] || vocalTones[0];
+        }
+      };
+
+      const recommendedTone = getRecommendedVocalTone(maleCount, femaleCount, finalGenres, subGenre);
+
+      const formation = maleCount > 0 && femaleCount > 0
+        ? 'Mixed group vocal'
+        : maleCount > 1
+          ? 'Male group vocal'
+          : maleCount === 1
+            ? 'Solo male vocal'
+            : femaleCount > 1
+              ? 'Female group vocal'
+              : femaleCount === 1
+                ? 'Solo female vocal'
+                : '';
+
       const buildSongPrompt = () => {
         const subGenreLabels = subGenre.map((id) => {
           const matched = GENRE_HIERARCHY
@@ -2211,13 +2296,36 @@ const saveRecentSong = async (newSong: any) => {
           !hasSoundFamily('texture-family', 'ambience-family') && !hasBalladStyle ? 'Balanced, clear, and commercially polished' : null,
         ].filter(Boolean).join(', ');
 
-        const vocalDesign = maleCount > 0 || femaleCount > 0
-          ? (maleCount > 0 && femaleCount > 0
-              ? 'Mixed lead arrangement with layered harmonies'
-              : maleCount > 1 || femaleCount > 1
-                ? 'Stacked ensemble lead with supportive harmonies'
-                : 'Main lead vocal with harmony support where needed')
-          : 'Main lead vocal with harmony support where needed';
+        // --- Vocal Restoration Logic ---
+        const genreVocalParts = subGenre.map((id) => {
+          const matched = GENRE_HIERARCHY
+            .flatMap((group) => group.children)
+            .flatMap((main) => main.children)
+            .find((item) => item.id === id);
+          return matched?.vocal;
+        }).filter(Boolean) as string[];
+
+        const pickOneGenreVocal = (parts: string[]) => {
+          if (parts.length === 0) return null;
+          const allDescriptors = parts.flatMap(p => p.split(',').map(s => s.trim()));
+          const harmonies = allDescriptors.find(d => d.toLowerCase().includes('harmonies'));
+          if (harmonies) return harmonies;
+          const hooks = allDescriptors.find(d => d.toLowerCase().includes('hooks'));
+          if (hooks) return hooks;
+          return allDescriptors[0];
+        };
+        const auxiliaryVocal = pickOneGenreVocal(genreVocalParts);
+
+        const selectedTone = selectedVocalToneId ? vocalTones.find(t => t.id === selectedVocalToneId)?.label : null;
+        const recTone = recommendedTone?.label;
+        const primaryTone = selectedTone || recTone;
+
+        const vocalDesignParts = [];
+        if (formation) vocalDesignParts.push(formation);
+        if (primaryTone) vocalDesignParts.push(primaryTone);
+        if (auxiliaryVocal) vocalDesignParts.push(auxiliaryVocal);
+        
+        const vocalDesign = vocalDesignParts.length > 0 ? vocalDesignParts.join(', ') : 'Main lead vocal with harmony support where needed';
 
         const vocalStyle = [
           hasBalladStyle ? 'Tender and emotionally clear' : null,
@@ -2226,7 +2334,7 @@ const saveRecentSong = async (newSong: any) => {
           finalMoods.includes('warm') || finalMoods.includes('peaceful') ? 'gentle and reassuring' : null,
           finalMoods.includes('tense') ? 'focused and dynamically assertive' : null,
           !hasBalladStyle && !finalMoods.includes('bright') && !finalMoods.includes('warm') && !finalMoods.includes('tense') ? 'clear, expressive, and melody-led' : null,
-        ].filter(Boolean).join(', ');
+        ].filter(Boolean).slice(0, 1).join(', '); // Limit to one additional styling
 
         const arrangement = [
           'Base structure: Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro',
@@ -2245,37 +2353,6 @@ const saveRecentSong = async (newSong: any) => {
 ·MOOD: ${moodStr}
 ·THEME: ${themeStr || 'No explicit story theme selected.'}`.trim();
       };
-
-      const getRecommendedVocalTone = (m: number, f: number, genres: string[]) => {
-        if (vocalTones.length === 0) return null;
-        
-        // 1. If nothing selected (m=0, f=0), return balanced_group
-        if (m === 0 && f === 0) {
-          return vocalTones.find(t => t.id === 'balanced_group') || vocalTones.find(t => t.isDefault) || vocalTones[0];
-        }
-
-        // 2. Filter by gender if selected
-        let candidates = vocalTones;
-        if (m > 0 && f > 0) {
-          candidates = vocalTones.filter(t => t.genderTarget === 'unisex' || t.genderTarget === 'any' || t.genderTarget === 'group');
-        } else if (m > 0) {
-          candidates = vocalTones.filter(t => t.genderTarget === 'male' || t.genderTarget === 'any');
-        } else if (f > 0) {
-          candidates = vocalTones.filter(t => t.genderTarget === 'female' || t.genderTarget === 'any');
-        }
-        
-        // 3. Filter by genre
-        const genreId = genres[0];
-        if (genreId) {
-          const genreMatch = candidates.find(t => t.genreTags.includes(genreId));
-          if (genreMatch) return genreMatch;
-        }
-        
-        // 4. Fallback to first candidate of that gender (as requested: "해당 성별 첫 번째 tone 자동 선택")
-        return candidates[0] || vocalTones.find(t => t.isDefault) || vocalTones[0];
-      };
-
-      const recommendedTone = getRecommendedVocalTone(maleCount, femaleCount, selectedGenres);
 
       const songPrompt = buildSongPrompt();
 
@@ -2327,6 +2404,9 @@ const saveRecentSong = async (newSong: any) => {
           genre: selectedGenres,
           subGenre: subGenre,
           vocal: payload.vocal,
+          vocalType: selectedVocalToneId 
+            ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
+            : (recommendedTone?.label || formation || 'Default'),
           kpopMode,
           isBallad: hasBalladStyle,
           tempoConfig: {
@@ -2433,6 +2513,28 @@ ${result.prompt}
     isThemeRandomized ||
     isStyleRandomized ||
     isSoundTextureRandomized;
+
+  // --- Genre Display Logic ---
+  const displayGenreKeywords = subGenre.length > 0 
+    ? subGenre.map(id => {
+        let label = id;
+        for (const group of GENRE_HIERARCHY) {
+          for (const main of group.children) {
+            const sub = main.children.find(s => s.id === id);
+            if (sub) {
+              label = sub.label;
+              break;
+            }
+          }
+          if (label !== id) break;
+        }
+        return { id, type: 'genre' as const, label };
+      })
+    : selectedGenres.map(id => ({ 
+        id, 
+        type: 'genre' as const, 
+        label: GENRES.find(item => item.id === id)?.labelKo || GENRES.find(item => item.id === id)?.label || id 
+      }));
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
@@ -2748,7 +2850,7 @@ ${result.prompt}
                 className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start"
               >
                 {[
-                  ...selectedGenres.map((id) => ({ id, type: 'genre' as const, label: GENRES.find((item) => item.id === id)?.labelKo || GENRES.find((item) => item.id === id)?.label || id })),
+                  ...displayGenreKeywords,
                   ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
                   ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
                   ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
@@ -3072,10 +3174,20 @@ ${result.prompt}
                       {
                         key: 'genre',
                         title: 'genre',
-                        values: result.appliedKeywords.genre ?? [],
+                        values: (result.appliedKeywords.subGenre && result.appliedKeywords.subGenre.length > 0)
+                          ? result.appliedKeywords.subGenre
+                          : (result.appliedKeywords.genre ?? []),
                         accent: 'default' as const,
                         getDescription: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.description,
-                        getLabel: (kw: string) => GENRES.find((item) => item.label === kw || item.id === kw)?.label ?? kw,
+                        getLabel: (kw: string) => {
+                          for (const group of GENRE_HIERARCHY) {
+                            for (const main of group.children) {
+                              const sub = main.children.find(s => s.id === kw);
+                              if (sub) return sub.label;
+                            }
+                          }
+                          return GENRES.find((item) => item.label === kw || item.id === kw)?.label ?? kw;
+                        },
                       },
                       {
                         key: 'theme',

@@ -16,6 +16,7 @@ import {
   SongStructure,
   SongResult,
   VocalConfig,
+  VocalRole,
   CustomSectionItem,
 } from "../types";
 
@@ -346,6 +347,21 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
     toneRule = `\n- Global vocal tone: ${vocal.globalToneId}`;
   }
 
+  // --- Add Auxiliary Vocal Rule (Only 1) ---
+  let auxiliaryVocalRule = "";
+  if (subGenres.length > 0) {
+    const genreVocal = SUB_GENRE_PROMPTS[subGenres[0]]?.vocal;
+    if (genreVocal) {
+      const genreParts = genreVocal.split(",").map(s => s.trim());
+      const harmonies = genreParts.find(p => p.toLowerCase().includes("harmonies"));
+      const hooks = genreParts.find(p => p.toLowerCase().includes("hooks"));
+      const auxiliary = harmonies || hooks || genreParts[0];
+      if (auxiliary) {
+        auxiliaryVocalRule = `\n- Additional Vocal Styling: ${auxiliary}`;
+      }
+    }
+  }
+
   let memberRolesRule = "";
   if (vocal.members && vocal.members.length > 0) {
     const memberDescriptions = vocal.members
@@ -383,7 +399,7 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
 VOCAL RULE (STRICT):
 - Formation: ${formation}
 - Gender: ${genderRule}${memberRolesRule}
-- ${rapRule}${toneRule}
+- ${rapRule}${toneRule}${auxiliaryVocalRule}
 - Do NOT override these vocal rules under any circumstance.
 `.trim();
 }
@@ -644,27 +660,65 @@ function buildSound(params: GenerateSongParams): string {
   const subGenreIds = params.subGenre ?? [];
   const selectedSoundIds = params.instrumentSounds ?? [];
   
-  const soundSet = new Set<string>();
-  
-  // 소분류(subGenre[0]) 데이터 우선 조회
+  interface SoundItem {
+    label: string;
+    priority: number; // 2: User, 1: SubGenre, 0: Other
+    role: string | null;
+  }
+
+  const soundItems: SoundItem[] = [];
+  const ROLES = ["bass", "snare", "drum", "kick", "hi-hat", "synth", "piano", "guitar", "pad", "string", "808", "percussion", "lead", "pluck"];
+
+  const getRole = (s: string) => {
+    const lower = s.toLowerCase();
+    if (lower.includes("808")) return "808";
+    for (const r of ROLES) {
+      if (lower.includes(r)) return r;
+    }
+    return null;
+  };
+
+  // 1. User selected sounds (Highest priority)
+  const selectedLabels = getInstrumentSoundLabels(selectedSoundIds);
+  selectedLabels.forEach(label => {
+    soundItems.push({ label, priority: 2, role: getRole(label) });
+  });
+
+  // 2. Sub-genre sounds
   if (subGenreIds.length > 0) {
     const prompt = SUB_GENRE_PROMPTS[subGenreIds[0]];
     if (prompt?.sound) {
       prompt.sound.split(",").forEach(s => {
-        const val = s.trim();
-        if (val) soundSet.add(val.toLowerCase());
+        const label = s.trim();
+        if (label) {
+          soundItems.push({ label, priority: 1, role: getRole(label) });
+        }
       });
     }
   }
-  
-  const selectedLabels = getInstrumentSoundLabels(selectedSoundIds);
-  selectedLabels.forEach(label => {
-    soundSet.add(label.toLowerCase());
-  });
-  
-  const finalSounds = Array.from(soundSet).map(s => s.charAt(0).toUpperCase() + s.slice(1));
-  const limitedSounds = finalSounds.slice(0, 6);
 
+  // Deduplicate by role and label
+  const finalSoundLabels: string[] = [];
+  const seenRoles = new Set<string>();
+  const seenLabels = new Set<string>();
+
+  // Sort by priority desc
+  soundItems.sort((a, b) => b.priority - a.priority);
+
+  for (const item of soundItems) {
+    const lowerLabel = item.label.toLowerCase();
+    if (seenLabels.has(lowerLabel)) continue;
+
+    if (item.role) {
+      if (seenRoles.has(item.role)) continue;
+      seenRoles.add(item.role);
+    }
+    
+    seenLabels.add(lowerLabel);
+    finalSoundLabels.push(item.label);
+  }
+
+  const limitedSounds = finalSoundLabels.slice(0, 6);
   return `SOUND: ${limitedSounds.join(", ")}`;
 }
 
@@ -689,27 +743,54 @@ function buildMoodTexture(params: GenerateSongParams): string {
 
 function buildVocal(params: GenerateSongParams): string {
   const v = params.vocal ?? { male: 0, female: 0, rap: false };
-  const subGenreIds = params.subGenre ?? [];
+  const subGenreIds = (params.subGenre ?? []).map(id => id.toLowerCase());
+  const genreId = (params.genre || "").toLowerCase();
   const parts: string[] = [];
 
-  // 소분류(subGenre[0]) 데이터 우선 조회
-  if (subGenreIds.length > 0) {
-    const genreVocal = SUB_GENRE_PROMPTS[subGenreIds[0]]?.vocal;
-    if (genreVocal) {
-      parts.push(...genreVocal.split(",").map(s => s.trim()));
-    }
-  }
+  const isHiphop = genreId.includes("hiphop") || 
+                   genreId.includes("trap") || 
+                   genreId.includes("drill") ||
+                   subGenreIds.some(id => id.includes("hiphop") || id.includes("trap") || id.includes("drill") || id.includes("rap"));
+  
+  const isIdol = genreId.includes("kpop") || 
+                 genreId.includes("idol") || 
+                 subGenreIds.some(id => id.includes("kpop") || id.includes("idol") || id.includes("dance-pop"));
 
+  // 1. Formation
   const formation = getVocalFormation(v);
   if (formation) parts.push(formation);
 
+  // 2. Genre Vocal (Auxiliary, 1 only)
+  let genreVocalPart = "";
+  if (subGenreIds.length > 0) {
+    const genreVocal = SUB_GENRE_PROMPTS[subGenreIds[0]]?.vocal;
+    if (genreVocal) {
+      const genreParts = genreVocal.split(",").map(s => s.trim());
+      // K-pop/Idol uses harmonies priority
+      const harmonies = genreParts.find(p => p.toLowerCase().includes("harmonies"));
+      const hooks = genreParts.find(p => p.toLowerCase().includes("hooks"));
+      genreVocalPart = harmonies || hooks || genreParts[0] || "";
+    }
+  }
+
+  // 3. Tone (Selected or Recommended)
+  if (v.isToneSelected && v.globalToneId) {
+    const tone = VOCAL_TONES.find(t => t.id === v.globalToneId);
+    if (tone) parts.push(tone.label);
+  } else if (!genreVocalPart) {
+    // Only add fallback if no genre vocal exists AND no user tone selected
+    parts.push("Genre-based recommended vocal tone");
+  }
+
+  // Add genre vocal if found
+  if (genreVocalPart) {
+    parts.push(genreVocalPart);
+  }
+
+  // 4. Members (if any)
   if (v.members && v.members.length > 0) {
     const membersOutput = v.members
-      .map((m) => {
-        const hasRoles = m.roles && m.roles.length > 0;
-        const hasTone = !!m.toneId;
-        if (!hasRoles && !hasTone) return null;
-
+      .map((m, idx) => {
         const genderLabel = m.gender === 'male' ? 'Male' : 'Female';
         let toneLabel = "";
         if (m.toneId) {
@@ -722,8 +803,26 @@ function buildVocal(params: GenerateSongParams): string {
           finalLabel = `${genderLabel} ${toneLabel}`;
         }
 
-        const rolesLabel = hasRoles
-          ? ` (${m.roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(", ")})`
+        // Role Assignment Logic
+        let roles: VocalRole[] = [...(m.roles || [])];
+        if (roles.length === 0) {
+          if (idx === 0) roles = ["main"];
+          else if (idx === 1) roles = ["lead"];
+          else if (idx === 2 && isHiphop) roles = ["rapper"];
+          else roles = ["sub"];
+        }
+
+        // Ensure Rapper for Hiphop if missing
+        if (isHiphop && idx === v.members!.length - 1 && !v.members!.some(member => member.roles?.some(r => r.toLowerCase().includes("rapper")))) {
+          if (!roles.some(r => r.toLowerCase().includes("rapper"))) {
+            roles = roles.filter(r => r !== "sub");
+            if (roles.length === 0) roles.push("rapper");
+            else roles.push("rapper");
+          }
+        }
+
+        const rolesLabel = roles.length > 0
+          ? ` (${roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(", ")})`
           : "";
 
         return `${finalLabel}${rolesLabel}`;
@@ -732,10 +831,11 @@ function buildVocal(params: GenerateSongParams): string {
     parts.push(...membersOutput);
   }
 
+  // 5. Rap
   if (v.rap) parts.push("Rap enabled");
 
   const deduplicated = Array.from(new Set(parts.map(p => p.toLowerCase())))
-    .map(s => s.charAt(0).toUpperCase() + s.slice(1));
+    .map(lower => parts.find(p => p.toLowerCase() === lower) || lower);
 
   return `VOCAL: ${deduplicated.join(", ")}`;
 }

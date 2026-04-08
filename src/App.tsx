@@ -1214,13 +1214,10 @@ function App() {
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
-  const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(true);
-  const keywordsContainerRef = useRef<HTMLDivElement>(null);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
-  const [hasKeywordsOverflow, setHasKeywordsOverflow] = useState(false);
-  const [keywordsContentHeight, setKeywordsContentHeight] = useState(84);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
-  const collapsedKeywordsHeight = 84;
+  const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
+  const [isActionsFloating, setIsActionsFloating] = useState(false);
   const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length;
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -1269,21 +1266,24 @@ function App() {
   };
 
   useEffect(() => {
-    if (keywordsContainerRef.current) {
-      const fullHeight = keywordsContainerRef.current.scrollHeight;
-      setKeywordsContentHeight(Math.max(collapsedKeywordsHeight, fullHeight));
-      setHasKeywordsOverflow(fullHeight > collapsedKeywordsHeight + 5);
-    } else {
-      setKeywordsContentHeight(collapsedKeywordsHeight);
-      setHasKeywordsOverflow(false);
-    }
-  }, [selectedGenres, selectedThemes, selectedMoods, selectedStyles, selectedInstrumentSounds, collapsedKeywordsHeight]);
-
-  useEffect(() => {
     if (appliedKeywordsRef.current) {
       setAppliedKeywordsHeight(appliedKeywordsRef.current.scrollHeight);
     }
   }, [isAppliedKeywordsExpanded, result]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (actionButtonsAnchorRef.current) {
+        const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
+        // Floating when anchor is below the bottom floating line
+        // 120px accounts for button height + bottom margin
+        setIsActionsFloating(rect.top > window.innerHeight - 120);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     if (hoveredItem) {
@@ -2649,6 +2649,80 @@ ${result.prompt}
         label: GENRES.find(item => item.id === id)?.labelKo || GENRES.find(item => item.id === id)?.label || id 
       }));
 
+  const actionButtonsContent = (
+    <>
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={() => {
+            applyRandom();
+            setHoveredItem({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' });
+          }}
+          onMouseEnter={() => setHoveredItem({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
+          onMouseLeave={() => {
+            setHoveredItem(null);
+            handleLongPressEnd();
+          }}
+          onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
+          onTouchEnd={handleLongPressEnd}
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-white/30 flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
+        >
+          <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
+          <span className="hidden md:block font-bold">랜덤 선택</span>
+        </button>
+      </div>
+
+      <button
+        onClick={() => {
+          handleGenerate();
+          setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' });
+        }}
+        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
+        onMouseLeave={() => {
+          setHoveredItem(null);
+          handleLongPressEnd();
+        }}
+        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
+        onTouchEnd={handleLongPressEnd}
+        className={cn(
+          "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+          isGenerating 
+            ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
+            : "music-waves shadow-brand-orange/20 hover:brightness-110"
+        )}
+      >
+        {isGenerating ? (
+          <>
+            <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
+            <span>작곡 취소</span>
+          </>
+        ) : (
+          <>
+            <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
+            <span>곡 생성하기</span>
+          </>
+        )}
+      </button>
+
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={() => clearAll({ preserveHistory: true })}
+          onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
+          onMouseLeave={() => setHoveredItem(null)}
+          className={cn(
+            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-[var(--shadow-md)]",
+            isGlobalClearable
+              ? "bg-[var(--card-bg)] border-white/30 text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+              : "bg-[var(--bg-primary)] border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
+          )}
+          disabled={!isGlobalClearable}
+        >
+          <Trash2 className={cn("w-5 h-5", isGlobalClearable ? "text-red-500" : "text-red-500/30")} />
+          <span className="hidden md:block font-bold">전체초기화</span>
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} />
@@ -2774,7 +2848,7 @@ ${result.prompt}
               />
           <CycleSection 
             title="Style" 
-            titleKo="장르-Sub"
+            titleKo="스타일"
             description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
             descriptionKo="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
             cycles={STYLE_CYCLES}
@@ -2947,72 +3021,6 @@ ${result.prompt}
 
         {/* Search & Actions */}
         <div className="space-y-6">
-          {/* Applied Keywords Display */}
-          <div className="relative">
-            <motion.div
-              initial={false}
-              animate={{ 
-                height: isKeywordsExpanded ? keywordsContentHeight : collapsedKeywordsHeight,
-                opacity: 1
-              }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="overflow-hidden min-h-[84px]"
-            >
-              <div 
-                ref={keywordsContainerRef}
-                className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start"
-              >
-                {[
-                  ...displayGenreKeywords,
-                  ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
-                  ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
-                  ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
-                  ...selectedInstrumentSounds.map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })),
-                ].map((item) => {
-                    const chipClassName = item.type === 'style'
-                      ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                      : item.type === 'sound'
-                        ? 'px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                        : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
-                    return (
-                      <span
-                        key={`${item.type}-${item.id}`}
-                        className={chipClassName}
-                      >
-                        {item.label}
-                        <button 
-                          onClick={() => {
-                            if (item.type === 'genre') toggleSelection(item.id, 'genre');
-                            else if (item.type === 'theme') toggleSelection(item.id, 'theme');
-                            else if (item.type === 'mood') toggleSelection(item.id, 'mood');
-                            else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
-                            else if (item.type === 'sound') setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
-                          }}
-                          className="hover:bg-white/10 rounded-full p-0.5 transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    );
-                  })}
-              </div>
-            </motion.div>
-            
-            {selectedKeywordCount > 0 && (hasKeywordsOverflow || !isKeywordsExpanded) && (
-              <button
-                onClick={() => setIsKeywordsExpanded(!isKeywordsExpanded)}
-                className={cn(
-                  "absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
-                  isKeywordsExpanded 
-                    ? "bg-brand-orange text-white border-brand-orange" 
-                    : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange hover:text-white hover:bg-brand-orange"
-                )}
-              >
-                {isKeywordsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-              </button>
-            )}
-          </div>
-
           <div className="relative group">
             <div className="absolute top-6 left-4 pointer-events-none z-10">
               <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
@@ -3041,75 +3049,71 @@ ${result.prompt}
             )}
           </div>
 
-          <div className="flex flex-row items-stretch gap-2 md:gap-4">
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={() => {
-                  applyRandom();
-                  setHoveredItem({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' });
-                }}
-                onMouseEnter={() => setHoveredItem({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
-                onMouseLeave={() => {
-                  setHoveredItem(null);
-                  handleLongPressEnd();
-                }}
-                onTouchStart={() => handleLongPressStart({ id: 'random', label: '전체 랜덤 선택', description: '키워드를 무작위로 조합합니다.' })}
-                onTouchEnd={handleLongPressEnd}
-                className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-white/10 hover:bg-white/20 text-[var(--text-primary)] transition-all border border-white/30 flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
-              >
-                <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
-                <span className="hidden md:block font-bold">랜덤 선택</span>
-              </button>
+          {/* Action Buttons Anchor */}
+          <div ref={actionButtonsAnchorRef} className="relative">
+            <div className={cn(
+              "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-opacity duration-200",
+              isActionsFloating ? "opacity-0 pointer-events-none" : "opacity-100"
+            )}>
+              {actionButtonsContent}
             </div>
+          </div>
 
-            <button
-              onClick={() => {
-                handleGenerate();
-                setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' });
-              }}
-              onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
-              onMouseLeave={() => {
-                setHoveredItem(null);
-                handleLongPressEnd();
-              }}
-              onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
-              onTouchEnd={handleLongPressEnd}
-              className={cn(
-                "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
-                isGenerating 
-                  ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-                  : "music-waves shadow-brand-orange/20 hover:brightness-110"
-              )}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
-                  <span>작곡 취소</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
-                  <span>곡 생성하기</span>
-                </>
-              )}
-            </button>
+          {/* Floating Action Buttons */}
+          <AnimatePresence>
+            {isActionsFloating && (
+              <Portal>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="fixed bottom-10 left-0 w-full z-[120] flex justify-center pointer-events-none px-6"
+                >
+                  <div className="pointer-events-auto flex flex-row items-stretch gap-2 md:gap-4 w-full max-w-6xl">
+                    {actionButtonsContent}
+                  </div>
+                </motion.div>
+              </Portal>
+            )}
+          </AnimatePresence>
 
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={() => clearAll({ preserveHistory: true })}
-                onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
-                onMouseLeave={() => setHoveredItem(null)}
-                className={cn(
-                  "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-[var(--shadow-md)]",
-                  isGlobalClearable
-                    ? "bg-white/10 border-white/30 text-[var(--text-primary)] hover:bg-white/20"
-                    : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
-                )}
-                disabled={!isGlobalClearable}
-              >
-                <Trash2 className={cn("w-5 h-5", isGlobalClearable ? "text-red-500" : "text-red-500/30")} />
-                <span className="hidden md:block font-bold">Clear all</span>
-              </button>
+          {/* Applied Keywords Display */}
+          <div className="relative">
+            <div className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start">
+              {[
+                ...displayGenreKeywords,
+                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
+                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
+                ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
+                ...selectedInstrumentSounds.map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })),
+              ].map((item) => {
+                  const chipClassName = item.type === 'style'
+                    ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
+                    : item.type === 'sound'
+                      ? 'px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
+                      : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
+                  return (
+                    <span
+                      key={`${item.type}-${item.id}`}
+                      className={chipClassName}
+                    >
+                      {item.label}
+                      <button 
+                        onClick={() => {
+                          if (item.type === 'genre') toggleSelection(item.id, 'genre');
+                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+                          else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+                          else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
+                          else if (item.type === 'sound') setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+                        }}
+                        className="hover:bg-white/10 rounded-full p-0.5 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
             </div>
           </div>
         </div>

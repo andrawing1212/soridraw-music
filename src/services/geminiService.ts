@@ -180,7 +180,18 @@ function resolveMoodValue(moodValue: string): string {
   if (!mood) return moodValue;
   return mood.promptCore ?? mood.label;
 }
+function resolveVocalToneValue(toneIdOrLabel: string): string {
+  const normalized = toneIdOrLabel.trim().toLowerCase();
 
+  const tone = VOCAL_TONES.find(
+    (item) =>
+      item.id.toLowerCase() === normalized ||
+      item.label.toLowerCase() === normalized
+  );
+
+  if (!tone) return toneIdOrLabel;
+  return tone.promptCore ?? tone.label;
+}
 function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): string {
   switch (lyricsLength) {
     case "very-short":
@@ -390,14 +401,11 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
         const rolesStr = hasRoles ? m.roles.join(", ") : "";
         let toneInfo = "";
         if (m.toneId) {
-          const tone = VOCAL_TONES.find((t) => t.id === m.toneId);
-          if (tone) {
-            const label = tone.label;
-            const displayLabel = label.toLowerCase().includes(genderStr.toLowerCase())
-              ? label
-              : `${genderStr} ${label}`;
-            toneInfo = `, Tone: ${displayLabel} (${tone.promptCore})`;
-          }
+          const toneValue = resolveVocalToneValue(m.toneId);
+          const displayLabel = toneValue.toLowerCase().includes(genderStr.toLowerCase())
+            ? toneValue
+            : `${genderStr} ${toneValue}`;
+          toneInfo = `, Tone: ${displayLabel}`;
         }
         
         const rolesPart = rolesStr ? `: ${rolesStr}` : "";
@@ -750,11 +758,19 @@ function buildSound(params: GenerateSongParams): string {
 
 function buildMoodTexture(params: GenerateSongParams): string {
   const moods = params.moods ?? [];
-  const moodValue = moods.length > 0 ? resolveMoodValue(moods[0]) : "Balanced";
-  
+
+  const moodValues = moods
+    .slice(0, 6)
+    .map((mood) => resolveMoodValue(mood))
+    .filter(Boolean);
+
+  const moodValue = moodValues.length > 0
+    ? moodValues.join(", ")
+    : "Balanced";
+
   const selectedStyleIds = params.styles ?? [];
   let textureDesc = "clear and polished";
-  
+
   if (selectedStyleIds.length > 0) {
     const styleItem = resolveStyleItem(selectedStyleIds[0]);
     if (styleItem && styleItem.promptCore) {
@@ -827,10 +843,9 @@ function buildVocal(params: GenerateSongParams): string {
   const toneParts: string[] = [];
   
   // A. User Global Tone
-  if (hasGlobalTone) {
-    const tone = VOCAL_TONES.find(t => t.id === v.globalToneId);
-    if (tone) toneParts.push(tone.label);
-  }
+  if (hasGlobalTone && v.globalToneId) {
+  toneParts.push(resolveVocalToneValue(v.globalToneId));
+}
 
   // B. Genre Fixed Tones (Only if all tones selected)
   if (shouldApplyGenreFixedTones) {
@@ -855,8 +870,7 @@ function buildVocal(params: GenerateSongParams): string {
         const genderLabel = m.gender === 'male' ? 'Male' : 'Female';
         let toneLabel = "";
         if (m.toneId) {
-          const tone = VOCAL_TONES.find((t) => t.id === m.toneId);
-          if (tone) toneLabel = tone.label;
+          toneLabel = resolveVocalToneValue(m.toneId);
         }
         
         let finalLabel = toneLabel || genderLabel;

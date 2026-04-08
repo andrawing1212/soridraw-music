@@ -5310,13 +5310,13 @@ const CUSTOM_STRUCTURE_SECTIONS = [
 
 const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
   'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic'],
-  'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
-  'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal'],
+  'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal', 'A-B', 'B-A'],
+  'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal', 'A-B', 'B-A'],
   'Pre-Chorus': ['Soft', 'Emotional', 'Build-up', 'Harmony'],
   'Chorus': ['Big', 'Harmony', 'Energetic', 'Emotional', 'Rap', 'Group'],
   'Hook': ['Big', 'Harmony', 'Energetic', 'Minimal', 'Group'],
   'Drop': ['Big', 'Instrumental', 'Energetic', 'Minimal'],
-  'Bridge': ['Soft', 'Instrumental', 'Emotional', 'Rap', 'Minimal'],
+  'Bridge': ['Soft', 'Instrumental', 'Emotional', 'Rap', 'Minimal', 'A-B', 'B-A'],
   'Breakdown': ['Minimal', 'Instrumental', 'Rap', 'Soft'],
   'Instrumental': ['Instrumental', 'Minimal', 'Emotional', 'Energetic'],
   'Solo': ['Instrumental', 'Emotional', 'Big'],

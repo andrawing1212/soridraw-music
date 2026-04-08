@@ -459,8 +459,7 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
         label: 'K-Style Polish', 
         labelKo: 'K-팝 세련미', 
         description: 'K-Pop 감성의 세련된 전개', 
-        descriptionKo: '정교한 트랙 메이킹과 중독성 있는 훅이 돋보이는 화려하고 세련된 K-팝 질감입니다.',
-        promptCore: 'Style layer: K-style polish with sharp sections, addictive hooks, and sleek Korean pop sensibility.' 
+        descriptionKo: '정교한 트랙 메이킹과 중독성 있는 훅이 돋보이는 화려하고 세련된 K-팝 질감입니다.Style layer: K-style polish with sharp sections, addictive hooks, and sleek Korean pop sensibility.',
       },
     ],
   },
@@ -681,6 +680,7 @@ export const MOODS: CategoryItem[] = [
   { id: 'dreamy', label: 'Dreamy', labelKo: '몽환적', description: '현실감이 흐려지듯 부유하는 감촉으로 몽환적인 무드를 만듭니다.' },
   { id: 'urban', label: 'Urban', labelKo: '도시적', description: '차갑고 세련된 도시의 결을 담아 현대적 분위기를 형성합니다.' },
   { id: 'moody', label: 'Moody', labelKo: '무디한', description: '감정의 결이 짙게 배어 있는 분위기로 깊고 미묘한 무드를 만듭니다.' },
+  { id: 'Sorrowful', label: 'Sorrowful', labelKo: '비통한', description: '가슴이 찢어질 듯한 슬픔과 비통한 분위기를 만듭니다.', promptCore: 'No explosive climaxes, No dramatic ending, Heartbreaking and sorrowful atmosphere' }, 
   { id: 'rainy_ambience', label: 'Rainy ambience', labelKo: '비소리', description: '잔잔히 내리는 비의 질감을 더해 촉촉하고 감성적인 분위기를 만듭니다.' },
   { id: 'forest_ambience', label: 'Forest ambience', labelKo: '숲소리', description: '자연의 숨결이 느껴지는 질감으로 맑고 편안한 분위기를 형성합니다.' },
   { id: 'beach_ambience', label: 'Beach ambience', labelKo: '해변소리', description: '파도와 바람이 스치는 질감으로 여유롭고 시원한 무드를 만듭니다.' },
@@ -1080,8 +1080,8 @@ export const MID_GENRE_PROMPTS: Record<
   },
   trot: {
     style: "Authentic Korean Trot, Adult Contemporary", // 한국 정통 트로트의 리듬과 성인 가요 스타일 고정
-    sound: "Accordion, Bright brass section, Rhythmic trot beat", // 아코디언과 화려한 관악기가 주도하는 특유의 비트
-    vocal: "Traditional Trot vibrato, Emotional 'Ggeok-gi' phrasing", // 정통 트로트 비브라토와 꺾기 창법 명시
+    sound: "Accordion-led arrangement with subtle melancholic string ensemble", // 아코디언과 화려한 관악기가 주도하는 특유의 비트
+    vocal: "Deep vibrato, Crying vocal style, Restrained and intimate", // 정통 트로트 비브라토와 꺾기 창법 명시
   },
   "7080_gayo": {
     style: "7080 Korean Retro Pop, Nostalgic Gayo style", // 70~80년대 한국 가요의 아날로그 복고 감성
@@ -1628,7 +1628,7 @@ export const SUB_GENRE_PROMPTS: Record<
   },
   semi_trot: { 
     style: "Modern Semi-Trot, Danceable", 
-    sound: "Synth-pop beats, Bright brass", 
+    sound: "infectious synth melody, Infectious Rhythm, Bright brass", 
     vocal: "Cheerful, Light trot phrasing" 
   },
   disco_trot: { 

@@ -176,20 +176,20 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
   {
     id: 'ballad-family',
     title: 'Ballad',
-    titleKo: '발라드 감성',
+    titleKo: '발라드 퓨전',
     variants: [
       { 
         id: 'ballad', 
-        label: 'Emotional Ballad', 
-        labelKo: '서정적 발라드', 
+        label: 'Emotional Ballad feeling', 
+        labelKo: '발라드 느낌', 
         description: '감정 중심의 기본 발라드 전개', 
         descriptionKo: '피아노와 현악기의 부드러운 레가토가 강조된 서정적이고 투명한 공간감을 제공합니다.',
-        promptCore: 'Style layer: emotional ballad pacing with clear melodic focus and vocal-forward development.' 
+        promptCore: 'emotional ballad pacing with clear melodic focus and vocal-forward development.' 
       },
       { 
         id: 'classic-ballad', 
-        label: 'Classic Ballad', 
-        labelKo: '클래식 발라드', 
+        label: 'Classic Ballad feeling', 
+        labelKo: '클래식 발라드 느낌', 
         description: '전통적인 발라드 감성', 
         descriptionKo: '전통적인 어쿠스틱 악기들의 조화로운 울림과 따뜻한 아날로그 질감이 돋보이는 사운드입니다.',
         promptCore: 'Style layer: classic ballad writing with timeless chord flow, heartfelt delivery, and elegant melodic rise.' 
@@ -203,27 +203,35 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
     variants: [
       { 
         id: 'dance', 
-        label: 'Dance Oriented', 
+        label: 'Dance feeling', 
         labelKo: '댄스 지향적', 
         description: '리듬과 퍼포먼스 중심의 기본 댄스 스타일', 
         descriptionKo: '명확한 킥 드럼의 어택감과 에너제틱한 신스 베이스가 주도하는 추진력 있는 사운드 질감입니다.',
-        promptCore: 'Style layer: dance-focused pulse with immediate energy and performance-ready momentum.' 
+        promptCore: 'dance-focused pulse with immediate energy and performance-ready momentum.' 
       },
       { 
         id: 'classic-disco', 
-        label: 'Disco Groove', 
+        label: 'with Disco Groove', 
         labelKo: '디스코 그루브', 
         description: '디스코 기반의 클래식 그루브', 
         descriptionKo: '펑키한 커팅 기타와 옥타브 베이스 라인이 만들어내는 경쾌하고 화려한 레트로 질감입니다.',
-        promptCore: 'Style layer: classic disco groove with four-on-the-floor motion, bright rhythm guitar, and uplifting movement.' 
+        promptCore: 'classic disco groove with four-on-the-floor motion, bright rhythm guitar, and uplifting movement.' 
       },
       { 
         id: 'modern-edm', 
-        label: 'Modern EDM', 
-        labelKo: 'EDM 다이내믹', 
+        label: 'with EDM', 
+        labelKo: 'EDM 추가', 
         description: '현대적인 EDM 감각', 
         descriptionKo: '날카로운 트랜지언트와 강력한 사이드체인 효과가 적용된 현대적이고 압도적인 전자음 질감입니다.',
-        promptCore: 'Style layer: modern EDM dynamics with sharp builds, polished drops, and sleek electronic impact.' 
+        promptCore: 'modern EDM dynamics with sharp builds, polished drops, and sleek electronic impact.' 
+      },
+      { 
+        id: 'nu-disco-fusion', 
+        label: 'Nu-Disco Fusion', 
+        labelKo: '뉴 디스코 퓨전', 
+        description: '세련된 도시적 그루브', 
+        descriptionKo: '단단한 슬랩 베이스 루프와 끊어 치는 DX7 건반, 리드미컬한 16비트 기타 커팅이 강조된 스타일입니다.',
+        promptCore: 'punchy repetitive slap bass loops, staccato DX7-style stabs, and rhythmic 16th-note electric guitar cutting.' 
       },
     ],
   },
@@ -761,7 +769,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'teen_pop', label: 'Teen Pop', labelKo: '틴팝', description: '밝고 청량한 에너지와 중독성 있는 훅이 돋보이는 하이틴 감성의 팝입니다.' },
           { id: 'britpop', label: 'Britpop', labelKo: '브릿팝', description: '영국 밴드 특유의 멜로디와 자연스러운 사운드가 강조된 얼터너티브 록 스타일입니다.' },
           { id: 'indie_pop', label: 'Indie Pop', labelKo: '인디팝', description: '독창적인 감성과 부드러운 사운드로 나른하고 편안한 분위기를 만드는 팝입니다.' },
-          { id: 'city_pop', label: 'City Pop', labelKo: '시티팝', description: '도회적이고 세련된 80년대 라운지 감성과 그루브가 중심인 음악입니다.' },
+          { id: 'city_pop', label: 'City Pop', labelKo: '클래식 시티팝', description: '도회적이고 세련된 80년대 라운지 감성과 그루브가 중심인 음악입니다.' },
           { id: 'funk_pop', label: 'Funk Pop', labelKo: '펑크팝', description: '리듬감 넘치는 베이스와 경쾌한 기타 커팅이 조화로운 팝 스타일입니다.' },
           { id: 'dance_pop', label: 'Dance Pop', labelKo: '댄스팝', description: '클럽 지향의 강렬한 비트와 화려한 코러스가 돋보이는 댄스 음악입니다.' },
           { id: 'acoustic_pop', label: 'Acoustic Pop', labelKo: '어쿠스틱팝', description: '어쿠스틱 기타와 피아노 중심의 담백하고 진솔한 감성을 담은 팝입니다.' },
@@ -1246,9 +1254,9 @@ export const SUB_GENRE_PROMPTS: Record<
     vocal: "Intense, High-pitched anime rock tone" 
   }, // 애니메이션 주제가 특유의 질주감 있는 록
   j_city_pop: { 
-    style: "80s Japanese City Pop, Urban", 
-    sound: "DX7 Synths, Funky bass, Saxophone", 
-    vocal: "Cool, Smooth, J-pop phrasing" 
+    style: "80s Japanese City Pop", 
+    sound: "Slap Bass, DX7 FM Electric Piano, Chorus Electric Guitar ", 
+    vocal: "airy, sophisticated, and restrained, delivered in a cool mid-range without dramatic peaks" 
   }, // 80년대 일본 시티팝의 펑키하고 도회적인 사운드
   visual_kei: { 
     style: "Dramatic Visual-kei, Gothic", 

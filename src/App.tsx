@@ -1315,22 +1315,33 @@ function App() {
     });
   };
 
-  const cycleFamilySelection = (
-    cycleId: string,
-    selected: string[],
-    setSelected: React.Dispatch<React.SetStateAction<string[]>>,
-    cycles: readonly { id: string; variants: readonly { id: string }[] }[]
-  ) => {
-    setSelected((prev) => {
-      const cycle = cycles.find((item) => item.id === cycleId);
-      if (!cycle) return prev;
-      const activeIndex = cycle.variants.findIndex((variant) => prev.includes(variant.id));
-      const withoutFamily = prev.filter((id) => !cycle.variants.some((variant) => variant.id === id));
-      if (activeIndex === -1) return [...withoutFamily, cycle.variants[0].id];
-      if (activeIndex < cycle.variants.length - 1) return [...withoutFamily, cycle.variants[activeIndex + 1].id];
-      return withoutFamily;
-    });
-  };
+const cycleFamilySelection = (
+  cycleId: string,
+  selected: string[],
+  setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+  cycles: readonly { id: string; variants: readonly { id: string }[] }[],
+  maxCount = Number.POSITIVE_INFINITY
+) => {
+  setSelected((prev) => {
+    const cycle = cycles.find((item) => item.id === cycleId);
+    if (!cycle) return prev;
+    const activeIndex = cycle.variants.findIndex((variant) =>
+      prev.includes(variant.id)
+    );
+    const withoutFamily = prev.filter(
+      (id) => !cycle.variants.some((variant) => variant.id === id)
+    );
+    if (activeIndex === -1) {
+      if (withoutFamily.length >= maxCount) return prev;
+      return [...withoutFamily, cycle.variants[0].id];
+    }
+    if (activeIndex < cycle.variants.length - 1) {
+      return [...withoutFamily, cycle.variants[activeIndex + 1].id];
+    }
+
+    return withoutFamily;
+  });
+};
 
   useEffect(() => {
     if (appliedKeywordsRef.current) {
@@ -1942,7 +1953,7 @@ function App() {
           setSelectedMoods(prev => prev.filter(m => !moodsToRemove.includes(m)));
         }
       }
-    } else if (state.length < 9) {
+    } else if (state.length < 10) {
       set([...state, id]);
       
       // Trot Logic: Auto-select moods
@@ -2948,7 +2959,7 @@ ${result.prompt}
             descriptionKo="하이브리드 장르를 위해 선택하세요. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 굳이 선택 안하고 기본 장르만으로도 좋은 곡을 만들수 있습니다 "
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
-            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
+            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES, 3)}
             onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
             onRandom={() => randomizeCategory('style')}
             onHover={setHoveredItem}

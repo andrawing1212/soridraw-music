@@ -672,7 +672,7 @@ function buildStyle(params: GenerateSongParams): string {
 
   let stylePart = genreStyle;
   if (userStyleLabel) {
-    stylePart = `${userStyleLabel} influenced ${genreStyle}`;
+    stylePart = `${genreStyle} with ${userStyleLabel}`;
   }
   
   const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
@@ -752,7 +752,7 @@ function buildSound(params: GenerateSongParams): string {
     finalSoundLabels.push("Drums", "Bass", "Synthesizer", "Piano");
   }
 
-  const limitedSounds = finalSoundLabels.slice(0, 6);
+  const limitedSounds = finalSoundLabels.slice(0, 9);
   return `SOUND: ${limitedSounds.join(", ")}`;
 }
 
@@ -760,7 +760,7 @@ function buildMoodTexture(params: GenerateSongParams): string {
   const moods = params.moods ?? [];
 
   const moodValues = moods
-    .slice(0, 6)
+    .slice(0, 10)
     .map((mood) => resolveMoodValue(mood))
     .filter(Boolean);
 

@@ -2850,7 +2850,7 @@ ${result.prompt}
             title="Style" 
             titleKo="스타일"
             description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
-            descriptionKo="곡의 표현 방식과 흐름을 결정합니다. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 음악의 전체적인 인상을 클래식, 세련됨, 감성적 등 원하는 방향으로 이큼니다."
+            descriptionKo="하이브리드 장르를 위해 선택하세요. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 굳이 선택 안하고 기본 장르만으로도 좋은 곡을 만들수 있습니다 "
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES)}
@@ -2866,9 +2866,8 @@ ${result.prompt}
           <CycleSection 
             title="Sound/Texture" 
             titleKo="사운드"
-            titleClassName="text-[16px] md:text-[18px]"
             description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
-            descriptionKo="악기 톤과 배경 질감을 설정합니다. 소리의 결, 공간감, 무게감, 타격감을 조절하여 음악의 청감 인상을 결정하며, 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
+            descriptionKo="악기 톤과 배경 질감을 설정합니다. 기본 장르에 적용된 악기 사운드의 질감을 바꿔서 원하는 느낌으로 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
             cycles={SOUND_TEXTURE_CYCLES}
             selected={selectedInstrumentSounds}
             onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES)}

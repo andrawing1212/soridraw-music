@@ -49,6 +49,8 @@ interface Props {
   isExpanded: boolean;
   onToggleExpand: () => void;
   isRandomized?: boolean;
+  onHeightChange?: (height: number) => void;
+  forcedHeight?: number;
 }
 
 const DEFAULT_GROUP_DESCRIPTION = '대분류를 선택한 뒤 메인 장르와 세부 장르를 고를 수 있습니다.';
@@ -119,7 +121,9 @@ export default function GenreHierarchySelector({
   onHover,
   isExpanded,
   onToggleExpand,
-  isRandomized = false
+  isRandomized = false,
+  onHeightChange,
+  forcedHeight
 }: Props) {
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
@@ -212,9 +216,13 @@ export default function GenreHierarchySelector({
 
   useEffect(() => {
     if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
+      const height = contentRef.current.scrollHeight;
+      setContentHeight(height);
+      if (onHeightChange) {
+        onHeightChange(height);
+      }
     }
-  }, [groups, isExpanded]);
+  }, [groups, onHeightChange]);
 
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
@@ -487,7 +495,7 @@ export default function GenreHierarchySelector({
         <motion.div
           initial={false}
           animate={{ 
-            height: isExpanded ? contentHeight : 56,
+            height: isExpanded ? (forcedHeight || contentHeight) : 64,
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}

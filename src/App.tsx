@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Component, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -1166,6 +1166,27 @@ function App() {
       else if (section === 'sound') setIsSoundExpanded(!isSoundExpanded);
     }
   };
+
+  const toggleSubSections = (section: 'mood' | 'theme') => {
+    const isPC = window.innerWidth >= 1024;
+    if (isPC) {
+      const nextState = !isMoodExpanded;
+      setIsMoodExpanded(nextState);
+      setIsThemeExpanded(nextState);
+    } else {
+      if (section === 'mood') setIsMoodExpanded(!isMoodExpanded);
+      else if (section === 'theme') setIsThemeExpanded(!isThemeExpanded);
+    }
+  };
+
+  const [genreHeight, setGenreHeight] = useState(0);
+  const [styleHeight, setStyleHeight] = useState(0);
+  const [soundHeight, setSoundHeight] = useState(0);
+  const [moodHeight, setMoodHeight] = useState(0);
+  const [themeHeight, setThemeHeight] = useState(0);
+
+  const row1MaxHeight = useMemo(() => Math.max(genreHeight, styleHeight, soundHeight), [genreHeight, styleHeight, soundHeight]);
+  const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
@@ -2848,6 +2869,8 @@ ${result.prompt}
                 isExpanded={isGenreExpanded}
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
+                onHeightChange={setGenreHeight}
+                forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
               />
           <CycleSection 
             title="Style" 
@@ -2865,6 +2888,8 @@ ${result.prompt}
             isRandomized={isStyleRandomized}
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
+            onHeightChange={setStyleHeight}
+            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -2882,6 +2907,8 @@ ${result.prompt}
             isRandomized={isSoundTextureRandomized}
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
+            onHeightChange={setSoundHeight}
+            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
           />
         </div>
 
@@ -2914,7 +2941,9 @@ ${result.prompt}
               onLongPressEnd={handleLongPressEnd}
               hoveredItem={hoveredItem}
               isExpanded={isMoodExpanded}
-              onToggleExpand={() => setIsMoodExpanded(!isMoodExpanded)}
+              onToggleExpand={() => toggleSubSections('mood')}
+              onHeightChange={setMoodHeight}
+              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -2937,7 +2966,9 @@ ${result.prompt}
               onLongPressEnd={handleLongPressEnd}
               hoveredItem={hoveredItem}
               isExpanded={isThemeExpanded}
-              onToggleExpand={() => setIsThemeExpanded(!isThemeExpanded)}
+              onToggleExpand={() => toggleSubSections('theme')}
+              onHeightChange={setThemeHeight}
+              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
             />
@@ -3980,6 +4011,8 @@ interface CycleSectionProps {
   isRandomized?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  onHeightChange?: (height: number) => void;
+  forcedHeight?: number;
 }
 
 function CycleSection({ 
@@ -3998,7 +4031,9 @@ function CycleSection({
   titleClassName, 
   isRandomized,
   isExpanded = false,
-  onToggleExpand
+  onToggleExpand,
+  onHeightChange,
+  forcedHeight
 }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -4006,9 +4041,13 @@ function CycleSection({
 
   useEffect(() => {
     if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
+      const height = contentRef.current.scrollHeight;
+      setContentHeight(height);
+      if (onHeightChange) {
+        onHeightChange(height);
+      }
     }
-  }, [isExpanded, cycles]);
+  }, [cycles, onHeightChange]);
 
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
@@ -4065,7 +4104,7 @@ function CycleSection({
         <motion.div
           initial={false}
           animate={{ 
-            height: isExpanded ? contentHeight : 64,
+            height: isExpanded ? (forcedHeight || contentHeight) : 64,
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
@@ -4193,6 +4232,8 @@ interface CategorySectionProps {
   citypopMode?: 0 | 1 | 2;
   isRandomized?: boolean;
   hidePin?: boolean;
+  onHeightChange?: (height: number) => void;
+  forcedHeight?: number;
 }
 
 function CategorySection({ 
@@ -4218,7 +4259,9 @@ function CategorySection({
   kpopMode = 0,
   citypopMode = 0,
   isRandomized = false,
-  hidePin = false
+  hidePin = false,
+  onHeightChange,
+  forcedHeight
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
@@ -4227,9 +4270,13 @@ function CategorySection({
 
   useEffect(() => {
     if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
+      const height = contentRef.current.scrollHeight;
+      setContentHeight(height);
+      if (onHeightChange) {
+        onHeightChange(height);
+      }
     }
-  }, [items, selected, isExpanded]);
+  }, [items, onHeightChange]);
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
@@ -4318,7 +4365,7 @@ function CategorySection({
         <motion.div
           initial={false}
           animate={{ 
-            height: isExpanded ? contentHeight : (window.innerWidth < 768 ? 40 : 84),
+            height: isExpanded ? (forcedHeight || contentHeight) : (window.innerWidth < 768 ? 40 : 84),
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}

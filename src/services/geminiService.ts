@@ -10,6 +10,7 @@ import {
   SOUND_STYLES,
   MID_GENRE_PROMPTS,
   SUB_GENRE_PROMPTS,
+  MOODS,
 } from "../constants";
 import { VOCAL_TONES } from "../constants/vocalTones";
 import {
@@ -161,8 +162,23 @@ function getInstrumentSoundPromptCores(values: string[] = []): string[] {
 
 function getInstrumentSoundLabels(values: string[] = []): string[] {
   return values
-    .map((value) => resolveInstrumentSoundItem(value)?.label ?? sentenceCase(value))
+    .map((value) => {
+      const item = resolveInstrumentSoundItem(value);
+      return item?.promptCore ?? item?.label ?? sentenceCase(value);
+    })
     .filter(NON_EMPTY);
+}
+function resolveMoodValue(moodValue: string): string {
+  const normalized = moodValue.trim().toLowerCase();
+
+  const mood = MOODS.find(
+    (item) =>
+      item.id.toLowerCase() === normalized ||
+      item.label.toLowerCase() === normalized
+  );
+
+  if (!mood) return moodValue;
+  return mood.promptCore ?? mood.label;
 }
 
 function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): string {
@@ -734,7 +750,7 @@ function buildSound(params: GenerateSongParams): string {
 
 function buildMoodTexture(params: GenerateSongParams): string {
   const moods = params.moods ?? [];
-  const moodValue = moods.length > 0 ? moods[0] : "Balanced";
+  const moodValue = moods.length > 0 ? resolveMoodValue(moods[0]) : "Balanced";
   
   const selectedStyleIds = params.styles ?? [];
   let textureDesc = "clear and polished";

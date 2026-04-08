@@ -630,6 +630,55 @@ const SOUND_LABEL_TO_ID = SOUND_TEXTURE_CYCLES.flatMap((cycle) => cycle.variants
   return acc;
 }, {});
 
+const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
+  return labels.map(label => {
+    // Special case for City Pop and K-Pop which might have extra labels
+    if (label.includes('City Pop') || label === '80s Japanese Pop' || label === 'Funk' || label === 'Groovy' || label === 'Retro' || label === 'Nu-Disco' || label === 'Synth-pop') {
+      return 'citypop';
+    }
+    if (label.includes('K-Pop')) {
+      return 'kpop';
+    }
+    const item = category.find(c => c.label === label || c.id === label);
+    return item ? item.id : null;
+  }).filter(Boolean) as string[];
+};
+
+const resolveMidGenreId = (val: string) => {
+  // 1. Check Hierarchy Main (MID)
+  for (const group of GENRE_HIERARCHY) {
+    const main = group.children.find(m => m.id === val || m.label === val || m.labelKo === val);
+    if (main) return main.id;
+  }
+  // 2. Check Hierarchy Sub (if stored in genre[] by mistake)
+  for (const group of GENRE_HIERARCHY) {
+    for (const main of group.children) {
+      const sub = main.children.find(s => s.id === val || s.label === val || s.labelKo === val);
+      if (sub) return main.id;
+    }
+  }
+  // 3. Fallback to GENRES but map to Hierarchy
+  const item = GENRES.find(c => c.id === val || c.label === val || c.id === val.replace('_', '-'));
+  if (item) {
+    for (const group of GENRE_HIERARCHY) {
+      const main = group.children.find(m => m.label === item.label || m.labelKo === item.labelKo || m.id === item.id.replace('-', '_'));
+      if (main) return main.id;
+    }
+    return item.id;
+  }
+  return null;
+};
+
+const resolveSubGenreId = (val: string) => {
+  for (const group of GENRE_HIERARCHY) {
+    for (const main of group.children) {
+      const sub = main.children.find(s => s.id === val || s.label === val || s.labelKo === val);
+      if (sub) return sub.id;
+    }
+  }
+  return null;
+};
+
 function resolveStyleIds(labelsOrIds: string[] = []) {
   return Array.from(new Set(labelsOrIds.map((value) => STYLE_LABEL_TO_ID[value] ?? (STYLE_VARIANT_LOOKUP[value] ? value : null)).filter(Boolean) as string[]));
 }
@@ -1133,6 +1182,8 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+
+
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_genres', JSON.stringify(pinnedGenres));
   }, [pinnedGenres]);
@@ -1225,13 +1276,8 @@ function App() {
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const historyIndexRef = useRef(historyIndex);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
-
-  useEffect(() => {
-    historyIndexRef.current = historyIndex;
-  }, [historyIndex]);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
@@ -1368,6 +1414,23 @@ function App() {
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // Refs for stable access in callbacks
+  const pinnedGenresRef = useRef(pinnedGenres);
+  const pinnedThemesRef = useRef(pinnedThemes);
+  const pinnedStylesRef = useRef(pinnedStyles);
+  const pinnedInstrumentSoundsRef = useRef(pinnedInstrumentSounds);
+  const historyRef = useRef(history);
+  const historyIndexRef = useRef(historyIndex);
+  const userRef = useRef(user);
+
+  useEffect(() => { pinnedGenresRef.current = pinnedGenres; }, [pinnedGenres]);
+  useEffect(() => { pinnedThemesRef.current = pinnedThemes; }, [pinnedThemes]);
+  useEffect(() => { pinnedStylesRef.current = pinnedStyles; }, [pinnedStyles]);
+  useEffect(() => { pinnedInstrumentSoundsRef.current = pinnedInstrumentSounds; }, [pinnedInstrumentSounds]);
+  useEffect(() => { historyRef.current = history; }, [history]);
+  useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
+  useEffect(() => { userRef.current = user; }, [user]);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1437,10 +1500,10 @@ function App() {
     };
   }, []);
 
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setToast({ message, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
-  };
+  }, []);
 
   const toggleFavorite = async (song: SongResult) => {
     if (!user) {
@@ -1547,84 +1610,54 @@ function App() {
     }
   };
 
-  // Reset filters on navigation to Home, but preserve generated song history
-    useEffect(() => {
-      if (location.pathname !== '/') return;
-
-      if (!hasInitializedHomeRef.current) {
-        hasInitializedHomeRef.current = true;
-        window.scrollTo(0, 0);
-        return;
-      }
-
-      // 1. Clear current state (preserving history)
-      clearAll({ preserveHistory: true, preservePinned: true });
-
-      // 2. Check for pending keywords from Favorites
-      const pending = sessionStorage.getItem('pendingAppliedKeywords');
-      if (pending) {
-        try {
-          const keywords = JSON.parse(pending);
-          // This function clears pinned keywords and sets new ones
-          applyKeywordsToNext(keywords);
-          // 3. Prevent duplicate application
-          sessionStorage.removeItem('pendingAppliedKeywords');
-        } catch (e) {
-          console.error('Failed to parse pending keywords', e);
-        }
-      }
-
-      window.scrollTo(0, 0);
-    }, [location.pathname]);
-
   // Scroll to top on mount
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  const applyKeywordsToNext = (appliedKeywords: SongResult['appliedKeywords']) => {
-    const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
-      return labels.map(label => {
-        // Special case for City Pop and K-Pop which might have extra labels
-        if (label.includes('City Pop') || label === '80s Japanese Pop' || label === 'Funk' || label === 'Groovy' || label === 'Retro' || label === 'Nu-Disco' || label === 'Synth-pop') {
-          return 'citypop';
-        }
-        if (label.includes('K-Pop')) {
-          return 'kpop';
-        }
-        const item = category.find(c => c.label === label || c.id === label);
-        return item ? item.id : null;
-      }).filter(Boolean) as string[];
-    };
-
+  const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
     let genreIds: string[] = [];
+    let subGenreIds: string[] = [];
+
+    // Step 1: Restore SUB genre
     if (appliedKeywords.subGenre && appliedKeywords.subGenre.length > 0) {
-      const subId = appliedKeywords.subGenre[0];
-      let parentId = null;
+      const subId = resolveSubGenreId(appliedKeywords.subGenre[0]);
+      if (subId) {
+        subGenreIds = [subId];
+        // Derive MID from SUB
+        for (const group of GENRE_HIERARCHY) {
+          for (const main of group.children) {
+            if (main.children.some(s => s.id === subId)) {
+              genreIds = [main.id];
+              break;
+            }
+          }
+          if (genreIds.length > 0) break;
+        }
+      }
+    }
+
+    // Step 2: Restore MID genre if not derived or if multiple exist
+    if (genreIds.length === 0 && appliedKeywords.genre && appliedKeywords.genre.length > 0) {
+      genreIds = appliedKeywords.genre.map(resolveMidGenreId).filter(Boolean) as string[];
+    }
+
+    // Step 3: Final validation - ensure MID is set if SUB is set
+    if (subGenreIds.length > 0 && genreIds.length === 0) {
+      const subId = subGenreIds[0];
       for (const group of GENRE_HIERARCHY) {
         for (const main of group.children) {
           if (main.children.some(s => s.id === subId)) {
-            parentId = main.id;
+            genreIds = [main.id];
             break;
           }
         }
-        if (parentId) break;
+        if (genreIds.length > 0) break;
       }
-      
-      if (parentId) {
-        genreIds = [parentId];
-        setSelectedGenres(genreIds);
-        setSubGenre([subId]);
-      } else {
-        genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
-        setSelectedGenres(genreIds);
-        setSubGenre([]);
-      }
-    } else {
-      genreIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.genre, GENRES)));
-      setSelectedGenres(genreIds);
-      setSubGenre([]);
     }
+
+    setSelectedGenres(Array.from(new Set(genreIds)));
+    setSubGenre(Array.from(new Set(subGenreIds)));
 
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
@@ -1674,7 +1707,7 @@ function App() {
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, [setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -1989,7 +2022,7 @@ function App() {
     }
   };
 
-  const clearAll = async (options: ClearAllOptions = {}) => {
+  const clearAll = useCallback(async (options: ClearAllOptions = {}) => {
     const { preserveHistory = false, preservePinned = false } = options;
 
     if (!preservePinned) {
@@ -1999,12 +2032,12 @@ function App() {
       setPinnedInstrumentSounds([]);
     }
 
-    setSelectedGenres(preservePinned ? pinnedGenres : []);
+    setSelectedGenres(preservePinned ? pinnedGenresRef.current : []);
     setSubGenre([]);
     setSelectedMoods([]);
-    setSelectedThemes(preservePinned ? pinnedThemes : []);
-    setSelectedStyles(preservePinned ? pinnedStyles : []);
-    setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSounds : []);
+    setSelectedThemes(preservePinned ? pinnedThemesRef.current : []);
+    setSelectedStyles(preservePinned ? pinnedStylesRef.current : []);
+    setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSoundsRef.current : []);
 
     setKpopMode(0);
     setIsKoreanEnglishMix(false);
@@ -2032,9 +2065,9 @@ function App() {
       setHistoryIndex(-1);
       setHistory([]);
 
-      if (user) {
+      if (userRef.current) {
         try {
-          const ref = doc(db, "user_recent_songs", user.uid);
+          const ref = doc(db, "user_recent_songs", userRef.current.uid);
           await setDoc(ref, { songs: [] }, { merge: true });
         } catch (error) {
           console.error('Failed to clear history in Firestore:', error);
@@ -2042,12 +2075,14 @@ function App() {
       }
     } else {
       setResult(prev => {
-        if (history.length === 0) return null;
-        if (historyIndex >= 0 && history[historyIndex]) return history[historyIndex];
-        return history[0] ?? prev;
+        const currentHistory = historyRef.current;
+        const currentIndex = historyIndexRef.current;
+        if (currentHistory.length === 0) return null;
+        if (currentIndex >= 0 && currentHistory[currentIndex]) return currentHistory[currentIndex];
+        return currentHistory[0] ?? prev;
       });
     }
-  };
+  }, []); // Now truly stable
 
   const deleteHistoryItem = async (index: number) => {
     const newHistory = history.filter((_, i) => i !== index);
@@ -2088,6 +2123,40 @@ function App() {
       setHistoryIndex(-1);
     }
   };
+
+  // Reset filters on navigation to Home, but preserve generated song history
+  useEffect(() => {
+    if (location.pathname !== '/') return;
+
+    const initializeHome = async () => {
+      if (!hasInitializedHomeRef.current) {
+        hasInitializedHomeRef.current = true;
+        window.scrollTo(0, 0);
+        return;
+      }
+
+      // 1. Clear current state (preserving history)
+      await clearAll({ preserveHistory: true, preservePinned: true });
+
+      // 2. Check for pending keywords from Favorites
+      const pending = sessionStorage.getItem('pendingAppliedKeywords');
+      if (pending) {
+        try {
+          const keywords = JSON.parse(pending);
+          // This function clears pinned keywords and sets new ones
+          applyKeywordsToNext(keywords);
+          // 3. Prevent duplicate application
+          sessionStorage.removeItem('pendingAppliedKeywords');
+        } catch (e) {
+          console.error('Failed to parse pending keywords', e);
+        }
+      }
+
+      window.scrollTo(0, 0);
+    };
+
+    initializeHome();
+  }, [location.pathname, applyKeywordsToNext, clearAll]);
 
   const unpinAll = (category: 'genre' | 'mood' | 'theme') => {
     if (category === 'genre') {

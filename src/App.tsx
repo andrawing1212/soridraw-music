@@ -1301,6 +1301,9 @@ function App() {
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
+      // If there's a state object, it's likely a modal or internal navigation, so skip exit logic
+      if (e.state) return;
+
       if (location.pathname === '/') {
         setExitCount(prev => {
           const newCount = prev + 1;
@@ -2810,7 +2813,7 @@ ${result.prompt}
 
             <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
               {/* Selection Sections */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -3998,7 +4001,6 @@ function CycleSection({
   onToggleExpand
 }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
@@ -4011,7 +4013,7 @@ function CycleSection({
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -4132,17 +4134,10 @@ function CycleSection({
       </div>
 
       <div 
-        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
-        className={cn(
-          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
-          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
-        )}
+        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
       >
         {selected.length > 0 ? (
-          <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight w-full text-center",
-            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
-          )}>
+          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
             {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
               .map(c => {
                 const v = c.variants.find(v => selected.includes(v.id));
@@ -4151,10 +4146,7 @@ function CycleSection({
               .join(', ')}
           </p>
         ) : (
-          <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight w-full text-center",
-            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
-          )}>
+          <p className="text-sm font-medium text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
             {titleKo || title} 키워드를 선택하세요.
           </p>
         )}
@@ -4229,7 +4221,6 @@ function CategorySection({
   hidePin = false
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
@@ -4241,7 +4232,7 @@ function CategorySection({
   }, [items, selected, isExpanded]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -4477,27 +4468,17 @@ function CategorySection({
       </div>
 
       <div 
-        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
-        className={cn(
-          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
-          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
-        )}
+        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
       >
         {selected.length > 0 ? (
-          <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight w-full text-center",
-            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
-          )}>
+          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
             {selected.map(id => {
               const item = items.find(i => i.id === id);
               return item?.labelKo || item?.label;
             }).join(', ')}
           </p>
         ) : (
-          <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight w-full text-center",
-            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
-          )}>
+          <p className="text-sm font-medium text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
         )}

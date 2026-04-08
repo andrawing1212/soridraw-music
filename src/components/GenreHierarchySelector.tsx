@@ -125,7 +125,6 @@ export default function GenreHierarchySelector({
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-  const [isBottomExpanded, setIsBottomExpanded] = useState(false);
   const lastSyncedGenreRef = useRef<string[]>([]);
   const lastSyncedSubGenreRef = useRef<string[]>([]);
 
@@ -251,6 +250,7 @@ export default function GenreHierarchySelector({
     setPendingMainId(null);
     setPendingSubId(null);
     setModalStep('main');
+    modalHistoryDepthRef.current = 0;
   };
 
   const openMainModal = (group: GroupItem) => {
@@ -271,28 +271,20 @@ export default function GenreHierarchySelector({
     modalHistoryDepthRef.current = 1;
   };
 
-  const closeModal = (source: 'ui' | 'history' = 'ui') => {
-    if (source === 'ui' && modalHistoryDepthRef.current > 0) {
-      window.history.back();
-      return;
+  const closeModal = () => {
+    if (modalHistoryDepthRef.current > 0) {
+      window.history.go(-modalHistoryDepthRef.current);
+    } else {
+      closeModalStateOnly();
     }
-    closeModalStateOnly();
-    modalHistoryDepthRef.current = 0;
   };
 
   const handleBack = () => {
     if (modalHistoryDepthRef.current > 0) {
       window.history.back();
-      return;
+    } else {
+      closeModalStateOnly();
     }
-
-    if (modalStep === 'sub') {
-      setModalStep('main');
-      setActiveMain(null);
-      return;
-    }
-
-    closeModalStateOnly();
   };
 
   const handleMainClick = (main: MainGenreItem) => {
@@ -396,26 +388,40 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       if (!activeGroup) return;
 
-      if (modalStep === 'sub') {
+      const state = event.state;
+
+      // If we landed on a state that doesn't belong to this modal, close it.
+      if (!state || !state.genreModal) {
+        closeModalStateOnly();
+        modalHistoryDepthRef.current = 0;
+        return;
+      }
+
+      // If we landed on 'main' state
+      if (state.genreModal === 'main') {
         setModalStep('main');
         setActiveMain(null);
         modalHistoryDepthRef.current = 1;
         return;
       }
 
-      closeModalStateOnly();
-      modalHistoryDepthRef.current = 0;
+      // If we landed on 'sub' state
+      if (state.genreModal === 'sub') {
+        setModalStep('sub');
+        modalHistoryDepthRef.current = 2;
+        return;
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [activeGroup, modalStep]);
+  }, [activeGroup]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -514,25 +520,15 @@ export default function GenreHierarchySelector({
       </div>
 
       <div 
-        onClick={() => setIsBottomExpanded(!isBottomExpanded)}
-        className={cn(
-          "mt-4 min-h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center cursor-pointer transition-all duration-200 hover:bg-white/5",
-          isBottomExpanded ? "h-auto" : "h-[56px] overflow-hidden"
-        )}
+        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
       >
         {selectedMainLabel ? (
-          <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight w-full text-center",
-            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
-          )}>
+          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
             {selectedMainLabel}
             {selectedSubLabels.length > 0 ? ` · ${selectedSubLabels.join(', ')}` : ''}
           </p>
         ) : (
-          <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight w-full text-center",
-            isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
-          )}>
+          <p className="text-sm font-medium text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
             대분류를 눌러 메인 장르를 선택하세요.
           </p>
         )}
@@ -559,13 +555,7 @@ export default function GenreHierarchySelector({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                onClick={() => {
-                  if (modalHistoryDepthRef.current > 0) {
-                    window.history.go(-modalHistoryDepthRef.current);
-                  } else {
-                    closeModalStateOnly();
-                  }
-                }}
+                onClick={closeModal}
               />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}

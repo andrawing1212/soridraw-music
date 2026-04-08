@@ -418,16 +418,16 @@ export default function GenreHierarchySelector({
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative min-w-0">
               <h3 
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
               >
-                <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-                장르
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedCount}/{totalCount})</span>
+                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className="truncate">장르</span>
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selectedCount}/{totalCount})</span>
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -522,7 +522,7 @@ export default function GenreHierarchySelector({
       >
         {selectedMainLabel ? (
           <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight w-full",
+            "text-sm font-semibold text-brand-orange leading-tight w-full text-center",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {selectedMainLabel}
@@ -530,7 +530,7 @@ export default function GenreHierarchySelector({
           </p>
         ) : (
           <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight w-full",
+            "text-sm font-medium text-brand-orange leading-tight w-full text-center",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             대분류를 눌러 메인 장르를 선택하세요.
@@ -554,13 +554,19 @@ export default function GenreHierarchySelector({
       <AnimatePresence>
         {activeGroup && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 overscroll-none">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => closeModal()}
-            />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={() => {
+                  if (modalHistoryDepthRef.current > 0) {
+                    window.history.go(-modalHistoryDepthRef.current);
+                  } else {
+                    closeModalStateOnly();
+                  }
+                }}
+              />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

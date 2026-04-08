@@ -4019,11 +4019,11 @@ function CycleSection({
               <h3
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help", titleClassName ?? "text-[20px]")}
+                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0", titleClassName ?? "text-[20px]")}
               >
                 <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
                 <span className="truncate">{titleKo || title}</span>
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1">({selectedFamilyCount}/{cycles.length})</span>
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({selectedFamilyCount}/{cycles.length})</span>
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -4117,7 +4117,7 @@ function CycleSection({
                   onTouchStart={() => onLongPressStart(hoverItem)}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
-                    "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center",
+                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center",
                     activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
                   )}
                 >
@@ -4140,7 +4140,7 @@ function CycleSection({
       >
         {selected.length > 0 ? (
           <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight w-full",
+            "text-sm font-semibold text-brand-orange leading-tight w-full text-center",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
@@ -4152,7 +4152,7 @@ function CycleSection({
           </p>
         ) : (
           <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight w-full",
+            "text-sm font-medium text-brand-orange leading-tight w-full text-center",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {titleKo || title} 키워드를 선택하세요.
@@ -4244,16 +4244,16 @@ function CategorySection({
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-full relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative min-w-0">
               <h3 
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
               >
-                <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
-                {titleKo || title}
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selected.length}/{items.length})</span>
+                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className="truncate">{titleKo || title}</span>
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -4485,7 +4485,7 @@ function CategorySection({
       >
         {selected.length > 0 ? (
           <p className={cn(
-            "text-sm font-semibold text-brand-orange leading-tight w-full",
+            "text-sm font-semibold text-brand-orange leading-tight w-full text-center",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             {selected.map(id => {
@@ -4495,7 +4495,7 @@ function CategorySection({
           </p>
         ) : (
           <p className={cn(
-            "text-sm font-medium text-brand-orange leading-tight w-full",
+            "text-sm font-medium text-brand-orange leading-tight w-full text-center",
             isBottomExpanded ? "whitespace-normal break-words" : "whitespace-nowrap overflow-hidden text-ellipsis"
           )}>
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.

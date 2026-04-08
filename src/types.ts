@@ -5,6 +5,8 @@ export interface CategoryItem {
   description: string;
   descriptionKo?: string;
   promptCore?: string;
+  mood?: string;
+  arrangement?: string;
   _ts?: number;
 }
 
@@ -18,7 +20,9 @@ export interface GenreGroup {
 }
 
 export interface SoundStyleItem extends CategoryItem {
-  promptCore?: string;
+  style?: string;
+  sound?: string;
+  mood?: string;
 }
 
 export interface InstrumentSoundItem extends CategoryItem {

@@ -142,12 +142,6 @@ function getGenreMeta(genreId: string | null) {
   return null;
 }
 
-function getStylePromptCores(styleValues: string[] = []): string[] {
-  return styleValues
-    .map((value) => resolveStyleItem(value)?.promptCore ?? "")
-    .filter(NON_EMPTY);
-}
-
 function getStyleLabels(styleValues: string[] = []): string[] {
   return styleValues
     .map((value) => resolveStyleItem(value)?.label ?? sentenceCase(value))
@@ -168,17 +162,19 @@ function getInstrumentSoundLabels(values: string[] = []): string[] {
     })
     .filter(NON_EMPTY);
 }
-function resolveMoodValue(moodValue: string): string {
-  const normalized = moodValue.trim().toLowerCase();
-
-  const mood = MOODS.find(
+function resolveMoodItem(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return MOODS.find(
     (item) =>
       item.id.toLowerCase() === normalized ||
       item.label.toLowerCase() === normalized
   );
+}
 
+function resolveMoodValue(moodValue: string): string {
+  const mood = resolveMoodItem(moodValue);
   if (!mood) return moodValue;
-  return mood.promptCore ?? mood.label;
+  return mood.mood ?? mood.promptCore ?? mood.label;
 }
 function resolveVocalToneValue(toneIdOrLabel: string): string {
   const normalized = toneIdOrLabel.trim().toLowerCase();
@@ -653,13 +649,13 @@ function buildStyle(params: GenerateSongParams): string {
   }
 
   const selectedStyleIds = params.styles ?? [];
-  let userStyleLabel = "";
-  if (selectedStyleIds.length > 0) {
-    const styleItem = resolveStyleItem(selectedStyleIds[0]);
-    if (styleItem) {
-      userStyleLabel = styleItem.label;
+  const stylePrompts: string[] = [];
+  selectedStyleIds.forEach(id => {
+    const item = resolveStyleItem(id);
+    if (item?.style) {
+      stylePrompts.push(item.style);
     }
-  }
+  });
 
   const tempoText = params.tempo
     ? params.tempo
@@ -671,8 +667,9 @@ function buildStyle(params: GenerateSongParams): string {
     : "";
 
   let stylePart = genreStyle;
-  if (userStyleLabel) {
-    stylePart = `${genreStyle} with ${userStyleLabel}`;
+  if (stylePrompts.length > 0) {
+    const uniqueStylePrompts = Array.from(new Set(stylePrompts));
+    stylePart = `${genreStyle} with ${uniqueStylePrompts.join(", ")}`;
   }
   
   const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
@@ -707,6 +704,20 @@ function buildSound(params: GenerateSongParams): string {
   const selectedLabels = getInstrumentSoundLabels(selectedSoundIds);
   selectedLabels.forEach(label => {
     soundItems.push({ label, priority: 2, role: getRole(label) });
+  });
+
+  // 1.5. Style sounds
+  const selectedStyleIds = params.styles ?? [];
+  selectedStyleIds.forEach(id => {
+    const item = resolveStyleItem(id);
+    if (item?.sound) {
+      item.sound.split(",").forEach(s => {
+        const label = s.trim();
+        if (label) {
+          soundItems.push({ label, priority: 1.5, role: getRole(label) });
+        }
+      });
+    }
   });
 
   // 2. Genre sounds (SubGenre takes precedence over MidGenre)
@@ -759,26 +770,29 @@ function buildSound(params: GenerateSongParams): string {
 function buildMoodTexture(params: GenerateSongParams): string {
   const moods = params.moods ?? [];
 
+  // 1. Mood values from MOODS data (all selected)
   const moodValues = moods
-    .slice(0, 10)
     .map((mood) => resolveMoodValue(mood))
     .filter(Boolean);
 
-  const moodValue = moodValues.length > 0
-    ? moodValues.join(", ")
+  // 2. Mood values from selected styles
+  const selectedStyleIds = params.styles ?? [];
+  const styleMoods: string[] = [];
+  selectedStyleIds.forEach(id => {
+    const item = resolveStyleItem(id);
+    if (item?.mood) {
+      styleMoods.push(item.mood);
+    }
+  });
+
+  // Combine and deduplicate
+  const combinedMoods = Array.from(new Set([...moodValues, ...styleMoods]));
+
+  const moodValue = combinedMoods.length > 0
+    ? combinedMoods.join(", ")
     : "Balanced";
 
-  const selectedStyleIds = params.styles ?? [];
-  let textureDesc = "clear and polished";
-
-  if (selectedStyleIds.length > 0) {
-    const styleItem = resolveStyleItem(selectedStyleIds[0]);
-    if (styleItem && styleItem.promptCore) {
-      textureDesc = styleItem.promptCore
-        .replace(/^Style layer:\s*/i, "")
-        .trim();
-    }
-  }
+  const textureDesc = "clear and polished";
 
   return `MOOD & TEXTURE: ${moodValue}, ${textureDesc}`;
 }
@@ -929,13 +943,26 @@ function buildVocal(params: GenerateSongParams): string {
 
 function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStructure): string {
   const genreId = params.genre;
-  let flow = "dynamic progression with clear sectional contrast";
+  let genreFlow = "dynamic progression with clear sectional contrast";
 
-  if (genreId === "drill") flow = "cold and sparse with hard-hitting rhythmic shifts";
-  if (genreId?.includes("jazz")) flow = "fluid and groove-led with organic transitions";
-  if (genreId?.includes("ballad")) flow = "gradual emotional build-up towards a powerful climax";
+  if (genreId === "drill") genreFlow = "cold and sparse with hard-hitting rhythmic shifts";
+  if (genreId?.includes("jazz")) genreFlow = "fluid and groove-led with organic transitions";
+  if (genreId?.includes("ballad")) genreFlow = "gradual emotional build-up towards a powerful climax";
 
-  return `ARRANGEMENT: ${flow}`;
+  // Mood arrangements (first 3 only)
+  const moodArrangements: string[] = [];
+  const moods = params.moods ?? [];
+  moods.slice(0, 3).forEach(id => {
+    const item = resolveMoodItem(id);
+    if (item?.arrangement) {
+      moodArrangements.push(item.arrangement);
+    }
+  });
+
+  // Combine and deduplicate
+  const combinedArrangements = Array.from(new Set([genreFlow, ...moodArrangements]));
+
+  return `ARRANGEMENT: ${combinedArrangements.join(", ")}`;
 }
 
 function buildTheme(params: GenerateSongParams): string {
@@ -979,7 +1006,6 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   const lyricGuidancePrompt = buildLyricGuidancePrompt(params.lyricsLength ?? "normal");
   const genreMeta = getGenreMeta(params.genre);
   const genrePromptCore = genreMeta?.promptCore ?? "";
-  const stylePromptCores = getStylePromptCores(params.styles ?? []);
   const instrumentSoundPromptCores = getInstrumentSoundPromptCores(params.instrumentSounds ?? []);
   const themePrompt = buildThemePrompt(params.themes ?? []);
   const themeSentence = buildThemeSentence(params.themes ?? []);
@@ -1038,9 +1064,6 @@ IMPORTANT:
 
 ROOT GENRE:
 ${genrePromptCore || "Choose an appropriate mainstream-friendly root genre if none is given."}
-
-STYLE LAYERS:
-${stylePromptCores.length ? stylePromptCores.map((s) => `- ${s}`).join("\n") : "- No extra style layer selected."}
 
 INSTRUMENT / SOUND LAYERS:
 ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- ${s}`).join("\n") : "- No extra instrument/sound layer selected."}

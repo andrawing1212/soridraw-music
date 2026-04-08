@@ -1728,41 +1728,63 @@ const cycleFamilySelection = (
   const [isSoundTextureRandomized, setIsSoundTextureRandomized] = useState(false);
 
   const randomizeCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
+    const limits = {
+      genre: 1,
+      style: 3,
+      sound: 3,
+      mood: 5,
+      theme: 4
+    };
+    
     const all = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : (category === 'theme' ? THEMES : (category === 'style' ? SOUND_STYLES : INSTRUMENT_SOUNDS)));
     const pinned = category === 'genre' ? pinnedGenres : (category === 'theme' ? pinnedThemes : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds));
     const isGenre = category === 'genre';
     
-    const result = category === 'mood' ? [] : [...pinned];
+    // Calculate current count of other categories to respect total 15 limit
+    const otherCount = (category === 'genre' ? 0 : selectedGenres.length) +
+                       (category === 'mood' ? 0 : selectedMoods.length) +
+                       (category === 'theme' ? 0 : selectedThemes.length) +
+                       (category === 'style' ? 0 : selectedStyles.length) +
+                       (category === 'sound' ? 0 : selectedInstrumentSounds.length);
+    
+    const maxForCat = limits[category];
+    const maxAllowedByTotal = Math.max(0, 15 - otherCount);
+    const finalLimit = Math.min(maxForCat, maxAllowedByTotal);
+    
+    // Start with pinned items, but don't exceed finalLimit
+    let result = category === 'mood' ? [] : [...pinned].slice(0, finalLimit);
+    
     const remainingPool = all.filter(item => 
       (category === 'mood' ? true : !pinned.includes(item.id)) && 
       (!isGenre || !TROT_GENRES.includes(item.id))
     );
     
-    // Choose a random number of additional items (up to 5 total)
-    const currentCount = category === 'mood' ? 0 : pinned.length;
-    const maxTotal = 5;
-    const additionalCount = Math.max(1, Math.floor(Math.random() * (maxTotal - currentCount + 1)));
-    const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, additionalCount);
+    const currentCount = result.length;
+    const needed = finalLimit - currentCount;
     
-    const final = [...result, ...picked.map(p => p.id)];
+    let pickedIds: string[] = [];
+    if (needed > 0) {
+      // Pick between 1 and 'needed' items
+      const additionalCount = Math.floor(Math.random() * needed) + 1;
+      const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, additionalCount);
+      pickedIds = picked.map(p => p.id);
+    }
+    
+    const final = [...result, ...pickedIds];
     
     if (category === 'genre') {
       setSelectedGenres(final);
       setIsGenreRandomized(true);
-    }
-    if (category === 'mood') {
+    } else if (category === 'mood') {
       setSelectedMoods(final);
       setIsMoodRandomized(true);
-    }
-    if (category === 'theme') {
+    } else if (category === 'theme') {
       setSelectedThemes(final);
       setIsThemeRandomized(true);
-    }
-    if (category === 'style') {
+    } else if (category === 'style') {
       setSelectedStyles(final);
       setIsStyleRandomized(true);
-    }
-    if (category === 'sound') {
+    } else if (category === 'sound') {
       setSelectedInstrumentSounds(final);
       setIsSoundTextureRandomized(true);
     }
@@ -2184,17 +2206,27 @@ const cycleFamilySelection = (
   };
 
   const applyRandom = () => {
-    const getRandomForCategory = (all: CategoryItem[], pinned: string[], count: number, isGenre: boolean = false) => {
-      const result = [...pinned];
+    const getRandomForCategory = (all: CategoryItem[], pinned: string[], maxCount: number, isGenre: boolean = false) => {
+      // Start with pinned, limited by maxCount
+      let result = [...pinned].slice(0, maxCount);
       const remainingPool = all.filter(item => 
         !pinned.includes(item.id) && 
         (!isGenre || !TROT_GENRES.includes(item.id))
       );
       
-      const needed = Math.max(0, count - pinned.length);
-      const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, needed);
+      const currentCount = result.length;
+      const needed = maxCount - currentCount;
       
-      return [...result, ...picked.map(p => p.id)];
+      if (needed > 0) {
+        // Pick a random number of items to add (at least 1 if current is 0)
+        const minToPick = currentCount > 0 ? 0 : 1;
+        const pickCount = Math.floor(Math.random() * (needed - minToPick + 1)) + minToPick;
+        
+        const picked = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, pickCount);
+        result = [...result, ...picked.map(p => p.id)];
+      }
+      
+      return result;
     };
 
     // 1. Genre Selection (1 Main + 1 Sub from Hierarchy)
@@ -2204,26 +2236,25 @@ const cycleFamilySelection = (
       ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
       : null;
 
-    const g = randomMain ? [randomMain.id] : [];
-    const sg = randomSub ? [randomSub.id] : [];
+    let g = randomMain ? [randomMain.id] : [];
+    let sg = randomSub ? [randomSub.id] : [];
 
-    // Random selection for other categories: Total 5-15, balanced across categories
-    const totalTarget = Math.floor(Math.random() * 11) + 5; // 5-15
-    const basePerCat = Math.floor(totalTarget / 4); // 4 categories left (Mood, Theme, Style, Sound)
-    const extra = totalTarget % 4;
+    // 2. Other categories with their limits
+    // Limits: Style 3, Sound 3, Mood 5, Theme 4
+    let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, 3);
+    let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, 3);
+    let m = getRandomForCategory(MOODS, [], 5);
+    let t = getRandomForCategory(THEMES, pinnedThemes, 4);
 
-    const counts = [basePerCat, basePerCat, basePerCat, basePerCat];
-    for (let i = 0; i < extra; i++) {
-      counts[i]++;
+    // 3. Total Limit 15 Check and Priority Trimming
+    // Priority: Genre > Style > Sound > Mood > Theme (Theme is first to be cut)
+    while (g.length + s.length + snd.length + m.length + t.length > 15) {
+      if (t.length > 0) t.pop();
+      else if (m.length > 0) m.pop();
+      else if (snd.length > 0) snd.pop();
+      else if (s.length > 0) s.pop();
+      else break;
     }
-    
-    // Shuffle counts to randomize which category gets the extra
-    counts.sort(() => 0.5 - Math.random());
-
-    let m = getRandomForCategory(MOODS, [], counts[0]);
-    let t = getRandomForCategory(THEMES, pinnedThemes, counts[1]);
-    let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, counts[2]);
-    let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, counts[3]);
 
     setSelectedGenres(g);
     setSubGenre(sg);
@@ -4455,6 +4486,10 @@ function CategorySection({
             {items.map((item) => {
             const isPinned = pinned.includes(item.id);
             const isSelected = selected.includes(item.id);
+            const selectedIndex = selected.indexOf(item.id);
+            const isPrimaryMood = title === "Mood" && isSelected && selectedIndex >= 0 && selectedIndex < 3;
+            const isSecondaryMood = isSelected && !isPrimaryMood;
+            
             const isKpop = item.id === 'kpop';
             const isCitypop = item.id === 'citypop';
             
@@ -4534,9 +4569,11 @@ function CategorySection({
                   className={cn(
                     "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2",
                     (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
-                    isSelected
-                      ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                      : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10",
+                    isPrimaryMood
+                      ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
+                      : isSecondaryMood
+                        ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                        : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10",
                     isKpop && kpopMode > 0 ? kpopStyle : "",
                     isCitypop && citypopMode > 0 ? citypopStyle : ""
                   )}

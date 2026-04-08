@@ -2664,7 +2664,7 @@ ${result.prompt}
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all border border-white/30 flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg-solid)] text-[var(--text-primary)] transition-all border border-white/30 flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
         >
           <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
           <span className="hidden md:block font-bold">랜덤 선택</span>
@@ -2711,7 +2711,7 @@ ${result.prompt}
           className={cn(
             "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-[var(--shadow-md)]",
             isGlobalClearable
-              ? "bg-[var(--card-bg)] border-white/30 text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+              ? "bg-[var(--card-bg)] border-white/30 text-[var(--text-primary)] hover:bg-[var(--hover-bg-solid)]"
               : "bg-[var(--bg-primary)] border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
           )}
           disabled={!isGlobalClearable}

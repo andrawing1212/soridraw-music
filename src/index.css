@@ -16,6 +16,7 @@
   --border-color: #e5e7eb;
   --input-bg: #ffffff;
   --hover-bg: #f8f9fa;
+  --hover-bg-solid: #f1f2f3;
   --glass-bg: rgba(255, 255, 255, 0.95);
   --glass-border: #e5e7eb;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
@@ -34,6 +35,7 @@
   --border-color: rgba(255, 255, 255, 0.25);
   --input-bg: rgba(255, 255, 255, 0.15);
   --hover-bg: rgba(255, 255, 255, 0.12);
+  --hover-bg-solid: #2a2a2a;
   --glass-bg: rgba(26, 26, 26, 0.9);
   --glass-border: rgba(255, 255, 255, 0.1);
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);

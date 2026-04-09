@@ -223,6 +223,31 @@ function sanitizeUserInput(input: string): string {
   return sanitized;
 }
 /**
+ * Handles Gemini API errors and provides user-friendly messages.
+ */
+function handleGeminiError(error: any, context: string): never {
+  console.error(`Gemini API Error (${context}):`, error);
+  
+  // Check for 429 Resource Exhausted
+  const errorStr = JSON.stringify(error);
+  if (
+    error?.status === "RESOURCE_EXHAUSTED" || 
+    error?.code === 429 || 
+    errorStr.includes("RESOURCE_EXHAUSTED") || 
+    errorStr.includes("quota")
+  ) {
+    throw new Error("API 할당량이 초과되었습니다. 잠시 후 다시 시도하거나, 나중에 다시 이용해주세요. (API Quota Exceeded)");
+  }
+  
+  // Check for other common errors
+  if (error?.status === "INVALID_ARGUMENT" || error?.code === 400) {
+    throw new Error("요청이 부적절합니다. 입력 내용을 확인해주세요. (Invalid Request)");
+  }
+
+  throw new Error("음악 생성 중 오류가 발생했습니다. 다시 시도해주세요. (Generation Error)");
+}
+
+/**
  * Summarizes user input into a concise English prompt layer.
  */
 async function buildDetailLayer(userInput: string): Promise<string> {
@@ -234,6 +259,8 @@ async function buildDetailLayer(userInput: string): Promise<string> {
 
   try {
     const ai = getAI();
+    // Use gemini-1.5-flash-latest for summary to save quota on the main model if possible
+    // or stick to the recommended one but handle failure gracefully
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Summarize the following music production request into a concise, comma-separated list of English prompt keywords or short phrases.
@@ -255,8 +282,8 @@ Request: ${sanitized}`,
 
     return response.text.trim().replace(/^DETAIL LAYER:\s*/i, "");
   } catch (error) {
-    console.error("Error building detail layer:", error);
-    // Fallback to sanitized input if AI call fails
+    console.warn("Error building detail layer (falling back to sanitized input):", error);
+    // Silent fallback for summary task to avoid blocking the whole generation if only the summary fails
     return sanitized;
   }
 }
@@ -1200,29 +1227,34 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 `.trim();
 
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model,
-    contents: "Generate the song title and lyrics based on the locked instructions.",
-    config: {
-      systemInstruction,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          lyrics: {
-            type: Type.OBJECT,
-            properties: {
-              english: { type: Type.STRING },
-              korean: { type: Type.STRING },
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model,
+      contents: "Generate the song title and lyrics based on the locked instructions.",
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            lyrics: {
+              type: Type.OBJECT,
+              properties: {
+                english: { type: Type.STRING },
+                korean: { type: Type.STRING },
+              },
+              required: ["english", "korean"],
             },
-            required: ["english", "korean"],
           },
+          required: ["title", "lyrics"],
         },
-        required: ["title", "lyrics"],
       },
-    },
-  });
+    });
+  } catch (error) {
+    handleGeminiError(error, "generateSong");
+  }
 
   const result = JSON.parse(response.text || "{}");
 

@@ -46,6 +46,7 @@ interface Props {
   onClear: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
+  onCommitSelection?: (mainId: string | null, subId: string | null) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   isRandomized?: boolean;
@@ -119,6 +120,7 @@ export default function GenreHierarchySelector({
   onClear,
   onRandom,
   onHover,
+  onCommitSelection,
   isExpanded,
   onToggleExpand,
   isRandomized = false,
@@ -142,6 +144,7 @@ export default function GenreHierarchySelector({
   // pending selections inside modal
   const [pendingMainId, setPendingMainId] = useState<string | null>(null);
   const [pendingSubId, setPendingSubId] = useState<string | null>(null);
+  const [hasChangedInModal, setHasChangedInModal] = useState(false);
 
   const groups = useMemo<GroupItem[]>(() => {
     const genreDescMap = new Map(GENRES.map(g => [g.id, g.description]));
@@ -252,12 +255,19 @@ export default function GenreHierarchySelector({
     return labels;
   }, [groups, committedSubGenre]);
 
-  const closeModalStateOnly = () => {
+  const finalizeAndClose = (shouldCommit = true, skipHistory = false) => {
+    if (shouldCommit && hasChangedInModal && pendingMainId) {
+      commitSelection(pendingMainId, pendingSubId);
+    }
+    if (!skipHistory && modalHistoryDepthRef.current > 0) {
+      window.history.go(-modalHistoryDepthRef.current);
+    }
     setActiveGroup(null);
     setActiveMain(null);
     setPendingMainId(null);
     setPendingSubId(null);
     setModalStep('main');
+    setHasChangedInModal(false);
     modalHistoryDepthRef.current = 0;
   };
 
@@ -274,25 +284,22 @@ export default function GenreHierarchySelector({
     setModalStep('main');
     setPendingMainId(currentMainId);
     setPendingSubId(currentSubId);
+    setHasChangedInModal(false);
 
     window.history.pushState({ genreModal: 'main' }, '');
     modalHistoryDepthRef.current = 1;
   };
 
   const closeModal = () => {
-    if (modalHistoryDepthRef.current > 0) {
-      window.history.go(-modalHistoryDepthRef.current);
-    } else {
-      closeModalStateOnly();
-    }
+    finalizeAndClose();
   };
 
   const handleBack = () => {
-    if (modalHistoryDepthRef.current > 0) {
+    if (modalStep === 'sub') {
       window.history.back();
-    } else {
-      closeModalStateOnly();
+      return;
     }
+    finalizeAndClose(true);
   };
 
   const handleMainClick = (main: MainGenreItem) => {
@@ -302,6 +309,7 @@ export default function GenreHierarchySelector({
     }
     setPendingMainId(main.id);
     setPendingSubId(null);
+    setHasChangedInModal(true);
   };
 
   const handleOpenSub = (main: MainGenreItem) => {
@@ -309,6 +317,7 @@ export default function GenreHierarchySelector({
     if (!main.children.some((sub) => sub.id === pendingSubId)) {
       setPendingSubId(null);
     }
+    setHasChangedInModal(true);
     setActiveMain(main);
     setModalStep('sub');
 
@@ -322,9 +331,15 @@ export default function GenreHierarchySelector({
       return;
     }
     setPendingSubId(subId);
+    setHasChangedInModal(true);
   };
 
   const commitSelection = (mainId: string | null, subId: string | null) => {
+    if (onCommitSelection) {
+      onCommitSelection(mainId, subId);
+      return;
+    }
+
     committedGenre.forEach((genreId) => onSelectGenre(genreId));
     committedSubGenre.forEach((subGenreId) => onSelectSubGenre(subGenreId));
 
@@ -335,15 +350,15 @@ export default function GenreHierarchySelector({
   const applyMain = () => {
     if (!pendingMainId) return;
     commitSelection(pendingMainId, null);
-    closeModalStateOnly();
-    modalHistoryDepthRef.current = 0;
+    setHasChangedInModal(false);
+    finalizeAndClose(false);
   };
 
   const applySub = () => {
     if (!pendingMainId) return;
     commitSelection(pendingMainId, pendingSubId);
-    closeModalStateOnly();
-    modalHistoryDepthRef.current = 0;
+    setHasChangedInModal(false);
+    finalizeAndClose(false);
   };
 
   const handleRandom = () => {
@@ -374,6 +389,13 @@ export default function GenreHierarchySelector({
     const originalHtmlOverflow = document.documentElement.style.overflow;
     const originalHtmlOverscroll = document.documentElement.style.overscrollBehavior;
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finalizeAndClose(true);
+      }
+    };
+
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
     document.body.style.top = `-${modalScrollYRef.current}px`;
@@ -381,6 +403,8 @@ export default function GenreHierarchySelector({
     document.body.style.touchAction = 'none';
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
+
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = originalBodyOverflow;
@@ -391,9 +415,11 @@ export default function GenreHierarchySelector({
       document.documentElement.style.overflow = originalHtmlOverflow;
       document.documentElement.style.overscrollBehavior = originalHtmlOverscroll;
 
+      window.removeEventListener('keydown', handleKeyDown);
+
       window.scrollTo(0, modalScrollYRef.current);
     };
-  }, [activeGroup]);
+  }, [activeGroup, hasChangedInModal, pendingMainId, pendingSubId]);
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -403,8 +429,7 @@ export default function GenreHierarchySelector({
 
       // If we landed on a state that doesn't belong to this modal, close it.
       if (!state || !state.genreModal) {
-        closeModalStateOnly();
-        modalHistoryDepthRef.current = 0;
+        finalizeAndClose(true, true);
         return;
       }
 

@@ -2958,6 +2958,11 @@ ${result.prompt}
                     prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
                   )
                 }
+                onCommitSelection={(mainId, subId) => {
+                  setSelectedGenres(mainId ? [mainId] : []);
+                  setSubGenre(subId ? [subId] : []);
+                  setIsGenreRandomized(false);
+                }}
                 onClear={() => {
                   setSelectedGenres([]);
                   setSubGenre([]);

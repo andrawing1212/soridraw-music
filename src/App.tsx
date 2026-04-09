@@ -3565,7 +3565,7 @@ ${result.prompt}
                             {result.appliedKeywords.songStructure === 'custom' 
                               ? (result.appliedKeywords.customStructure ?? []).map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`).join(' → ')
                               : result.appliedKeywords.songStructure === '1'
-                                ? 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2(A-B) → Chorus → Bridge → Final Chorus → Outro"'
+                                ? 'Intro → Verse 1 → Chorus / Drop → Outro"'
                                 : result.appliedKeywords.songStructure === '2'
                                   ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
                                   : result.appliedKeywords.songStructure === '3'
@@ -5007,7 +5007,7 @@ function SongStructureIntegratedControl({
                     {songStructure === 'custom' ? '현재 커스텀 구조' : `구조 ${songStructure} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2(A-B) → Chorus → Bridge → Final Chorus → Outro"}
+                    {songStructure === '1' && "Intro → Verse 1 → Chorus / Drop → Outro"}
                     {songStructure === '2' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
                     {songStructure === '3' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (

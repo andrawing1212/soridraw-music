@@ -25,11 +25,13 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      import.meta.env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
       throw new Error(
-        "Gemini API key is not defined. Please set VITE_GEMINI_API_KEY in your environment variables."
+        "Gemini API key is not defined. Please set GEMINI_API_KEY or VITE_GEMINI_API_KEY."
       );
     }
 
@@ -262,9 +264,9 @@ async function buildDetailLayer(userInput: string): Promise<string> {
 
   try {
     const ai = getAI();
-    // Use gemini-1.5-flash-latest for summary to save quota on the main model
+    // Use gemini-1.5-flash for summary to save quota on the main model
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-1.5-flash",
       contents: `Summarize the following music production request into a concise, comma-separated list of English prompt keywords or short phrases.
 Focus on extracting:
 1. Vocal Feel (tone, texture, delivery)
@@ -1269,12 +1271,12 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       errorStr.includes("429");
 
     // If quota exhausted on primary model, try fallback model
-    if (isQuotaError && model !== "gemini-1.5-flash-latest") {
-      console.warn("Primary model quota exhausted, trying fallback model (gemini-1.5-flash-latest)...");
+    if (isQuotaError && model !== "gemini-1.5-flash") {
+      console.warn("Primary model quota exhausted, trying fallback model (gemini-1.5-flash)...");
       try {
         response = await ai.models.generateContent({
           ...generateParams,
-          model: "gemini-1.5-flash-latest"
+          model: "gemini-1.5-flash"
         });
       } catch (fallbackError) {
         handleGeminiError(fallbackError, "generateSong (fallback)");
@@ -1445,11 +1447,11 @@ Translate the provided lyrics into ${targetLanguage}.
       errorStr.includes("quota") ||
       errorStr.includes("429");
 
-    if (isQuotaError && model !== "gemini-1.5-flash-latest") {
+    if (isQuotaError && model !== "gemini-1.5-flash") {
       try {
         response = await ai.models.generateContent({
           ...generateParams,
-          model: "gemini-1.5-flash-latest"
+          model: "gemini-1.5-flash"
         });
       } catch (fallbackError) {
         handleGeminiError(fallbackError, "translateLyrics (fallback)");

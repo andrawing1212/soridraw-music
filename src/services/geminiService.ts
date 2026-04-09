@@ -228,19 +228,22 @@ function sanitizeUserInput(input: string): string {
 function handleGeminiError(error: any, context: string): never {
   console.error(`Gemini API Error (${context}):`, error);
   
-  // Check for 429 Resource Exhausted
   const errorStr = JSON.stringify(error);
-  if (
+  const isQuotaError = 
     error?.status === "RESOURCE_EXHAUSTED" || 
     error?.code === 429 || 
+    error?.error?.code === 429 ||
+    error?.error?.status === "RESOURCE_EXHAUSTED" ||
     errorStr.includes("RESOURCE_EXHAUSTED") || 
-    errorStr.includes("quota")
-  ) {
+    errorStr.includes("quota") ||
+    errorStr.includes("429");
+
+  if (isQuotaError) {
     throw new Error("API 할당량이 초과되었습니다. 잠시 후 다시 시도하거나, 나중에 다시 이용해주세요. (API Quota Exceeded)");
   }
   
   // Check for other common errors
-  if (error?.status === "INVALID_ARGUMENT" || error?.code === 400) {
+  if (error?.status === "INVALID_ARGUMENT" || error?.code === 400 || error?.error?.code === 400) {
     throw new Error("요청이 부적절합니다. 입력 내용을 확인해주세요. (Invalid Request)");
   }
 
@@ -259,10 +262,9 @@ async function buildDetailLayer(userInput: string): Promise<string> {
 
   try {
     const ai = getAI();
-    // Use gemini-1.5-flash-latest for summary to save quota on the main model if possible
-    // or stick to the recommended one but handle failure gracefully
+    // Use gemini-1.5-flash-latest for summary to save quota on the main model
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash-latest",
       contents: `Summarize the following music production request into a concise, comma-separated list of English prompt keywords or short phrases.
 Focus on extracting:
 1. Vocal Feel (tone, texture, delivery)
@@ -1092,7 +1094,7 @@ function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStr
 
 export async function generateSong(...args: GenerateSongInput): Promise<SongResult> {
   const params = normalizeArgs(args);
-  const model = "gemini-3-flash-preview";
+  const model: string = "gemini-3-flash-preview";
 
   const genresForDuration = params.genre ? [params.genre] : [];
   const resolvedStructure = (
@@ -1228,32 +1230,58 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   const ai = getAI();
   let response;
-  try {
-    response = await ai.models.generateContent({
-      model,
-      contents: "Generate the song title and lyrics based on the locked instructions.",
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            lyrics: {
-              type: Type.OBJECT,
-              properties: {
-                english: { type: Type.STRING },
-                korean: { type: Type.STRING },
-              },
-              required: ["english", "korean"],
+  
+  const generateParams = {
+    model,
+    contents: "Generate the song title and lyrics based on the locked instructions.",
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          lyrics: {
+            type: Type.OBJECT,
+            properties: {
+              english: { type: Type.STRING },
+              korean: { type: Type.STRING },
             },
+            required: ["english", "korean"],
           },
-          required: ["title", "lyrics"],
         },
+        required: ["title", "lyrics"],
       },
-    });
+    },
+  };
+
+  try {
+    response = await ai.models.generateContent(generateParams);
   } catch (error) {
-    handleGeminiError(error, "generateSong");
+    const errorStr = JSON.stringify(error);
+    const isQuotaError = 
+      error?.status === "RESOURCE_EXHAUSTED" || 
+      error?.code === 429 || 
+      error?.error?.code === 429 ||
+      error?.error?.status === "RESOURCE_EXHAUSTED" ||
+      errorStr.includes("RESOURCE_EXHAUSTED") || 
+      errorStr.includes("quota") ||
+      errorStr.includes("429");
+
+    // If quota exhausted on primary model, try fallback model
+    if (isQuotaError && model !== "gemini-1.5-flash-latest") {
+      console.warn("Primary model quota exhausted, trying fallback model (gemini-1.5-flash-latest)...");
+      try {
+        response = await ai.models.generateContent({
+          ...generateParams,
+          model: "gemini-1.5-flash-latest"
+        });
+      } catch (fallbackError) {
+        handleGeminiError(fallbackError, "generateSong (fallback)");
+      }
+    } else {
+      handleGeminiError(error, "generateSong");
+    }
   }
 
   const result = JSON.parse(response.text || "{}");
@@ -1385,7 +1413,7 @@ export async function translateLyrics(
   lyrics: string,
   targetLanguage: "korean" | "english"
 ): Promise<string> {
-  const model = "gemini-3-flash-preview";
+  const model: string = "gemini-3-flash-preview";
 
   const systemInstruction = `
 You are a professional lyricist and translator.
@@ -1396,11 +1424,40 @@ Translate the provided lyrics into ${targetLanguage}.
 `.trim();
 
   const ai = getAI();
-  const response = await ai.models.generateContent({
+  let response;
+  
+  const generateParams = {
     model,
     contents: lyrics,
     config: { systemInstruction },
-  });
+  };
+
+  try {
+    response = await ai.models.generateContent(generateParams);
+  } catch (error) {
+    const errorStr = JSON.stringify(error);
+    const isQuotaError = 
+      error?.status === "RESOURCE_EXHAUSTED" || 
+      error?.code === 429 || 
+      error?.error?.code === 429 ||
+      error?.error?.status === "RESOURCE_EXHAUSTED" ||
+      errorStr.includes("RESOURCE_EXHAUSTED") || 
+      errorStr.includes("quota") ||
+      errorStr.includes("429");
+
+    if (isQuotaError && model !== "gemini-1.5-flash-latest") {
+      try {
+        response = await ai.models.generateContent({
+          ...generateParams,
+          model: "gemini-1.5-flash-latest"
+        });
+      } catch (fallbackError) {
+        handleGeminiError(fallbackError, "translateLyrics (fallback)");
+      }
+    } else {
+      handleGeminiError(error, "translateLyrics");
+    }
+  }
 
   return response.text || "";
 }

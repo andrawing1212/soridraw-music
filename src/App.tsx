@@ -3565,7 +3565,7 @@ ${result.prompt}
                             {result.appliedKeywords.songStructure === 'custom' 
                               ? (result.appliedKeywords.customStructure ?? []).map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`).join(' → ')
                               : result.appliedKeywords.songStructure === '1'
-                                ? 'Intro → Verse 1 → Chorus / Drop → Outro'
+                                ? 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2(A-B) → Chorus → Bridge → Final Chorus → Outro"'
                                 : result.appliedKeywords.songStructure === '2'
                                   ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
                                   : result.appliedKeywords.songStructure === '3'
@@ -4733,9 +4733,9 @@ function SongStructureIntegratedControl({
   ];
 
   const structureOptions = [
-    { id: '1', label: '1', description: '짧고 간결한 구조 · 추천 길이 1~2분' },
-    { id: '2', label: '2', description: '가장 일반적인 기본 구조 · 추천 길이 2~4분' },
-    { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분' },
+    { id: '1', label: '1', description: '간결한 구조.추천 2~3분' },
+    { id: '2', label: '2', description: '일반적인 기본 구조. 추천 2~4분' },
+    { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
     { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
   ] as const;
 
@@ -5007,7 +5007,7 @@ function SongStructureIntegratedControl({
                     {songStructure === 'custom' ? '현재 커스텀 구조' : `구조 ${songStructure} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "Intro → Verse 1 → Chorus / Drop → Outro"}
+                    {songStructure === '1' && "Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2(A-B) → Chorus → Bridge → Final Chorus → Outro"}
                     {songStructure === '2' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
                     {songStructure === '3' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (

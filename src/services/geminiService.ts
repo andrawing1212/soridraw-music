@@ -188,6 +188,79 @@ function resolveVocalToneValue(toneIdOrLabel: string): string {
   if (!tone) return toneIdOrLabel;
   return tone.promptCore ?? tone.label;
 }
+
+/**
+ * Generalizes artist names into vocal characteristics to avoid direct mentions.
+ */
+function sanitizeUserInput(input: string): string {
+  if (!input) return "";
+  
+  let sanitized = input;
+  
+  const artistReplacements: [RegExp, string][] = [
+    [/아이유|IU/gi, "맑고 섬세한 여성 보컬 (clear and delicate female vocal)"],
+    [/태연|Taeyeon/gi, "청아하고 호소력 있는 여성 보컬 (clear and soulful female vocal)"],
+    [/정국|Jungkook/gi, "부드럽고 트렌디한 남성 보컬 (smooth and trendy male vocal)"],
+    [/지민|Jimin/gi, "유니크하고 미성이 섞인 남성 보컬 (unique and high-toned male vocal)"],
+    [/뷔|V(?![a-z])/gi, "허스키하고 깊은 저음의 남성 보컬 (husky and deep bass male vocal)"],
+    [/블랙핑크|BLACKPINK/gi, "세련되고 파워풀한 여성 그룹 보컬 (sophisticated and powerful female group vocal)"],
+    [/뉴진스|NewJeans/gi, "자연스럽고 청량한 여성 그룹 보컬 (natural and refreshing female group vocal)"],
+    [/에스파|aespa/gi, "에너제틱하고 미래지향적인 여성 그룹 보컬 (energetic and futuristic female group vocal)"],
+    [/볼빨간사춘기|안지영/gi, "독특하고 귀여운 음색의 여성 보컬 (unique and cute female vocal)"],
+    [/백예린|Yerin Baek/gi, "몽환적이고 감각적인 여성 보컬 (dreamy and soulful female vocal)"],
+    [/임영웅/gi, "따뜻하고 호소력 짙은 남성 보컬 (warm and deeply expressive male vocal)"],
+    [/성시경/gi, "부드럽고 감미로운 남성 보컬 (smooth and sweet male vocal)"],
+    [/박효신/gi, "웅장하고 깊은 울림의 남성 보컬 (grand and deep resonant male vocal)"],
+    [/트와이스|TWICE/gi, "밝고 에너제틱한 여성 그룹 보컬 (bright and energetic female group vocal)"],
+    [/아이브|IVE/gi, "우아하고 세련된 여성 그룹 보컬 (elegant and sophisticated female group vocal)"],
+    [/르세라핌|LE SSERAFIM/gi, "당당하고 파워풀한 여성 그룹 보컬 (confident and powerful female group vocal)"],
+  ];
+
+  artistReplacements.forEach(([regex, replacement]) => {
+    sanitized = sanitized.replace(regex, replacement);
+  });
+
+  return sanitized;
+}
+/**
+ * Summarizes user input into a concise English prompt layer.
+ */
+async function buildDetailLayer(userInput: string): Promise<string> {
+  const trimmed = (userInput || "").trim();
+  if (!trimmed) return "";
+
+  // 1. Pre-sanitize for artists to ensure generalization
+  const sanitized = sanitizeUserInput(trimmed);
+
+  try {
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Summarize the following music production request into a concise, comma-separated list of English prompt keywords or short phrases.
+Focus on extracting:
+1. Vocal Feel (tone, texture, delivery)
+2. Mood & Emotion (nuance, atmosphere)
+3. Sound Detail (instrument texture, mix details)
+4. Theme & Scene (narrative situation, imagery)
+
+Rules:
+- Translate to English.
+- Use short, professional prompt-style keywords.
+- Generalize any real artist names into descriptive vocal traits.
+- Do NOT include filler words or complete sentences.
+- Return ONLY the comma-separated keywords.
+
+Request: ${sanitized}`,
+    });
+
+    return response.text.trim().replace(/^DETAIL LAYER:\s*/i, "");
+  } catch (error) {
+    console.error("Error building detail layer:", error);
+    // Fallback to sanitized input if AI call fails
+    return sanitized;
+  }
+}
+
 function buildLyricsLengthInstruction(lyricsLength: LyricsLength = "normal"): string {
   switch (lyricsLength) {
     case "very-short":
@@ -650,12 +723,13 @@ function buildStyle(params: GenerateSongParams): string {
 
   const selectedStyleIds = params.styles ?? [];
   const stylePrompts: string[] = [];
-  selectedStyleIds.forEach(id => {
-    const item = resolveStyleItem(id);
+  // Only 1st style affects STYLE section
+  if (selectedStyleIds.length > 0) {
+    const item = resolveStyleItem(selectedStyleIds[0]);
     if (item?.style) {
       stylePrompts.push(item.style);
     }
-  });
+  }
 
   const tempoText = params.tempo
     ? params.tempo
@@ -706,9 +780,9 @@ function buildSound(params: GenerateSongParams): string {
     soundItems.push({ label, priority: 2, role: getRole(label) });
   });
 
-  // 1.5. Style sounds
+  // 1.5. Style sounds (1st and 2nd styles only)
   const selectedStyleIds = params.styles ?? [];
-  selectedStyleIds.forEach(id => {
+  selectedStyleIds.slice(0, 2).forEach(id => {
     const item = resolveStyleItem(id);
     if (item?.sound) {
       item.sound.split(",").forEach(s => {
@@ -775,10 +849,10 @@ function buildMoodTexture(params: GenerateSongParams): string {
     .map((mood) => resolveMoodValue(mood))
     .filter(Boolean);
 
-  // 2. Mood values from selected styles
+  // 2. Mood values from selected styles (1st, 2nd, and 3rd styles)
   const selectedStyleIds = params.styles ?? [];
   const styleMoods: string[] = [];
-  selectedStyleIds.forEach(id => {
+  selectedStyleIds.slice(0, 3).forEach(id => {
     const item = resolveStyleItem(id);
     if (item?.mood) {
       styleMoods.push(item.mood);
@@ -970,7 +1044,7 @@ function buildTheme(params: GenerateSongParams): string {
   return `THEME: ${themeSentence}`;
 }
 
-function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure): string {
+function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string): string {
   const sections = [
     { label: "STYLE", content: buildStyle(params) },
     { label: "SOUND", content: buildSound(params) },
@@ -978,6 +1052,7 @@ function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStr
     { label: "VOCAL", content: buildVocal(params) },
     { label: "ARRANGEMENT", content: buildArrangement(params, resolvedStructure) },
     { label: "THEME", content: buildTheme(params) },
+    ...(detailLayer ? [{ label: "DETAIL LAYER", content: detailLayer }] : []),
   ];
 
   return sections
@@ -1014,7 +1089,11 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
     params.subGenre ?? []
   );
   const basePromptSeed = BASE_PROMPTS.join("\n");
-  const finalPrompt = buildFinalPrompt(params, resolvedStructure);
+  
+  // Build Detail Layer (Summarized English Prompt)
+  const detailLayer = await buildDetailLayer(params.userInput || "");
+  
+  const finalPrompt = buildFinalPrompt(params, resolvedStructure, detailLayer);
   console.log("🔥 generateSong called");
   console.log("🔥 FINAL PROMPT:", finalPrompt);
   const exactStructureText = buildStructureText(
@@ -1053,12 +1132,24 @@ ${exactStructureText}
   const systemInstruction = `
 You are a professional music composer and lyricist.
 
-USER CREATIVE INTENT (HIGHEST PRIORITY):
-${params.userInput || "No extra user description."}
+USER CREATIVE DETAIL LAYER (SUPPORTING DIRECTION):
+${detailLayer || "No extra user description."}
+
+ROLE OF USER INPUT:
+- This layer is for SUPPLEMENTARY creative details only.
+- Use it to enhance: 
+  1. Vocal Feel (tone, texture, delivery style, emotional expression)
+  2. Mood & Emotion (specific emotional nuances, atmosphere, emotional color)
+  3. Sound Detail (specific instrument textures, mix details, sound quality)
+  4. Theme & Scene (specific narrative situations, imagery, emotional storyline)
+  
+- Vocal feel may refine expression only, but must NOT override vocal rules, member roles, tone selection logic, or gender/formation constraints.
+
+- It must NOT override the Genre, Style, Vocal Formation, Rap settings, or Song Structure defined in the Locked Blueprint.
+- If the user input requests a change that conflicts with the Locked Blueprint (e.g., changing genre or structure), IGNORE that part of the input and strictly follow the Locked Blueprint.
 
 IMPORTANT:
-- The user input overrides stylistic assumptions if conflict occurs.
-- Treat user intent as the primary creative direction.
+- Do NOT use real artist names in the output. Generalize them into vocal characteristics.
 - Do NOT simplify, generalize, or replace the selected arrangement with a default pop form.
 - Treat the final production prompt below as a locked blueprint, not a loose reference.
 
@@ -1096,7 +1187,7 @@ Return JSON:
 
 Lyrics rules:
 ${lyricGuidancePrompt}
-- The lyrics should primarily follow the user's story/intention and the selected theme(s).
+- The lyrics should follow the selected theme(s) and the narrative details provided in the creative detail layer.
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.

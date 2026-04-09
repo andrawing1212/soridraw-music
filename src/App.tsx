@@ -4225,6 +4225,11 @@ function CycleSection({
             {cycles.map((cycle) => {
               const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
               const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
+              
+              const selectedIndex = activeVariant ? selected.indexOf(activeVariant.id) : -1;
+              const showOrderBadge = title === "Style" && selected.length >= 2 && selectedIndex >= 0;
+              const orderNumber = selectedIndex + 1;
+
               const baseVariant = cycle.variants[0];
               const hoverItem: CategoryItem = activeVariant
                 ? {
@@ -4269,10 +4274,15 @@ function CycleSection({
                   onTouchStart={() => onLongPressStart(hoverItem)}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
-                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center",
+                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative",
                     activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
                   )}
                 >
+                  {showOrderBadge && (
+                    <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 z-10">
+                      <span className="text-[10px] font-black text-white leading-none">{orderNumber}</span>
+                    </div>
+                  )}
                   <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
                     {activeVariant ? (activeVariant.labelKo ?? activeVariant.label) : (cycle.titleKo ?? cycle.title)}
                   </span>

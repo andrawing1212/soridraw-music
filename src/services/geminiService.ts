@@ -1235,24 +1235,50 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     "k-pop", "kpop", "j-pop", "jpop", "hip hop", "hiphop", "r&b", "rnb", "edm", "pop", "rock", "jazz", "ballad", "trot", "dance", "synth", "indie", "folk", "metal", "drill", "trap", "lo-fi", "lofi", "g-funk", "gfunk"
   ]);
 
+  const addVariations = (label: string) => {
+    if (!label) return;
+    const l = label.toLowerCase();
+    keywordsToRemove.add(l);
+    
+    // Add variations with prefixes
+    const prefixes = [
+      "k ", "j ", "k-", "j-", "90s ", "80s ", "70s ", "modern ", "korean ", "japanese ", 
+      "retro ", "classic ", "neo ", "new ", "old school ", "old-school ", "style ", "production ",
+      "korean idol production style ", "japanese idol production style ", "idol production style "
+    ];
+    prefixes.forEach(p => {
+      keywordsToRemove.add((p + l).toLowerCase());
+    });
+    
+    // Also add the label parts if it's a multi-word label
+    const parts = l.split(/\s+/);
+    if (parts.length > 1) {
+      parts.forEach(part => {
+        if (part.length > 2) keywordsToRemove.add(part);
+      });
+    }
+  };
+
   if (subGenreIds.length > 0) {
     const subGenreMeta = GENRES.find(g => g.id === subGenreIds[0]);
     genreTag = subGenreMeta?.label ?? sentenceCase(subGenreIds[0]);
     if (subGenreMeta) {
-      keywordsToRemove.add(subGenreMeta.label.toLowerCase());
+      addVariations(subGenreMeta.label);
       if (subGenreMeta.labelKo) keywordsToRemove.add(subGenreMeta.labelKo.toLowerCase());
     }
   } else if (genreId) {
     const genreMeta = GENRES.find(g => g.id === genreId);
     genreTag = genreMeta?.label ?? sentenceCase(genreId);
     if (genreMeta) {
-      keywordsToRemove.add(genreMeta.label.toLowerCase());
+      addVariations(genreMeta.label);
       if (genreMeta.labelKo) keywordsToRemove.add(genreMeta.labelKo.toLowerCase());
     }
   } else {
     genreTag = "Song";
   }
-  keywordsToRemove.add(genreTag.toLowerCase());
+  
+  // Ensure the final genreTag itself and its variations are removed from the body
+  addVariations(genreTag);
 
   if (typeof result.title === "string") {
     let title = result.title.trim();
@@ -1264,11 +1290,17 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     let changed = true;
     while (changed) {
       changed = false;
-      const sortedKeywords = Array.from(keywordsToRemove).filter(Boolean).sort((a, b) => b.length - a.length);
+      // Sort by length descending to remove longest matches first
+      const sortedKeywords = Array.from(keywordsToRemove)
+        .filter(Boolean)
+        .map(kw => kw.trim())
+        .filter(kw => kw.length > 0)
+        .sort((a, b) => b.length - a.length);
+
       for (const kw of sortedKeywords) {
         const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Match keyword at the start, followed by space or punctuation or quote
-        const regex = new RegExp(`^${escapedKw}(?=[\\s'\"│\\-]|$)\\s*[\\-\\s]*`, "i");
+        // Match keyword at the start, followed by space or punctuation or quote or end of string
+        const regex = new RegExp(`^${escapedKw}(?=[\\s'\"│\\-\\:]|$)\\s*[\\-\\s\\:]*`, "i");
         if (regex.test(title)) {
           title = title.replace(regex, "").trim();
           changed = true;

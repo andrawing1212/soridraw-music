@@ -65,6 +65,10 @@ function getSongInstrumentSoundValues(song: any): string[] {
   return song?.appliedKeywords?.instrumentSound ?? [];
 }
 
+function getSongSubGenreValues(song: any): string[] {
+  return song?.appliedKeywords?.subGenre ?? song?.appliedKeywords?.subGenreIds ?? [];
+}
+
 function getTimestampMs(value: any): number {
   if (!value) return 0;
 
@@ -796,6 +800,7 @@ ${song.prompt}
   const applyKeywordsToNext = (song: any) => {
     sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify({
       genre: getSongGenreValues(song),
+      subGenre: getSongSubGenreValues(song),
       mood: getSongMoodValues(song),
       theme: getSongThemeValues(song),
       style: getSongStyleValues(song),

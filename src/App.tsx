@@ -3180,13 +3180,13 @@ ${result.prompt}
               onChange={(e) => {
                 setUserInput(e.target.value);
                 e.target.style.height = 'auto';
-                e.target.style.height = e.target.scrollHeight + 'px';
+                e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
               }}
               onFocus={() => {
                 setIsInputFocused(true);
               }}
               onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-white/15 border border-white/20 rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[300px] resize-none overflow-hidden relative shadow-[var(--shadow-lg)] placeholder:text-white/40"
+              className="w-full bg-white/15 border border-white/20 rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative shadow-[var(--shadow-lg)] placeholder:text-white/40 scroll-smooth"
               rows={1}
             />
             {!userInput && !isInputFocused && (

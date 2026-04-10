@@ -1210,9 +1210,16 @@ ${structureInstruction}
 
 Return JSON:
 {
-  "title": "[Genre] 'English Title'│'Korean Title'",
+  "title": "'English Title' │ 'Korean Title'",
   "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }
 }
+
+TITLE RULES (CRITICAL):
+- The title must contain ONLY the song title itself.
+- DO NOT include genre, style, production terms, era, nationality, or descriptors.
+- DO NOT include words taken from STYLE such as: "Traditional Korean Fusion", "Gugak-pop", "New Jack Swing", "City Pop", "K-pop", "J-pop", "ballad pacing", "global pop approach", etc.
+- The genre label will be attached later by the app, so return the title body only.
+- Format: 'English Title' │ 'Korean Title'
 
 Lyrics rules:
 ${lyricGuidancePrompt}
@@ -1292,7 +1299,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   
   let genreTag = "";
   const keywordsToRemove = new Set([
-    "k-pop", "kpop", "j-pop", "jpop", "hip hop", "hiphop", "r&b", "rnb", "edm", "pop", "rock", "jazz", "ballad", "trot", "dance", "synth", "indie", "folk", "metal", "drill", "trap", "lo-fi", "lofi", "g-funk", "gfunk"
+    "k-pop", "kpop", "j-pop", "jpop", "hip hop", "hiphop", "r&b", "rnb", "edm", "pop", "rock", "jazz", "ballad", "trot", "dance", "synth", "indie", "folk", "metal", "drill", "trap", "lo-fi", "lofi", "g-funk", "gfunk",
+    "traditional korean fusion", "gugak-pop", "new jack swing", "city pop", "ballad pacing", "global pop approach", "korean idol production style", "japanese style", "fusion", "style", "production", "groove", "pacing"
   ]);
 
   const addVariations = (label: string) => {
@@ -1300,7 +1308,6 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     const l = label.toLowerCase();
     keywordsToRemove.add(l);
     
-    // Add variations with prefixes
     const prefixes = [
       "k ", "j ", "k-", "j-", "90s ", "80s ", "70s ", "modern ", "korean ", "japanese ", 
       "retro ", "classic ", "neo ", "new ", "old school ", "old-school ", "style ", "production ",
@@ -1310,7 +1317,6 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       keywordsToRemove.add((p + l).toLowerCase());
     });
     
-    // Also add the label parts if it's a multi-word label
     const parts = l.split(/\s+/);
     if (parts.length > 1) {
       parts.forEach(part => {
@@ -1337,46 +1343,56 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     genreTag = "Song";
   }
   
-  // Ensure the final genreTag itself and its variations are removed from the body
   addVariations(genreTag);
 
   if (typeof result.title === "string") {
-    let title = result.title.trim();
+    let rawTitle = result.title.trim();
     
     // 1. Remove any existing [Genre] tag from the AI
-    title = title.replace(/^\[[^\]]+\]\s*/, "");
+    rawTitle = rawTitle.replace(/^\[[^\]]+\]\s*/, "");
     
-    // 2. Remove leading genre keywords (case-insensitive)
-    let changed = true;
-    while (changed) {
-      changed = false;
-      // Sort by length descending to remove longest matches first
-      const sortedKeywords = Array.from(keywordsToRemove)
-        .filter(Boolean)
-        .map(kw => kw.trim())
-        .filter(kw => kw.length > 0)
-        .sort((a, b) => b.length - a.length);
+    // 2. Try to extract quoted pair: 'Eng' │ 'Kor' or "Eng" │ "Kor"
+    const quotePairRegex = /['"]([^'"]+)['"]\s*│\s*['"]([^'"]+)['"]/;
+    const match = rawTitle.match(quotePairRegex);
+    
+    if (match) {
+      const engTitle = match[1].trim();
+      const korTitle = match[2].trim();
+      result.title = `[${genreTag}] '${engTitle}' │ '${korTitle}'`;
+    } else {
+      // 3. Fallback: Aggressive cleaning
+      let title = rawTitle;
+      let changed = true;
+      while (changed) {
+        changed = false;
+        const sortedKeywords = Array.from(keywordsToRemove)
+          .filter(Boolean)
+          .map(kw => kw.trim())
+          .filter(kw => kw.length > 0)
+          .sort((a, b) => b.length - a.length);
 
-      for (const kw of sortedKeywords) {
-        const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Match keyword at the start, followed by space or punctuation or quote or end of string
-        const regex = new RegExp(`^${escapedKw}(?=[\\s'\"│\\-\\:]|$)\\s*[\\-\\s\\:]*`, "i");
-        if (regex.test(title)) {
-          title = title.replace(regex, "").trim();
-          changed = true;
-          break;
+        for (const kw of sortedKeywords) {
+          const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`^${escapedKw}(?=[\\s'\"│\\-\\:]|$)\\s*[\\-\\s\\:]*`, "i");
+          if (regex.test(title)) {
+            title = title.replace(regex, "").trim();
+            changed = true;
+            break;
+          }
         }
       }
+      
+      // 4. Ensure it has a │ and is quoted
+      if (title.includes("│")) {
+        const parts = title.split("│").map(p => p.trim().replace(/^['"]+|['"]+$/g, ""));
+        const eng = parts[0] || "Untitled";
+        const kor = parts[1] || "무제";
+        result.title = `[${genreTag}] '${eng}' │ '${kor}'`;
+      } else {
+        const cleanTitle = title.replace(/^['"]+|['"]+$/g, "");
+        result.title = `[${genreTag}] '${cleanTitle || 'Untitled'}'`;
+      }
     }
-    
-    // 3. Ensure the title has spaces around │ and is properly quoted if possible
-    if (title.includes("│")) {
-      const parts = title.split("│").map(p => p.trim());
-      title = parts.join(" │ ");
-    }
-    
-    // 4. Final assembly
-    result.title = `[${genreTag}] ${title}`;
   } else {
     result.title = `[${genreTag}] 'Untitled' │ '무제'`;
   }

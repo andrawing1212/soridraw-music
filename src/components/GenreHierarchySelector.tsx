@@ -562,7 +562,7 @@ export default function GenreHierarchySelector({
           </p>
         ) : (
           <p className="text-sm font-medium text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            대분류를 눌러 메인 장르를 선택하세요.
+            메인 장르를 선택하세요.
           </p>
         )}
       </div>

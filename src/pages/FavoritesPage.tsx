@@ -732,7 +732,7 @@ export default function FavoritesPage({
       `[Themes] ${getSongThemeValues(song).join(', ')}`,
       `[Styles] ${getSongStyleValues(song).join(', ')}`,
       `[Instruments / Sound] ${getSongInstrumentSoundValues(song).join(', ')}`,
-      song.appliedKeywords.vocalType ? `[Vocal] ${song.appliedKeywords.vocalType}` : '',
+      song.appliedKeywords.vocalType ? `[Vocal] ${song.appliedKeywords.vocalType}${song.appliedKeywords.vocal?.isToneSelected && song.appliedKeywords.vocalTone ? ` (${song.appliedKeywords.vocalTone})` : ''}` : '',
       song.appliedKeywords.tempo ? `[Tempo] ${song.appliedKeywords.tempo}` : ''
     ].filter((line) => !line.endsWith('] ')).join('\n');
 
@@ -798,7 +798,8 @@ ${song.prompt}
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
 
   const applyKeywordsToNext = (song: any) => {
-    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify({
+    const pendingKeywords = {
+      ...song.appliedKeywords,
       genre: getSongGenreValues(song),
       subGenre: getSongSubGenreValues(song),
       mood: getSongMoodValues(song),
@@ -807,13 +808,17 @@ ${song.prompt}
       instrumentSound: getSongInstrumentSoundValues(song),
       tempo: song.appliedKeywords.tempo ?? null,
       lyricsLength: song.appliedKeywords.lyricsLength ?? 'normal',
-      drumStyle: song.appliedKeywords.drumStyle ?? 'none',
       maleCount: song.appliedKeywords.maleCount ?? 0,
       femaleCount: song.appliedKeywords.femaleCount ?? 0,
       rapEnabled: song.appliedKeywords.rapEnabled ?? false,
-      tempoConfig: song.appliedKeywords.tempoConfig ?? null,
-      customStructure: song.appliedKeywords.customStructure ?? []
-    }));
+      isKoreanEnglishMix: song.appliedKeywords.isKoreanEnglishMix ?? false,
+      vocal: song.appliedKeywords.vocal ?? null,
+      kpopMode: song.appliedKeywords.kpopMode ?? 0,
+      citypopMode: song.appliedKeywords.citypopMode ?? 0,
+      songStructure: song.appliedKeywords.songStructure ?? '2',
+      customStructure: song.appliedKeywords.customStructure ?? [],
+    };
+    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(pendingKeywords));
     navigate('/');
   };
 
@@ -1408,9 +1413,42 @@ ${song.prompt}
                           e.stopPropagation();
                           onHover({ id: `vocal-${song.id}`, label: '보컬', description: `${song.appliedKeywords.vocalType} 구성입니다.`, _ts: Date.now() });
                         }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
                       >
                         #{song.appliedKeywords.vocalType}
+                      </span>
+                    )}
+                    {song.appliedKeywords.vocal?.isToneSelected && song.appliedKeywords.vocalTone && (
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHover({ id: `vocal-tone-${song.id}`, label: '보컬톤', description: `선택된 보컬톤: ${song.appliedKeywords.vocalTone}`, _ts: Date.now() });
+                        }}
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
+                      >
+                        #보컬톤: {song.appliedKeywords.vocalTone}
+                      </span>
+                    )}
+                    {song.appliedKeywords.isKoreanEnglishMix && (
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHover({ id: `mix-${song.id}`, label: '한/영 혼합', description: '한국어와 영어가 혼합된 가사입니다.', _ts: Date.now() });
+                        }}
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
+                      >
+                        #한/영 혼합
+                      </span>
+                    )}
+                    {song.appliedKeywords.rapEnabled && (
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onHover({ id: `rap-${song.id}`, label: '랩 ON', description: '랩이 포함된 곡입니다.', _ts: Date.now() });
+                        }}
+                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
+                      >
+                        #랩 ON
                       </span>
                     )}
                   </div>
@@ -1848,6 +1886,24 @@ ${song.prompt}
                     <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans mb-1">
                       <span className="w-1 h-1 rounded-full bg-brand-orange" />
                       Vocal: {selectedSong.appliedKeywords.vocalType}
+                    </div>
+                  )}
+                  {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
+                    <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans mb-1">
+                      <span className="w-1 h-1 rounded-full bg-brand-orange" />
+                      Vocal Tone: {selectedSong.appliedKeywords.vocalTone}
+                    </div>
+                  )}
+                  {selectedSong.appliedKeywords.isKoreanEnglishMix && (
+                    <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans mb-1">
+                      <span className="w-1 h-1 rounded-full bg-brand-orange" />
+                      Lyrics: 한/영 혼합
+                    </div>
+                  )}
+                  {selectedSong.appliedKeywords.rapEnabled && (
+                    <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] font-sans mb-1">
+                      <span className="w-1 h-1 rounded-full bg-brand-orange" />
+                      Rap: ON
                     </div>
                   )}
                   {selectedSong.appliedKeywords.tempo && (

@@ -376,7 +376,7 @@ function buildThemePrompt(themes: string[]): string {
 
 function buildThemeSentence(themes: string[]): string {
   const normalized = themes.map((theme) => theme.trim()).filter(NON_EMPTY);
-  if (normalized.length === 0) return "No explicit story theme selected.";
+  if (normalized.length === 0) return "";
 
   const set = new Set(normalized.map((theme) => theme.toLowerCase()));
 
@@ -707,6 +707,7 @@ function buildAppliedKeywordPayload(
     maleCount: params.vocal?.male ?? 0,
     femaleCount: params.vocal?.female ?? 0,
     rapEnabled: params.vocal?.rap ?? false,
+    isKoreanEnglishMix: params.isKoreanEnglishMix ?? false,
     vocal: params.vocal ?? { male: 0, female: 0, rap: false },
   };
 }
@@ -1069,18 +1070,21 @@ function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStr
 }
 
 function buildTheme(params: GenerateSongParams): string {
-  const themeSentence = buildThemeSentence(params.themes ?? []);
+  const themes = params.themes ?? [];
+  if (themes.length === 0) return "";
+  const themeSentence = buildThemeSentence(themes);
   return `THEME: ${themeSentence}`;
 }
 
 function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string): string {
+  const themeContent = buildTheme(params);
   const sections = [
     { label: "STYLE", content: buildStyle(params) },
     { label: "SOUND", content: buildSound(params) },
     { label: "MOOD & TEXTURE", content: buildMoodTexture(params) },
     { label: "VOCAL", content: buildVocal(params) },
     { label: "ARRANGEMENT", content: buildArrangement(params, resolvedStructure) },
-    { label: "THEME", content: buildTheme(params) },
+    ...(themeContent ? [{ label: "THEME", content: themeContent }] : []),
     ...(detailLayer ? [{ label: "DETAIL LAYER", content: detailLayer }] : []),
   ];
 
@@ -1191,9 +1195,9 @@ ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- $
 MOOD LAYER (EMOTIONAL COLOR ONLY):
 ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
 
-THEME / STORY CONCEPT (SITUATION, MESSAGE, OR NARRATIVE):
-${themePrompt || "No explicit theme/story concept selected."}
-Expanded story direction: ${themeSentence}
+${(params.themes ?? []).length > 0 ? `THEME / STORY CONCEPT (SITUATION, MESSAGE, OR NARRATIVE):
+${themePrompt}
+Expanded story direction: ${themeSentence}` : ""}
 
 LOCKED FINAL PRODUCTION PROMPT:
 ${finalPrompt}

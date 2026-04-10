@@ -140,6 +140,7 @@ export interface AppliedKeywords {
   tempo?: string;
   tempoConfig?: TempoConfig | null;
   vocalType?: string;
+  vocalTone?: string | null;
   lyricsLength?: LyricsLength;
   songStructure?: SongStructure;
   customStructure?: CustomSectionItem[];

@@ -1697,6 +1697,17 @@ const cycleFamilySelection = (
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
     if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
     
+    if (appliedKeywords.vocal) {
+      const v = appliedKeywords.vocal;
+      if (v.isToneSelected && v.globalToneId) {
+        setSelectedVocalToneId(v.globalToneId);
+      } else {
+        setSelectedVocalToneId(undefined);
+      }
+      if (v.mode) setVocalMode(v.mode);
+      if (v.members) setVocalMembers(v.members);
+    }
+
     if (appliedKeywords.tempoConfig) {
       setTempoEnabled(appliedKeywords.tempoConfig.enabled);
       setMinBPM(appliedKeywords.tempoConfig.min);
@@ -2652,9 +2663,12 @@ const saveRecentSong = async (newSong: any) => {
           genre: selectedGenres,
           subGenre: subGenre,
           vocal: payload.vocal,
-          vocalType: selectedVocalToneId 
+          vocalType: formation || 'Default',
+          vocalTone: selectedVocalToneId 
             ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
-            : (recommendedTone?.label || formation || 'Default'),
+            : null,
+          rapEnabled: rapEnabled,
+          isKoreanEnglishMix: isKoreanEnglishMix,
           kpopMode,
           isBallad: hasBalladStyle,
           tempoConfig: {
@@ -2711,7 +2725,7 @@ const saveRecentSong = async (newSong: any) => {
       result.appliedKeywords.theme?.length ? `[Themes] ${result.appliedKeywords.theme.join(', ')}` : '',
       result.appliedKeywords.style?.length ? `[Styles] ${result.appliedKeywords.style.join(', ')}` : '',
       result.appliedKeywords.instrumentSound?.length ? `[Sound / Texture] ${result.appliedKeywords.instrumentSound.map(getSoundVariantLabelById).join(', ')}` : '',
-      result.appliedKeywords.vocalType ? `[Vocal] ${result.appliedKeywords.vocalType}` : '',
+      result.appliedKeywords.vocalType ? `[Vocal] ${result.appliedKeywords.vocalType}${result.appliedKeywords.vocal?.isToneSelected && result.appliedKeywords.vocalTone ? ` (${result.appliedKeywords.vocalTone})` : ''}` : '',
       result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
     ].filter(Boolean).join('\n');
 
@@ -3236,12 +3250,21 @@ ${result.prompt}
                 ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
                 ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
                 ...selectedInstrumentSounds.map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })),
+                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#한/영 혼합' }] : []),
+                ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
+                ...(selectedVocalToneId ? [{ 
+                  id: 'vocal-tone', 
+                  type: 'vocal-tone' as const, 
+                  label: `#보컬톤: ${vocalTones.find(t => t.id === selectedVocalToneId)?.label || '선택됨'}` 
+                }] : []),
               ].map((item) => {
                   const chipClassName = item.type === 'style'
                     ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
                     : item.type === 'sound'
                       ? 'px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                      : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
+                      : item.type === 'mix' || item.type === 'rap' || item.type === 'vocal-tone'
+                        ? 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm'
+                        : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
                   return (
                     <span
                       key={`${item.type}-${item.id}`}
@@ -3255,6 +3278,9 @@ ${result.prompt}
                           else if (item.type === 'mood') toggleSelection(item.id, 'mood');
                           else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
                           else if (item.type === 'sound') setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+                          else if (item.type === 'mix') setIsKoreanEnglishMix(false);
+                          else if (item.type === 'rap') setRapEnabled(false);
+                          else if (item.type === 'vocal-tone') setSelectedVocalToneId(undefined);
                         }}
                         className="hover:bg-white/10 rounded-full p-0.5 transition-colors"
                       >
@@ -3525,17 +3551,28 @@ ${result.prompt}
                         </div>
                       </div>
                     ))}
-                    {result.appliedKeywords.vocalType && (
+                    {(result.appliedKeywords.vocalType || (result.appliedKeywords.vocal?.isToneSelected && result.appliedKeywords.vocalTone)) && (
                       <div className="space-y-0.5">
                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>
                         <div className="flex flex-wrap gap-1">
-                          <span 
-                            className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
-                            onMouseEnter={() => setHoveredItem({ id: 'kw-vocal', label: 'Vocal', description: '곡의 보컬 구성을 나타냅니다.' })}
-                            onMouseLeave={() => setHoveredItem(null)}
-                          >
-                            {result.appliedKeywords.vocalType}
-                          </span>
+                          {result.appliedKeywords.vocalType && (
+                            <span 
+                              className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
+                              onMouseEnter={() => setHoveredItem({ id: 'kw-vocal', label: 'Vocal', description: '곡의 보컬 구성을 나타냅니다.' })}
+                              onMouseLeave={() => setHoveredItem(null)}
+                            >
+                              {result.appliedKeywords.vocalType}
+                            </span>
+                          )}
+                          {result.appliedKeywords.vocal?.isToneSelected && result.appliedKeywords.vocalTone && (
+                            <span 
+                              className="px-1.5 py-0.5 rounded-md text-[11px] bg-brand-orange/10 text-brand-orange border border-brand-orange/20 cursor-help"
+                              onMouseEnter={() => setHoveredItem({ id: 'kw-vocal-tone', label: 'Vocal Tone', description: `선택된 보컬톤: ${result.appliedKeywords.vocalTone}` })}
+                              onMouseLeave={() => setHoveredItem(null)}
+                            >
+                              #보컬톤: {result.appliedKeywords.vocalTone}
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}

@@ -817,6 +817,10 @@ ${song.prompt}
       citypopMode: song.appliedKeywords.citypopMode ?? 0,
       songStructure: song.appliedKeywords.songStructure ?? '2',
       customStructure: song.appliedKeywords.customStructure ?? [],
+      userInput: song.appliedKeywords.userInput ?? '',
+      lyricDraft: song.appliedKeywords.lyricDraft ?? '',
+      isLyricMode: song.appliedKeywords.isLyricMode ?? false,
+      lyricMode: song.appliedKeywords.lyricMode ?? 'assist',
     };
     sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(pendingKeywords));
     navigate('/');

@@ -153,6 +153,10 @@ export interface AppliedKeywords {
   rapEnabled?: boolean;
   drumStyle?: string;
   isBallad?: boolean;
+  userInput?: string;
+  lyricDraft?: string;
+  isLyricMode?: boolean;
+  lyricMode?: 'assist' | 'preserve';
 }
 
 export interface GenerateSongParams {
@@ -165,6 +169,9 @@ export interface GenerateSongParams {
   tempo: string;
   vocal: VocalConfig;
   userInput?: string;
+  lyricDraft?: string;
+  isLyricMode?: boolean;
+  lyricMode?: 'assist' | 'preserve';
   songStructure?: SongStructure;
   customStructure?: CustomSectionItem[];
   lyricsLength?: LyricsLength;

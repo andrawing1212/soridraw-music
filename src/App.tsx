@@ -17,6 +17,7 @@ import {
   Search, 
   X, 
   Info,
+  Languages,
   Loader2,
   ChevronDown,
   ChevronUp,
@@ -49,7 +50,6 @@ import {
   CheckCircle2,
   Mic2,
   Tag,
-  Languages,
   Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1272,6 +1272,9 @@ function App() {
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
   const [userInput, setUserInput] = useState('');
+  const [isLyricMode, setIsLyricMode] = useState(false);
+  const [lyricDraft, setLyricDraft] = useState('');
+  const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
@@ -1697,6 +1700,11 @@ const cycleFamilySelection = (
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
     if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
     
+    if (appliedKeywords.userInput !== undefined) setUserInput(appliedKeywords.userInput);
+    if (appliedKeywords.lyricDraft !== undefined) setLyricDraft(appliedKeywords.lyricDraft);
+    if (appliedKeywords.isLyricMode !== undefined) setIsLyricMode(appliedKeywords.isLyricMode);
+    if (appliedKeywords.lyricMode !== undefined) setLyricMode(appliedKeywords.lyricMode);
+
     if (appliedKeywords.vocal) {
       const v = appliedKeywords.vocal;
       if (v.isToneSelected && v.globalToneId) {
@@ -2094,6 +2102,9 @@ const cycleFamilySelection = (
     setIsSoundTextureRandomized(false);
 
     setUserInput('');
+    setLyricDraft('');
+    setIsLyricMode(false);
+    setLyricMode('assist');
     setLyricsLength('normal');
     setSongStructure('2');
     setMaleCount(0);
@@ -2645,6 +2656,9 @@ const saveRecentSong = async (newSong: any) => {
         kpopMode,
         isKoreanEnglishMix,
         customStructure,
+        lyricDraft: isLyricMode ? lyricDraft : undefined,
+        isLyricMode,
+        lyricMode: isLyricMode ? lyricMode : undefined,
       };
 
       console.log("SELECTED GENRE:", selectedGenres);
@@ -2671,6 +2685,10 @@ const saveRecentSong = async (newSong: any) => {
           isKoreanEnglishMix: isKoreanEnglishMix,
           kpopMode,
           isBallad: hasBalladStyle,
+          userInput: userInput,
+          lyricDraft: isLyricMode ? lyricDraft : undefined,
+          isLyricMode,
+          lyricMode: isLyricMode ? lyricMode : undefined,
           tempoConfig: {
             enabled: tempoEnabled,
             min: minBPM,
@@ -3210,7 +3228,109 @@ ${result.prompt}
                 </div>
               </div>
             )}
+
+            {/* Direct Lyrics Toggle Button */}
+            <AnimatePresence>
+              {(userInput.length > 0 || isInputFocused) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute right-4 bottom-4 z-20"
+                >
+                  <button
+                    onClick={() => setIsLyricMode(!isLyricMode)}
+                    onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
+                    onMouseLeave={() => setHoveredItem(null)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all border shadow-sm",
+                      isLyricMode 
+                        ? "bg-brand-orange text-white border-brand-orange" 
+                        : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                    )}
+                  >
+                    <Languages className="w-3.5 h-3.5" />
+                    직접 작사
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
+
+          {/* Direct Lyrics Input Area */}
+          <AnimatePresence>
+            {isLyricMode && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-2 pb-4 space-y-3">
+                  <div className="h-px bg-white/10 w-full" />
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
+                      <p className="text-[12px] font-medium text-[var(--text-secondary)]">
+                        이 아래 내용은 가사 초안으로 우선 반영됩니다.
+                      </p>
+                    </div>
+                    
+                    {/* Lyric Mode Selector */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+                        <button
+                          onClick={() => setLyricMode('assist')}
+                          className={cn(
+                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            lyricMode === 'assist' 
+                              ? "bg-brand-orange text-white shadow-sm" 
+                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          )}
+                        >
+                          AI 보정
+                        </button>
+                        <button
+                          onClick={() => setLyricMode('preserve')}
+                          className={cn(
+                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            lyricMode === 'preserve' 
+                              ? "bg-brand-orange text-white shadow-sm" 
+                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          )}
+                        >
+                          원문 유지
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setLyricDraft('');
+                          setIsLyricMode(false);
+                        }}
+                        onMouseEnter={() => setHoveredItem({ id: 'delete-lyric', label: '가사 삭제', description: '입력한 가사 초안을 모두 지우고 창을 닫습니다.' })}
+                        onMouseLeave={() => setHoveredItem(null)}
+                        className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[var(--text-secondary)] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative group">
+                    <textarea
+                      value={lyricDraft}
+                      onChange={(e) => {
+                        setLyricDraft(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
+                      }}
+                      placeholder="여기에 가사 초안을 자유롭게 적어주세요. 구조는 자동 반영됩니다."
+                      className="w-full bg-white/10 border border-white/10 rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange/30 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-white/30"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Action Buttons Anchor */}
           <div ref={actionButtonsAnchorRef} className="relative">
@@ -5478,7 +5598,7 @@ const CUSTOM_STRUCTURE_SECTIONS = [
 ] as const;
 
 const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
-  'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic'],
+  'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic', 'Chorus'],
   'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal', 'A-B', 'B-A'],
   'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal', 'A-B', 'B-A'],
   'Pre-Chorus': ['Soft', 'Emotional', 'Build-up', 'Harmony'],

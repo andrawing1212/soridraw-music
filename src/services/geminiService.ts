@@ -53,6 +53,9 @@ interface GenerateSongParams {
   styles?: string[];
   instrumentSounds?: string[];
   userInput: string;
+  lyricDraft?: string;
+  isLyricMode?: boolean;
+  lyricMode?: 'assist' | 'preserve';
   songPrompt?: string;
   lyricsLength?: LyricsLength;
   songStructure?: SongStructure;
@@ -549,6 +552,9 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       isKpopSelected: first.isKpopSelected ?? false,
       isKoreanEnglishMix: first.isKoreanEnglishMix ?? false,
       customStructure: first.customStructure ?? [],
+      lyricDraft: first.lyricDraft ?? "",
+      isLyricMode: first.isLyricMode ?? false,
+      lyricMode: first.lyricMode ?? 'assist',
     };
   }
 
@@ -607,6 +613,9 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     isKpopSelected: genres?.includes("kpop") ?? false,
     isKoreanEnglishMix: false,
     customStructure: [],
+    lyricDraft: "",
+    isLyricMode: false,
+    lyricMode: 'assist',
   };
 }
 
@@ -709,6 +718,9 @@ function buildAppliedKeywordPayload(
     rapEnabled: params.vocal?.rap ?? false,
     isKoreanEnglishMix: params.isKoreanEnglishMix ?? false,
     vocal: params.vocal ?? { male: 0, female: 0, rap: false },
+    lyricDraft: params.lyricDraft,
+    isLyricMode: params.isLyricMode ?? false,
+    lyricMode: params.lyricMode ?? 'assist',
   };
 }
 
@@ -1147,6 +1159,32 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
 - Do not keep the two versions fully separated by language.
 - Keep the code-switching natural and melodic, not forced.`
     : "";
+  
+  const lyricDraftInstruction = (params.isLyricMode && params.lyricDraft)
+    ? (params.lyricMode === 'preserve' 
+      ? `LYRIC PRESERVE MODE (PRIMARY SOURCE):
+- The user provided finished lyrics or draft lyrics below:
+"${params.lyricDraft}"
+
+- Preserve the user's wording, expressions, imagery, line flow, and emotional tone as much as possible.
+- Do NOT add new story elements, unrelated metaphors, or new narrative directions.
+- Do NOT rewrite the lyrics into a different theme.
+- Only:
+  - improve minor awkward line breaks if necessary
+  - split into song sections if needed
+  - repeat existing hook lines only when needed
+- The user's original wording must remain the main body of the lyrics.
+- Reorganize into the selected song structure automatically.`
+      : `LYRIC DRAFT PRIORITY (PRIMARY SOURCE):
+- The user provided original lyric ideas below:
+"${params.lyricDraft}"
+
+- Preserve the user's wording, imagery, emotional tone, and key phrases as much as possible.
+- Do NOT discard or replace the user's core lyrical ideas.
+- Expand naturally only where needed to fit the structure and length.
+- Reorganize into the selected song structure automatically.
+- Keep it natural and polished.`)
+    : "";
 
   const structureInstruction =
     params.songStructure === "custom" && (params.customStructure ?? []).length > 0
@@ -1210,6 +1248,8 @@ ${basePromptSeed}
 
 ${mixedLyricsInstruction}
 
+${lyricDraftInstruction}
+
 ${structureInstruction}
 
 Return JSON:
@@ -1227,6 +1267,11 @@ TITLE RULES (CRITICAL):
 
 Lyrics rules:
 ${lyricGuidancePrompt}
+- If lyricDraft exists, it must be treated as the primary lyrical source.
+- The generated lyrics should preserve the user’s draft as much as possible.
+- Only expand, refine, and restructure where necessary.
+- Do not ignore lyricDraft.
+- Do not replace it with a completely new lyric idea.
 - The lyrics should follow the selected theme(s) and the narrative details provided in the creative detail layer.
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.

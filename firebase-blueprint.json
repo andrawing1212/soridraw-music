@@ -102,6 +102,14 @@
     "/section_tags/{tagId}": {
       "schema": "SectionTag",
       "description": "Collection of section tags managed by admins."
+    },
+    "/section_tags_draft/{tagId}": {
+      "schema": "SectionTag",
+      "description": "Draft collection of section tags for admin testing."
+    },
+    "/section_tags_live/{tagId}": {
+      "schema": "SectionTag",
+      "description": "Live collection of section tags for production use."
     }
   }
 }

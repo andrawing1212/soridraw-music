@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CategoryItem, GenreGroupItem } from '../types';
 import { GENRE_HIERARCHY, GENRES } from '../constants';
-import { ChevronDown, ChevronUp, RotateCcw, Dices, X, Check, ArrowLeft } from 'lucide-react';
+import { ChevronDown, ChevronUp, RotateCcw, Dices, X, Check, ArrowLeft, ChevronRight, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -131,6 +131,7 @@ export default function GenreHierarchySelector({
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>('main');
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [hoveredModalItem, setHoveredModalItem] = useState<{ label: string; description: string } | null>(null);
   const lastSyncedGenreRef = useRef<string[]>([]);
   const lastSyncedSubGenreRef = useRef<string[]>([]);
 
@@ -304,11 +305,12 @@ export default function GenreHierarchySelector({
 
   const handleMainClick = (main: MainGenreItem) => {
     if (pendingMainId === main.id) {
-      applyMain();
-      return;
+      setPendingMainId(null);
+      setPendingSubId(null);
+    } else {
+      setPendingMainId(main.id);
+      setPendingSubId(null);
     }
-    setPendingMainId(main.id);
-    setPendingSubId(null);
     setHasChangedInModal(true);
   };
 
@@ -327,10 +329,10 @@ export default function GenreHierarchySelector({
 
   const handleSubClick = (subId: string) => {
     if (pendingSubId === subId) {
-      applySub();
-      return;
+      setPendingSubId(null);
+    } else {
+      setPendingSubId(subId);
     }
-    setPendingSubId(subId);
     setHasChangedInModal(true);
   };
 
@@ -595,45 +597,57 @@ export default function GenreHierarchySelector({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-              className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
+              className="w-full max-w-md rounded-[32px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <button
-                    onClick={handleBack}
-                    className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
-                    title="뒤로가기"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </button>
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-bold text-[var(--text-primary)] truncate">
-                      {modalStep === 'main' ? (activeGroup.labelKo || activeGroup.label) : (activeMain?.labelKo || activeMain?.label)}
-                    </h3>
-                    <p className="text-xs text-[var(--text-secondary)] mt-1">
-                      {modalStep === 'main'
-                        ? activeGroup.descriptionKo || activeGroup.description || DEFAULT_GROUP_DESCRIPTION
-                        : activeMain?.descriptionKo || activeMain?.description || DEFAULT_SUB_DESCRIPTION}
-                    </p>
-                  </div>
-                </div>
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]/20">
+                <button
+                  onClick={handleBack}
+                  className="w-10 h-10 rounded-full border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-sm active:scale-90"
+                  title="뒤로가기"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                
+                <h3 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
+                  {modalStep === 'main' ? (activeGroup.labelKo || activeGroup.label) : (activeMain?.labelKo || activeMain?.label)}
+                </h3>
+
                 <button
                   onClick={() => closeModal()}
-                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center"
+                  className="w-10 h-10 rounded-full border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-sm active:scale-90"
                   title="닫기"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
+              {/* Selection Status Bar */}
+              <div className="px-6 py-2.5 bg-brand-orange/5 border-b border-brand-orange/10 flex items-center gap-2 overflow-hidden">
+                <span className="text-[10px] font-black text-brand-orange uppercase tracking-widest shrink-0">Selection</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate">
+                  <span className={cn(pendingMainId ? "text-brand-orange" : "text-[var(--text-secondary)]")}>
+                    {pendingMainId ? (activeGroup.children.find(m => m.id === pendingMainId)?.labelKo || activeGroup.children.find(m => m.id === pendingMainId)?.label) : "미선택"}
+                  </span>
+                  {modalStep === 'sub' && activeMain && (
+                    <>
+                      <ChevronRight className="w-3 h-3 text-[var(--text-secondary)]" />
+                      <span className={cn(pendingSubId ? "text-brand-orange" : "text-[var(--text-secondary)]")}>
+                        {pendingSubId ? (activeMain.children.find(s => s.id === pendingSubId)?.labelKo || activeMain.children.find(s => s.id === pendingSubId)?.label) : "전체/기본"}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
               <div
-                className="p-4 space-y-3 max-h-[70vh] overflow-y-auto overscroll-contain custom-scrollbar"
+                className="p-5 space-y-4 max-h-[60vh] overflow-y-auto overscroll-contain custom-scrollbar"
                 onWheel={(e) => e.stopPropagation()}
                 onTouchMove={(e) => e.stopPropagation()}
               >
                 {modalStep === 'main' && (
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3">
                     {activeGroup.children.map((main) => {
                       const isCommitted = committedGenre.includes(main.id);
                       const isPending = pendingMainId === main.id;
@@ -642,50 +656,55 @@ export default function GenreHierarchySelector({
                       return (
                         <div
                           key={main.id}
-                          className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/40 p-3"
-                          title={main.description || DEFAULT_MAIN_DESCRIPTION}
+                          className="group/card relative"
+                          onMouseEnter={() => setHoveredModalItem({ 
+                            label: main.labelKo || main.label, 
+                            description: main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION 
+                          })}
+                          onMouseLeave={() => setHoveredModalItem(null)}
                         >
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => handleMainClick(main)}
-                              onMouseEnter={() => onHover({ id: main.id, label: main.label, labelKo: main.labelKo, description: main.description || DEFAULT_MAIN_DESCRIPTION, descriptionKo: main.descriptionKo, _ts: Date.now() } as CategoryItem)}
-                              onMouseLeave={() => onHover(null)}
-                              className={[
-                                'flex-1 text-left rounded-xl border px-4 py-3 transition-all',
-                                isActiveVisual
-                                  ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
-                                  : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]',
-                              ].join(' ')}
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <div className="font-bold text-sm">{main.labelKo || main.label}</div>
-                                  <div className={['text-xs mt-1', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                                    {main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION}
-                                  </div>
-                                </div>
-                                {isActiveVisual && <Check className="w-4 h-4 shrink-0" />}
-                              </div>
-                            </button>
-
-                            {main.children.length > 0 && (
-                              <button
-                                onClick={() => handleOpenSub(main)}
-                                onMouseEnter={() => onHover({ id: `${main.id}-sub`, label: `${main.label} Details`, labelKo: `${main.labelKo || main.label} 세부장르`, description: DEFAULT_SUB_DESCRIPTION, _ts: Date.now() } as CategoryItem)}
-                                onMouseLeave={() => onHover(null)}
-                                className={[
-                                  'shrink-0 px-3 py-3 rounded-xl border transition-all text-xs font-bold leading-tight flex flex-col items-center justify-center gap-1 min-w-[70px]',
-                                  isActiveVisual
-                                    ? 'border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10'
-                                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-                                ].join(' ')}
-                                title="세부장르 더보기"
-                              >
-                                <span>세부장르</span>
-                                <span>더보기</span>
-                              </button>
+                          <button
+                            onClick={() => handleMainClick(main)}
+                            className={cn(
+                              'w-full text-left rounded-2xl border p-4 transition-all duration-200 flex items-center justify-between gap-4 hover:scale-[1.02] active:scale-[0.98]',
+                              isActiveVisual
+                                ? 'bg-brand-orange border-transparent text-white shadow-lg shadow-brand-orange/30'
+                                : 'bg-[var(--bg-secondary)]/40 border-[var(--border-color)] hover:bg-[var(--hover-bg)] hover:border-brand-orange/30 text-[var(--text-primary)]'
                             )}
-                          </div>
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-lg tracking-tight">
+                                {main.labelKo || main.label}
+                              </div>
+                              <div className={cn(
+                                'text-xs mt-0.5 truncate',
+                                isActiveVisual ? 'text-white/90' : 'text-[var(--text-secondary)]'
+                              )}>
+                                {main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 shrink-0">
+                              {isActiveVisual && <Check className="w-5 h-5" />}
+                              {main.children.length > 0 && (
+                                <div 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenSub(main);
+                                  }}
+                                  className={cn(
+                                    "p-2.5 rounded-xl border transition-all hover:scale-110 active:scale-90",
+                                    isActiveVisual 
+                                      ? "bg-white/20 border-white/30 text-white" 
+                                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange shadow-sm hover:border-brand-orange/50"
+                                  )}
+                                  title="세부장르 더보기"
+                                >
+                                  <ChevronRight className="w-5 h-5" />
+                                </div>
+                              )}
+                            </div>
+                          </button>
                         </div>
                       );
                     })}
@@ -693,37 +712,61 @@ export default function GenreHierarchySelector({
                 )}
 
                 {modalStep === 'sub' && activeMain && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      {activeMain.children.map((sub) => {
-                        const isCommitted = committedSubGenre.includes(sub.id) && committedGenre.includes(activeMain.id);
-                        const isPending = pendingSubId === sub.id;
-                        const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
+                  <div className="grid grid-cols-2 gap-3">
+                    {activeMain.children.map((sub) => {
+                      const isCommitted = committedSubGenre.includes(sub.id) && committedGenre.includes(activeMain.id);
+                      const isPending = pendingSubId === sub.id;
+                      const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
 
-                        return (
+                      return (
                         <button
                           key={sub.id}
                           onClick={() => handleSubClick(sub.id)}
-                          onMouseEnter={() => onHover({ id: sub.id, label: sub.label, labelKo: sub.labelKo, description: sub.description || DEFAULT_SUB_DESCRIPTION, descriptionKo: sub.descriptionKo, _ts: Date.now() } as CategoryItem)}
-                          onMouseLeave={() => onHover(null)}
-                          className={[
-                            'px-4 py-3 rounded-2xl font-bold text-sm transition-all border text-left',
+                          onMouseEnter={() => setHoveredModalItem({ 
+                            label: sub.labelKo || sub.label, 
+                            description: sub.descriptionKo || sub.description || DEFAULT_SUB_DESCRIPTION 
+                          })}
+                          onMouseLeave={() => setHoveredModalItem(null)}
+                          className={cn(
+                            'px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98]',
                             isActiveVisual
-                              ? 'bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20'
-                              : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]',
-                          ].join(' ')}
-                          title={sub.descriptionKo || sub.description || DEFAULT_SUB_DESCRIPTION}
+                              ? 'bg-brand-orange text-white border-transparent shadow-lg shadow-brand-orange/30'
+                              : 'bg-[var(--bg-secondary)]/40 text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] hover:border-brand-orange/30',
+                          )}
                         >
-                          <div className="font-bold text-sm">{sub.labelKo || sub.label}</div>
-                          <div className={['text-[11px] mt-1 leading-snug', isActiveVisual ? 'text-white/80' : 'text-[var(--text-secondary)]'].join(' ')}>
-                            {sub.descriptionKo || sub.description || DEFAULT_SUB_DESCRIPTION}
-                          </div>
+                          {sub.labelKo || sub.label}
                         </button>
-                        );
-                      })}
-                    </div>
+                      );
+                    })}
                   </div>
                 )}
+              </div>
+
+              {/* Bottom Info Area */}
+              <div className="px-6 py-5 bg-[var(--bg-secondary)]/30 border-t border-[var(--border-color)] min-h-[100px] flex items-start gap-4">
+                <div className="p-2.5 rounded-xl bg-brand-orange/10 text-brand-orange shrink-0 shadow-inner">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  {hoveredModalItem ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={hoveredModalItem.label}
+                    >
+                      <div className="text-sm font-bold text-[var(--text-primary)] mb-1">
+                        {hoveredModalItem.label}
+                      </div>
+                      <div className="text-[12px] text-[var(--text-secondary)] leading-relaxed line-clamp-2 font-medium">
+                        {hoveredModalItem.description}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <div className="text-xs text-[var(--text-secondary)] italic mt-1 font-medium opacity-60">
+                      장르 항목에 마우스를 올리면 스타일 가이드를 확인할 수 있습니다.
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>

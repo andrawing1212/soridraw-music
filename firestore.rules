@@ -120,6 +120,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /section_tags_draft/{tagId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /section_tags_live/{tagId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /users/{uid} {
       // Users can read their own profile
       allow read: if isOwner(uid);

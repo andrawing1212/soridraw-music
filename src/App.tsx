@@ -53,7 +53,8 @@ import {
   Settings,
   Play,
   Youtube as YoutubeIcon,
-  ExternalLink
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
@@ -1050,7 +1051,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }: { user: User | null; handleLogin: () => void; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void }) {
+function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, isAdminUser }: { user: User | null; handleLogin: () => void; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -1205,7 +1206,7 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }:
                       <div className="px-3 py-2 border-b border-[var(--border-color)]/50 mb-1">
                         <p className="text-[10px] md:text-[12px] text-[var(--text-secondary)] truncate font-medium">{user.displayName}</p>
                       </div>
-                      {isAdminEmail(user?.email) && (
+                      {isAdminUser && (
                         <>
                           <button 
                             onClick={() => {
@@ -1228,6 +1229,17 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }:
                           >
                             <Settings className="w-3 h-3" />
                             보컬 관리
+                          </button>
+                          <button 
+                            onClick={() => {
+                              navigate('/admin/tags');
+                              setIsProfileOpen(false);
+                              setIsExpanded(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                          >
+                            <Tag className="w-3 h-3" />
+                            태그 관리
                           </button>
                         </>
                       )}
@@ -1792,7 +1804,8 @@ const cycleFamilySelection = (
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const isAdminUser = isAdminEmail(user?.email);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const isAdminUser = useMemo(() => isAdminEmail(user?.email), [user?.email]);
   const effectiveUserTier: TagTier = isAdminUser ? 'pro+' : userTier;
 
   // Refs for stable access in callbacks
@@ -3295,7 +3308,20 @@ ${result.prompt}
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
-      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} />
+      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} />
+
+      {/* Guide Button */}
+      {user && (
+        <div className="fixed top-6 right-20 md:right-28 2xl:right-[calc((100vw-1152px)/2-2px)] z-50">
+          <button
+            onClick={() => setIsGuideModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 md:py-3 rounded-2xl bg-[var(--card-bg)]/90 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group"
+          >
+            <YoutubeIcon className="w-5 h-5 md:w-6 md:h-6 text-red-500 group-hover:scale-110 transition-transform" />
+            <span className="hidden md:block font-bold">가이드</span>
+          </button>
+        </div>
+      )}
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (
@@ -3603,55 +3629,6 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />
-        </div>
-
-        {/* Recommended Templates Section */}
-        <div className="mb-10">
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <Sparkles className="w-5 h-5 text-brand-orange" />
-            <h2 className="text-xl font-bold text-[var(--text-primary)]">추천 템플릿</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {PROMPT_TEMPLATES.map((template) => (
-              <div 
-                key={template.id}
-                className="bg-[var(--card-bg)] border border-white/10 rounded-2xl p-5 flex flex-col gap-4 hover:border-brand-orange/30 transition-all group"
-              >
-                <div>
-                  <h3 className="text-lg font-bold text-[var(--text-primary)] group-hover:text-brand-orange transition-colors">
-                    {template.title}
-                  </h3>
-                  <p className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-1">
-                    {template.description}
-                  </p>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <button 
-                    disabled
-                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/5 text-[10px] md:text-[12px] font-bold text-[var(--text-secondary)] cursor-not-allowed opacity-50"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    샘플 준비중
-                  </button>
-                  <button 
-                    disabled
-                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/5 text-[10px] md:text-[12px] font-bold text-[var(--text-secondary)] cursor-not-allowed opacity-50"
-                  >
-                    <YoutubeIcon className="w-3.5 h-3.5" />
-                    영상 준비중
-                  </button>
-                </div>
-                
-                <button
-                  onClick={() => applyTemplate(template)}
-                  className="w-full py-3 rounded-xl bg-brand-orange/10 border border-brand-orange/20 text-brand-orange font-bold text-sm hover:bg-brand-orange hover:text-white transition-all shadow-sm"
-                >
-                  이 설정 적용
-                </button>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Search & Actions */}
@@ -4347,17 +4324,29 @@ ${result.prompt}
         />
         <Route path="/archive" element={<Navigate to="/history" replace />} />
         <Route path="/library" element={<Navigate to="/history" replace />} />
-        <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} />} />
-        <Route path="/admin/vocals" element={
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-            <AdminVocalTonesPageLazy />
-          </Suspense>
-        } />
-        <Route path="/admin/tags" element={
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-            <AdminSectionTagsPageLazy />
-          </Suspense>
-        } />
+        
+        {/* Admin Routes */}
+        {isAdminUser ? (
+          <>
+            <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} />} />
+            <Route path="/admin/vocals" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <AdminVocalTonesPageLazy />
+              </Suspense>
+            } />
+            <Route path="/admin/tags" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <AdminSectionTagsPageLazy />
+              </Suspense>
+            } />
+          </>
+        ) : (
+          <>
+            <Route path="/admin/plans" element={<Navigate to="/" replace />} />
+            <Route path="/admin/vocals" element={<Navigate to="/" replace />} />
+            <Route path="/admin/tags" element={<Navigate to="/" replace />} />
+          </>
+        )}
       </Routes>
 
       {/* Tooltip / Description Overlay */}
@@ -4399,6 +4388,12 @@ ${result.prompt}
         )}
       </AnimatePresence>
 
+      <GuideModal 
+        isOpen={isGuideModalOpen} 
+        onClose={() => setIsGuideModalOpen(false)} 
+        applyTemplate={applyTemplate} 
+      />
+
       <SecondaryScrollControl />
 
       <style>{`
@@ -4431,6 +4426,94 @@ ${result.prompt}
         }
       `}</style>
     </div>
+  );
+}
+
+function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClose: () => void; applyTemplate: (template: PromptTemplate) => void }) {
+  if (!isOpen) return null;
+
+  const guides = [
+    {
+      id: 'idol-dance',
+      title: '아이돌 댄스곡 만들기',
+      youtubeUrl: 'https://youtu.be/MuXLbouYeIM?si=wm2vQZCgdxb16Gzv',
+      templateId: 'kpop-fresh'
+    },
+    {
+      id: 'emotional-indie',
+      title: '감성 인디곡 만들기',
+      youtubeUrl: 'https://youtu.be/izyFzAfgjlg?si=Fna5bgfonYfaYBD7',
+      templateId: 'indie-folk-warm'
+    },
+    {
+      id: 'hiphop-beat',
+      title: '힙합 비트 만들기',
+      youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      templateId: 'hiphop-dark'
+    }
+  ];
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="relative w-full max-w-md bg-[var(--card-bg)] border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+        >
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <YoutubeIcon className="w-6 h-6 text-red-500" />
+                가이드 템플릿
+              </h2>
+              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                <X className="w-5 h-5 text-[var(--text-secondary)]" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {guides.map((guide) => (
+                <div key={guide.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      window.open(guide.youtubeUrl, '_blank');
+                    }}
+                    className="flex-1 flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all group text-left"
+                  >
+                    <span className="font-bold text-[var(--text-primary)] group-hover:text-brand-orange transition-colors">
+                      {guide.title}
+                    </span>
+                    <ExternalLink className="w-4 h-4 text-[var(--text-secondary)]" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const template = PROMPT_TEMPLATES.find(t => t.id === guide.templateId);
+                      if (template) {
+                        applyTemplate(template);
+                        onClose();
+                      }
+                    }}
+                    className="p-4 rounded-2xl bg-brand-orange/10 border border-brand-orange/20 text-brand-orange hover:bg-brand-orange hover:text-white transition-all group/zap"
+                    title="템플릿 적용"
+                  >
+                    <Zap className="w-5 h-5 group-hover/zap:scale-110 transition-transform" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </Portal>
   );
 }
 

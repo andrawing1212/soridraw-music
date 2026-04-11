@@ -260,7 +260,7 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function isAdminEmail(email?: string | null) {
+export function isAdminEmail(email?: string | null) {
   return !!email && ADMIN_EMAILS.includes(normalizeEmail(email));
 }
 
@@ -273,6 +273,7 @@ type UserPlanRecord = {
 
 function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [emailInput, setEmailInput] = useState('');
   const [planRecords, setPlanRecords] = useState<UserPlanRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -370,6 +371,42 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-6 pt-28 pb-16">
       <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex gap-2 mb-2">
+          <button 
+            onClick={() => navigate('/admin/plans')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/plans' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            플랜 관리
+          </button>
+          <button 
+            onClick={() => navigate('/admin/vocals')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/vocals' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            보컬 관리
+          </button>
+          <button 
+            onClick={() => navigate('/admin/tags')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/tags' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            태그 관리
+          </button>
+        </div>
+
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-[var(--text-primary)]">플랜 관리</h1>
@@ -671,6 +708,7 @@ function SecondaryScrollControl() {
 
 const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));
 const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
+const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -4294,6 +4332,11 @@ ${result.prompt}
             <AdminVocalTonesPageLazy />
           </Suspense>
         } />
+        <Route path="/admin/tags" element={
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+            <AdminSectionTagsPageLazy />
+          </Suspense>
+        } />
       </Routes>
 
       {/* Tooltip / Description Overlay */}
@@ -6076,7 +6119,7 @@ type SavedStructurePreset = {
   createdAt: number;
 };
 
-const CUSTOM_STRUCTURE_SECTIONS = [
+export const CUSTOM_STRUCTURE_SECTIONS = [
   'Intro',
   'Verse 1',
   'Verse 2',

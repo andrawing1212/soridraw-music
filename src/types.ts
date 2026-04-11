@@ -1,3 +1,5 @@
+import { TagTier } from './constants';
+
 export interface CategoryItem {
   id: string;
   label: string;
@@ -133,6 +135,17 @@ export type GenreGroupItem = {
   descriptionKo?: string;
   children: GenreMainItem[];
 };
+
+export interface SectionTag {
+  id: string;
+  label: string;
+  description: string;
+  tier: TagTier;
+  sections: string[];
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface AppliedKeywords {
   genre: string[];

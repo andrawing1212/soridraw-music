@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { VocalTone } from '../types';
+import { isAdminEmail } from '../App';
 import { 
   Plus, 
   Trash2, 
@@ -27,7 +28,11 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+import { useNavigate, useLocation } from 'react-router-dom';
+
 export default function AdminVocalTonesPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [vocalTones, setVocalTones] = useState<VocalTone[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,7 +53,7 @@ export default function AdminVocalTonesPage() {
   });
   const [genreTagInput, setGenreTagInput] = useState('');
 
-  const isAdmin = auth.currentUser?.email === 'andrawing1212@gmail.com';
+  const isAdmin = isAdminEmail(auth.currentUser?.email);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -184,8 +189,44 @@ export default function AdminVocalTonesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-color)] p-6 md:p-10">
+    <div className="min-h-screen bg-[var(--bg-color)] p-6 md:p-10 pt-28">
       <div className="max-w-5xl mx-auto">
+        <div className="flex gap-2 mb-6">
+          <button 
+            onClick={() => navigate('/admin/plans')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/plans' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            플랜 관리
+          </button>
+          <button 
+            onClick={() => navigate('/admin/vocals')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/vocals' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            보컬 관리
+          </button>
+          <button 
+            onClick={() => navigate('/admin/tags')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/tags' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+            )}
+          >
+            태그 관리
+          </button>
+        </div>
+
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">보컬 톤 관리</h1>

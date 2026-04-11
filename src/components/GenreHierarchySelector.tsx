@@ -624,9 +624,9 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-brand-orange/5 border-b border-brand-orange/10 flex items-center gap-2 overflow-hidden">
+              <div className="px-6 py-2.5 bg-brand-orange/5 border-b border-brand-orange/10 flex items-center justify-center gap-2 overflow-hidden">
                 <span className="text-[10px] font-black text-brand-orange uppercase tracking-widest shrink-0">Selection</span>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   <span className={cn(pendingMainId ? "text-brand-orange" : "text-[var(--text-secondary)]")}>
                     {pendingMainId ? (activeGroup.children.find(m => m.id === pendingMainId)?.labelKo || activeGroup.children.find(m => m.id === pendingMainId)?.label) : "미선택"}
                   </span>
@@ -666,25 +666,30 @@ export default function GenreHierarchySelector({
                           <button
                             onClick={() => handleMainClick(main)}
                             className={cn(
-                              'w-full text-left rounded-2xl border p-4 transition-all duration-200 flex items-center justify-between gap-4 hover:scale-[1.02] active:scale-[0.98]',
+                              'w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-between hover:scale-[1.02] active:scale-[0.98]',
                               isActiveVisual
                                 ? 'bg-brand-orange border-transparent text-white shadow-lg shadow-brand-orange/30'
                                 : 'bg-[var(--bg-secondary)]/40 border-[var(--border-color)] hover:bg-[var(--hover-bg)] hover:border-brand-orange/30 text-[var(--text-primary)]'
                             )}
                           >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-lg tracking-tight">
+                            {/* Left Spacer to maintain center alignment of text within the card */}
+                            <div className="w-16 flex-shrink-0" aria-hidden="true" />
+
+                            {/* Text Area */}
+                            <div className="flex-1 min-w-0 text-center pr-4">
+                              <div className="font-bold text-lg tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
                               <div className={cn(
-                                'text-xs mt-0.5 truncate',
+                                'text-xs truncate w-full break-keep',
                                 isActiveVisual ? 'text-white/90' : 'text-[var(--text-secondary)]'
                               )}>
                                 {main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION}
                               </div>
                             </div>
                             
-                            <div className="flex items-center gap-2 shrink-0">
+                            {/* Right Button Area */}
+                            <div className="w-16 flex-shrink-0 flex items-center justify-center gap-2">
                               {isActiveVisual && <Check className="w-5 h-5" />}
                               {main.children.length > 0 && (
                                 <div 
@@ -693,14 +698,14 @@ export default function GenreHierarchySelector({
                                     handleOpenSub(main);
                                   }}
                                   className={cn(
-                                    "p-2.5 rounded-xl border transition-all hover:scale-110 active:scale-90",
+                                    "p-2 rounded-xl border transition-all hover:scale-110 active:scale-90",
                                     isActiveVisual 
                                       ? "bg-white/20 border-white/30 text-white" 
                                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange shadow-sm hover:border-brand-orange/50"
                                   )}
                                   title="세부장르 더보기"
                                 >
-                                  <ChevronRight className="w-5 h-5" />
+                                  <ChevronRight className="w-4 h-4" />
                                 </div>
                               )}
                             </div>
@@ -728,7 +733,7 @@ export default function GenreHierarchySelector({
                           })}
                           onMouseLeave={() => setHoveredModalItem(null)}
                           className={cn(
-                            'px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98]',
+                            'px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep',
                             isActiveVisual
                               ? 'bg-brand-orange text-white border-transparent shadow-lg shadow-brand-orange/30'
                               : 'bg-[var(--bg-secondary)]/40 text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] hover:border-brand-orange/30',
@@ -743,27 +748,28 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Bottom Info Area */}
-              <div className="px-6 py-5 bg-[var(--bg-secondary)]/30 border-t border-[var(--border-color)] min-h-[100px] flex items-start gap-4">
-                <div className="p-2.5 rounded-xl bg-brand-orange/10 text-brand-orange shrink-0 shadow-inner">
+              <div className="px-6 py-5 bg-[var(--bg-secondary)]/30 border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden">
+                <div className="p-2.5 rounded-xl bg-brand-orange/10 text-brand-orange shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 text-center">
                   {hoveredModalItem ? (
                     <motion.div
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       key={hoveredModalItem.label}
+                      className="flex flex-col items-center"
                     >
-                      <div className="text-sm font-bold text-[var(--text-primary)] mb-1">
+                      <div className="text-sm font-bold text-[var(--text-primary)] mb-1 break-keep">
                         {hoveredModalItem.label}
                       </div>
-                      <div className="text-[12px] text-[var(--text-secondary)] leading-relaxed line-clamp-2 font-medium">
+                      <div className="text-[12px] text-[var(--text-secondary)] leading-relaxed line-clamp-2 font-medium break-keep">
                         {hoveredModalItem.description}
                       </div>
                     </motion.div>
                   ) : (
-                    <div className="text-xs text-[var(--text-secondary)] italic mt-1 font-medium opacity-60">
-                      장르 항목에 마우스를 올리면 스타일 가이드를 확인할 수 있습니다.
+                    <div className="text-xs text-[var(--text-secondary)] italic font-medium opacity-60 break-keep">
+                      장르 항목에 마우스를 올리면 자세한 설명을 볼 수 있어요.
                     </div>
                   )}
                 </div>

@@ -85,7 +85,7 @@ import {
   INSTRUMENT_TAG_DESCRIPTIONS
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
@@ -1482,6 +1482,28 @@ function App() {
   const [isVocalExpanded, setIsVocalExpanded] = useState(true);
   const [isSongStructureExpanded, setIsSongStructureExpanded] = useState(true);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
+  const [sectionTags, setSectionTags] = useState<SectionTag[]>([]);
+
+  // Load section tags from Firestore
+  useEffect(() => {
+    const q = query(
+      collection(db, 'section_tags'),
+      where('isActive', '==', true),
+      orderBy('label', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedTags = snapshot.docs.map(doc => ({
+        ...doc.data()
+      })) as SectionTag[];
+      setSectionTags(fetchedTags);
+    }, (err) => {
+      console.error("Error fetching section tags for user UI:", err);
+      // Fallback is handled in the components by checking if sectionTags is empty
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
     const isPC = window.innerWidth >= 1024;
@@ -3560,6 +3582,7 @@ ${result.prompt}
               onLongPressEnd={handleLongPressEnd}
               user={user}
               userTier={effectiveUserTier}
+              sectionTags={sectionTags}
             />
           </div>
         </div>
@@ -5296,6 +5319,7 @@ interface SongStructureIntegratedControlProps {
   onLongPressEnd: () => void;
   user: User | null;
   userTier: TagTier;
+  sectionTags: SectionTag[];
 }
 
 function SongStructureIntegratedControl({
@@ -5310,7 +5334,8 @@ function SongStructureIntegratedControl({
   onLongPressStart,
   onLongPressEnd,
   user,
-  userTier
+  userTier,
+  sectionTags
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -5930,6 +5955,7 @@ function SongStructureIntegratedControl({
             onLongPressStart={onLongPressStart}
             onLongPressEnd={onLongPressEnd}
             userTier={userTier}
+            sectionTags={sectionTags}
           />
         )}
       </AnimatePresence>
@@ -5959,7 +5985,8 @@ function TagEditModal({
   onHover,
   onLongPressStart,
   onLongPressEnd,
-  userTier
+  userTier,
+  sectionTags
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -5970,12 +5997,60 @@ function TagEditModal({
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
   userTier: TagTier;
+  sectionTags: SectionTag[];
 }) {
-  const [selectedTags, setSelectedTags] = useState<string[]>(tags);
-  const isInstrumental = section === 'Instrumental';
-  const allowedTags = isInstrumental 
-    ? (INSTRUMENTAL_SOLO_TAGS as unknown as string[]) 
-    : (ALLOWED_TAGS_BY_SECTION[section] || []);
+const [selectedTags, setSelectedTags] = useState<string[]>(tags);
+const isInstrumental = section === 'Instrumental' || section === 'Solo';
+
+const allowedTags = useMemo(() => {
+  const fallbackTags = isInstrumental
+    ? [...INSTRUMENTAL_SOLO_TAGS]
+    : [...((ALLOWED_TAGS_BY_SECTION[section as keyof typeof ALLOWED_TAGS_BY_SECTION] || []) as string[])];
+
+  const firestoreTagsForSection = sectionTags
+    .filter(tag => Array.isArray(tag.sections) && tag.sections.includes(section))
+    .map(tag => tag.label);
+
+  const merged = [...fallbackTags, ...firestoreTagsForSection];
+
+  return Array.from(new Set(merged));
+}, [section, isInstrumental, sectionTags]);
+
+const maxTags = userTier === 'pro+' ? 3 : userTier === 'pro' ? 2 : 1;
+
+const handleToggle = (tag: string) => {
+  if (selectedTags.includes(tag)) {
+    setSelectedTags(prev => prev.filter(t => t !== tag));
+  } else {
+    if (selectedTags.length < maxTags) {
+      setSelectedTags(prev => [...prev, tag]);
+    }
+  }
+};
+
+const getTagTier = (tag: string) => {
+  const fsTag = sectionTags.find(
+    t => t.label === tag && Array.isArray(t.sections) && t.sections.includes(section)
+  );
+  if (fsTag) return fsTag.tier;
+
+  if (isInstrumental) return 'free';
+
+  return TAG_META[tag as keyof typeof TAG_META]?.tier || 'free';
+};
+
+const getTagDescription = (tag: string) => {
+  const fsTag = sectionTags.find(
+    t => t.label === tag && Array.isArray(t.sections) && t.sections.includes(section)
+  );
+  if (fsTag) return fsTag.description || '';
+
+  if (isInstrumental) {
+    return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || '';
+  }
+
+  return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
+};
 
   const maxSelectable = isInstrumental ? 1 : (userTier === 'free' ? 1 : userTier === 'pro' ? 2 : 3);
 
@@ -5984,12 +6059,14 @@ function TagEditModal({
   }, [isOpen, tags]);
 
   const toggleTag = (tag: string) => {
-    const meta = TAG_META[tag];
-    const isLocked = !isInstrumental && ((meta?.tier === 'pro' && userTier === 'free') || 
-                     (meta?.tier === 'pro+' && userTier !== 'pro+'));
+    const fsTag = sectionTags.find(t => t.label === tag);
+    const tier = fsTag ? fsTag.tier : TAG_META[tag as keyof typeof TAG_META]?.tier;
+    
+    const isLocked = !isInstrumental && ((tier === 'pro' && userTier === 'free') || 
+                     (tier === 'pro+' && userTier !== 'pro+'));
 
     if (isLocked) {
-      const tierLabel = meta?.tier === 'pro' ? 'Pro' : 'Pro+';
+      const tierLabel = tier === 'pro' ? 'Pro' : 'Pro+';
       alert(`${tierLabel} 기능입니다.`);
       return;
     }
@@ -6043,9 +6120,10 @@ function TagEditModal({
         <div className="p-5 space-y-4">
           <div className="flex flex-wrap gap-2">
             {allowedTags.map(tag => {
-              const meta = TAG_META[tag];
-              const isLocked = (meta?.tier === 'pro' && userTier === 'free') || 
-                               (meta?.tier === 'pro+' && userTier !== 'pro+');
+              const tier = getTagTier(tag);
+              const description = getTagDescription(tag);
+              const isLocked = !isInstrumental && ((tier === 'pro' && userTier === 'free') || 
+                               (tier === 'pro+' && userTier !== 'pro+'));
               
               return (
                 <button
@@ -6055,9 +6133,7 @@ function TagEditModal({
                     id: `tag-${tag}`, 
                     label: tag, 
                     labelKo: tag, 
-                    description: isInstrumental 
-                      ? (INSTRUMENT_TAG_DESCRIPTIONS[tag] || '독주용 악기를 선택합니다.')
-                      : (TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.') 
+                    description: description || (isInstrumental ? '독주용 악기를 선택합니다.' : '음악적 디렉션을 추가합니다.')
                   })}
                   onMouseLeave={() => {
                     onHover(null);
@@ -6067,9 +6143,7 @@ function TagEditModal({
                     id: `tag-${tag}`, 
                     label: tag, 
                     labelKo: tag, 
-                    description: isInstrumental 
-                      ? (INSTRUMENT_TAG_DESCRIPTIONS[tag] || '독주용 악기를 선택합니다.')
-                      : (TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.') 
+                    description: description || (isInstrumental ? '독주용 악기를 선택합니다.' : '음악적 디렉션을 추가합니다.')
                   })}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
@@ -6082,8 +6156,8 @@ function TagEditModal({
                   )}
                 >
                   {tag}
-                  {meta?.tier === 'pro' && <Lock className="w-3 h-3" />}
-                  {meta?.tier === 'pro+' && <div className="flex items-center">⭐<Lock className="w-3 h-3" /></div>}
+                  {isLocked && <Lock className="w-3 h-3" />}
+                  {tier !== 'free' && !isLocked && <Sparkles className="w-3 h-3 text-yellow-500" />}
                 </button>
               );
             })}

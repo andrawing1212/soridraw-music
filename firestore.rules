@@ -113,6 +113,20 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
+    match /section_tags/{tagId} {
+      // Anyone can read active tags
+      allow read: if true;
+      // Only admins can manage tags
+      allow write: if isAdmin();
+    }
+
+    match /users/{uid} {
+      // Users can read their own profile
+      allow read: if isOwner(uid);
+      // Only admins can manage user roles
+      allow write: if isAdmin();
+    }
+
     // Default deny
     match /{path=**} {
       allow read, write: if false;

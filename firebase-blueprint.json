@@ -72,6 +72,22 @@
         }
       },
       "required": ["songs"]
+    },
+    "SectionTag": {
+      "title": "Section Tag",
+      "description": "A tag that can be applied to a song section.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "tier": { "type": "string", "enum": ["free", "pro", "pro+"] },
+        "sections": { "type": "array", "items": { "type": "string" } },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "label", "description", "tier", "sections", "isActive", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -82,6 +98,10 @@
     "/user_recent_songs/{uid}": {
       "schema": "RecentSongs",
       "description": "Document containing the 5 most recent songs for a user."
+    },
+    "/section_tags/{tagId}": {
+      "schema": "SectionTag",
+      "description": "Collection of section tags managed by admins."
     }
   }
 }

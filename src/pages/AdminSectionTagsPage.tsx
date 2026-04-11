@@ -21,6 +21,7 @@ import {
   Save,
   X,
   Check,
+  CheckCircle2,
   AlertCircle,
   Loader2,
   Search,
@@ -60,6 +61,7 @@ export default function AdminSectionTagsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState<TagTier | 'all'>('all');
   const [sectionFilter, setSectionFilter] = useState<string | 'all'>('all');
@@ -93,6 +95,7 @@ export default function AdminSectionTagsPage() {
           };
         }) as SectionTagDoc[];
 
+        console.log(`Fetched ${fetchedTags.length} tags from Firestore`);
         setTags(fetchedTags);
         setIsLoading(false);
       },
@@ -238,13 +241,19 @@ export default function AdminSectionTagsPage() {
   };
 
   const handleDelete = async (docId: string) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+    console.log('handleDelete called for docId:', docId);
 
     try {
+      setIsLoading(true);
       await deleteDoc(doc(db, 'section_tags', docId));
+      console.log('Successfully deleted document:', docId);
+      setSuccessMessage('태그가 성공적으로 삭제되었습니다.');
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Error deleting section tag:', err);
-      alert('삭제 중 오류가 발생했습니다.');
+      setError('삭제 중 오류가 발생했습니다: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -260,45 +269,57 @@ export default function AdminSectionTagsPage() {
   };
 
   const handleInitialLoad = async () => {
-    if (
-      !window.confirm(
-        'constants.ts의 데이터를 Firestore로 마이그레이션하시겠습니까? (이미 존재하는 태그는 건너뜁니다)'
-      )
-    )
-      return;
-
+    console.log('handleInitialLoad triggered');
+    
     setIsMigrating(true);
     setError(null);
+    setSuccessMessage(null);
+    console.log('Starting migration process...');
 
     try {
       const existingTagsSnapshot = await getDocs(collection(db, 'section_tags'));
       const existingIds = new Set(existingTagsSnapshot.docs.map((d) => d.id));
+      console.log(`Found ${existingIds.size} existing tags in Firestore`);
 
       const batch = writeBatch(db);
-      let count = 0;
+      let addedCount = 0;
+      let skippedCount = 0;
 
-      // Collect all unique labels from both TAG_META and ALLOWED_TAGS_BY_SECTION
-      const allLabels = new Set<string>(Object.keys(TAG_META));
+      // Collect all unique labels from TAG_META, ALLOWED_TAGS_BY_SECTION, and INSTRUMENTAL_SOLO_TAGS
+      const allLabels = new Set<string>();
+      
+      // 1. From TAG_META
+      Object.keys(TAG_META).forEach(label => allLabels.add(label));
+      
+      // 2. From ALLOWED_TAGS_BY_SECTION
       Object.values(ALLOWED_TAGS_BY_SECTION).forEach((sectionTags) => {
         sectionTags.forEach((label) => allLabels.add(label));
       });
 
-      // Also add instrumental tags
+      // 3. From INSTRUMENTAL_SOLO_TAGS
       INSTRUMENTAL_SOLO_TAGS.forEach((label) => allLabels.add(label));
+
+      console.log(`Total unique labels to process: ${allLabels.size}`);
 
       for (const label of allLabels) {
         const id = slugifyTagId(label);
 
-        if (existingIds.has(id)) continue;
+        // Skip if already exists in Firestore
+        if (existingIds.has(id)) {
+          skippedCount++;
+          continue;
+        }
 
         const sections: string[] = [];
+        
+        // Find sections from ALLOWED_TAGS_BY_SECTION
         for (const [section, allowedTags] of Object.entries(ALLOWED_TAGS_BY_SECTION)) {
           if (allowedTags.includes(label)) {
             sections.push(section);
           }
         }
 
-        // Handle instrumental/solo tags specifically if they are in INSTRUMENTAL_SOLO_TAGS
+        // Add Instrumental/Solo sections for instrument tags
         if (INSTRUMENTAL_SOLO_TAGS.includes(label as any)) {
           if (!sections.includes('Instrumental')) sections.push('Instrumental');
           if (!sections.includes('Solo')) sections.push('Solo');
@@ -322,18 +343,28 @@ export default function AdminSectionTagsPage() {
         };
 
         batch.set(tagRef, tagData);
-        count++;
+        addedCount++;
       }
 
-      if (count > 0) {
+      console.log(`Migration plan: ${addedCount} to add, ${skippedCount} skipped`);
+
+      if (addedCount > 0) {
         await batch.commit();
-        alert(`${count}개의 태그가 성공적으로 마이그레이션되었습니다.`);
+        const msg = `${addedCount}개의 태그가 성공적으로 마이그레이션되었습니다. (이미 존재하여 ${skippedCount}개 건너뜀)`;
+        console.log(msg);
+        setSuccessMessage(msg);
+        alert(msg);
       } else {
-        alert('마이그레이션할 새로운 태그가 없습니다.');
+        const msg = '마이그레이션할 새로운 태그가 없습니다. 모든 기본 태그가 이미 Firestore에 존재합니다.';
+        console.log(msg);
+        setSuccessMessage(msg);
+        alert(msg);
       }
     } catch (err) {
       console.error('Error migrating tags:', err);
-      setError('데이터 마이그레이션 중 오류가 발생했습니다.');
+      const errMsg = '데이터 마이그레이션 중 오류가 발생했습니다: ' + (err instanceof Error ? err.message : String(err));
+      setError(errMsg);
+      alert(errMsg);
     } finally {
       setIsMigrating(false);
     }
@@ -484,6 +515,13 @@ export default function AdminSectionTagsPage() {
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-500">
             <AlertCircle className="w-5 h-5" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3 text-green-500">
+            <CheckCircle2 className="w-5 h-5" />
+            <span>{successMessage}</span>
           </div>
         )}
 

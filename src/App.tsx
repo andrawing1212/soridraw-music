@@ -1488,7 +1488,6 @@ function App() {
   useEffect(() => {
     const q = query(
       collection(db, 'section_tags'),
-      where('isActive', '==', true),
       orderBy('label', 'asc')
     );
 
@@ -1499,7 +1498,6 @@ function App() {
       setSectionTags(fetchedTags);
     }, (err) => {
       console.error("Error fetching section tags for user UI:", err);
-      // Fallback is handled in the components by checking if sectionTags is empty
     });
 
     return () => unsubscribe();
@@ -5999,58 +5997,46 @@ function TagEditModal({
   userTier: TagTier;
   sectionTags: SectionTag[];
 }) {
-const [selectedTags, setSelectedTags] = useState<string[]>(tags);
-const isInstrumental = section === 'Instrumental' || section === 'Solo';
+  const [selectedTags, setSelectedTags] = useState<string[]>(tags);
+  const isInstrumental = section === 'Instrumental' || section === 'Solo';
 
-const allowedTags = useMemo(() => {
-  const fallbackTags = isInstrumental
-    ? [...INSTRUMENTAL_SOLO_TAGS]
-    : [...((ALLOWED_TAGS_BY_SECTION[section as keyof typeof ALLOWED_TAGS_BY_SECTION] || []) as string[])];
+  const allowedTags = useMemo(() => {
+    // 1. Get all tags from Firestore for this section
+    const fsTagsForSection = sectionTags.filter(t => Array.isArray(t.sections) && t.sections.includes(section));
+    const fsLabels = new Set(fsTagsForSection.map(t => t.label));
 
-  const firestoreTagsForSection = sectionTags
-    .filter(tag => Array.isArray(tag.sections) && tag.sections.includes(section))
-    .map(tag => tag.label);
+    // 2. Get fallback tags from constants that are NOT in Firestore yet
+    const fallbackSource = isInstrumental
+      ? [...INSTRUMENTAL_SOLO_TAGS]
+      : [...((ALLOWED_TAGS_BY_SECTION[section as keyof typeof ALLOWED_TAGS_BY_SECTION] || []) as string[])];
+    
+    const missingFromFs = fallbackSource.filter(label => !fsLabels.has(label));
 
-  const merged = [...fallbackTags, ...firestoreTagsForSection];
+    // 3. Only include ACTIVE tags from Firestore
+    const activeFsLabels = fsTagsForSection.filter(t => t.isActive).map(t => t.label);
 
-  return Array.from(new Set(merged));
-}, [section, isInstrumental, sectionTags]);
+    // 4. Merge: Active Firestore tags + Constants not yet in Firestore
+    const merged = [...activeFsLabels, ...missingFromFs];
+    return Array.from(new Set(merged));
+  }, [section, isInstrumental, sectionTags]);
 
-const maxTags = userTier === 'pro+' ? 3 : userTier === 'pro' ? 2 : 1;
+  const getTagTier = (tag: string) => {
+    const fsTag = sectionTags.find(t => t.label === tag);
+    if (fsTag) return fsTag.tier;
 
-const handleToggle = (tag: string) => {
-  if (selectedTags.includes(tag)) {
-    setSelectedTags(prev => prev.filter(t => t !== tag));
-  } else {
-    if (selectedTags.length < maxTags) {
-      setSelectedTags(prev => [...prev, tag]);
+    if (isInstrumental) return 'free';
+    return TAG_META[tag as keyof typeof TAG_META]?.tier || 'free';
+  };
+
+  const getTagDescription = (tag: string) => {
+    const fsTag = sectionTags.find(t => t.label === tag);
+    if (fsTag) return fsTag.description || '';
+
+    if (isInstrumental) {
+      return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || '';
     }
-  }
-};
-
-const getTagTier = (tag: string) => {
-  const fsTag = sectionTags.find(
-    t => t.label === tag && Array.isArray(t.sections) && t.sections.includes(section)
-  );
-  if (fsTag) return fsTag.tier;
-
-  if (isInstrumental) return 'free';
-
-  return TAG_META[tag as keyof typeof TAG_META]?.tier || 'free';
-};
-
-const getTagDescription = (tag: string) => {
-  const fsTag = sectionTags.find(
-    t => t.label === tag && Array.isArray(t.sections) && t.sections.includes(section)
-  );
-  if (fsTag) return fsTag.description || '';
-
-  if (isInstrumental) {
-    return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || '';
-  }
-
-  return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
-};
+    return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
+  };
 
   const maxSelectable = isInstrumental ? 1 : (userTier === 'free' ? 1 : userTier === 'pro' ? 2 : 3);
 

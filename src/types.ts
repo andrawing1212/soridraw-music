@@ -95,9 +95,14 @@ export interface TempoConfig {
   max: number;
 }
 
+export type CustomSectionType = 
+  | 'Intro' | 'Verse 1' | 'Verse 2' | 'Pre-Chorus' | 'Chorus' | 'Hook' | 'Drop' 
+  | 'Bridge' | 'Breakdown' | 'Instrumental' | 'Solo' | 'Rap Verse' | 'Final Chorus' | 'Outro'
+  | 'Theme A' | 'Theme B' | 'Build-up' | 'Main Theme' | 'Climax';
+
 export interface CustomSectionItem {
   id: string;
-  section: string;
+  section: CustomSectionType | string;
   tags: string[];
 }
 
@@ -157,6 +162,7 @@ export interface AppliedKeywords {
   lyricDraft?: string;
   isLyricMode?: boolean;
   lyricMode?: 'assist' | 'preserve';
+  instrumentTags?: string[];
 }
 
 export interface GenerateSongParams {
@@ -176,6 +182,7 @@ export interface GenerateSongParams {
   customStructure?: CustomSectionItem[];
   lyricsLength?: LyricsLength;
   kpopMode?: 0 | 1 | 2;
+  instrumentTags?: string[];
 }
 
 export interface SongResult {

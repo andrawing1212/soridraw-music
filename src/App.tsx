@@ -50,7 +50,10 @@ import {
   CheckCircle2,
   Mic2,
   Tag,
-  Settings
+  Settings,
+  Play,
+  Youtube as YoutubeIcon,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
@@ -72,9 +75,18 @@ import {
   INSTRUMENT_SOUNDS,
   STYLE_CYCLES,
   SOUND_TEXTURE_CYCLES,
+  ALLOWED_TAGS_BY_SECTION,
+  TAG_DESCRIPTIONS,
+  TAG_META,
+  SECTION_META,
+  TagTier,
+  INSTRUMENTAL_SOLO_TAGS,
+  INSTRUMENT_TAGS,
+  INSTRUMENT_TAG_DESCRIPTIONS
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
 import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole } from './types';
+import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   if (!input || !Array.isArray(input)) return [];
@@ -240,6 +252,222 @@ class ErrorBoundary extends Component<any, any> {
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+const ADMIN_EMAILS = ['andrawing1212@gmail.com'];
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function isAdminEmail(email?: string | null) {
+  return !!email && ADMIN_EMAILS.includes(normalizeEmail(email));
+}
+
+type UserPlanRecord = {
+  email: string;
+  tier: TagTier;
+  updatedAt?: any;
+  updatedBy?: string;
+};
+
+function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
+  const navigate = useNavigate();
+  const [emailInput, setEmailInput] = useState('');
+  const [planRecords, setPlanRecords] = useState<UserPlanRecord[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  const canAccess = isAdminEmail(currentUser?.email);
+
+  const loadPlans = useCallback(async () => {
+    if (!canAccess) return;
+    try {
+      const snapshot = await getDocs(collection(db, 'user_plans'));
+      const plans = snapshot.docs
+        .map((snapshotDoc) => ({
+          email: String(snapshotDoc.data().email || snapshotDoc.id),
+          tier: (snapshotDoc.data().tier || 'free') as TagTier,
+          updatedAt: snapshotDoc.data().updatedAt,
+          updatedBy: snapshotDoc.data().updatedBy,
+        }))
+        .sort((a, b) => a.email.localeCompare(b.email));
+      setPlanRecords(plans);
+    } catch (error) {
+      console.error('Failed to load user plans:', error);
+      setPageError('플랜 목록을 불러오지 못했습니다.');
+    }
+  }, [canAccess]);
+
+  useEffect(() => {
+    loadPlans();
+  }, [loadPlans]);
+
+  const assignPlan = async (email: string, tier: TagTier) => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      setPageError('올바른 이메일을 입력해주세요.');
+      return;
+    }
+
+    setIsSaving(true);
+    setPageError(null);
+    try {
+      await setDoc(
+        doc(db, 'user_plans', normalizedEmail),
+        sanitizeForFirestore({
+          email: normalizedEmail,
+          tier,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser?.email || null,
+        }),
+        { merge: true }
+      );
+      setEmailInput('');
+      await loadPlans();
+    } catch (error) {
+      console.error('Failed to assign user plan:', error);
+      setPageError('플랜 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const removePlan = async (email: string) => {
+    setIsSaving(true);
+    setPageError(null);
+    try {
+      await deleteDoc(doc(db, 'user_plans', normalizeEmail(email)));
+      await loadPlans();
+    } catch (error) {
+      console.error('Failed to remove user plan:', error);
+      setPageError('플랜 삭제에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!canAccess) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-6 text-center">
+        <div className="max-w-md space-y-4">
+          <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-500/10">
+            <Lock className="w-10 h-10 text-red-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-[var(--text-primary)]">접근 권한이 없습니다</h2>
+          <p className="text-[var(--text-secondary)]">관리자 계정으로만 플랜을 부여할 수 있습니다.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-5 py-3 rounded-2xl bg-brand-orange text-white font-bold hover:brightness-110 transition-all"
+          >
+            홈으로 이동
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[var(--bg-primary)] px-6 pt-28 pb-16">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-[var(--text-primary)]">플랜 관리</h1>
+            <p className="text-sm text-[var(--text-secondary)] mt-2">이메일 기준으로 free / pro / pro+ 권한을 직접 부여합니다.</p>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-all"
+          >
+            홈으로
+          </button>
+        </div>
+
+        <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-5 shadow-[var(--shadow-md)] space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">플랜 부여</h2>
+            <p className="text-xs text-[var(--text-secondary)] mt-1">계정 이메일을 입력하고 원하는 플랜을 바로 부여하세요.</p>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-3">
+            <input
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="plan@example.com"
+              className="flex-1 px-4 py-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] outline-none focus:border-brand-orange"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => assignPlan(emailInput, 'free')}
+                disabled={isSaving}
+                className="px-4 py-3 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-all disabled:opacity-50"
+              >
+                Free
+              </button>
+              <button
+                onClick={() => assignPlan(emailInput, 'pro')}
+                disabled={isSaving}
+                className="px-4 py-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all disabled:opacity-50"
+              >
+                Pro
+              </button>
+              <button
+                onClick={() => assignPlan(emailInput, 'pro+')}
+                disabled={isSaving}
+                className="px-4 py-3 rounded-2xl bg-brand-orange text-white hover:brightness-110 transition-all disabled:opacity-50"
+              >
+                Pro+
+              </button>
+            </div>
+          </div>
+
+          {pageError && <p className="text-sm text-red-400">{pageError}</p>}
+          <p className="text-xs text-[var(--text-secondary)]">관리자 본인 계정은 항상 Pro+로 동작합니다.</p>
+        </div>
+
+        <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-5 shadow-[var(--shadow-md)]">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">부여된 플랜 목록</h2>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">삭제하면 다시 free로 돌아갑니다.</p>
+            </div>
+            <button
+              onClick={loadPlans}
+              className="p-2 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-primary)] hover:bg-white/10 transition-all"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {planRecords.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-6 text-sm text-[var(--text-secondary)] text-center">
+                아직 부여된 플랜이 없습니다.
+              </div>
+            ) : (
+              planRecords.map((record) => (
+                <div
+                  key={record.email}
+                  className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-2xl border border-[var(--border-color)] px-4 py-3 bg-[var(--bg-secondary)]/40"
+                >
+                  <div>
+                    <p className="text-sm font-bold text-[var(--text-primary)]">{record.email}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">현재 플랜: {record.tier}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => assignPlan(record.email, 'free')} disabled={isSaving} className="px-3 py-2 rounded-xl border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-all disabled:opacity-50">Free</button>
+                    <button onClick={() => assignPlan(record.email, 'pro')} disabled={isSaving} className="px-3 py-2 rounded-xl border border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 transition-all disabled:opacity-50">Pro</button>
+                    <button onClick={() => assignPlan(record.email, 'pro+')} disabled={isSaving} className="px-3 py-2 rounded-xl bg-brand-orange text-white hover:brightness-110 transition-all disabled:opacity-50">Pro+</button>
+                    <button onClick={() => removePlan(record.email)} disabled={isSaving} className="px-3 py-2 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50">삭제</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SecondaryScrollControl() {
@@ -939,18 +1167,31 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme }:
                       <div className="px-3 py-2 border-b border-[var(--border-color)]/50 mb-1">
                         <p className="text-[10px] md:text-[12px] text-[var(--text-secondary)] truncate font-medium">{user.displayName}</p>
                       </div>
-                      {user?.email === 'andrawing1212@gmail.com' && (
-                        <button 
-                          onClick={() => {
-                            navigate('/admin/vocals');
-                            setIsProfileOpen(false);
-                            setIsExpanded(false);
-                          }}
-                          className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                        >
-                          <Settings className="w-3 h-3" />
-                          보컬 관리
-                        </button>
+                      {isAdminEmail(user?.email) && (
+                        <>
+                          <button 
+                            onClick={() => {
+                              navigate('/admin/plans');
+                              setIsProfileOpen(false);
+                              setIsExpanded(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                          >
+                            <Settings className="w-3 h-3" />
+                            플랜 관리
+                          </button>
+                          <button 
+                            onClick={() => {
+                              navigate('/admin/vocals');
+                              setIsProfileOpen(false);
+                              setIsExpanded(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                          >
+                            <Settings className="w-3 h-3" />
+                            보컬 관리
+                          </button>
+                        </>
                       )}
                       <button 
                         onClick={() => {
@@ -1271,6 +1512,7 @@ function App() {
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
+  const [userTier, setUserTier] = useState<TagTier>('free');
   const [userInput, setUserInput] = useState('');
   const [isLyricMode, setIsLyricMode] = useState(false);
   const [lyricDraft, setLyricDraft] = useState('');
@@ -1303,6 +1545,70 @@ function App() {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+  };
+
+  const applyTemplate = (template: PromptTemplate) => {
+    // Helper to filter valid IDs
+    const filterValid = (ids: string[] | undefined, validList: { id: string }[]) => {
+      if (!ids) return [];
+      const validIds = new Set(validList.map(item => item.id));
+      return ids.filter(id => validIds.has(id));
+    };
+
+    // 1. Genres & SubGenres
+    // SubGenres can be main genres or leaf genres in GENRE_HIERARCHY
+    const allSubGenres = GENRE_HIERARCHY.flatMap(group => 
+      group.children.flatMap(main => [main, ...(main.children || [])])
+    );
+    const validGenres = filterValid(template.genre, GENRES);
+    const validSubGenres = filterValid(template.subGenre, allSubGenres);
+
+    // Ensure that if a subGenre is selected, its parent main genre is also in selectedGenres
+    const inferredGenres = new Set(validGenres);
+    if (validSubGenres.length > 0) {
+      validSubGenres.forEach(subId => {
+        GENRE_HIERARCHY.forEach(group => {
+          group.children.forEach(mainGenre => {
+            if (mainGenre.id === subId || mainGenre.children?.some(sub => sub.id === subId)) {
+              inferredGenres.add(mainGenre.id);
+            }
+          });
+        });
+      });
+    }
+
+    setSelectedGenres(Array.from(inferredGenres));
+    setSubGenre(validSubGenres);
+
+    // 2. Moods & Themes
+    setSelectedMoods(filterValid(template.moods, MOODS));
+    setSelectedThemes(filterValid(template.themes, THEMES));
+
+    // 3. Styles & Sounds
+    setSelectedStyles(filterValid(template.styles, SOUND_STYLES));
+    setSelectedInstrumentSounds(filterValid(template.instrumentSounds, INSTRUMENT_SOUNDS));
+
+    // 4. Vocal Settings
+    setMaleCount(template.maleCount ?? 0);
+    setFemaleCount(template.femaleCount ?? 0);
+    setRapEnabled(template.rapEnabled ?? false);
+    
+    const isValidVocalTone = VOCAL_TONES.some(tone => tone.id === template.vocalToneId);
+    setSelectedVocalToneId(isValidVocalTone ? template.vocalToneId : undefined);
+
+    // 5. Structure & Mode
+    if (template.songStructure) {
+      setSongStructure(template.songStructure as SongStructure);
+    }
+    if (template.customStructure) {
+      setCustomStructure(template.customStructure);
+    }
+    if (template.lyricMode) {
+      setLyricMode(template.lyricMode);
+    }
+    
+    // Scroll to input area
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const toggle = (
@@ -1428,6 +1734,8 @@ const cycleFamilySelection = (
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const isAdminUser = isAdminEmail(user?.email);
+  const effectiveUserTier: TagTier = isAdminUser ? 'pro+' : userTier;
 
   // Refs for stable access in callbacks
   const pinnedGenresRef = useRef(pinnedGenres);
@@ -1489,6 +1797,34 @@ const cycleFamilySelection = (
       }
 
       if (currentUser) {
+        const loadUserPlan = async () => {
+          try {
+            if (isAdminEmail(currentUser.email)) {
+              setUserTier('pro+');
+              return;
+            }
+
+            const normalizedEmail = normalizeEmail(currentUser.email || '');
+            if (!normalizedEmail) {
+              setUserTier('free');
+              return;
+            }
+
+            const planSnap = await getDoc(doc(db, 'user_plans', normalizedEmail));
+            if (planSnap.exists()) {
+              const tier = planSnap.data()?.tier;
+              setUserTier(tier === 'pro' || tier === 'pro+' ? tier : 'free');
+            } else {
+              setUserTier('free');
+            }
+          } catch (error) {
+            console.error('Failed to load user plan:', error);
+            setUserTier('free');
+          }
+        };
+
+        loadUserPlan();
+
         // Fetch favorites for the user
         const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
         unsubFavs = onSnapshot(q, (snapshot) => {
@@ -1505,6 +1841,7 @@ const cycleFamilySelection = (
         });
       } else {
         setFavorites([]);
+        setUserTier('free');
       }
     });
 
@@ -2110,6 +2447,7 @@ const cycleFamilySelection = (
     setMaleCount(0);
     setFemaleCount(0);
     setRapEnabled(false);
+    setCustomStructure([]);
 
     setTempoEnabled(true);
     setMinBPM(90);
@@ -2607,7 +2945,14 @@ const saveRecentSong = async (newSong: any) => {
         ].filter(Boolean).slice(0, 1).join(', '); // Limit to one additional styling
 
         const arrangement = [
-          'Base structure: Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro',
+          songStructure === 'custom' 
+            ? `Custom structure: ${customStructure.map(s => {
+                if (s.section === 'Instrumental' && s.tags.length > 0) {
+                  return `${s.section}: ${s.tags[0]} Solo`;
+                }
+                return `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`;
+              }).join(' → ')}`
+            : `Base structure: ${songStructure === '1' ? 'Intro → Verse 1 → Chorus / Drop → Outro' : songStructure === '2' ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
@@ -3176,6 +3521,7 @@ ${result.prompt}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
               user={user}
+              userTier={effectiveUserTier}
             />
           </div>
         </div>
@@ -3198,6 +3544,55 @@ ${result.prompt}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
           />
+        </div>
+
+        {/* Recommended Templates Section */}
+        <div className="mb-10">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <Sparkles className="w-5 h-5 text-brand-orange" />
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">추천 템플릿</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {PROMPT_TEMPLATES.map((template) => (
+              <div 
+                key={template.id}
+                className="bg-[var(--card-bg)] border border-white/10 rounded-2xl p-5 flex flex-col gap-4 hover:border-brand-orange/30 transition-all group"
+              >
+                <div>
+                  <h3 className="text-lg font-bold text-[var(--text-primary)] group-hover:text-brand-orange transition-colors">
+                    {template.title}
+                  </h3>
+                  <p className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-1">
+                    {template.description}
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button 
+                    disabled
+                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/5 text-[10px] md:text-[12px] font-bold text-[var(--text-secondary)] cursor-not-allowed opacity-50"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    샘플 준비중
+                  </button>
+                  <button 
+                    disabled
+                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/5 text-[10px] md:text-[12px] font-bold text-[var(--text-secondary)] cursor-not-allowed opacity-50"
+                  >
+                    <YoutubeIcon className="w-3.5 h-3.5" />
+                    영상 준비중
+                  </button>
+                </div>
+                
+                <button
+                  onClick={() => applyTemplate(template)}
+                  className="w-full py-3 rounded-xl bg-brand-orange/10 border border-brand-orange/20 text-brand-orange font-bold text-sm hover:bg-brand-orange hover:text-white transition-all shadow-sm"
+                >
+                  이 설정 적용
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Search & Actions */}
@@ -3720,7 +4115,12 @@ ${result.prompt}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
                             {result.appliedKeywords.songStructure === 'custom' 
-                              ? (result.appliedKeywords.customStructure ?? []).map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`).join(' → ')
+                              ? (result.appliedKeywords.customStructure ?? []).map(s => {
+                                  if (s.section === 'Instrumental' && (s.tags ?? []).length > 0) {
+                                    return `${s.section}: ${(s.tags ?? [])[0]}`;
+                                  }
+                                  return `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`;
+                                }).join(' → ')
                               : result.appliedKeywords.songStructure === '1'
                                 ? 'Intro → Verse 1 → Chorus / Drop → Outro"'
                                 : result.appliedKeywords.songStructure === '2'
@@ -3888,6 +4288,7 @@ ${result.prompt}
         />
         <Route path="/archive" element={<Navigate to="/history" replace />} />
         <Route path="/library" element={<Navigate to="/history" replace />} />
+        <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} />} />
         <Route path="/admin/vocals" element={
           <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
             <AdminVocalTonesPageLazy />
@@ -4851,6 +5252,7 @@ interface SongStructureIntegratedControlProps {
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
   user: User | null;
+  userTier: TagTier;
 }
 
 function SongStructureIntegratedControl({
@@ -4864,7 +5266,8 @@ function SongStructureIntegratedControl({
   onHover,
   onLongPressStart,
   onLongPressEnd,
-  user
+  user,
+  userTier
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -4957,7 +5360,12 @@ function SongStructureIntegratedControl({
 
   function formatStructureText(structure: CustomSectionItem[]) {
     const normalized = normalizeCustomStructure(structure);
-    return normalized.map(s => `${s.section}${(s.tags ?? []).length > 0 ? ` · ${(s.tags ?? []).join(' · ')}` : ''}`).join(' → ');
+    return normalized.map(s => {
+      if (s.section === 'Instrumental' && (s.tags ?? []).length > 0) {
+        return `${s.section}: ${(s.tags ?? [])[0]}`;
+      }
+      return `${s.section}${(s.tags ?? []).length > 0 ? ` · ${(s.tags ?? []).join(' · ')}` : ''}`;
+    }).join(' → ');
   }
 
   const handleSelectStructure = (optionId: SongStructure) => {
@@ -4965,8 +5373,19 @@ function SongStructureIntegratedControl({
       '1': '짧고 간결한 구조 · 추천 길이 1~2분',
       '2': '가장 일반적인 기본 구조 · 추천 길이 2~4분',
       '3': '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분',
-      'custom': (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.',
+      'custom': (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · Pro부터 사용할 수 있습니다.',
     };
+
+    if (optionId === 'custom' && userTier === 'free') {
+      onHover({
+        id: 'song-structure-custom-locked',
+        label: '구조 커스텀',
+        description: '커스텀 구조는 Pro부터 사용할 수 있습니다.',
+        _ts: Date.now(),
+      });
+      alert('커스텀 구조는 Pro부터 사용할 수 있습니다.');
+      return;
+    }
 
     onSongStructureChange(optionId);
 
@@ -5135,27 +5554,33 @@ function SongStructureIntegratedControl({
               <div className="space-y-2">
                 <p className="text-[13px] font-bold text-brand-orange uppercase tracking-wider">│섹션 구조</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {structureOptions.map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => handleSelectStructure(opt.id as SongStructure)}
-                      onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
-                      onMouseLeave={() => {
-                        onHover(null);
-                        onLongPressEnd();
-                      }}
-                      onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: opt.description })}
-                      onTouchEnd={onLongPressEnd}
-                      className={cn(
-                        "py-1.5 rounded-xl text-[13px] font-bold transition-all border",
-                        songStructure === opt.id
-                          ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                          : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  {structureOptions.map((opt) => {
+                    const isCustomLocked = opt.id === 'custom' && userTier === 'free';
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleSelectStructure(opt.id as SongStructure)}
+                        onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: isCustomLocked ? '커스텀 구조는 Pro부터 사용할 수 있습니다.' : opt.description })}
+                        onMouseLeave={() => {
+                          onHover(null);
+                          onLongPressEnd();
+                        }}
+                        onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: isCustomLocked ? '커스텀 구조는 Pro부터 사용할 수 있습니다.' : opt.description })}
+                        onTouchEnd={onLongPressEnd}
+                        className={cn(
+                          "py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5",
+                          songStructure === opt.id
+                            ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                            : isCustomLocked
+                              ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/60 hover:bg-white/10"
+                              : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                        )}
+                      >
+                        {opt.label}
+                        {isCustomLocked && <Lock className="w-3.5 h-3.5" />}
+                      </button>
+                    );
+                  })}
                 </div>
                 
                 {/* Structure Guide - Always Visible */}
@@ -5212,17 +5637,39 @@ function SongStructureIntegratedControl({
                 <div>
                   <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-3">섹션 추가</p>
                   <div className="flex flex-wrap gap-2">
-                    {CUSTOM_STRUCTURE_SECTIONS.map((section) => (
-                      <button
-                        key={section}
-                        onClick={() => appendSection(section)}
-                        onMouseEnter={() => onHover({ id: `section-add-${section}`, label: section, description: `${section} 섹션을 구조에 추가합니다.` })}
-                        onMouseLeave={() => onHover(null)}
-                        className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-[13px] font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
-                      >
-                        {section}
-                      </button>
-                    ))}
+                    {CUSTOM_STRUCTURE_SECTIONS.map((section) => {
+                      const meta = SECTION_META[section];
+                      const sectionTier = meta?.tier || 'free';
+                      const isLocked = sectionTier === 'pro+' && userTier !== 'pro+';
+
+                      return (
+                        <button
+                          key={section}
+                          onClick={() => {
+                            if (isLocked) {
+                              alert('이 섹션은 Pro+ 플랜 전용 기능입니다.');
+                              return;
+                            }
+                            appendSection(section);
+                          }}
+                          onMouseEnter={() => onHover({ 
+                            id: `section-add-${section}`, 
+                            label: section, 
+                            description: isLocked ? 'Pro+ 플랜 전용 섹션입니다.' : `${section} 섹션을 구조에 추가합니다.` 
+                          })}
+                          onMouseLeave={() => onHover(null)}
+                          className={cn(
+                            "px-3.5 py-2 rounded-xl border text-[13px] font-bold transition-all flex items-center gap-1.5",
+                            isLocked 
+                              ? "bg-white/5 border-white/5 text-[var(--text-secondary)]/40 cursor-not-allowed"
+                              : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                          )}
+                        >
+                          {section}
+                          {isLocked && <Lock className="w-3 h-3" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -5439,6 +5886,7 @@ function SongStructureIntegratedControl({
             onHover={onHover}
             onLongPressStart={onLongPressStart}
             onLongPressEnd={onLongPressEnd}
+            userTier={userTier}
           />
         )}
       </AnimatePresence>
@@ -5456,6 +5904,7 @@ interface SongStructureControlProps {
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
   user: User | null;
+  userTier: TagTier;
 }
 
 function TagEditModal({
@@ -5466,7 +5915,8 @@ function TagEditModal({
   onSave,
   onHover,
   onLongPressStart,
-  onLongPressEnd
+  onLongPressEnd,
+  userTier
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -5476,20 +5926,42 @@ function TagEditModal({
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  userTier: TagTier;
 }) {
   const [selectedTags, setSelectedTags] = useState<string[]>(tags);
-  const allowedTags = ALLOWED_TAGS_BY_SECTION[section] || [];
+  const isInstrumental = section === 'Instrumental';
+  const allowedTags = isInstrumental 
+    ? (INSTRUMENTAL_SOLO_TAGS as unknown as string[]) 
+    : (ALLOWED_TAGS_BY_SECTION[section] || []);
+
+  const maxSelectable = isInstrumental ? 1 : (userTier === 'free' ? 1 : userTier === 'pro' ? 2 : 3);
 
   useEffect(() => {
     if (isOpen) setSelectedTags(tags);
   }, [isOpen, tags]);
 
   const toggleTag = (tag: string) => {
+    const meta = TAG_META[tag];
+    const isLocked = !isInstrumental && ((meta?.tier === 'pro' && userTier === 'free') || 
+                     (meta?.tier === 'pro+' && userTier !== 'pro+'));
+
+    if (isLocked) {
+      const tierLabel = meta?.tier === 'pro' ? 'Pro' : 'Pro+';
+      alert(`${tierLabel} 기능입니다.`);
+      return;
+    }
+
     setSelectedTags(prev => {
       if (prev.includes(tag)) {
         return prev.filter(t => t !== tag);
       }
-      if (prev.length >= 2) return prev;
+      
+      // For Instrumental, replace the existing selection if it's max 1
+      if (isInstrumental) {
+        return [tag];
+      }
+
+      if (prev.length >= maxSelectable) return prev;
       return [...prev, tag];
     });
   };
@@ -5514,7 +5986,7 @@ function TagEditModal({
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
             <h4 className="text-lg font-bold text-[var(--text-primary)]">{section} 태그 편집</h4>
-            <p className="text-xs text-[var(--text-secondary)] mt-0.5">최대 2개까지 선택 가능합니다.</p>
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">최대 {maxSelectable}개까지 선택 가능합니다.</p>
           </div>
           <button 
             onClick={onClose} 
@@ -5527,27 +5999,51 @@ function TagEditModal({
         </div>
         <div className="p-5 space-y-4">
           <div className="flex flex-wrap gap-2">
-            {allowedTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                onMouseEnter={() => onHover({ id: `tag-${tag}`, label: tag, labelKo: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
-                onMouseLeave={() => {
-                  onHover(null);
-                  onLongPressEnd();
-                }}
-                onTouchStart={() => onLongPressStart({ id: `tag-${tag}`, label: tag, labelKo: tag, description: TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.' })}
-                onTouchEnd={onLongPressEnd}
-                className={cn(
-                  "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border",
-                  selectedTags.includes(tag)
-                    ? "bg-brand-orange border-orange-400 text-white"
-                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
-                )}
-              >
-                {tag}
-              </button>
-            ))}
+            {allowedTags.map(tag => {
+              const meta = TAG_META[tag];
+              const isLocked = (meta?.tier === 'pro' && userTier === 'free') || 
+                               (meta?.tier === 'pro+' && userTier !== 'pro+');
+              
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  onMouseEnter={() => onHover({ 
+                    id: `tag-${tag}`, 
+                    label: tag, 
+                    labelKo: tag, 
+                    description: isInstrumental 
+                      ? (INSTRUMENT_TAG_DESCRIPTIONS[tag] || '독주용 악기를 선택합니다.')
+                      : (TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.') 
+                  })}
+                  onMouseLeave={() => {
+                    onHover(null);
+                    onLongPressEnd();
+                  }}
+                  onTouchStart={() => onLongPressStart({ 
+                    id: `tag-${tag}`, 
+                    label: tag, 
+                    labelKo: tag, 
+                    description: isInstrumental 
+                      ? (INSTRUMENT_TAG_DESCRIPTIONS[tag] || '독주용 악기를 선택합니다.')
+                      : (TAG_DESCRIPTIONS[tag] || '음악적 디렉션을 추가합니다.') 
+                  })}
+                  onTouchEnd={onLongPressEnd}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5",
+                    selectedTags.includes(tag)
+                      ? "bg-brand-orange border-orange-400 text-white"
+                      : isLocked
+                        ? "bg-white/5 border-white/10 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
+                        : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                  )}
+                >
+                  {tag}
+                  {meta?.tier === 'pro' && <Lock className="w-3 h-3" />}
+                  {meta?.tier === 'pro+' && <div className="flex items-center">⭐<Lock className="w-3 h-3" /></div>}
+                </button>
+              );
+            })}
           </div>
           <div className="flex gap-2 pt-2">
             <button
@@ -5595,40 +6091,20 @@ const CUSTOM_STRUCTURE_SECTIONS = [
   'Rap Verse',
   'Final Chorus',
   'Outro',
+  'Theme A',
+  'Theme B',
+  'Build-up',
+  'Main Theme',
+  'Climax',
 ] as const;
 
-const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
-  'Intro': ['Soft', 'Instrumental', 'Minimal', 'Emotional', 'Energetic', 'Chorus'],
-  'Verse 1': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal', 'A-B', 'B-A'],
-  'Verse 2': ['Solo', 'Duet', 'Rap', 'Soft', 'Emotional', 'Minimal', 'A-B', 'B-A'],
-  'Pre-Chorus': ['Soft', 'Emotional', 'Build-up', 'Harmony'],
-  'Chorus': ['Big', 'Harmony', 'Energetic', 'Emotional', 'Rap', 'Group'],
-  'Hook': ['Big', 'Harmony', 'Energetic', 'Minimal', 'Group'],
-  'Drop': ['Big', 'Instrumental', 'Energetic', 'Minimal'],
-  'Bridge': ['Soft', 'Instrumental', 'Emotional', 'Rap', 'Minimal', 'A-B', 'B-A'],
-  'Breakdown': ['Minimal', 'Instrumental', 'Rap', 'Soft'],
-  'Instrumental': ['Instrumental', 'Minimal', 'Emotional', 'Energetic'],
-  'Solo': ['Instrumental', 'Emotional', 'Big'],
-  'Rap Verse': ['Rap', 'Solo', 'Energetic', 'Aggressive'],
-  'Final Chorus': ['Big', 'Harmony', 'Adlib', 'Emotional', 'Energetic', 'Group'],
-  'Outro': ['Soft', 'Instrumental', 'Minimal', 'Emotional'],
-};
-
-const TAG_DESCRIPTIONS: Record<string, string> = {
-  'Solo': '한 명의 보컬이 전면에 드러나는 섹션입니다.',
-  'Duet': '두 명의 보컬이 조화를 이루며 노래하는 섹션입니다.',
-  'Group': '모든 보컬이 함께 참여하여 풍성함을 더하는 섹션입니다.',
-  'Rap': '멜로디보다 리듬과 가사 전달에 집중하는 랩 섹션입니다.',
-  'Harmony': '여러 화성이 겹쳐 더 풍성하게 들리는 섹션입니다.',
-  'Adlib': '정해진 멜로디 외에 자유로운 보컬 표현이 추가되는 섹션입니다.',
-  'Instrumental': '보컬보다 연주가 중심이 되는 구간입니다.',
-  'Soft': '부드럽고 잔잔한 분위기로 감성을 자극하는 섹션입니다.',
-  'Big': '에너지가 크게 확장되어 후렴의 임팩트를 강화합니다.',
-  'Minimal': '악기 수와 밀도를 줄여 간결하게 들리게 합니다.',
-  'Emotional': '감정적인 호소력이 짙게 묻어나는 섹션입니다.',
-  'Energetic': '활기차고 역동적인 에너지가 느껴지는 섹션입니다.',
-  'Build-up': '점진적으로 에너지를 쌓아 올려 다음 섹션을 준비합니다.',
-  'Aggressive': '강렬하고 공격적인 사운드로 긴장감을 높입니다.',
+const TAG_DESCRIPTIONS_LOCAL: Record<string, string> = {
+  'Solo': '한 명의 보컬이 중심이 되어 또렷하게 들립니다.',
+  'Duet': '두 보컬이 주고받으며 자연스럽게 어우러집니다.',
+  'Group': '여러 보컬이 함께 나와 풍성하게 들립니다.',
+  'Rap': '멜로디보다 리듬감 있는 랩이 강조됩니다.',
+  'Harmony': '여러 화성이 겹쳐 더 풍부하게 들립니다.',
+  'Adlib': '자유로운 애드리브가 추가되어 표현이 더 살아납니다.',
 };
 
 interface VocalControlProps {

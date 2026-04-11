@@ -14,7 +14,7 @@ export const GENRES: CategoryItem[] = [
   { id: 'synth-pop', label: 'Synth Pop', labelKo: '신스 팝', description: '신디사이저 중심의 세련된 팝 사운드입니다.' },
   { id: 'teen-pop', label: 'Teen Pop', labelKo: '틴 팝', description: '밝고 접근성이 높은 틴 팝 스타일입니다.' },
   { id: 'kpop', label: 'K-Pop', labelKo: 'K-팝', description: '한국 대중음악 기반의 세련된 사운드입니다.' },
-  { id: 'j-pop', label: 'J-Pop', labelKo: 'J-팝', description: '일본 대중음악 특유의 멜로디와 편곡이 특징입니다.' },
+  { id: 'jpop', label: 'J-Pop', labelKo: 'J-팝', description: '일본 대중음악 특유의 멜로디와 편곡이 특징입니다.' },
   { id: 'citypop', label: 'City Pop', labelKo: '시티팝', description: '도시적인 레트로 감성과 세련된 그루브가 중심인 시티팝입니다.' },
   { id: 'piano-ballad', label: 'Piano Ballad', labelKo: '피아노 발라드', description: '피아노 중심의 감성적인 발라드입니다.' },
   { id: 'adult-contemporary', label: 'Adult Contemporary', labelKo: '어덜트 컨템퍼러리', description: '부드럽고 안정적인 성인 취향의 팝입니다.' },
@@ -44,6 +44,10 @@ export const GENRES: CategoryItem[] = [
   { id: 'pb-rnb', label: 'PBR&B', labelKo: 'PBR&B', description: '어둡고 몽환적인 질감의 현대적 R&B입니다.' },
   { id: 'jazz-hiphop', label: 'Jazz Hip-Hop', labelKo: '재즈 힙합', description: '재즈 화성과 힙합 리듬이 결합된 스타일입니다.' },
   { id: 'neo-soul', label: 'Neo Soul', labelKo: '네오 소울', description: 'R&B, 소울, 재즈가 섞인 깊이 있는 그루브입니다.' },
+  { id: 'hiphop', label: 'Hip-hop', labelKo: '힙합', description: '리듬과 비트, 래핑이 중심인 힙합 사운드입니다.' },
+  { id: 'rnb', label: 'R&B', labelKo: 'R&B', description: '감미로운 보컬과 그루브가 특징인 알앤비 사운드입니다.' },
+  { id: 'rock', label: 'Rock', labelKo: '록', description: '강렬한 기타와 밴드 사운드가 중심인 록 음악입니다.' },
+  { id: 'metal', label: 'Metal', labelKo: '메탈', description: '폭발적인 에너지와 강한 디스토션의 메탈 사운드입니다.' },
 
   { id: 'house', label: 'House', labelKo: '하우스', description: '4/4 클럽 그루브 중심의 전자 음악입니다.' },
   { id: 'techno', label: 'Techno', labelKo: '테크노', description: '반복적이고 몰입감 있는 전자 리듬이 특징입니다.' },
@@ -55,6 +59,7 @@ export const GENRES: CategoryItem[] = [
   { id: 'vaporwave', label: 'Vaporwave', labelKo: '베이퍼웨이브', description: '레트로하고 몽환적인 디지털 감성이 특징입니다.' },
   { id: 'electro-pop', label: 'Electro Pop', labelKo: '일렉트로 팝', description: '팝 감성과 전자 사운드가 결합된 스타일입니다.' },
   { id: 'eurobeat', label: 'Eurobeat', labelKo: '유로비트', description: '고속 비트와 강한 멜로디가 특징입니다.' },
+  { id: 'edm', label: 'EDM', labelKo: 'EDM', description: '클럽과 페스티벌을 위한 강렬한 전자 댄스 음악입니다.' },
 
   { id: 'swing', label: 'Swing', labelKo: '스윙', description: '스윙 리듬이 살아 있는 전통 재즈입니다.' },
   { id: 'bebop', label: 'Bebop', labelKo: '비밥', description: '복잡한 즉흥성과 빠른 전개가 특징입니다.' },
@@ -66,6 +71,8 @@ export const GENRES: CategoryItem[] = [
   { id: 'acid-jazz', label: 'Acid Jazz', labelKo: '애시드 재즈', description: '재즈와 펑크/그루브가 결합된 스타일입니다.' },
   { id: 'delta-blues', label: 'Delta Blues', labelKo: '델타 블루스', description: '전통적인 블루스 루츠 스타일입니다.' },
   { id: 'chicago-blues', label: 'Chicago Blues', labelKo: '시카고 블루스', description: '전기 블루스 중심의 도시적 블루스입니다.' },
+  { id: 'jazz', label: 'Jazz', labelKo: '재즈', description: '즉흥 연주와 세련된 화성이 특징인 재즈 사운드입니다.' },
+  { id: 'classical', label: 'Classical', labelKo: '클래식', description: '우아하고 웅장한 클래식 오케스트레이션 사운드입니다.' },
 
   { id: 'modern-folk', label: 'Modern Folk', labelKo: '모던 포크', description: '현대적으로 다듬어진 포크 스타일입니다.' },
   { id: 'anti-folk', label: 'Anti-Folk', labelKo: '안티 포크', description: '거칠고 솔직한 감성의 포크 스타일입니다.' },
@@ -77,9 +84,14 @@ export const GENRES: CategoryItem[] = [
   { id: 'americana', label: 'Americana', labelKo: '아메리카나', description: '미국 루츠 음악 전반을 포괄하는 스타일입니다.' },
   { id: 'honky-tonk', label: 'Honky-Tonk', labelKo: '홍키통크', description: '경쾌한 피아노와 컨트리 감성이 특징입니다.' },
   { id: 'southern-rock', label: 'Southern Rock', labelKo: '서던 록', description: '남부 록 감성과 블루스가 결합된 스타일입니다.' },
+  { id: 'acoustic_folk', label: 'Acoustic Folk', labelKo: '어쿠스틱 포크', description: '따뜻한 어쿠스틱 악기와 진솔한 감성의 포크입니다.' },
+  { id: 'world_music_folk', label: 'World Music', labelKo: '월드 뮤직', description: '세계 각국의 전통적인 색채와 리듬이 담긴 음악입니다.' },
 
   { id: 'traditional-trot', label: 'Traditional Trot', labelKo: '정통 트로트', description: '전통 트로트의 깊은 감성이 살아 있는 스타일입니다.' },
   { id: 'semi-trot', label: 'Semi-Trot', labelKo: '세미 트로트', description: '현대적으로 다듬어진 대중적 트로트 스타일입니다.' },
+  { id: 'trot', label: 'Trot', labelKo: '트로트', description: '한국 특유의 정서와 흥이 담긴 트로트 사운드입니다.' },
+  { id: '7080_gayo', label: '7080 Gayo', labelKo: '7080 가요', description: '70~80년대 한국 가요의 아날로그 복고 감성입니다.' },
+  { id: 'ost', label: 'OST', labelKo: 'OST', description: '영화나 드라마의 서사를 완성하는 배경음악 스타일입니다.' },
 
   { id: 'film-score', label: 'Film Score', labelKo: '필름 스코어', description: '영화 음악 스타일의 서사적 구성입니다.' },
   { id: 'game-bgm', label: 'Game BGM', labelKo: '게임 BGM', description: '게임 배경음악 스타일입니다.' },
@@ -1992,3 +2004,404 @@ export const SUB_GENRE_PROMPTS: Record<
     vocal: "Ethereal, Distant, Wordless textures" 
   },
 };
+
+export type TagTier = 'free' | 'pro' | 'pro+';
+
+export const SECTION_META: Record<string, { tier: TagTier }> = {
+  'Intro': { tier: 'pro' },
+  'Verse 1': { tier: 'pro' },
+  'Verse 2': { tier: 'pro' },
+  'Pre-Chorus': { tier: 'pro' },
+  'Chorus': { tier: 'pro' },
+  'Hook': { tier: 'pro' },
+  'Drop': { tier: 'pro' },
+  'Bridge': { tier: 'pro' },
+  'Breakdown': { tier: 'pro' },
+  'Instrumental': { tier: 'pro' },
+  'Solo': { tier: 'pro' },
+  'Rap Verse': { tier: 'pro' },
+  'Final Chorus': { tier: 'pro' },
+  'Outro': { tier: 'pro' },
+  'Theme A': { tier: 'pro+' },
+  'Theme B': { tier: 'pro+' },
+  'Build-up': { tier: 'pro+' },
+  'Main Theme': { tier: 'pro+' },
+  'Climax': { tier: 'pro+' },
+};
+
+export const FREE_TAGS = [
+  // Intro
+  "Minimal", "Soft Start", "Ambient",
+
+  // Verse
+  "Low Energy", "Steady", "Story",
+
+  // Pre-Chorus
+  "Lead-in", "Build",
+
+  // Chorus
+  "High Energy", "Hook Boost",
+
+  // Bridge
+  "Breakdown", "Contrast",
+
+  // Outro
+  "Fade-out", "Soft End", "Calm"
+];
+
+
+export const PRO_TAGS = [
+  // Intro
+  "Slow Build", "Hook First", "Instrumental",
+
+  // Verse
+  "Rhythmic Flow", "Sparse",
+
+  // Pre-Chorus
+  "Energy Rise", "Tension Build",
+
+  // Chorus
+  "Full Power", "Peak Hit",
+
+  // Bridge
+  "Energy Drop", "Reset",
+
+  // Outro
+  "Smooth Exit"
+];
+
+export const PRO_PLUS_TAGS = [
+  // Intro
+  "Layer Build", "Teaser Intro",
+
+  // Verse
+  "Groove Drive", "Laid-back", "Subtle Build",
+
+  // Pre-Chorus
+  "Dynamic Rise", "Momentum Shift", "Intensity Build", "Anticipation",
+
+  // Chorus
+  "Explosive Hit", "Anthem Hook", "Wide Spread", "Power Drive",
+
+  // Bridge
+  "Hard Shift", "Dynamic Switch", "Rebuild", "Transition Flow",
+
+  // Outro
+  "Echo Fade", "Energy Release", "Minimal End", "Loop Ready"
+];
+
+export const TAG_META: Record<string, { tier: TagTier }> = {
+  "Minimal": { tier: 'free' },
+  "Ambient Start": { tier: 'pro' },
+  "Slow Build": { tier: 'pro' },
+  "Hook-first": { tier: 'pro' },
+  "Soft Entry": { tier: 'free' },
+  "Instrumental Opening": { tier: 'pro' },
+  "Gradual Layering": { tier: 'pro+' },
+  "Teaser Opening": { tier: 'pro+' },
+  "Low Energy": { tier: 'free' },
+  "Story Focused": { tier: 'pro' },
+  "Rhythmic Flow": { tier: 'pro' },
+  "Sparse Arrangement": { tier: 'pro' },
+  "Groove Driven": { tier: 'pro+' },
+  "Laid-back": { tier: 'pro+' },
+  "Steady Pace": { tier: 'free' },
+  "Subtle Build": { tier: 'pro+' },
+  "Build-up": { tier: 'pro' },
+  "Rising Energy": { tier: 'pro' },
+  "Tension Lift": { tier: 'pro' },
+  "Dynamic Increase": { tier: 'pro+' },
+  "Momentum Shift": { tier: 'pro+' },
+  "Intensity Growth": { tier: 'pro+' },
+  "Lead-in": { tier: 'free' },
+  "Anticipation": { tier: 'pro+' },
+  "High Energy": { tier: 'pro' },
+  "Explosive": { tier: 'pro+' },
+  "Full Arrangement": { tier: 'pro' },
+  "Peak Section": { tier: 'pro' },
+  "Anthemic": { tier: 'pro+' },
+  "Wide Impact": { tier: 'pro+' },
+  "Powerful Delivery": { tier: 'pro+' },
+  "Hook Emphasis": { tier: 'pro' },
+  "Breakdown": { tier: 'pro' },
+  "Contrast Section": { tier: 'pro' },
+  "Energy Drop": { tier: 'pro' },
+  "Minimal Reset": { tier: 'pro' },
+  "Unexpected Shift": { tier: 'pro+' },
+  "Dynamic Change": { tier: 'pro+' },
+  "Rebuild Start": { tier: 'pro+' },
+  "Transition Focused": { tier: 'pro+' },
+  "Fade-out": { tier: 'free' },
+  "Soft Ending": { tier: 'free' },
+  "Gradual Exit": { tier: 'pro' },
+  "Echo Finish": { tier: 'pro+' },
+  "Energy Release": { tier: 'pro+' },
+  "Minimal Ending": { tier: 'pro+' },
+  "Calm Closure": { tier: 'pro' },
+  "Loop-friendly Ending": { tier: 'pro+' }
+};
+
+
+export const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
+  'Intro': [
+    "Minimal",
+    "Ambient Start",
+    "Slow Build",
+    "Hook-first",
+    "Soft Entry",
+    "Instrumental Opening",
+    "Gradual Layering",
+    "Teaser Opening"
+  ],
+
+  'Verse 1': [
+    "Low Energy",
+    "Story Focused",
+    "Rhythmic Flow",
+    "Sparse Arrangement",
+    "Groove Driven",
+    "Laid-back",
+    "Steady Pace",
+    "Subtle Build"
+  ],
+
+  'Verse 2': [
+    "Low Energy",
+    "Story Focused",
+    "Rhythmic Flow",
+    "Sparse Arrangement",
+    "Groove Driven",
+    "Laid-back",
+    "Steady Pace",
+    "Subtle Build"
+  ],
+
+  'Pre-Chorus': [
+    "Build-up",
+    "Rising Energy",
+    "Tension Lift",
+    "Dynamic Increase",
+    "Momentum Shift",
+    "Intensity Growth",
+    "Lead-in",
+    "Anticipation"
+  ],
+
+  'Chorus': [
+    "High Energy",
+    "Explosive",
+    "Full Arrangement",
+    "Peak Section",
+    "Anthemic",
+    "Wide Impact",
+    "Powerful Delivery",
+    "Hook Emphasis"
+  ],
+
+  'Final Chorus': [
+    "High Energy",
+    "Explosive",
+    "Full Arrangement",
+    "Peak Section",
+    "Anthemic",
+    "Wide Impact",
+    "Powerful Delivery",
+    "Hook Emphasis"
+  ],
+
+  'Hook': [
+    "High Energy",
+    "Explosive",
+    "Full Arrangement",
+    "Peak Section",
+    "Anthemic",
+    "Wide Impact",
+    "Powerful Delivery",
+    "Hook Emphasis"
+  ],
+
+  'Drop': [
+    "High Energy",
+    "Explosive",
+    "Full Arrangement",
+    "Peak Section",
+    "Anthemic",
+    "Wide Impact",
+    "Powerful Delivery",
+    "Hook Emphasis"
+  ],
+
+  'Bridge': [
+    "Breakdown",
+    "Contrast Section",
+    "Energy Drop",
+    "Minimal Reset",
+    "Unexpected Shift",
+    "Dynamic Change",
+    "Rebuild Start",
+    "Transition Focused"
+  ],
+
+  'Breakdown': [
+    "Breakdown",
+    "Contrast Section",
+    "Energy Drop",
+    "Minimal Reset",
+    "Unexpected Shift",
+    "Dynamic Change",
+    "Rebuild Start",
+    "Transition Focused"
+  ],
+
+  'Solo': [
+    "Breakdown",
+    "Contrast Section",
+    "Energy Drop",
+    "Minimal Reset",
+    "Unexpected Shift",
+    "Dynamic Change",
+    "Rebuild Start",
+    "Transition Focused"
+  ],
+
+  'Rap Verse': [
+    "Low Energy",
+    "Story Focused",
+    "Rhythmic Flow",
+    "Sparse Arrangement",
+    "Groove Driven",
+    "Laid-back",
+    "Steady Pace",
+    "Subtle Build"
+  ],
+
+  'Outro': [
+    "Fade-out",
+    "Soft Ending",
+    "Gradual Exit",
+    "Echo Finish",
+    "Energy Release",
+    "Minimal Ending",
+    "Calm Closure",
+    "Loop-friendly Ending"
+  ],
+  'Theme A': [
+    "Low Energy", "Story Focused", "Rhythmic Flow", "Sparse Arrangement", "Groove Driven", "Laid-back", "Steady Pace", "Subtle Build"
+  ],
+  'Theme B': [
+    "Low Energy", "Story Focused", "Rhythmic Flow", "Sparse Arrangement", "Groove Driven", "Laid-back", "Steady Pace", "Subtle Build"
+  ],
+  'Build-up': [
+    "Build-up", "Rising Energy", "Tension Lift", "Dynamic Increase", "Momentum Shift", "Intensity Growth", "Lead-in", "Anticipation"
+  ],
+  'Main Theme': [
+    "High Energy", "Explosive", "Full Arrangement", "Peak Section", "Anthemic", "Wide Impact", "Powerful Delivery", "Hook Emphasis"
+  ],
+  'Climax': [
+    "High Energy", "Explosive", "Full Arrangement", "Peak Section", "Anthemic", "Wide Impact", "Powerful Delivery", "Hook Emphasis"
+  ],
+};
+export const INSTRUMENT_TAGS = [
+  "Piano",
+  "Acoustic Guitar",
+  "Electric Guitar",
+  "Synth",
+  "Pad",
+  "Strings",
+  "Bass",
+  "Drums",
+  "Percussion",
+  "Pluck",
+  "Brass",
+  "FX"
+] as const;
+
+export const INSTRUMENTAL_SOLO_TAGS = [
+  "Piano",
+  "Acoustic Guitar",
+  "Electric Guitar",
+  "Strings",
+  "Synth Lead",
+  "Pluck",
+  "Gayageum",
+  "Haegeum",
+  "Taepyeongso"
+] as const;
+
+export const INSTRUMENT_TAG_DESCRIPTIONS: Record<string, string> = {
+  "Piano": "피아노 중심으로 선율과 감정을 또렷하게 잡아줍니다.",
+  "Acoustic Guitar": "어쿠스틱 기타의 자연스럽고 따뜻한 질감을 더합니다.",
+  "Electric Guitar": "일렉 기타의 선명하고 힘있는 존재감을 더합니다.",
+  "Synth": "신스 중심의 현대적이고 전자적인 질감을 만듭니다.",
+  "Synth Lead": "선명하고 화려한 신스 리드로 멜로디를 강조합니다.",
+  "Pad": "뒤를 채우는 패드로 공간감과 분위기를 넓혀줍니다.",
+  "Strings": "스트링으로 감정선과 스케일을 풍부하게 만듭니다.",
+  "Bass": "저음을 단단하게 받쳐 곡의 중심을 잡아줍니다.",
+  "Drums": "드럼 중심의 리듬과 추진력을 분명하게 만듭니다.",
+  "Percussion": "퍼커션으로 리듬의 디테일과 움직임을 더합니다.",
+  "Pluck": "플럭 사운드로 또렷하고 경쾌한 포인트를 만듭니다.",
+  "Brass": "브라스로 화려하고 힘있는 인상을 더합니다.",
+  "FX": "효과음과 질감 요소로 연출감을 강화합니다.",
+  "Gayageum": "가야금의 우아하고 섬세한 선율이 돋보입니다.",
+  "Haegeum": "해금의 애절하고 독특한 음색이 강조됩니다.",
+  "Taepyeongso": "태평소의 강렬하고 시원한 소리가 에너지를 더합니다."
+};
+export const TAG_DESCRIPTIONS = {
+  "Minimal": "소리가 최소화되어 여백이 크게 느껴집니다.",
+  "Ambient Start": "잔잔하고 부드러운 분위기로 시작됩니다.",
+  "Slow Build": "시간이 지날수록 점점 풍부해집니다.",
+  "Hook-first": "처음부터 핵심 멜로디가 강하게 인상 남깁니다.",
+  "Soft Entry": "부드럽고 자연스럽게 시작됩니다.",
+  "Instrumental Opening": "보컬 없이 연주 중심으로 시작됩니다.",
+  "Gradual Layering": "악기가 하나씩 추가되며 점점 쌓입니다.",
+  "Teaser Opening": "짧고 인상적인 도입으로 호기심을 자극합니다.",
+
+  "Low Energy": "차분하고 안정된 흐름이 유지됩니다.",
+  "Story Focused": "가사 전달이 또렷하게 들립니다.",
+  "Rhythmic Flow": "리듬감이 자연스럽게 이어집니다.",
+  "Sparse Arrangement": "악기 구성이 단순하고 여유롭게 들립니다.",
+  "Groove Driven": "리듬 중심의 흐름이 강조됩니다.",
+  "Laid-back": "느긋하고 여유로운 분위기가 유지됩니다.",
+  "Steady Pace": "일정한 흐름이 안정적으로 이어집니다.",
+  "Subtle Build": "눈에 띄지 않게 서서히 변화가 쌓입니다.",
+
+  "Build-up": "점점 긴장감이 높아집니다.",
+  "Rising Energy": "에너지가 점진적으로 상승합니다.",
+  "Tension Lift": "긴장감이 서서히 끌어올려집니다.",
+  "Dynamic Increase": "사운드의 밀도가 점점 커집니다.",
+  "Momentum Shift": "흐름이 다음 단계로 넘어갈 준비를 합니다.",
+  "Intensity Growth": "강도가 점차 강해집니다.",
+  "Lead-in": "다음 구간으로 자연스럽게 이어집니다.",
+  "Anticipation": "기대감이 점점 커집니다.",
+
+  "High Energy": "강하고 활기찬 분위기가 강조됩니다.",
+  "Explosive": "강하게 터지듯 에너지가 폭발합니다.",
+  "Full Arrangement": "모든 요소가 꽉 찬 사운드로 들립니다.",
+  "Peak Section": "곡에서 가장 강한 구간으로 느껴집니다.",
+  "Anthemic": "웅장하고 따라 부르기 쉬운 느낌이 강조됩니다.",
+  "Wide Impact": "사운드가 넓게 퍼지며 크게 느껴집니다.",
+  "Powerful Delivery": "보컬과 사운드가 강하게 전달됩니다.",
+  "Hook Emphasis": "핵심 멜로디가 강하게 반복되어 기억에 남습니다.",
+
+  "Breakdown": "구성이 단순해지며 힘이 빠집니다.",
+  "Contrast Section": "이전과 다른 분위기로 전환됩니다.",
+  "Energy Drop": "에너지가 잠시 낮아집니다.",
+  "Minimal Reset": "최소 구성으로 리셋되는 느낌이 납니다.",
+  "Unexpected Shift": "예상과 다른 전개가 나타납니다.",
+  "Dynamic Change": "전체적인 흐름이 크게 바뀝니다.",
+  "Rebuild Start": "다시 상승하기 위한 준비가 시작됩니다.",
+  "Transition Focused": "다음 구간으로 넘어가는 흐름이 강조됩니다.",
+
+  "Fade-out": "점점 작아지며 자연스럽게 끝납니다.",
+  "Soft Ending": "부드럽고 잔잔하게 마무리됩니다.",
+  "Gradual Exit": "천천히 사라지듯 마무리됩니다.",
+  "Echo Finish": "잔향이 남으며 여운이 이어집니다.",
+  "Energy Release": "쌓였던 에너지가 풀리며 마무리됩니다.",
+  "Minimal Ending": "간결하게 정리되며 끝납니다.",
+  "Calm Closure": "안정적으로 마무리됩니다.",
+  "Loop-friendly Ending": "다시 반복되어도 자연스럽게 이어집니다."
+};
+
+
+
+

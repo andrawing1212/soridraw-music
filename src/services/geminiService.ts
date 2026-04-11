@@ -1193,6 +1193,11 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
 - Use this exact section order without omission or replacement:
 ${exactStructureText}
 - Each tag in parentheses is a real arrangement instruction. Apply it musically, not just as a label.
+- Special Sections Guide (if used):
+  - Theme A/B: Distinct melodic themes or motifs.
+  - Build-up: A section focused on rising tension and energy leading to a main theme or climax.
+  - Main Theme: The core melodic or rhythmic identity of the song.
+  - Climax: The highest point of energy and emotional intensity.
 - Do not collapse this into a generic pop structure.`
       : `SONG STRUCTURE (MANDATORY):
 - Selected mode: ${resolvedStructure}.

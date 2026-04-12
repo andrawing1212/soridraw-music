@@ -4352,25 +4352,25 @@ ${result.prompt}
       {/* Tooltip / Description Overlay */}
       <AnimatePresence>
         {hoveredItem && (
-          <Portal>
-            <motion.div
-              initial={{ opacity: 0, x: '-50%' }}
-              animate={{ 
-                opacity: isTooltipHovered ? 0.1 : 1, 
-                x: '-50%'
-              }}
-              exit={{ opacity: 0, x: '-50%' }}
-              onMouseEnter={() => setIsTooltipHovered(true)}
-              onMouseLeave={() => setIsTooltipHovered(false)}
-              className={cn(
-                "fixed left-1/2 z-[300] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default max-w-[200px] text-center",
-                location.pathname === '/' ? "bottom-36" : "bottom-10"
-              )}
-            >
-              <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
-              <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
-            </motion.div>
-          </Portal>
+          <motion.div
+            initial={{ opacity: 0, x: '-50%' }}
+            animate={{ 
+              opacity: isTooltipHovered ? 0.1 : 1, 
+              x: '-50%'
+            }}
+            exit={{ opacity: 0, x: '-50%' }}
+            onMouseEnter={() => setIsTooltipHovered(true)}
+            onMouseLeave={() => setIsTooltipHovered(false)}
+            className={cn(
+              "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
+              location.pathname === '/' 
+                ? "bottom-32 md:bottom-35 max-w-[200px] md:max-w-[400px]" 
+                : "bottom-10 max-w-[250px] md:max-w-[300px]"
+            )}
+          >
+            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
+            <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
+          </motion.div>
         )}
       </AnimatePresence>
 

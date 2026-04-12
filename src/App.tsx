@@ -5449,7 +5449,7 @@ function SongStructureIntegratedControl({
   ];
 
   const structureOptions = [
-    { id: '1', label: '1', description: '간결한 구조.추천 2~3분' },
+    { id: '1', label: '1', description: '간결한 구조.추천 1~2분' },
     { id: '2', label: '2', description: '일반적인 기본 구조. 추천 2~4분' },
     { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
     { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },

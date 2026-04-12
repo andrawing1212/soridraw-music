@@ -4364,8 +4364,8 @@ ${result.prompt}
             className={cn(
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/' 
-                ? "bottom-32 md:bottom-35 max-w-[200px] md:max-w-[400px]" 
-                : "bottom-10 max-w-[250px] md:max-w-[300px]"
+                ? "bottom-29 md:bottom-35 max-w-[200px] md:max-w-[400px]" 
+                : "bottom-10 max-w-[250px] md:max-w-[400px]"
             )}
           >
             <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>

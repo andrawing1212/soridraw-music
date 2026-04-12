@@ -49,6 +49,7 @@ import {
   RefreshCw,
   CheckCircle2,
   Mic2,
+  MicOff,
   Tag,
   Settings,
   Play,
@@ -1386,6 +1387,7 @@ function App() {
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
+  const [isNoLyrics, setIsNoLyrics] = useState(false);
   const [songStructure, setSongStructure] = useState<SongStructure>('2');
   const [vocalMode, setVocalMode] = useState<VocalMode>('solo');
   const [vocalTones, setVocalTones] = useState<VocalTone[]>(VOCAL_TONES);
@@ -2102,6 +2104,7 @@ const cycleFamilySelection = (
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
+    if (appliedKeywords.isNoLyrics !== undefined) setIsNoLyrics(appliedKeywords.isNoLyrics);
     if (appliedKeywords.songStructure) setSongStructure(appliedKeywords.songStructure);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
@@ -3072,6 +3075,7 @@ const saveRecentSong = async (newSong: any) => {
         kpopMode,
         isKoreanEnglishMix,
         customStructure,
+        isNoLyrics,
         lyricDraft: isLyricMode ? lyricDraft : undefined,
         isLyricMode,
         lyricMode: isLyricMode ? lyricMode : undefined,
@@ -3098,6 +3102,7 @@ const saveRecentSong = async (newSong: any) => {
             ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
             : null,
           rapEnabled: rapEnabled,
+          isNoLyrics: isNoLyrics,
           isKoreanEnglishMix: isKoreanEnglishMix,
           kpopMode,
           isBallad: hasBalladStyle,
@@ -3592,12 +3597,15 @@ ${result.prompt}
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
               onLyricsLengthChange={setLyricsLength}
+              isNoLyrics={isNoLyrics}
+              onNoLyricsToggle={() => setIsNoLyrics(!isNoLyrics)}
               songStructure={songStructure}
               customStructure={customStructure}
               onSongStructureChange={setSongStructure}
               onCustomStructureChange={setCustomStructure}
               onClear={() => {
                 setLyricsLength('normal');
+                setIsNoLyrics(false);
                 setSongStructure('2');
                 setCustomStructure([]);
               }}
@@ -4217,73 +4225,73 @@ ${result.prompt}
 
 
               <div className="flex flex-col gap-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* English Lyrics Section */}
-                  <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                    <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
-                      <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                        <Music className="w-4 h-4 text-brand-orange" />
-                        영어 가사
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
-                          onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                          className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
-                        >
-                          {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                          <span className="hidden md:block text-sm font-bold">복사</span>
-                        </button>
+                {!result.appliedKeywords.isNoLyrics && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* English Lyrics Section */}
+                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                      <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
+                        <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                          <Music className="w-4 h-4 text-brand-orange" />
+                          영어 가사
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
+                            onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
+                            onMouseLeave={() => setHoveredItem(null)}
+                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                          >
+                            {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                            <span className="hidden md:block text-sm font-bold">복사</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                        <div className="flex-1" />
+                        <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
+                          {(result.lyrics.english || '')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
+                            .replace(/\n{3,}/g, '\n\n')
+                            .trim()}
+                        </pre>
+                        <div className="flex-1" />
                       </div>
                     </div>
-                    <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                      <div className="flex-1" />
-                      <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                        {(result.lyrics.english || '')
-                          .replace(/\\n/g, '\n')
-                          .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
-                          .replace(/\n{3,}/g, '\n\n')
-                          .trim()}
-                      </pre>
-                      <div className="flex-1" />
-                    </div>
-                  </div>
 
-                  {/* Korean Lyrics Section */}
-                  <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                    <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
-                      <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                        <Music className="w-4 h-4 text-brand-orange" />
-                        한글 가사
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
-                          onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                          className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
-                        >
-                          {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                          <span className="hidden md:block text-sm font-bold">복사</span>
-                        </button>
+                    {/* Korean Lyrics Section */}
+                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                      <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                        <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                          <Music className="w-4 h-4 text-brand-orange" />
+                          한글 가사
+                        </h3>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
+                            onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
+                            onMouseLeave={() => setHoveredItem(null)}
+                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                          >
+                            {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                            <span className="hidden md:block text-sm font-bold">복사</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                        <div className="flex-1" />
+                        <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
+                          {(result.lyrics.korean || '')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
+                            .replace(/\n{3,}/g, '\n\n')
+                            .trim()}
+                        </pre>
+                        <div className="flex-1" />
                       </div>
                     </div>
-                    <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                      <div className="flex-1" />
-                      <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                        {(result.lyrics.korean || '')
-                          .replace(/\\n/g, '\n')
-                          .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
-                          .replace(/\n{3,}/g, '\n\n')
-                          .trim()}
-                      </pre>
-                      <div className="flex-1" />
-                    </div>
                   </div>
-                </div>
-
-
+                )}
               </div>
             </motion.div>
           )}
@@ -5397,6 +5405,8 @@ function CategorySection({
 interface SongStructureIntegratedControlProps {
   lyricsLength: LyricsLength;
   onLyricsLengthChange: (val: LyricsLength) => void;
+  isNoLyrics: boolean;
+  onNoLyricsToggle: () => void;
   songStructure: SongStructure;
   customStructure: CustomSectionItem[];
   onSongStructureChange: (val: SongStructure) => void;
@@ -5413,6 +5423,8 @@ interface SongStructureIntegratedControlProps {
 function SongStructureIntegratedControl({
   lyricsLength,
   onLyricsLengthChange,
+  isNoLyrics,
+  onNoLyricsToggle,
   songStructure,
   customStructure,
   onSongStructureChange,
@@ -5635,19 +5647,35 @@ function SongStructureIntegratedControl({
             <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
             곡 구조
           </h3>
-          <button
-            onClick={onClear}
-            onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "p-2 rounded-lg transition-all border",
-              (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0)
-                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
-            )}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onNoLyricsToggle}
+              onMouseEnter={() => onHover({ id: 'no-lyrics', label: '가사없음', labelKo: '가사없음', description: isNoLyrics ? '가사 생성을 다시 활성화합니다.' : '가사 없이 연주곡 또는 가사 없는 노래를 생성합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+                isNoLyrics 
+                  ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
+                  : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+              )}
+            >
+              <MicOff className={cn("w-3 h-3", isNoLyrics ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
+              가사없음 {isNoLyrics ? 'ON' : 'OFF'}
+            </button>
+            <button
+              onClick={onClear}
+              onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2 rounded-lg transition-all border",
+                (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0 || isNoLyrics)
+                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+              )}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <AnimatePresence>
             {showTitleTooltip && (
               <motion.div

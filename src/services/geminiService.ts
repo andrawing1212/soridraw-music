@@ -65,6 +65,7 @@ interface GenerateSongParams {
   specialPrompt?: string;
   kpopMode?: 0 | 1 | 2;
   customStructure?: CustomSectionItem[];
+  isNoLyrics?: boolean;
 }
 
 type GenerateSongInput =
@@ -555,6 +556,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       lyricDraft: first.lyricDraft ?? "",
       isLyricMode: first.isLyricMode ?? false,
       lyricMode: first.lyricMode ?? 'assist',
+      isNoLyrics: first.isNoLyrics ?? false,
     };
   }
 
@@ -718,6 +720,7 @@ function buildAppliedKeywordPayload(
     rapEnabled: params.vocal?.rap ?? false,
     isKoreanEnglishMix: params.isKoreanEnglishMix ?? false,
     vocal: params.vocal ?? { male: 0, female: 0, rap: false },
+    isNoLyrics: params.isNoLyrics ?? false,
     lyricDraft: params.lyricDraft,
     isLyricMode: params.isLyricMode ?? false,
     lyricMode: params.lyricMode ?? 'assist',
@@ -1149,7 +1152,22 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
 
   const shouldUseMixedLyrics = Boolean(params.isKoreanEnglishMix || (params.isKpopSelected && params.kpopMode === 2));
 
-  const mixedLyricsInstruction = shouldUseMixedLyrics
+  const lyricsResponseSchema = params.isNoLyrics 
+    ? {} 
+    : {
+        lyrics: {
+          type: Type.OBJECT,
+          properties: {
+            english: { type: Type.STRING },
+            korean: { type: Type.STRING },
+          },
+          required: ["english", "korean"],
+        },
+      };
+
+  const lyricsRequired = params.isNoLyrics ? [] : ["lyrics"];
+
+  const mixedLyricsInstruction = (shouldUseMixedLyrics && !params.isNoLyrics)
     ? `MIXED LANGUAGE MODE (MANDATORY):
 - Use natural Korean/English mixed lyrics.
 - Ratio: about 70-75% primary language flow and 25-30% mixed-language accents.
@@ -1259,8 +1277,8 @@ ${structureInstruction}
 
 Return JSON:
 {
-  "title": "'English Title' │ 'Korean Title'",
-  "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }
+  "title": "'English Title' │ 'Korean Title'"${params.isNoLyrics ? "" : `,
+  "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }`}
 }
 
 TITLE RULES (CRITICAL):
@@ -1270,13 +1288,13 @@ TITLE RULES (CRITICAL):
 - The genre label will be attached later by the app, so return the title body only.
 - Format: 'English Title' │ 'Korean Title'
 
-Lyrics rules:
+${params.isNoLyrics ? "LYRICS RULE (MANDATORY):\n- DO NOT generate any lyrics. The user requested an instrumental-only track or a track without lyrics.\n- Omit the 'lyrics' field from the JSON output." : `Lyrics rules:
 ${lyricGuidancePrompt}
 - If lyricDraft exists, it must be treated as the primary lyrical source.
 - The generated lyrics should preserve the user’s draft as much as possible.
 - Only expand, refine, and restructure where necessary.
 - Do not ignore lyricDraft.
-- Do not replace it with a completely new lyric idea.
+- Do not rewrite it with a completely new lyric idea.
 - The lyrics should follow the selected theme(s) and the narrative details provided in the creative detail layer.
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
@@ -1285,7 +1303,7 @@ ${lyricGuidancePrompt}
 - Respect the selected lyricsLength strictly.
 - Respect the selected song structure strictly.
 - Do not drift longer than the requested lyric size.
-- Do not invent a new structure that conflicts with the locked blueprint.
+- Do not invent a new structure that conflicts with the locked blueprint.`}
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 `.trim();
 
@@ -1302,16 +1320,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         type: Type.OBJECT,
         properties: {
           title: { type: Type.STRING },
-          lyrics: {
-            type: Type.OBJECT,
-            properties: {
-              english: { type: Type.STRING },
-              korean: { type: Type.STRING },
-            },
-            required: ["english", "korean"],
-          },
+          ...lyricsResponseSchema,
         },
-        required: ["title", "lyrics"],
+        required: ["title", ...lyricsRequired],
       },
     },
   };

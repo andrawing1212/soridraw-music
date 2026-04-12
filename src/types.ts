@@ -176,6 +176,7 @@ export interface AppliedKeywords {
   isLyricMode?: boolean;
   lyricMode?: 'assist' | 'preserve';
   instrumentTags?: string[];
+  isNoLyrics?: boolean;
 }
 
 export interface GenerateSongParams {
@@ -196,6 +197,7 @@ export interface GenerateSongParams {
   lyricsLength?: LyricsLength;
   kpopMode?: 0 | 1 | 2;
   instrumentTags?: string[];
+  isNoLyrics?: boolean;
 }
 
 export interface SongResult {

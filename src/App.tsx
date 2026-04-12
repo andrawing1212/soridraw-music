@@ -5440,10 +5440,10 @@ function SongStructureIntegratedControl({
   }, [lyricsLength, songStructure, customStructure]);
 
   const lyricsOptions = [
-    { id: 'very-short', label: 'Very Short', labelKo: '더짧게', description: '매우 간결하고 함축적인 가사 (2-3줄)' },
-    { id: 'short', label: 'Short', labelKo: '짧게', description: '함축적이고 간결한 가사 (째즈/발라드 추천)' },
+    { id: 'very-short', label: 'Very Short', labelKo: '더짧게', description: '매우 간결하고 함축적인 가사 (트로트)' },
+    { id: 'short', label: 'Short', labelKo: '짧게', description: '함축적이고 간결한 가사 (째즈/발라드 등)' },
     { id: 'normal', label: 'Normal', labelKo: '기본', description: '일반적인 팝 스타일의 가사 분량' },
-    { id: 'long', label: 'Long', labelKo: '길게', description: '서사적이고 풍부한 가사' }
+    { id: 'long', label: 'Long', labelKo: '길게', description: '서사적이고 풍부한 가사(랩,오페라 등)' }
   ];
 
   const structureOptions = [

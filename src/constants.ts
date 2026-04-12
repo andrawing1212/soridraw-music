@@ -201,6 +201,16 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
         mood: 'emotional, sentimental'
       },
       { 
+      id: 'wildflower_pop_ballad',
+      label: 'Wildflower Pop Ballad', 
+      labelKo: '야생화풍 발라드',
+      description: 'Deep emotional narrative starting with minimalist piano and escalating into a grand, explosive orchestral climax.', 
+      descriptionKo: '절제된 피아노로 시작해 웅장한 오케스트라와 폭발적인 고음으로 이어지는 극적인 서사를 만듭니다.', 
+      style: 'Cinematic Ballad, K-Pop Ballad, Orchestral Pop', 
+      sound: 'Minimalist piano, lush strings, cinematic percussion', 
+      mood: 'Poetic, explosive, breathtaking emotional depth', 
+      },
+      { 
         id: 'classic-ballad', 
         label: 'Classic Ballad feeling', 
         labelKo: '클래식 발라드 느낌', 

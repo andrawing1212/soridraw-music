@@ -6128,7 +6128,7 @@ function TagEditModal({
     return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
   };
 
-  const maxSelectable = isInstrumental ? 1 : (userTier === 'free' ? 1 : userTier === 'pro' ? 2 : 3);
+  const maxSelectable = userTier === 'pro+' ? 99 : (isInstrumental ? 1 : (userTier === 'free' ? 1 : 2));
 
   useEffect(() => {
     if (isOpen) setSelectedTags(tags);
@@ -6152,8 +6152,8 @@ function TagEditModal({
         return prev.filter(t => t !== tag);
       }
       
-      // For Instrumental, replace the existing selection if it's max 1
-      if (isInstrumental) {
+      // For Instrumental, replace the existing selection if it's max 1 (except for Pro+)
+      if (isInstrumental && userTier !== 'pro+') {
         return [tag];
       }
 
@@ -6182,7 +6182,9 @@ function TagEditModal({
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
             <h4 className="text-lg font-bold text-[var(--text-primary)]">{section} 태그 편집</h4>
-            <p className="text-xs text-[var(--text-secondary)] mt-0.5">최대 {maxSelectable}개까지 선택 가능합니다.</p>
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+              {userTier === 'pro+' ? '제한 없이 선택 가능합니다.' : `최대 ${maxSelectable}개까지 선택 가능합니다.`}
+            </p>
           </div>
           <button 
             onClick={onClose} 

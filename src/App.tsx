@@ -27,6 +27,8 @@ import {
   History,
   ArrowLeft,
   ArrowRight,
+  ArrowUpDown,
+  GripVertical,
   Maximize2,
   Minimize2,
   Plus,
@@ -57,7 +59,7 @@ import {
   ExternalLink,
   Zap
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { createPortal } from 'react-dom';
 
 // Portal component for top-level rendering
@@ -255,6 +257,84 @@ class ErrorBoundary extends Component<any, any> {
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+const ReorderableSectionItem = ({ 
+  item, 
+  index, 
+  onEdit, 
+  onRemove, 
+  onHover 
+}: { 
+  item: CustomSectionItem; 
+  index: number; 
+  onEdit: (index: number) => void; 
+  onRemove: (index: number) => void; 
+  onHover: (item: CategoryItem | null) => void;
+  key?: React.Key;
+}) => {
+  const controls = useDragControls();
+  
+  return (
+    <Reorder.Item
+      value={item}
+      dragListener={false}
+      dragControls={controls}
+      className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5 touch-none"
+      whileDrag={{ 
+        scale: 1.02, 
+        boxShadow: "0 8px 30px rgba(0,0,0,0.3)", 
+        borderColor: "rgba(255,165,0,0.3)",
+        backgroundColor: "rgba(255,255,255,0.08)"
+      }}
+    >
+      <button
+        onPointerDown={(e) => controls.start(e)}
+        className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0"
+        onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 눌러 위아래로 드래그하여 순서를 변경합니다.' })}
+        onMouseLeave={() => onHover(null)}
+      >
+        <ArrowUpDown className="w-4 h-4" />
+      </button>
+
+      <span className="w-6 h-6 rounded-full bg-brand-orange/10 text-brand-orange text-[11px] font-black flex items-center justify-center shrink-0">
+        {index + 1}
+      </span>
+      
+      <div className="flex-1 min-w-0">
+        <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
+        {SECTION_META[item.section]?.descriptionKo && (
+          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep">
+            {SECTION_META[item.section].descriptionKo}
+          </p>
+        )}
+        {(item.tags ?? []).length > 0 && (
+          <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate">
+            {(item.tags ?? []).join(' · ')}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onEdit(index)}
+          onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
+          onMouseLeave={() => onHover(null)}
+          className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center"
+        >
+          <Tag className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => onRemove(index)}
+          onMouseEnter={() => onHover({ id: 'section-remove', label: '삭제', description: '이 섹션을 구조에서 제거합니다.' })}
+          onMouseLeave={() => onHover(null)}
+          className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+};
 
 const ADMIN_EMAILS = ['andrawing1212@gmail.com'];
 
@@ -5589,16 +5669,6 @@ function SongStructureIntegratedControl({
     setDraftStructure((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const moveSection = (index: number, direction: 'left' | 'right') => {
-    setDraftStructure((prev) => {
-      const targetIndex = direction === 'left' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next;
-    });
-  };
-
   const handleApplyCustomStructure = () => {
     if ((draftStructure ?? []).length === 0) return;
     onCustomStructureChange(draftStructure);
@@ -5839,8 +5909,11 @@ function SongStructureIntegratedControl({
                           onMouseEnter={() => onHover({ 
                             id: `section-add-${section}`, 
                             label: section, 
-                            description: isLocked ? 'Pro+ 플랜 전용 섹션입니다.' : `${section} 섹션을 구조에 추가합니다.` 
-                          })}
+                            description: isLocked 
+                              ? 'Pro+ 플랜 전용 섹션입니다.' 
+                                : (SECTION_META[section]?.descriptionKo || '')
+                            })
+                          }
                           onMouseLeave={() => onHover(null)}
                           className={cn(
                             "px-3.5 py-2 rounded-xl border text-[13px] font-bold transition-all flex items-center gap-1.5",
@@ -5858,9 +5931,43 @@ function SongStructureIntegratedControl({
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.9fr] gap-5">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
+                  <div className="space-y-4">
+                    {/* Action Buttons & Preview moved here */}
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setIsCustomModalOpen(false)}
+                          className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 transition-all font-bold text-sm"
+                        >
+                          취소
+                        </button>
+                        <button
+                          onClick={handleApplyCustomStructure}
+                          disabled={(draftStructure ?? []).length === 0}
+                          className={cn(
+                            "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm",
+                            (draftStructure ?? []).length > 0
+                              ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
+                              : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                          )}
+                        >
+                          적용
+                        </button>
+                      </div>
+
+                      {(draftStructure ?? []).length > 0 && (
+                        <div className="rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3">
+                          <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
+                          <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
+                            {formatStructureText(draftStructure)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
                       <button
                         onClick={() => setDraftStructure([])}
                         className={cn(
@@ -5875,90 +5982,33 @@ function SongStructureIntegratedControl({
                       </button>
                     </div>
 
-                    <div className="min-h-[180px] rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2">
+                    <Reorder.Group 
+                      axis="y" 
+                      values={draftStructure ?? []} 
+                      onReorder={setDraftStructure}
+                      className="min-h-[180px] rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2"
+                    >
                       {(draftStructure ?? []).length === 0 ? (
                         <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
                           구조가 비어 있습니다. 위의 섹션 버튼을 눌러 추가하세요.
                         </div>
                       ) : (
                         (draftStructure ?? []).map((item, index) => (
-                          <div
+                          <ReorderableSectionItem
                             key={item.id}
-                            className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5"
-                          >
-                            <span className="w-6 h-6 rounded-full bg-brand-orange/10 text-brand-orange text-[11px] font-black flex items-center justify-center shrink-0">
-                              {index + 1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
-                              {(item.tags ?? []).length > 0 && (
-                                <p className="text-[10px] text-brand-orange/80 font-medium mt-0.5 truncate">
-                                  {(item.tags ?? []).join(' · ')}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => moveSection(index, 'left')}
-                                onMouseEnter={() => onHover({ id: 'section-move-left', label: '왼쪽 이동', description: '이 섹션의 순서를 앞으로 당깁니다.' })}
-                                onMouseLeave={() => onHover(null)}
-                                className={cn(
-                                  "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
-                                  index === 0
-                                    ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
-                                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
-                                )}
-                                disabled={index === 0}
-                              >
-                                <ArrowLeft className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => moveSection(index, 'right')}
-                                onMouseEnter={() => onHover({ id: 'section-move-right', label: '오른쪽 이동', description: '이 섹션의 순서를 뒤로 미룹니다.' })}
-                                onMouseLeave={() => onHover(null)}
-                                className={cn(
-                                  "w-8 h-8 rounded-lg border flex items-center justify-center transition-all",
-                                  index === (draftStructure ?? []).length - 1
-                                    ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
-                                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
-                                )}
-                                disabled={index === (draftStructure ?? []).length - 1}
-                              >
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setEditingSectionIndex(index)}
-                                onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
-                                onMouseLeave={() => onHover(null)}
-                                className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center"
-                              >
-                                <Tag className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => removeSectionAt(index)}
-                                onMouseEnter={() => onHover({ id: 'section-remove', label: '삭제', description: '이 섹션을 구조에서 제거합니다.' })}
-                                onMouseLeave={() => onHover(null)}
-                                className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
+                            item={item}
+                            index={index}
+                            onEdit={setEditingSectionIndex}
+                            onRemove={removeSectionAt}
+                            onHover={onHover}
+                          />
                         ))
                       )}
-                    </div>
-
-                    {(draftStructure ?? []).length > 0 && (
-                      <div className="rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3">
-                        <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
-                        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
-                          {formatStructureText(draftStructure)}
-                        </p>
-                      </div>
-                    )}
+                    </Reorder.Group>
                   </div>
+                </div>
 
-                  <div className="space-y-4">
+                <div className="space-y-4">
                     <div className="rounded-2xl border border-[var(--border-color)] p-4 space-y-3">
                       <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조 저장</p>
                       <input
@@ -6023,33 +6073,11 @@ function SongStructureIntegratedControl({
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <button
-                    onClick={() => setIsCustomModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 transition-all font-bold"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handleApplyCustomStructure}
-                    disabled={(draftStructure ?? []).length === 0}
-                    className={cn(
-                      "px-5 py-2.5 rounded-xl font-bold transition-all border",
-                      (draftStructure ?? []).length > 0
-                        ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
-                        : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
-                    )}
-                  >
-                    적용
-                  </button>
-                </div>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {editingSectionIndex !== null && (
           <TagEditModal
@@ -6210,8 +6238,13 @@ function TagEditModal({
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
             <h4 className="text-lg font-bold text-[var(--text-primary)]">{section} 태그 편집</h4>
-            <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-              {userTier === 'pro+' ? '제한 없이 선택 가능합니다.' : `최대 ${maxSelectable}개까지 선택 가능합니다.`}
+            {SECTION_META[section]?.descriptionKo && (
+              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed">
+                {SECTION_META[section].descriptionKo}
+              </p>
+            )}
+            <p className="text-[10px] text-brand-orange/80 font-bold mt-1 uppercase tracking-wider">
+              {userTier === 'pro+' ? '제한 없이 선택 가능' : `최대 ${maxSelectable}개 선택 가능`}
             </p>
           </div>
           <button 

@@ -2354,26 +2354,83 @@ export const SUB_GENRE_PROMPTS: Record<
 
 export type TagTier = 'free' | 'pro' | 'pro+';
 
-export const SECTION_META: Record<string, { tier: TagTier }> = {
-  'Intro': { tier: 'pro' },
-  'Verse 1': { tier: 'pro' },
-  'Verse 2': { tier: 'pro' },
-  'Pre-Chorus': { tier: 'pro' },
-  'Chorus': { tier: 'pro' },
-  'Hook': { tier: 'pro' },
-  'Drop': { tier: 'pro' },
-  'Bridge': { tier: 'pro' },
-  'Breakdown': { tier: 'pro' },
-  'Instrumental': { tier: 'pro' },
-  'Solo': { tier: 'pro' },
-  'Rap Verse': { tier: 'pro' },
-  'Final Chorus': { tier: 'pro' },
-  'Outro': { tier: 'pro' },
-  'Theme A': { tier: 'pro+' },
-  'Theme B': { tier: 'pro+' },
-  'Build-up': { tier: 'pro+' },
-  'Main Theme': { tier: 'pro+' },
-  'Climax': { tier: 'pro+' },
+export const SECTION_META: Record<string, { tier: TagTier, descriptionKo?: string }> = {
+  'Intro': { 
+    tier: 'pro', 
+    descriptionKo: "곡의 시작을 여는 구간. 분위기와 톤을 설정하며, 청자의 몰입을 유도합니다." 
+  },
+  'Verse 1': { 
+    tier: 'pro', 
+    descriptionKo: "첫 번째 이야기 전개 구간. 가사와 분위기의 방향을 제시합니다." 
+  },
+  'Verse 2': { 
+    tier: 'pro', 
+    descriptionKo: "두 번째 전개 구간. 감정이나 내용을 확장하고 변화를 줍니다." 
+  },
+  'Pre-Chorus': { 
+    tier: 'pro', 
+    descriptionKo: "코러스로 넘어가기 전 긴장감을 쌓는 구간. 에너지 상승과 기대감을 형성합니다." 
+  },
+  'Chorus': { 
+    tier: 'pro', 
+    descriptionKo: "곡의 핵심 후렴구. 가장 강한 감정과 멜로디가 반복되며 기억에 남는 부분입니다." 
+  },
+  'Hook': { 
+    tier: 'pro', 
+    descriptionKo: "귀에 꽂히는 핵심 포인트. 짧지만 강한 반복 요소로 곡의 중독성을 만듭니다." 
+  },
+  'Drop': { 
+    tier: 'pro', 
+    descriptionKo: "비트나 사운드가 폭발하는 구간. 에너지 중심의 전개가 강조됩니다." 
+  },
+  'Bridge': { 
+    tier: 'pro', 
+    descriptionKo: "곡의 흐름을 전환하는 구간. 새로운 분위기나 변화를 통해 후반부를 준비합니다." 
+  },
+  'Breakdown': { 
+    tier: 'pro',
+    descriptionKo: "곡의 에너지를 낮추고 리듬을 쪼개어 변화를 주는 구간입니다."
+  },
+  'Instrumental': { 
+    tier: 'pro',
+    descriptionKo: "보컬 없이 악기 연주만으로 구성된 구간입니다."
+  },
+  'Solo': { 
+    tier: 'pro',
+    descriptionKo: "특정 악기의 독주가 강조되는 구간입니다."
+  },
+  'Rap Verse': { 
+    tier: 'pro',
+    descriptionKo: "랩으로 구성된 전개 구간입니다."
+  },
+  'Final Chorus': { 
+    tier: 'pro',
+    descriptionKo: "곡의 대미를 장식하는 마지막 후렴구입니다."
+  },
+  'Outro': { 
+    tier: 'pro', 
+    descriptionKo: "곡을 마무리하는 구간. 감정을 정리하고 자연스럽게 끝맺습니다." 
+  },
+  'Theme A': { 
+    tier: 'pro+',
+    descriptionKo: "곡의 주요 테마 A를 정의하는 구간입니다."
+  },
+  'Theme B': { 
+    tier: 'pro+',
+    descriptionKo: "곡의 주요 테마 B를 정의하는 구간입니다."
+  },
+  'Build-up': { 
+    tier: 'pro+',
+    descriptionKo: "에너지를 점진적으로 고조시키는 구간입니다."
+  },
+  'Main Theme': { 
+    tier: 'pro+',
+    descriptionKo: "곡의 가장 핵심적인 테마가 연주되는 구간입니다."
+  },
+  'Climax': { 
+    tier: 'pro+',
+    descriptionKo: "곡의 감정과 에너지가 최고조에 달하는 구간입니다."
+  },
 };
 
 export const FREE_TAGS = [

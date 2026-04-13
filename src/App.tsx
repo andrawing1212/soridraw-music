@@ -2827,7 +2827,7 @@ const saveRecentSong = async (newSong: any) => {
       }
 
       const tempoInfo =
-        tempoEnabled && (currentMinBPM !== 40 || currentMaxBPM !== 160)
+        (currentMinBPM !== 40 || currentMaxBPM !== 160)
           ? currentMinBPM === currentMaxBPM
             ? `Exactly ${currentMinBPM} BPM`
             : `Between ${currentMinBPM} and ${currentMaxBPM} BPM`
@@ -6156,7 +6156,7 @@ function TagEditModal({
     return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
   };
 
-  const maxSelectable = userTier === 'pro+' ? 99 : (isInstrumental ? 1 : (userTier === 'free' ? 1 : 2));
+  const maxSelectable = userTier === 'pro+' ? 4 : (isInstrumental ? 1 : (userTier === 'free' ? 1 : 2));
 
   useEffect(() => {
     if (isOpen) setSelectedTags(tags);

@@ -1816,22 +1816,32 @@ const cycleFamilySelection = (
 
   useEffect(() => {
     const handleScroll = () => {
-      // Hide buttons temporarily while scrolling
-      setIsActionButtonsTemporarilyHidden(true);
-      
-      if (scrollStopTimerRef.current) {
-        clearTimeout(scrollStopTimerRef.current);
-      }
-      
-      scrollStopTimerRef.current = setTimeout(() => {
-        setIsActionButtonsTemporarilyHidden(false);
-      }, 2500);
-
+      let isFloating = false;
       if (actionButtonsAnchorRef.current) {
         const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
         // Floating when anchor is below the bottom floating line
         // 120px accounts for button height + bottom margin
-        setIsActionsFloating(rect.top > window.innerHeight - 120);
+        isFloating = rect.top > window.innerHeight - 120;
+        setIsActionsFloating(isFloating);
+      }
+
+      // Hide buttons temporarily while scrolling ONLY when floating
+      if (isFloating) {
+        setIsActionButtonsTemporarilyHidden(true);
+        
+        if (scrollStopTimerRef.current) {
+          clearTimeout(scrollStopTimerRef.current);
+        }
+        
+        scrollStopTimerRef.current = setTimeout(() => {
+          setIsActionButtonsTemporarilyHidden(false);
+        }, 2000);
+      } else {
+        // Always show when in original position
+        setIsActionButtonsTemporarilyHidden(false);
+        if (scrollStopTimerRef.current) {
+          clearTimeout(scrollStopTimerRef.current);
+        }
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -3900,7 +3910,7 @@ ${result.prompt}
           <div ref={actionButtonsAnchorRef} className="relative">
             <div className={cn(
               "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-all duration-300",
-              (isActionsFloating || isAnyModalOpen || isActionButtonsTemporarilyHidden) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
+              (isActionsFloating || isAnyModalOpen) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
             )}>
               {actionButtonsContent}
             </div>

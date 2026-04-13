@@ -1633,6 +1633,8 @@ function App() {
   const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
+  const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
+  const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
 
@@ -1887,6 +1889,7 @@ const cycleFamilySelection = (
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
   const isAdminUser = useMemo(() => isAdminEmail(user?.email), [user?.email]);
   const effectiveUserTier: TagTier = isAdminUser ? 'pro+' : userTier;
 
@@ -2591,6 +2594,19 @@ const cycleFamilySelection = (
     setIsThemeRandomized(false);
     setIsStyleRandomized(false);
     setIsSoundTextureRandomized(false);
+        // 펼쳐보기 상태 초기화
+    setIsGenreExpanded(false);
+    setIsStyleExpanded(false);
+    setIsSoundExpanded(false);
+    setIsMoodExpanded(false);
+    setIsThemeExpanded(false);
+
+    // 기본 열림 상태 유지 (앱 초기값 기준)
+    setIsVocalExpanded(true);
+    setIsSongStructureExpanded(true);
+
+    // 적용된 키워드
+    setIsAppliedKeywordsExpanded(false);
 
     setUserInput('');
     setLyricDraft('');
@@ -2629,6 +2645,10 @@ const cycleFamilySelection = (
         return currentHistory[0] ?? prev;
       });
     }
+    // 상태 초기화들 다 끝난 뒤
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('전체 설정이 초기화되었습니다.');
   }, []); // Now truly stable
 
   const deleteHistoryItem = async (index: number) => {
@@ -2839,6 +2859,11 @@ const saveRecentSong = async (newSong: any) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
+      return;
+    }
+
+    if (selectedGenres.length === 0) {
+      showToast('최소 장르 1개를 선택해주세요.');
       return;
     }
 
@@ -3533,6 +3558,7 @@ ${result.prompt}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
                 forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+                onModalStateChange={setIsGenreHierarchyModalOpen}
               />
           <CycleSection 
             title="Style" 
@@ -3683,6 +3709,7 @@ ${result.prompt}
               customStructure={customStructure}
               onSongStructureChange={setSongStructure}
               onCustomStructureChange={setCustomStructure}
+              onModalStateChange={setIsStructureModalOpen}
               onClear={() => {
                 setLyricsLength('normal');
                 setIsNoLyrics(false);
@@ -3854,8 +3881,8 @@ ${result.prompt}
           {/* Action Buttons Anchor */}
           <div ref={actionButtonsAnchorRef} className="relative">
             <div className={cn(
-              "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-opacity duration-200",
-              isActionsFloating ? "opacity-0 pointer-events-none" : "opacity-100"
+              "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-all duration-300",
+              (isActionsFloating || isAnyModalOpen) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
             )}>
               {actionButtonsContent}
             </div>
@@ -3863,7 +3890,7 @@ ${result.prompt}
 
           {/* Floating Action Buttons */}
           <AnimatePresence>
-            {isActionsFloating && (
+            {isActionsFloating && !isAnyModalOpen && (
               <Portal>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -4331,7 +4358,7 @@ ${result.prompt}
                         <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
                           {(result.lyrics.english || '')
                             .replace(/\\n/g, '\n')
-                            .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
+                            .replace(sectionRegex, '\n\n$1')
                             .replace(/\n{3,}/g, '\n\n')
                             .trim()}
                         </pre>
@@ -4363,7 +4390,7 @@ ${result.prompt}
                         <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
                           {(result.lyrics.korean || '')
                             .replace(/\\n/g, '\n')
-                            .replace(/\s*(\[(Intro|Verse 1|Verse 2|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Drop|Hook|Rap)[^\]]*\])/g, '\n\n$1')
+                            .replace(sectionRegex, '\n\n$1')
                             .replace(/\n{3,}/g, '\n\n')
                             .trim()}
                         </pre>
@@ -5498,6 +5525,7 @@ interface SongStructureIntegratedControlProps {
   user: User | null;
   userTier: TagTier;
   sectionTags: SectionTag[];
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
 function SongStructureIntegratedControl({
@@ -5515,7 +5543,8 @@ function SongStructureIntegratedControl({
   onLongPressEnd,
   user,
   userTier,
-  sectionTags
+  sectionTags,
+  onModalStateChange
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -5526,6 +5555,10 @@ function SongStructureIntegratedControl({
   const [presetName, setPresetName] = useState('');
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
+
+  useEffect(() => {
+    onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null);
+  }, [isCustomModalOpen, editingSectionIndex, onModalStateChange]);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -6184,15 +6217,14 @@ function TagEditModal({
     return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
   };
 
-  const maxSelectable = userTier === 'pro+' ? 4 : (isInstrumental ? 1 : (userTier === 'free' ? 1 : 2));
+  const maxSelectable = isInstrumental ? 1 : 2;
 
   useEffect(() => {
     if (isOpen) setSelectedTags(tags);
   }, [isOpen, tags]);
 
   const toggleTag = (tag: string) => {
-    const fsTag = sectionTags.find(t => t.label === tag);
-    const tier = fsTag ? fsTag.tier : TAG_META[tag as keyof typeof TAG_META]?.tier;
+    const tier = getTagTier(tag);
     
     const isLocked = !isInstrumental && ((tier === 'pro' && userTier === 'free') || 
                      (tier === 'pro+' && userTier !== 'pro+'));
@@ -6208,8 +6240,8 @@ function TagEditModal({
         return prev.filter(t => t !== tag);
       }
       
-      // For Instrumental, replace the existing selection if it's max 1 (except for Pro+)
-      if (isInstrumental && userTier !== 'pro+') {
+      // For Instrumental, replace the existing selection if it's max 1
+      if (isInstrumental) {
         return [tag];
       }
 
@@ -6244,7 +6276,7 @@ function TagEditModal({
               </p>
             )}
             <p className="text-[10px] text-brand-orange/80 font-bold mt-1 uppercase tracking-wider">
-              {userTier === 'pro+' ? '제한 없이 선택 가능' : `최대 ${maxSelectable}개 선택 가능`}
+              {`최대 ${maxSelectable}개 선택 가능`}
             </p>
           </div>
           <button 
@@ -6335,24 +6367,36 @@ type SavedStructurePreset = {
 export const CUSTOM_STRUCTURE_SECTIONS = [
   'Intro',
   'Verse 1',
-  'Verse 2',
   'Pre-Chorus',
   'Chorus',
   'Hook',
-  'Drop',
+  'Verse 2',
   'Bridge',
-  'Breakdown',
-  'Instrumental',
-  'Solo',
-  'Rap Verse',
   'Final Chorus',
   'Outro',
+  'Breakdown',  
+  'Drop',
+  'Rap Verse',
+  'Solo',
+  'Instrumental',
   'Theme A',
   'Theme B',
   'Build-up',
   'Main Theme',
   'Climax',
 ] as const;
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const sectionPattern = CUSTOM_STRUCTURE_SECTIONS
+  .map(escapeRegExp)
+  .join('|');
+
+const sectionRegex = new RegExp(
+  `\\s*(\\[(${sectionPattern})[^\\]]*\\])`,
+  'g'
+);
 
 const TAG_DESCRIPTIONS_LOCAL: Record<string, string> = {
   'Solo': '한 명의 보컬이 중심이 되어 또렷하게 들립니다.',

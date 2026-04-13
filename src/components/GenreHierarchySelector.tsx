@@ -52,6 +52,7 @@ interface Props {
   isRandomized?: boolean;
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
 const DEFAULT_GROUP_DESCRIPTION = '대분류를 선택한 뒤 메인 장르와 세부 장르를 고를 수 있습니다.';
@@ -125,7 +126,8 @@ export default function GenreHierarchySelector({
   onToggleExpand,
   isRandomized = false,
   onHeightChange,
-  forcedHeight
+  forcedHeight,
+  onModalStateChange
 }: Props) {
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
@@ -146,6 +148,10 @@ export default function GenreHierarchySelector({
   const [pendingMainId, setPendingMainId] = useState<string | null>(null);
   const [pendingSubId, setPendingSubId] = useState<string | null>(null);
   const [hasChangedInModal, setHasChangedInModal] = useState(false);
+
+  useEffect(() => {
+    onModalStateChange?.(!!activeGroup);
+  }, [activeGroup, onModalStateChange]);
 
   const groups = useMemo<GroupItem[]>(() => {
     const genreDescMap = new Map(GENRES.map(g => [g.id, g.description]));

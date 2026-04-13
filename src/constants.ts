@@ -567,11 +567,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Band',
     titleKo: '밴드',
     variants: [
-      { id: 'band', label: 'Band', labelKo: '밴드', description: '기본 밴드', promptCore: 'Live band, drums, bass, guitar, keys.' },
-      { id: 'pop-band', label: 'Pop Band', labelKo: '팝 밴드', description: '팝 밴드', promptCore: 'Clean pop ensemble.' },
-      { id: 'funk-band', label: 'Funk Band', labelKo: '펑크 밴드', description: '펑크 밴드', promptCore: 'Tight funk rhythm, groove.' },
-      { id: 'rock-band', label: 'Rock Band', labelKo: '록 밴드', description: '록 밴드', promptCore: 'Energetic rock, electric guitar.' },
-      { id: 'jazz-band', label: 'Jazz Band', labelKo: '재즈 밴드', description: '재즈 밴드', promptCore: 'Jazz ensemble, interaction.' },
+      { 
+        id: 'band', 
+        label: 'Band', 
+        labelKo: '밴드', 
+        description: '드럼, 베이스, 기타, 건반이 함께 어우러지는 기본 밴드 구성입니다. 가장 균형 잡힌 라이브 합주 감각을 만들며, 장르에 따라 안정적인 중심 사운드를 형성합니다.', 
+        promptCore: 'Live band, drums, bass, guitar, keys.' 
+      },
+      { 
+        id: 'pop-band', 
+        label: 'Pop Band', 
+        labelKo: '팝 밴드', 
+        description: '깔끔하고 대중적인 팝 밴드 구성입니다. 부담 없이 듣기 좋은 균형 잡힌 악기 배치와 세련된 리듬감으로 현대적인 팝 사운드에 잘 어울립니다.', 
+        promptCore: 'Clean pop ensemble.' 
+      },
+      { 
+        id: 'funk-band', 
+        label: 'Funk Band', 
+        labelKo: '펑크 밴드', 
+        description: '리듬감과 그루브가 살아 있는 밴드 구성입니다. 베이스와 기타의 타이트한 리듬이 중심이 되며, 몸을 타는 듯한 탄력 있는 사운드를 만듭니다.', 
+        promptCore: 'Tight funk rhythm, groove.' 
+      },
+      { 
+        id: 'rock-band', 
+        label: 'Rock Band', 
+        labelKo: '록 밴드', 
+        description: '일렉 기타와 드럼의 존재감이 강한 밴드 사운드입니다. 에너지와 추진력이 뚜렷하며, 강한 전개와 라이브한 질감을 원하는 곡에 적합합니다.', 
+        promptCore: 'Energetic rock, electric guitar.' 
+      },
+      { 
+        id: 'jazz-band', 
+        label: 'Jazz Band', 
+        labelKo: '재즈 밴드', 
+        description: '악기 간의 유기적인 호흡과 여유로운 연주감이 중심인 재즈 밴드 구성입니다. 섬세한 인터플레이와 부드러운 그루브를 강조할 때 적합합니다.', 
+        promptCore: 'Jazz ensemble, interaction.' 
+      },
     ],
   },
   {
@@ -579,11 +609,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Bass',
     titleKo: '베이스',
     variants: [
-      { id: 'bass', label: 'Bass', labelKo: '베이스', description: '기본 베이스', promptCore: 'Bass foundation, pulse.' },
-      { id: '808-bass', label: '808 Bass', labelKo: '808 베이스', description: '808 베이스', promptCore: '808 sub, low-end pressure.' },
-      { id: 'smooth-bass', label: 'Smooth Bass', labelKo: '스무스 베이스', description: '스무스 베이스', promptCore: 'Smooth bass, rounded tone.' },
-      { id: 'funky-bassline', label: 'Funky Bassline', labelKo: '펑키 베이스라인', description: '펑키 베이스', promptCore: 'Funky bass, rhythmic groove.' },
-      { id: 'sharp-synth-bass', label: 'Sharp Synth Bass', labelKo: '샤프 신스 베이스', description: '신스 베이스', promptCore: 'Sharp synth bass, sharp attack.' },
+      { 
+        id: 'bass', 
+        label: 'Bass', 
+        labelKo: '베이스', 
+        description: '곡의 저음을 받쳐주는 기본 베이스입니다. 전체 사운드의 중심과 안정감을 만들어주며, 리듬과 화성을 자연스럽게 연결합니다.', 
+        promptCore: 'Bass foundation, pulse.' 
+      },
+      { 
+        id: '808-bass', 
+        label: '808 Bass', 
+        labelKo: '808 베이스', 
+        description: '강한 저음 압력과 묵직한 존재감이 특징인 베이스입니다. 힙합, 트랩, 강한 전자음악에서 바닥을 울리는 듯한 저역 에너지를 만들 때 적합합니다.', 
+        promptCore: '808 sub, low-end pressure.' 
+      },
+      { 
+        id: 'smooth-bass', 
+        label: 'Smooth Bass', 
+        labelKo: '스무스 베이스', 
+        description: '부드럽고 둥근 톤의 베이스입니다. 지나치게 튀지 않으면서도 곡의 흐름을 매끄럽게 이어주며, 감성적이거나 안정적인 사운드에 잘 어울립니다.', 
+        promptCore: 'Smooth bass, rounded tone.' 
+      },
+      { 
+        id: 'funky-bassline', 
+        label: 'Funky Bassline', 
+        labelKo: '펑키 베이스라인', 
+        description: '리듬감이 강하고 움직임이 느껴지는 베이스라인입니다. 그루브 중심의 곡에서 탄력 있고 리드미컬한 에너지를 만들어냅니다.', 
+        promptCore: 'Funky bass, rhythmic groove.' 
+      },
+      { 
+        id: 'sharp-synth-bass', 
+        label: 'Sharp Synth Bass', 
+        labelKo: '샤프 신스 베이스', 
+        description: '어택감이 분명하고 선명하게 치고 나오는 신스 베이스입니다. 팝, 댄스, 전자 계열에서 날카롭고 현대적인 저역 캐릭터를 줄 때 적합합니다.', 
+        promptCore: 'Sharp synth bass, sharp attack.' 
+      },
     ],
   },
   {
@@ -591,11 +651,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Drums',
     titleKo: '드럼',
     variants: [
-      { id: 'drums', label: 'Drums', labelKo: '드럼', description: '기본 드럼', promptCore: 'Steady drum, groove.' },
-      { id: 'brushed-drums', label: 'Brushed drums', labelKo: '브러시 드럼', description: '브러시 드럼', promptCore: 'Brushed drums, soft feel.' },
-      { id: 'double-time', label: 'Double-time', labelKo: '더블 타임', description: '더블 타임', promptCore: 'Fast double-time, momentum.' },
-      { id: 'half-time', label: 'Half-time', labelKo: '하프 타임', description: '하프 타임', promptCore: 'Heavy half-time, deep space.' },
-      { id: 'driving-rhythm', label: 'Driving rhythm', labelKo: '드라이빙 리듬', description: '추진 리듬', promptCore: 'Driving rhythm, energetic pulse.' },
+      { 
+        id: 'drums', 
+        label: 'Drums', 
+        labelKo: '드럼', 
+        description: '곡의 기본 박자와 에너지를 만드는 중심 리듬 악기입니다. 전체 템포감과 추진력을 안정적으로 잡아주는 가장 기본적인 드럼 선택입니다.', 
+        promptCore: 'Steady drum, groove.' 
+      },
+      { 
+        id: 'brushed-drums', 
+        label: 'Brushed drums', 
+        labelKo: '브러시 드럼', 
+        description: '브러시로 부드럽게 긁어내듯 연주되는 드럼입니다. 재즈, 발라드, 잔잔한 곡에서 섬세하고 따뜻한 리듬감을 만들 때 잘 어울립니다.', 
+        promptCore: 'Brushed drums, soft feel.' 
+      },
+      { 
+        id: 'double-time', 
+        label: 'Double-time', 
+        labelKo: '더블 타임', 
+        description: '체감 속도를 빠르게 느끼게 하는 리듬 패턴입니다. 곡에 긴장감과 몰아치는 에너지를 더하고 싶을 때 효과적입니다.', 
+        promptCore: 'Fast double-time, momentum.' 
+      },
+      { 
+        id: 'half-time', 
+        label: 'Half-time', 
+        labelKo: '하프 타임', 
+        description: '체감 속도를 절반처럼 느끼게 하는 느리고 묵직한 리듬입니다. 무게감, 공간감, 여유 있는 그루브를 강조할 때 적합합니다.', 
+        promptCore: 'Heavy half-time, deep space.' 
+      },
+      { 
+        id: 'driving-rhythm', 
+        label: 'Driving rhythm', 
+        labelKo: '드라이빙 리듬', 
+        description: '앞으로 밀고 나가는 추진력이 강한 드럼 패턴입니다. 에너지와 속도감을 살리고 싶을 때 매우 효과적인 선택입니다.', 
+        promptCore: 'Driving rhythm, energetic pulse.' 
+      },
     ],
   },
   {
@@ -603,11 +693,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Pad',
     titleKo: '패드',
     variants: [
-      { id: 'pad', label: 'Pad', labelKo: '패드', description: '기본 패드', promptCore: 'Supportive pad, atmosphere.' },
-      { id: 'glassy-pad', label: 'Glassy Pad', labelKo: '글래시 패드', description: '맑은 패드', promptCore: 'Glassy pad, airy shimmer.' },
-      { id: 'warm-pad', label: 'Warm Pad', labelKo: '웜 패드', description: '따뜻한 패드', promptCore: 'Warm pad, soft body.' },
-      { id: 'ethereal-pad', label: 'Ethereal Pad', labelKo: '에테리얼 패드', description: '몽환 패드', promptCore: 'Ethereal bloom, dreamlike.' },
-      { id: 'deep-pad', label: 'Deep Pad', labelKo: '딥 패드', description: '깊은 패드', promptCore: 'Deep pad, dark ambience.' },
+      { 
+        id: 'pad', 
+        label: 'Pad', 
+        labelKo: '패드', 
+        description: '곡의 배경을 부드럽게 채워주는 기본 패드입니다. 전면에 튀기보다 뒤에서 공간감과 안정감을 형성하는 역할을 합니다.', 
+        promptCore: 'Supportive pad, atmosphere.' 
+      },
+      { 
+        id: 'glassy-pad', 
+        label: 'Glassy Pad', 
+        labelKo: '글래시 패드', 
+        description: '맑고 반짝이는 질감의 패드입니다. 공기감 있고 투명한 분위기를 만들며, 선명하고 깨끗한 감성에 잘 어울립니다.', 
+        promptCore: 'Glassy pad, airy shimmer.' 
+      },
+      { 
+        id: 'warm-pad', 
+        label: 'Warm Pad', 
+        labelKo: '웜 패드', 
+        description: '포근하고 따뜻한 배경을 만들어주는 패드입니다. 차갑지 않은 감성적 분위기, 부드럽고 안정적인 곡 전개에 적합합니다.', 
+        promptCore: 'Warm pad, soft body.' 
+      },
+      { 
+        id: 'ethereal-pad', 
+        label: 'Ethereal Pad', 
+        labelKo: '에테리얼 패드', 
+        description: '몽환적이고 떠다니는 듯한 분위기를 만드는 패드입니다. 현실감이 흐려지는 듯한 부유감과 신비로운 감성을 강조합니다.', 
+        promptCore: 'Ethereal bloom, dreamlike.' 
+      },
+      { 
+        id: 'deep-pad', 
+        label: 'Deep Pad', 
+        labelKo: '딥 패드', 
+        description: '깊고 어두운 배경층을 형성하는 패드입니다. 무게감 있고 차분한 분위기, 어두운 감정선이나 영화적인 공간감에 잘 어울립니다.', 
+        promptCore: 'Deep pad, dark ambience.' 
+      },
     ],
   },
   {
@@ -615,11 +735,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Synths',
     titleKo: '신스',
     variants: [
-      { id: 'synths', label: 'Synths', labelKo: '신스', description: '기본 신스', promptCore: 'Modern synth, melodic.' },
-      { id: 'bright-synth', label: 'Bright Synth', labelKo: '브라이트 신스', description: '밝은 신스', promptCore: 'Bright synth, catchy.' },
-      { id: 'dreamy-synth', label: 'Dreamy Synth', labelKo: '드리미 신스', description: '몽환 신스', promptCore: 'Dreamy synth, floating.' },
-      { id: 'dark-synth', label: 'Dark Synth', labelKo: '다크 신스', description: '어두운 신스', promptCore: 'Dark synth, moody.' },
-      { id: 'deep-synth', label: 'Deep Synth', labelKo: '딥 신스', description: '깊은 신스', promptCore: 'Deep synth, rich weight.' },
+      { 
+        id: 'synths', 
+        label: 'Synths', 
+        labelKo: '신스', 
+        description: '현대적인 음악의 핵심이 되는 기본 신스입니다. 멜로디, 배경, 훅 등 다양한 역할을 담당하며 전자적인 색채를 자연스럽게 더합니다.', 
+        promptCore: 'Modern synth, melodic.' 
+      },
+      { 
+        id: 'bright-synth', 
+        label: 'Bright Synth', 
+        labelKo: '브라이트 신스', 
+        description: '밝고 선명하며 캐치한 존재감을 가진 신스입니다. 팝, 댄스, 경쾌한 곡에서 귀에 잘 꽂히는 멜로디와 화사한 분위기를 만듭니다.', 
+        promptCore: 'Bright synth, catchy.' 
+      },
+      { 
+        id: 'dreamy-synth', 
+        label: 'Dreamy Synth', 
+        labelKo: '드리미 신스', 
+        description: '부드럽고 몽글몽글한 감정을 만드는 신스입니다. 몽환적이고 감성적인 곡, 밤이나 추억 같은 이미지에 잘 어울립니다.', 
+        promptCore: 'Dreamy synth, floating.' 
+      },
+      { 
+        id: 'dark-synth', 
+        label: 'Dark Synth', 
+        labelKo: '다크 신스', 
+        description: '어둡고 무디한 분위기를 만드는 신스입니다. 긴장감, 차가움, 깊은 감정선이 필요한 곡에서 효과적으로 사용됩니다.', 
+        promptCore: 'Dark synth, moody.' 
+      },
+      { 
+        id: 'deep-synth', 
+        label: 'Deep Synth', 
+        labelKo: '딥 신스', 
+        description: '무게감 있고 깊게 가라앉는 질감의 신스입니다. 풍성한 저중역대와 깊은 공간감을 통해 곡의 밀도를 높여줍니다.', 
+        promptCore: 'Deep synth, rich weight.' 
+      },
     ],
   },
   {
@@ -627,11 +777,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Snare',
     titleKo: '스네어',
     variants: [
-      { id: 'snare', label: 'Snare', labelKo: '스네어', description: '기본 스네어', promptCore: 'Clear snare, backbeat.' },
-      { id: 'sharp-snare', label: 'Sharp snare', labelKo: '샤프 스네어', description: '날카로운 스네어', promptCore: 'Sharp snare, precise crack.' },
-      { id: 'warm-snare', label: 'Warm snare', labelKo: '웜 스네어', description: '따뜻한 스네어', promptCore: 'Warm snare, rounded.' },
-      { id: 'hard-hitting-snare', label: 'Hard-hitting snare', labelKo: '하드 히팅 스네어', description: '파워 스네어', promptCore: 'Punchy snare, bold attack.' },
-      { id: 'big-reverb-snare', label: 'Big reverb snare', labelKo: '빅 리버브 스네어', description: '공간 스네어', promptCore: 'Reverb snare, wide tail.' },
+      { 
+        id: 'snare', 
+        label: 'Snare', 
+        labelKo: '스네어', 
+        description: '비트의 중심을 잡아주는 기본 스네어입니다. 곡의 리듬감을 또렷하게 만들어주며, 박자감을 선명하게 전달합니다.', 
+        promptCore: 'Clear snare, backbeat.' 
+      },
+      { 
+        id: 'sharp-snare', 
+        label: 'Sharp snare', 
+        labelKo: '샤프 스네어', 
+        description: '날카롭고 선명하게 튀는 타격감을 가진 스네어입니다. 비트의 어택을 강조하고 리듬의 윤곽을 또렷하게 만들고 싶을 때 적합합니다.', 
+        promptCore: 'Sharp snare, precise crack.' 
+      },
+      { 
+        id: 'warm-snare', 
+        label: 'Warm snare', 
+        labelKo: '웜 스네어', 
+        description: '부드럽고 둥근 질감을 가진 스네어입니다. 너무 공격적이지 않으면서도 자연스럽게 리듬을 받쳐주는 따뜻한 느낌을 줍니다.', 
+        promptCore: 'Warm snare, rounded.' 
+      },
+      { 
+        id: 'hard-hitting-snare', 
+        label: 'Hard-hitting snare', 
+        labelKo: '하드 히팅 스네어', 
+        description: '강하게 꽂히는 파워풀한 스네어입니다. 에너지, 존재감, 박력 있는 비트를 강조하고 싶을 때 적합합니다.', 
+        promptCore: 'Punchy snare, bold attack.' 
+      },
+      { 
+        id: 'big-reverb-snare', 
+        label: 'Big reverb snare', 
+        labelKo: '빅 리버브 스네어', 
+        description: '넓은 공간에서 울리는 듯한 리버브가 강조된 스네어입니다. 시원하고 웅장한 공간감, 드라마틱한 타격감을 만들 때 효과적입니다.', 
+        promptCore: 'Reverb snare, wide tail.' 
+      },
     ],
   },
   {
@@ -639,11 +819,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Hi-hats',
     titleKo: '하이햇',
     variants: [
-      { id: 'hi-hats', label: 'Hi-hats', labelKo: '하이햇', description: '기본 하이햇', promptCore: 'Steady hi-hat, rhythm.' },
-      { id: 'crisp-hi-hats', label: 'Crisp hi-hats', labelKo: '크리스프 하이햇', description: '선명 하이햇', promptCore: 'Crisp hi-hats, sparkle.' },
-      { id: 'soft-hi-hats', label: 'Soft hi-hats', labelKo: '소프트 하이햇', description: '부드런 하이햇', promptCore: 'Soft hi-hats, light.' },
-      { id: 'fast-triplet-hi-hats', label: 'Fast triplet hi-hats', labelKo: '패스트 하이햇', description: '빠른 하이햇', promptCore: 'Triplet hi-hats, tension.' },
-      { id: 'distanced-hi-hats', label: 'Distanced hi-hats', labelKo: '디스턴스 하이햇', description: '먼 하이햇', promptCore: 'Distanced hi-hats, atmospheric.' },
+      { 
+        id: 'hi-hats', 
+        label: 'Hi-hats', 
+        labelKo: '하이햇', 
+        description: '곡의 세밀한 리듬과 흐름을 조절하는 기본 하이햇입니다. 전체 박자의 질감을 정리하고 리듬의 움직임을 자연스럽게 만들어줍니다.', 
+        promptCore: 'Steady hi-hat, rhythm.' 
+      },
+      { 
+        id: 'crisp-hi-hats', 
+        label: 'Crisp hi-hats', 
+        labelKo: '크리스프 하이햇', 
+        description: '선명하고 또렷한 질감의 하이햇입니다. 리듬의 디테일을 명확하게 드러내고 전체 사운드를 더 깨끗하게 느끼게 합니다.', 
+        promptCore: 'Crisp hi-hats, sparkle.' 
+      },
+      { 
+        id: 'soft-hi-hats', 
+        label: 'Soft hi-hats', 
+        labelKo: '소프트 하이햇', 
+        description: '부드럽고 가벼운 질감의 하이햇입니다. 리듬을 과하게 밀지 않고 자연스럽고 편안한 흐름을 만들 때 적합합니다.', 
+        promptCore: 'Soft hi-hats, light.' 
+      },
+      { 
+        id: 'fast-triplet-hi-hats', 
+        label: 'Fast triplet hi-hats', 
+        labelKo: '패스트 하이햇', 
+        description: '빠르고 촘촘한 움직임으로 긴장감과 속도감을 주는 하이햇입니다. 트랩, 힙합, 강한 전자음악에서 에너지를 끌어올릴 때 효과적입니다.', 
+        promptCore: 'Triplet hi-hats, tension.' 
+      },
+      { 
+        id: 'distanced-hi-hats', 
+        label: 'Distanced hi-hats', 
+        labelKo: '디스턴스 하이햇', 
+        description: '멀리서 들리는 듯한 공간감이 있는 하이햇입니다. 직접적인 타격감보다 분위기와 거리감을 강조할 때 잘 어울립니다.', 
+        promptCore: 'Distanced hi-hats, atmospheric.' 
+      },
     ],
   },
   {
@@ -651,11 +861,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Guitar',
     titleKo: '기타',
     variants: [
-      { id: 'guitar', label: 'Guitar', labelKo: '기타', description: '기본 기타', promptCore: 'Guitar, rhythmic texture.' },
-      { id: 'acoustic', label: 'Acoustic', labelKo: '어쿠스틱', description: '어쿠스틱', promptCore: 'Acoustic guitar, natural.' },
-      { id: 'electric', label: 'Electric', labelKo: '일렉트릭', description: '일렉트릭', promptCore: 'Electric guitar, rhythmic.' },
-      { id: 'overdriven', label: 'Overdriven', labelKo: '오버드라이브', description: '드라이브 기타', promptCore: 'Gritty guitar, grit.' },
-      { id: 'ambient-electric', label: 'Ambient Electric', labelKo: '앰비언트 기타', description: '앰비언트 기타', promptCore: 'Ambient guitar, spacious.' },
+      { 
+        id: 'guitar', 
+        label: 'Guitar', 
+        labelKo: '기타', 
+        description: '곡의 리듬과 분위기를 동시에 잡아주는 기본 기타입니다. 장르에 따라 담백한 반주부터 존재감 있는 리프까지 폭넓게 활용됩니다.', 
+        promptCore: 'Guitar, rhythmic texture.' 
+      },
+      { 
+        id: 'acoustic', 
+        label: 'Acoustic', 
+        labelKo: '어쿠스틱', 
+        description: '자연스럽고 따뜻한 울림을 가진 기타입니다. 감성적이고 친밀한 분위기, 포크나 발라드 같은 곡에 잘 어울립니다.', 
+        promptCore: 'Acoustic guitar, natural.' 
+      },
+      { 
+        id: 'electric', 
+        label: 'Electric', 
+        labelKo: '일렉트릭', 
+        description: '선명한 존재감과 리듬감을 더해주는 기타입니다. 팝, 록, 시티팝 등에서 에너지와 캐릭터를 만들어주는 핵심 악기입니다.', 
+        promptCore: 'Electric guitar, rhythmic.' 
+      },
+      { 
+        id: 'overdriven', 
+        label: 'Overdriven', 
+        labelKo: '오버드라이브', 
+        description: '적당히 거칠고 밀도 있는 드라이브 톤의 기타입니다. 록적인 에너지, 감정의 강도, 거친 질감을 추가하고 싶을 때 적합합니다.', 
+        promptCore: 'Gritty guitar, grit.' 
+      },
+      { 
+        id: 'ambient-electric', 
+        label: 'Ambient Electric', 
+        labelKo: '앰비언트 기타', 
+        description: '공간감과 여운이 강조된 전기 기타입니다. 직접적인 리프보다는 넓은 배경과 감성적인 잔향을 만드는 데 적합합니다.', 
+        promptCore: 'Ambient guitar, spacious.' 
+      },
     ],
   },
   {
@@ -663,11 +903,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Trumpet',
     titleKo: '트럼펫',
     variants: [
-      { id: 'trumpet', label: 'Trumpet', labelKo: '트럼펫', description: '기본 트럼펫', promptCore: 'Trumpet, brass accent.' },
-      { id: 'bright-trumpet', label: 'Bright Trumpet', labelKo: '브라이트 트럼펫', description: '밝은 트럼펫', promptCore: 'Bright trumpet, vivid.' },
-      { id: 'muted-trumpet', label: 'Muted Trumpet', labelKo: '뮤트 트럼펫', description: '뮤트 트럼펫', promptCore: 'Muted trumpet, intimate.' },
-      { id: 'soft-trumpet-solo', label: 'Soft Trumpet solo', labelKo: '트럼펫 솔로', description: '트럼펫 솔로', promptCore: 'Soft trumpet, elegance.' },
-      { id: 'funky-trumpet-hits', label: 'Funky Trumpet hits', labelKo: '펑키 트럼펫', description: '펑키 트럼펫', promptCore: 'Funk trumpet, brass hits.' },
+      { 
+        id: 'trumpet', 
+        label: 'Trumpet', 
+        labelKo: '트럼펫', 
+        description: '밝고 강한 존재감을 가진 기본 트럼펫입니다. 멜로디를 돋보이게 하거나 브라스 특유의 화려한 인상을 줄 때 효과적입니다.', 
+        promptCore: 'Trumpet, brass accent.' 
+      },
+      { 
+        id: 'bright-trumpet', 
+        label: 'Bright Trumpet', 
+        labelKo: '브라이트 트럼펫', 
+        description: '더 밝고 화사한 톤의 트럼펫입니다. 힘차고 시원한 인상을 만들며, 곡에 생동감과 활력을 더해줍니다.', 
+        promptCore: 'Bright trumpet, vivid.' 
+      },
+      { 
+        id: 'muted-trumpet', 
+        label: 'Muted Trumpet', 
+        labelKo: '뮤트 트럼펫', 
+        description: '부드럽고 절제된 톤의 트럼펫입니다. 날카로운 존재감보다 섬세하고 재즈적인 감성, 조용한 분위기를 만들 때 적합합니다.', 
+        promptCore: 'Muted trumpet, intimate.' 
+      },
+      { 
+        id: 'soft-trumpet-solo', 
+        label: 'Soft Trumpet solo', 
+        labelKo: '트럼펫 솔로', 
+        description: '부드럽고 우아하게 선율을 이끄는 트럼펫 솔로입니다. 과하지 않으면서도 감정선을 섬세하게 끌어올릴 때 좋습니다.', 
+        promptCore: 'Soft trumpet, elegance.' 
+      },
+      { 
+        id: 'funky-trumpet-hits', 
+        label: 'Funky Trumpet hits', 
+        labelKo: '펑키 트럼펫', 
+        description: '짧고 경쾌하게 치고 들어오는 브라스 히트입니다. 펑크, 디스코, 그루브 중심 곡에서 리듬감을 강조할 때 효과적입니다.', 
+        promptCore: 'Funk trumpet, brass hits.' 
+      },
     ],
   },
   {
@@ -675,9 +945,27 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Gayageum',
     titleKo: '가야금',
     variants: [
-      { id: 'gayageum', label: 'Gayageum', labelKo: '가야금', description: '가야금', promptCore: 'Gayageum, Korean pluck.' },
-      { id: 'haegeum', label: 'Haegeum', labelKo: '해금', description: '해금', promptCore: 'Haegeum, Korean bowed.' },
-      { id: 'kalimba-pluck', label: 'Kalimba pluck', labelKo: '칼림바', description: '칼림바', promptCore: 'Kalimba, clean pluck.' },
+      { 
+        id: 'gayageum', 
+        label: 'Gayageum', 
+        labelKo: '가야금', 
+        description: '맑고 섬세하게 튕기는 울림이 특징인 한국 전통 현악기입니다. 동양적인 정서와 우아한 결을 곡에 더할 수 있습니다.', 
+        promptCore: 'Gayageum, Korean pluck.' 
+      },
+      { 
+        id: 'haegeum', 
+        label: 'Haegeum', 
+        labelKo: '해금', 
+        description: '감정선이 짙고 사람 목소리처럼 울리는 한국 전통 찰현악기입니다. 애절하고 서정적인 분위기를 강조할 때 잘 어울립니다.', 
+        promptCore: 'Haegeum, Korean bowed.' 
+      },
+      { 
+        id: 'kalimba-pluck', 
+        label: 'Kalimba pluck', 
+        labelKo: '칼림바', 
+        description: '맑고 귀여운 울림이 특징인 플럭 악기입니다. 아기자기하고 순수한 분위기, 반짝이는 감성을 만들 때 적합합니다.', 
+        promptCore: 'Kalimba, clean pluck.' 
+      },
     ],
   },
   {
@@ -685,11 +973,41 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Strings',
     titleKo: '스트링',
     variants: [
-      { id: 'strings', label: 'Strings', labelKo: '스트링', description: '기본 스트링', promptCore: 'Warm strings, contour.' },
-      { id: 'full-orchestral-strings', label: 'Full Orchestral Strings', labelKo: '오케스트라', description: '오케스트라', promptCore: 'Orchestral strings, breadth.' },
-      { id: 'soft-legato-strings', label: 'Soft legato strings', labelKo: '레가토 스트링', description: '레가토 스트링', promptCore: 'Legato strings, warmth.' },
-      { id: 'pizzicato-strings', label: 'Pizzicato strings', labelKo: '피치카토', description: '피치카토', promptCore: 'Pizzicato strings, plucked.' },
-      { id: 'staccato-strings', label: 'Staccato strings', labelKo: '스타카토', description: '스타카토', promptCore: 'Staccato strings, precision.' },
+      { 
+        id: 'strings', 
+        label: 'Strings', 
+        labelKo: '스트링', 
+        description: '곡의 감정선과 서사를 풍성하게 채워주는 기본 스트링입니다. 부드럽고 넓은 울림으로 몰입감과 깊이를 더해줍니다.', 
+        promptCore: 'Warm strings, contour.' 
+      },
+      { 
+        id: 'full-orchestral-strings', 
+        label: 'Full Orchestral Strings', 
+        labelKo: '오케스트라', 
+        description: '웅장하고 영화적인 스케일을 가진 오케스트라 스트링입니다. 클라이맥스, 감정 폭발, 서사적인 장면 연출에 매우 효과적입니다.', 
+        promptCore: 'Orchestral strings, breadth.' 
+      },
+      { 
+        id: 'soft-legato-strings', 
+        label: 'Soft legato strings', 
+        labelKo: '레가토 스트링', 
+        description: '부드럽게 이어지는 선율 중심의 스트링입니다. 자연스럽고 감성적인 흐름을 만들며 발라드나 서정적인 곡에 잘 어울립니다.', 
+        promptCore: 'Legato strings, warmth.' 
+      },
+      { 
+        id: 'pizzicato-strings', 
+        label: 'Pizzicato strings', 
+        labelKo: '피치카토', 
+        description: '현을 퉁기듯 연주하는 경쾌한 스트링입니다. 귀엽고 리듬감 있는 분위기, 가벼운 긴장감이나 장난스러운 느낌을 줄 때 적합합니다.', 
+        promptCore: 'Pizzicato strings, plucked.' 
+      },
+      { 
+        id: 'staccato-strings', 
+        label: 'Staccato strings', 
+        labelKo: '스타카토', 
+        description: '짧고 또렷하게 끊어지는 스트링입니다. 리듬감, 긴장감, 명확한 악센트를 주고 싶을 때 효과적입니다.', 
+        promptCore: 'Staccato strings, precision.' 
+      },
     ],
   },
   {
@@ -697,31 +1015,50 @@ export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
     title: 'Minimalist texture',
     titleKo: '미니멀 텍스쳐',
     variants: [
-      { id: 'minimalist-texture', label: 'Minimalist texture', labelKo: '미니멀 텍스쳐', description: '미니멀 텍스쳐', promptCore: 'Minimal texture, space.' },
-      { id: 'rich-texture', label: 'Rich texture', labelKo: '리치 텍스쳐', description: '리치 텍스쳐', promptCore: 'Rich texture, layered.' },
-      { id: 'evolving-texture', label: 'Evolving texture', labelKo: '이볼빙 텍스쳐', description: '이볼빙 텍스쳐', promptCore: 'Evolving texture, shifts.' },
-      { id: 'granular-texture', label: 'Granular texture', labelKo: '그래뉼러 텍스쳐', description: '그래뉼러 텍스쳐', promptCore: 'Granular texture, detail.' },
-    ],
-  },
-  {
-    id: 'ambience-family',
-    title: 'Nature textures',
-    titleKo: '자연 텍스쳐',
-    variants: [
-      { id: 'nature-textures', label: 'Nature textures', labelKo: '자연 텍스쳐', description: '자연 텍스쳐', promptCore: 'Nature textures, organic.' },
-      { id: 'rainy-textures', label: 'Rainy textures', labelKo: '우천 텍스쳐', description: '우천 텍스쳐', promptCore: 'Rainy textures, droplets.' },
-      { id: 'urban-ambience', label: 'Urban ambience', labelKo: '어반 앰비언스', description: '어반 앰비언스', promptCore: 'Urban ambience, nocturnal.' },
-      { id: 'mechanical-textures', label: 'Mechanical textures', labelKo: '기계 텍스쳐', description: '기계 텍스쳐', promptCore: 'Mechanical, cold pulse.' },
+      { 
+        id: 'minimalist-texture', 
+        label: 'Minimalist texture', 
+        labelKo: '미니멀 텍스쳐', 
+        description: '불필요한 요소를 줄이고 여백을 살리는 질감입니다. 단순하지만 집중도 높은 사운드를 만들고 싶을 때 적합합니다.', 
+        promptCore: 'Minimal texture, space.' 
+      },
+      { 
+        id: 'rich-texture', 
+        label: 'Rich texture', 
+        labelKo: '리치 텍스쳐', 
+        description: '레이어가 풍성하게 쌓인 밀도 높은 질감입니다. 공간을 가득 채우는 풍부한 사운드와 존재감을 만들고 싶을 때 좋습니다.', 
+        promptCore: 'Rich texture, layered.' 
+      },
+      { 
+        id: 'evolving-texture', 
+        label: 'Evolving texture', 
+        labelKo: '이볼빙 텍스쳐', 
+        description: '시간이 흐르면서 미세하게 변화하는 질감입니다. 정적인 곡에도 움직임과 생명감을 부여할 수 있습니다.', 
+        promptCore: 'Evolving texture, shifts.' 
+      },
+      { 
+        id: 'granular-texture', 
+        label: 'Granular texture', 
+        labelKo: '그래뉼러 텍스쳐', 
+        description: '잘게 부서진 입자감과 디테일이 느껴지는 질감입니다. 실험적이거나 섬세한 소리 결을 강조하고 싶을 때 적합합니다.', 
+        promptCore: 'Granular texture, detail.' 
+      },
     ],
   },
   {
     id: 'Magic-family',
     title: 'Magic textures',
-    titleKo: '마법 사운드', 
-        variants: [ 
-      { id: 'star_candy_sound', label: 'Star Candy Sound', labelKo: '별사탕 사운드', description: '반짝이는 신스 플럭과 부드러운 패드의 조화', promptCore: 'shimmering synth pluck melodies reminiscent of star candy, soft pads, gentle synthesizer, minimal instrumentation' },
+    titleKo: '마법 사운드',
+    variants: [
+      { 
+        id: 'star_candy_sound', 
+        label: 'Star Candy Sound', 
+        labelKo: '별사탕 사운드', 
+        description: '반짝이는 플럭과 부드러운 패드가 어우러진 판타지 계열 사운드입니다. 동화적이고 꿈같은 분위기, 귀엽고 마법 같은 감성을 표현할 때 적합합니다.', 
+        promptCore: 'shimmering synth pluck melodies reminiscent of star candy, soft pads, gentle synthesizer, minimal instrumentation' 
+      },
     ],
-  }, 
+  },
 ] as const;
 
 export const INSTRUMENT_SOUNDS: InstrumentSoundItem[] = SOUND_TEXTURE_CYCLES.flatMap((cycle) =>

@@ -1634,6 +1634,8 @@ function App() {
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
+  const [isActionButtonsTemporarilyHidden, setIsActionButtonsTemporarilyHidden] = useState(false);
+  const scrollStopTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
@@ -1814,6 +1816,17 @@ const cycleFamilySelection = (
 
   useEffect(() => {
     const handleScroll = () => {
+      // Hide buttons temporarily while scrolling
+      setIsActionButtonsTemporarilyHidden(true);
+      
+      if (scrollStopTimerRef.current) {
+        clearTimeout(scrollStopTimerRef.current);
+      }
+      
+      scrollStopTimerRef.current = setTimeout(() => {
+        setIsActionButtonsTemporarilyHidden(false);
+      }, 2500);
+
       if (actionButtonsAnchorRef.current) {
         const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
         // Floating when anchor is below the bottom floating line
@@ -1823,7 +1836,12 @@ const cycleFamilySelection = (
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollStopTimerRef.current) {
+        clearTimeout(scrollStopTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -3882,7 +3900,7 @@ ${result.prompt}
           <div ref={actionButtonsAnchorRef} className="relative">
             <div className={cn(
               "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-all duration-300",
-              (isActionsFloating || isAnyModalOpen) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
+              (isActionsFloating || isAnyModalOpen || isActionButtonsTemporarilyHidden) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
             )}>
               {actionButtonsContent}
             </div>
@@ -3890,7 +3908,7 @@ ${result.prompt}
 
           {/* Floating Action Buttons */}
           <AnimatePresence>
-            {isActionsFloating && !isAnyModalOpen && (
+            {isActionsFloating && !isAnyModalOpen && !isActionButtonsTemporarilyHidden && (
               <Portal>
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -4479,7 +4497,7 @@ ${result.prompt}
             className={cn(
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/' 
-                ? (isActionsFloating 
+                ? (isActionsFloating && !isAnyModalOpen && !isActionButtonsTemporarilyHidden
                     ? "bottom-29 md:bottom-35 max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
                 : "bottom-10 max-w-[250px] md:max-w-[400px]"

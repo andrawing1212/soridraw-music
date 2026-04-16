@@ -281,8 +281,8 @@ const ReorderableSectionItem = ({
       value={item}
       dragListener={false}
       dragControls={controls}
-      onPointerDown={(e) => controls.start(e)}
-      className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5 touch-none select-none cursor-default relative group"
+      className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5 touch-pan-y"
+      as="div"
       whileDrag={{ 
         scale: 1.02, 
         boxShadow: "0 8px 30px rgba(0,0,0,0.3)", 
@@ -291,11 +291,8 @@ const ReorderableSectionItem = ({
       }}
     >
       <button
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          controls.start(e);
-        }}
-        className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0"
+        onPointerDown={(e) => controls.start(e)}
+        className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 touch-none"
         onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 눌러 위아래로 드래그하여 순서를 변경합니다.' })}
         onMouseLeave={() => onHover(null)}
       >
@@ -307,36 +304,36 @@ const ReorderableSectionItem = ({
       </span>
       
       <div className="flex-1 min-w-0">
-        <span className="text-sm font-bold text-[var(--text-primary)] block pointer-events-none">{item.section}</span>
+        <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
         {SECTION_META[item.section]?.descriptionKo && (
-          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep pointer-events-none">
+          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep">
             {SECTION_META[item.section].descriptionKo}
           </p>
         )}
         {(item.tags ?? []).length > 0 && (
-          <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate pointer-events-none">
+          <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate">
             {(item.tags ?? []).join(' · ')}
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-1">
-        <motion.button
-          onTap={() => onEdit(index)}
+        <button
+          onClick={() => onEdit(index)}
           onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center relative z-10"
+          className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center"
         >
           <Tag className="w-3.5 h-3.5" />
-        </motion.button>
-        <motion.button
-          onTap={() => onRemove(index)}
+        </button>
+        <button
+          onClick={() => onRemove(index)}
           onMouseEnter={() => onHover({ id: 'section-remove', label: '삭제', description: '이 섹션을 구조에서 제거합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center relative z-10"
+          className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
         >
           <X className="w-3.5 h-3.5" />
-        </motion.button>
+        </button>
       </div>
     </Reorder.Item>
   );
@@ -6106,6 +6103,7 @@ function SongStructureIntegratedControl({
                       values={draftStructure ?? []} 
                       onReorder={setDraftStructure}
                       className="min-h-[180px] rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2"
+                      as="div"
                     >
                       {(draftStructure ?? []).length === 0 ? (
                         <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">

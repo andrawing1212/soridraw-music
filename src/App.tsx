@@ -5580,6 +5580,7 @@ function SongStructureIntegratedControl({
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const customModalHistoryPushedRef = useRef(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
@@ -5638,6 +5639,15 @@ function SongStructureIntegratedControl({
     loadStructures();
   }, [user]);
 
+  const closeCustomModal = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && customModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setIsCustomModalOpen(false);
+    customModalHistoryPushedRef.current = false;
+  }, []);
+
   useEffect(() => {
     if (!isCustomModalOpen) return;
     const originalOverflow = document.body.style.overflow;
@@ -5645,16 +5655,29 @@ function SongStructureIntegratedControl({
 
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsCustomModalOpen(false);
+        if (editingSectionIndex !== null) {
+          setEditingSectionIndex(null);
+        } else {
+          closeCustomModal();
+        }
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (isCustomModalOpen) {
+        closeCustomModal('history');
       }
     };
 
     window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('popstate', handlePopState);
+    
     return () => {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('popstate', handlePopState);
     };
-  }, [isCustomModalOpen]);
+  }, [isCustomModalOpen, closeCustomModal, editingSectionIndex]);
 
   const persistSavedStructures = async (next: SavedStructurePreset[]) => {
     if (!user) return;
@@ -5672,6 +5695,8 @@ function SongStructureIntegratedControl({
     setPresetName('');
     setEditingSavedStructureId(null);
     setIsCustomModalOpen(true);
+    window.history.pushState({ modal: 'custom-structure' }, '');
+    customModalHistoryPushedRef.current = true;
   };
 
   function formatStructureText(structure: CustomSectionItem[]) {
@@ -5741,7 +5766,7 @@ function SongStructureIntegratedControl({
     if ((draftStructure ?? []).length === 0) return;
     onCustomStructureChange(draftStructure);
     onSongStructureChange('custom');
-    setIsCustomModalOpen(false);
+    closeCustomModal();
     onHover({
       id: 'song-structure-custom-applied',
       label: '커스텀 구조 적용',
@@ -5966,7 +5991,7 @@ function SongStructureIntegratedControl({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-            onClick={() => setIsCustomModalOpen(false)}
+            onClick={() => closeCustomModal()}
           >
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -5982,7 +6007,7 @@ function SongStructureIntegratedControl({
                   <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 곡 구조를 만드세요.</p>
                 </div>
                 <button
-                  onClick={() => setIsCustomModalOpen(false)}
+                  onClick={() => closeCustomModal()}
                   className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
                 >
                   <X className="w-4 h-4" />
@@ -6038,7 +6063,7 @@ function SongStructureIntegratedControl({
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => setIsCustomModalOpen(false)}
+                          onClick={() => closeCustomModal()}
                           className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 transition-all font-bold text-sm"
                         >
                           취소

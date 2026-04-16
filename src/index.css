@@ -5,25 +5,36 @@
   --color-studio-brown: #DC9146;
   --font-sans: "Pretendard", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Playfair Display", serif;
+  
+  --color-btn-bg: var(--button-bg);
+  --color-btn-border: var(--button-border);
+  --color-btn-hover: var(--button-hover-bg);
+  --shadow-btn: var(--button-shadow);
 }
 
 :root {
   --bg-primary: #ffffff;
-  --bg-secondary: #ffffff;
+  --bg-secondary: #faf9f8;
   --card-bg: #ffffff;
   --text-primary: #1a1a1a;
-  --text-secondary: #636e72;
-  --border-color: #e5e7eb;
+  --text-secondary: #7d756d;
+  --border-color: #f1efed;
   --input-bg: #ffffff;
-  --hover-bg: #f8f9fa;
-  --hover-bg-solid: #f1f2f3;
+  --hover-bg: #faf9f8;
+  --hover-bg-solid: #f5f3f1;
   --glass-bg: rgba(255, 255, 255, 0.95);
-  --glass-border: #e5e7eb;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
-  --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.1);
-  --shadow-2xl: 0 20px 48px rgba(0, 0, 0, 0.12);
+  --glass-border: #f1efed;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px rgba(27, 25, 24, 0.04);
+  --shadow-lg: 0 8px 24px rgba(27, 25, 24, 0.06);
+  --shadow-xl: 0 12px 32px rgba(27, 25, 24, 0.08);
+  --shadow-2xl: 0 20px 48px rgba(27, 25, 24, 0.1);
+  
+  /* Button Styles for Light Mode - Warmer & Lighter */
+  --button-bg: #f5f3f1;
+  --button-border: #e9e6e3;
+  --button-hover-bg: #edeae7;
+  --button-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .dark {
@@ -40,6 +51,12 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  
+  /* Button Styles for Dark Mode */
+  --button-bg: rgba(255, 255, 255, 0.05);
+  --button-border: rgba(255, 255, 255, 0.1);
+  --button-hover-bg: rgba(255, 255, 255, 0.12);
+  --button-shadow: none;
 }
 
 html {

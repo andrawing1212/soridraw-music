@@ -499,10 +499,10 @@ export default function GenreHierarchySelector({
               onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', labelKo: '랜덤 선택', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2.5 rounded-xl transition-all",
+                "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                 isRandomized
-                  ? "bg-brand-orange text-white"
-                  : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
+                  ? "bg-brand-orange text-white border-brand-orange"
+                  : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
               )}
               title="랜덤 선택"
             >
@@ -513,10 +513,10 @@ export default function GenreHierarchySelector({
               onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2.5 rounded-xl transition-all border",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 selectedCount > 0 || isRandomized
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
               title="초기화"
             >
@@ -543,12 +543,12 @@ export default function GenreHierarchySelector({
                   onClick={() => openMainModal(group)}
                   onMouseEnter={() => onHover({ id: group.id, label: group.label, labelKo: group.labelKo, description: group.description || DEFAULT_GROUP_DESCRIPTION, descriptionKo: group.descriptionKo, _ts: Date.now() } as CategoryItem)}
                   onMouseLeave={() => onHover(null)}
-                  className={[
-                    'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center',
+                  className={cn(
+                    'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center shadow-btn',
                     hasSelectedMain
                       ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
-                      : 'bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10',
-                  ].join(' ')}
+                      : 'bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover'
+                  )}
                 >
                   <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
@@ -607,10 +607,10 @@ export default function GenreHierarchySelector({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]/20">
+              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]">
                 <button
                   onClick={handleBack}
-                  className="w-10 h-10 rounded-full border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-sm active:scale-90"
+                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
                   title="뒤로가기"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -622,7 +622,7 @@ export default function GenreHierarchySelector({
 
                 <button
                   onClick={() => closeModal()}
-                  className="w-10 h-10 rounded-full border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-sm active:scale-90"
+                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
                   title="닫기"
                 >
                   <X className="w-5 h-5" />
@@ -675,7 +675,7 @@ export default function GenreHierarchySelector({
                               'w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-between hover:scale-[1.02] active:scale-[0.98]',
                               isActiveVisual
                                 ? 'bg-brand-orange border-transparent text-white shadow-lg shadow-brand-orange/30'
-                                : 'bg-[var(--bg-secondary)]/40 border-[var(--border-color)] hover:bg-[var(--hover-bg)] hover:border-brand-orange/30 text-[var(--text-primary)]'
+                                : 'bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 text-[var(--text-primary)] shadow-btn'
                             )}
                           >
                             {/* Left Spacer to maintain center alignment of text within the card */}
@@ -706,8 +706,8 @@ export default function GenreHierarchySelector({
                                   className={cn(
                                     "p-2 rounded-xl border transition-all hover:scale-110 active:scale-90",
                                     isActiveVisual 
-                                      ? "bg-white/20 border-white/30 text-white" 
-                                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange shadow-sm hover:border-brand-orange/50"
+                                      ? "bg-white/30 border-white/40 text-white" 
+                                      : "bg-btn-bg border-btn-border text-brand-orange shadow-btn hover:border-brand-orange/50"
                                   )}
                                   title="세부장르 더보기"
                                 >
@@ -742,7 +742,7 @@ export default function GenreHierarchySelector({
                             'px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep',
                             isActiveVisual
                               ? 'bg-brand-orange text-white border-transparent shadow-lg shadow-brand-orange/30'
-                              : 'bg-[var(--bg-secondary)]/40 text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] hover:border-brand-orange/30',
+                              : 'bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 shadow-btn',
                           )}
                         >
                           {sub.labelKo || sub.label}
@@ -754,7 +754,7 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Bottom Info Area */}
-              <div className="px-6 py-5 bg-[var(--bg-secondary)]/30 border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden">
+              <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
                 <div className="p-2.5 rounded-xl bg-brand-orange/10 text-brand-orange shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>

@@ -281,7 +281,7 @@ const ReorderableSectionItem = ({
       value={item}
       dragListener={false}
       dragControls={controls}
-      className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5 touch-pan-y"
+      className="flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 touch-pan-y shadow-sm"
       as="div"
       whileDrag={{ 
         scale: 1.02, 
@@ -292,7 +292,7 @@ const ReorderableSectionItem = ({
     >
       <button
         onPointerDown={(e) => controls.start(e)}
-        className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 touch-none"
+        className="w-8 h-8 rounded-lg border bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 touch-none shadow-btn"
         onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 눌러 위아래로 드래그하여 순서를 변경합니다.' })}
         onMouseLeave={() => onHover(null)}
       >
@@ -322,7 +322,7 @@ const ReorderableSectionItem = ({
           onClick={() => onEdit(index)}
           onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center"
+          className="w-8 h-8 rounded-lg border bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center justify-center shadow-btn"
         >
           <Tag className="w-3.5 h-3.5" />
         </button>
@@ -463,7 +463,7 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
               location.pathname === '/admin/plans' 
                 ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
             )}
           >
             플랜 관리
@@ -474,7 +474,7 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
               location.pathname === '/admin/vocals' 
                 ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
             )}
           >
             보컬 관리
@@ -485,7 +485,7 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
               location.pathname === '/admin/tags' 
                 ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
             )}
           >
             태그 관리
@@ -555,7 +555,7 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
             </div>
             <button
               onClick={loadPlans}
-              className="p-2 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-primary)] hover:bg-white/10 transition-all"
+              className="p-2 rounded-xl border border-[var(--border-color)] bg-btn-bg text-[var(--text-primary)] hover:bg-btn-hover transition-all shadow-btn"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -754,7 +754,7 @@ function SecondaryScrollControl() {
         >
           <div className="relative h-40 w-8 flex items-center justify-center">
             {/* Track Visual */}
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-white/5 rounded-full" />
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-btn-border/30 rounded-full" />
             
             {/* Control Circle (Reduced Size) */}
             <motion.div
@@ -3388,7 +3388,7 @@ ${result.prompt}
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg-solid)] text-[var(--text-primary)] transition-all border border-white/30 flex items-center justify-center gap-2 group/random shadow-[var(--shadow-md)]"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[var(--text-primary)] transition-all border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn"
         >
           <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
           <span className="hidden md:block font-bold">랜덤 선택</span>
@@ -3398,14 +3398,14 @@ ${result.prompt}
       <button
         onClick={() => {
           handleGenerate();
-          setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' });
+          setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.(장르는 필수 선택)' });
         }}
-        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
+        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.(장르는 필수 선택)' })}
         onMouseLeave={() => {
           setHoveredItem(null);
           handleLongPressEnd();
         }}
-        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.' })}
+        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.(장르는 필수 선택)' })}
         onTouchEnd={handleLongPressEnd}
         className={cn(
           "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
@@ -3433,10 +3433,10 @@ ${result.prompt}
           onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
           onMouseLeave={() => setHoveredItem(null)}
           className={cn(
-            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-[var(--shadow-md)]",
+            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-btn",
             isGlobalClearable
-              ? "bg-[var(--card-bg)] border-white/30 text-[var(--text-primary)] hover:bg-[var(--hover-bg-solid)]"
-              : "bg-[var(--bg-primary)] border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
+              ? "bg-[var(--card-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+              : "bg-[var(--bg-primary)] border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
           )}
           disabled={!isGlobalClearable}
         >
@@ -3784,29 +3784,22 @@ ${result.prompt}
               <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
             </div>
             
-            <textarea
-              value={userInput}
-              onChange={(e) => {
-                setUserInput(e.target.value);
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
-              }}
-              onFocus={() => {
-                setIsInputFocused(true);
-              }}
-              onBlur={() => setIsInputFocused(false)}
-              className="w-full bg-white/15 border border-white/20 rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative shadow-[var(--shadow-lg)] placeholder:text-white/40 scroll-smooth"
-              rows={1}
-            />
-            {!userInput && !isInputFocused && (
-              <div className="absolute inset-0 pointer-events-none flex items-center pl-12 overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap text-[var(--text-secondary)] text-[14px] md:text-lg">
-                  작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 ) &nbsp;&nbsp;&nbsp;&nbsp; 작곡 할 내용을 입력하세요.( 예 : 주식 떡상을 위한 기도, 화성 갈끄니까 괜찮아 )
-                </div>
-              </div>
-            )}
-
-            {/* Direct Lyrics Toggle Button */}
+              <textarea
+                value={userInput}
+                onChange={(e) => {
+                  setUserInput(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
+                }}
+                onFocus={() => {
+                  setIsInputFocused(true);
+                }}
+                onBlur={() => setIsInputFocused(false)}
+                className="w-full bg-[var(--bg-secondary)] border border-btn-border rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange/50 transition-all text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative shadow-[var(--shadow-lg)] placeholder:text-[var(--text-secondary)]/40 scroll-smooth shadow-inner"
+                rows={1}
+                placeholder="곡의 장르, 분위기, 특징을 콤마로 구분해서 입력하거나 문장으로 입력하세요..."
+              />
+                {/* Direct Lyrics Toggle Button */}
             <AnimatePresence>
               {(userInput.length > 0 || isInputFocused) && (
                 <motion.div
@@ -3823,7 +3816,7 @@ ${result.prompt}
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all border shadow-sm",
                       isLyricMode 
                         ? "bg-brand-orange text-white border-brand-orange" 
-                        : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                        : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                     )}
                   >
                     <Languages className="w-3.5 h-3.5" />
@@ -3844,7 +3837,7 @@ ${result.prompt}
                 className="overflow-hidden"
               >
                 <div className="pt-2 pb-4 space-y-3">
-                  <div className="h-px bg-white/10 w-full" />
+                  <div className="h-px bg-btn-border w-full" />
                   <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
@@ -3855,7 +3848,7 @@ ${result.prompt}
                     
                     {/* Lyric Mode Selector */}
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+                      <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
                         <button
                           onClick={() => setLyricMode('assist')}
                           className={cn(
@@ -3886,7 +3879,7 @@ ${result.prompt}
                         }}
                         onMouseEnter={() => setHoveredItem({ id: 'delete-lyric', label: '가사 삭제', description: '입력한 가사 초안을 모두 지우고 창을 닫습니다.' })}
                         onMouseLeave={() => setHoveredItem(null)}
-                        className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[var(--text-secondary)] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all"
+                        className="p-1.5 rounded-lg bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all shadow-btn"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -3901,7 +3894,7 @@ ${result.prompt}
                         e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
                       }}
                       placeholder="여기에 가사 초안을 자유롭게 적어주세요. 구조는 자동 반영됩니다."
-                      className="w-full bg-white/10 border border-white/10 rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange/30 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-white/30"
+                      className="w-full bg-[var(--bg-secondary)] border border-btn-border rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange/30 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-[var(--text-secondary)]/30 shadow-inner"
                     />
                   </div>
                 </div>
@@ -3979,7 +3972,7 @@ ${result.prompt}
                           else if (item.type === 'rap') setRapEnabled(false);
                           else if (item.type === 'vocal-tone') setSelectedVocalToneId(undefined);
                         }}
-                        className="hover:bg-white/10 rounded-full p-0.5 transition-colors"
+                        className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -4333,8 +4326,8 @@ ${result.prompt}
               </div>
 
               {/* Prompt Section */}
-              <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col h-[400px] shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+              <div className="bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col h-[400px] shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <Sparkles className="w-4 h-4 text-brand-orange" />
                     음악 프롬프트
@@ -4344,7 +4337,7 @@ ${result.prompt}
                       onClick={() => copyToClipboard(result.prompt, 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
                     >
                       {copiedType === 'prompt' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
                       <span className="hidden md:block text-sm font-bold">복사</span>
@@ -4352,11 +4345,9 @@ ${result.prompt}
                   </div>
                 </div>
                 <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
-                  <div className="bg-[var(--input-bg)] rounded-2xl p-6 border border-[var(--border-color)]">
-                    <p className="text-[var(--text-secondary)] leading-relaxed text-sm font-mono whitespace-pre-wrap">
-                      {result.prompt}
-                    </p>
-                  </div>
+                  <pre className="whitespace-pre-wrap font-mono text-[var(--text-secondary)] leading-relaxed text-sm w-full">
+                    {result.prompt}
+                  </pre>
                 </div>
               </div>
 
@@ -4366,8 +4357,8 @@ ${result.prompt}
                 {!result.appliedKeywords.isNoLyrics && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* English Lyrics Section */}
-                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                      <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]">
+                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                      <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
                         <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                           <Music className="w-4 h-4 text-brand-orange" />
                           영어 가사
@@ -4377,7 +4368,7 @@ ${result.prompt}
                             onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
                             onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
                             onMouseLeave={() => setHoveredItem(null)}
-                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
                           >
                             {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
                             <span className="hidden md:block text-sm font-bold">복사</span>
@@ -4398,8 +4389,8 @@ ${result.prompt}
                     </div>
 
                     {/* Korean Lyrics Section */}
-                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)]/80 overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                      <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
+                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                      <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
                         <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                           <Music className="w-4 h-4 text-brand-orange" />
                           한글 가사
@@ -4409,7 +4400,7 @@ ${result.prompt}
                             onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
                             onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
                             onMouseLeave={() => setHoveredItem(null)}
-                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[var(--hover-bg)] hover:bg-[var(--hover-bg)]/20 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-[var(--border-color)]/30 active:scale-95"
+                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
                           >
                             {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
                             <span className="hidden md:block text-sm font-bold">복사</span>
@@ -4628,7 +4619,7 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
                 <YoutubeIcon className="w-6 h-6 text-red-500" />
                 가이드 템플릿
               </h2>
-              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+              <button onClick={onClose} className="p-2 hover:bg-btn-hover rounded-full transition-colors">
                 <X className="w-5 h-5 text-[var(--text-secondary)]" />
               </button>
             </div>
@@ -4640,7 +4631,7 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
                     onClick={() => {
                       window.open(guide.youtubeUrl, '_blank');
                     }}
-                    className="flex-1 flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all group text-left"
+                    className="flex-1 flex items-center justify-between p-4 rounded-2xl bg-btn-bg border border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 transition-all group text-left shadow-btn"
                   >
                     <span className="font-bold text-[var(--text-primary)] group-hover:text-brand-orange transition-colors">
                       {guide.title}
@@ -4782,10 +4773,10 @@ function GenreCategorySection({
             onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-2.5 rounded-xl transition-all border",
+              "p-2.5 rounded-xl transition-all border shadow-btn",
               (!!selectedChild || isRandomized)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
             )}
           >
             <RotateCcw className="w-4 h-4" />
@@ -5056,7 +5047,7 @@ function CycleSection({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={onRandom} className={`p-2.5 rounded-xl transition-all ${isRandomized ? 'bg-brand-orange text-white' : 'bg-white/10 text-[var(--text-secondary)] hover:bg-white/20'}`}>
+            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? 'bg-brand-orange text-white border-brand-orange' : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
               <Dices className="w-4 h-4" />
             </button>
             <button 
@@ -5064,10 +5055,10 @@ function CycleSection({
               onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', labelKo: '초기화', description: `${title} 설정을 초기화합니다.` })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2.5 rounded-xl transition-all border",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
               <RotateCcw className="w-4 h-4" />
@@ -5137,8 +5128,8 @@ function CycleSection({
                   onTouchStart={() => onLongPressStart(hoverItem)}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
-                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative",
-                    activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn",
+                    activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
                   {showOrderBadge && (
@@ -5302,10 +5293,10 @@ function CategorySection({
               onTouchStart={() => onLongPressStart({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "p-2.5 rounded-xl transition-all",
+                "p-2.5 rounded-xl transition-all shadow-btn",
                 isRandomized 
                   ? "bg-brand-orange text-white" 
-                  : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover"
               )}
             >
               <Dices className="w-4 h-4" />
@@ -5320,7 +5311,7 @@ function CategorySection({
                 }}
                 onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
                 onTouchEnd={onLongPressEnd}
-                className="p-2.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-all"
+                className="p-2.5 rounded-xl bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover transition-all shadow-btn"
               >
                 <PinOff className="w-4 h-4" />
               </button>
@@ -5335,10 +5326,10 @@ function CategorySection({
               onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "p-2.5 rounded-xl transition-all border",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
               <RotateCcw className="w-4 h-4" />
@@ -5381,7 +5372,7 @@ function CategorySection({
                 displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
                 displayLabel = "K-Pop";
               } else {
-                kpopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
+                kpopStyle = "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover shadow-btn";
                 displayDescription = "K-Pop 장르를 선택하고 스타일(기본/Mix)을 순환하며 선택합니다.";
                 displayLabel = "K-Pop";
               }
@@ -5399,7 +5390,7 @@ function CategorySection({
                 displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
                 displayLabel = "City Pop(O)";
               } else {
-                citypopStyle = "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10";
+                citypopStyle = "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover shadow-btn";
                 displayDescription = "City Pop 장르를 선택하고 스타일(올드/현대)을 순환하며 선택합니다.";
                 displayLabel = "City Pop";
               }
@@ -5440,13 +5431,13 @@ function CategorySection({
                     }
                   }}
                   className={cn(
-                    "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2",
+                    "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2 shadow-btn",
                     (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
                     isPrimaryMood
                       ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
                       : isSecondaryMood
                         ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10",
+                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover",
                     isKpop && kpopMode > 0 ? kpopStyle : "",
                     isCitypop && citypopMode > 0 ? citypopStyle : ""
                   )}
@@ -5850,10 +5841,10 @@ function SongStructureIntegratedControl({
               onMouseEnter={() => onHover({ id: 'no-lyrics', label: '가사없음', labelKo: '가사없음', description: isNoLyrics ? '가사 생성을 다시 활성화합니다.' : '가사 없이 연주곡 또는 가사 없는 노래를 생성합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border shadow-sm",
                 isNoLyrics 
                   ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
-                  : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
               )}
             >
               <MicOff className={cn("w-3 h-3", isNoLyrics ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
@@ -5864,10 +5855,10 @@ function SongStructureIntegratedControl({
               onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2 rounded-lg transition-all border",
+                "p-2 rounded-lg transition-all border shadow-btn",
                 (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0 || isNoLyrics)
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                  : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                  : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -5913,10 +5904,10 @@ function SongStructureIntegratedControl({
                         onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border",
+                          "w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border shadow-sm",
                           lyricsLength === opt.id
                             ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                            : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                            : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                         )}
                       >
                         {opt.labelKo || opt.label}
@@ -5926,9 +5917,8 @@ function SongStructureIntegratedControl({
                 </div>
               </div>
 
-              {/* Separator */}
               <div className="flex justify-center">
-                <div className="w-1/2 h-[1px] bg-white/5" />
+                <div className="w-1/2 h-[1px] bg-btn-border/50" />
               </div>
 
               {/* 3. 섹션 구조 */}
@@ -5949,12 +5939,12 @@ function SongStructureIntegratedControl({
                         onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: isCustomLocked ? '커스텀 구조는 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5",
+                          "py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
                           songStructure === opt.id
                             ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
                             : isCustomLocked
-                              ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/60 hover:bg-white/10"
-                              : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                              ? "bg-btn-bg border-btn-border text-[var(--text-secondary)]/60 hover:bg-btn-hover"
+                              : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                         )}
                       >
                         {opt.label}
@@ -6043,10 +6033,10 @@ function SongStructureIntegratedControl({
                           }
                           onMouseLeave={() => onHover(null)}
                           className={cn(
-                            "px-3.5 py-2 rounded-xl border text-[13px] font-bold transition-all flex items-center gap-1.5",
+                            "px-3.5 py-2 rounded-xl border text-[13px] font-bold transition-all flex items-center gap-1.5 shadow-btn",
                             isLocked 
-                              ? "bg-white/5 border-white/5 text-[var(--text-secondary)]/40 cursor-not-allowed"
-                              : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                              ? "bg-btn-bg border-btn-border text-[var(--text-secondary)]/40 cursor-not-allowed"
+                              : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                           )}
                         >
                           {section}
@@ -6064,7 +6054,7 @@ function SongStructureIntegratedControl({
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => closeCustomModal()}
-                          className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 transition-all font-bold text-sm"
+                          className="px-4 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-primary)] hover:bg-btn-hover transition-all font-bold text-sm shadow-btn"
                         >
                           취소
                         </button>
@@ -6072,9 +6062,9 @@ function SongStructureIntegratedControl({
                           <button
                             onClick={handleSavePreset}
                             className={cn(
-                              "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm",
+                              "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm shadow-btn",
                               (draftStructure ?? []).length > 0
-                                ? "bg-white/10 text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
+                                ? "bg-btn-bg text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
                                 : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                             )}
                             disabled={(draftStructure ?? []).length === 0}
@@ -6086,7 +6076,7 @@ function SongStructureIntegratedControl({
                           onClick={handleApplyCustomStructure}
                           disabled={(draftStructure ?? []).length === 0}
                           className={cn(
-                            "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm",
+                            "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm shadow-btn",
                             (draftStructure ?? []).length > 0
                               ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
                               : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
@@ -6112,10 +6102,10 @@ function SongStructureIntegratedControl({
                       <button
                         onClick={() => setDraftStructure([])}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all",
+                          "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-btn",
                           (draftStructure ?? []).length > 0
                             ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                            : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                            : "bg-btn-bg border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
                         disabled={(draftStructure ?? []).length === 0}
                       >
@@ -6158,7 +6148,7 @@ function SongStructureIntegratedControl({
                         value={presetName}
                         onChange={(e) => setPresetName(e.target.value)}
                         placeholder="예: 감성 발라드형"
-                        className="w-full rounded-xl bg-white/10 border border-white/15 px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                        className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 shadow-inner"
                       />
                       <button
                         onClick={handleSavePreset}
@@ -6190,7 +6180,7 @@ function SongStructureIntegratedControl({
                               value={structureSearch}
                               onChange={(e) => setStructureSearch(e.target.value)}
                               placeholder="구조 이름 또는 내용 검색..."
-                              className="w-full rounded-xl bg-white/5 border border-white/10 pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40"
+                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40 shadow-inner"
                             />
                             {structureSearch && (
                               <button 
@@ -6208,10 +6198,10 @@ function SongStructureIntegratedControl({
                                 key={f}
                                 onClick={() => setStructureFilter(f)}
                                 className={cn(
-                                  "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5",
+                                  "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-btn",
                                   structureFilter === f
                                     ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
-                                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                                 )}
                               >
                                 {f === 'all' && '전체'}
@@ -6225,7 +6215,7 @@ function SongStructureIntegratedControl({
 
                       <div className="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
                         {filteredSavedStructures.length === 0 ? (
-                          <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-6 text-center">
+                          <div className="rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-6 text-center">
                             <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
                             <p className="text-[12px] text-[var(--text-secondary)]">
                               {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장된 구조가 없습니다.'}
@@ -6233,7 +6223,7 @@ function SongStructureIntegratedControl({
                           </div>
                         ) : (
                           filteredSavedStructures.map((preset) => (
-                            <div key={preset.id} className="rounded-2xl bg-white/5 border border-white/10 p-3 hover:border-white/20 transition-all group">
+                            <div key={preset.id} className="rounded-2xl bg-[var(--bg-secondary)] border border-btn-border p-3 hover:border-brand-orange/30 transition-all group shadow-sm">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2 mb-1">
@@ -6241,7 +6231,7 @@ function SongStructureIntegratedControl({
                                     {preset.reaction && (
                                       <span className={cn(
                                         "shrink-0 p-1 rounded-md",
-                                        preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-white/10 text-[var(--text-secondary)]"
+                                        preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
                                       )}>
                                         {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
                                       </span>
@@ -6532,7 +6522,7 @@ function TagEditModal({
               onClick={onClose}
               onMouseEnter={() => onHover({ id: 'tag-modal-cancel', label: 'Cancel', labelKo: '취소', description: '변경사항을 취소하고 닫습니다.' })}
               onMouseLeave={() => onHover(null)}
-              className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold text-[var(--text-primary)] hover:bg-white/10 transition-all"
+              className="flex-1 py-3 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)] hover:bg-btn-hover transition-all shadow-btn"
             >
               취소
             </button>
@@ -6828,10 +6818,10 @@ function VocalControl({
             })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border shadow-sm",
               isKoreanEnglishMix 
                 ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
             )}
           >
             <Languages className={cn("w-3 h-3", isKoreanEnglishMix ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
@@ -6842,10 +6832,10 @@ function VocalControl({
             onMouseEnter={() => onHover({ id: 'rap', label: 'Rap', labelKo: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border shadow-sm",
               rapEnabled 
                 ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)]"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
             )}
           >
             <Mic2 className={cn("w-3 h-3", rapEnabled ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
@@ -6856,10 +6846,10 @@ function VocalControl({
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "p-2 rounded-lg transition-all border",
+              "p-2 rounded-lg transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0 || rapEnabled || isKoreanEnglishMix)
                 ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -6891,7 +6881,7 @@ function VocalControl({
         >
           <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}
-          <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+          <div className="flex gap-1 bg-btn-bg p-1 rounded-xl border border-btn-border shadow-btn">
             {(['solo', 'duo', 'group'] as VocalMode[]).map((mode) => (
               <button
                 key={mode}
@@ -6908,8 +6898,8 @@ function VocalControl({
                 className={cn(
                   "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
                   vocalMode === mode 
-                    ? "bg-brand-orange text-white shadow-sm" 
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    ? "bg-brand-orange text-white shadow-md" 
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-btn-hover"
                 )}
               >
                 {getModeLabel(mode)}
@@ -6929,7 +6919,7 @@ function VocalControl({
                   "py-3 px-2 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
                     ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
-                    : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -6944,7 +6934,7 @@ function VocalControl({
                   "py-3 px-2 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
                     ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
-                    : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -6958,13 +6948,13 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
                   maleCount > 0
                     ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
-                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                 )}
               >
-                <span className={cn("w-2 h-2 rounded-full", maleCount > 0 ? "bg-blue-400" : "bg-white/20")} />
+                <span className={cn("w-2 h-2 rounded-full", maleCount > 0 ? "bg-blue-400" : "bg-[var(--border-color)]")} />
                 남성
               </button>
               <button
@@ -6972,13 +6962,13 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
                   femaleCount > 0
                     ? "bg-pink-600/20 border-pink-500/40 text-pink-400"
-                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                 )}
               >
-                <span className={cn("w-2 h-2 rounded-full", femaleCount > 0 ? "bg-pink-400" : "bg-white/20")} />
+                <span className={cn("w-2 h-2 rounded-full", femaleCount > 0 ? "bg-pink-400" : "bg-[var(--border-color)]")} />
                 여성
               </button>
             </div>
@@ -6986,14 +6976,14 @@ function VocalControl({
 
           {/* Member Roles */}
           {vocalMembers.length > 0 && (
-            <div className="space-y-1.5 pt-1.5 border-t border-white/5">
+            <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-color)]">
               <div className="flex items-center justify-between px-1">
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버별 설정 ({vocalMembers.length}/7)</p>
                 <span className="text-[9px] text-[var(--text-secondary)] opacity-50">역할 및 톤 개별 설정</span>
               </div>
               <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
                 {vocalMembers.map((member, idx) => (
-                  <div key={member.id} className="bg-white/5 rounded-xl p-2 border border-white/10 relative group/member">
+                  <div key={member.id} className="bg-btn-bg rounded-xl p-2 border border-btn-border relative group/member shadow-sm">
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
                         <span className={cn(
@@ -7042,7 +7032,7 @@ function VocalControl({
                                 "px-2 py-0.5 rounded-md text-[9px] font-bold transition-all border",
                                 isActive
                                   ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
-                                  : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                               )}
                             >
                               {info.labelKo}
@@ -7059,7 +7049,7 @@ function VocalControl({
                             "w-full py-1 px-2 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-between",
                             member.toneId
                               ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
-                              : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                              : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                           )}
                         >
                           <div className="flex items-center gap-1.5">
@@ -7090,7 +7080,7 @@ function VocalControl({
                                   onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveVocalTonePopup(null); }}
                                   className={cn(
                                     "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
-                                    !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                                    !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-btn-hover"
                                   )}
                                 >
                                   기본 (Default)
@@ -7103,7 +7093,7 @@ function VocalControl({
                                     onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveVocalTonePopup(null); }}
                                     className={cn(
                                       "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
-                                      member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
+                                      member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-btn-hover"
                                     )}
                                   >
                                     <div className="flex items-center justify-between">
@@ -7223,7 +7213,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity",
+                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-btn-bg rounded-xl border border-btn-border shadow-btn transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -7271,10 +7261,10 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMouseEnter={() => onHover({ id: 'tempo-clear-mobile', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-2 rounded-lg transition-all border",
+                  "p-2 rounded-lg transition-all border shadow-btn",
                   (!enabled || min !== 90 || max !== 110)
                     ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                    : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
               >
                 <RotateCcw className="w-3.5 h-3.5" />

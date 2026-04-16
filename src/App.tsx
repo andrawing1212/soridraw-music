@@ -6739,7 +6739,7 @@ function VocalControl({
                 }}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all",
+                  "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
                   vocalMode === mode 
                     ? "bg-brand-orange text-white shadow-sm" 
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -6759,13 +6759,13 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-3 px-2 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
                     ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
                     : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5" />
                 남성 멤버 추가
               </button>
               <button
@@ -6774,13 +6774,13 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2 px-2 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-3 px-2 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
                     ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
                     : "bg-white/5 border-white/5 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-3.5 h-3.5" />
                 여성 멤버 추가
               </button>
             </div>
@@ -6791,13 +6791,13 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount > 0
                     ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
                     : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
                 )}
               >
-                <span className={cn("w-1.5 h-1.5 rounded-full", maleCount > 0 ? "bg-blue-400" : "bg-white/20")} />
+                <span className={cn("w-2 h-2 rounded-full", maleCount > 0 ? "bg-blue-400" : "bg-white/20")} />
                 남성
               </button>
               <button
@@ -6805,13 +6805,13 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-2 px-2 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-2",
+                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5",
                   femaleCount > 0
                     ? "bg-pink-600/20 border-pink-500/40 text-pink-400"
                     : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
                 )}
               >
-                <span className={cn("w-1.5 h-1.5 rounded-full", femaleCount > 0 ? "bg-pink-400" : "bg-white/20")} />
+                <span className={cn("w-2 h-2 rounded-full", femaleCount > 0 ? "bg-pink-400" : "bg-white/20")} />
                 여성
               </button>
             </div>
@@ -6958,88 +6958,8 @@ function VocalControl({
           </div>
         )}
 
-        {/* Vocal Tone Selection */}
-        <div className="relative">
-          <button
-            data-tone-trigger="global"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const scrollY = window.scrollY || window.pageYOffset;
-              const scrollX = window.scrollX || window.pageXOffset;
-              setVocalTonePopupPos({
-                top: rect.bottom + scrollY + 4,
-                left: rect.left + scrollX
-              });
-              setShowToneSelector(!showToneSelector);
-            }}
-            className={cn(
-              "w-full py-2.5 px-3 rounded-xl text-[10px] font-bold transition-all border flex items-center justify-between",
-              selectedTone 
-                ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <Settings className="w-3 h-3" />
-              <span>{selectedTone ? (selectedTone.labelKo || selectedTone.label) : "보컬 톤 선택 (기본)"}</span>
-            </div>
-            <ChevronDown className={cn("w-3 h-3 transition-transform", showToneSelector && "rotate-180")} />
-          </button>
-
-          <AnimatePresence>
-            {showToneSelector && (
-              <Portal>
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  style={{ 
-                    position: 'absolute',
-                    top: vocalTonePopupPos.top,
-                    left: vocalTonePopupPos.left,
-                    zIndex: 10000,
-                    pointerEvents: 'auto'
-                  }}
-                  className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden w-64"
-                >
-                  <div className="p-2 max-h-48 overflow-y-auto custom-scrollbar">
-                    <button
-                      onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
-                      className={cn(
-                        "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
-                        !selectedToneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
-                      )}
-                    >
-                      기본 (Default)
-                    </button>
-                    {filteredTones.map(tone => (
-                      <button
-                        key={tone.id}
-                        onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
-                        className={cn(
-                          "w-full text-left px-3 py-2 rounded-lg text-[10px] font-bold transition-all mb-1",
-                          selectedToneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-white/5"
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>{tone.labelKo || tone.label}</span>
-                          {tone.isDefault && <span className="text-[8px] opacity-60">DEFAULT</span>}
-                        </div>
-                        <p className="text-[8px] opacity-60 font-normal line-clamp-1">{tone.descriptionKo || tone.description}</p>
-                      </button>
-                    ))}
-                    {filteredTones.length === 0 && (
-                      <p className="text-[9px] text-[var(--text-secondary)] text-center py-4">사용 가능한 톤이 없습니다.</p>
-                    )}
-                  </div>
-                </motion.div>
-                <div className="fixed inset-0 z-[9999]" onClick={() => setShowToneSelector(false)} />
-              </Portal>
-            )}
-          </AnimatePresence>
-          </div>
-          </div>
-        </motion.div>
+      </div>
+    </motion.div>
       </div>
     </div>
   );

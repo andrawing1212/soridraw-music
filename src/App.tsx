@@ -55,6 +55,8 @@ import {
   Tag,
   Settings,
   Play,
+  ThumbsUp,
+  ThumbsDown,
   Youtube as YoutubeIcon,
   ExternalLink,
   Zap
@@ -279,7 +281,8 @@ const ReorderableSectionItem = ({
       value={item}
       dragListener={false}
       dragControls={controls}
-      className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5 touch-none"
+      onPointerDown={(e) => controls.start(e)}
+      className="flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 px-3 py-2.5 touch-none select-none cursor-default relative group"
       whileDrag={{ 
         scale: 1.02, 
         boxShadow: "0 8px 30px rgba(0,0,0,0.3)", 
@@ -288,7 +291,10 @@ const ReorderableSectionItem = ({
       }}
     >
       <button
-        onPointerDown={(e) => controls.start(e)}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          controls.start(e);
+        }}
         className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0"
         onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 눌러 위아래로 드래그하여 순서를 변경합니다.' })}
         onMouseLeave={() => onHover(null)}
@@ -301,36 +307,36 @@ const ReorderableSectionItem = ({
       </span>
       
       <div className="flex-1 min-w-0">
-        <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
+        <span className="text-sm font-bold text-[var(--text-primary)] block pointer-events-none">{item.section}</span>
         {SECTION_META[item.section]?.descriptionKo && (
-          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep">
+          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep pointer-events-none">
             {SECTION_META[item.section].descriptionKo}
           </p>
         )}
         {(item.tags ?? []).length > 0 && (
-          <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate">
+          <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate pointer-events-none">
             {(item.tags ?? []).join(' · ')}
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => onEdit(index)}
+        <motion.button
+          onTap={() => onEdit(index)}
           onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center"
+          className="w-8 h-8 rounded-lg border bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10 transition-all flex items-center justify-center relative z-10"
         >
           <Tag className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => onRemove(index)}
+        </motion.button>
+        <motion.button
+          onTap={() => onRemove(index)}
           onMouseEnter={() => onHover({ id: 'section-remove', label: '삭제', description: '이 섹션을 구조에서 제거합니다.' })}
           onMouseLeave={() => onHover(null)}
-          className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
+          className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center relative z-10"
         >
           <X className="w-3.5 h-3.5" />
-        </button>
+        </motion.button>
       </div>
     </Reorder.Item>
   );
@@ -5582,6 +5588,8 @@ function SongStructureIntegratedControl({
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [editingSavedStructureId, setEditingSavedStructureId] = useState<string | null>(null);
+  const [structureSearch, setStructureSearch] = useState('');
+  const [structureFilter, setStructureFilter] = useState<'all' | 'like' | 'dislike'>('all');
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
@@ -5779,6 +5787,28 @@ function SongStructureIntegratedControl({
   const handleDeletePreset = (presetId: string) => {
     persistSavedStructures(savedStructures.filter((preset) => preset.id !== presetId));
   };
+
+  const handleToggleReaction = (presetId: string, reaction: 'like' | 'dislike') => {
+    const next = savedStructures.map(p => {
+      if (p.id === presetId) {
+        return {
+          ...p,
+          reaction: p.reaction === reaction ? null : reaction
+        };
+      }
+      return p;
+    });
+    persistSavedStructures(next);
+  };
+
+  const filteredSavedStructures = useMemo(() => {
+    return savedStructures.filter(preset => {
+      const matchesSearch = preset.name.toLowerCase().includes(structureSearch.toLowerCase()) ||
+                          formatStructureText(preset.sections).toLowerCase().includes(structureSearch.toLowerCase());
+      const matchesFilter = structureFilter === 'all' || preset.reaction === structureFilter;
+      return matchesSearch && matchesFilter;
+    });
+  }, [savedStructures, structureSearch, structureFilter]);
 
   return (
     <>
@@ -6122,39 +6152,124 @@ function SongStructureIntegratedControl({
                     </div>
 
                     <div className="rounded-2xl border border-[var(--border-color)] p-4">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장된 구조</p>
-                        <span className="text-[11px] text-[var(--text-secondary)]">{savedStructures.length}개</span>
+                      <div className="flex flex-col gap-3 mb-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장된 구조</p>
+                          <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
+                        </div>
+                        
+                        {/* Search and Filters */}
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-secondary)]" />
+                            <input
+                              type="text"
+                              value={structureSearch}
+                              onChange={(e) => setStructureSearch(e.target.value)}
+                              placeholder="구조 이름 또는 내용 검색..."
+                              className="w-full rounded-xl bg-white/5 border border-white/10 pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40"
+                            />
+                            {structureSearch && (
+                              <button 
+                                onClick={() => setStructureSearch('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2"
+                              >
+                                <X className="w-3 h-3 text-[var(--text-secondary)]" />
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-1">
+                            {(['all', 'like', 'dislike'] as const).map((f) => (
+                              <button
+                                key={f}
+                                onClick={() => setStructureFilter(f)}
+                                className={cn(
+                                  "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5",
+                                  structureFilter === f
+                                    ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
+                                    : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                                )}
+                              >
+                                {f === 'all' && '전체'}
+                                {f === 'like' && <><ThumbsUp className="w-3 h-3" /> </>}
+                                {f === 'dislike' && <><ThumbsDown className="w-3 h-3" /> </>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
-                        {savedStructures.length === 0 ? (
-                          <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-4 text-center text-[12px] text-[var(--text-secondary)]">
-                            저장된 구조가 없습니다.
+                        {filteredSavedStructures.length === 0 ? (
+                          <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-6 text-center">
+                            <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
+                            <p className="text-[12px] text-[var(--text-secondary)]">
+                              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장된 구조가 없습니다.'}
+                            </p>
                           </div>
                         ) : (
-                          savedStructures.map((preset) => (
-                            <div key={preset.id} className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                          filteredSavedStructures.map((preset) => (
+                            <div key={preset.id} className="rounded-2xl bg-white/5 border border-white/10 p-3 hover:border-white/20 transition-all group">
                               <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
-                                  <p className="text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed break-words">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
+                                    {preset.reaction && (
+                                      <span className={cn(
+                                        "shrink-0 p-1 rounded-md",
+                                        preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-white/10 text-[var(--text-secondary)]"
+                                      )}>
+                                        {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
                                     {formatStructureText(preset.sections)}
                                   </p>
                                 </div>
+                                <div className="flex flex-col gap-1 shrink-0">
+                                  <button
+                                    onClick={() => handleDeletePreset(preset.id)}
+                                    className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              <div className="mt-3 flex gap-2">
+                                <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+                                  <button
+                                    onClick={() => handleToggleReaction(preset.id, 'like')}
+                                    className={cn(
+                                      "p-1.5 rounded-lg transition-all",
+                                      preset.reaction === 'like'
+                                        ? "bg-brand-orange text-white shadow-sm"
+                                        : "text-[var(--text-secondary)] hover:bg-white/10"
+                                    )}
+                                  >
+                                    <ThumbsUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleReaction(preset.id, 'dislike')}
+                                    className={cn(
+                                      "p-1.5 rounded-lg transition-all",
+                                      preset.reaction === 'dislike'
+                                        ? "bg-white/20 text-white shadow-sm"
+                                        : "text-[var(--text-secondary)] hover:bg-white/10"
+                                    )}
+                                  >
+                                    <ThumbsDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                                 <button
-                                  onClick={() => handleDeletePreset(preset.id)}
-                                  className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center shrink-0"
+                                  onClick={() => handleLoadPreset(preset)}
+                                  className="flex-1 py-1.5 rounded-xl bg-white/10 border border-white/15 text-[11px] font-bold text-[var(--text-primary)] hover:bg-white/15 transition-all"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  불러오기
                                 </button>
                               </div>
-                              <button
-                                onClick={() => handleLoadPreset(preset)}
-                                className="mt-3 w-full py-2 rounded-xl bg-white/10 border border-white/15 text-[12px] font-bold text-[var(--text-primary)] hover:bg-white/15 transition-all"
-                              >
-                                불러오기
-                              </button>
                             </div>
                           ))
                         )}
@@ -6418,6 +6533,7 @@ type SavedStructurePreset = {
   name: string;
   sections: CustomSectionItem[];
   createdAt: number;
+  reaction?: 'like' | 'dislike' | null;
 };
 
 export const CUSTOM_STRUCTURE_SECTIONS = [

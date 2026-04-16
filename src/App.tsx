@@ -651,7 +651,7 @@ function SecondaryScrollControl() {
     document.documentElement.style.scrollBehavior = '';
     
     if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
-    activeTimerRef.current = setTimeout(() => setIsActive(false), 2000);
+    activeTimerRef.current = setTimeout(() => setIsActive(false), 1500);
   }, []);
 
   // Global cleanup for safety

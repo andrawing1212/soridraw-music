@@ -5581,6 +5581,7 @@ function SongStructureIntegratedControl({
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
+  const [editingSavedStructureId, setEditingSavedStructureId] = useState<string | null>(null);
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
@@ -5664,6 +5665,7 @@ function SongStructureIntegratedControl({
   const openCustomModal = () => {
     setDraftStructure(normalizeCustomStructure(customStructure));
     setPresetName('');
+    setEditingSavedStructureId(null);
     setIsCustomModalOpen(true);
   };
 
@@ -5744,22 +5746,34 @@ function SongStructureIntegratedControl({
   };
 
   const handleSavePreset = () => {
-    const trimmedName = presetName.trim();
-    if (!trimmedName || (draftStructure ?? []).length === 0) return;
+    const trimmedName = presetName.trim() || '제목없음';
+    if ((draftStructure ?? []).length === 0) return;
 
-    const nextPreset: SavedStructurePreset = {
-      id: `${Date.now()}`,
-      name: trimmedName,
-      sections: draftStructure,
-      createdAt: Date.now(),
-    };
-
-    persistSavedStructures([nextPreset, ...savedStructures].slice(0, 20));
+    if (editingSavedStructureId) {
+      const next = savedStructures.map(p => 
+        p.id === editingSavedStructureId 
+          ? { ...p, name: trimmedName, sections: draftStructure } 
+          : p
+      );
+      persistSavedStructures(next);
+    } else {
+      const nextPreset: SavedStructurePreset = {
+        id: `${Date.now()}`,
+        name: trimmedName,
+        sections: draftStructure,
+        createdAt: Date.now(),
+      };
+      persistSavedStructures([nextPreset, ...savedStructures].slice(0, 20));
+    }
+    
     setPresetName('');
+    setEditingSavedStructureId(null);
   };
 
   const handleLoadPreset = (preset: SavedStructurePreset) => {
     setDraftStructure(normalizeCustomStructure(preset.sections));
+    setPresetName(preset.name);
+    setEditingSavedStructureId(preset.id);
   };
 
   const handleDeletePreset = (presetId: string) => {
@@ -6002,6 +6016,20 @@ function SongStructureIntegratedControl({
                         >
                           취소
                         </button>
+                        {(editingSavedStructureId || (draftStructure ?? []).length > 0) && (
+                          <button
+                            onClick={handleSavePreset}
+                            className={cn(
+                              "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm",
+                              (draftStructure ?? []).length > 0
+                                ? "bg-white/10 text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
+                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                            )}
+                            disabled={(draftStructure ?? []).length === 0}
+                          >
+                            {editingSavedStructureId ? '업데이트 저장' : '구조 저장'}
+                          </button>
+                        )}
                         <button
                           onClick={handleApplyCustomStructure}
                           disabled={(draftStructure ?? []).length === 0}
@@ -6081,15 +6109,15 @@ function SongStructureIntegratedControl({
                       />
                       <button
                         onClick={handleSavePreset}
-                        disabled={!presetName.trim() || (draftStructure ?? []).length === 0}
+                        disabled={(draftStructure ?? []).length === 0}
                         className={cn(
                           "w-full py-2.5 rounded-xl font-bold text-sm transition-all border",
-                          presetName.trim() && (draftStructure ?? []).length > 0
+                          (draftStructure ?? []).length > 0
                             ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
                             : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
                       >
-                        구조 저장
+                        {editingSavedStructureId ? '업데이트 저장' : '구조 저장'}
                       </button>
                     </div>
 

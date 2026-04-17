@@ -13,6 +13,7 @@ import {
 import { db, auth } from '../firebase';
 import { AppUserInfo, UserRole, AccountStatus, PaymentStatus } from '../types';
 import {
+  Users,
   Search,
   Filter,
   User,
@@ -93,6 +94,35 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [editMemo, setEditMemo] = useState('');
 
   const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+
+  // --- Summary Statistics Calculation ---
+  const userStats = useMemo(() => {
+    const now = Date.now();
+    const onlineThreshold = 30000; // 30 seconds
+    
+    const total = users.length;
+    const online = users.filter(u => u.lastSeenAt && (now - u.lastSeenAt) < onlineThreshold).length;
+    
+    const byRole = {
+      free: { total: 0, online: 0 },
+      basic: { total: 0, online: 0 },
+      pro: { total: 0, online: 0 },
+      admin: { total: 0, online: 0 }
+    };
+    
+    users.forEach(u => {
+      const r = u.role || 'free';
+      const isOnline = u.lastSeenAt && (now - u.lastSeenAt) < onlineThreshold;
+      
+      if (byRole[r as keyof typeof byRole]) {
+        byRole[r as keyof typeof byRole].total++;
+        if (isOnline) byRole[r as keyof typeof byRole].online++;
+      }
+    });
+    
+    return { total, online, byRole };
+  }, [users]);
+  // ---------------------------------------
 
   useEffect(() => {
     if (isAdminProp !== undefined) {
@@ -352,6 +382,71 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         </button>
       }
     >
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
+        >
+          <div className="flex items-center gap-2 mb-1 text-[var(--text-secondary)] text-xs font-bold">
+            <Users className="w-3.5 h-3.5" />
+            총 회원수
+          </div>
+          <div className="text-2xl font-black text-[var(--text-primary)]">
+            {userStats.total}<span className="text-sm font-bold ml-1">명</span>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
+        >
+          <div className="flex items-center gap-2 mb-1 text-emerald-500 text-xs font-bold">
+            <Activity className="w-3.5 h-3.5" />
+            현재 접속
+          </div>
+          <div className="text-2xl font-black text-emerald-500">
+            {userStats.online}<span className="text-sm font-bold ml-1">명</span>
+          </div>
+        </motion.div>
+        
+        {/* Role Stats */}
+        {(Object.entries(userStats.byRole) as [UserRole, {total: number, online: number}][]).map(([role, data], idx) => (
+          <motion.div 
+            key={role}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 + (idx * 0.05) }}
+            className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
+          >
+            <div 
+              className="flex items-center gap-2 mb-1 text-[10px] font-black uppercase tracking-wider"
+              style={{ 
+                color: role === 'admin' ? '#f43f5e' : 
+                       role === 'pro' ? 'var(--brand-orange)' : 
+                       role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
+              }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full" style={{ 
+                backgroundColor: role === 'admin' ? '#f43f5e' : 
+                                role === 'pro' ? 'var(--brand-orange)' : 
+                                role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
+              }} />
+              {ROLE_LABELS[role]}
+            </div>
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-xl font-black text-[var(--text-primary)]">{data.total}</span>
+              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                ON {data.online}
+              </span>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
       {/* Search & Filters */}
       <div className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-[var(--shadow-md)] space-y-4">
           <div className="flex flex-col md:flex-row gap-3">

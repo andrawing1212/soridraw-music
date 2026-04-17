@@ -342,7 +342,7 @@ const ReorderableSectionItem = ({
   );
 };
 
-const ADMIN_EMAILS = ['andrawing1212@gmail.com'];
+const ADMIN_EMAILS = ['andrawing1212@gmail.com', 'andrawing1213@gmail.com', 'legend3636@gmail.com'];
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -1734,7 +1734,7 @@ const cycleFamilySelection = (
         lastSeenAt: Date.now(),
         isOnline: true
       }).catch(() => {});
-    }, 30000);
+    }, 20000);
 
     // Activity tracker & Focus handler
     const handleActivity = () => {
@@ -1860,21 +1860,35 @@ const cycleFamilySelection = (
               baseData.accountStatus = 'active';
               baseData.paymentStatus = 'none';
               
-              // Bootstrap role
+              // Bootstrap role (Only set if document doesn't exist)
               baseData.role = isAdminEmail(currentUser.email) ? 'admin' : 'free';
               
               await setDoc(userRef, baseData);
             } else {
               const currentData = userSnap.data();
+              
+              // Protection: NEVER downgrade an existing admin
+              // This is the primary defense against role being overwritten by legacy sync logic or client side mistakes.
+              const wasAdmin = currentData.role === 'admin';
+              
               // Special cleanup for requested accounts or any legacy 'pro+' data
               if (isSpecialAccount || currentData.role === 'pro+' || currentData.tier === 'pro+') {
-                if (currentData.role === 'pro+' || currentData.tier === 'pro+') {
-                  baseData.role = 'pro';
-                }
-                // Always remove legacy 'tier' and 'user_plan' references if found
+                // Remove legacy fields that might trigger sync issues
                 baseData.tier = deleteField();
                 baseData.user_plans = deleteField();
+                
+                // If they were 'pro+' legacy, map to 'pro' ONLY if they are not admin
+                if (!wasAdmin && (currentData.role === 'pro+' || currentData.tier === 'pro+')) {
+                  baseData.role = 'pro';
+                }
               }
+
+              // Final safeguard: If user is already an admin in DB, keep it that way.
+              // Also check ADMIN_EMAILS as a secondary source of truth for requested accounts.
+              if (wasAdmin || isAdminEmail(currentUser.email)) {
+                baseData.role = 'admin';
+              }
+
               await updateDoc(userRef, baseData);
             }
           } catch (error) {

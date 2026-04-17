@@ -3,7 +3,8 @@ import {
   collection,
   query,
   orderBy,
-  onSnapshot,
+  getDocs,
+  getDoc,
   doc,
   updateDoc,
   where,
@@ -36,6 +37,8 @@ import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { isAdminEmail, getTimestampMs } from '../App';
 import { motion, AnimatePresence } from 'motion/react';
+
+import AdminPageLayout from '../components/AdminPageLayout';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   free: 'Free',
@@ -100,65 +103,69 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   useEffect(() => {
     if (!auth.currentUser || isAdminProp !== undefined) return;
     
-    // Support real-time role check if prop wasn't passed or we want extra safety
-    const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
+    // 1-time check for admin role to save costs
+    const checkAdmin = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
         }
+      } catch (err) {
+        console.error("Admin check failed:", err);
       }
-    });
-    return () => unsub();
+    };
+    checkAdmin();
   }, [isAdminProp]);
 
-  useEffect(() => {
+  // Fetch users 1-time or on refresh
+  const fetchUsers = async () => {
     if (!isAdmin) return;
-
-    const q = query(collection(db, 'users'), orderBy(sortBy, 'desc'));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedUsers = snapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-          // Safe mapping with default values
-          return {
-            uid: docSnap.id,
-            email: data.email || null,
-            displayName: data.displayName || null,
-            role: (data.role as UserRole) || 'free',
-            accountStatus: (data.accountStatus as AccountStatus) || 'active',
-            paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
-            createdAt: getTimestampMs(data.createdAt || Date.now()),
-            lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
-            planName: data.planName,
-            planStartAt: data.planStartAt ? getTimestampMs(data.planStartAt) : undefined,
-            planExpireAt: data.planExpireAt ? getTimestampMs(data.planExpireAt) : undefined,
-            nextBillingAt: data.nextBillingAt ? getTimestampMs(data.nextBillingAt) : undefined,
-            lastPaymentAt: data.lastPaymentAt ? getTimestampMs(data.lastPaymentAt) : undefined,
-            songGeneratedCount: data.songGeneratedCount || 0,
-            favoriteCount: data.favoriteCount || 0,
-            adminMemo: data.adminMemo || '',
-            isOnline: data.isOnline || false,
-            lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
-          } as AppUserInfo;
-        });
-        setUsers(fetchedUsers);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error('Failed to fetch users:', error);
-        if (error.code === 'permission-denied') {
-          // You might want to show a more specific error in UI
-          alert('상용자 정보를 불러올 권한이 없습니다. (Permission Denied)');
-        }
-        setIsLoading(false);
+    setIsLoading(true);
+    try {
+      const q = query(collection(db, 'users'), orderBy(sortBy, 'desc'));
+      const snapshot = await getDocs(q);
+      const fetchedUsers = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          uid: docSnap.id,
+          email: data.email || null,
+          displayName: data.displayName || null,
+          role: (data.role as UserRole) || 'free',
+          accountStatus: (data.accountStatus as AccountStatus) || 'active',
+          paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
+          createdAt: getTimestampMs(data.createdAt || Date.now()),
+          lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
+          planName: data.planName,
+          planStartAt: data.planStartAt ? getTimestampMs(data.planStartAt) : undefined,
+          planExpireAt: data.planExpireAt ? getTimestampMs(data.planExpireAt) : undefined,
+          nextBillingAt: data.nextBillingAt ? getTimestampMs(data.nextBillingAt) : undefined,
+          lastPaymentAt: data.lastPaymentAt ? getTimestampMs(data.lastPaymentAt) : undefined,
+          songGeneratedCount: data.songGeneratedCount || 0,
+          favoriteCount: data.favoriteCount || 0,
+          adminMemo: data.adminMemo || '',
+          isOnline: data.isOnline || false,
+          lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+        } as AppUserInfo;
+      });
+      setUsers(fetchedUsers);
+    } catch (error: any) {
+      console.error('Failed to fetch users:', error);
+      if (error.code === 'permission-denied') {
+        alert('사용자 정보를 불러올 권한이 없습니다. (Permission Denied)');
       }
-    );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchUsers();
   }, [isAdmin, sortBy]);
 
   const filteredUsers = useMemo(() => {
@@ -176,6 +183,52 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     });
   }, [users, searchTerm, roleFilter, statusFilter, paymentFilter]);
 
+  const [isRefreshingDetail, setIsRefreshingDetail] = useState(false);
+
+  const fetchUserDetail = async (uid: string) => {
+    setIsRefreshingDetail(true);
+    try {
+      const snap = await getDoc(doc(db, 'users', uid));
+      if (snap.exists()) {
+        const data = snap.data();
+        const updatedUser = {
+          uid: snap.id,
+          email: data.email || null,
+          displayName: data.displayName || null,
+          role: (data.role as UserRole) || 'free',
+          accountStatus: (data.accountStatus as AccountStatus) || 'active',
+          paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
+          createdAt: getTimestampMs(data.createdAt || Date.now()),
+          lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
+          planName: data.planName,
+          planStartAt: data.planStartAt ? getTimestampMs(data.planStartAt) : undefined,
+          planExpireAt: data.planExpireAt ? getTimestampMs(data.planExpireAt) : undefined,
+          nextBillingAt: data.nextBillingAt ? getTimestampMs(data.nextBillingAt) : undefined,
+          lastPaymentAt: data.lastPaymentAt ? getTimestampMs(data.lastPaymentAt) : undefined,
+          songGeneratedCount: data.songGeneratedCount || 0,
+          favoriteCount: data.favoriteCount || 0,
+          adminMemo: data.adminMemo || '',
+          isOnline: data.isOnline || false,
+          lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+        } as AppUserInfo;
+        
+        setSelectedUser(updatedUser);
+        setEditRole(updatedUser.role);
+        setEditStatus(updatedUser.accountStatus);
+        setEditPaymentStatus(updatedUser.paymentStatus || 'none');
+        setEditPlanName(updatedUser.planName || '');
+        setEditMemo(updatedUser.adminMemo || '');
+        
+        // Also update in list to keep it relatively in sync
+        setUsers(prev => prev.map(u => u.uid === uid ? updatedUser : u));
+      }
+    } catch (err) {
+      console.error("Failed to refresh user detail:", err);
+    } finally {
+      setIsRefreshingDetail(false);
+    }
+  };
+
   const handleOpenDetail = (user: AppUserInfo) => {
     setSelectedUser(user);
     setEditRole(user.role);
@@ -185,6 +238,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     setEditMemo(user.adminMemo || '');
     setSaveStatus('idle');
     setIsDetailOpen(true);
+    // Fetch latest when opening
+    fetchUserDetail(user.uid);
   };
 
   const handleUpdateUser = async () => {
@@ -267,8 +322,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   const isUserOnline = (lastSeenAt?: number) => {
     if (!lastSeenAt) return false;
-    // Considered online if active within last 60 seconds (1 minute)
-    return (Date.now() - lastSeenAt) < 60000;
+    // Considered online if active within last 30 seconds
+    return (Date.now() - lastSeenAt) < 30000;
   };
 
   if (!isAdmin) {
@@ -284,29 +339,21 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-16">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <button onClick={() => navigate('/admin/users')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/users' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>회원 관리</button>
-          <button onClick={() => navigate('/admin/vocals')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/vocals' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>보컬 관리</button>
-          <button onClick={() => navigate('/admin/tags')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/tags' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>태그 관리</button>
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)]">회원 관리</h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">플랫폼 가입자들의 상태와 등급을 대시보드에서 관리합니다.</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => window.location.reload()} className="p-2.5 rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn">
-              <RefreshCw className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Search & Filters */}
-        <div className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-[var(--shadow-md)] space-y-4">
+    <AdminPageLayout
+      title="회원 관리"
+      description="플랫폼 가입자들의 상태와 등급을 대시보드에서 관리합니다."
+      actions={
+        <button 
+          onClick={fetchUsers} 
+          disabled={isLoading}
+          className="p-2.5 rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn disabled:opacity-50"
+        >
+          <RefreshCw className={cn("w-5 h-5", isLoading && "animate-spin")} />
+        </button>
+      }
+    >
+      {/* Search & Filters */}
+      <div className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-[var(--shadow-md)] space-y-4">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
@@ -425,7 +472,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             ))
           )}
         </div>
-      </div>
 
       {/* User Detail Modal */}
       <AnimatePresence>
@@ -448,6 +494,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                 <div className="flex items-center gap-3">
                   <User className="w-5 h-5 text-brand-orange" />
                   <h2 className="text-xl font-black text-[var(--text-primary)]">회원 상세 정보</h2>
+                  <button 
+                    onClick={() => fetchUserDetail(selectedUser.uid)}
+                    disabled={isRefreshingDetail}
+                    className="p-1.5 hover:bg-btn-hover rounded-lg transition-colors ml-2"
+                    title="새로고침"
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5 text-[var(--text-secondary)]", isRefreshingDetail && "animate-spin")} />
+                  </button>
                 </div>
                 <button onClick={() => setIsDetailOpen(false)} className="p-2 hover:bg-btn-hover rounded-full transition-colors">
                   <X className="w-5 h-5 text-[var(--text-secondary)]" />
@@ -694,6 +748,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </AdminPageLayout>
   );
 }

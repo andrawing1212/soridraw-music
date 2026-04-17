@@ -29,6 +29,7 @@ import {
 import { cn } from '../lib/utils';
 
 import { useNavigate, useLocation } from 'react-router-dom';
+import AdminPageLayout from '../components/AdminPageLayout';
 
 export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
@@ -212,60 +213,21 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-color)] p-6 md:p-10 pt-28">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex gap-2 mb-6">
-          <button 
-            onClick={() => navigate('/admin/users')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/users' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            회원 관리
-          </button>
-          <button 
-            onClick={() => navigate('/admin/vocals')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/vocals' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            보컬 관리
-          </button>
-          <button 
-            onClick={() => navigate('/admin/tags')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/tags' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            태그 관리
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">보컬 톤 관리</h1>
-            <p className="text-[var(--text-secondary)]">보컬 톤 데이터를 생성, 수정, 삭제하고 순서를 관리합니다.</p>
-          </div>
-          <button
-            onClick={handleAddNew}
-            disabled={!!isEditing}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-white rounded-xl font-bold hover:brightness-110 transition-all disabled:opacity-50"
-          >
-            <Plus className="w-5 h-5" />
-            새 보컬 톤 추가
-          </button>
-        </div>
-
-        {error && (
+    <AdminPageLayout
+      title="보컬 관리"
+      description="보컬 톤 데이터를 생성, 수정, 삭제하고 순서를 관리합니다."
+      actions={
+        <button
+          onClick={handleAddNew}
+          disabled={!!isEditing}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-white rounded-xl font-bold hover:brightness-110 transition-all disabled:opacity-50"
+        >
+          <Plus className="w-5 h-5" />
+          <span>새 보컬 톤 추가</span>
+        </button>
+      }
+    >
+      {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-500">
             <AlertCircle className="w-5 h-5" />
             <span>{error}</span>
@@ -499,7 +461,6 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
             </table>
           </div>
         </div>
-      </div>
-    </div>
+    </AdminPageLayout>
   );
 }

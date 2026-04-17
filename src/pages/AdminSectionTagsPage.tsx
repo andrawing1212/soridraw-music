@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
+import AdminPageLayout from '../components/AdminPageLayout';
 import { 
   TAG_META, 
   ALLOWED_TAGS_BY_SECTION, 
@@ -421,77 +422,32 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-color)] p-6 md:p-10 pt-28">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex gap-2 mb-6">
+    <AdminPageLayout
+      title="태그 관리"
+      description="곡 구조 섹션별로 사용 가능한 태그와 티어를 관리합니다."
+      actions={
+        <>
           <button
-            onClick={() => navigate('/admin/users')}
-            className={cn(
-              'px-4 py-2 rounded-xl text-xs font-bold transition-all border',
-              location.pathname === '/admin/users'
-                ? 'bg-brand-orange border-brand-orange text-white'
-                : 'bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn'
-            )}
+            onClick={handleInitialLoad}
+            disabled={isMigrating}
+            className="flex items-center gap-2 px-4 py-2 bg-btn-bg border border-btn-border text-[var(--text-primary)] rounded-xl font-bold hover:bg-btn-hover transition-all disabled:opacity-50"
+            title="기존 constants.ts 데이터를 불러옵니다"
           >
-            회원 관리
+            {isMigrating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+            <span className="hidden sm:inline">초기 데이터 로드</span>
           </button>
           <button
-            onClick={() => navigate('/admin/vocals')}
-            className={cn(
-              'px-4 py-2 rounded-xl text-xs font-bold transition-all border',
-              location.pathname === '/admin/vocals'
-                ? 'bg-brand-orange border-brand-orange text-white'
-                : 'bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn'
-            )}
+            onClick={handleAddNew}
+            disabled={!!isEditing}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-white rounded-xl font-bold hover:brightness-110 transition-all disabled:opacity-50"
           >
-            보컬 관리
+            <Plus className="w-5 h-5" />
+            <span>새 태그 추가</span>
           </button>
-          <button
-            onClick={() => navigate('/admin/tags')}
-            className={cn(
-              'px-4 py-2 rounded-xl text-xs font-bold transition-all border',
-              location.pathname === '/admin/tags'
-                ? 'bg-brand-orange border-brand-orange text-white'
-                : 'bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn'
-            )}
-          >
-            태그 관리
-          </button>
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                onClick={() => navigate('/')}
-                className="p-2 hover:bg-white/5 rounded-lg text-[var(--text-secondary)]"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h1 className="text-3xl font-bold text-[var(--text-primary)]">섹션 태그 관리</h1>
-            </div>
-            <p className="text-[var(--text-secondary)] ml-10">곡 구조 섹션별로 사용 가능한 태그와 티어를 관리합니다.</p>
-          </div>
-          <div className="flex items-center gap-3 ml-10 md:ml-0">
-            <button
-              onClick={handleInitialLoad}
-              disabled={isMigrating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-[var(--text-primary)] rounded-xl font-bold hover:bg-white/10 transition-all disabled:opacity-50"
-              title="기존 constants.ts 데이터를 불러옵니다"
-            >
-              {isMigrating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-              초기 데이터 로드
-            </button>
-            <button
-              onClick={handleAddNew}
-              disabled={!!isEditing}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-white rounded-xl font-bold hover:brightness-110 transition-all disabled:opacity-50"
-            >
-              <Plus className="w-5 h-5" />
-              새 태그 추가
-            </button>
-          </div>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-6">
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="relative">
@@ -751,6 +707,6 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
           </div>
         </div>
       </div>
-    </div>
+    </AdminPageLayout>
   );
 }

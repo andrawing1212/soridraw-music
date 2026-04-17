@@ -97,11 +97,22 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   // --- Summary Statistics Calculation ---
   const userStats = useMemo(() => {
-    const now = Date.now();
-    const onlineThreshold = 30000; // 30 seconds
-    
     const total = users.length;
-    const online = users.filter(u => u.lastSeenAt && (now - u.lastSeenAt) < onlineThreshold).length;
+    // Primary criterion: isOnline flag from document
+    // Secondary safety: lastSeenAt within last 1 hour (to catch abandoned sessions where isOnline might be stuck)
+    const onlineThreshold = 3600000; // 1 hour safety margin
+    const now = Date.now();
+
+    const isActuallyOnline = (u: AppUserInfo) => {
+      // If flag is true and haven't seen them for > 1 hour, probably a stuck session
+      if (u.isOnline) {
+        if (u.lastSeenAt && (now - u.lastSeenAt) > onlineThreshold) return false;
+        return true;
+      }
+      return false;
+    };
+    
+    const online = users.filter(u => isActuallyOnline(u)).length;
     
     const byRole = {
       free: { total: 0, online: 0 },
@@ -112,7 +123,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     
     users.forEach(u => {
       const r = u.role || 'free';
-      const isOnline = u.lastSeenAt && (now - u.lastSeenAt) < onlineThreshold;
+      const isOnline = isActuallyOnline(u);
       
       if (byRole[r as keyof typeof byRole]) {
         byRole[r as keyof typeof byRole].total++;
@@ -350,10 +361,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     return new Date(timestamp).toLocaleDateString();
   };
 
-  const isUserOnline = (lastSeenAt?: number) => {
-    if (!lastSeenAt) return false;
-    // Considered online if active within last 30 seconds
-    return (Date.now() - lastSeenAt) < 30000;
+  const isUserOnline = (user: AppUserInfo) => {
+    if (!user.isOnline) return false;
+    // 1-hour safety margin for stuck sessions
+    if (user.lastSeenAt && (Date.now() - user.lastSeenAt) > 3600000) return false;
+    return true;
   };
 
   if (!isAdmin) {
@@ -525,14 +537,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               >
                 <div className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-center shrink-0 border border-btn-border group-hover:scale-110 transition-transform relative">
                   <User className="w-6 h-6 text-[var(--text-secondary)]" />
-                  {isUserOnline(user.lastSeenAt) && (
+                  {isUserOnline(user) && (
                     <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[var(--bg-primary)] rounded-full animate-pulse shadow-sm" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-bold text-[var(--text-primary)] truncate">{user.displayName || '이름 없음'}</span>
-                    {isUserOnline(user.lastSeenAt) && <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-emerald-500" /> 접속 중</span>}
+                    {isUserOnline(user) && <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-emerald-500" /> 접속 중</span>}
                     <span className={cn(
                       "px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
                       user.role === 'admin' ? "bg-red-500/10 text-red-500" :

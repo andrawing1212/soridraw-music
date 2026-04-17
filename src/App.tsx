@@ -1749,19 +1749,17 @@ const cycleFamilySelection = (
 
     setOnline();
 
-    // Heartbeat for lastSeenAt - 30s for better real-time accuracy
+    // Heartbeat for lastSeenAt - 1 minute for secondary activity tracking
     const interval = setInterval(() => {
       if (isTerminating || document.visibilityState !== 'visible') return;
       updateDoc(userRef, {
         lastSeenAt: Date.now(),
         isOnline: true
       }).catch(() => {});
-    }, 20000);
+    }, 60000);
 
     // Activity tracker & Focus handler
     const handleActivity = () => {
-      // We can update on activity, but heartbeat 30s is usually enough.
-      // Re-set online and update lastSeenAt when user returns to tab
       if (document.visibilityState === 'visible') {
         updateDoc(userRef, {
           isOnline: true,
@@ -1770,10 +1768,22 @@ const cycleFamilySelection = (
       }
     };
 
+    const handleTerminate = () => {
+      if (isTerminating) return;
+      // On tab close/navigation away, set offline
+      // Note: This is best-effort on web
+      updateDoc(userRef, {
+        isOnline: false,
+        lastSeenAt: Date.now()
+      }).catch(() => {});
+    };
+
     window.addEventListener('mousedown', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('focus', handleActivity);
     document.addEventListener('visibilitychange', handleActivity);
+    window.addEventListener('pagehide', handleTerminate);
+    window.addEventListener('beforeunload', handleTerminate);
 
     return () => {
       isTerminating = true;
@@ -1782,6 +1792,8 @@ const cycleFamilySelection = (
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('focus', handleActivity);
       document.removeEventListener('visibilitychange', handleActivity);
+      window.removeEventListener('pagehide', handleTerminate);
+      window.removeEventListener('beforeunload', handleTerminate);
       
       // Set offline on unmount/logout
       updateDoc(userRef, {
@@ -2308,6 +2320,12 @@ const cycleFamilySelection = (
 
   const handleLogout = async () => {
     try {
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          isOnline: false,
+          lastSeenAt: Date.now()
+        }).catch(() => {});
+      }
       setHistory([]);
       setResult(null);
       setHistoryIndex(-1);

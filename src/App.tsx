@@ -92,7 +92,7 @@ import {
   INSTRUMENT_TAG_DESCRIPTIONS
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
@@ -349,260 +349,6 @@ function normalizeEmail(email: string) {
 
 export function isAdminEmail(email?: string | null) {
   return !!email && ADMIN_EMAILS.includes(normalizeEmail(email));
-}
-
-type UserPlanRecord = {
-  email: string;
-  tier: TagTier;
-  updatedAt?: any;
-  updatedBy?: string;
-};
-
-function AdminPlanManagerPage({ currentUser, isAdmin }: { currentUser: User | null; isAdmin: boolean }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [emailInput, setEmailInput] = useState('');
-  const [planRecords, setPlanRecords] = useState<UserPlanRecord[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [pageError, setPageError] = useState<string | null>(null);
-
-  const canAccess = isAdmin;
-
-  const loadPlans = useCallback(async () => {
-    if (!canAccess) return;
-    try {
-      const snapshot = await getDocs(collection(db, 'user_plans'));
-      const plans = snapshot.docs
-        .map((snapshotDoc) => ({
-          email: String(snapshotDoc.data().email || snapshotDoc.id),
-          tier: (snapshotDoc.data().tier || 'free') as TagTier,
-          updatedAt: snapshotDoc.data().updatedAt,
-          updatedBy: snapshotDoc.data().updatedBy,
-        }))
-        .sort((a, b) => a.email.localeCompare(b.email));
-      setPlanRecords(plans);
-    } catch (error) {
-      console.error('Failed to load user plans:', error);
-      setPageError('플랜 목록을 불러오지 못했습니다.');
-    }
-  }, [canAccess]);
-
-  useEffect(() => {
-    loadPlans();
-  }, [loadPlans]);
-
-  const assignPlan = async (email: string, tier: TagTier) => {
-    const normalizedEmail = normalizeEmail(email);
-    if (!normalizedEmail || !normalizedEmail.includes('@')) {
-      setPageError('올바른 이메일을 입력해주세요.');
-      return;
-    }
-
-    setIsSaving(true);
-    setPageError(null);
-    try {
-      await setDoc(
-        doc(db, 'user_plans', normalizedEmail),
-        sanitizeForFirestore({
-          email: normalizedEmail,
-          tier,
-          updatedAt: serverTimestamp(),
-          updatedBy: currentUser?.email || null,
-        }),
-        { merge: true }
-      );
-      setEmailInput('');
-      await loadPlans();
-    } catch (error) {
-      console.error('Failed to assign user plan:', error);
-      setPageError('플랜 저장에 실패했습니다.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const removePlan = async (email: string) => {
-    setIsSaving(true);
-    setPageError(null);
-    try {
-      await deleteDoc(doc(db, 'user_plans', normalizeEmail(email)));
-      await loadPlans();
-    } catch (error) {
-      console.error('Failed to remove user plan:', error);
-      setPageError('플랜 삭제에 실패했습니다.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (!canAccess) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-6 text-center">
-        <div className="max-w-md space-y-4">
-          <div className="inline-flex items-center justify-center p-4 rounded-full bg-red-500/10">
-            <Lock className="w-10 h-10 text-red-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">접근 권한이 없습니다</h2>
-          <p className="text-[var(--text-secondary)]">관리자 계정으로만 플랜을 부여할 수 있습니다.</p>
-          <button
-            onClick={() => navigate('/')}
-            className="px-5 py-3 rounded-2xl bg-brand-orange text-white font-bold hover:brightness-110 transition-all"
-          >
-            홈으로 이동
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[var(--bg-primary)] px-6 pt-28 pb-16">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex gap-2 mb-2">
-          <button 
-            onClick={() => navigate('/admin/plans')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/plans' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            플랜 관리
-          </button>
-          <button 
-            onClick={() => navigate('/admin/users')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/users' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            회원 관리
-          </button>
-          <button 
-            onClick={() => navigate('/admin/vocals')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/vocals' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            보컬 관리
-          </button>
-          <button 
-            onClick={() => navigate('/admin/tags')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/tags' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            태그 관리
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)]">플랜 관리</h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-2">이메일 기준으로 free / pro / pro+ 권한을 직접 부여합니다.</p>
-          </div>
-          <button
-            onClick={() => navigate('/')}
-            className="px-4 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-all"
-          >
-            홈으로
-          </button>
-        </div>
-
-        <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-5 shadow-[var(--shadow-md)] space-y-4">
-          <div>
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">플랜 부여</h2>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">계정 이메일을 입력하고 원하는 플랜을 바로 부여하세요.</p>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-3">
-            <input
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="plan@example.com"
-              className="flex-1 px-4 py-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] outline-none focus:border-brand-orange"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => assignPlan(emailInput, 'free')}
-                disabled={isSaving}
-                className="px-4 py-3 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-all disabled:opacity-50"
-              >
-                Free
-              </button>
-              <button
-                onClick={() => assignPlan(emailInput, 'pro')}
-                disabled={isSaving}
-                className="px-4 py-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all disabled:opacity-50"
-              >
-                Pro
-              </button>
-              <button
-                onClick={() => assignPlan(emailInput, 'pro+')}
-                disabled={isSaving}
-                className="px-4 py-3 rounded-2xl bg-brand-orange text-white hover:brightness-110 transition-all disabled:opacity-50"
-              >
-                Pro+
-              </button>
-            </div>
-          </div>
-
-          {pageError && <p className="text-sm text-red-400">{pageError}</p>}
-          <p className="text-xs text-[var(--text-secondary)]">관리자 본인 계정은 항상 Pro+로 동작합니다.</p>
-        </div>
-
-        <div className="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-5 shadow-[var(--shadow-md)]">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">부여된 플랜 목록</h2>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">삭제하면 다시 free로 돌아갑니다.</p>
-            </div>
-            <button
-              onClick={loadPlans}
-              className="p-2 rounded-xl border border-[var(--border-color)] bg-btn-bg text-[var(--text-primary)] hover:bg-btn-hover transition-all shadow-btn"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {planRecords.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-6 text-sm text-[var(--text-secondary)] text-center">
-                아직 부여된 플랜이 없습니다.
-              </div>
-            ) : (
-              planRecords.map((record) => (
-                <div
-                  key={record.email}
-                  className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-2xl border border-[var(--border-color)] px-4 py-3 bg-[var(--bg-secondary)]/40"
-                >
-                  <div>
-                    <p className="text-sm font-bold text-[var(--text-primary)]">{record.email}</p>
-                    <p className="text-xs text-[var(--text-secondary)] mt-1">현재 플랜: {record.tier}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => assignPlan(record.email, 'free')} disabled={isSaving} className="px-3 py-2 rounded-xl border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-all disabled:opacity-50">Free</button>
-                    <button onClick={() => assignPlan(record.email, 'pro')} disabled={isSaving} className="px-3 py-2 rounded-xl border border-brand-orange/30 text-brand-orange hover:bg-brand-orange/10 transition-all disabled:opacity-50">Pro</button>
-                    <button onClick={() => assignPlan(record.email, 'pro+')} disabled={isSaving} className="px-3 py-2 rounded-xl bg-brand-orange text-white hover:brightness-110 transition-all disabled:opacity-50">Pro+</button>
-                    <button onClick={() => removePlan(record.email)} disabled={isSaving} className="px-3 py-2 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50">삭제</button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function SecondaryScrollControl() {
@@ -1308,17 +1054,6 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
                         <>
                           <button 
                             onClick={() => {
-                              navigate('/admin/plans');
-                              setIsProfileOpen(false);
-                              setIsExpanded(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                          >
-                            <Settings className="w-3 h-3" />
-                            플랜 관리
-                          </button>
-                          <button 
-                            onClick={() => {
                               navigate('/admin/users');
                               setIsProfileOpen(false);
                               setIsExpanded(false);
@@ -1944,6 +1679,7 @@ const cycleFamilySelection = (
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('free');
+  const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
@@ -2070,9 +1806,11 @@ const cycleFamilySelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
+            if (data.accountStatus) setUserStatus(data.accountStatus as AccountStatus);
           } else {
             // Initial signup fallback
             setUserRole(isAdminEmail(currentUser.email) ? 'admin' : 'free');
+            setUserStatus('active');
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
@@ -2088,14 +1826,19 @@ const cycleFamilySelection = (
             const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
             const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
 
-            const baseData = {
+            const baseData: any = {
               uid: currentUser.uid,
               email: currentUser.email,
               displayName: currentUser.displayName,
               lastLoginAt: Date.now(),
-              favoriteCount: favsSnap.size,
-              songGeneratedCount: songCount
             };
+
+            // Only sync counters if they don't exist or we want to force refresh from collections
+            // But we already have real-time increment logic, so we just set them once if user is new
+            if (!userSnap.exists()) {
+              baseData.favoriteCount = favsSnap.size;
+              baseData.songGeneratedCount = songCount;
+            }
 
             if (!userSnap.exists()) {
               // Get current tier from user_plans if exists
@@ -2257,11 +2000,23 @@ const cycleFamilySelection = (
       showToast('삭제할 수 있는 곡이 없습니다.');
       return;
     }
+
+    if (userStatus === 'banned' && !isAdminUser) {
+      showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+      return;
+    }
+
     try {
       const batch = writeBatch(db);
       unlockedFavs.forEach(f => {
         batch.delete(doc(db, 'favorites', f.id));
       });
+      
+      // Update favoriteCount
+      batch.update(doc(db, 'users', user.uid), {
+        favoriteCount: increment(-unlockedFavs.length)
+      });
+
       await batch.commit();
       showToast(`${unlockedFavs.length}개의 곡이 삭제되었습니다.`);
     } catch (error) {
@@ -3052,6 +2807,21 @@ const saveRecentSong = async (newSong: any) => {
       return;
     }
 
+    if (userStatus !== 'active' && !isAdminUser) {
+      if (userStatus === 'paused') {
+        showToast('계정이 일시 제한되었습니다. 관리자에게 문의하세요.');
+        return;
+      }
+      if (userStatus === 'expired') {
+        showToast('이용 기간이 만료되었습니다. 플랜을 갱신해주세요.');
+        return;
+      }
+      if (userStatus === 'banned') {
+        showToast('접근이 차단된 계정입니다. 기능을 사용할 수 없습니다.');
+        return;
+      }
+    }
+
     if (selectedGenres.length === 0) {
       showToast('최소 장르 1개를 선택해주세요.');
       return;
@@ -3616,6 +3386,38 @@ ${result.prompt}
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+      {/* Account Status Banner */}
+      {user && userStatus !== 'active' && !isAdminUser && (
+        <Portal>
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-48px)] max-w-lg">
+            <motion.div 
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className={cn(
+                "px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center gap-3 shadow-2xl overflow-hidden relative",
+                userStatus === 'banned' ? "bg-red-500/10 border-red-500/20 text-red-400" :
+                "bg-orange-500/10 border-orange-500/20 text-orange-400"
+              )}
+            >
+              <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-[13px] font-black leading-tight mb-0.5">
+                  {userStatus === 'paused' && '계정 일시 제한'}
+                  {userStatus === 'expired' && '이용 기간 만료'}
+                  {userStatus === 'banned' && '계정 차단됨'}
+                </p>
+                <p className="text-[11px] opacity-80 leading-snug">
+                  {userStatus === 'paused' && '관리자에 의해 계정이 일시 정지되었습니다. 곡 생성이 불가능합니다.'}
+                  {userStatus === 'expired' && '워크스페이스 이용 기간이 종료되었습니다. 갱신 후 이용해주세요.'}
+                  {userStatus === 'banned' && '해당 계정은 서비스 이용이 제한되었습니다. 고객센터에 문의하세요.'}
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </Portal>
+      )}
+
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} />
 
       {/* Guide Button */}
@@ -4633,7 +4435,6 @@ ${result.prompt}
         {isAdminUser ? (
           <>
             <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-            <Route path="/admin/plans" element={<Navigate to="/admin/users" replace />} />
             <Route path="/admin/users" element={
               <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
                 <AdminUserManagementPageLazy isAdmin={isAdminUser} />
@@ -4652,7 +4453,6 @@ ${result.prompt}
           </>
         ) : (
           <>
-            <Route path="/admin/plans" element={<Navigate to="/" replace />} />
             <Route path="/admin/vocals" element={<Navigate to="/" replace />} />
             <Route path="/admin/tags" element={<Navigate to="/" replace />} />
           </>

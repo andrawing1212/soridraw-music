@@ -3485,60 +3485,69 @@ ${result.prompt}
         <Route path="/" element={
           <>
 
-            {/* Header */}
-            <header className="pt-16 pb-16 px-6 border-b border-[var(--border-color)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
-              <div className="max-w-6xl mx-auto relative">
-                {/* Guide Button inside Home Header - bottom-left aligned */}
-                {user && (
-                  <div className="absolute bottom-0 right-6 z-10 hidden md:block">
-                    <button
-                      onClick={() => setIsGuideModalOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-xs"
+              {/* Header */}
+              <header className="pt-16 pb-16 border-b border-[var(--border-color)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+                <div className="max-w-6xl mx-auto px-6 relative">
+                  {/* Guide Button inside Home Header - Aligned with "Sound" card right edge */}
+                  {user && (
+                    <div className="absolute -bottom-[50px] right-6 z-20">
+                      <button
+                        onClick={() => setIsGuideModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
+                      >
+                        <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                        <span className="font-bold text-[10px] md:text-xs">가이드</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="text-center flex flex-col items-center">
+                    <motion.div
+                      initial={{ opacity: 0, y: -40 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 100, damping: 10 }}
+                      className="mb-6"
                     >
-                      <YoutubeIcon className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
-                      <span className="font-bold">가이드</span>
-                    </button>
+                      <button 
+                        onClick={() => {
+                          if (!user) {
+                            handleLogin();
+                          } else {
+                            navigate('/history');
+                          }
+                        }}
+                        className="inline-flex items-center justify-center p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
+                      >
+                        <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
+                      </button>
+                    </motion.div>
+
+                    <h1 
+                      className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display text-center w-full"
+                      style={{ fontFamily: 'Verdana' }}
+                    >
+                      SORIDRAW's <span className="text-brand-orange">Studio</span>
+                    </h1>
+
+                    <p className="text-[11px] md:text-[13px] text-[var(--text-secondary)] font-medium tracking-widest uppercase mb-4 text-center w-full">
+                      Compose Your Atmosphere
+                    </p>
+
+                    <p 
+                      className="max-w-2xl mx-auto leading-relaxed px-4 text-center w-full"
+                      style={{ fontFamily: 'Courier New', color: 'var(--text-secondary)', fontWeight: 'normal', fontSize: '14px' }}
+                    >
+                      <span className="text-[var(--text-primary)] opacity-80 font-bold text-xl md:text-2xl">
+                        나의 이야기를 음악으로
+                      </span>
+                      <br />
+                      <span className="text-[var(--text-secondary)]">
+                        세상에 단 하나 뿐인 나만의 곡을 만들어보세요
+                      </span>
+                    </p>
                   </div>
-                )}
-                <div className="text-center">
-                  <motion.div
-                    initial={{ opacity: 0, y: -40 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ type: "spring", stiffness: 100, damping: 10 }}
-                    className="flex flex-col items-center justify-center mb-6"
-                  >
-                    <button 
-                      onClick={() => {
-                        if (!user) {
-                          handleLogin();
-                        } else {
-                          navigate('/history');
-                        }
-                      }}
-                      className="inline-flex items-center justify-center p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
-                    >
-                      <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
-                    </button>
-                  </motion.div>
-                  <h1 
-                    className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display"
-                    style={{ fontFamily: 'Verdana' }}
-                  >
-                    SORIDRAW's <span className="text-brand-orange">Studio</span>
-                  </h1>
-                  <p className="text-[11px] md:text-[13px] text-[var(--text-secondary)] font-medium tracking-widest uppercase mb-4">
-                    Compose Your Atmosphere
-                  </p>
-                  <p 
-                    className="max-w-2xl mx-auto leading-relaxed px-4"
-                    style={{ fontFamily: 'Courier New', color: 'var(--text-secondary)', fontWeight: 'normal', fontSize: '14px' }}
-                  >
-                    <span className="text-[var(--text-primary)] opacity-80 font-bold text-xl md:text-2xl">나의 이야기를 음악으로</span><br />
-                    <span className="text-[var(--text-secondary)]">세상에 단 하나 뿐인 나만의 곡을 만들어보세요</span>
-                  </p>
                 </div>
-              </div>
-            </header>
+              </header>
 
             <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
               {/* Selection Sections */}

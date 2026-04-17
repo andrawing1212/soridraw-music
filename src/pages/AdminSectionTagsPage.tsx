@@ -53,7 +53,7 @@ const slugifyTagId = (label: string) =>
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9\-가-힣]/g, '');
 
-export default function AdminSectionTagsPage() {
+export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [tags, setTags] = useState<SectionTagDoc[]>([]);
@@ -77,7 +77,30 @@ export default function AdminSectionTagsPage() {
     isActive: true
   });
 
-  const isAdmin = isAdminEmail(auth.currentUser?.email);
+  const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+
+  useEffect(() => {
+    if (isAdminProp !== undefined) {
+      setIsAdmin(isAdminProp);
+    }
+  }, [isAdminProp]);
+
+  useEffect(() => {
+    if (!auth.currentUser || isAdminProp !== undefined) return;
+    
+    // Support real-time role check if prop wasn't passed or we want extra safety
+    const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      }
+    });
+    return () => unsub();
+  }, [isAdminProp]);
 
   useEffect(() => {
     if (!isAdmin) return;

@@ -60,7 +60,7 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   trial: '체험판'
 };
 
-export default function AdminUserManagementPage() {
+export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [users, setUsers] = useState<AppUserInfo[]>([]);
@@ -80,7 +80,30 @@ export default function AdminUserManagementPage() {
   const [editStatus, setEditStatus] = useState<AccountStatus>('active');
   const [editMemo, setEditMemo] = useState('');
 
-  const isAdmin = isAdminEmail(auth.currentUser?.email);
+  const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+
+  useEffect(() => {
+    if (isAdminProp !== undefined) {
+      setIsAdmin(isAdminProp);
+    }
+  }, [isAdminProp]);
+
+  useEffect(() => {
+    if (!auth.currentUser || isAdminProp !== undefined) return;
+    
+    // Support real-time role check if prop wasn't passed or we want extra safety
+    const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      }
+    });
+    return () => unsub();
+  }, [isAdminProp]);
 
   useEffect(() => {
     if (!isAdmin) return;

@@ -30,7 +30,7 @@ import { cn } from '../lib/utils';
 
 import { useNavigate, useLocation } from 'react-router-dom';
 
-export default function AdminVocalTonesPage() {
+export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [vocalTones, setVocalTones] = useState<VocalTone[]>([]);
@@ -53,7 +53,30 @@ export default function AdminVocalTonesPage() {
   });
   const [genreTagInput, setGenreTagInput] = useState('');
 
-  const isAdmin = isAdminEmail(auth.currentUser?.email);
+  const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+
+  useEffect(() => {
+    if (isAdminProp !== undefined) {
+      setIsAdmin(isAdminProp);
+    }
+  }, [isAdminProp]);
+
+  useEffect(() => {
+    if (!auth.currentUser || isAdminProp !== undefined) return;
+    
+    // Support real-time role check if prop wasn't passed or we want extra safety
+    const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      }
+    });
+    return () => unsub();
+  }, [isAdminProp]);
 
   useEffect(() => {
     if (!isAdmin) return;

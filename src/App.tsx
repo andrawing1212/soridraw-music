@@ -357,7 +357,7 @@ type UserPlanRecord = {
   updatedBy?: string;
 };
 
-function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
+function AdminPlanManagerPage({ currentUser, isAdmin }: { currentUser: User | null; isAdmin: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [emailInput, setEmailInput] = useState('');
@@ -365,7 +365,7 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
   const [isSaving, setIsSaving] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  const canAccess = isAdminEmail(currentUser?.email);
+  const canAccess = isAdmin;
 
   const loadPlans = useCallback(async () => {
     if (!canAccess) return;
@@ -1942,10 +1942,11 @@ const cycleFamilySelection = (
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<UserRole>('free');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
-  const isAdminUser = useMemo(() => isAdminEmail(user?.email), [user?.email]);
+  const isAdminUser = useMemo(() => userRole === 'admin' || isAdminEmail(user?.email), [userRole, user?.email]);
   const effectiveUserTier: TagTier = isAdminUser ? 'pro+' : userTier;
 
   // Refs for stable access in callbacks
@@ -1997,6 +1998,7 @@ const cycleFamilySelection = (
     testConnection();
 
     let unsubFavs: (() => void) | null = null;
+    let unsubUserDoc: (() => void) | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -2006,8 +2008,25 @@ const cycleFamilySelection = (
         unsubFavs();
         unsubFavs = null;
       }
+      if (unsubUserDoc) {
+        unsubUserDoc();
+        unsubUserDoc = null;
+      }
 
       if (currentUser) {
+        // Sync user role in real-time
+        unsubUserDoc = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.role) setUserRole(data.role as UserRole);
+          } else {
+            // Initial signup fallback
+            setUserRole(isAdminEmail(currentUser.email) ? 'admin' : 'free');
+          }
+        }, (error) => {
+          console.error('Failed to sync user role:', error);
+        });
+
         const syncUserDoc = async () => {
           try {
             const userRef = doc(db, 'users', currentUser.uid);
@@ -2111,6 +2130,7 @@ const cycleFamilySelection = (
     return () => {
       unsubscribe();
       if (unsubFavs) unsubFavs();
+      if (unsubUserDoc) unsubUserDoc();
     };
   }, []);
 
@@ -4541,20 +4561,20 @@ ${result.prompt}
         {/* Admin Routes */}
         {isAdminUser ? (
           <>
-            <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} />} />
+            <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} isAdmin={isAdminUser} />} />
             <Route path="/admin/users" element={
               <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
-                <AdminUserManagementPageLazy />
+                <AdminUserManagementPageLazy isAdmin={isAdminUser} />
               </Suspense>
             } />
             <Route path="/admin/vocals" element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminVocalTonesPageLazy />
+                <AdminVocalTonesPageLazy isAdmin={isAdminUser} />
               </Suspense>
             } />
             <Route path="/admin/tags" element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminSectionTagsPageLazy />
+                <AdminSectionTagsPageLazy isAdmin={isAdminUser} />
               </Suspense>
             } />
           </>

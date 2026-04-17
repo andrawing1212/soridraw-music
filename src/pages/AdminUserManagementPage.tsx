@@ -74,10 +74,19 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [selectedUser, setSelectedUser] = useState<AppUserInfo | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   // Edit states for Modal
   const [editRole, setEditRole] = useState<UserRole>('free');
   const [editStatus, setEditStatus] = useState<AccountStatus>('active');
+  const [editPaymentStatus, setEditPaymentStatus] = useState<PaymentStatus>('none');
+  const [editPlanName, setEditPlanName] = useState('');
   const [editMemo, setEditMemo] = useState('');
 
   const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
@@ -131,7 +140,9 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             lastPaymentAt: data.lastPaymentAt ? getTimestampMs(data.lastPaymentAt) : undefined,
             songGeneratedCount: data.songGeneratedCount || 0,
             favoriteCount: data.favoriteCount || 0,
-            adminMemo: data.adminMemo || ''
+            adminMemo: data.adminMemo || '',
+            isOnline: data.isOnline || false,
+            lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
           } as AppUserInfo;
         });
         setUsers(fetchedUsers);
@@ -169,26 +180,89 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     setSelectedUser(user);
     setEditRole(user.role);
     setEditStatus(user.accountStatus);
+    setEditPaymentStatus(user.paymentStatus || 'none');
+    setEditPlanName(user.planName || '');
     setEditMemo(user.adminMemo || '');
+    setSaveStatus('idle');
     setIsDetailOpen(true);
   };
 
   const handleUpdateUser = async () => {
     if (!selectedUser) return;
+
+    // Safety Checks
+    const isSelf = auth.currentUser?.uid === selectedUser.uid;
+    
+    // 1. Prevents self-demotion from admin
+    if (isSelf && selectedUser.role === 'admin' && editRole !== 'admin') {
+      alert('자기 자신의 관리자 권한을 해제할 수 없습니다.');
+      return;
+    }
+
+    // 2. Prevents self-suspension/ban
+    if (isSelf && editStatus !== 'active') {
+      alert('자기 자신의 계정 상태를 변경(일시정지/정지 등)할 수 없습니다.');
+      return;
+    }
+
+    // 3. Prevents removing the last admin
+    const adminCount = users.filter(u => u.role === 'admin').length;
+    if (adminCount <= 1 && selectedUser.role === 'admin' && editRole !== 'admin') {
+      alert('시스템에 최소 1명의 관리자가 존재해야 합니다. 마지막 관리자 권한을 해제할 수 없습니다.');
+      return;
+    }
+
+    // Confirmation logic
+    const needsConfirm = editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus;
+    
+    if (needsConfirm && !confirmModal.isOpen) {
+      setConfirmModal({
+        isOpen: true,
+        title: '변경 내용 확인',
+        message: '회원의 등급 또는 상태를 변경하시겠습니까? 이 작업은 즉시 반영됩니다.',
+        onConfirm: () => executeUpdate()
+      });
+      return;
+    }
+
+    executeUpdate();
+  };
+
+  const executeUpdate = async () => {
+    if (!selectedUser) return;
     setIsSaving(true);
+    setSaveStatus('idle');
+    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+
     try {
       await updateDoc(doc(db, 'users', selectedUser.uid), {
         role: editRole,
         accountStatus: editStatus,
+        paymentStatus: editPaymentStatus,
+        planName: editPlanName,
         adminMemo: editMemo
       });
-      setIsDetailOpen(false);
+      setSaveStatus('success');
+      setTimeout(() => {
+        setIsDetailOpen(false);
+        setSaveStatus('idle');
+      }, 1500);
     } catch (error) {
       console.error('Failed to update user:', error);
-      alert('사용자 정보 수정에 실패했습니다.');
+      setSaveStatus('error');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const formatLastSeen = (timestamp?: number) => {
+    if (!timestamp) return '기록 없음';
+    const now = Date.now();
+    const diff = now - timestamp;
+    if (diff < 60000) return '방금 전';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}분 전`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
+    return new Date(timestamp).toLocaleDateString();
   };
 
   if (!isAdmin) {
@@ -208,7 +282,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Navigation Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <button onClick={() => navigate('/admin/plans')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/plans' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>플랜 관리</button>
           <button onClick={() => navigate('/admin/users')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/users' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>회원 관리</button>
           <button onClick={() => navigate('/admin/vocals')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/vocals' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>보컬 관리</button>
           <button onClick={() => navigate('/admin/tags')} className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all border shrink-0", location.pathname === '/admin/tags' ? "bg-brand-orange text-white border-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn")}>태그 관리</button>
@@ -302,12 +375,16 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                 onClick={() => handleOpenDetail(user)}
                 className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] hover:border-brand-orange/30 transition-all cursor-pointer group shadow-sm flex items-center gap-4"
               >
-                <div className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-center shrink-0 border border-btn-border group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-center shrink-0 border border-btn-border group-hover:scale-110 transition-transform relative">
                   <User className="w-6 h-6 text-[var(--text-secondary)]" />
+                  {user.isOnline && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[var(--bg-primary)] rounded-full animate-pulse shadow-sm" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-bold text-[var(--text-primary)] truncate">{user.displayName || '이름 없음'}</span>
+                    {user.isOnline && <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-emerald-500" /> 접속 중</span>}
                     <span className={cn(
                       "px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
                       user.role === 'admin' ? "bg-red-500/10 text-red-500" :
@@ -321,6 +398,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> 가입: {new Date(user.createdAt).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 최근 활동: {formatLastSeen(user.lastSeenAt)}</span>
                   </div>
                 </div>
                 <div className="hidden md:flex flex-col items-end shrink-0 gap-1.5 px-4 border-l border-btn-border">
@@ -489,6 +567,29 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
                   <div className="space-y-3">
                     <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-2">
+                       구독 플랜 및 결제 상세 변경
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                       <input 
+                         value={editPlanName}
+                         onChange={(e) => setEditPlanName(e.target.value)}
+                         placeholder="플랜명 (예: Pro Plan)"
+                         className="px-4 py-2 rounded-xl bg-[var(--bg-secondary)] border border-btn-border text-xs outline-none focus:border-brand-orange"
+                       />
+                       <select 
+                         value={editPaymentStatus}
+                         onChange={(e) => setEditPaymentStatus(e.target.value as any)}
+                         className="px-4 py-2 rounded-xl bg-[var(--bg-secondary)] border border-btn-border text-xs outline-none focus:border-brand-orange cursor-pointer"
+                       >
+                         {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
+                           <option key={value} value={value}>{label}</option>
+                         ))}
+                       </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-2">
                       <FileText className="w-3.5 h-3.5" /> 관리자 메모 (해당 회원에 대한 특이사항 기록)
                     </label>
                     <textarea 
@@ -501,7 +602,29 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                 </section>
               </div>
 
-              <div className="px-6 py-5 border-t border-[var(--border-color)] bg-[var(--bg-secondary)]/30 flex items-center justify-end gap-3">
+              <div className="px-6 py-5 border-t border-[var(--border-color)] bg-[var(--bg-secondary)]/30 flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <AnimatePresence>
+                    {saveStatus === 'success' && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: -10 }} 
+                        animate={{ opacity: 1, x: 0 }} 
+                        className="text-emerald-500 text-xs font-bold flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" /> 성공적으로 저장되었습니다.
+                      </motion.div>
+                    )}
+                    {saveStatus === 'error' && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: -10 }} 
+                        animate={{ opacity: 1, x: 0 }} 
+                        className="text-red-500 text-xs font-bold flex items-center gap-1"
+                      >
+                        <AlertCircle className="w-3 h-3" /> 저장 중 오류가 발생했습니다.
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
                 <button 
                   onClick={() => setIsDetailOpen(false)}
                   className="px-5 py-2.5 rounded-xl text-sm font-bold text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
@@ -510,11 +633,55 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                 </button>
                 <button 
                   onClick={handleUpdateUser}
-                  disabled={isSaving}
-                  className="px-6 py-2.5 rounded-xl text-sm font-bold bg-brand-orange text-white hover:brightness-110 transition-all flex items-center gap-2 shadow-lg shadow-brand-orange/20"
+                  disabled={isSaving || saveStatus === 'success'}
+                  className={cn(
+                    "px-6 py-2.5 rounded-xl text-sm font-bold text-white hover:brightness-110 transition-all flex items-center gap-2 shadow-lg",
+                    saveStatus === 'success' ? "bg-emerald-500 shadow-emerald-500/20" : "bg-brand-orange shadow-brand-orange/20"
+                  )}
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  설정 저장
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveStatus === 'success' ? <RefreshCw className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  {saveStatus === 'success' ? '완료' : '설정 저장'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {confirmModal.isOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-sm bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3 text-brand-orange">
+                <AlertCircle className="w-6 h-6" />
+                <h3 className="text-lg font-black">{confirmModal.title}</h3>
+              </div>
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                {confirmModal.message}
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button 
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-3 rounded-2xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-secondary)] hover:bg-btn-hover"
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={confirmModal.onConfirm}
+                  className="flex-1 py-3 rounded-2xl bg-brand-orange text-white text-sm font-bold hover:brightness-110 shadow-lg shadow-brand-orange/20"
+                >
+                  확인
                 </button>
               </div>
             </motion.div>

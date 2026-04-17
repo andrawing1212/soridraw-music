@@ -143,6 +143,7 @@ import {
   writeBatch,
   getDocs,
   getDocFromServer,
+  increment,
   query as firestoreQuery
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
@@ -1965,6 +1966,56 @@ const cycleFamilySelection = (
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    if (!user) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    let isTerminating = false;
+
+    // Set online
+    const setOnline = async () => {
+      try {
+        await updateDoc(userRef, {
+          isOnline: true,
+          lastSeenAt: Date.now()
+        });
+      } catch (e) {
+        console.error('Failed to set online:', e);
+      }
+    };
+
+    setOnline();
+
+    // Heartbeat for lastSeenAt
+    const interval = setInterval(() => {
+      if (isTerminating) return;
+      updateDoc(userRef, {
+        lastSeenAt: Date.now()
+      }).catch(() => {});
+    }, 60000);
+
+    // Activity tracker (more granular than heartbeat)
+    const handleActivity = () => {
+      // Throttle? Or just let the heartbeat handle it for now to avoid too many writes.
+      // User requested "주요 진입 시점에 lastSeenAt 갱신" - heartbeat is enough for real-time.
+    };
+    window.addEventListener('mousedown', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+
+    return () => {
+      isTerminating = true;
+      clearInterval(interval);
+      window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      
+      // Set offline on unmount/logout
+      updateDoc(userRef, {
+        isOnline: false,
+        lastSeenAt: Date.now()
+      }).catch(() => {});
+    };
+  }, [user]);
+
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -2155,6 +2206,12 @@ const cycleFamilySelection = (
           return;
         }
         await deleteDoc(doc(db, 'favorites', existingFav.id));
+        
+        // Decrement favoriteCount in users document
+        await updateDoc(doc(db, 'users', user.uid), {
+          favoriteCount: increment(-1)
+        }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+
         showToast('곡이 삭제 되었습니다.');
       } else {
         await addDoc(collection(db, 'favorites'), sanitizeForFirestore({
@@ -2167,6 +2224,12 @@ const cycleFamilySelection = (
           createdAt: serverTimestamp(),
           createdAtMs: Date.now()
         }));
+
+        // Increment favoriteCount in users document
+        await updateDoc(doc(db, 'users', user.uid), {
+          favoriteCount: increment(1)
+        }).catch(err => console.error("Failed to increment favoriteCount:", err));
+
         showToast('저장되었습니다.');
       }
     } catch (error) {
@@ -3354,6 +3417,14 @@ const saveRecentSong = async (newSong: any) => {
       setResult(newResult);
       setHistory(prev => [newResult, ...prev].slice(0, 10));
       await saveRecentSong(newResult);
+
+      // Increment songGeneratedCount in users document
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          songGeneratedCount: increment(1)
+        }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
+      }
+
       setHistoryIndex(0);
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -4561,7 +4632,8 @@ ${result.prompt}
         {/* Admin Routes */}
         {isAdminUser ? (
           <>
-            <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} isAdmin={isAdminUser} />} />
+            <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+            <Route path="/admin/plans" element={<Navigate to="/admin/users" replace />} />
             <Route path="/admin/users" element={
               <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
                 <AdminUserManagementPageLazy isAdmin={isAdminUser} />

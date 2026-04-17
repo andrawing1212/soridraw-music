@@ -216,17 +216,6 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
       <div className="max-w-5xl mx-auto">
         <div className="flex gap-2 mb-6">
           <button 
-            onClick={() => navigate('/admin/plans')} 
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
-              location.pathname === '/admin/plans' 
-                ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
-            )}
-          >
-            플랜 관리
-          </button>
-          <button 
             onClick={() => navigate('/admin/users')} 
             className={cn(
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",

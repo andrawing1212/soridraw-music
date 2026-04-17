@@ -2352,7 +2352,7 @@ export const SUB_GENRE_PROMPTS: Record<
   },
 };
 
-export type TagTier = 'free' | 'pro' | 'pro+';
+export type TagTier = 'free' | 'basic' | 'pro';
 
 export const SECTION_META: Record<string, { tier: TagTier, descriptionKo?: string }> = {
   'Intro': { 
@@ -2412,23 +2412,23 @@ export const SECTION_META: Record<string, { tier: TagTier, descriptionKo?: strin
     descriptionKo: "곡을 마무리하는 구간. 감정을 정리하고 자연스럽게 끝맺습니다." 
   },
   'Theme A': { 
-    tier: 'pro+',
+    tier: 'pro',
     descriptionKo: "곡의 주요 테마 A를 정의하는 구간입니다."
   },
   'Theme B': { 
-    tier: 'pro+',
+    tier: 'pro',
     descriptionKo: "곡의 주요 테마 B를 정의하는 구간입니다."
   },
   'Build-up': { 
-    tier: 'pro+',
+    tier: 'pro',
     descriptionKo: "에너지를 점진적으로 고조시키는 구간입니다."
   },
   'Main Theme': { 
-    tier: 'pro+',
+    tier: 'pro',
     descriptionKo: "곡의 가장 핵심적인 테마가 연주되는 구간입니다."
   },
   'Climax': { 
-    tier: 'pro+',
+    tier: 'pro',
     descriptionKo: "곡의 감정과 에너지가 최고조에 달하는 구간입니다."
   },
 };
@@ -2457,40 +2457,26 @@ export const FREE_TAGS = [
 export const PRO_TAGS = [
   // Intro
   "Slow Build", "Hook First", "Instrumental",
-
-  // Verse
-  "Rhythmic Flow", "Sparse",
-
-  // Pre-Chorus
-  "Energy Rise", "Tension Build",
-
-  // Chorus
-  "Full Power", "Peak Hit",
-
-  // Bridge
-  "Energy Drop", "Reset",
-
-  // Outro
-  "Smooth Exit"
-];
-
-export const PRO_PLUS_TAGS = [
-  // Intro
   "Layer Build", "Teaser Intro",
 
   // Verse
+  "Rhythmic Flow", "Sparse",
   "Groove Drive", "Laid-back", "Subtle Build",
 
   // Pre-Chorus
+  "Energy Rise", "Tension Build",
   "Dynamic Rise", "Momentum Shift", "Intensity Build", "Anticipation",
 
   // Chorus
+  "Full Power", "Peak Hit",
   "Explosive Hit", "Anthem Hook", "Wide Spread", "Power Drive",
 
   // Bridge
+  "Energy Drop", "Reset",
   "Hard Shift", "Dynamic Switch", "Rebuild", "Transition Flow",
 
   // Outro
+  "Smooth Exit",
   "Echo Fade", "Energy Release", "Minimal End", "Loop Ready"
 ];
 
@@ -2501,48 +2487,48 @@ export const TAG_META: Record<string, { tier: TagTier }> = {
   "Hook-first": { tier: 'pro' },
   "Soft Entry": { tier: 'free' },
   "Instrumental Opening": { tier: 'pro' },
-  "Gradual Layering": { tier: 'pro+' },
-  "Teaser Opening": { tier: 'pro+' },
+  "Gradual Layering": { tier: 'pro' },
+  "Teaser Opening": { tier: 'pro' },
   "Low Energy": { tier: 'free' },
   "Story Focused": { tier: 'pro' },
   "Rhythmic Flow": { tier: 'pro' },
   "Sparse Arrangement": { tier: 'pro' },
-  "Groove Driven": { tier: 'pro+' },
-  "Laid-back": { tier: 'pro+' },
+  "Groove Driven": { tier: 'pro' },
+  "Laid-back": { tier: 'pro' },
   "Steady Pace": { tier: 'free' },
-  "Subtle Build": { tier: 'pro+' },
+  "Subtle Build": { tier: 'pro' },
   "Build-up": { tier: 'pro' },
   "Rising Energy": { tier: 'pro' },
   "Tension Lift": { tier: 'pro' },
-  "Dynamic Increase": { tier: 'pro+' },
-  "Momentum Shift": { tier: 'pro+' },
-  "Intensity Growth": { tier: 'pro+' },
+  "Dynamic Increase": { tier: 'pro' },
+  "Momentum Shift": { tier: 'pro' },
+  "Intensity Growth": { tier: 'pro' },
   "Lead-in": { tier: 'free' },
-  "Anticipation": { tier: 'pro+' },
+  "Anticipation": { tier: 'pro' },
   "High Energy": { tier: 'pro' },
-  "Explosive": { tier: 'pro+' },
+  "Explosive": { tier: 'pro' },
   "Full Arrangement": { tier: 'pro' },
   "Peak Section": { tier: 'pro' },
-  "Anthemic": { tier: 'pro+' },
-  "Wide Impact": { tier: 'pro+' },
-  "Powerful Delivery": { tier: 'pro+' },
+  "Anthemic": { tier: 'pro' },
+  "Wide Impact": { tier: 'pro' },
+  "Powerful Delivery": { tier: 'pro' },
   "Hook Emphasis": { tier: 'pro' },
   "Breakdown": { tier: 'pro' },
   "Contrast Section": { tier: 'pro' },
   "Energy Drop": { tier: 'pro' },
   "Minimal Reset": { tier: 'pro' },
-  "Unexpected Shift": { tier: 'pro+' },
-  "Dynamic Change": { tier: 'pro+' },
-  "Rebuild Start": { tier: 'pro+' },
-  "Transition Focused": { tier: 'pro+' },
+  "Unexpected Shift": { tier: 'pro' },
+  "Dynamic Change": { tier: 'pro' },
+  "Rebuild Start": { tier: 'pro' },
+  "Transition Focused": { tier: 'pro' },
   "Fade-out": { tier: 'free' },
   "Soft Ending": { tier: 'free' },
   "Gradual Exit": { tier: 'pro' },
-  "Echo Finish": { tier: 'pro+' },
-  "Energy Release": { tier: 'pro+' },
-  "Minimal Ending": { tier: 'pro+' },
+  "Echo Finish": { tier: 'pro' },
+  "Energy Release": { tier: 'pro' },
+  "Minimal Ending": { tier: 'pro' },
   "Calm Closure": { tier: 'pro' },
-  "Loop-friendly Ending": { tier: 'pro+' }
+  "Loop-friendly Ending": { tier: 'pro' }
 };
 
 

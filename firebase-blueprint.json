@@ -81,7 +81,7 @@
         "id": { "type": "string" },
         "label": { "type": "string" },
         "description": { "type": "string" },
-        "tier": { "type": "string", "enum": ["free", "pro", "pro+"] },
+        "tier": { "type": "string", "enum": ["free", "basic", "pro"] },
         "sections": { "type": "array", "items": { "type": "string" } },
         "isActive": { "type": "boolean" },
         "createdAt": { "type": "number" },

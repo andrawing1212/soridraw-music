@@ -144,6 +144,7 @@ import {
   getDocs,
   getDocFromServer,
   increment,
+  deleteField,
   query as firestoreQuery
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
@@ -1431,7 +1432,6 @@ function App() {
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
-  const [userTier, setUserTier] = useState<TagTier>('free');
   const [userInput, setUserInput] = useState('');
   const [isLyricMode, setIsLyricMode] = useState(false);
   const [lyricDraft, setLyricDraft] = useState('');
@@ -1683,8 +1683,13 @@ const cycleFamilySelection = (
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
+  
   const isAdminUser = useMemo(() => userRole === 'admin' || isAdminEmail(user?.email), [userRole, user?.email]);
-  const effectiveUserTier: TagTier = isAdminUser ? 'pro+' : userTier;
+  const effectiveUserTier: TagTier = useMemo(() => {
+    if (userRole === 'admin' || userRole === 'pro') return 'pro';
+    if (userRole === 'basic') return 'basic';
+    return 'free';
+  }, [userRole]);
 
   // Refs for stable access in callbacks
   const pinnedGenresRef = useRef(pinnedGenres);
@@ -1826,6 +1831,9 @@ const cycleFamilySelection = (
             const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
             const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
 
+            const normalizedEmail = normalizeEmail(currentUser.email || '');
+            const isSpecialAccount = ['andrawing1213@gmail.com', 'legend3636@gmail.com'].includes(normalizedEmail);
+
             const baseData: any = {
               uid: currentUser.uid,
               email: currentUser.email,
@@ -1833,38 +1841,28 @@ const cycleFamilySelection = (
               lastLoginAt: Date.now(),
             };
 
-            // Only sync counters if they don't exist or we want to force refresh from collections
-            // But we already have real-time increment logic, so we just set them once if user is new
             if (!userSnap.exists()) {
               baseData.favoriteCount = favsSnap.size;
               baseData.songGeneratedCount = songCount;
-            }
-
-            if (!userSnap.exists()) {
-              // Get current tier from user_plans if exists
-              let initialRole: UserRole = 'free';
-              if (isAdminEmail(currentUser.email)) {
-                initialRole = 'admin';
-              } else {
-                const normalizedEmail = normalizeEmail(currentUser.email || '');
-                if (normalizedEmail) {
-                  const planSnap = await getDoc(doc(db, 'user_plans', normalizedEmail));
-                  if (planSnap.exists()) {
-                    const tier = planSnap.data()?.tier;
-                    if (tier === 'pro' || tier === 'pro+') initialRole = 'pro';
-                    if (tier === 'basic') initialRole = 'basic';
-                  }
-                }
-              }
-
-              await setDoc(userRef, {
-                ...baseData,
-                role: initialRole,
-                accountStatus: 'active',
-                paymentStatus: 'none',
-                createdAt: Date.now(),
-              });
+              baseData.createdAt = Date.now();
+              baseData.accountStatus = 'active';
+              baseData.paymentStatus = 'none';
+              
+              // Bootstrap role
+              baseData.role = isAdminEmail(currentUser.email) ? 'admin' : 'free';
+              
+              await setDoc(userRef, baseData);
             } else {
+              const currentData = userSnap.data();
+              // Special cleanup for requested accounts or any legacy 'pro+' data
+              if (isSpecialAccount || currentData.role === 'pro+' || currentData.tier === 'pro+') {
+                if (currentData.role === 'pro+' || currentData.tier === 'pro+') {
+                  baseData.role = 'pro';
+                }
+                // Always remove legacy 'tier' and 'user_plan' references if found
+                baseData.tier = deleteField();
+                baseData.user_plans = deleteField();
+              }
               await updateDoc(userRef, baseData);
             }
           } catch (error) {
@@ -1873,33 +1871,6 @@ const cycleFamilySelection = (
         };
 
         syncUserDoc();
-        const loadUserPlan = async () => {
-          try {
-            if (isAdminEmail(currentUser.email)) {
-              setUserTier('pro+');
-              return;
-            }
-
-            const normalizedEmail = normalizeEmail(currentUser.email || '');
-            if (!normalizedEmail) {
-              setUserTier('free');
-              return;
-            }
-
-            const planSnap = await getDoc(doc(db, 'user_plans', normalizedEmail));
-            if (planSnap.exists()) {
-              const tier = planSnap.data()?.tier;
-              setUserTier(tier === 'pro' || tier === 'pro+' ? tier : 'free');
-            } else {
-              setUserTier('free');
-            }
-          } catch (error) {
-            console.error('Failed to load user plan:', error);
-            setUserTier('free');
-          }
-        };
-
-        loadUserPlan();
 
         // Fetch favorites for the user
         const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
@@ -1917,7 +1888,7 @@ const cycleFamilySelection = (
         });
       } else {
         setFavorites([]);
-        setUserTier('free');
+        setUserRole('free');
       }
     });
 
@@ -5984,14 +5955,16 @@ function SongStructureIntegratedControl({
                     {CUSTOM_STRUCTURE_SECTIONS.map((section) => {
                       const meta = SECTION_META[section];
                       const sectionTier = meta?.tier || 'free';
-                      const isLocked = sectionTier === 'pro+' && userTier !== 'pro+';
+                      const isLocked = (sectionTier === 'pro' && userTier !== 'pro') || 
+                                       (sectionTier === 'basic' && userTier === 'free');
 
                       return (
                         <button
                           key={section}
                           onClick={() => {
                             if (isLocked) {
-                              alert('이 섹션은 Pro+ 플랜 전용 기능입니다.');
+                              const tierLabel = sectionTier === 'pro' ? 'Pro' : 'Basic';
+                              alert(`이 섹션은 ${tierLabel} 플랜 전용 기능입니다.`);
                               return;
                             }
                             appendSection(section);
@@ -6000,7 +5973,7 @@ function SongStructureIntegratedControl({
                             id: `section-add-${section}`, 
                             label: section, 
                             description: isLocked 
-                              ? 'Pro+ 플랜 전용 섹션입니다.' 
+                              ? `${sectionTier === 'pro' ? 'Pro' : 'Basic'} 플랜 전용 섹션입니다.` 
                                 : (SECTION_META[section]?.descriptionKo || '')
                             })
                           }
@@ -6383,11 +6356,13 @@ function TagEditModal({
   const toggleTag = (tag: string) => {
     const tier = getTagTier(tag);
     
-    const isLocked = !isInstrumental && ((tier === 'pro' && userTier === 'free') || 
-                     (tier === 'pro+' && userTier !== 'pro+'));
+    const isLocked = !isInstrumental && (
+      (tier === 'pro' && userTier !== 'pro') ||
+      (tier === 'basic' && userTier === 'free')
+    );
 
     if (isLocked) {
-      const tierLabel = tier === 'pro' ? 'Pro' : 'Pro+';
+      const tierLabel = tier === 'pro' ? 'Pro' : 'Basic';
       alert(`${tierLabel} 기능입니다.`);
       return;
     }
@@ -6450,8 +6425,10 @@ function TagEditModal({
             {allowedTags.map(tag => {
               const tier = getTagTier(tag);
               const description = getTagDescription(tag);
-              const isLocked = !isInstrumental && ((tier === 'pro' && userTier === 'free') || 
-                               (tier === 'pro+' && userTier !== 'pro+'));
+              const isLocked = !isInstrumental && (
+                (tier === 'pro' && userTier !== 'pro') ||
+                (tier === 'basic' && userTier === 'free')
+              );
               
               return (
                 <button

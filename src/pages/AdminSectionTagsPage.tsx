@@ -513,8 +513,8 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
             >
               <option value="all">모든 티어</option>
               <option value="free">Free</option>
+              <option value="basic">Basic</option>
               <option value="pro">Pro</option>
-              <option value="pro+">Pro+</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -578,7 +578,7 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">티어 (Tier)</label>
                   <div className="flex gap-2">
-                    {(['free', 'pro', 'pro+'] as TagTier[]).map((t) => (
+                    {(['free', 'basic', 'pro'] as TagTier[]).map((t) => (
                       <button
                         key={t}
                         onClick={() => setFormData({ ...formData, tier: t })}

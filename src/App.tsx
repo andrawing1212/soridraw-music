@@ -414,7 +414,7 @@ function SecondaryScrollControl() {
     document.documentElement.style.scrollBehavior = '';
     
     if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
-    activeTimerRef.current = setTimeout(() => setIsActive(false), 1500);
+    activeTimerRef.current = setTimeout(() => setIsActive(false), 1200);
   }, []);
 
   // Global cleanup for safety
@@ -903,6 +903,7 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -927,6 +928,17 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
       setIsExpanded(false);
       setIsProfileOpen(false);
     }, 2000);
+  };
+
+  const handleProfileMouseEnter = () => {
+    if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
+    setIsProfileOpen(true);
+  };
+
+  const handleProfileMouseLeave = () => {
+    profileTimeoutRef.current = setTimeout(() => {
+      setIsProfileOpen(false);
+    }, 150); // Small delay to prevent flickering
   };
 
   // Collapse menu on scroll
@@ -1016,7 +1028,11 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
               className="flex flex-col items-center gap-4 md:gap-5"
             >
               {/* Profile Icon */}
-              <div className="relative">
+              <div 
+                className="relative"
+                onMouseEnter={handleProfileMouseEnter}
+                onMouseLeave={handleProfileMouseLeave}
+              >
                 {user ? (
                   <button 
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -1046,59 +1062,65 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
                       initial={{ opacity: 0, x: 10, scale: 0.95 }}
                       animate={{ opacity: 1, x: 0, scale: 1 }}
                       exit={{ opacity: 0, x: 10, scale: 0.95 }}
-                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-[var(--card-bg)]/95 border border-[var(--border-color)] backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden"
+                      className="absolute left-full ml-3 top-0 w-32 md:w-40 py-2 bg-[var(--card-bg)]/95 border border-[var(--border-color)] backdrop-blur-xl rounded-xl shadow-2xl overflow-visible"
                     >
-                      <div className="px-3 py-2 border-b border-[var(--border-color)]/50 mb-1">
-                        <p className="text-[10px] md:text-[12px] text-[var(--text-secondary)] truncate font-medium">{user.displayName}</p>
+                      {/* Gap Bridge to prevent closing when moving between icon and menu */}
+                      <div className="absolute -left-3 top-0 bottom-0 w-3 pointer-events-auto" />
+                      
+                      <div className="relative rounded-xl overflow-hidden">
+                        <div className="px-3 py-2 border-b border-[var(--border-color)]/50 mb-1">
+                          <p className="text-[10px] md:text-[12px] text-[var(--text-secondary)] truncate font-medium">{user.displayName}</p>
+                        </div>
+                        {isAdminUser && (
+                          <>
+                            <button 
+                              onClick={() => {
+                                navigate('/admin/users');
+                                setIsProfileOpen(false);
+                                setIsExpanded(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                            >
+                              <Users className="w-3 h-3" />
+                              회원 관리
+                            </button>
+                            <button 
+                              onClick={() => {
+                                navigate('/admin/vocals');
+                                setIsProfileOpen(false);
+                                setIsExpanded(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                            >
+                              <Settings className="w-3 h-3" />
+                              보컬 관리
+                            </button>
+                            <button 
+                              onClick={() => {
+                                navigate('/admin/tags');
+                                setIsProfileOpen(false);
+                                setIsExpanded(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                            >
+                              <Tag className="w-3 h-3" />
+                              태그 관리
+                            </button>
+                          </>
+                        )}
+                        <button 
+                          onClick={() => {
+                            handleLogout();
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                            if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-[11px] md:text-[13px] font-bold text-brand-orange hover:bg-[var(--hover-bg)] transition-colors text-left"
+                        >
+                          로그아웃
+                        </button>
                       </div>
-                      {isAdminUser && (
-                        <>
-                          <button 
-                            onClick={() => {
-                              navigate('/admin/users');
-                              setIsProfileOpen(false);
-                              setIsExpanded(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                          >
-                            <Users className="w-3 h-3" />
-                            회원 관리
-                          </button>
-                          <button 
-                            onClick={() => {
-                              navigate('/admin/vocals');
-                              setIsProfileOpen(false);
-                              setIsExpanded(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                          >
-                            <Settings className="w-3 h-3" />
-                            보컬 관리
-                          </button>
-                          <button 
-                            onClick={() => {
-                              navigate('/admin/tags');
-                              setIsProfileOpen(false);
-                              setIsExpanded(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                          >
-                            <Tag className="w-3 h-3" />
-                            태그 관리
-                          </button>
-                        </>
-                      )}
-                      <button 
-                        onClick={() => {
-                          handleLogout();
-                          setIsProfileOpen(false);
-                          setIsExpanded(false);
-                          if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] md:text-[13px] font-bold text-brand-orange hover:bg-[var(--hover-bg)] transition-colors text-left"
-                      >
-                        로그아웃
-                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -3425,19 +3447,6 @@ ${result.prompt}
 
       <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} />
 
-      {/* Guide Button */}
-      {user && (
-        <div className="fixed top-6 right-20 md:right-28 2xl:right-[calc((100vw-1152px)/2-2px)] z-50">
-          <button
-            onClick={() => setIsGuideModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 md:py-3 rounded-2xl bg-[var(--card-bg)]/90 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group"
-          >
-            <YoutubeIcon className="w-5 h-5 md:w-6 md:h-6 text-red-500 group-hover:scale-110 transition-transform" />
-            <span className="hidden md:block font-bold">가이드</span>
-          </button>
-        </div>
-      )}
-
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (
         <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
@@ -3477,8 +3486,20 @@ ${result.prompt}
           <>
 
             {/* Header */}
-            <header className="pt-24 pb-12 px-6 border-b border-[var(--border-color)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
-              <div className="max-w-6xl mx-auto">
+            <header className="pt-16 pb-16 px-6 border-b border-[var(--border-color)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+              <div className="max-w-6xl mx-auto relative">
+                {/* Guide Button inside Home Header - bottom-left aligned */}
+                {user && (
+                  <div className="absolute bottom-0 right-6 z-10 hidden md:block">
+                    <button
+                      onClick={() => setIsGuideModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-xs"
+                    >
+                      <YoutubeIcon className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                      <span className="font-bold">가이드</span>
+                    </button>
+                  </div>
+                )}
                 <div className="text-center">
                   <motion.div
                     initial={{ opacity: 0, y: -40 }}

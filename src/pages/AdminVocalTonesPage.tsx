@@ -198,10 +198,21 @@ export default function AdminVocalTonesPage() {
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
               location.pathname === '/admin/plans' 
                 ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
             )}
           >
             플랜 관리
+          </button>
+          <button 
+            onClick={() => navigate('/admin/users')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/users' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
+            )}
+          >
+            회원 관리
           </button>
           <button 
             onClick={() => navigate('/admin/vocals')} 
@@ -209,7 +220,7 @@ export default function AdminVocalTonesPage() {
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
               location.pathname === '/admin/vocals' 
                 ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
             )}
           >
             보컬 관리
@@ -220,7 +231,7 @@ export default function AdminVocalTonesPage() {
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
               location.pathname === '/admin/tags' 
                 ? "bg-brand-orange border-brand-orange text-white" 
-                : "bg-white/5 border-white/10 text-[var(--text-secondary)] hover:bg-white/10"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
             )}
           >
             태그 관리

@@ -53,6 +53,7 @@ import {
   Mic2,
   MicOff,
   Tag,
+  Users,
   Settings,
   Play,
   ThumbsUp,
@@ -91,7 +92,7 @@ import {
   INSTRUMENT_TAG_DESCRIPTIONS
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
@@ -469,6 +470,17 @@ function AdminPlanManagerPage({ currentUser }: { currentUser: User | null }) {
             플랜 관리
           </button>
           <button 
+            onClick={() => navigate('/admin/users')} 
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              location.pathname === '/admin/users' 
+                ? "bg-brand-orange border-brand-orange text-white" 
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn"
+            )}
+          >
+            회원 관리
+          </button>
+          <button 
             onClick={() => navigate('/admin/vocals')} 
             className={cn(
               "px-4 py-2 rounded-xl text-xs font-bold transition-all border",
@@ -794,6 +806,7 @@ function SecondaryScrollControl() {
 const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));
 const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
 const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
+const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -1107,7 +1120,7 @@ const calculateOptimalBPM = (genres: string[], moods: string[], subGenre: string
 };
 
 
-function getTimestampMs(value: any): number {
+export function getTimestampMs(value: any): number {
   if (!value) return 0;
   if (typeof value?.toDate === 'function') {
     const ms = value.toDate().getTime();
@@ -1302,6 +1315,17 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
                           >
                             <Settings className="w-3 h-3" />
                             플랜 관리
+                          </button>
+                          <button 
+                            onClick={() => {
+                              navigate('/admin/users');
+                              setIsProfileOpen(false);
+                              setIsExpanded(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                          >
+                            <Users className="w-3 h-3" />
+                            회원 관리
                           </button>
                           <button 
                             onClick={() => {
@@ -1984,6 +2008,58 @@ const cycleFamilySelection = (
       }
 
       if (currentUser) {
+        const syncUserDoc = async () => {
+          try {
+            const userRef = doc(db, 'users', currentUser.uid);
+            const userSnap = await getDoc(userRef);
+            
+            // Fetch counts
+            const favsSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
+            const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
+            const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
+
+            const baseData = {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              lastLoginAt: Date.now(),
+              favoriteCount: favsSnap.size,
+              songGeneratedCount: songCount
+            };
+
+            if (!userSnap.exists()) {
+              // Get current tier from user_plans if exists
+              let initialRole: UserRole = 'free';
+              if (isAdminEmail(currentUser.email)) {
+                initialRole = 'admin';
+              } else {
+                const normalizedEmail = normalizeEmail(currentUser.email || '');
+                if (normalizedEmail) {
+                  const planSnap = await getDoc(doc(db, 'user_plans', normalizedEmail));
+                  if (planSnap.exists()) {
+                    const tier = planSnap.data()?.tier;
+                    if (tier === 'pro' || tier === 'pro+') initialRole = 'pro';
+                    if (tier === 'basic') initialRole = 'basic';
+                  }
+                }
+              }
+
+              await setDoc(userRef, {
+                ...baseData,
+                role: initialRole,
+                accountStatus: 'active',
+                paymentStatus: 'none',
+                createdAt: Date.now(),
+              });
+            } else {
+              await updateDoc(userRef, baseData);
+            }
+          } catch (error) {
+            console.error('Failed to sync user document:', error);
+          }
+        };
+
+        syncUserDoc();
         const loadUserPlan = async () => {
           try {
             if (isAdminEmail(currentUser.email)) {
@@ -4466,6 +4542,11 @@ ${result.prompt}
         {isAdminUser ? (
           <>
             <Route path="/admin/plans" element={<AdminPlanManagerPage currentUser={user} />} />
+            <Route path="/admin/users" element={
+              <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
+                <AdminUserManagementPageLazy />
+              </Suspense>
+            } />
             <Route path="/admin/vocals" element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <AdminVocalTonesPageLazy />

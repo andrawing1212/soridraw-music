@@ -75,6 +75,16 @@ service cloud.firestore {
              data.createdAt is timestamp;
     }
 
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'accountStatus', 'paymentStatus', 'createdAt']) &&
+             data.uid is string &&
+             (data.email == null || data.email is string) &&
+             data.role in ['free', 'basic', 'pro', 'admin'] &&
+             data.accountStatus in ['active', 'paused', 'expired', 'banned'] &&
+             data.paymentStatus in ['none', 'active', 'canceled', 'expired', 'refunded', 'trial'] &&
+             (data.createdAt is number || data.createdAt is timestamp);
+    }
+
     function isValidRecentSongs(data) {
       return data.keys().hasAll(['songs']) &&
              data.keys().hasOnly(['songs']) &&
@@ -131,10 +141,21 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      // Users can read their own profile
-      allow read: if isOwner(uid);
-      // Only admins can manage user roles
-      allow write: if isAdmin();
+      // Users can read/write their own profile
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      
+      // Users can create their own profile as 'free' (or 'admin' if email fallback matches)
+      allow create: if isOwner(uid) && 
+                      isValidUser(request.resource.data) && 
+                      (request.resource.data.role == 'free' || isAdmin());
+      
+      // Users can update their own profile but NOT their role or account status
+      allow update: if (isOwner(uid) && 
+                        isValidUser(request.resource.data) && 
+                        request.resource.data.role == resource.data.role && 
+                        request.resource.data.accountStatus == resource.data.accountStatus) || 
+                      isAdmin();
     }
 
     // Default deny

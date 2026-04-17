@@ -210,3 +210,32 @@ export interface SongResult {
   appliedKeywords: AppliedKeywords;
   randomKeywords?: string[];
 }
+
+export type UserRole = 'free' | 'basic' | 'pro' | 'admin';
+export type AccountStatus = 'active' | 'paused' | 'expired' | 'banned';
+export type PaymentStatus = 'none' | 'active' | 'canceled' | 'expired' | 'refunded' | 'trial';
+
+export interface AppUserInfo {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  role: UserRole;
+  accountStatus: AccountStatus;
+  paymentStatus: PaymentStatus;
+  createdAt: number;
+  lastLoginAt?: number;
+  
+  // Subscription info
+  planName?: string;
+  planStartAt?: number;
+  planExpireAt?: number;
+  nextBillingAt?: number;
+  lastPaymentAt?: number;
+  
+  // Usage info
+  songGeneratedCount: number;
+  favoriteCount: number;
+  
+  // Admin only
+  adminMemo?: string;
+}

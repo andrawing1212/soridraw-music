@@ -88,9 +88,37 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["id", "label", "description", "tier", "sections", "isActive", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "App User",
+      "description": "User profile and metadata including role, status, and subscription details.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["free", "basic", "pro", "admin"] },
+        "accountStatus": { "type": "string", "enum": ["active", "paused", "expired", "banned"] },
+        "paymentStatus": { "type": "string", "enum": ["none", "active", "canceled", "expired", "refunded", "trial"] },
+        "createdAt": { "type": "number" },
+        "lastLoginAt": { "type": "number" },
+        "planName": { "type": "string" },
+        "planStartAt": { "type": "number" },
+        "planExpireAt": { "type": "number" },
+        "nextBillingAt": { "type": "number" },
+        "lastPaymentAt": { "type": "number" },
+        "songGeneratedCount": { "type": "number" },
+        "favoriteCount": { "type": "number" },
+        "adminMemo": { "type": "string" }
+      },
+      "required": ["uid", "email", "role", "accountStatus", "paymentStatus", "createdAt", "songGeneratedCount", "favoriteCount"]
     }
   },
   "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles collection."
+    },
     "/favorites/{favoriteId}": {
       "schema": "Favorite",
       "description": "Collection of user favorite songs."

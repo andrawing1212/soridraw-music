@@ -267,8 +267,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   const isUserOnline = (lastSeenAt?: number) => {
     if (!lastSeenAt) return false;
-    // Considered online if active within last 90 seconds
-    return (Date.now() - lastSeenAt) < 90000;
+    // Considered online if active within last 60 seconds (1 minute)
+    return (Date.now() - lastSeenAt) < 60000;
   };
 
   if (!isAdmin) {

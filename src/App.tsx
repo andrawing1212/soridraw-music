@@ -2276,6 +2276,7 @@ const cycleFamilySelection = (
       setResult(null);
       setHistoryIndex(-1);
       await signOut(auth);
+      navigate('/', { replace: true });
     } catch (error) {
       console.error("Logout Error:", error);
     }

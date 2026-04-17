@@ -265,6 +265,12 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     return new Date(timestamp).toLocaleDateString();
   };
 
+  const isUserOnline = (lastSeenAt?: number) => {
+    if (!lastSeenAt) return false;
+    // Considered online if active within last 90 seconds
+    return (Date.now() - lastSeenAt) < 90000;
+  };
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-6">
@@ -377,14 +383,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               >
                 <div className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-center shrink-0 border border-btn-border group-hover:scale-110 transition-transform relative">
                   <User className="w-6 h-6 text-[var(--text-secondary)]" />
-                  {user.isOnline && (
+                  {isUserOnline(user.lastSeenAt) && (
                     <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[var(--bg-primary)] rounded-full animate-pulse shadow-sm" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-bold text-[var(--text-primary)] truncate">{user.displayName || '이름 없음'}</span>
-                    {user.isOnline && <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-emerald-500" /> 접속 중</span>}
+                    {isUserOnline(user.lastSeenAt) && <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-emerald-500" /> 접속 중</span>}
                     <span className={cn(
                       "px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
                       user.role === 'admin' ? "bg-red-500/10 text-red-500" :

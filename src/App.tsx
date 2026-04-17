@@ -1727,27 +1727,39 @@ const cycleFamilySelection = (
 
     setOnline();
 
-    // Heartbeat for lastSeenAt
+    // Heartbeat for lastSeenAt - 30s for better real-time accuracy
     const interval = setInterval(() => {
-      if (isTerminating) return;
+      if (isTerminating || document.visibilityState !== 'visible') return;
       updateDoc(userRef, {
-        lastSeenAt: Date.now()
+        lastSeenAt: Date.now(),
+        isOnline: true
       }).catch(() => {});
-    }, 60000);
+    }, 30000);
 
-    // Activity tracker (more granular than heartbeat)
+    // Activity tracker & Focus handler
     const handleActivity = () => {
-      // Throttle? Or just let the heartbeat handle it for now to avoid too many writes.
-      // User requested "주요 진입 시점에 lastSeenAt 갱신" - heartbeat is enough for real-time.
+      // We can update on activity, but heartbeat 30s is usually enough.
+      // Re-set online and update lastSeenAt when user returns to tab
+      if (document.visibilityState === 'visible') {
+        updateDoc(userRef, {
+          isOnline: true,
+          lastSeenAt: Date.now()
+        }).catch(() => {});
+      }
     };
+
     window.addEventListener('mousedown', handleActivity);
     window.addEventListener('keydown', handleActivity);
+    window.addEventListener('focus', handleActivity);
+    document.addEventListener('visibilitychange', handleActivity);
 
     return () => {
       isTerminating = true;
       clearInterval(interval);
       window.removeEventListener('mousedown', handleActivity);
       window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('focus', handleActivity);
+      document.removeEventListener('visibilitychange', handleActivity);
       
       // Set offline on unmount/logout
       updateDoc(userRef, {
@@ -1910,6 +1922,9 @@ const cycleFamilySelection = (
       handleLogin();
       return;
     }
+
+    // Activity indicator
+    updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
 
     const existingFav = favorites.find(f => f.title === song.title && f.prompt === song.prompt);
 
@@ -2812,6 +2827,10 @@ const saveRecentSong = async (newSong: any) => {
     abortControllerRef.current = new AbortController();
 
     try {
+      // Activity indicator
+      if (user) {
+        updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
+      }
       let finalGenres = [...selectedGenres];
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];

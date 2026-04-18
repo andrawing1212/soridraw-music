@@ -34,7 +34,8 @@ import {
   FileText,
   AlertCircle,
   LogIn,
-  LogOut
+  LogOut,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -573,14 +574,30 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               <div 
                 key={user.uid}
                 onClick={() => handleOpenDetail(user)}
-                className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] hover:border-brand-orange/30 transition-all cursor-pointer group shadow-sm flex items-center gap-4"
+                className={cn(
+                  "bg-[var(--card-bg)] p-4 rounded-3xl border transition-all cursor-pointer group shadow-sm flex items-center gap-4",
+                  user.accountStatus === 'banned' 
+                    ? "border-red-500/50 bg-red-500/5 hover:bg-red-500/10" 
+                    : "border-[var(--border-color)] hover:border-brand-orange/30"
+                )}
               >
-                <div className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-center shrink-0 border border-btn-border group-hover:scale-110 transition-transform relative">
-                  <User className="w-6 h-6 text-[var(--text-secondary)]" />
+                <div className={cn(
+                  "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-transform relative group-hover:scale-110",
+                  user.accountStatus === 'banned' ? "bg-red-500/20 border-red-500/30" : "bg-[var(--bg-secondary)] border-btn-border"
+                )}>
+                  <User className={cn("w-6 h-6", user.accountStatus === 'banned' ? "text-red-500" : "text-[var(--text-secondary)]")} />
+                  {user.accountStatus === 'banned' && (
+                    <div className="absolute -top-1 -right-1">
+                      <AlertTriangle className="w-4 h-4 text-red-500 fill-red-500" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-bold text-[var(--text-primary)] truncate">{user.displayName || '이름 없음'}</span>
+                    <span className={cn(
+                      "font-bold truncate",
+                      user.accountStatus === 'banned' ? "text-red-500" : "text-[var(--text-primary)]"
+                    )}>{user.displayName || '이름 없음'}</span>
                     <span className={cn(
                       "px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
                       user.role === 'admin' ? "bg-red-500/10 text-red-500" :
@@ -590,6 +607,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     )}>
                       {ROLE_LABELS[user.role]}
                     </span>
+                    {user.accountStatus === 'banned' && (
+                      <span className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider animate-pulse">
+                        BANNED
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] md:text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
@@ -776,7 +798,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                             onClick={() => setEditStatus(s)}
                             className={cn(
                               "py-2 rounded-xl text-xs font-bold border transition-all",
-                              editStatus === s ? "bg-zinc-900 border-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                              editStatus === s 
+                                ? s === 'banned'
+                                  ? "bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20"
+                                  : "bg-zinc-900 border-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" 
+                                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                             )}
                           >
                             {STATUS_LABELS[s]}

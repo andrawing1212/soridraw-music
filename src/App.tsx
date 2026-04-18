@@ -54,6 +54,7 @@ import {
   MicOff,
   Tag,
   Users,
+  Shield,
   Settings,
   Play,
   ThumbsUp,
@@ -1703,6 +1704,7 @@ const cycleFamilySelection = (
   const [userRole, setUserRole] = useState<UserRole>('free');
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isBanModalOpen, setIsBanModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
   
@@ -1784,7 +1786,13 @@ const cycleFamilySelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
-            if (data.accountStatus) setUserStatus(data.accountStatus as AccountStatus);
+            if (data.accountStatus) {
+              const status = data.accountStatus as AccountStatus;
+              setUserStatus(status);
+              if (status === 'banned') {
+                setIsBanModalOpen(true);
+              }
+            }
           } else {
             // Initial signup fallback
             setUserRole(isAdminEmail(currentUser.email) ? 'admin' : 'free');
@@ -1830,6 +1838,10 @@ const cycleFamilySelection = (
             } else {
               const currentData = userSnap.data();
               
+              if (currentData.accountStatus === 'banned') {
+                setIsBanModalOpen(true);
+              }
+
               // Protection: NEVER downgrade an existing admin
               // This is the primary defense against role being overwritten by legacy sync logic or client side mistakes.
               const wasAdmin = currentData.role === 'admin';
@@ -4506,6 +4518,42 @@ ${result.prompt}
             <Check className="w-3 h-3 text-brand-orange" />
             {toast.message}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isBanModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-md w-full mx-4 bg-[var(--card-bg)] border border-red-500/30 rounded-[32px] p-8 text-center shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Shield className="w-10 h-10 text-red-500" />
+              </div>
+              <h2 className="text-2xl font-black text-[var(--text-primary)] mb-4">
+                계정 이용 제한 안내
+              </h2>
+              <div className="space-y-4 mb-8">
+                <p className="text-[var(--text-secondary)] leading-relaxed">
+                  이 계정은 서비스 이용 정책 위반 또는 관리자 결정에 의해 <span className="text-red-500 font-bold underline underline-offset-4">이용이 제한</span>되었습니다.
+                </p>
+                <p className="text-xs text-[var(--text-secondary)]/60">
+                  문의사항이 있으시면 관리자에게 연락해 주시기 바랍니다.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsBanModalOpen(false);
+                  handleLogout();
+                }}
+                className="w-full py-4 bg-brand-orange text-white font-black rounded-2xl shadow-xl shadow-brand-orange/20 hover:brightness-110 active:scale-95 transition-all"
+              >
+                확인 및 로그아웃
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

@@ -2416,7 +2416,7 @@ const cycleFamilySelection = (
     if (rememberLogin) return;
 
     const AWAY_EVENT_THROTTLE_MS = 30 * 1000;
-    const AUTO_LOGOUT_MS = 4 * 60 * 60 * 1000;
+    const AUTO_LOGOUT_MS = 1 * 60 * 60 * 1000;
     let lastSyncedSeenAt = 0;
 
     const markActivity = () => {

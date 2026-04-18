@@ -1757,6 +1757,7 @@ const cycleFamilySelection = (
     let interval: NodeJS.Timeout | null = null;
     
     if (isForcedLogoutModalOpen) {
+      console.log("[ForceLogout Client] Modal opened - Countdown timer started");
       setForcedLogoutCountdown(10);
       isForcedLogoutProcessingRef.current = false;
       
@@ -1765,14 +1766,14 @@ const cycleFamilySelection = (
           if (prev <= 1) {
             if (interval) clearInterval(interval);
             // Auto-logout when countdown reaches 0
-            if (!isForcedLogoutProcessingRef.current) {
-              isForcedLogoutProcessingRef.current = true;
-              console.log("[Auth Debug] Auto-logout triggered by timer");
-              handleLogout().then(() => {
-                setIsForcedLogoutModalOpen(false);
-                navigate('/');
-              });
-            }
+                    if (!isForcedLogoutProcessingRef.current) {
+                      isForcedLogoutProcessingRef.current = true;
+                      console.log("[ForceLogout Client] Auto-logout triggered by timer");
+                      handleLogout().then(() => {
+                        setIsForcedLogoutModalOpen(false);
+                        navigate('/');
+                      });
+                    }
             return 0;
           }
           return prev - 1;
@@ -1826,9 +1827,18 @@ const cycleFamilySelection = (
     const shouldProcessForceLogout = (forceLogoutAtValue: any, targetUser: User | null) => {
       const forceLogoutTime = getTimestampMs(forceLogoutAtValue);
       const sessionStartTime = getSessionStartTime(targetUser);
-      if (forceLogoutTime <= 0 || sessionStartTime <= 0) return false;
-      if (forceLogoutTime <= sessionStartTime) return false;
-      if (forceLogoutTime <= lastForcedLogoutTimeRef.current) return false;
+      
+      const result = forceLogoutTime > 0 && sessionStartTime > 0 && 
+                     forceLogoutTime > sessionStartTime && 
+                     forceLogoutTime > lastForcedLogoutTimeRef.current;
+      
+      console.log(`[ForceLogout Client] shouldProcessForceLogout check:
+        - forceLogoutTime: ${forceLogoutTime} (${forceLogoutTime > 0 ? new Date(forceLogoutTime).toLocaleString() : 'N/A'})
+        - sessionStartTime: ${sessionStartTime} (${sessionStartTime > 0 ? new Date(sessionStartTime).toLocaleString() : 'N/A'})
+        - lastProcessedTime: ${lastForcedLogoutTimeRef.current}
+        - result: ${result}`);
+
+      if (!result) return false;
       lastForcedLogoutTimeRef.current = forceLogoutTime;
       return true;
     };
@@ -1870,7 +1880,7 @@ const cycleFamilySelection = (
             }
 
             if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
-              console.log('[Auth Debug] Force Logout detected during re-entry check. Silent logout.');
+              console.log('[ForceLogout Client] Re-entry detection triggered. Executing silent logout.');
               await performForcedLogout({ silent: true });
               return;
             }
@@ -1885,6 +1895,7 @@ const cycleFamilySelection = (
 
         // Sync user role in real-time
         unsubUserDoc = onSnapshot(userRef, (docSnap) => {
+          console.log('[ForceLogout Client] User document snapshot received');
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
@@ -1903,7 +1914,7 @@ const cycleFamilySelection = (
             }
 
             if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
-              console.log('[Auth Debug] Force Logout detected in active session. Showing modal.');
+              console.log('[ForceLogout Client] Real-time detection triggered. Showing modal.');
               setIsForcedLogoutModalOpen(true);
             }
           } else {
@@ -2380,19 +2391,23 @@ const cycleFamilySelection = (
   };
 
       const handleLogout = async () => {
+        console.log('[ForceLogout Client] handleLogout called');
         try {
           const currentUser = auth.currentUser;
 
           if (currentUser) {
+            console.log(`[ForceLogout Client] handleLogout - Updating Firestore for UID: ${currentUser.uid}`);
             const userDocRef = doc(db, 'users', currentUser.uid);
 
             try {
               await setDoc(userDocRef, {
                 isOnline: false,
-                lastLogoutAt: Date.now()
+                lastLogoutAt: Date.now(),
+                lastSeenAt: Date.now()
               }, { merge: true });
+              console.log('[ForceLogout Client] handleLogout - Firestore update successful');
             } catch (dbErr) {
-              console.error("[Logout] Firestore 저장 실패:", dbErr);
+              console.error("[ForceLogout Client] handleLogout - Firestore update failed:", dbErr);
             }
           }
 
@@ -2400,7 +2415,9 @@ const cycleFamilySelection = (
           setResult(null);
           setHistoryIndex(-1);
 
+          console.log('[ForceLogout Client] handleLogout - Calling signOut(auth)');
           await signOut(auth);
+          console.log('[ForceLogout Client] handleLogout - signOut(auth) successful');
           navigate('/', { replace: true });
 
         } catch (error) {
@@ -4697,6 +4714,7 @@ ${result.prompt}
               <button
                 onClick={async () => {
                   if (!isForcedLogoutProcessingRef.current) {
+                    console.log("[ForceLogout Client] Manual logout button clicked in modal");
                     isForcedLogoutProcessingRef.current = true;
                     setIsForcedLogoutModalOpen(false);
                     await handleLogout();

@@ -711,16 +711,19 @@ const handleForceLogout = async () => {
                       const loginTime = user.lastLoginAt || 0;
                       const logoutTime = user.lastLogoutAt || 0;
                       const forceTime = user.forceLogoutAt || 0;
+                      
+                      const isForced = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
+                      const isOnline = loginTime > logoutTime;
 
-                      // Check for forced logout status first
-                      if (forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime)) {
-                        return <span className="flex items-center gap-1 font-bold text-red-500"><LogOut className="w-3 h-3" /> 강제 로그아웃됨</span>;
+                      if (isForced) {
+                        return <span className="flex items-center gap-1 font-bold text-red-500"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
                       }
 
                       if (!loginTime && !logoutTime) {
                         return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
                       }
-                      if (loginTime > logoutTime) {
+                      
+                      if (isOnline) {
                         return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(loginTime)}</span>;
                       } else {
                         return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime)}</span>;

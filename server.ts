@@ -9,16 +9,49 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin
-const firebaseConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'firebase-applet-config.json'), 'utf-8'));
-
 try {
-  admin.initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
-  console.log("Firebase Admin initialized successfully");
+  const configPath = path.resolve(__dirname, 'firebase-applet-config.json');
+
+  if (!admin.apps.length) {
+    if (process.env.FIREBASE_PRIVATE_KEY) {
+      let projectId = "soridraw-app-866a5";
+
+      if (fs.existsSync(configPath)) {
+        const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        if (firebaseConfig?.projectId) {
+          projectId = firebaseConfig.projectId;
+        }
+      }
+
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail: "firebase-adminsdk-fbsvc@soridraw-app-866a5.iam.gserviceaccount.com",
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        }),
+      });
+
+      console.log("[Admin SDK] Initialized with SERVICE ACCOUNT:", projectId);
+    } else if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      console.log("[Admin SDK] Project ID from config:", firebaseConfig.projectId);
+
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId,
+      });
+
+      console.log("[Admin SDK] Initialized with projectId only (no private key found)");
+    } else {
+      admin.initializeApp();
+      console.log("[Admin SDK] Initialized with ADC fallback");
+    }
+  }
 } catch (error) {
-  console.error("Firebase Admin initialization failed:", error);
+  console.error("[Admin SDK] Initialization Error:", error);
 }
+
+const db = admin.firestore();
+const authClient = admin.auth();
 
 async function startServer() {
   const app = express();
@@ -33,8 +66,11 @@ async function startServer() {
 
   // Force Logout Admin API
   app.post("/api/admin/force-logout", async (req, res) => {
+    console.log("[ForceLogout API] Received request");
+    
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn("[ForceLogout API] Unauthorized attempt: Missing or invalid header");
       return res.status(401).json({ error: "Missing or invalid authorization header" });
     }
 
@@ -42,41 +78,53 @@ async function startServer() {
     const { targetUid, disableUser } = req.body;
 
     if (!targetUid) {
+      console.warn("[ForceLogout API] Bad request: Missing targetUid");
       return res.status(400).json({ error: "Missing targetUid" });
     }
 
     try {
-      // 1. Verify the requester is an admin
-      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      console.log("[ForceLogout API] Step 1: Verifying requester admin token...");
+      const decodedToken = await authClient.verifyIdToken(idToken);
       const requesterUid = decodedToken.uid;
+      console.log("[ForceLogout API] Requester UID:", requesterUid);
       
-      const userDoc = await admin.firestore().collection('users').doc(requesterUid).get();
+      const userDoc = await db.collection('users').doc(requesterUid).get();
       const userData = userDoc.data();
 
       if (!userData || userData.role !== 'admin') {
+        console.warn("[ForceLogout API] Forbidden: Requester is not an admin", { requesterUid, role: userData?.role });
         return res.status(403).json({ error: "Unauthorized: Admin privileges required" });
       }
 
-      // 2. Perform the force logout (revoke refresh tokens)
-      await admin.auth().revokeRefreshTokens(targetUid);
+      console.log("[ForceLogout API] Step 2: Revoking refresh tokens for target:", targetUid);
+      await authClient.revokeRefreshTokens(targetUid);
+      console.log("[ForceLogout API] Revoke refresh tokens SUCCESS");
       
-      // 3. Signal immediate client-side logout
-      await admin.firestore().collection('users').doc(targetUid).update({
+      console.log("[ForceLogout API] Step 3: Updating Firestore signal for target:", targetUid);
+      const targetUserRef = db.collection('users').doc(targetUid);
+      await targetUserRef.update({
         forceLogoutAt: admin.firestore.FieldValue.serverTimestamp(),
         forceLogoutReason: 'admin_forced'
       });
+      console.log("[ForceLogout API] Firestore update SUCCESS");
+
+      // Verify the field was actually written
+      const verifySnap = await targetUserRef.get();
+      console.log("[ForceLogout API] Final State Check (forceLogoutAt exists):", !!verifySnap.data()?.forceLogoutAt);
       
       let message = `Successfully revoked tokens and sent logout signal for user ${targetUid}`;
 
-      // 4. Optionally disable the user
+      console.log("[ForceLogout API] Step 4: Account status update (disableUser):", disableUser);
       if (disableUser) {
-        await admin.auth().updateUser(targetUid, { disabled: true });
+        await authClient.updateUser(targetUid, { disabled: true });
+        console.log("[ForceLogout API] Account DISABLE SUCCESS");
         message += " and disabled the account";
       }
 
+      console.log("[ForceLogout API] ALL STEPS COMPLETED SUCCESSFULLY");
       res.json({ success: true, message });
     } catch (error: any) {
-      console.error("Error in force-logout API:", error);
+      console.error("[ForceLogout API] ERROR during execution:", error);
       res.status(500).json({ error: error.message || "Internal server error" });
     }
   });

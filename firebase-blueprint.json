@@ -109,7 +109,9 @@
         "lastPaymentAt": { "type": "number" },
         "songGeneratedCount": { "type": "number" },
         "favoriteCount": { "type": "number" },
-        "adminMemo": { "type": "string" }
+        "adminMemo": { "type": "string" },
+        "forceLogoutAt": { "type": "object", "description": "Server timestamp for force logout signal." },
+        "forceLogoutReason": { "type": "string" }
       },
       "required": ["uid", "email", "role", "accountStatus", "paymentStatus", "createdAt", "songGeneratedCount", "favoriteCount"]
     }

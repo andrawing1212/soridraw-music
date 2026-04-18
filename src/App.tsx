@@ -2457,6 +2457,8 @@ const cycleFamilySelection = (
 
 
       const handleLogout = async () => {
+        console.log("🔥 HANDLE LOGOUT CALLED");
+        console.trace('[ForceLogout Client] handleLogout trace');
         console.log('[ForceLogout Client] handleLogout called');
         try {
           const currentUser = auth.currentUser;

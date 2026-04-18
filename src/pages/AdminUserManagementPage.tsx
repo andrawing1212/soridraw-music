@@ -67,27 +67,71 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   trial: '체험판'
 };
 
-const AWAY_THRESHOLD_MS = 10 * 60 * 1000;
-const IDLE_THRESHOLD_MS = 60 * 60 * 1000;
 
-function getUserPresence(user: AppUserInfo): 'forced' | 'loggedIn' | 'away' | 'idle' | 'loggedOut' | 'noRecord' {
-  const now = Date.now();
-  const loginTime = user.lastLoginAt || 0;
-  const logoutTime = user.lastLogoutAt || 0;
-  const forceTime = user.forceLogoutAt || 0;
-  const isForcedLogout = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LONG_INACTIVE_DAYS = 180;
+const DORMANT_DAYS = 365;
 
-  if (isForcedLogout) return 'forced';
-  if (!loginTime && !logoutTime) return 'noRecord';
-  if (!user.isOnline || (logoutTime > 0 && logoutTime >= loginTime)) return 'loggedOut';
+type AdminBadgeState = 'forcedLogout' | 'dormantMember' | 'longInactive' | 'account';
 
-  const lastSeen = user.lastSeenAt || loginTime;
-  const inactiveMs = Math.max(0, now - lastSeen);
+const getDaysSince = (timestamp?: number) => {
+  if (!timestamp) return 0;
+  return Math.floor((Date.now() - timestamp) / DAY_MS);
+};
 
-  if (inactiveMs >= IDLE_THRESHOLD_MS) return 'idle';
-  if (inactiveMs >= AWAY_THRESHOLD_MS) return 'away';
-  return 'loggedIn';
-}
+const isForceLoggedOutUser = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt'> & { forceLogoutAt?: number }) => {
+  const forceLogoutAt = user.forceLogoutAt || 0;
+  const lastLoginAt = user.lastLoginAt || 0;
+  const lastLogoutAt = user.lastLogoutAt || 0;
+  return !!forceLogoutAt && forceLogoutAt > lastLoginAt && (!lastLogoutAt || lastLogoutAt < forceLogoutAt);
+};
+
+const getStatusBadgeInfo = (user: Pick<AppUserInfo, 'accountStatus' | 'lastLoginAt' | 'lastLogoutAt'> & { forceLogoutAt?: number }) => {
+  if (isForceLoggedOutUser(user)) {
+    return {
+      state: 'forcedLogout' as AdminBadgeState,
+      dotClass: 'bg-red-500',
+      textClass: 'text-red-500',
+      label: '강제 로그아웃됨'
+    };
+  }
+
+  const inactiveDays = getDaysSince(user.lastLoginAt);
+  if (inactiveDays >= DORMANT_DAYS) {
+    return {
+      state: 'dormantMember' as AdminBadgeState,
+      dotClass: 'bg-red-500',
+      textClass: 'text-red-500',
+      label: '휴면회원'
+    };
+  }
+
+  if (inactiveDays >= LONG_INACTIVE_DAYS) {
+    return {
+      state: 'longInactive' as AdminBadgeState,
+      dotClass: 'bg-orange-500',
+      textClass: 'text-orange-500',
+      label: '장기 미접속'
+    };
+  }
+
+  return {
+    state: 'account' as AdminBadgeState,
+    dotClass:
+      user.accountStatus === 'active'
+        ? 'bg-emerald-500'
+        : user.accountStatus === 'banned'
+          ? 'bg-red-500'
+          : 'bg-zinc-400',
+    textClass:
+      user.accountStatus === 'active'
+        ? 'text-[var(--text-primary)]'
+        : user.accountStatus === 'banned'
+          ? 'text-red-500'
+          : 'text-[var(--text-primary)]',
+    label: STATUS_LABELS[user.accountStatus]
+  };
+};
 
 export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
@@ -220,6 +264,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           adminMemo: data.adminMemo || '',
           isOnline: data.isOnline || false,
           lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+          forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
         } as AppUserInfo;
       });
       setUsers(fetchedUsers);
@@ -289,6 +334,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           adminMemo: data.adminMemo || '',
           isOnline: data.isOnline || false,
           lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+          forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
         } as AppUserInfo;
         
         setSelectedUser(updatedUser);
@@ -720,43 +766,34 @@ const handleForceLogout = async () => {
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] md:text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
                     {(() => {
-                      const presence = getUserPresence(user);
                       const loginTime = user.lastLoginAt || 0;
                       const logoutTime = user.lastLogoutAt || 0;
-                      const forceTime = user.forceLogoutAt || 0;
-                      const lastSeenTime = user.lastSeenAt || loginTime;
-
-                      if (presence === 'noRecord') {
+                      if (!loginTime && !logoutTime) {
                         return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
                       }
-                      if (presence === 'forced') {
-                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
+                      if (loginTime > logoutTime) {
+                        return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(loginTime)}</span>;
+                      } else {
+                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime)}</span>;
                       }
-                      if (presence === 'loggedOut') {
-                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
-                      }
-                      if (presence === 'away') {
-                        return <span className="flex items-center gap-1 font-bold text-amber-500"><Clock className="w-3 h-3" /> 자리비움: {formatLastSeen(lastSeenTime)}</span>;
-                      }
-                      if (presence === 'idle') {
-                        return <span className="flex items-center gap-1 font-bold text-yellow-500"><Clock className="w-3 h-3" /> 휴면: {formatLastSeen(lastSeenTime)}</span>;
-                      }
-                      return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(lastSeenTime)}</span>;
                     })()}
                   </div>
                 </div>
                 <div className="hidden md:flex flex-col items-end shrink-0 gap-1.5 px-4 border-l border-btn-border">
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn(
-                      "w-2 h-2 rounded-full",
-                      user.accountStatus === 'active' ? "bg-emerald-500" : 
-                      user.accountStatus === 'banned' ? "bg-red-500" : "bg-zinc-400"
-                    )} />
-                    <span className="text-xs font-bold text-[var(--text-primary)]">{STATUS_LABELS[user.accountStatus]}</span>
-                  </div>
-                  <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-                    {PAYMENT_LABELS[user.paymentStatus]}
-                  </span>
+                  {(() => {
+                    const badgeInfo = getStatusBadgeInfo(user as AppUserInfo & { forceLogoutAt?: number });
+                    return (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("w-2 h-2 rounded-full", badgeInfo.dotClass)} />
+                          <span className={cn("text-xs font-bold", badgeInfo.textClass)}>{badgeInfo.label}</span>
+                        </div>
+                        <span className="text-[10px] font-medium text-[var(--text-secondary)]">
+                          {PAYMENT_LABELS[user.paymentStatus]}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
                 <ChevronRight className="w-5 h-5 text-[var(--text-secondary)] group-hover:translate-x-1 transition-transform" />
               </div>

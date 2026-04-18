@@ -2015,7 +2015,7 @@ const cycleFamilySelection = (
     const inactivityInterval = window.setInterval(() => {
       if (!auth.currentUser) return;
       const inactiveMs = Date.now() - lastActivityAtRef.current;
-      if (!rememberLogin && inactiveMs >= 4 * 60 * 60 * 1000 && !inactivityLogoutTriggeredRef.current) {
+      if (!rememberLogin && inactiveMs >= 1 * 60 * 1000 && !inactivityLogoutTriggeredRef.current) {
         inactivityLogoutTriggeredRef.current = true;
         handleLogout().catch((err) => console.error('[Inactivity Logout] failed:', err));
       }

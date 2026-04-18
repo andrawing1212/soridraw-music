@@ -58,6 +58,7 @@ import {
   Settings,
   Play,
   ThumbsUp,
+  LogOut,
   ThumbsDown,
   Youtube as YoutubeIcon,
   ExternalLink,
@@ -1699,6 +1700,8 @@ const cycleFamilySelection = (
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
+  const [isForcedLogoutModalOpen, setIsForcedLogoutModalOpen] = useState(false);
+  const lastForcedLogoutTimeRef = useRef<number>(0);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
   
@@ -1780,11 +1783,31 @@ const cycleFamilySelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
+            
+            // Check for Banned status
             if (data.accountStatus) {
               const status = data.accountStatus as AccountStatus;
               setUserStatus(status);
               if (status === 'banned') {
                 setIsBanModalOpen(true);
+              }
+            }
+
+            // Check for Force Logout signal
+            if (data.forceLogoutAt) {
+              const forceLogoutTime = typeof data.forceLogoutAt === 'object' && data.forceLogoutAt?.toMillis 
+                ? data.forceLogoutAt.toMillis() 
+                : (typeof data.forceLogoutAt === 'number' ? data.forceLogoutAt : 0);
+              
+              const sessionStartTime = currentUser.metadata.lastSignInTime 
+                ? new Date(currentUser.metadata.lastSignInTime).getTime() 
+                : Date.now();
+
+              if (forceLogoutTime > 0 && forceLogoutTime > sessionStartTime && forceLogoutTime > lastForcedLogoutTimeRef.current) {
+                // If the signal is newer than both the session start AND what we've processed, trigger forced logout
+                console.log("[Auth Debug] Force Logout signal detected:", forceLogoutTime);
+                lastForcedLogoutTimeRef.current = forceLogoutTime;
+                setIsForcedLogoutModalOpen(true);
               }
             }
           } else {
@@ -4541,6 +4564,44 @@ ${result.prompt}
                 className="w-full py-4 bg-brand-orange text-white font-black rounded-2xl shadow-xl shadow-brand-orange/20 hover:brightness-110 active:scale-95 transition-all"
               >
                 확인 및 로그아웃
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isForcedLogoutModalOpen && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-md w-full mx-4 bg-[var(--card-bg)] border border-brand-orange/30 rounded-[32px] p-8 text-center shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-brand-orange/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <LogOut className="w-10 h-10 text-brand-orange" />
+              </div>
+              <h2 className="text-2xl font-black text-[var(--text-primary)] mb-4">
+                강제 로그아웃 알림
+              </h2>
+              <div className="space-y-4 mb-8">
+                <p className="text-[var(--text-secondary)] leading-relaxed">
+                  관리자에 의해 <span className="text-brand-orange font-bold">강제 로그아웃</span> 처리가 수행되었습니다.<br />
+                  세션이 만료되어 자동으로 로그아웃됩니다.
+                </p>
+                <p className="text-xs text-[var(--text-secondary)]/60">
+                  문의사항이 있으시면 고객 센터로 연락해 주시기 바랍니다.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  setIsForcedLogoutModalOpen(false);
+                  await handleLogout();
+                  navigate('/');
+                }}
+                className="w-full py-4 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                닫기 및 확인
               </button>
             </motion.div>
           </div>

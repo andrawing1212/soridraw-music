@@ -98,6 +98,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [editMemo, setEditMemo] = useState('');
 
   const [isAdmin, setIsAdmin] = useState(isAdminProp || false);
+  const [isForceLoggingOut, setIsForceLoggingOut] = useState(false);
+  const [forceLogoutResult, setForceLogoutResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // --- Summary Statistics Calculation ---
   const userStats = useMemo(() => {
@@ -292,9 +294,55 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     setEditPlanName(user.planName || '');
     setEditMemo(user.adminMemo || '');
     setSaveStatus('idle');
+    setForceLogoutResult(null);
     setIsDetailOpen(true);
     // Fetch latest when opening
     fetchUserDetail(user.uid);
+  };
+
+
+  const handleForceLogout = async () => {
+    if (!selectedUser) return;
+    
+    const isSelf = auth.currentUser?.uid === selectedUser.uid;
+    if (isSelf) {
+      alert('자기 자신을 강제 로그아웃할 수 없습니다.');
+      return;
+    }
+
+    if (!window.confirm(`${selectedUser.displayName || selectedUser.email} 회원의 모든 세션을 강제로 무효화(로그아웃)하시겠습니까? 만약 계정 정지(Banned) 상태라면 재로그인이 불가능해집니다.`)) {
+      return;
+    }
+
+    setIsForceLoggingOut(true);
+    setForceLogoutResult(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch('/api/admin/force-logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetUid: selectedUser.uid,
+          disableUser: editStatus === 'banned'
+        })
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        setForceLogoutResult({ success: true, message: result.message || '강제 로그아웃 처리가 완료되었습니다.' });
+      } else {
+        setForceLogoutResult({ success: false, message: result.error || '처리에 실패했습니다.' });
+      }
+    } catch (err: any) {
+      console.error("Force logout failed:", err);
+      setForceLogoutResult({ success: false, message: '네트워크 또는 서버 오류가 발생했습니다.' });
+    } finally {
+      setIsForceLoggingOut(false);
+    }
   };
 
   const handleUpdateUser = async () => {
@@ -845,6 +893,52 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                       placeholder="메모를 입력하세요..."
                       className="w-full h-24 p-4 rounded-2xl bg-[var(--bg-secondary)] border border-btn-border outline-none focus:border-brand-orange transition-all text-sm resize-none shadow-inner"
                     />
+                  </div>
+
+                  {/* Danger Zone: Force Logout */}
+                  <div className="pt-4 border-t border-[var(--border-color)]">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-bold text-red-500 flex items-center gap-2">
+                             위험 구역 (Danger Zone)
+                          </h4>
+                          <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                            계정 접속 강제 종료 및 세션 무효화 처리를 수행합니다.
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleForceLogout}
+                          disabled={isForceLoggingOut || (auth.currentUser?.uid === selectedUser?.uid)}
+                          className={cn(
+                            "px-4 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2",
+                            "border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          {isForceLoggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                          강제 로그아웃 실행
+                        </button>
+                      </div>
+
+                      <AnimatePresence>
+                        {forceLogoutResult && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className={cn(
+                              "p-3 rounded-xl text-[10px] font-bold flex items-center gap-2 border",
+                              forceLogoutResult.success 
+                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
+                                : "bg-red-500/10 border-red-500/20 text-red-500"
+                            )}
+                          >
+                            {forceLogoutResult.success ? <RefreshCw className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                            {forceLogoutResult.message}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </section>
               </div>

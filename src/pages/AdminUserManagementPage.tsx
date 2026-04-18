@@ -355,7 +355,13 @@ const handleForceLogout = async () => {
     });
 
     console.log("[ForceLogout UI] Fetch status:", response.status, response.statusText);
-    const result = await response.json();
+    const text = await response.text();
+    let result;
+    try {
+      result = text ? JSON.parse(text) : {};
+    } catch {
+      result = {};
+    }
     console.log("[ForceLogout UI] Response JSON:", result);
     
     if (response.ok) {
@@ -363,7 +369,9 @@ const handleForceLogout = async () => {
       setForceLogoutResult({ success: true, message: result.message || '강제 로그아웃 처리가 완료되었습니다.' });
     } else {
       console.error("[ForceLogout UI] API Response Failure:", result);
+      alert("강제 로그아웃 실패");
       setForceLogoutResult({ success: false, message: result.error || '처리에 실패했습니다.' });
+      return;
     }
   } catch (err: any) {
     console.error("[ForceLogout UI] Network or Server Exception:", err);

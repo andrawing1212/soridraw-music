@@ -67,6 +67,28 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   trial: '체험판'
 };
 
+const AWAY_THRESHOLD_MS = 10 * 60 * 1000;
+const IDLE_THRESHOLD_MS = 60 * 60 * 1000;
+
+function getUserPresence(user: AppUserInfo): 'forced' | 'loggedIn' | 'away' | 'idle' | 'loggedOut' | 'noRecord' {
+  const now = Date.now();
+  const loginTime = user.lastLoginAt || 0;
+  const logoutTime = user.lastLogoutAt || 0;
+  const forceTime = user.forceLogoutAt || 0;
+  const isForcedLogout = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
+
+  if (isForcedLogout) return 'forced';
+  if (!loginTime && !logoutTime) return 'noRecord';
+  if (!user.isOnline || (logoutTime > 0 && logoutTime >= loginTime)) return 'loggedOut';
+
+  const lastSeen = user.lastSeenAt || loginTime;
+  const inactiveMs = Math.max(0, now - lastSeen);
+
+  if (inactiveMs >= IDLE_THRESHOLD_MS) return 'idle';
+  if (inactiveMs >= AWAY_THRESHOLD_MS) return 'away';
+  return 'loggedIn';
+}
+
 export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,20 +144,9 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       // Status calculation
       const loginTime = u.lastLoginAt || 0;
       const logoutTime = u.lastLogoutAt || 0;
-      const forceTime = u.forceLogoutAt || 0;
-
-      // Forced logout condition: forceLogoutAt exists and is newer than lastLoginAt, 
-      // and either lastLogoutAt is missing or older than forceLogoutAt
-      const isForcedLogout = forceTime > 0 && 
-                             forceTime > loginTime && 
-                             (logoutTime === 0 || logoutTime < forceTime);
-
       if (loginTime > 0 || logoutTime > 0) {
         if (loginTime > logoutTime) {
-          // Exclude from loggedIn count if in forced logout state
-          if (!isForcedLogout) {
-            loggedIn++;
-          }
+          loggedIn++;
         } else {
           loggedOut++;
         }
@@ -209,7 +220,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           adminMemo: data.adminMemo || '',
           isOnline: data.isOnline || false,
           lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
-          forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
         } as AppUserInfo;
       });
       setUsers(fetchedUsers);
@@ -240,14 +250,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
       const loginTime = user.lastLoginAt || 0;
       const logoutTime = user.lastLogoutAt || 0;
-      const forceTime = user.forceLogoutAt || 0;
-      const isForced = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
-
       let matchesLoginStatus = true;
       if (loginStatusFilter === 'loggedIn') {
-        matchesLoginStatus = (loginTime > logoutTime) && !isForced;
+        matchesLoginStatus = loginTime > logoutTime;
       } else if (loginStatusFilter === 'loggedOut') {
-        matchesLoginStatus = (logoutTime >= loginTime && logoutTime > 0) || isForced;
+        matchesLoginStatus = logoutTime >= loginTime && logoutTime > 0;
       }
 
       return matchesSearch && matchesRole && matchesStatus && matchesPayment && matchesLoginStatus;
@@ -282,7 +289,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           adminMemo: data.adminMemo || '',
           isOnline: data.isOnline || false,
           lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
-          forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
         } as AppUserInfo;
         
         setSelectedUser(updatedUser);
@@ -371,13 +377,7 @@ const handleForceLogout = async () => {
     });
 
     console.log("[ForceLogout UI] Fetch status:", response.status, response.statusText);
-    const text = await response.text();
-    let result;
-    try {
-      result = text ? JSON.parse(text) : {};
-    } catch {
-      result = {};
-    }
+    const result = await response.json();
     console.log("[ForceLogout UI] Response JSON:", result);
     
     if (response.ok) {
@@ -385,9 +385,7 @@ const handleForceLogout = async () => {
       setForceLogoutResult({ success: true, message: result.message || '강제 로그아웃 처리가 완료되었습니다.' });
     } else {
       console.error("[ForceLogout UI] API Response Failure:", result);
-      alert("강제 로그아웃 실패");
       setForceLogoutResult({ success: false, message: result.error || '처리에 실패했습니다.' });
-      return;
     }
   } catch (err: any) {
     console.error("[ForceLogout UI] Network or Server Exception:", err);
@@ -722,26 +720,28 @@ const handleForceLogout = async () => {
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] md:text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
                     {(() => {
+                      const presence = getUserPresence(user);
                       const loginTime = user.lastLoginAt || 0;
                       const logoutTime = user.lastLogoutAt || 0;
                       const forceTime = user.forceLogoutAt || 0;
-                      
-                      const isForced = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
-                      const isOnline = loginTime > logoutTime;
+                      const lastSeenTime = user.lastSeenAt || loginTime;
 
-                      if (isForced) {
-                        return <span className="flex items-center gap-1 font-bold text-red-500"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
-                      }
-
-                      if (!loginTime && !logoutTime) {
+                      if (presence === 'noRecord') {
                         return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
                       }
-                      
-                      if (isOnline) {
-                        return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(loginTime)}</span>;
-                      } else {
-                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime)}</span>;
+                      if (presence === 'forced') {
+                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
                       }
+                      if (presence === 'loggedOut') {
+                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
+                      }
+                      if (presence === 'away') {
+                        return <span className="flex items-center gap-1 font-bold text-amber-500"><Clock className="w-3 h-3" /> 자리비움: {formatLastSeen(lastSeenTime)}</span>;
+                      }
+                      if (presence === 'idle') {
+                        return <span className="flex items-center gap-1 font-bold text-yellow-500"><Clock className="w-3 h-3" /> 휴면: {formatLastSeen(lastSeenTime)}</span>;
+                      }
+                      return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(lastSeenTime)}</span>;
                     })()}
                   </div>
                 </div>
@@ -752,27 +752,7 @@ const handleForceLogout = async () => {
                       user.accountStatus === 'active' ? "bg-emerald-500" : 
                       user.accountStatus === 'banned' ? "bg-red-500" : "bg-zinc-400"
                     )} />
-                    <span className="text-xs font-bold text-[var(--text-primary)]">
-                      {(() => {
-                        const lat = user.lastLoginAt || 0;
-                        const lot = user.lastLogoutAt || 0;
-                        const flat = user.forceLogoutAt || 0;
-                        
-                        if (flat > 0 && flat > lat && (lot === 0 || lot < flat)) {
-                          return <span className="text-red-500 font-black">강제 로그아웃됨</span>;
-                        }
-                        
-                        // Status indicator
-                        const isActiveStatus = user.accountStatus === 'active';
-                        const isOnline = lat > lot;
-                        
-                        if (isActiveStatus && isOnline) {
-                          return <span className="text-emerald-500">로그인 중</span>;
-                        }
-                        
-                        return STATUS_LABELS[user.accountStatus];
-                      })()}
-                    </span>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">{STATUS_LABELS[user.accountStatus]}</span>
                   </div>
                   <span className="text-[10px] font-medium text-[var(--text-secondary)]">
                     {PAYMENT_LABELS[user.paymentStatus]}

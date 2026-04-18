@@ -122,9 +122,20 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       // Status calculation
       const loginTime = u.lastLoginAt || 0;
       const logoutTime = u.lastLogoutAt || 0;
+      const forceTime = u.forceLogoutAt || 0;
+
+      // Forced logout condition: forceLogoutAt exists and is newer than lastLoginAt, 
+      // and either lastLogoutAt is missing or older than forceLogoutAt
+      const isForcedLogout = forceTime > 0 && 
+                             forceTime > loginTime && 
+                             (logoutTime === 0 || logoutTime < forceTime);
+
       if (loginTime > 0 || logoutTime > 0) {
         if (loginTime > logoutTime) {
-          loggedIn++;
+          // Exclude from loggedIn count if in forced logout state
+          if (!isForcedLogout) {
+            loggedIn++;
+          }
         } else {
           loggedOut++;
         }
@@ -229,11 +240,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
       const loginTime = user.lastLoginAt || 0;
       const logoutTime = user.lastLogoutAt || 0;
+      const forceTime = user.forceLogoutAt || 0;
+      const isForced = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
+
       let matchesLoginStatus = true;
       if (loginStatusFilter === 'loggedIn') {
-        matchesLoginStatus = loginTime > logoutTime;
+        matchesLoginStatus = (loginTime > logoutTime) && !isForced;
       } else if (loginStatusFilter === 'loggedOut') {
-        matchesLoginStatus = logoutTime >= loginTime && logoutTime > 0;
+        matchesLoginStatus = (logoutTime >= loginTime && logoutTime > 0) || isForced;
       }
 
       return matchesSearch && matchesRole && matchesStatus && matchesPayment && matchesLoginStatus;

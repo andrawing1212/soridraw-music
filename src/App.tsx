@@ -1173,19 +1173,19 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
 
       {/* Right Menu - Login (Only on Home Page) */}
       {location.pathname === '/' && !user && (
-        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50 flex items-center gap-2.5 rounded-2xl bg-[var(--card-bg)]/85 border border-[var(--border-color)] backdrop-blur-md px-2.5 py-2 shadow-xl">
-          <label className="flex items-center gap-1.5 text-[10px] md:text-[11px] font-semibold text-[var(--text-secondary)] select-none cursor-pointer whitespace-nowrap">
+        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50 flex items-center gap-2">
+          <label className="flex items-center gap-1.5 px-2.5 py-2 rounded-2xl bg-[var(--card-bg)]/90 border border-[var(--border-color)] backdrop-blur-md text-[10px] md:text-[11px] font-semibold text-[var(--text-primary)] shadow-lg select-none">
             <input
               type="checkbox"
               checked={rememberLogin}
               onChange={(e) => setRememberLogin(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border border-btn-border accent-brand-orange cursor-pointer"
+              className="w-3.5 h-3.5 accent-brand-orange"
             />
             로그인 유지
           </label>
           <button 
             onClick={handleLogin}
-            className="px-3.5 py-2 rounded-2xl bg-brand-orange text-white text-[11px] font-bold shadow-lg shadow-brand-orange/20 hover:brightness-110 transition-all flex items-center gap-2"
+            className="px-4 py-2 rounded-2xl bg-brand-orange text-white text-[11px] font-bold shadow-lg shadow-brand-orange/20 hover:brightness-110 transition-all flex items-center gap-2"
           >
             <Sparkles className="w-3.5 h-3.5" />
             Login
@@ -1205,11 +1205,6 @@ function App() {
     return 'system';
   });
 
-  const [rememberLogin, setRememberLogin] = useState<boolean>(() => localStorage.getItem('rememberLogin') === 'true');
-  const lastActivityAtRef = useRef<number>(Date.now());
-  const lastSeenSyncAtRef = useRef<number>(0);
-  const inactivityLogoutTriggeredRef = useRef(false);
-
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const savedMode = localStorage.getItem('themeMode') || 'system';
     if (savedMode === 'system') {
@@ -1217,10 +1212,6 @@ function App() {
     }
     return (savedMode === 'dark' ? 'dark' : 'light');
   });
-
-  useEffect(() => {
-    localStorage.setItem('rememberLogin', String(rememberLogin));
-  }, [rememberLogin]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1389,9 +1380,18 @@ function App() {
       const fetchedTags = snapshot.docs.map(doc => ({
         ...doc.data()
       })) as SectionTag[];
+      console.log(`[Tags Debug] Fetched ${fetchedTags.length} tags`);
       setSectionTags(fetchedTags);
     }, (err) => {
       console.error("Error fetching section tags for user UI:", err);
+      // Detailed logging for permissions error
+      if (err.message.includes('permission')) {
+        console.error("[Tags Debug] Current User Auth State:", {
+          uid: auth.currentUser?.uid,
+          email: auth.currentUser?.email,
+          emailVerified: auth.currentUser?.emailVerified
+        });
+      }
     });
 
     return () => unsubscribe();
@@ -1714,6 +1714,13 @@ const cycleFamilySelection = (
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
+  const [rememberLogin, setRememberLogin] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('rememberLogin') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [userRole, setUserRole] = useState<UserRole>('free');
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -1722,6 +1729,7 @@ const cycleFamilySelection = (
   const [forcedLogoutCountdown, setForcedLogoutCountdown] = useState(10);
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
+  const hasCompletedForceLogoutReentryCheckRef = useRef(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
   
@@ -1740,6 +1748,7 @@ const cycleFamilySelection = (
   const historyRef = useRef(history);
   const historyIndexRef = useRef(historyIndex);
   const userRef = useRef(user);
+  const lastActivityAtRef = useRef<number>(Date.now());
 
   useEffect(() => { pinnedGenresRef.current = pinnedGenres; }, [pinnedGenres]);
   useEffect(() => { pinnedThemesRef.current = pinnedThemes; }, [pinnedThemes]);
@@ -1748,6 +1757,11 @@ const cycleFamilySelection = (
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('rememberLogin', rememberLogin ? 'true' : 'false');
+    } catch {}
+  }, [rememberLogin]);
 
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
@@ -1774,6 +1788,7 @@ const cycleFamilySelection = (
     let interval: NodeJS.Timeout | null = null;
     
     if (isForcedLogoutModalOpen) {
+      console.log("[ForceLogout Client] Modal opened - Countdown timer started");
       setForcedLogoutCountdown(10);
       isForcedLogoutProcessingRef.current = false;
       
@@ -1782,14 +1797,14 @@ const cycleFamilySelection = (
           if (prev <= 1) {
             if (interval) clearInterval(interval);
             // Auto-logout when countdown reaches 0
-            if (!isForcedLogoutProcessingRef.current) {
-              isForcedLogoutProcessingRef.current = true;
-              console.log("[Auth Debug] Auto-logout triggered by timer");
-              handleLogout().then(() => {
-                setIsForcedLogoutModalOpen(false);
-                navigate('/');
-              });
-            }
+                    if (!isForcedLogoutProcessingRef.current) {
+                      isForcedLogoutProcessingRef.current = true;
+                      console.log("[ForceLogout Client] Auto-logout triggered by timer");
+                      handleLogout().then(() => {
+                        setIsForcedLogoutModalOpen(false);
+                        navigate('/');
+                      });
+                    }
             return 0;
           }
           return prev - 1;
@@ -1808,7 +1823,7 @@ const cycleFamilySelection = (
         await getDocFromServer(doc(db, 'test', 'connection'));
       } catch (error) {
         if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration. ");
+          console.error("Please check your Firebase configuration. " );
         }
       }
     };
@@ -1817,9 +1832,55 @@ const cycleFamilySelection = (
     let unsubFavs: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
 
+    const getSessionStartTime = (targetUser: User | null) => {
+      if (!targetUser?.metadata?.lastSignInTime) return 0;
+      const ms = new Date(targetUser.metadata.lastSignInTime).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const performForcedLogout = async ({ silent }: { silent: boolean }) => {
+      if (isForcedLogoutProcessingRef.current) return;
+      isForcedLogoutProcessingRef.current = true;
+
+      try {
+        if (silent) {
+          setIsForcedLogoutModalOpen(false);
+          setForcedLogoutCountdown(10);
+        }
+        await handleLogout();
+      } catch (err) {
+        console.error(`[Auth Debug] ${silent ? 'Silent' : 'Modal'} forced logout failed:`, err);
+      } finally {
+        isForcedLogoutProcessingRef.current = false;
+      }
+    };
+
+    const shouldProcessForceLogout = (forceLogoutAtValue: any, targetUser: User | null) => {
+      const forceLogoutTime = getTimestampMs(forceLogoutAtValue);
+      const sessionStartTime = getSessionStartTime(targetUser);
+      
+      const result = forceLogoutTime > 0 && sessionStartTime > 0 && 
+                     forceLogoutTime > sessionStartTime && 
+                     forceLogoutTime > lastForcedLogoutTimeRef.current;
+      
+      console.log(`[ForceLogout Client] shouldProcessForceLogout check:
+        - forceLogoutTime: ${forceLogoutTime} (${forceLogoutTime > 0 ? new Date(forceLogoutTime).toLocaleString() : 'N/A'})
+        - sessionStartTime: ${sessionStartTime} (${sessionStartTime > 0 ? new Date(sessionStartTime).toLocaleString() : 'N/A'})
+        - lastProcessedTime: ${lastForcedLogoutTimeRef.current}
+        - result: ${result}`);
+
+      if (!result) return false;
+      lastForcedLogoutTimeRef.current = forceLogoutTime;
+      return true;
+    };
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
+      setIsForcedLogoutModalOpen(false);
+      setForcedLogoutCountdown(10);
+      lastForcedLogoutTimeRef.current = 0;
+      hasCompletedForceLogoutReentryCheckRef.current = false;
       
       if (unsubFavs) {
         unsubFavs();
@@ -1831,12 +1892,41 @@ const cycleFamilySelection = (
       }
 
       if (currentUser) {
-        lastActivityAtRef.current = Date.now();
-        lastSeenSyncAtRef.current = 0;
-        inactivityLogoutTriggeredRef.current = false;
-        let isInitialUserDocSync = true;
+        const userRef = doc(db, 'users', currentUser.uid);
+
+        const runInitialForceLogoutCheck = async () => {
+          try {
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              return;
+            }
+
+            const data = userSnap.data();
+            if (data.role) setUserRole(data.role as UserRole);
+            if (data.accountStatus) {
+              const status = data.accountStatus as AccountStatus;
+              setUserStatus(status);
+              if (status === 'banned') setIsBanModalOpen(true);
+            }
+
+            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
+              console.log('[ForceLogout Client] Re-entry detection triggered. Executing silent logout.');
+              await performForcedLogout({ silent: true });
+              return;
+            }
+          } catch (error) {
+            console.error('[Auth Debug] Initial force logout check failed:', error);
+          } finally {
+            hasCompletedForceLogoutReentryCheckRef.current = true;
+          }
+        };
+
+        runInitialForceLogoutCheck();
+
         // Sync user role in real-time
-        unsubUserDoc = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+        unsubUserDoc = onSnapshot(userRef, (docSnap) => {
+          console.log('[ForceLogout Client] User document snapshot received');
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
@@ -1850,36 +1940,14 @@ const cycleFamilySelection = (
               }
             }
 
-            // Check for Force Logout signal
-            if (data.forceLogoutAt) {
-              const forceLogoutTime = typeof data.forceLogoutAt === 'object' && data.forceLogoutAt?.toMillis 
-                ? data.forceLogoutAt.toMillis() 
-                : (typeof data.forceLogoutAt === 'number' ? data.forceLogoutAt : 0);
-              
-              const sessionStartTime = currentUser.metadata.lastSignInTime 
-                ? new Date(currentUser.metadata.lastSignInTime).getTime() 
-                : Date.now();
-
-              if (forceLogoutTime > 0 && forceLogoutTime > sessionStartTime && forceLogoutTime > lastForcedLogoutTimeRef.current) {
-                // If the signal is newer than both the session start AND what we've processed, trigger forced logout
-                console.log("[Auth Debug] Force Logout signal detected:", forceLogoutTime);
-                lastForcedLogoutTimeRef.current = forceLogoutTime;
-
-                if (isInitialUserDocSync) {
-                  // Path B: Re-entry (Silent logout)
-                  console.log("[Auth Debug] Force Logout detected on initial sync (Re-entry). Silent logout.");
-                  if (!isForcedLogoutProcessingRef.current) {
-                    isForcedLogoutProcessingRef.current = true;
-                    handleLogout().catch(err => console.error("[Auth Debug] Silent logout failed:", err));
-                  }
-                } else {
-                  // Path A: Active Session (Modal + Countdown)
-                  console.log("[Auth Debug] Force Logout detected in active session. Showing modal.");
-                  setIsForcedLogoutModalOpen(true);
-                }
-              }
+            if (!hasCompletedForceLogoutReentryCheckRef.current) {
+              return;
             }
-            isInitialUserDocSync = false;
+
+            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
+              console.log('[ForceLogout Client] Real-time detection triggered. Showing modal.');
+              setIsForcedLogoutModalOpen(true);
+            }
           } else {
             // Initial signup fallback
             setUserRole('free');
@@ -1895,69 +1963,51 @@ const cycleFamilySelection = (
             const userRef = doc(db, 'users', currentUser.uid);
             const userSnap = await getDoc(userRef);
             console.log("[Auth Debug] User Doc Exists:", userSnap.exists());
-            
-            // Fetch counts
-            const favsSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
-            const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
-            const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
 
             const now = Date.now();
-            const baseData: any = {
-              uid: currentUser.uid,
-              email: currentUser.email,
-              displayName: currentUser.displayName,
-              lastLoginAt: now,
-              lastSeenAt: now,
-              isOnline: true,
-              rememberLogin,
-            };
 
             if (!userSnap.exists()) {
-              baseData.favoriteCount = favsSnap.size;
-              baseData.songGeneratedCount = songCount;
-              baseData.createdAt = Date.now();
-              baseData.accountStatus = 'active';
-              baseData.paymentStatus = 'none';
-              
-              // Bootstrap role (Only set if document doesn't exist)
-              baseData.role = 'free';
-              
-              await setDoc(userRef, baseData);
+              // New user bootstrap only.
+              const favsSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
+              const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
+              const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
+
+              await setDoc(userRef, {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                displayName: currentUser.displayName,
+                createdAt: now,
+                lastLoginAt: now,
+                lastSeenAt: now,
+                isOnline: true,
+                favoriteCount: favsSnap.size,
+                songGeneratedCount: songCount,
+                accountStatus: 'active',
+                paymentStatus: 'none',
+                role: 'free'
+              });
             } else {
               const currentData = userSnap.data();
-              
+
               if (currentData.accountStatus === 'banned') {
                 setIsBanModalOpen(true);
               }
 
-              // Protection: NEVER downgrade an existing admin
-              // This is the primary defense against role being overwritten by legacy sync logic or client side mistakes.
-              const wasAdmin = currentData.role === 'admin';
-              
-              // Special cleanup for any legacy 'pro+' data
-              if (currentData.role === 'pro+' || currentData.tier === 'pro+') {
-                // Remove legacy fields that might trigger sync issues
-                baseData.tier = deleteField();
-                baseData.user_plans = deleteField();
-                
-                // If they were 'pro+' legacy, map to 'pro' ONLY if they are not admin
-                if (!wasAdmin && (currentData.role === 'pro+' || currentData.tier === 'pro+')) {
-                  baseData.role = 'pro';
-                }
-              }
-
-              // Final safeguard: If user is already an admin in DB, keep it that way.
-              if (wasAdmin) {
-                baseData.role = 'admin';
-              }
-
-              // Using setDoc with merge is consistent and safer
-              await setDoc(userRef, baseData, { merge: true });
+              // Existing users: never overwrite role/plan/payment/account fields here.
+              await setDoc(userRef, {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                displayName: currentUser.displayName,
+                lastLoginAt: now,
+                lastSeenAt: now,
+                isOnline: true
+              }, { merge: true });
             }
           } catch (error) {
             console.error('Failed to sync user document:', error);
           }
         };
+
 
         syncUserDoc();
 
@@ -1987,45 +2037,6 @@ const cycleFamilySelection = (
       if (unsubUserDoc) unsubUserDoc();
     };
   }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const syncPresence = (now: number) => {
-      if (now - lastSeenSyncAtRef.current < 60000) return;
-      lastSeenSyncAtRef.current = now;
-      updateDoc(doc(db, 'users', user.uid), {
-        lastSeenAt: now,
-        isOnline: true
-      }).catch(() => {});
-    };
-
-    const markActivity = () => {
-      const now = Date.now();
-      lastActivityAtRef.current = now;
-      inactivityLogoutTriggeredRef.current = false;
-      syncPresence(now);
-    };
-
-    markActivity();
-
-    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true } as AddEventListenerOptions));
-
-    const inactivityInterval = window.setInterval(() => {
-      if (!auth.currentUser) return;
-      const inactiveMs = Date.now() - lastActivityAtRef.current;
-      if (!rememberLogin && inactiveMs >= 1 * 60 * 1000 && !inactivityLogoutTriggeredRef.current) {
-        inactivityLogoutTriggeredRef.current = true;
-        handleLogout().catch((err) => console.error('[Inactivity Logout] failed:', err));
-      }
-    }, 60000);
-
-    return () => {
-      events.forEach((eventName) => window.removeEventListener(eventName, markActivity as EventListener));
-      window.clearInterval(inactivityInterval);
-    };
-  }, [user, rememberLogin]);
 
   const showToast = useCallback((message: string) => {
     setToast({ message, visible: true });
@@ -2383,19 +2394,16 @@ const cycleFamilySelection = (
       await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
-        const now = Date.now();
-        lastActivityAtRef.current = now;
-        lastSeenSyncAtRef.current = now;
-        inactivityLogoutTriggeredRef.current = false;
+        lastActivityAtRef.current = Date.now();
         try {
           await setDoc(doc(db, 'users', result.user.uid), {
-            lastLoginAt: now,
-            lastSeenAt: now,
+            lastLoginAt: Date.now(),
+            lastSeenAt: Date.now(),
             isOnline: true,
             rememberLogin
           }, { merge: true });
         } catch (dbErr) {
-          console.error("Failed to record login state:", dbErr);
+          console.error("Failed to record lastLoginAt:", dbErr);
         }
       }
     } catch (error) {
@@ -2403,37 +2411,85 @@ const cycleFamilySelection = (
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      const currentUser = auth.currentUser;
+  useEffect(() => {
+    if (!user) return;
+    if (rememberLogin) return;
 
-      if (currentUser) {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const now = Date.now();
+    const AWAY_EVENT_THROTTLE_MS = 30 * 1000;
+    const AUTO_LOGOUT_MS = 4 * 60 * 60 * 1000;
+    let lastSyncedSeenAt = 0;
 
-        try {
-          await setDoc(userDocRef, {
-            isOnline: false,
-            lastSeenAt: now,
-            lastLogoutAt: now
-          }, { merge: true });
-        } catch (dbErr) {
-          console.error("[Logout] Firestore 저장 실패:", dbErr);
-        }
+    const markActivity = () => {
+      const now = Date.now();
+      lastActivityAtRef.current = now;
+
+      if (now - lastSyncedSeenAt < AWAY_EVENT_THROTTLE_MS) return;
+      lastSyncedSeenAt = now;
+
+      updateDoc(doc(db, 'users', user.uid), {
+        lastSeenAt: now,
+        isOnline: true
+      }).catch(() => {});
+    };
+
+    markActivity();
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true });
+    });
+
+    const interval = window.setInterval(() => {
+      const inactiveFor = Date.now() - lastActivityAtRef.current;
+      if (inactiveFor >= AUTO_LOGOUT_MS) {
+        handleLogout();
       }
+    }, 30 * 1000);
 
-      inactivityLogoutTriggeredRef.current = false;
-      setHistory([]);
-      setResult(null);
-      setHistoryIndex(-1);
+    return () => {
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity as EventListener);
+      });
+      window.clearInterval(interval);
+    };
+  }, [user, rememberLogin]);
 
-      await signOut(auth);
-      navigate('/', { replace: true });
 
-    } catch (error) {
-      console.error("[Logout] 처리 오류:", error);
-    }
-  };
+      const handleLogout = async () => {
+        console.log('[ForceLogout Client] handleLogout called');
+        try {
+          const currentUser = auth.currentUser;
+
+          if (currentUser) {
+            console.log(`[ForceLogout Client] handleLogout - Updating Firestore for UID: ${currentUser.uid}`);
+            const userDocRef = doc(db, 'users', currentUser.uid);
+
+            try {
+              await setDoc(userDocRef, {
+                isOnline: false,
+                lastLogoutAt: Date.now(),
+                lastSeenAt: Date.now()
+              }, { merge: true });
+              console.log('[ForceLogout Client] handleLogout - Firestore update successful');
+            } catch (dbErr) {
+              console.error("[ForceLogout Client] handleLogout - Firestore update failed:", dbErr);
+            }
+          }
+
+          setHistory([]);
+          setResult(null);
+          setHistoryIndex(-1);
+
+          console.log('[ForceLogout Client] handleLogout - Calling signOut(auth)');
+          await signOut(auth);
+          console.log('[ForceLogout Client] handleLogout - signOut(auth) successful');
+          navigate('/', { replace: true });
+
+        } catch (error) {
+          console.error("[Logout] 처리 오류:", error);
+        }
+      };
 
   // History state is now persisted per logged-in user in Firestore.
   useEffect(() => {
@@ -4724,6 +4780,7 @@ ${result.prompt}
               <button
                 onClick={async () => {
                   if (!isForcedLogoutProcessingRef.current) {
+                    console.log("[ForceLogout Client] Manual logout button clicked in modal");
                     isForcedLogoutProcessingRef.current = true;
                     setIsForcedLogoutModalOpen(false);
                     await handleLogout();

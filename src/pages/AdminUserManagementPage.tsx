@@ -67,71 +67,96 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   trial: '체험판'
 };
 
+// 자리비움 기준 (10분)
+const AWAY_MS = 10 * 60 * 1000;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+// 휴면 기준 (30분)
+const IDLE_MS = 30 * 60 * 1000;
+
+// 자동 로그아웃 기준 (1시간)
+const AUTO_LOGOUT_MS = 1 * 60 * 60 * 1000;
+
+// 장기 미접속 기준 (180일)
 const LONG_INACTIVE_DAYS = 180;
+
+// 휴면회원 기준 (365일)
 const DORMANT_DAYS = 365;
 
-type AdminBadgeState = 'forcedLogout' | 'dormantMember' | 'longInactive' | 'account';
-
-const getDaysSince = (timestamp?: number) => {
+// 마지막 로그인 기준으로 현재까지 경과 일수 계산
+const getDayDiff = (timestamp?: number) => {
   if (!timestamp) return 0;
-  return Math.floor((Date.now() - timestamp) / DAY_MS);
+  return (Date.now() - timestamp) / (1000 * 60 * 60 * 24);
 };
 
-const isForceLoggedOutUser = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt'> & { forceLogoutAt?: number }) => {
-  const forceLogoutAt = user.forceLogoutAt || 0;
-  const lastLoginAt = user.lastLoginAt || 0;
-  const lastLogoutAt = user.lastLogoutAt || 0;
-  return !!forceLogoutAt && forceLogoutAt > lastLoginAt && (!lastLogoutAt || lastLogoutAt < forceLogoutAt);
+const isForceLoggedOut = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>) => {
+  const loginTime = user.lastLoginAt || 0;
+  const logoutTime = user.lastLogoutAt || 0;
+  const forceTime = user.forceLogoutAt || 0;
+  return forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
 };
 
-const getStatusBadgeInfo = (user: Pick<AppUserInfo, 'accountStatus' | 'lastLoginAt' | 'lastLogoutAt'> & { forceLogoutAt?: number }) => {
-  if (isForceLoggedOutUser(user)) {
-    return {
-      state: 'forcedLogout' as AdminBadgeState,
-      dotClass: 'bg-red-500',
-      textClass: 'text-red-500',
-      label: '강제 로그아웃됨'
-    };
-  }
+type PresenceState = 'loggedIn' | 'away' | 'idle' | 'loggedOut' | 'forced';
 
-  const inactiveDays = getDaysSince(user.lastLoginAt);
-  if (inactiveDays >= DORMANT_DAYS) {
-    return {
-      state: 'dormantMember' as AdminBadgeState,
-      dotClass: 'bg-red-500',
-      textClass: 'text-red-500',
-      label: '휴면회원'
-    };
-  }
+const getPresenceState = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>): PresenceState => {
+  if (isForceLoggedOut(user)) return 'forced';
 
-  if (inactiveDays >= LONG_INACTIVE_DAYS) {
-    return {
-      state: 'longInactive' as AdminBadgeState,
-      dotClass: 'bg-orange-500',
-      textClass: 'text-orange-500',
-      label: '장기 미접속'
-    };
-  }
+  const loginTime = user.lastLoginAt || 0;
+  const logoutTime = user.lastLogoutAt || 0;
+  const lastSeen = user.lastSeenAt || 0;
+  const isOnline = Boolean(user.isOnline);
+  const referenceSeen = lastSeen || loginTime;
 
-  return {
-    state: 'account' as AdminBadgeState,
-    dotClass:
-      user.accountStatus === 'active'
-        ? 'bg-emerald-500'
-        : user.accountStatus === 'banned'
-          ? 'bg-red-500'
-          : 'bg-zinc-400',
-    textClass:
-      user.accountStatus === 'active'
-        ? 'text-[var(--text-primary)]'
-        : user.accountStatus === 'banned'
-          ? 'text-red-500'
-          : 'text-[var(--text-primary)]',
-    label: STATUS_LABELS[user.accountStatus]
-  };
+  if (!loginTime && !logoutTime) return 'loggedOut';
+  if (!isOnline) return 'loggedOut';
+  if (!referenceSeen) return 'loggedIn';
+
+  const diff = Date.now() - referenceSeen;
+  if (diff < AWAY_MS) return 'loggedIn';
+  if (diff < IDLE_MS) return 'away';
+  if (diff < AUTO_LOGOUT_MS) return 'idle';
+  return 'loggedOut';
 };
+
+const getRecentStatusLabel = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>, formatLastSeen: (timestamp?: number) => string) => {
+  const loginTime = user.lastLoginAt || 0;
+  const logoutTime = user.lastLogoutAt || 0;
+  const forceTime = user.forceLogoutAt || 0;
+  const lastSeen = user.lastSeenAt || 0;
+  const presence = getPresenceState(user);
+
+  switch (presence) {
+    case 'forced':
+      return { icon: LogOut, className: 'text-red-500', text: `로그아웃: ${formatLastSeen(logoutTime || forceTime)}` };
+    case 'loggedIn':
+      return { icon: LogIn, className: 'text-emerald-500', text: `로그인: ${formatLastSeen(lastSeen || loginTime)}` };
+    case 'away':
+      return { icon: Clock, className: 'text-amber-500', text: `자리비움: ${formatLastSeen(lastSeen || loginTime)}` };
+    case 'idle':
+      return { icon: Clock, className: 'text-yellow-500', text: `휴면: ${formatLastSeen(lastSeen || loginTime)}` };
+    default:
+      return { icon: LogOut, className: 'text-red-400', text: `로그아웃: ${formatLastSeen(logoutTime || lastSeen || loginTime)}` };
+  }
+};
+
+const getBadgeInfo = (user: Pick<AppUserInfo, 'accountStatus' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>) => {
+  if (isForceLoggedOut(user)) {
+    return { dot: 'bg-red-500', textClass: 'text-red-500 font-black', label: '강제 로그아웃됨' };
+  }
+
+  const loginDays = getDayDiff(user.lastLoginAt);
+  if (loginDays >= DORMANT_DAYS) {
+    return { dot: 'bg-red-500', textClass: 'text-red-500 font-black', label: '휴면회원' };
+  }
+  if (loginDays >= LONG_INACTIVE_DAYS) {
+    return { dot: 'bg-orange-500', textClass: 'text-orange-500 font-black', label: '장기 미접속' };
+  }
+
+  const status = user.accountStatus || 'active';
+  if (status === 'banned') return { dot: 'bg-red-500', textClass: 'text-red-500', label: STATUS_LABELS[status] };
+  if (status === 'active') return { dot: 'bg-emerald-500', textClass: 'text-[var(--text-primary)]', label: STATUS_LABELS[status] };
+  return { dot: 'bg-zinc-400', textClass: 'text-[var(--text-primary)]', label: STATUS_LABELS[status] };
+};
+
 
 export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
@@ -178,25 +203,21 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       pro: 0,
       admin: 0
     };
-    
+
     users.forEach(u => {
       const r = u.role || 'free';
       if (typeof byRole[r as keyof typeof byRole] !== 'undefined') {
         byRole[r as keyof typeof byRole]++;
       }
 
-      // Status calculation
-      const loginTime = u.lastLoginAt || 0;
-      const logoutTime = u.lastLogoutAt || 0;
-      if (loginTime > 0 || logoutTime > 0) {
-        if (loginTime > logoutTime) {
-          loggedIn++;
-        } else {
-          loggedOut++;
-        }
+      const presence = getPresenceState(u);
+      if (presence === 'loggedIn' || presence === 'away' || presence === 'idle') {
+        loggedIn++;
+      } else {
+        loggedOut++;
       }
     });
-    
+
     return { total, byRole, loggedIn, loggedOut };
   }, [users]);
   // ---------------------------------------
@@ -293,13 +314,13 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       const matchesStatus = statusFilter === 'all' || user.accountStatus === statusFilter;
       const matchesPayment = paymentFilter === 'all' || user.paymentStatus === paymentFilter;
 
-      const loginTime = user.lastLoginAt || 0;
-      const logoutTime = user.lastLogoutAt || 0;
+      const presence = getPresenceState(user);
+
       let matchesLoginStatus = true;
       if (loginStatusFilter === 'loggedIn') {
-        matchesLoginStatus = loginTime > logoutTime;
+        matchesLoginStatus = presence === 'loggedIn' || presence === 'away' || presence === 'idle';
       } else if (loginStatusFilter === 'loggedOut') {
-        matchesLoginStatus = logoutTime >= loginTime && logoutTime > 0;
+        matchesLoginStatus = presence === 'loggedOut' || presence === 'forced';
       }
 
       return matchesSearch && matchesRole && matchesStatus && matchesPayment && matchesLoginStatus;
@@ -423,7 +444,13 @@ const handleForceLogout = async () => {
     });
 
     console.log("[ForceLogout UI] Fetch status:", response.status, response.statusText);
-    const result = await response.json();
+    const text = await response.text();
+    let result;
+    try {
+      result = text ? JSON.parse(text) : {};
+    } catch {
+      result = {};
+    }
     console.log("[ForceLogout UI] Response JSON:", result);
     
     if (response.ok) {
@@ -431,7 +458,9 @@ const handleForceLogout = async () => {
       setForceLogoutResult({ success: true, message: result.message || '강제 로그아웃 처리가 완료되었습니다.' });
     } else {
       console.error("[ForceLogout UI] API Response Failure:", result);
+      alert("강제 로그아웃 실패");
       setForceLogoutResult({ success: false, message: result.error || '처리에 실패했습니다.' });
+      return;
     }
   } catch (err: any) {
     console.error("[ForceLogout UI] Network or Server Exception:", err);
@@ -768,10 +797,20 @@ const handleForceLogout = async () => {
                     {(() => {
                       const loginTime = user.lastLoginAt || 0;
                       const logoutTime = user.lastLogoutAt || 0;
+                      const forceTime = user.forceLogoutAt || 0;
+                      
+                      const isForced = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
+                      const isOnline = loginTime > logoutTime;
+
+                      if (isForced) {
+                        return <span className="flex items-center gap-1 font-bold text-red-500"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
+                      }
+
                       if (!loginTime && !logoutTime) {
                         return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
                       }
-                      if (loginTime > logoutTime) {
+                      
+                      if (isOnline) {
                         return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(loginTime)}</span>;
                       } else {
                         return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime)}</span>;
@@ -780,20 +819,36 @@ const handleForceLogout = async () => {
                   </div>
                 </div>
                 <div className="hidden md:flex flex-col items-end shrink-0 gap-1.5 px-4 border-l border-btn-border">
-                  {(() => {
-                    const badgeInfo = getStatusBadgeInfo(user as AppUserInfo & { forceLogoutAt?: number });
-                    return (
-                      <>
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("w-2 h-2 rounded-full", badgeInfo.dotClass)} />
-                          <span className={cn("text-xs font-bold", badgeInfo.textClass)}>{badgeInfo.label}</span>
-                        </div>
-                        <span className="text-[10px] font-medium text-[var(--text-secondary)]">
-                          {PAYMENT_LABELS[user.paymentStatus]}
-                        </span>
-                      </>
-                    );
-                  })()}
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      const badge = getBadgeInfo(user);
+                      return <span className={cn("w-2 h-2 rounded-full", badge.dot)} />;
+                    })()}
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                      {(() => {
+                        const lat = user.lastLoginAt || 0;
+                        const lot = user.lastLogoutAt || 0;
+                        const flat = user.forceLogoutAt || 0;
+                        
+                        if (flat > 0 && flat > lat && (lot === 0 || lot < flat)) {
+                          return <span className="text-red-500 font-black">강제 로그아웃됨</span>;
+                        }
+                        
+                        // Status indicator
+                        const isActiveStatus = user.accountStatus === 'active';
+                        const isOnline = lat > lot;
+                        
+                        if (isActiveStatus && isOnline) {
+                          return <span className="text-emerald-500">로그인 중</span>;
+                        }
+                        
+                        return STATUS_LABELS[user.accountStatus];
+                      })()}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-medium text-[var(--text-secondary)]">
+                    {PAYMENT_LABELS[user.paymentStatus]}
+                  </span>
                 </div>
                 <ChevronRight className="w-5 h-5 text-[var(--text-secondary)] group-hover:translate-x-1 transition-transform" />
               </div>

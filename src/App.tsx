@@ -3531,7 +3531,7 @@ ${result.prompt}
                       </span>
                       <br />
                       <span className="text-[var(--text-secondary)]">
-                        세상에 단 하나 뿐인 나만의 곡을 만들어보세요
+                        세상에 단 하나뿐인 곡을 만들어보세요
                       </span>
                     </p>
                   </div>

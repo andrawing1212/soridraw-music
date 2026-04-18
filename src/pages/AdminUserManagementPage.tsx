@@ -710,6 +710,13 @@ const handleForceLogout = async () => {
                     {(() => {
                       const loginTime = user.lastLoginAt || 0;
                       const logoutTime = user.lastLogoutAt || 0;
+                      const forceTime = user.forceLogoutAt || 0;
+
+                      // Check for forced logout status first
+                      if (forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime)) {
+                        return <span className="flex items-center gap-1 font-bold text-red-500"><LogOut className="w-3 h-3" /> 강제 로그아웃됨</span>;
+                      }
+
                       if (!loginTime && !logoutTime) {
                         return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
                       }
@@ -737,6 +744,15 @@ const handleForceLogout = async () => {
                         if (flat > 0 && flat > lat && (lot === 0 || lot < flat)) {
                           return <span className="text-red-500 font-black">강제 로그아웃됨</span>;
                         }
+                        
+                        // Status indicator
+                        const isActiveStatus = user.accountStatus === 'active';
+                        const isOnline = lat > lot;
+                        
+                        if (isActiveStatus && isOnline) {
+                          return <span className="text-emerald-500">로그인 중</span>;
+                        }
+                        
                         return STATUS_LABELS[user.accountStatus];
                       })()}
                     </span>

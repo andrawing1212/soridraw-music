@@ -41,7 +41,7 @@ import {
   INSTRUMENTAL_SOLO_TAGS,
   INSTRUMENT_TAG_DESCRIPTIONS
 } from '../constants';
-import { CUSTOM_STRUCTURE_SECTIONS, isAdminEmail } from '../App';
+import { CUSTOM_STRUCTURE_SECTIONS } from '../App';
 
 type SectionTagDoc = SectionTag & {
   docId: string;
@@ -78,7 +78,7 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
     isActive: true
   });
 
-  const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+  const [isAdmin, setIsAdmin] = useState(isAdminProp || false);
 
   useEffect(() => {
     if (isAdminProp !== undefined) {
@@ -93,7 +93,7 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
     const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+        if (data.role === 'admin') {
           setIsAdmin(true);
         } else {
           setIsAdmin(false);

@@ -343,14 +343,8 @@ const ReorderableSectionItem = ({
   );
 };
 
-const ADMIN_EMAILS = ['andrawing1212@gmail.com', 'andrawing1213@gmail.com', 'legend3636@gmail.com'];
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
-}
-
-export function isAdminEmail(email?: string | null) {
-  return !!email && ADMIN_EMAILS.includes(normalizeEmail(email));
 }
 
 function SecondaryScrollControl() {
@@ -1708,7 +1702,7 @@ const cycleFamilySelection = (
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
   
-  const isAdminUser = useMemo(() => userRole === 'admin' || isAdminEmail(user?.email), [userRole, user?.email]);
+  const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
   const effectiveUserTier: TagTier = useMemo(() => {
     if (userRole === 'admin' || userRole === 'pro') return 'pro';
     if (userRole === 'basic') return 'basic';
@@ -1795,7 +1789,7 @@ const cycleFamilySelection = (
             }
           } else {
             // Initial signup fallback
-            setUserRole(isAdminEmail(currentUser.email) ? 'admin' : 'free');
+            setUserRole('free');
             setUserStatus('active');
           }
         }, (error) => {
@@ -1814,9 +1808,6 @@ const cycleFamilySelection = (
             const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
             const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
 
-            const normalizedEmail = normalizeEmail(currentUser.email || '');
-            const isSpecialAccount = ['andrawing1213@gmail.com', 'legend3636@gmail.com'].includes(normalizedEmail);
-
             const baseData: any = {
               uid: currentUser.uid,
               email: currentUser.email,
@@ -1832,7 +1823,7 @@ const cycleFamilySelection = (
               baseData.paymentStatus = 'none';
               
               // Bootstrap role (Only set if document doesn't exist)
-              baseData.role = isAdminEmail(currentUser.email) ? 'admin' : 'free';
+              baseData.role = 'free';
               
               await setDoc(userRef, baseData);
             } else {
@@ -1846,8 +1837,8 @@ const cycleFamilySelection = (
               // This is the primary defense against role being overwritten by legacy sync logic or client side mistakes.
               const wasAdmin = currentData.role === 'admin';
               
-              // Special cleanup for requested accounts or any legacy 'pro+' data
-              if (isSpecialAccount || currentData.role === 'pro+' || currentData.tier === 'pro+') {
+              // Special cleanup for any legacy 'pro+' data
+              if (currentData.role === 'pro+' || currentData.tier === 'pro+') {
                 // Remove legacy fields that might trigger sync issues
                 baseData.tier = deleteField();
                 baseData.user_plans = deleteField();
@@ -1859,8 +1850,7 @@ const cycleFamilySelection = (
               }
 
               // Final safeguard: If user is already an admin in DB, keep it that way.
-              // Also check ADMIN_EMAILS as a secondary source of truth for requested accounts.
-              if (wasAdmin || isAdminEmail(currentUser.email)) {
+              if (wasAdmin) {
                 baseData.role = 'admin';
               }
 

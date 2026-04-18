@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { isAdminEmail, getTimestampMs } from '../App';
+import { getTimestampMs } from '../App';
 import { motion, AnimatePresence } from 'motion/react';
 
 import AdminPageLayout from '../components/AdminPageLayout';
@@ -97,7 +97,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [editPlanName, setEditPlanName] = useState('');
   const [editMemo, setEditMemo] = useState('');
 
-  const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+  const [isAdmin, setIsAdmin] = useState(isAdminProp || false);
 
   // --- Summary Statistics Calculation ---
   const userStats = useMemo(() => {
@@ -149,7 +149,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
         if (snap.exists()) {
           const data = snap.data();
-          if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+          if (data.role === 'admin') {
             setIsAdmin(true);
           } else {
             setIsAdmin(false);

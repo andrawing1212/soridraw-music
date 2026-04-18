@@ -12,7 +12,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { VocalTone } from '../types';
-import { isAdminEmail } from '../App';
 import { 
   Plus, 
   Trash2, 
@@ -54,7 +53,7 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
   });
   const [genreTagInput, setGenreTagInput] = useState('');
 
-  const [isAdmin, setIsAdmin] = useState(isAdminProp || isAdminEmail(auth.currentUser?.email));
+  const [isAdmin, setIsAdmin] = useState(isAdminProp || false);
 
   useEffect(() => {
     if (isAdminProp !== undefined) {
@@ -69,7 +68,7 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
     const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.role === 'admin' || isAdminEmail(auth.currentUser?.email)) {
+        if (data.role === 'admin') {
           setIsAdmin(true);
         } else {
           setIsAdmin(false);

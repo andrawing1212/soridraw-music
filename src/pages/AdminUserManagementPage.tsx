@@ -198,6 +198,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           adminMemo: data.adminMemo || '',
           isOnline: data.isOnline || false,
           lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+          forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
         } as AppUserInfo;
       });
       setUsers(fetchedUsers);
@@ -267,6 +268,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           adminMemo: data.adminMemo || '',
           isOnline: data.isOnline || false,
           lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+          forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
         } as AppUserInfo;
         
         setSelectedUser(updatedUser);
@@ -726,7 +728,18 @@ const handleForceLogout = async () => {
                       user.accountStatus === 'active' ? "bg-emerald-500" : 
                       user.accountStatus === 'banned' ? "bg-red-500" : "bg-zinc-400"
                     )} />
-                    <span className="text-xs font-bold text-[var(--text-primary)]">{STATUS_LABELS[user.accountStatus]}</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                      {(() => {
+                        const lat = user.lastLoginAt || 0;
+                        const lot = user.lastLogoutAt || 0;
+                        const flat = user.forceLogoutAt || 0;
+                        
+                        if (flat > 0 && flat > lat && (lot === 0 || lot < flat)) {
+                          return <span className="text-red-500 font-black">강제 로그아웃됨</span>;
+                        }
+                        return STATUS_LABELS[user.accountStatus];
+                      })()}
+                    </span>
                   </div>
                   <span className="text-[10px] font-medium text-[var(--text-secondary)]">
                     {PAYMENT_LABELS[user.paymentStatus]}

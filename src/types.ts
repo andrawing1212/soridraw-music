@@ -227,6 +227,7 @@ export interface AppUserInfo {
   lastLogoutAt?: number;
   isOnline?: boolean;
   lastSeenAt?: number;
+  forceLogoutAt?: number;
   
   // Subscription info
   planName?: string;

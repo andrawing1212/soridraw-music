@@ -73,8 +73,8 @@ const AWAY_MS = 10 * 60 * 1000;
 // 휴면 기준 (30분)
 const IDLE_MS = 30 * 60 * 1000;
 
-// 자동 로그아웃 기준 (1시간)
-const AUTO_LOGOUT_MS = 1 * 60 * 60 * 1000;
+// 로그아웃 표시 기준 (2시간) 
+const LOGGED_OUT_MS = 2 * 60 * 60 * 1000;
 
 // 장기 미접속 기준 (180일)
 const LONG_INACTIVE_DAYS = 180;
@@ -113,7 +113,7 @@ const getPresenceState = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'l
   const diff = Date.now() - referenceSeen;
   if (diff < AWAY_MS) return 'loggedIn';
   if (diff < IDLE_MS) return 'away';
-  if (diff < AUTO_LOGOUT_MS) return 'idle';
+  if (diff < LOGGED_OUT_MS) return 'idle';
   return 'loggedOut';
 };
 
@@ -133,8 +133,18 @@ const getRecentStatusLabel = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' 
       return { icon: Clock, className: 'text-amber-500', text: `자리비움: ${formatLastSeen(lastSeen || loginTime)}` };
     case 'idle':
       return { icon: Clock, className: 'text-yellow-500', text: `휴면: ${formatLastSeen(lastSeen || loginTime)}` };
-    default:
-      return { icon: LogOut, className: 'text-red-400', text: `로그아웃: ${formatLastSeen(logoutTime || lastSeen || loginTime)}` };
+    default: {
+      const baseTime = logoutTime || lastSeen || loginTime;
+      const isRealLogout = logoutTime > 0;
+
+      return {
+        icon: LogOut,
+        className: 'text-red-400',
+        text: isRealLogout
+          ? `로그아웃: ${formatLastSeen(baseTime)}`
+          : `로그아웃 추정: ${formatLastSeen(baseTime)}`
+      };
+    }
   }
 };
 
@@ -794,58 +804,32 @@ const handleForceLogout = async () => {
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] md:text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
-                    {(() => {
-                      const loginTime = user.lastLoginAt || 0;
-                      const logoutTime = user.lastLogoutAt || 0;
-                      const forceTime = user.forceLogoutAt || 0;
-                      
-                      const isForced = forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
-                      const isOnline = loginTime > logoutTime;
-
-                      if (isForced) {
-                        return <span className="flex items-center gap-1 font-bold text-red-500"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime || forceTime)}</span>;
-                      }
-
-                      if (!loginTime && !logoutTime) {
-                        return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
-                      }
-                      
-                      if (isOnline) {
-                        return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(loginTime)}</span>;
-                      } else {
-                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime)}</span>;
-                      }
+                      {(() => {
+                      const recent = getRecentStatusLabel(user, formatLastSeen);
+                      const Icon = recent.icon;
+                      return (
+                        <span className={cn("flex items-center gap-1 font-bold", recent.className)}>
+                          <Icon className="w-3 h-3" /> {recent.text}
+                        </span>
+                      );
                     })()}
                   </div>
                 </div>
                 <div className="hidden md:flex flex-col items-end shrink-0 gap-1.5 px-4 border-l border-btn-border">
-                  <div className="flex items-center gap-1.5">
-                    {(() => {
-                      const badge = getBadgeInfo(user);
-                      return <span className={cn("w-2 h-2 rounded-full", badge.dot)} />;
-                    })()}
-                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                    <div className="flex items-center gap-1.5">
                       {(() => {
-                        const lat = user.lastLoginAt || 0;
-                        const lot = user.lastLogoutAt || 0;
-                        const flat = user.forceLogoutAt || 0;
-                        
-                        if (flat > 0 && flat > lat && (lot === 0 || lot < flat)) {
-                          return <span className="text-red-500 font-black">강제 로그아웃됨</span>;
-                        }
-                        
-                        // Status indicator
-                        const isActiveStatus = user.accountStatus === 'active';
-                        const isOnline = lat > lot;
-                        
-                        if (isActiveStatus && isOnline) {
-                          return <span className="text-emerald-500">로그인 중</span>;
-                        }
-                        
-                        return STATUS_LABELS[user.accountStatus];
+                        const badge = getBadgeInfo(user);
+                        return <span className={cn("w-2 h-2 rounded-full", badge.dot)} />;
                       })()}
-                    </span>
-                  </div>
+                      {(() => {
+                        const badge = getBadgeInfo(user);
+                        return (
+                          <span className={cn("text-xs font-bold", badge.textClass)}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
                   <span className="text-[10px] font-medium text-[var(--text-secondary)]">
                     {PAYMENT_LABELS[user.paymentStatus]}
                   </span>

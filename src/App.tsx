@@ -152,7 +152,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import { signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
   CREATE = 'create',
@@ -892,7 +892,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin }: { user: User | null; handleLogin: () => void; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>> }) {
+function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, isAdminUser }: { user: User | null; handleLogin: () => void; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -1173,16 +1173,7 @@ function Navigation({ user, handleLogin, handleLogout, themeMode, toggleTheme, i
 
       {/* Right Menu - Login (Only on Home Page) */}
       {location.pathname === '/' && !user && (
-        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50 flex items-center gap-2">
-          <label className="flex items-center gap-1.5 px-2.5 py-2 rounded-2xl bg-[var(--card-bg)]/90 border border-[var(--border-color)] backdrop-blur-md text-[10px] md:text-[11px] font-semibold text-[var(--text-primary)] shadow-lg select-none">
-            <input
-              type="checkbox"
-              checked={rememberLogin}
-              onChange={(e) => setRememberLogin(e.target.checked)}
-              className="w-3.5 h-3.5 accent-brand-orange"
-            />
-            로그인 유지
-          </label>
+        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50">
           <button 
             onClick={handleLogin}
             className="px-4 py-2 rounded-2xl bg-brand-orange text-white text-[11px] font-bold shadow-lg shadow-brand-orange/20 hover:brightness-110 transition-all flex items-center gap-2"
@@ -1714,13 +1705,6 @@ const cycleFamilySelection = (
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [user, setUser] = useState<User | null>(null);
-  const [rememberLogin, setRememberLogin] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('rememberLogin') === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [userRole, setUserRole] = useState<UserRole>('free');
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -1748,7 +1732,6 @@ const cycleFamilySelection = (
   const historyRef = useRef(history);
   const historyIndexRef = useRef(historyIndex);
   const userRef = useRef(user);
-  const lastActivityAtRef = useRef<number>(Date.now());
 
   useEffect(() => { pinnedGenresRef.current = pinnedGenres; }, [pinnedGenres]);
   useEffect(() => { pinnedThemesRef.current = pinnedThemes; }, [pinnedThemes]);
@@ -1757,11 +1740,6 @@ const cycleFamilySelection = (
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
   useEffect(() => { userRef.current = user; }, [user]);
-  useEffect(() => {
-    try {
-      localStorage.setItem('rememberLogin', rememberLogin ? 'true' : 'false');
-    } catch {}
-  }, [rememberLogin]);
 
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
@@ -1964,27 +1942,30 @@ const cycleFamilySelection = (
             const userSnap = await getDoc(userRef);
             console.log("[Auth Debug] User Doc Exists:", userSnap.exists());
 
-            const now = Date.now();
+            const safeSessionData = {
+              uid: currentUser.uid,
+              email: currentUser.email ?? '',
+              displayName: currentUser.displayName ?? '',
+              lastLoginAt: Date.now(),
+              lastSeenAt: Date.now(),
+              isOnline: true,
+            };
 
             if (!userSnap.exists()) {
-              // New user bootstrap only.
-              const favsSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
+              const favsSnap = await getDocs(
+                query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
+              );
               const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
               const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
 
               await setDoc(userRef, {
-                uid: currentUser.uid,
-                email: currentUser.email,
-                displayName: currentUser.displayName,
-                createdAt: now,
-                lastLoginAt: now,
-                lastSeenAt: now,
-                isOnline: true,
+                ...safeSessionData,
                 favoriteCount: favsSnap.size,
                 songGeneratedCount: songCount,
+                createdAt: Date.now(),
+                role: 'free',
                 accountStatus: 'active',
                 paymentStatus: 'none',
-                role: 'free'
               });
             } else {
               const currentData = userSnap.data();
@@ -1993,21 +1974,13 @@ const cycleFamilySelection = (
                 setIsBanModalOpen(true);
               }
 
-              // Existing users: never overwrite role/plan/payment/account fields here.
-              await setDoc(userRef, {
-                uid: currentUser.uid,
-                email: currentUser.email,
-                displayName: currentUser.displayName,
-                lastLoginAt: now,
-                lastSeenAt: now,
-                isOnline: true
-              }, { merge: true });
+              // Existing users: never touch role/plan/account status from the client.
+              await updateDoc(userRef, safeSessionData);
             }
           } catch (error) {
             console.error('Failed to sync user document:', error);
           }
         };
-
 
         syncUserDoc();
 
@@ -2391,16 +2364,12 @@ const cycleFamilySelection = (
 
   const handleLogin = async () => {
     try {
-      await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
+      await setPersistence(auth, browserSessionPersistence);
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
-        lastActivityAtRef.current = Date.now();
         try {
           await setDoc(doc(db, 'users', result.user.uid), {
-            lastLoginAt: Date.now(),
-            lastSeenAt: Date.now(),
-            isOnline: true,
-            rememberLogin
+            lastLoginAt: Date.now()
           }, { merge: true });
         } catch (dbErr) {
           console.error("Failed to record lastLoginAt:", dbErr);
@@ -2411,54 +2380,7 @@ const cycleFamilySelection = (
     }
   };
 
-  useEffect(() => {
-    if (!user) return;
-    if (rememberLogin) return;
-
-    const AWAY_EVENT_THROTTLE_MS = 30 * 1000;
-    const AUTO_LOGOUT_MS = 1 * 60 * 60 * 1000;
-    let lastSyncedSeenAt = 0;
-
-    const markActivity = () => {
-      const now = Date.now();
-      lastActivityAtRef.current = now;
-
-      if (now - lastSyncedSeenAt < AWAY_EVENT_THROTTLE_MS) return;
-      lastSyncedSeenAt = now;
-
-      updateDoc(doc(db, 'users', user.uid), {
-        lastSeenAt: now,
-        isOnline: true
-      }).catch(() => {});
-    };
-
-    markActivity();
-
-    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
-
-    events.forEach((eventName) => {
-      window.addEventListener(eventName, markActivity, { passive: true });
-    });
-
-    const interval = window.setInterval(() => {
-      const inactiveFor = Date.now() - lastActivityAtRef.current;
-      if (inactiveFor >= AUTO_LOGOUT_MS) {
-        handleLogout();
-      }
-    }, 30 * 1000);
-
-    return () => {
-      events.forEach((eventName) => {
-        window.removeEventListener(eventName, markActivity as EventListener);
-      });
-      window.clearInterval(interval);
-    };
-  }, [user, rememberLogin]);
-
-
       const handleLogout = async () => {
-        console.log("🔥 HANDLE LOGOUT CALLED");
-        console.trace('[ForceLogout Client] handleLogout trace');
         console.log('[ForceLogout Client] handleLogout called');
         try {
           const currentUser = auth.currentUser;
@@ -3620,7 +3542,7 @@ ${result.prompt}
         </Portal>
       )}
 
-      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} />
+      <Navigation user={user} handleLogin={handleLogin} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} />
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (

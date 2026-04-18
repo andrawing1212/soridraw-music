@@ -1813,6 +1813,7 @@ const cycleFamilySelection = (
       }
 
       if (currentUser) {
+        let isInitialUserDocSync = true;
         // Sync user role in real-time
         unsubUserDoc = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
           if (docSnap.exists()) {
@@ -1842,9 +1843,22 @@ const cycleFamilySelection = (
                 // If the signal is newer than both the session start AND what we've processed, trigger forced logout
                 console.log("[Auth Debug] Force Logout signal detected:", forceLogoutTime);
                 lastForcedLogoutTimeRef.current = forceLogoutTime;
-                setIsForcedLogoutModalOpen(true);
+
+                if (isInitialUserDocSync) {
+                  // Path B: Re-entry (Silent logout)
+                  console.log("[Auth Debug] Force Logout detected on initial sync (Re-entry). Silent logout.");
+                  if (!isForcedLogoutProcessingRef.current) {
+                    isForcedLogoutProcessingRef.current = true;
+                    handleLogout().catch(err => console.error("[Auth Debug] Silent logout failed:", err));
+                  }
+                } else {
+                  // Path A: Active Session (Modal + Countdown)
+                  console.log("[Auth Debug] Force Logout detected in active session. Showing modal.");
+                  setIsForcedLogoutModalOpen(true);
+                }
               }
             }
+            isInitialUserDocSync = false;
           } else {
             // Initial signup fallback
             setUserRole('free');

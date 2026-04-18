@@ -1701,6 +1701,8 @@ const cycleFamilySelection = (
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
   const [isForcedLogoutModalOpen, setIsForcedLogoutModalOpen] = useState(false);
+  const [forcedLogoutCountdown, setForcedLogoutCountdown] = useState(10);
+  const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
@@ -1748,6 +1750,39 @@ const cycleFamilySelection = (
       setMaxBPM(max);
     }
   }, [selectedGenres, selectedMoods, subGenre, tempoEnabled]);
+
+  // Automated Forced Logout Timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (isForcedLogoutModalOpen) {
+      setForcedLogoutCountdown(10);
+      isForcedLogoutProcessingRef.current = false;
+      
+      interval = setInterval(() => {
+        setForcedLogoutCountdown((prev) => {
+          if (prev <= 1) {
+            if (interval) clearInterval(interval);
+            // Auto-logout when countdown reaches 0
+            if (!isForcedLogoutProcessingRef.current) {
+              isForcedLogoutProcessingRef.current = true;
+              console.log("[Auth Debug] Auto-logout triggered by timer");
+              handleLogout().then(() => {
+                setIsForcedLogoutModalOpen(false);
+                navigate('/');
+              });
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isForcedLogoutModalOpen, navigate]);
 
   useEffect(() => {
     const testConnection = async () => {
@@ -4589,15 +4624,23 @@ ${result.prompt}
                   관리자에 의해 <span className="text-brand-orange font-bold">강제 로그아웃</span> 처리가 수행되었습니다.<br />
                   세션이 만료되어 자동으로 로그아웃됩니다.
                 </p>
+                <div className="py-2.5 px-4 bg-brand-orange/10 rounded-2xl inline-block mx-auto border border-brand-orange/20">
+                  <p className="text-brand-orange font-bold text-sm">
+                    {forcedLogoutCountdown}초 후 자동으로 로그아웃됩니다.
+                  </p>
+                </div>
                 <p className="text-xs text-[var(--text-secondary)]/60">
                   문의사항이 있으시면 고객 센터로 연락해 주시기 바랍니다.
                 </p>
               </div>
               <button
                 onClick={async () => {
-                  setIsForcedLogoutModalOpen(false);
-                  await handleLogout();
-                  navigate('/');
+                  if (!isForcedLogoutProcessingRef.current) {
+                    isForcedLogoutProcessingRef.current = true;
+                    setIsForcedLogoutModalOpen(false);
+                    await handleLogout();
+                    navigate('/');
+                  }
                 }}
                 className="w-full py-4 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
               >

@@ -1704,6 +1704,7 @@ const cycleFamilySelection = (
   const [forcedLogoutCountdown, setForcedLogoutCountdown] = useState(10);
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
+  const hasCompletedForceLogoutReentryCheckRef = useRef(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
   
@@ -1790,7 +1791,7 @@ const cycleFamilySelection = (
         await getDocFromServer(doc(db, 'test', 'connection'));
       } catch (error) {
         if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration. ");
+          console.error("Please check your Firebase configuration. " );
         }
       }
     };
@@ -1799,9 +1800,46 @@ const cycleFamilySelection = (
     let unsubFavs: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
 
+    const getSessionStartTime = (targetUser: User | null) => {
+      if (!targetUser?.metadata?.lastSignInTime) return 0;
+      const ms = new Date(targetUser.metadata.lastSignInTime).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const performForcedLogout = async ({ silent }: { silent: boolean }) => {
+      if (isForcedLogoutProcessingRef.current) return;
+      isForcedLogoutProcessingRef.current = true;
+
+      try {
+        if (silent) {
+          setIsForcedLogoutModalOpen(false);
+          setForcedLogoutCountdown(10);
+        }
+        await handleLogout();
+      } catch (err) {
+        console.error(`[Auth Debug] ${silent ? 'Silent' : 'Modal'} forced logout failed:`, err);
+      } finally {
+        isForcedLogoutProcessingRef.current = false;
+      }
+    };
+
+    const shouldProcessForceLogout = (forceLogoutAtValue: any, targetUser: User | null) => {
+      const forceLogoutTime = getTimestampMs(forceLogoutAtValue);
+      const sessionStartTime = getSessionStartTime(targetUser);
+      if (forceLogoutTime <= 0 || sessionStartTime <= 0) return false;
+      if (forceLogoutTime <= sessionStartTime) return false;
+      if (forceLogoutTime <= lastForcedLogoutTimeRef.current) return false;
+      lastForcedLogoutTimeRef.current = forceLogoutTime;
+      return true;
+    };
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
+      setIsForcedLogoutModalOpen(false);
+      setForcedLogoutCountdown(10);
+      lastForcedLogoutTimeRef.current = 0;
+      hasCompletedForceLogoutReentryCheckRef.current = false;
       
       if (unsubFavs) {
         unsubFavs();
@@ -1813,9 +1851,40 @@ const cycleFamilySelection = (
       }
 
       if (currentUser) {
-        let isInitialUserDocSync = true;
+        const userRef = doc(db, 'users', currentUser.uid);
+
+        const runInitialForceLogoutCheck = async () => {
+          try {
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              return;
+            }
+
+            const data = userSnap.data();
+            if (data.role) setUserRole(data.role as UserRole);
+            if (data.accountStatus) {
+              const status = data.accountStatus as AccountStatus;
+              setUserStatus(status);
+              if (status === 'banned') setIsBanModalOpen(true);
+            }
+
+            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
+              console.log('[Auth Debug] Force Logout detected during re-entry check. Silent logout.');
+              await performForcedLogout({ silent: true });
+              return;
+            }
+          } catch (error) {
+            console.error('[Auth Debug] Initial force logout check failed:', error);
+          } finally {
+            hasCompletedForceLogoutReentryCheckRef.current = true;
+          }
+        };
+
+        runInitialForceLogoutCheck();
+
         // Sync user role in real-time
-        unsubUserDoc = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+        unsubUserDoc = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
@@ -1829,36 +1898,14 @@ const cycleFamilySelection = (
               }
             }
 
-            // Check for Force Logout signal
-            if (data.forceLogoutAt) {
-              const forceLogoutTime = typeof data.forceLogoutAt === 'object' && data.forceLogoutAt?.toMillis 
-                ? data.forceLogoutAt.toMillis() 
-                : (typeof data.forceLogoutAt === 'number' ? data.forceLogoutAt : 0);
-              
-              const sessionStartTime = currentUser.metadata.lastSignInTime 
-                ? new Date(currentUser.metadata.lastSignInTime).getTime() 
-                : Date.now();
-
-              if (forceLogoutTime > 0 && forceLogoutTime > sessionStartTime && forceLogoutTime > lastForcedLogoutTimeRef.current) {
-                // If the signal is newer than both the session start AND what we've processed, trigger forced logout
-                console.log("[Auth Debug] Force Logout signal detected:", forceLogoutTime);
-                lastForcedLogoutTimeRef.current = forceLogoutTime;
-
-                if (isInitialUserDocSync) {
-                  // Path B: Re-entry (Silent logout)
-                  console.log("[Auth Debug] Force Logout detected on initial sync (Re-entry). Silent logout.");
-                  if (!isForcedLogoutProcessingRef.current) {
-                    isForcedLogoutProcessingRef.current = true;
-                    handleLogout().catch(err => console.error("[Auth Debug] Silent logout failed:", err));
-                  }
-                } else {
-                  // Path A: Active Session (Modal + Countdown)
-                  console.log("[Auth Debug] Force Logout detected in active session. Showing modal.");
-                  setIsForcedLogoutModalOpen(true);
-                }
-              }
+            if (!hasCompletedForceLogoutReentryCheckRef.current) {
+              return;
             }
-            isInitialUserDocSync = false;
+
+            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
+              console.log('[Auth Debug] Force Logout detected in active session. Showing modal.');
+              setIsForcedLogoutModalOpen(true);
+            }
           } else {
             // Initial signup fallback
             setUserRole('free');

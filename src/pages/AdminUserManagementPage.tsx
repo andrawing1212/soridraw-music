@@ -98,40 +98,21 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   // --- Summary Statistics Calculation ---
   const userStats = useMemo(() => {
     const total = users.length;
-    // Primary criterion: isOnline flag from document
-    // Secondary safety: lastSeenAt within last 1 hour (to catch abandoned sessions where isOnline might be stuck)
-    const onlineThreshold = 3600000; // 1 hour safety margin
-    const now = Date.now();
-
-    const isActuallyOnline = (u: AppUserInfo) => {
-      // If flag is true and haven't seen them for > 1 hour, probably a stuck session
-      if (u.isOnline) {
-        if (u.lastSeenAt && (now - u.lastSeenAt) > onlineThreshold) return false;
-        return true;
-      }
-      return false;
-    };
-    
-    const online = users.filter(u => isActuallyOnline(u)).length;
-    
     const byRole = {
-      free: { total: 0, online: 0 },
-      basic: { total: 0, online: 0 },
-      pro: { total: 0, online: 0 },
-      admin: { total: 0, online: 0 }
+      free: 0,
+      basic: 0,
+      pro: 0,
+      admin: 0
     };
     
     users.forEach(u => {
       const r = u.role || 'free';
-      const isOnline = isActuallyOnline(u);
-      
-      if (byRole[r as keyof typeof byRole]) {
-        byRole[r as keyof typeof byRole].total++;
-        if (isOnline) byRole[r as keyof typeof byRole].online++;
+      if (typeof byRole[r as keyof typeof byRole] !== 'undefined') {
+        byRole[r as keyof typeof byRole]++;
       }
     });
     
-    return { total, online, byRole };
+    return { total, byRole };
   }, [users]);
   // ---------------------------------------
 
@@ -171,8 +152,13 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     try {
       const q = query(collection(db, 'users'), orderBy(sortBy, 'desc'));
       const snapshot = await getDocs(q);
+      console.log(`[Admin Debug] Fetched ${snapshot.size} users`);
       const fetchedUsers = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
+        // Log all users who have a lastLogoutAt to see if it's actually there
+        if (data.lastLogoutAt) {
+          console.log(`[Admin Debug] User ${data.email || docSnap.id} has lastLogoutAt:`, data.lastLogoutAt);
+        }
         return {
           uid: docSnap.id,
           email: data.email || null,
@@ -182,6 +168,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
           createdAt: getTimestampMs(data.createdAt || Date.now()),
           lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
+          lastLogoutAt: data.lastLogoutAt ? getTimestampMs(data.lastLogoutAt) : undefined,
           planName: data.planName,
           planStartAt: data.planStartAt ? getTimestampMs(data.planStartAt) : undefined,
           planExpireAt: data.planExpireAt ? getTimestampMs(data.planExpireAt) : undefined,
@@ -241,6 +228,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
           createdAt: getTimestampMs(data.createdAt || Date.now()),
           lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
+          lastLogoutAt: data.lastLogoutAt ? getTimestampMs(data.lastLogoutAt) : undefined,
           planName: data.planName,
           planStartAt: data.planStartAt ? getTimestampMs(data.planStartAt) : undefined,
           planExpireAt: data.planExpireAt ? getTimestampMs(data.planExpireAt) : undefined,
@@ -351,6 +339,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     }
   };
 
+  const formatTimestamp = (timestamp?: number) => {
+    if (!timestamp) return '기록 없음';
+    return new Date(timestamp).toLocaleString();
+  };
+
   const formatLastSeen = (timestamp?: number) => {
     if (!timestamp) return '기록 없음';
     const now = Date.now();
@@ -359,13 +352,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     if (diff < 3600000) return `${Math.floor(diff / 60000)}분 전`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
     return new Date(timestamp).toLocaleDateString();
-  };
-
-  const isUserOnline = (user: AppUserInfo) => {
-    if (!user.isOnline) return false;
-    // 1-hour safety margin for stuck sessions
-    if (user.lastSeenAt && (Date.now() - user.lastSeenAt) > 3600000) return false;
-    return true;
   };
 
   if (!isAdmin) {
@@ -395,7 +381,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       }
     >
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -409,29 +395,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             {userStats.total}<span className="text-sm font-bold ml-1">명</span>
           </div>
         </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
-        >
-          <div className="flex items-center gap-2 mb-1 text-emerald-500 text-xs font-bold">
-            <Activity className="w-3.5 h-3.5" />
-            현재 접속
-          </div>
-          <div className="text-2xl font-black text-emerald-500">
-            {userStats.online}<span className="text-sm font-bold ml-1">명</span>
-          </div>
-        </motion.div>
         
         {/* Role Stats */}
-        {(Object.entries(userStats.byRole) as [UserRole, {total: number, online: number}][]).map(([role, data], idx) => (
+        {(Object.entries(userStats.byRole) as [UserRole, number][]).map(([role, count], idx) => (
           <motion.div 
             key={role}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + (idx * 0.05) }}
+            transition={{ delay: 0.05 + (idx * 0.05) }}
             className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
           >
             <div 
@@ -450,9 +421,9 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               {ROLE_LABELS[role]}
             </div>
             <div className="flex items-baseline justify-between gap-1">
-              <span className="text-xl font-black text-[var(--text-primary)]">{data.total}</span>
-              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-                ON {data.online}
+              <span className="text-xl font-black text-[var(--text-primary)]">{count}</span>
+              <span className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded-full">
+                명
               </span>
             </div>
           </motion.div>
@@ -537,14 +508,10 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               >
                 <div className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-center shrink-0 border border-btn-border group-hover:scale-110 transition-transform relative">
                   <User className="w-6 h-6 text-[var(--text-secondary)]" />
-                  {isUserOnline(user) && (
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[var(--bg-primary)] rounded-full animate-pulse shadow-sm" />
-                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-bold text-[var(--text-primary)] truncate">{user.displayName || '이름 없음'}</span>
-                    {isUserOnline(user) && <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5"><span className="w-1 h-1 rounded-full bg-emerald-500" /> 접속 중</span>}
                     <span className={cn(
                       "px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
                       user.role === 'admin' ? "bg-red-500/10 text-red-500" :
@@ -555,10 +522,10 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                       {ROLE_LABELS[user.role]}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] md:text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
-                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> 가입: {new Date(user.createdAt).toLocaleDateString()}</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 최근 활동: {formatLastSeen(user.lastSeenAt)}</span>
+                    <span className="flex items-center gap-1 font-bold text-emerald-500"><Clock className="w-3 h-3" /> 로그인: {formatLastSeen(user.lastLoginAt)}</span>
+                    <span className="flex items-center gap-1 text-red-400"><Clock className="w-3 h-3" /> 로그아웃: {formatLastSeen(user.lastLogoutAt)}</span>
                   </div>
                 </div>
                 <div className="hidden md:flex flex-col items-end shrink-0 gap-1.5 px-4 border-l border-btn-border">
@@ -640,8 +607,16 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                         <span className="text-sm font-bold text-[var(--text-primary)]">{new Date(selectedUser.createdAt).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between items-center py-2 border-b border-btn-border/50">
-                        <span className="text-xs text-[var(--text-secondary)]">최종 접속</span>
-                        <span className="text-sm font-bold text-[var(--text-primary)]">{selectedUser.lastLoginAt ? new Date(selectedUser.lastLoginAt).toLocaleString() : '기록 없음'}</span>
+                        <span className="text-xs text-[var(--text-secondary)]">최근 로그인</span>
+                        <span className="text-xs font-bold text-emerald-500">{formatTimestamp(selectedUser.lastLoginAt)}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-btn-border/50">
+                        <span className="text-xs text-[var(--text-secondary)]">최근 로그아웃</span>
+                        <span className="text-xs font-bold text-red-400">{formatTimestamp(selectedUser.lastLogoutAt)}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-btn-border/50">
+                        <span className="text-xs text-[var(--text-secondary)]">최근 활동</span>
+                        <span className="text-xs font-bold text-[var(--text-secondary)]">{formatTimestamp(selectedUser.lastSeenAt)}</span>
                       </div>
                     </div>
                   </div>

@@ -76,13 +76,12 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'email', 'role', 'accountStatus', 'paymentStatus', 'createdAt']) &&
-             data.uid is string &&
-             (data.email == null || data.email is string) &&
-             data.role in ['free', 'basic', 'pro', 'admin'] &&
-             data.accountStatus in ['active', 'paused', 'expired', 'banned'] &&
-             data.paymentStatus in ['none', 'active', 'canceled', 'expired', 'refunded', 'trial'] &&
-             (data.createdAt is number || data.createdAt is timestamp);
+      return data.uid is string &&
+             (data.get('email', null) == null || (data.get('email', '') is string)) &&
+             data.get('role', 'free') in ['free', 'basic', 'pro', 'admin'] &&
+             data.get('accountStatus', 'active') in ['active', 'paused', 'expired', 'banned'] &&
+             data.get('paymentStatus', 'none') in ['none', 'active', 'canceled', 'expired', 'refunded', 'trial'] &&
+             (data.get('createdAt', 0) is number || data.get('createdAt', timestamp(0)) is timestamp);
     }
 
     function isValidRecentSongs(data) {
@@ -153,8 +152,8 @@ service cloud.firestore {
       // Users can update their own profile but NOT their role or account status
       allow update: if (isOwner(uid) && 
                         isValidUser(request.resource.data) && 
-                        request.resource.data.role == resource.data.role && 
-                        request.resource.data.accountStatus == resource.data.accountStatus) || 
+                        request.resource.data.get('role', 'free') == resource.data.get('role', 'free') && 
+                        request.resource.data.get('accountStatus', 'active') == resource.data.get('accountStatus', 'active')) || 
                       isAdmin();
     }
 

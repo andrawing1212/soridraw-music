@@ -224,6 +224,7 @@ export interface AppUserInfo {
   paymentStatus: PaymentStatus;
   createdAt: number;
   lastLoginAt?: number;
+  lastLogoutAt?: number;
   isOnline?: boolean;
   lastSeenAt?: number;
   

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -150,7 +151,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
   CREATE = 'create',
@@ -1729,79 +1730,6 @@ const cycleFamilySelection = (
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
   useEffect(() => { userRef.current = user; }, [user]);
-  useEffect(() => {
-    if (!user) return;
-
-    const userRef = doc(db, 'users', user.uid);
-    let isTerminating = false;
-
-    // Set online
-    const setOnline = async () => {
-      try {
-        await updateDoc(userRef, {
-          isOnline: true,
-          lastSeenAt: Date.now()
-        });
-      } catch (e) {
-        console.error('Failed to set online:', e);
-      }
-    };
-
-    setOnline();
-
-    // Heartbeat for lastSeenAt - 1 minute for secondary activity tracking
-    const interval = setInterval(() => {
-      if (isTerminating || document.visibilityState !== 'visible') return;
-      updateDoc(userRef, {
-        lastSeenAt: Date.now(),
-        isOnline: true
-      }).catch(() => {});
-    }, 60000);
-
-    // Activity tracker & Focus handler
-    const handleActivity = () => {
-      if (document.visibilityState === 'visible') {
-        updateDoc(userRef, {
-          isOnline: true,
-          lastSeenAt: Date.now()
-        }).catch(() => {});
-      }
-    };
-
-    const handleTerminate = () => {
-      if (isTerminating) return;
-      // On tab close/navigation away, set offline
-      // Note: This is best-effort on web
-      updateDoc(userRef, {
-        isOnline: false,
-        lastSeenAt: Date.now()
-      }).catch(() => {});
-    };
-
-    window.addEventListener('mousedown', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('focus', handleActivity);
-    document.addEventListener('visibilitychange', handleActivity);
-    window.addEventListener('pagehide', handleTerminate);
-    window.addEventListener('beforeunload', handleTerminate);
-
-    return () => {
-      isTerminating = true;
-      clearInterval(interval);
-      window.removeEventListener('mousedown', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      window.removeEventListener('focus', handleActivity);
-      document.removeEventListener('visibilitychange', handleActivity);
-      window.removeEventListener('pagehide', handleTerminate);
-      window.removeEventListener('beforeunload', handleTerminate);
-      
-      // Set offline on unmount/logout
-      updateDoc(userRef, {
-        isOnline: false,
-        lastSeenAt: Date.now()
-      }).catch(() => {});
-    };
-  }, [user]);
 
   const [favorites, setFavorites] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
@@ -1868,9 +1796,11 @@ const cycleFamilySelection = (
         });
 
         const syncUserDoc = async () => {
+          console.log("[Auth Debug] syncUserDoc triggered for:", currentUser.uid);
           try {
             const userRef = doc(db, 'users', currentUser.uid);
             const userSnap = await getDoc(userRef);
+            console.log("[Auth Debug] User Doc Exists:", userSnap.exists());
             
             // Fetch counts
             const favsSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
@@ -1923,7 +1853,8 @@ const cycleFamilySelection = (
                 baseData.role = 'admin';
               }
 
-              await updateDoc(userRef, baseData);
+              // Using setDoc with merge is consistent and safer
+              await setDoc(userRef, baseData, { merge: true });
             }
           } catch (error) {
             console.error('Failed to sync user document:', error);
@@ -2312,27 +2243,67 @@ const cycleFamilySelection = (
 
   const handleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      await setPersistence(auth, browserSessionPersistence);
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        try {
+          await setDoc(doc(db, 'users', result.user.uid), {
+            lastLoginAt: Date.now()
+          }, { merge: true });
+        } catch (dbErr) {
+          console.error("Failed to record lastLoginAt:", dbErr);
+        }
+      }
     } catch (error) {
       console.error("Login Error:", error);
     }
   };
 
   const handleLogout = async () => {
+    alert("logout 진입");  // ✅ 여기
+    console.log("🔥 handleLogout 실행됨", auth.currentUser?.uid);
     try {
-      if (user) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          isOnline: false,
-          lastSeenAt: Date.now()
-        }).catch(() => {});
+      const currentUser = auth.currentUser;
+      const logoutTime = Date.now();
+      console.log("[Logout Debug] Starting handleLogout for UID:", currentUser?.uid);
+
+      if (currentUser) {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        console.log("[Logout Debug] Persistence Path:", userDocRef.path);
+        
+        try {
+          const updatePayload = {
+            isOnline: false,
+            lastLogoutAt: logoutTime
+          };
+          console.log("[Logout Debug] Attempting Firestore setDoc (merge) with payload:", updatePayload);
+          
+          // Using setDoc with merge is safer than updateDoc as it creates the doc if it's missing
+          await setDoc(userDocRef, updatePayload, { merge: true });
+          
+          console.log("[Logout Debug] Firestore record success. lastLogoutAt saved as:", logoutTime);
+          const verifySnap = await getDoc(userDocRef);
+          console.log("[Logout Debug] verify doc data:", verifySnap.data());
+
+        } catch (dbErr: any) {
+          console.error("[Logout Debug] Firestore record error:", dbErr.message, dbErr);
+          // We still continue to signOut even if logging fails, but we want to know why it failed
+        }
+      } else {
+        console.warn("[Logout Debug] No authenticated user found during handleLogout.");
       }
+
       setHistory([]);
       setResult(null);
       setHistoryIndex(-1);
+      
+      console.log("[Logout Debug] Proceeding to Firebase signOut...");
       await signOut(auth);
+      console.log("[Logout Debug] Sign out complete. Navigating home.");
+      
       navigate('/', { replace: true });
     } catch (error) {
-      console.error("Logout Error:", error);
+      console.error("[Logout Debug] Terminal error in handleLogout:", error);
     }
   };
 

@@ -3,32 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Assumed Data Model
+    // Global Deny
     // ===============================================================
-    //
-    // Collection: favorites
-    // Document ID: auto-generated
-    // Fields:
-    //   - uid: string (required) - The user's UID
-    //   - title: string (required, max 200 chars)
-    //   - lyrics: map (required)
-    //     - english: string (required, max 5000 chars)
-    //     - korean: string (required, max 5000 chars)
-    //   - prompt: string (required, max 2000 chars)
-    //   - appliedKeywords: map (required)
-    //     - genre: list of strings (required, max 10 items)
-    //     - mood: list of strings (required, max 10 items)
-    //     - theme: list of strings (required, max 10 items)
-    //     - tempo: string (optional, max 50 chars)
-    //     - vocalGender: string (optional, max 50 chars)
-    //   - createdAt: timestamp (required)
-    //
-    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
     // Helper Functions
     // ===============================================================
-
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -42,50 +25,37 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ===============================================================
+    // Validation Helpers (Simplified)
+    // ===============================================================
     function isValidFavorite(data) {
       return data.keys().hasAll(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'isLocked', 'createdAt']) &&
-             data.keys().hasOnly(['uid', 'title', 'lyrics', 'prompt', 'appliedKeywords', 'isLocked', 'createdAt']) &&
              data.uid is string &&
-             data.title is string && data.title.size() <= 200 &&
+             data.title is string &&
              data.lyrics is map &&
-             data.lyrics.keys().hasOnly(['english', 'korean']) &&
-             data.lyrics.english is string && data.lyrics.english.size() <= 10000 &&
-             data.lyrics.korean is string && data.lyrics.korean.size() <= 10000 &&
-             data.prompt is string && data.prompt.size() <= 5000 &&
+             data.prompt is string &&
              data.appliedKeywords is map &&
-             data.appliedKeywords.keys().hasOnly(['genre', 'mood', 'theme', 'tempo', 'vocalType', 'lyricsLength', 'drumStyle', 'maleCount', 'femaleCount', 'tempoConfig']) &&
-             data.appliedKeywords.genre is list && data.appliedKeywords.genre.size() <= 10 &&
-             data.appliedKeywords.mood is list && data.appliedKeywords.mood.size() <= 10 &&
-             data.appliedKeywords.theme is list && data.appliedKeywords.theme.size() <= 10 &&
-             (!('tempo' in data.appliedKeywords) || (data.appliedKeywords.tempo is string && data.appliedKeywords.tempo.size() <= 50)) &&
-             (!('vocalType' in data.appliedKeywords) || (data.appliedKeywords.vocalType is string && data.appliedKeywords.vocalType.size() <= 50)) &&
-             (!('lyricsLength' in data.appliedKeywords) || (data.appliedKeywords.lyricsLength is string && data.appliedKeywords.lyricsLength.size() <= 50)) &&
-             (!('drumStyle' in data.appliedKeywords) || (data.appliedKeywords.drumStyle is string && data.appliedKeywords.drumStyle.size() <= 50)) &&
-             (!('maleCount' in data.appliedKeywords) || (data.appliedKeywords.maleCount is number)) &&
-             (!('femaleCount' in data.appliedKeywords) || (data.appliedKeywords.femaleCount is number)) &&
-             (!('tempoConfig' in data.appliedKeywords) || (
-               data.appliedKeywords.tempoConfig is map &&
-               data.appliedKeywords.tempoConfig.keys().hasOnly(['enabled', 'min', 'max']) &&
-               data.appliedKeywords.tempoConfig.enabled is bool &&
-               data.appliedKeywords.tempoConfig.min is number &&
-               data.appliedKeywords.tempoConfig.max is number
-             )) &&
              data.isLocked is bool &&
              data.createdAt is timestamp;
     }
 
     function isValidUser(data) {
       return data.uid is string &&
-             (data.get('email', null) == null || (data.get('email', '') is string)) &&
-             data.get('role', 'free') in ['free', 'basic', 'pro', 'admin'] &&
-             data.get('accountStatus', 'active') in ['active', 'paused', 'expired', 'banned'] &&
-             data.get('paymentStatus', 'none') in ['none', 'active', 'canceled', 'expired', 'refunded', 'trial'] &&
-             (data.get('createdAt', 0) is number || data.get('createdAt', timestamp(0)) is timestamp);
+             data.role in ['free', 'basic', 'pro', 'admin'] &&
+             data.accountStatus in ['active', 'paused', 'expired', 'banned'] &&
+             data.paymentStatus in ['none', 'active', 'canceled', 'expired', 'refunded', 'trial'];
     }
 
     function isValidRecentSongs(data) {
       return data.keys().hasAll(['songs']) &&
-             data.keys().hasOnly(['songs']) &&
              data.songs is list &&
              data.songs.size() <= 5;
     }
@@ -94,71 +64,41 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && incoming().role == 'free';
+      allow update: if isAdmin() || (isOwner(uid) && incoming().role == existing().role && incoming().accountStatus == existing().accountStatus);
+    }
+
     match /favorites/{favoriteId} {
-      // Users can only read their own favorites
-      allow read: if isOwner(resource.data.uid);
-      
-      // Users can only create favorites for themselves
-      allow create: if isOwner(request.resource.data.uid) && isValidFavorite(request.resource.data);
-      
-      // Users can only delete their own favorites
-      allow delete: if isOwner(resource.data.uid);
-      
-      // Only isLocked can be updated
-      allow update: if isOwner(resource.data.uid) && 
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isLocked']) &&
-                      request.resource.data.isLocked is bool;
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      allow create: if isOwner(incoming().uid) && isValidFavorite(incoming());
+      allow delete: if isOwner(existing().uid) || isAdmin();
+      allow update: if (isOwner(existing().uid) || isAdmin()) && 
+                      incoming().diff(existing()).affectedKeys().hasOnly(['isLocked']);
     }
 
     match /user_recent_songs/{uid} {
-      // Users can only read their own recent songs
-      allow read: if isOwner(uid);
-      
-      // Users can only create/update their own recent songs
-      allow create, update: if isOwner(uid) && isValidRecentSongs(request.resource.data);
-      
-      // Users can only delete their own recent songs
-      allow delete: if isOwner(uid);
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && isValidRecentSongs(incoming());
+      allow delete: if isOwner(uid) || isAdmin();
     }
 
     match /section_tags/{tagId} {
-      // Anyone can read active tags
-      allow read: if true;
-      // Only admins can manage tags
+      // Tags are public information for the UI
+      allow get, list: if true;
       allow write: if isAdmin();
     }
 
     match /section_tags_draft/{tagId} {
-      allow read: if true;
+      allow get, list: if true;
       allow write: if isAdmin();
     }
 
     match /section_tags_live/{tagId} {
-      allow read: if true;
+      allow get, list: if true;
       allow write: if isAdmin();
-    }
-
-    match /users/{uid} {
-      // Users can read/write their own profile
-      allow get: if isOwner(uid) || isAdmin();
-      allow list: if isAdmin();
-      
-      // Users can create their own profile as 'free' (or 'admin' if email fallback matches)
-      allow create: if isOwner(uid) && 
-                      isValidUser(request.resource.data) && 
-                      (request.resource.data.role == 'free' || isAdmin());
-      
-      // Users can update their own profile but NOT their role or account status
-      allow update: if (isOwner(uid) && 
-                        isValidUser(request.resource.data) && 
-                        request.resource.data.get('role', 'free') == resource.data.get('role', 'free') && 
-                        request.resource.data.get('accountStatus', 'active') == resource.data.get('accountStatus', 'active')) || 
-                      isAdmin();
-    }
-
-    // Default deny
-    match /{path=**} {
-      allow read, write: if false;
     }
   }
 }

@@ -1371,9 +1371,18 @@ function App() {
       const fetchedTags = snapshot.docs.map(doc => ({
         ...doc.data()
       })) as SectionTag[];
+      console.log(`[Tags Debug] Fetched ${fetchedTags.length} tags`);
       setSectionTags(fetchedTags);
     }, (err) => {
       console.error("Error fetching section tags for user UI:", err);
+      // Detailed logging for permissions error
+      if (err.message.includes('permission')) {
+        console.error("[Tags Debug] Current User Auth State:", {
+          uid: auth.currentUser?.uid,
+          email: auth.currentUser?.email,
+          emailVerified: auth.currentUser?.emailVerified
+        });
+      }
     });
 
     return () => unsubscribe();

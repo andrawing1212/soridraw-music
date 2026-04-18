@@ -32,7 +32,9 @@ import {
   Music,
   Heart,
   FileText,
-  AlertCircle
+  AlertCircle,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -73,6 +75,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<AccountStatus | 'all'>('all');
   const [paymentFilter, setPaymentFilter] = useState<PaymentStatus | 'all'>('all');
+  const [loginStatusFilter, setLoginStatusFilter] = useState<'all' | 'loggedIn' | 'loggedOut'>('all');
   const [sortBy, setBy] = useState<'createdAt' | 'lastLoginAt'>('createdAt');
   
   const [selectedUser, setSelectedUser] = useState<AppUserInfo | null>(null);
@@ -98,6 +101,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   // --- Summary Statistics Calculation ---
   const userStats = useMemo(() => {
     const total = users.length;
+    let loggedIn = 0;
+    let loggedOut = 0;
     const byRole = {
       free: 0,
       basic: 0,
@@ -110,9 +115,20 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       if (typeof byRole[r as keyof typeof byRole] !== 'undefined') {
         byRole[r as keyof typeof byRole]++;
       }
+
+      // Status calculation
+      const loginTime = u.lastLoginAt || 0;
+      const logoutTime = u.lastLogoutAt || 0;
+      if (loginTime > 0 || logoutTime > 0) {
+        if (loginTime > logoutTime) {
+          loggedIn++;
+        } else {
+          loggedOut++;
+        }
+      }
     });
     
-    return { total, byRole };
+    return { total, byRole, loggedIn, loggedOut };
   }, [users]);
   // ---------------------------------------
 
@@ -207,9 +223,18 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       const matchesStatus = statusFilter === 'all' || user.accountStatus === statusFilter;
       const matchesPayment = paymentFilter === 'all' || user.paymentStatus === paymentFilter;
 
-      return matchesSearch && matchesRole && matchesStatus && matchesPayment;
+      const loginTime = user.lastLoginAt || 0;
+      const logoutTime = user.lastLogoutAt || 0;
+      let matchesLoginStatus = true;
+      if (loginStatusFilter === 'loggedIn') {
+        matchesLoginStatus = loginTime > logoutTime;
+      } else if (loginStatusFilter === 'loggedOut') {
+        matchesLoginStatus = logoutTime >= loginTime && logoutTime > 0;
+      }
+
+      return matchesSearch && matchesRole && matchesStatus && matchesPayment && matchesLoginStatus;
     });
-  }, [users, searchTerm, roleFilter, statusFilter, paymentFilter]);
+  }, [users, searchTerm, roleFilter, statusFilter, paymentFilter, loginStatusFilter]);
 
   const [isRefreshingDetail, setIsRefreshingDetail] = useState(false);
 
@@ -381,7 +406,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       }
     >
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -395,39 +420,74 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             {userStats.total}<span className="text-sm font-bold ml-1">명</span>
           </div>
         </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm border-emerald-500/20"
+        >
+          <div className="flex items-center gap-2 mb-1 text-emerald-500 text-xs font-bold">
+            <LogIn className="w-3.5 h-3.5" />
+            로그인
+          </div>
+          <div className="text-2xl font-black text-emerald-500">
+            {userStats.loggedIn}<span className="text-xs font-bold ml-1">명</span>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm border-red-500/20"
+        >
+          <div className="flex items-center gap-2 mb-1 text-red-500 text-xs font-bold">
+            <LogOut className="w-3.5 h-3.5" />
+            로그아웃
+          </div>
+          <div className="text-2xl font-black text-red-500">
+            {userStats.loggedOut}<span className="text-xs font-bold ml-1">명</span>
+          </div>
+        </motion.div>
         
         {/* Role Stats */}
-        {(Object.entries(userStats.byRole) as [UserRole, number][]).map(([role, count], idx) => (
-          <motion.div 
-            key={role}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 + (idx * 0.05) }}
-            className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
-          >
-            <div 
-              className="flex items-center gap-2 mb-1 text-[10px] font-black uppercase tracking-wider"
-              style={{ 
-                color: role === 'admin' ? '#f43f5e' : 
-                       role === 'pro' ? 'var(--brand-orange)' : 
-                       role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
-              }}
-            >
-              <div className="w-1.5 h-1.5 rounded-full" style={{ 
-                backgroundColor: role === 'admin' ? '#f43f5e' : 
-                                role === 'pro' ? 'var(--brand-orange)' : 
-                                role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
-              }} />
-              {ROLE_LABELS[role]}
-            </div>
-            <div className="flex items-baseline justify-between gap-1">
-              <span className="text-xl font-black text-[var(--text-primary)]">{count}</span>
-              <span className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded-full">
-                명
-              </span>
-            </div>
-          </motion.div>
-        ))}
+        {(Object.entries(userStats.byRole) as [UserRole, number][]).map(([role, count], idx) => {
+          if (role === 'admin' || role === 'pro') {
+            return (
+              <motion.div 
+                key={role}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 + (idx * 0.05) }}
+                className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
+              >
+                <div 
+                  className="flex items-center gap-2 mb-1 text-[10px] font-black uppercase tracking-wider"
+                  style={{ 
+                    color: role === 'admin' ? '#f43f5e' : 
+                          role === 'pro' ? 'var(--brand-orange)' : 
+                          role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
+                  }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ 
+                    backgroundColor: role === 'admin' ? '#f43f5e' : 
+                                    role === 'pro' ? 'var(--brand-orange)' : 
+                                    role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
+                  }} />
+                  {ROLE_LABELS[role]}
+                </div>
+                <div className="flex items-baseline justify-between gap-1">
+                  <span className="text-xl font-black text-[var(--text-primary)]">{count}</span>
+                  <span className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded-full">
+                    명
+                  </span>
+                </div>
+              </motion.div>
+            );
+          }
+          return null;
+        })}
       </div>
 
       {/* Search & Filters */}
@@ -443,6 +503,15 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               />
             </div>
             <div className="flex gap-2">
+              <select 
+                value={loginStatusFilter} 
+                onChange={(e) => setLoginStatusFilter(e.target.value as any)}
+                className="px-3 py-2.5 rounded-2xl bg-[var(--bg-secondary)] border border-btn-border text-sm outline-none focus:border-brand-orange cursor-pointer"
+              >
+                <option value="all">최근 상태</option>
+                <option value="loggedIn">로그인</option>
+                <option value="loggedOut">로그아웃</option>
+              </select>
               <select 
                 value={roleFilter} 
                 onChange={(e) => setRoleFilter(e.target.value as any)}
@@ -524,8 +593,18 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] md:text-xs text-[var(--text-secondary)]">
                     <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
-                    <span className="flex items-center gap-1 font-bold text-emerald-500"><Clock className="w-3 h-3" /> 로그인: {formatLastSeen(user.lastLoginAt)}</span>
-                    <span className="flex items-center gap-1 text-red-400"><Clock className="w-3 h-3" /> 로그아웃: {formatLastSeen(user.lastLogoutAt)}</span>
+                    {(() => {
+                      const loginTime = user.lastLoginAt || 0;
+                      const logoutTime = user.lastLogoutAt || 0;
+                      if (!loginTime && !logoutTime) {
+                        return <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 기록 없음</span>;
+                      }
+                      if (loginTime > logoutTime) {
+                        return <span className="flex items-center gap-1 font-bold text-emerald-500"><LogIn className="w-3 h-3" /> 로그인: {formatLastSeen(loginTime)}</span>;
+                      } else {
+                        return <span className="flex items-center gap-1 font-bold text-red-400"><LogOut className="w-3 h-3" /> 로그아웃: {formatLastSeen(logoutTime)}</span>;
+                      }
+                    })()}
                   </div>
                 </div>
                 <div className="hidden md:flex flex-col items-end shrink-0 gap-1.5 px-4 border-l border-btn-border">

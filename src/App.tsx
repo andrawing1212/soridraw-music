@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -2259,53 +2258,34 @@ const cycleFamilySelection = (
     }
   };
 
-  const handleLogout = async () => {
-    alert("logout 진입");  // ✅ 여기
-    console.log("🔥 handleLogout 실행됨", auth.currentUser?.uid);
-    try {
-      const currentUser = auth.currentUser;
-      const logoutTime = Date.now();
-      console.log("[Logout Debug] Starting handleLogout for UID:", currentUser?.uid);
-
-      if (currentUser) {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        console.log("[Logout Debug] Persistence Path:", userDocRef.path);
-        
+      const handleLogout = async () => {
         try {
-          const updatePayload = {
-            isOnline: false,
-            lastLogoutAt: logoutTime
-          };
-          console.log("[Logout Debug] Attempting Firestore setDoc (merge) with payload:", updatePayload);
-          
-          // Using setDoc with merge is safer than updateDoc as it creates the doc if it's missing
-          await setDoc(userDocRef, updatePayload, { merge: true });
-          
-          console.log("[Logout Debug] Firestore record success. lastLogoutAt saved as:", logoutTime);
-          const verifySnap = await getDoc(userDocRef);
-          console.log("[Logout Debug] verify doc data:", verifySnap.data());
+          const currentUser = auth.currentUser;
 
-        } catch (dbErr: any) {
-          console.error("[Logout Debug] Firestore record error:", dbErr.message, dbErr);
-          // We still continue to signOut even if logging fails, but we want to know why it failed
+          if (currentUser) {
+            const userDocRef = doc(db, 'users', currentUser.uid);
+
+            try {
+              await setDoc(userDocRef, {
+                isOnline: false,
+                lastLogoutAt: Date.now()
+              }, { merge: true });
+            } catch (dbErr) {
+              console.error("[Logout] Firestore 저장 실패:", dbErr);
+            }
+          }
+
+          setHistory([]);
+          setResult(null);
+          setHistoryIndex(-1);
+
+          await signOut(auth);
+          navigate('/', { replace: true });
+
+        } catch (error) {
+          console.error("[Logout] 처리 오류:", error);
         }
-      } else {
-        console.warn("[Logout Debug] No authenticated user found during handleLogout.");
-      }
-
-      setHistory([]);
-      setResult(null);
-      setHistoryIndex(-1);
-      
-      console.log("[Logout Debug] Proceeding to Firebase signOut...");
-      await signOut(auth);
-      console.log("[Logout Debug] Sign out complete. Navigating home.");
-      
-      navigate('/', { replace: true });
-    } catch (error) {
-      console.error("[Logout Debug] Terminal error in handleLogout:", error);
-    }
-  };
+      };
 
   // History state is now persisted per logged-in user in Firestore.
   useEffect(() => {

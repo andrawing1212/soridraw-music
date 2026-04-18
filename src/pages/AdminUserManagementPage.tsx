@@ -302,23 +302,52 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
 
   const handleForceLogout = async () => {
-    if (!selectedUser) return;
+    console.log("%c[ForceLogout UI] EXECUTION START", "color: orange; font-weight: bold; font-size: 14px;");
+    console.log("[ForceLogout UI] Current selectedUser:", selectedUser);
+    
+    if (!selectedUser) {
+      console.warn("[ForceLogout UI] No selected user found in state.");
+      return;
+    }
     
     const isSelf = auth.currentUser?.uid === selectedUser.uid;
+    console.log("[ForceLogout UI] Target UID:", selectedUser.uid);
+    console.log("[ForceLogout UI] Admin UID:", auth.currentUser?.uid);
+    console.log("[ForceLogout UI] Is Self Logout Attempt:", isSelf);
+
     if (isSelf) {
+      console.warn("[ForceLogout UI] Self-logout blocked.");
       alert('자기 자신을 강제 로그아웃할 수 없습니다.');
       return;
     }
 
-    if (!window.confirm(`${selectedUser.displayName || selectedUser.email} 회원의 모든 세션을 강제로 무효화(로그아웃)하시겠습니까? 만약 계정 정지(Banned) 상태라면 재로그인이 불가능해집니다.`)) {
+    console.log("[ForceLogout UI] Showing confirmation dialog...");
+    const confirmed = window.confirm(`${selectedUser.displayName || selectedUser.email} 회원의 모든 세션을 강제로 무효화(로그아웃)하시겠습니까? 만약 계정 정지(Banned) 상태라면 재로그인이 불가능해집니다.`);
+    
+    if (!confirmed) {
+      console.log("[ForceLogout UI] User cancelled the action.");
       return;
     }
 
+    console.log("[ForceLogout UI] Starting process...");
     setIsForceLoggingOut(true);
     setForceLogoutResult(null);
 
     try {
+      console.log("[ForceLogout UI] Step 1: Requesting Admin Token...");
       const token = await auth.currentUser?.getIdToken();
+      
+      if (!token) {
+        console.error("[ForceLogout UI] Fatal Error: Failed to acquire admin token.");
+        setForceLogoutResult({ success: false, message: '인증 토큰을 가져오지 못했습니다.' });
+        setIsForceLoggingOut(false);
+        return;
+      }
+      console.log("[ForceLogout UI] Token acquired (starts with):", token.substring(0, 10));
+
+      console.log("[ForceLogout UI] Step 2: Fetching API endpoint...");
+      console.log("[ForceLogout UI] Payload:", { targetUid: selectedUser.uid, disableUser: editStatus === 'banned' });
+      
       const response = await fetch('/api/admin/force-logout', {
         method: 'POST',
         headers: {
@@ -331,17 +360,22 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         })
       });
 
+      console.log("[ForceLogout UI] Fetch status:", response.status, response.statusText);
       const result = await response.json();
+      
       if (response.ok) {
+        console.log("[ForceLogout UI] API Response Success:", result);
         setForceLogoutResult({ success: true, message: result.message || '강제 로그아웃 처리가 완료되었습니다.' });
       } else {
+        console.error("[ForceLogout UI] API Response Failure:", result);
         setForceLogoutResult({ success: false, message: result.error || '처리에 실패했습니다.' });
       }
     } catch (err: any) {
-      console.error("Force logout failed:", err);
+      console.error("[ForceLogout UI] Network or Server Exception:", err);
       setForceLogoutResult({ success: false, message: '네트워크 또는 서버 오류가 발생했습니다.' });
     } finally {
       setIsForceLoggingOut(false);
+      console.log("[ForceLogout UI] EXECUTION END");
     }
   };
 
@@ -427,6 +461,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
     return new Date(timestamp).toLocaleDateString();
   };
+
+  console.log("[Admin Debug] Rendering Page - isAdmin:", isAdmin, "user:", auth.currentUser?.email);
+  if (selectedUser) {
+    console.log("[Admin Debug] Selected User in State:", selectedUser.uid, "ForceLogout Disabled:", isForceLoggingOut || (auth.currentUser?.uid === selectedUser?.uid));
+  }
 
   if (!isAdmin) {
     return (

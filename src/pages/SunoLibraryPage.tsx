@@ -13,8 +13,11 @@ export default function SunoLibraryPage() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
+      const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
+        console.log("Suno Library 현재 rcZ2GZrBndOZzT8C635eiNBjYIJ2:", currentUser?.uid);
+        console.log("Suno Library 현재 andrawing1212@gmail.com:", currentUser?.email);
+
+        setUser(currentUser);
       if (!currentUser) {
         setLoading(false);
         setTracks([]);
@@ -22,8 +25,7 @@ export default function SunoLibraryPage() {
       }
 
       const q = query(
-        collection(db, 'suno_tracks', currentUser.uid, 'tracks'),
-        orderBy('createdAt', 'desc')
+        collection(db, 'suno_tracks', currentUser.uid, 'tracks')
       );
 
       const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
@@ -31,6 +33,13 @@ export default function SunoLibraryPage() {
           id: doc.id,
           ...doc.data()
         }));
+        
+        list.sort((a: any, b: any) => {
+          const t1 = a.createdAt?.seconds || 0;
+          const t2 = b.createdAt?.seconds || 0;
+          return t2 - t1;
+        });
+
         setTracks(list);
         setLoading(false);
       }, (error) => {

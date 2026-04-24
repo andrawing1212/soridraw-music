@@ -1,67 +1,217 @@
-import * as functions from 'firebase-functions/v2';
-import * as admin from 'firebase-admin';
+import { onRequest } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
-export const saveSunoApiKey = functions.https.onCall(async (request) => {
-  const auth = request.auth;
-  if (!auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+const ALLOWED_ORIGINS = [
+  "https://soridraw-music.vercel.app",
+  "https://soridraw-app-866a5.web.app",
+  "https://soridraw-app-866a5.firebaseapp.com"
+];
+
+const handleCors = (req: any, res: any) => {
+  const origin = req.headers.origin;
+  
+  if (origin) {
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      res.set("Access-Control-Allow-Origin", origin);
+    } else {
+      res.set("Access-Control-Allow-Origin", origin);
+    }
+  } else {
+    res.set("Access-Control-Allow-Origin", "*");
   }
+  
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  const { apiKey } = request.data;
-  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
-    throw new functions.https.HttpsError('invalid-argument', 'API Key is required.');
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return true; // CORS preflight handled
   }
+  return false;
+};
 
-  const uid = auth.uid;
-  const db = admin.firestore();
-
-  await db.collection('user_api_keys').doc(uid).set({
-    sunoApiKey: apiKey.trim(),
-    hasSunoApiKey: true,
-    provider: 'sunoapi.org',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  return { ok: true, hasSunoApiKey: true };
-});
-
-export const deleteSunoApiKey = functions.https.onCall(async (request) => {
-  const auth = request.auth;
-  if (!auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+const verifyAuth = async (req: any, res: any): Promise<string | null> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Unauthorized", ok: false });
+    return null;
   }
-
-  const uid = auth.uid;
-  const db = admin.firestore();
-
-  await db.collection('user_api_keys').doc(uid).delete();
-
-  return { ok: true, hasSunoApiKey: false };
-});
-
-export const getSunoApiKeyStatus = functions.https.onCall(async (request) => {
-  const auth = request.auth;
-  if (!auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+  
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    return decodedToken.uid;
+  } catch (error) {
+    res.status(401).json({ error: "Unauthorized", ok: false });
+    return null;
   }
+};
 
-  const uid = auth.uid;
-  const db = admin.firestore();
+export const saveSunoApiKey = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
 
-  const docSnap = await db.collection('user_api_keys').doc(uid).get();
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
 
-  if (!docSnap.exists) {
-    return { ok: true, hasSunoApiKey: false };
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    const apiKey = req.body?.apiKey;
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+      res.status(400).json({ error: "API Key is required" });
+      return;
+    }
+
+    const db = admin.firestore();
+
+    await db.collection('user_api_keys').doc(uid).set({
+      sunoApiKey: apiKey.trim(),
+      hasSunoApiKey: true,
+      provider: 'sunoapi.org',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.json({ ok: true, hasSunoApiKey: true });
   }
+);
 
-  const data = docSnap.data();
-  return {
-    ok: true,
-    hasSunoApiKey: data?.hasSunoApiKey || false,
-    provider: data?.provider || null,
-    updatedAt: data?.updatedAt ? data.updatedAt.toDate().toISOString() : null,
-  };
-});
+export const deleteSunoApiKey = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    const db = admin.firestore();
+
+    await db.collection('user_api_keys').doc(uid).delete();
+
+    res.json({ ok: true, hasSunoApiKey: false });
+  }
+);
+
+export const getSunoApiKeyStatus = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    const db = admin.firestore();
+
+    const docSnap = await db.collection('user_api_keys').doc(uid).get();
+
+    if (!docSnap.exists) {
+      res.json({ ok: true, hasSunoApiKey: false });
+      return;
+    }
+
+    const docData = docSnap.data();
+    res.json({
+      ok: true,
+      hasSunoApiKey: docData?.hasSunoApiKey || false,
+      provider: docData?.provider || null,
+      updatedAt: docData?.updatedAt ? docData.updatedAt.toDate().toISOString() : null,
+    });
+  }
+);
+
+export const createSunoTrack = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    const { prompt } = req.body;
+    if (!prompt) {
+      res.status(400).json({ error: "prompt is required" });
+      return;
+    }
+
+    const db = admin.firestore();
+    const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
+
+    if (!apiKeyDoc.exists) {
+      res.status(400).json({ error: "Suno API Key not found. Please set it in settings." });
+      return;
+    }
+
+    const apiKeyData = apiKeyDoc.data();
+    const sunoApiKey = apiKeyData?.sunoApiKey;
+
+    if (!sunoApiKey) {
+      res.status(400).json({ error: "Suno API Key is empty." });
+      return;
+    }
+
+    try {
+      const sunoRes = await fetch("https://api.sunoapi.org/api/v1/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sunoApiKey}`
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          model: "V5_5",
+          callbackUrl: "playground"
+        })
+      });
+
+      if (!sunoRes.ok) {
+        const errText = await sunoRes.text();
+        console.error("Suno API Error:", errText);
+        res.status(500).json({ error: "Suno API Error", details: errText });
+        return;
+      }
+
+      const data = await sunoRes.json();
+      
+      const taskId = data?.id || data?.taskId || data?.data?.task_id || data?.task_id || "unknown";
+
+      const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc();
+
+      const trackData = {
+        taskId: taskId,
+        apiResponse: data,
+        prompt: prompt,
+        status: "submitted",
+        provider: "sunoapi.org",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await trackRef.set(trackData);
+
+      res.json({ ok: true, trackId: trackRef.id, taskId: taskId });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to create track", details: error.message });
+    }
+  }
+);

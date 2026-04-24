@@ -121,11 +121,10 @@ exports.createSunoTrack = (0, https_1.onRequest)({ region: "us-central1" }, asyn
     const uid = await verifyAuth(req, res);
     if (!uid)
         return;
-    const { prompt } = req.body;
-    if (!prompt) {
-        res.status(400).json({ error: "prompt is required" });
-        return;
-    }
+    const body = req.body || {};
+    const title = body.title || "Untitled";
+    const lyricsText = body.lyrics || "";
+    const stylePrompt = body.style || body.prompt || "";
     const db = admin.firestore();
     const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
     if (!apiKeyDoc.exists) {
@@ -139,36 +138,70 @@ exports.createSunoTrack = (0, https_1.onRequest)({ region: "us-central1" }, asyn
         return;
     }
     try {
+        const sunoPayload = {
+            custom_mode: true,
+            customMode: true,
+            instrumental: typeof body.instrumental === "boolean" ? body.instrumental : false,
+            model: "V5_5",
+            title: title,
+            prompt: lyricsText,
+            style: stylePrompt,
+            lyrics: lyricsText,
+            callBackUrl: "playground"
+        };
+        const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc();
+        if (body.dryRun === true) {
+            const trackData = {
+                taskId: "dry_run",
+                apiResponse: { ok: true, dryRun: true },
+                requestPayload: sunoPayload,
+                prompt: stylePrompt,
+                style: stylePrompt,
+                title: sunoPayload.title,
+                lyrics: lyricsText,
+                status: "dry_run",
+                provider: "sunoapi.org",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            };
+            await trackRef.set(trackData);
+            res.json({ ok: true, dryRun: true, trackId: trackRef.id, requestPayload: sunoPayload });
+            return;
+        }
         const sunoRes = await fetch("https://api.sunoapi.org/api/v1/generate", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${sunoApiKey}`
             },
-            body: JSON.stringify({
-                prompt: prompt,
-                model: "V5_5",
-                callbackUrl: "playground"
-            })
+            body: JSON.stringify(sunoPayload)
         });
         if (!sunoRes.ok) {
             const errText = await sunoRes.text();
-            console.error("Suno API Error:", errText);
-            res.status(500).json({ error: "Suno API Error", details: errText });
+            console.error("Suno API HTTP Error:", errText);
+            res.status(500).json({ error: "Suno API HTTP Error", details: errText });
             return;
         }
         const data = await sunoRes.json();
-        const taskId = (data === null || data === void 0 ? void 0 : data.id) || (data === null || data === void 0 ? void 0 : data.taskId) || ((_a = data === null || data === void 0 ? void 0 : data.data) === null || _a === void 0 ? void 0 : _a.task_id) || (data === null || data === void 0 ? void 0 : data.task_id) || "unknown";
-        const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc();
+        const taskId = ((_a = data === null || data === void 0 ? void 0 : data.data) === null || _a === void 0 ? void 0 : _a.taskId) || (data === null || data === void 0 ? void 0 : data.taskId) || "unknown";
+        // If data.code is >= 400 it's a structural error from sunoapi.org
+        const isFailed = typeof (data === null || data === void 0 ? void 0 : data.code) === 'number' && data.code >= 400;
         const trackData = {
             taskId: taskId,
             apiResponse: data,
-            prompt: prompt,
-            status: "submitted",
+            requestPayload: sunoPayload,
+            prompt: stylePrompt,
+            style: stylePrompt,
+            title: sunoPayload.title,
+            lyrics: lyricsText,
+            status: isFailed ? "failed" : "submitted",
             provider: "sunoapi.org",
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         };
         await trackRef.set(trackData);
+        if (isFailed) {
+            res.status(400).json({ error: (data === null || data === void 0 ? void 0 : data.msg) || "Failed to create track based on SunoAPI response", details: data });
+            return;
+        }
         res.json({ ok: true, trackId: trackRef.id, taskId: taskId });
     }
     catch (error) {

@@ -30,7 +30,7 @@ export default function SunoLibraryPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { currentTrack, isPlaying, playTrack } = useGlobalPlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause } = useGlobalPlayer();
 
   useEffect(() => {
     const searchParams = new URL(window.location.href).searchParams;
@@ -367,7 +367,11 @@ export default function SunoLibraryPage() {
             </button>
             <div>
               <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                <Music className="w-8 h-8 text-brand-orange" />
+                <div className="flex gap-[5px] items-end justify-center w-8 h-8 text-brand-orange">
+                  <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] opacity-80" />
+                  <div className="w-[6px] h-[26px] border-[2px] border-current rounded-[3px]" />
+                  <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
+                </div>
                 {isSharedView ? '공유된 음악' : 'Suno Library'}
               </h1>
               <p className="text-sm text-[var(--text-secondary)] mt-1">
@@ -496,11 +500,20 @@ export default function SunoLibraryPage() {
                           className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${isCurrent ? 'bg-brand-orange/5' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
-                             if (audioUrl) handlePlayTrack(group, idx);
+                             if (audioUrl) {
+                               if (isCurrent) togglePlayPause();
+                               else handlePlayTrack(group, idx);
+                             }
                           }}
                         >
                           <button 
-                            onClick={(e) => { e.stopPropagation(); if (audioUrl) handlePlayTrack(group, idx); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (audioUrl) {
+                                if (isCurrent) togglePlayPause();
+                                else handlePlayTrack(group, idx);
+                              }
+                            }}
                             disabled={!audioUrl}
                             className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all ${
                               isCurrent && isPlaying ? 'bg-brand-orange text-white ring-4 ring-brand-orange/20 shadow-lg shadow-brand-orange/40' : 

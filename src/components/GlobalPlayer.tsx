@@ -39,9 +39,46 @@ export default function GlobalPlayer() {
   const isDragging = useRef(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [mobileDockSide, setMobileDockSide] = useState<'center' | 'left' | 'right'>('center');
+  const playerRef = useRef<HTMLDivElement>(null);
+
+  const getClampedPosition = (x: number, y: number) => {
+    const minVisible = 80;
+    
+    let width = 384; 
+    let height = 100;
+    if (playerRef.current) {
+      width = playerRef.current.offsetWidth;
+      height = playerRef.current.offsetHeight;
+    }
+
+    const minX = -(window.innerWidth - minVisible); 
+    const maxX = Math.max(16, width - minVisible); 
+    const minY = -(window.innerHeight - minVisible);
+    const maxY = Math.max(16, height - minVisible);
+
+    return {
+      x: Math.max(minX, Math.min(x, maxX)),
+      y: Math.max(minY, Math.min(y, maxY))
+    };
+  };
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      setPosition(prev => {
+        const minVisible = 80;
+        let width = playerRef.current?.offsetWidth || 384;
+        let height = playerRef.current?.offsetHeight || 100;
+        const minX = -(window.innerWidth - minVisible); 
+        const maxX = Math.max(16, width - minVisible); 
+        const minY = -(window.innerHeight - minVisible);
+        const maxY = Math.max(16, height - minVisible);
+        return {
+          x: Math.max(minX, Math.min(prev.x, maxX)),
+          y: Math.max(minY, Math.min(prev.y, maxY))
+        };
+      });
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -50,7 +87,9 @@ export default function GlobalPlayer() {
     const saved = localStorage.getItem('global_player_pos');
     if (saved) {
       try {
-        setPosition(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Wait for next tick so ref has dimensions
+        setTimeout(() => setPosition(getClampedPosition(parsed.x, parsed.y)), 0);
       } catch (e) {}
     }
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
@@ -63,6 +102,18 @@ export default function GlobalPlayer() {
     setMode(newMode);
     localStorage.setItem('soridraw_global_player_mode', newMode);
   };
+
+  useEffect(() => {
+    if (isMobile && mode === 'expanded') {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mode, isMobile]);
 
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {
@@ -194,18 +245,7 @@ export default function GlobalPlayer() {
     let newX = position.x + info.offset.x;
     let newY = position.y + info.offset.y;
     
-    // Bounds check roughly to prevent it from going entirely off screen
-    const maxX = window.innerWidth - 100;
-    const minX = -window.innerWidth + 100;
-    const maxY = window.innerHeight - 100;
-    const minY = -window.innerHeight + 100;
-    
-    if (newX > maxX) newX = maxX;
-    if (newX < minX) newX = minX;
-    if (newY > maxY) newY = maxY;
-    if (newY < minY) newY = minY;
-
-    const newPos = { x: newX, y: newY };
+    const newPos = getClampedPosition(newX, newY);
     setPosition(newPos);
     localStorage.setItem('global_player_pos', JSON.stringify(newPos));
   };
@@ -233,7 +273,15 @@ export default function GlobalPlayer() {
       />
 
       <motion.div
+        ref={playerRef}
         drag={isMobile ? (mode === 'expanded' ? false : "x") : true}
+        dragConstraints={isMobile ? undefined : {
+          left: -(window.innerWidth - 80),
+          right: Math.max(16, (playerRef.current?.offsetWidth || 384) - 80),
+          top: -(window.innerHeight - 80),
+          bottom: Math.max(16, (playerRef.current?.offsetHeight || 100) - 80)
+        }}
+        dragElastic={0}
         dragMomentum={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}

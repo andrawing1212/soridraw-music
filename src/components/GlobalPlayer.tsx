@@ -231,13 +231,19 @@ export default function GlobalPlayer() {
     setTimeout(() => { isDragging.current = false; }, 100);
 
     if (isMobile && mode !== 'expanded') {
-      if (info.offset.x < -100) {
-        clearPlayer();
-        setMobileDockSide('center');
-      } else if (info.offset.x > 80) {
-        setMobileDockSide('right');
+      if (mobileDockSide === 'right') {
+        if (info.offset.x < -40) {
+          setMobileDockSide('center');
+        }
       } else {
-        setMobileDockSide('center');
+        if (info.offset.x < -100) {
+          clearPlayer();
+          setMobileDockSide('center');
+        } else if (info.offset.x > 80) {
+          setMobileDockSide('right');
+        } else {
+          setMobileDockSide('center');
+        }
       }
       return;
     }
@@ -281,7 +287,6 @@ export default function GlobalPlayer() {
           top: -(window.innerHeight - 80),
           bottom: Math.max(16, (playerRef.current?.offsetHeight || 100) - 80)
         }}
-        dragElastic={0}
         dragMomentum={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -320,7 +325,7 @@ export default function GlobalPlayer() {
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
                    {currentTrack.imageUrl ? (
-                      <img src={currentTrack.imageUrl} alt={currentTrack.title} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
+                      <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
                    ) : (
                       <Music className="w-4 h-4 text-white/30" />
                    )}
@@ -391,7 +396,7 @@ export default function GlobalPlayer() {
               <div className="flex items-center gap-3 relative z-10 w-full mt-2">
                 <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
                    {currentTrack.imageUrl ? (
-                      <img src={currentTrack.imageUrl} alt={currentTrack.title} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
+                      <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
                    ) : (
                       <Music className="w-6 h-6 text-white/30" />
                    )}
@@ -513,7 +518,7 @@ export default function GlobalPlayer() {
 
               <div className="w-full aspect-square mt-8 mb-6 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/40 border border-white/5 flex items-center justify-center relative z-10">
                  {currentTrack.imageUrl ? (
-                    <img src={currentTrack.imageUrl} alt={currentTrack.title} className="w-full h-full object-cover" />
+                    <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="w-full h-full object-cover" />
                  ) : (
                     <Music className="w-20 h-20 text-white/20" />
                  )}

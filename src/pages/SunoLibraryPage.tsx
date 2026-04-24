@@ -254,7 +254,7 @@ export default function SunoLibraryPage() {
 
   const handleDownload = (url: string) => {
     if (!url) {
-      alert('다운로드 링크를 찾을 수 없습니다.');
+      alert('아직 다운로드할 음원이 없습니다.');
       return;
     }
     window.open(url, '_blank');
@@ -321,7 +321,7 @@ export default function SunoLibraryPage() {
   };
 
   const handleDelete = async (groupId: string) => {
-    if (window.confirm("라이브러리에서 이 곡을 숨길까요?")) {
+    if (window.confirm("라이브러리에서 이 항목을 숨길까요?")) {
       try {
         const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
         if (user) {
@@ -329,6 +329,7 @@ export default function SunoLibraryPage() {
              hidden: true,
              deletedAt: serverTimestamp()
            });
+           setTracks(prev => prev.filter(t => t.id !== groupId));
         }
       } catch (e) {
         console.error(e);
@@ -430,7 +431,8 @@ export default function SunoLibraryPage() {
         ) : (
           <div className="space-y-6">
             {filteredTracks.map((group) => {
-              const items = group.sunoData || (group.audioUrl ? [{ audioUrl: group.audioUrl, title: group.title }] : []);
+              const dataItems = group.sunoData || (group.audioUrl ? [{ audioUrl: group.audioUrl, title: group.title }] : []);
+              const items = dataItems.length > 0 ? dataItems : [{}];
               const dateStr = formatCreatedAt(group.createdAt);
               
               return (
@@ -473,7 +475,8 @@ export default function SunoLibraryPage() {
 
                   {/* Tracks List */}
                   <div className="divide-y divide-white/5">
-                    {items.length > 0 ? items.map((item: any, idx: number) => {
+                    {items.map((item: any, idx: number) => {
+                      const isDummy = !item.audioUrl && !item.audio_url && !group.sunoData?.length && !group.audioUrl;
                       const audioUrl = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl;
                       const isCurrent = currentTrack?.parent?.id === group.id && currentTrack?.index === idx;
                       
@@ -502,10 +505,25 @@ export default function SunoLibraryPage() {
                             {group.style || group.tags || 'Music'}
                           </div>
                           
-                          <div className="flex-1 min-w-0 pr-2">
+                          <div className="flex-1 min-w-0 pr-2 flex items-center gap-3">
                             <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
                               {item.title || group.title || `Track ${idx + 1}`}
                             </h4>
+                            {isDummy && (
+                              <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
+                                {group.status === 'failed' ? (
+                                  <>
+                                    <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                                    생성 실패: {group.apiStatusResponse?.msg || group.apiResponse?.msg || '알 수 없는 오류'}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    오디오 생성 중...
+                                  </>
+                                )}
+                              </span>
+                            )}
                             <p className="md:hidden text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{group.style || group.tags || 'Music'}</p>
                           </div>
 
@@ -557,18 +575,7 @@ export default function SunoLibraryPage() {
                           </div>
                         </div>
                       );
-                    }) : (
-                      <div className="px-6 py-8 text-center opacity-30 text-xs">
-                        {group.status === 'failed' ? (
-                          <div className="flex flex-col items-center gap-2">
-                             <AlertCircle className="w-6 h-6 text-red-500/50" />
-                             <span>생성 실패: {group.apiStatusResponse?.msg || group.apiResponse?.msg || '알 수 없는 오류'}</span>
-                          </div>
-                        ) : (
-                          <span>오디오를 기다리는 중...</span>
-                        )}
-                      </div>
-                    )}
+                    })}
                   </div>
                 </motion.div>
               );

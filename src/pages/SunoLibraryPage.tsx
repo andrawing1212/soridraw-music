@@ -44,7 +44,7 @@ export default function SunoLibraryPage() {
         const list = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        }));
+        })).filter((docData: any) => !docData.hidden);
 
         list.sort((a: any, b: any) => {
           const t1 = a.createdAt?.seconds || 0;
@@ -170,15 +170,20 @@ export default function SunoLibraryPage() {
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'completed':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">완료됨</span>;
+        return null;
       case 'failed':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>;
       case 'processing':
       case 'submitted':
       case 'pending':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">생성 중...</span>;
+        return (
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+             <Loader2 className="w-3 h-3 animate-spin" />
+             생성 중...
+          </span>
+        );
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30">{status || '대기 중'}</span>;
+        return null;
     }
   };
 
@@ -195,6 +200,80 @@ export default function SunoLibraryPage() {
     } catch (error) {
       console.error('createdAt format error:', error);
       return '';
+    }
+  };
+
+  const handleDownload = (url: string) => {
+    if (!url) {
+      alert('다운로드 링크를 찾을 수 없습니다.');
+      return;
+    }
+    window.open(url, '_blank');
+  };
+
+  const handleShare = async (url: string) => {
+    if (!url) {
+       alert('공유할 주소가 없습니다.');
+       return;
+    }
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Suno Music',
+          url: url
+        });
+      } catch (e) {
+        console.log('Share failed', e);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('공유 링크를 복사했습니다.');
+      } catch (e) {
+        alert('링크 복사에 실패했습니다.');
+      }
+    }
+  };
+
+  const handleApplyNext = (group: any, item: any) => {
+    const data = {
+      title: item?.title || group.title,
+      lyrics: group.lyrics,
+      prompt: group.prompt,
+      keywords: group.tags || group.style,
+      genre: group.style || group.tags,
+      taskId: group.taskId,
+      source: 'suno-library'
+    };
+    localStorage.setItem('soridraw_next_suno_apply', JSON.stringify(data));
+    alert('다음 곡에 적용할 정보가 저장되었습니다.');
+  };
+
+  const handleSavePlaylist = (group: any, item: any, url: string) => {
+    const data = {
+      title: item?.title || group.title,
+      url: url,
+      source: 'suno-library',
+      groupId: group.id
+    };
+    localStorage.setItem('soridraw_playlists_pending', JSON.stringify(data));
+    alert('플레이리스트 저장 준비가 완료되었습니다.');
+  };
+
+  const handleDelete = async (groupId: string) => {
+    if (window.confirm("라이브러리에서 이 곡을 숨길까요?")) {
+      try {
+        const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+        if (user) {
+           await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', groupId), {
+             hidden: true,
+             deletedAt: serverTimestamp()
+           });
+        }
+      } catch (e) {
+        console.error(e);
+        alert('삭제 중 오류가 발생했습니다.');
+      }
     }
   };
 
@@ -394,11 +473,11 @@ export default function SunoLibraryPage() {
                                   >
                                     {[
                                       { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...group, itemIndex: idx }); setActiveMenu(null); } },
-                                      { icon: Download, label: '다운로드', action: () => { alert('다운로드 준비 중입니다.'); setActiveMenu(null); } },
-                                      { icon: Music, label: '다음곡에 적용', action: () => { alert('프롬프트 적용 기능 준비 중...'); setActiveMenu(null); } },
-                                      { icon: Share2, label: '공유', action: () => { alert('공유 링크 생성 중...'); setActiveMenu(null); } },
-                                      { icon: Star, label: '플레이리스트 저장', action: () => { alert('플레이리스트 저장 완료!'); setActiveMenu(null); } },
-                                      { icon: Trash2, label: '삭제', action: () => { alert('삭제 기능은 다음 단계에서 연결됩니다.'); setActiveMenu(null); }, danger: true },
+                                      { icon: Download, label: '다운로드', action: () => { handleDownload(audioUrl); setActiveMenu(null); } },
+                                      { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } },
+                                      { icon: Share2, label: '공유', action: () => { handleShare(audioUrl || window.location.href); setActiveMenu(null); } },
+                                      { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } },
+                                      { icon: Trash2, label: '삭제', action: () => { handleDelete(group.id); setActiveMenu(null); }, danger: true },
                                     ].map((m, i) => (
                                       <button
                                         key={i}

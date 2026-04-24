@@ -32,6 +32,7 @@ interface GlobalPlayerContextType {
   handleTimeUpdate: () => void;
   handleEnded: () => void;
   setIsPlaying: (v: boolean) => void;
+  clearPlayer: () => void;
 }
 
 const GlobalPlayerContext = createContext<GlobalPlayerContextType | null>(null);
@@ -48,6 +49,15 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const [isMuted, setIsMuted] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+
+  const clearPlayer = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsPlaying(false);
+    setCurrentTrack(null);
+  };
 
   const playTrack = (track: Track, newQueue?: Track[]) => {
     if (newQueue) {
@@ -160,7 +170,8 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
         setRepeatMode,
         handleTimeUpdate,
         handleEnded,
-        setIsPlaying
+        setIsPlaying,
+        clearPlayer
       }}
     >
       {children}

@@ -2,23 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
-  Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, Info, Download, Share2, Trash2
+  Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2
 } from 'lucide-react';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-
-function LibraryIcon({ className = "" }: { className?: string }) {
-  return (
-    <div className={`flex items-center justify-center p-1.5 bg-white/10 hover:bg-brand-orange/20 rounded-xl border border-white/20 transition-all ${className} group`}>
-      <div className="flex gap-[2px] items-center justify-center -rotate-[15deg]">
-        <div className="w-[3px] h-[10px] bg-white rounded-full group-hover:bg-brand-orange transition-all" />
-        <div className="w-[3px] h-[14px] bg-white rounded-full group-hover:bg-brand-orange transition-all" />
-        <div className="w-[3px] h-[12px] bg-white rounded-full group-hover:bg-brand-orange transition-all" />
-      </div>
-    </div>
-  );
-}
 
 export default function GlobalPlayer() {
   const {
@@ -192,9 +180,14 @@ export default function GlobalPlayer() {
     setTimeout(() => { isDragging.current = false; }, 100);
 
     if (isMobile && mode !== 'expanded') {
-      if (info.offset.x > 80) setMobileDockSide('right');
-      else if (info.offset.x < -80) setMobileDockSide('left');
-      else setMobileDockSide('center');
+      if (info.offset.x < -100) {
+        clearPlayer();
+        setMobileDockSide('center');
+      } else if (info.offset.x > 80) {
+        setMobileDockSide('right');
+      } else {
+        setMobileDockSide('center');
+      }
       return;
     }
 
@@ -202,9 +195,9 @@ export default function GlobalPlayer() {
     let newY = position.y + info.offset.y;
     
     // Bounds check roughly to prevent it from going entirely off screen
-    const maxX = 100;
+    const maxX = window.innerWidth - 100;
     const minX = -window.innerWidth + 100;
-    const maxY = 100;
+    const maxY = window.innerHeight - 100;
     const minY = -window.innerHeight + 100;
     
     if (newX > maxX) newX = maxX;
@@ -247,7 +240,7 @@ export default function GlobalPlayer() {
         initial={false}
         animate={{ 
           x: isMobile 
-            ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? 'calc(50vw - 32px)' : mobileDockSide === 'left' ? 'calc(-50vw + 32px)' : '-50%'))
+            ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? 'calc(50vw - 48px)' : '-50%'))
             : position.x,
           y: isMobile
             ? (mode === 'expanded' ? '-50%' : 0)
@@ -289,12 +282,24 @@ export default function GlobalPlayer() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 relative z-10 pointer-events-auto">
+              <div className="flex items-center gap-1 shrink-0 relative z-10 pointer-events-auto">
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); playPrev(); }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                 >
+                    <SkipBack className="w-4 h-4 fill-current" />
+                 </button>
                  <button 
                     onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
                     className="w-8 h-8 rounded-full flex items-center justify-center bg-brand-orange/10 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shrink-0"
                  >
                     {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+                 </button>
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); playNext(); }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                 >
+                    <SkipForward className="w-4 h-4 fill-current" />
                  </button>
               </div>
             </motion.div>
@@ -307,7 +312,11 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => {
-                 if (!isDragging.current) handleModeChange('expanded');
+                 if (!isDragging.current && mobileDockSide === 'center') {
+                    handleModeChange('expanded');
+                 } else if (isMobile && mobileDockSide !== 'center') {
+                    setMobileDockSide('center');
+                 }
               }}
               className="w-full md:w-96 bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-2xl p-3 shadow-2xl flex flex-col cursor-pointer relative overflow-hidden"
             >
@@ -345,7 +354,13 @@ export default function GlobalPlayer() {
                    <p className="text-[10px] opacity-50 truncate">{currentTrack.parent?.style || currentTrack.parent?.prompt || 'Music'}</p>
                 </div>
 
-                <div className="flex items-center gap-2 relative z-30 pointer-events-auto shrink-0 mr-1">
+                <div className="flex items-center gap-1.5 relative z-30 pointer-events-auto shrink-0 mr-1">
+                   <button 
+                      onClick={(e) => { e.stopPropagation(); playPrev(); }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                   >
+                      <SkipBack className="w-4 h-4 fill-current" />
+                   </button>
                    <button 
                       onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
                       className="w-10 h-10 rounded-full flex items-center justify-center bg-brand-orange/10 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shrink-0"
@@ -354,9 +369,9 @@ export default function GlobalPlayer() {
                    </button>
                    <button 
                       onClick={(e) => { e.stopPropagation(); playNext(); }}
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
                    >
-                      <SkipForward className="w-5 h-5 fill-current" />
+                      <SkipForward className="w-4 h-4 fill-current" />
                    </button>
                 </div>
               </div>
@@ -397,9 +412,9 @@ export default function GlobalPlayer() {
                  <div className="relative">
                    <button 
                       onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-                      className="p-1 hover:bg-white/10 rounded-xl transition-all"
+                      className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50"
                    >
-                      <LibraryIcon />
+                      <MoreHorizontal className="w-5 h-5" />
                    </button>
                    <AnimatePresence>
                      {showMenu && (

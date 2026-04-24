@@ -1156,10 +1156,14 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
                   navigate('/suno-library');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-brand-orange border border-brand-orange/50 backdrop-blur-md text-white shadow-xl hover:bg-brand-orange/90 transition-all group"
                 title="Suno Library"
               >
-                <Music className="w-5 h-5 md:w-6 md:h-6" />
+                <div className="flex gap-[2.5px] items-center justify-center -rotate-[15deg] w-5 h-5 md:w-6 md:h-6">
+                  <div className="w-[3px] h-[10px] bg-white rounded-full" />
+                  <div className="w-[3px] h-[14px] bg-white rounded-full" />
+                  <div className="w-[3px] h-[12px] bg-white rounded-full" />
+                </div>
               </button>
 
               {/* Theme Toggle Button */}

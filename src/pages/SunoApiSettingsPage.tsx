@@ -2,9 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Key, CheckCircle2, XCircle, AlertTriangle, Trash2 } from 'lucide-react';
-import { httpsCallable } from 'firebase/functions';
-import { functions, auth } from '../firebase';
+import { auth } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+
+const PROJECT_ID = "soridraw-app-866a5";
+const REGION = "us-central1";
+const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 
 export default function SunoApiSettingsPage() {
   const navigate = useNavigate();
@@ -25,9 +28,18 @@ export default function SunoApiSettingsPage() {
   const loadSunoApiKeyStatus = useCallback(async () => {
     if (!user) return;
     try {
-      const getStatusFn = httpsCallable<{ok?: boolean}, {ok: boolean, hasSunoApiKey: boolean}>(functions, 'getSunoApiKeyStatus');
-      const result = await getStatusFn();
-      if (result.data && result.data.hasSunoApiKey) {
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/getSunoApiKeyStatus`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      const result = await res.json();
+
+      if (result && result.hasSunoApiKey) {
         setIsRegistered(true);
       } else {
         setIsRegistered(false);
@@ -43,9 +55,18 @@ export default function SunoApiSettingsPage() {
     setMessage('');
     
     try {
-      const saveFn = httpsCallable<{apiKey: string}, {ok: boolean, hasSunoApiKey: boolean}>(functions, 'saveSunoApiKey');
-      const result = await saveFn({ apiKey: apiKey.trim() });
-      if (result.data && result.data.ok) {
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/saveSunoApiKey`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ apiKey: apiKey.trim() })
+      });
+      const result = await res.json();
+      
+      if (res.ok && result.ok) {
         setIsRegistered(true);
         setApiKey('');
         setMessage('API Key가 안전하게 등록되었습니다.');
@@ -66,9 +87,18 @@ export default function SunoApiSettingsPage() {
     setMessage('');
     
     try {
-      const deleteFn = httpsCallable<{ok?: boolean}, {ok: boolean, hasSunoApiKey: boolean}>(functions, 'deleteSunoApiKey');
-      const result = await deleteFn();
-      if (result.data && result.data.ok) {
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/deleteSunoApiKey`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      const result = await res.json();
+
+      if (res.ok && result.ok) {
         setIsRegistered(false);
         setMessage('API Key가 삭제되었습니다.');
       } else {

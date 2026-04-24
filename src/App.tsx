@@ -1221,6 +1221,59 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 }
 
 function App() {
+  const generateMusic = async () => {
+    if (isMusicApiGenerating) return;
+
+    try {
+      setIsMusicApiGenerating(true);
+
+      const user = auth.currentUser;
+      if (!user) {
+        showToast("로그인이 필요합니다.");
+        return;
+      }
+
+      if (!result) {
+        showToast("먼저 곡을 생성해주세요.");
+        return;
+      }
+
+      const token = await user.getIdToken();
+
+      const res = await fetch(
+        "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: result.title || "Untitled",
+            prompt: result.prompt || "",
+            style: result.prompt || "",
+            lyrics: result.lyrics?.korean || result.lyrics?.english || "",
+            appliedKeywords: result.appliedKeywords || {},
+          }),
+        }
+      );
+
+      const data = await res.json();
+      console.log("생성 결과:", data);
+
+      if (!res.ok || !data.ok) {
+        showToast(`Music API 생성 요청에 실패했습니다.\n${data.error || "unknown error"}`);
+        return;
+      }
+
+      showToast("Music API 생성 요청이 접수되었습니다.\nMusic Library에서 진행 상태를 확인해주세요.");
+    } catch (err) {
+      console.error("생성 실패:", err);
+      showToast("Music API 생성 요청 중 오류가 발생했습니다.");
+    } finally {
+      setIsMusicApiGenerating(false);
+    }
+  };
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -1692,6 +1745,7 @@ function App() {
   const [lyricDraft, setLyricDraft] = useState('');
   const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
@@ -4702,6 +4756,20 @@ ${result.prompt}
                     </div>
                   </div>
                 )}
+                  <div className="mt-4">
+                  <button
+                    onClick={generateMusic}
+                    disabled={isMusicApiGenerating}
+                    className={cn(
+                      "w-full py-3 rounded-xl text-white font-bold transition-all",
+                      isMusicApiGenerating
+                        ? "bg-purple-600/40 cursor-not-allowed"
+                        : "bg-purple-600 hover:bg-purple-700"
+                    )}
+                  >
+                    {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

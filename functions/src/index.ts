@@ -253,3 +253,130 @@ export const createSunoTrack = onRequest(
     }
   }
 );
+
+export const getSunoTrackStatus = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    const { trackId, taskId } = req.body;
+    if (!trackId || !taskId) {
+      res.status(400).json({ error: "trackId and taskId are required" });
+      return;
+    }
+
+    const db = admin.firestore();
+    const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
+
+    if (!apiKeyDoc.exists) {
+      res.status(400).json({ error: "Suno API Key not found. Please set it in settings." });
+      return;
+    }
+
+    const apiKeyData = apiKeyDoc.data();
+    const sunoApiKey = apiKeyData?.sunoApiKey;
+
+    if (!sunoApiKey) {
+      res.status(400).json({ error: "Suno API Key is empty." });
+      return;
+    }
+
+    const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId);
+    const trackSnap = await trackRef.get();
+    if (!trackSnap.exists) {
+      res.status(404).json({ error: "Track not found" });
+      return;
+    }
+    const trackData = trackSnap.data();
+    if (trackData?.taskId !== taskId) {
+      res.status(400).json({ error: "Task ID mismatch" });
+      return;
+    }
+
+    try {
+      const SUNO_STATUS_URL = "https://api.sunoapi.org/api/v1/generate/record-info";
+      
+      const sunoRes = await fetch(`${SUNO_STATUS_URL}?taskIds=${taskId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${sunoApiKey}`
+        }
+      });
+
+      if (!sunoRes.ok) {
+        const errText = await sunoRes.text();
+        console.error("Suno API HTTP Error:", errText);
+        res.status(500).json({ error: "Suno API HTTP Error", details: errText });
+        return;
+      }
+
+      const data = await sunoRes.json();
+      
+      const isFailed = typeof data?.code === 'number' && data.code >= 400;
+      
+      let status = "processing";
+      let audioUrl = "";
+      let streamAudioUrl = "";
+      let imageUrl = "";
+
+      const candidates = Array.isArray(data?.data) ? data.data : [data?.data || data];
+      
+      for (const item of candidates) {
+        if (!item) continue;
+        if (item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl) {
+          audioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || "";
+          streamAudioUrl = item.streamAudioUrl || item.stream_audio_url || "";
+          imageUrl = item.imageUrl || item.image_url || "";
+          
+          if (item.status === "SUCCESS" || item.status === "completed") {
+            status = "completed";
+          } else if (item.status === "FAILED" || item.status === "failed") {
+            status = "failed";
+          } else if (item.status) {
+            status = item.status.toLowerCase();
+          } else if (audioUrl || streamAudioUrl) {
+            status = "completed";
+          }
+          break;
+        }
+      }
+
+      if (isFailed) {
+        status = "failed";
+      }
+
+      const updates: any = {
+        apiStatusResponse: data,
+        status: status,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (audioUrl) updates.audioUrl = audioUrl;
+      if (streamAudioUrl) updates.streamAudioUrl = streamAudioUrl;
+      if (imageUrl) updates.imageUrl = imageUrl;
+
+      await trackRef.update(updates);
+
+      res.json({
+        ok: true,
+        status: status,
+        audioUrl: audioUrl || streamAudioUrl,
+        streamAudioUrl: streamAudioUrl,
+        imageUrl: imageUrl,
+        apiStatusResponse: data
+      });
+      
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch track status", details: error.message });
+    }
+  }
+);

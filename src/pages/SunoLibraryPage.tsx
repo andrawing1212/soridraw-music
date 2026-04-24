@@ -263,13 +263,21 @@ export default function SunoLibraryPage() {
     window.open(url, '_blank');
   };
 
-  const handleShare = async (group: any, item: any) => {
-    if (!group) return;
+  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any } | null>(null);
+
+  const handleShare = (group: any, item: any) => {
+    setSharePopupInfo({ group, item });
+  };
+
+  const handlePublicShare = async () => {
+    if (!sharePopupInfo) return;
+    const { group, item } = sharePopupInfo;
     try {
       if (user) {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
         await updateDoc(trackRef, {
           isPublic: true,
+          shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
       }
@@ -285,16 +293,41 @@ export default function SunoLibraryPage() {
             text: text,
             url: shareUrl
           });
+          alert('공개 공유 링크를 복사했습니다.');
         } catch (e) {
-          console.log('Share failed', e);
+          if ((e as Error).name !== 'AbortError') {
+            await navigator.clipboard.writeText(shareUrl);
+            alert('공개 공유 링크를 복사했습니다.');
+          }
         }
       } else {
         await navigator.clipboard.writeText(shareUrl);
-        alert('공유 링크를 복사했습니다.');
+        alert('공개 공유 링크를 복사했습니다.');
       }
+      setSharePopupInfo(null);
     } catch (e) {
       console.error('Error sharing:', e);
       alert('공유 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handlePrivateShare = async () => {
+    if (!sharePopupInfo) return;
+    const { group } = sharePopupInfo;
+    try {
+      if (user) {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+        await updateDoc(trackRef, {
+          isPublic: false,
+          shareType: 'private',
+          privateUpdatedAt: serverTimestamp()
+        });
+        alert('비공개로 전환했습니다.');
+      }
+      setSharePopupInfo(null);
+    } catch (e) {
+      console.error('Error setting private:', e);
+      alert('비공개 전환 중 오류가 발생했습니다.');
     }
   };
 
@@ -606,6 +639,47 @@ export default function SunoLibraryPage() {
           </div>
         )}
       </div>
+
+      {/* Share Modal */}
+      <AnimatePresence>
+        {sharePopupInfo && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-xl font-bold mb-2">공유 설정</h2>
+              <p className="text-sm text-white/50 mb-6 leading-relaxed">
+                공개 공유를 켜면 링크를 가진 누구나 로그인 없이 들을 수 있습니다.
+              </p>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handlePublicShare}
+                  className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all"
+                >
+                  <Share2 className="w-5 h-5" /> 공개 링크 만들기
+                </button>
+                <button
+                  onClick={handlePrivateShare}
+                  className="w-full py-3 bg-white/5 text-white/80 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/10 hover:text-white transition-all"
+                >
+                  비공개로 전환
+                </button>
+                <button
+                  onClick={() => setSharePopupInfo(null)}
+                  className="w-full py-3 text-white/40 font-medium hover:text-white transition-all mt-2"
+                >
+                  취소
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Details Modal */}
       <AnimatePresence>

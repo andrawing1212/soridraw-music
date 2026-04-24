@@ -8,6 +8,36 @@ import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
+function ScrollText({ text, className = '' }: { text: string; className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [needsScroll, setNeedsScroll] = useState(false);
+
+  useEffect(() => {
+    const checkScroll = () => {
+      if (containerRef.current && textRef.current) {
+        setNeedsScroll(textRef.current.scrollWidth > containerRef.current.clientWidth);
+      }
+    };
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, [text]);
+
+  return (
+    <div ref={containerRef} className={`overflow-hidden whitespace-nowrap flex relative items-center w-full ${className}`}>
+      {needsScroll ? (
+        <div className="flex shrink-0 w-max animate-[sunoMarquee_10s_linear_infinite]">
+          <span className="pr-12 shrink-0">{text}</span>
+          <span className="pr-12 shrink-0">{text}</span>
+        </div>
+      ) : (
+        <span ref={textRef} className="truncate w-full block">{text}</span>
+      )}
+    </div>
+  );
+}
+
 export default function GlobalPlayer() {
   const {
     currentTrack,
@@ -267,6 +297,12 @@ export default function GlobalPlayer() {
 
   return (
     <>
+      <style>{`
+        @keyframes sunoMarquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
       <audio 
         ref={audioRef}
         className="hidden" 
@@ -330,8 +366,8 @@ export default function GlobalPlayer() {
                       <Music className="w-4 h-4 text-white/30" />
                    )}
                 </div>
-                <div className="min-w-0">
-                   <h3 className="font-bold text-xs truncate max-w-[140px] md:max-w-[200px]">{currentTrack.title || 'Untitled'}</h3>
+                <div className="min-w-0 pr-2 overflow-hidden max-w-[140px] md:max-w-[200px]">
+                   <ScrollText text={currentTrack.title || 'Untitled'} className="font-bold text-xs" />
                 </div>
               </div>
 
@@ -402,8 +438,8 @@ export default function GlobalPlayer() {
                    )}
                 </div>
                 
-                <div className="flex-1 min-w-0 pr-16 relative">
-                   <h3 className="font-bold text-sm truncate pr-2">{currentTrack.title || 'Untitled'}</h3>
+                <div className="flex-1 min-w-0 pr-16 relative overflow-hidden">
+                   <ScrollText text={currentTrack.title || 'Untitled'} className="font-bold text-sm" />
                    <p className="text-[10px] opacity-50 truncate">{currentTrack.parent?.style || currentTrack.parent?.prompt || 'Music'}</p>
                 </div>
 
@@ -524,9 +560,11 @@ export default function GlobalPlayer() {
                  )}
               </div>
 
-              <div className="relative z-10 flex-1 flex flex-col w-full">
+              <div className="relative z-10 flex-1 flex flex-col w-full min-w-0">
                 <div className="flex items-center justify-between gap-4 mb-1">
-                   <h2 className="text-xl font-bold leading-tight truncate">{currentTrack.title || 'Untitled Track'}</h2>
+                   <div className="flex-1 min-w-0 pr-2 overflow-hidden">
+                     <ScrollText text={currentTrack.title || 'Untitled Track'} className="text-xl font-bold leading-tight" />
+                   </div>
                    <button onClick={() => alert('즐겨찾기는 준비 중입니다.')} className="text-white/40 hover:text-brand-orange shrink-0">
                       <Star className="w-5 h-5" />
                    </button>

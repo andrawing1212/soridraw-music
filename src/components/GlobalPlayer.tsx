@@ -2,11 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
-  Volume2, VolumeX, ChevronDown, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2
+  Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, Info, Download, Share2, Trash2
 } from 'lucide-react';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+
+function LibraryIcon({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex items-center justify-center p-1.5 bg-white/10 hover:bg-brand-orange/20 rounded-xl border border-white/20 transition-all ${className} group`}>
+      <div className="flex gap-[2px] items-center justify-center -rotate-[15deg]">
+        <div className="w-[3px] h-[10px] bg-white rounded-full group-hover:bg-brand-orange transition-all" />
+        <div className="w-[3px] h-[14px] bg-white rounded-full group-hover:bg-brand-orange transition-all" />
+        <div className="w-[3px] h-[12px] bg-white rounded-full group-hover:bg-brand-orange transition-all" />
+      </div>
+    </div>
+  );
+}
 
 export default function GlobalPlayer() {
   const {
@@ -37,6 +49,14 @@ export default function GlobalPlayer() {
   const [showMenu, setShowMenu] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [mobileDockSide, setMobileDockSide] = useState<'center' | 'left' | 'right'>('center');
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('global_player_pos');
@@ -170,6 +190,14 @@ export default function GlobalPlayer() {
 
   const handleDragEnd = (e: any, info: any) => {
     setTimeout(() => { isDragging.current = false; }, 100);
+
+    if (isMobile && mode !== 'expanded') {
+      if (info.offset.x > 80) setMobileDockSide('right');
+      else if (info.offset.x < -80) setMobileDockSide('left');
+      else setMobileDockSide('center');
+      return;
+    }
+
     let newX = position.x + info.offset.x;
     let newY = position.y + info.offset.y;
     
@@ -212,13 +240,24 @@ export default function GlobalPlayer() {
       />
 
       <motion.div
-        drag
+        drag={isMobile ? (mode === 'expanded' ? false : "x") : true}
         dragMomentum={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         initial={false}
-        animate={{ x: position.x, y: position.y }}
-        className={`fixed z-[100] bottom-4 flex flex-col items-end ${mode === 'expanded' ? 'right-3 left-3 md:left-auto md:right-8' : 'right-4 left-4 md:left-auto md:right-8'}`}
+        animate={{ 
+          x: isMobile 
+            ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? 'calc(50vw - 32px)' : mobileDockSide === 'left' ? 'calc(-50vw + 32px)' : '-50%'))
+            : position.x,
+          y: isMobile
+            ? (mode === 'expanded' ? '-50%' : 0)
+            : position.y
+        }}
+        className={`fixed z-[100] flex flex-col ${
+          isMobile 
+            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
+            : (mode === 'expanded' ? 'bottom-4 right-3 md:left-auto md:right-8 items-end w-full md:w-auto' : 'bottom-4 right-4 md:left-auto md:right-8 items-end w-full md:w-auto')
+        }`}
         style={{ touchAction: 'none' }}
       >
         <AnimatePresence mode="wait">
@@ -229,23 +268,28 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => {
-                 if (!isDragging.current) handleModeChange('normal');
+                 if (!isDragging.current && mobileDockSide === 'center') {
+                    handleModeChange('normal');
+                 } else if (isMobile && mobileDockSide !== 'center') {
+                    setMobileDockSide('center');
+                 }
               }}
-              className="w-full md:w-64 bg-[var(--bg-secondary)] border border-white/10 rounded-full py-2 px-4 shadow-xl flex items-center gap-3 cursor-pointer"
+              className="w-full bg-[var(--bg-secondary)] border border-white/10 rounded-full py-2 px-4 shadow-xl flex items-center justify-between cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
-                 {currentTrack.imageUrl ? (
-                    <img src={currentTrack.imageUrl} alt={currentTrack.title} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
-                 ) : (
-                    <Music className="w-4 h-4 text-white/30" />
-                 )}
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                 <h3 className="font-bold text-xs truncate">{currentTrack.title || 'Untitled'}</h3>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
+                   {currentTrack.imageUrl ? (
+                      <img src={currentTrack.imageUrl} alt={currentTrack.title} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
+                   ) : (
+                      <Music className="w-4 h-4 text-white/30" />
+                   )}
+                </div>
+                <div className="min-w-0">
+                   <h3 className="font-bold text-xs truncate max-w-[140px] md:max-w-[200px]">{currentTrack.title || 'Untitled'}</h3>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0 relative z-10 pointer-events-auto">
                  <button 
                     onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
                     className="w-8 h-8 rounded-full flex items-center justify-center bg-brand-orange/10 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shrink-0"
@@ -267,14 +311,18 @@ export default function GlobalPlayer() {
               }}
               className="w-full md:w-96 bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-2xl p-3 shadow-2xl flex flex-col cursor-pointer relative overflow-hidden"
             >
-              {/* Menu and Close buttons for Normal mode */}
-              <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
+              {/* Normal mode top handle */}
+              <div className="absolute top-0 left-0 right-0 h-6 flex items-center justify-center z-20 pointer-events-auto">
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleModeChange('collapsed'); }}
-                  className="p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 relative z-30 pointer-events-auto"
+                  className="px-4 py-1 hover:bg-white/10 rounded-b-xl transition-all text-white/40 hover:text-white/80"
                 >
-                  <ChevronDown className="w-4 h-4" />
+                  <div className="w-8 h-1 bg-white/20 rounded-full" />
                 </button>
+              </div>
+
+              {/* Menu and Close buttons for Normal mode */}
+              <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
                 <button 
                   onClick={(e) => { e.stopPropagation(); clearPlayer(); }}
                   className="p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 relative z-30 pointer-events-auto"
@@ -283,7 +331,7 @@ export default function GlobalPlayer() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-3 relative z-10 w-full">
+              <div className="flex items-center gap-3 relative z-10 w-full mt-2">
                 <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
                    {currentTrack.imageUrl ? (
                       <img src={currentTrack.imageUrl} alt={currentTrack.title} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
@@ -328,8 +376,14 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full md:w-[400px] max-h-[80vh] overflow-y-auto bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-6 pb-8 px-6 relative"
+              className="w-full md:w-[400px] max-h-[86vh] overflow-y-auto bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-6 pb-8 px-6 relative scrollbar-hide"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
+              <style>{`
+                .scrollbar-hide::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
               {currentTrack.imageUrl ? (
                 <div 
                   className="absolute inset-0 bg-cover bg-center opacity-10 blur-xl saturate-200 pointer-events-none"
@@ -343,9 +397,9 @@ export default function GlobalPlayer() {
                  <div className="relative">
                    <button 
                       onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-                      className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50"
+                      className="p-1 hover:bg-white/10 rounded-xl transition-all"
                    >
-                      <MoreHorizontal className="w-5 h-5" />
+                      <LibraryIcon />
                    </button>
                    <AnimatePresence>
                      {showMenu && (
@@ -381,9 +435,9 @@ export default function GlobalPlayer() {
 
                  <button 
                     onClick={() => handleModeChange('normal')}
-                    className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50"
+                    className="p-2 px-6 hover:bg-white/10 rounded-full transition-all text-white/50"
                  >
-                    <ChevronDown className="w-6 h-6" />
+                    <div className="w-8 h-1.5 bg-white/20 rounded-full" />
                  </button>
 
                  <button 

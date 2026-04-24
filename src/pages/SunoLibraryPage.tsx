@@ -26,6 +26,9 @@ export default function SunoLibraryPage() {
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite'>('all');
   const [showDetails, setShowDetails] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { currentTrack, isPlaying, playTrack } = useGlobalPlayer();
 
@@ -320,21 +323,28 @@ export default function SunoLibraryPage() {
     alert('플레이리스트 저장 준비가 완료되었습니다.');
   };
 
-  const handleDelete = async (groupId: string) => {
-    if (window.confirm("라이브러리에서 이 항목을 숨길까요?")) {
-      try {
-        const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-        if (user) {
-           await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', groupId), {
-             hidden: true,
-             deletedAt: serverTimestamp()
-           });
-           setTracks(prev => prev.filter(t => t.id !== groupId));
-        }
-      } catch (e) {
-        console.error(e);
-        alert('삭제 중 오류가 발생했습니다.');
-      }
+  const handleDeleteClick = (groupId: string) => {
+    setDeleteTarget(groupId);
+    setDeleteError(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !user) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget), {
+        hidden: true,
+        deletedAt: serverTimestamp()
+      });
+      setTracks(prev => prev.filter(t => t.id !== deleteTarget));
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error(e);
+      setDeleteError('삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -557,7 +567,7 @@ export default function SunoLibraryPage() {
                                       { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } },
                                       { icon: Share2, label: '공유', action: () => { handleShare(group, item); setActiveMenu(null); } },
                                       { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } },
-                                      (!isSharedView || isSharedOwner) ? { icon: Trash2, label: '삭제', action: () => { handleDelete(group.id); setActiveMenu(null); }, danger: true } : null,
+                                      (!isSharedView || isSharedOwner) ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(group.id); setActiveMenu(null); }, danger: true } : null,
                                     ].filter(Boolean).map((m: any, i) => (
                                       <button
                                         key={i}
@@ -629,6 +639,53 @@ export default function SunoLibraryPage() {
                 >
                   닫기
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl p-6"
+            >
+              <div className="flex flex-col items-center text-center">
+                 <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
+                    <AlertCircle className="w-6 h-6 text-red-500" />
+                 </div>
+                 <h3 className="text-xl font-bold mb-2">라이브러리에서 이 항목을 숨길까요?</h3>
+                 <p className="text-sm text-[var(--text-secondary)] mb-6">
+                   숨긴 항목은 더 이상 목록에 표시되지 않습니다.
+                 </p>
+                 
+                 {deleteError && (
+                   <div className="w-full text-xs text-red-400 bg-red-500/10 px-4 py-2 rounded-xl mb-4 border border-red-500/20">
+                     {deleteError}
+                   </div>
+                 )}
+                 
+                 <div className="flex w-full gap-3">
+                   <button
+                     onClick={() => setDeleteTarget(null)}
+                     disabled={isDeleting}
+                     className="flex-1 py-3 px-4 rounded-xl font-bold bg-white/5 hover:bg-white/10 transition-all text-white/70 hover:text-white disabled:opacity-50"
+                   >
+                     취소
+                   </button>
+                   <button
+                     onClick={confirmDelete}
+                     disabled={isDeleting}
+                     className="flex-1 py-3 px-4 rounded-xl font-bold bg-red-500 hover:bg-red-600 text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                   >
+                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : '숨기기'}
+                   </button>
+                 </div>
               </div>
             </motion.div>
           </div>

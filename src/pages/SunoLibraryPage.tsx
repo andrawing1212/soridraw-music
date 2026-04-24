@@ -20,6 +20,7 @@ export default function SunoLibraryPage() {
   const [isSharedView, setIsSharedView] = useState(false);
   const [isSharedOwner, setIsSharedOwner] = useState(false);
   const [sharedTrackLoading, setSharedTrackLoading] = useState(false);
+  const [sharedError, setSharedError] = useState(false);
   
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,6 +44,8 @@ export default function SunoLibraryPage() {
       const unsubAuth = auth.onAuthStateChanged(async (currentUser) => {
         setUser(currentUser);
         try {
+          console.log("shared track search start", { trackId, isSharedView: true, hasUser: !!currentUser });
+          
           if (currentUser) {
             const trackRef = doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId);
             const snap = await getDoc(trackRef);
@@ -60,7 +63,23 @@ export default function SunoLibraryPage() {
             where('isPublic', '==', true)
           );
           const querySnapshot = await getDocs(q);
-          const publicTrack = querySnapshot.docs.find(d => d.id === trackId && !d.data().hidden);
+          console.log("public tracks count", querySnapshot.size);
+          
+          let publicTrack = null;
+          for (const docSnap of querySnapshot.docs) {
+            const data = docSnap.data();
+            console.log("public track candidate", {
+              docId: docSnap.id,
+              isPublic: data.isPublic,
+              hidden: data.hidden,
+              title: data.title
+            });
+            
+            if (docSnap.id === trackId && data.isPublic === true && data.hidden !== true) {
+              publicTrack = docSnap;
+              break;
+            }
+          }
           
           if (publicTrack) {
             setTracks([{ id: publicTrack.id, ...publicTrack.data() }]);
@@ -68,8 +87,9 @@ export default function SunoLibraryPage() {
             setTracks([]);
           }
         } catch (e) {
-          console.error(e);
+          console.error("shared track query failed", e);
           setTracks([]);
+          setSharedError(true);
         } finally {
           setSharedTrackLoading(false);
           setLoading(false);
@@ -541,10 +561,10 @@ export default function SunoLibraryPage() {
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
             </div>
             <h2 className="text-xl font-bold mb-2">
-              {isSharedView ? '공유된 음악을 찾을 수 없습니다' : '검색 결과가 없습니다'}
+              {isSharedView ? (sharedError ? '공유곡 조회 중 오류가 발생했습니다.' : '공유된 음악을 찾을 수 없습니다') : '검색 결과가 없습니다'}
             </h2>
             <p className="text-[var(--text-secondary)] mb-8">
-              {isSharedView ? '비공개로 전환되었거나 삭제된 음악일 수 있습니다.' : '다른 검색어를 사용하거나 필터를 변경해보세요.'}
+              {isSharedView ? (sharedError ? '잠시 후 다시 시도해주세요.' : '비공개로 전환되었거나 삭제된 음악일 수 있습니다.') : '다른 검색어를 사용하거나 필터를 변경해보세요.'}
             </p>
           </motion.div>
         ) : (

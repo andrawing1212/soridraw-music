@@ -78,6 +78,11 @@ service cloud.firestore {
       allow read: if resource.data.isPublic == true && resource.data.hidden != true;
       allow write: if request.auth != null && request.auth.uid == uid;
     }
+    
+    // Suno public tracks for collectionGroup("tracks")
+    match /{path=**}/tracks/{trackId} {
+      allow read: if resource.data.isPublic == true && resource.data.hidden != true;
+    }
 
     // Suno API Shares
     match /suno_shares/{shareId} {

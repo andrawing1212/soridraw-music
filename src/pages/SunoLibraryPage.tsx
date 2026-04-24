@@ -66,7 +66,6 @@ export default function SunoLibraryPage() {
             setTracks([{ id: publicTrack.id, ...publicTrack.data() }]);
           } else {
             setTracks([]);
-            alert('공유된 곡을 찾을 수 없거나 접근할 수 없습니다.');
           }
         } catch (e) {
           console.error(e);
@@ -527,7 +526,7 @@ export default function SunoLibraryPage() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
           </div>
-        ) : !user ? (
+        ) : (!user && !isSharedView) ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
@@ -539,10 +538,14 @@ export default function SunoLibraryPage() {
             className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-              <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />
+              {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
             </div>
-            <h2 className="text-xl font-bold mb-2">검색 결과가 없습니다</h2>
-            <p className="text-[var(--text-secondary)] mb-8">다른 검색어를 사용하거나 필터를 변경해보세요.</p>
+            <h2 className="text-xl font-bold mb-2">
+              {isSharedView ? '공유된 음악을 찾을 수 없습니다' : '검색 결과가 없습니다'}
+            </h2>
+            <p className="text-[var(--text-secondary)] mb-8">
+              {isSharedView ? '비공개로 전환되었거나 삭제된 음악일 수 있습니다.' : '다른 검색어를 사용하거나 필터를 변경해보세요.'}
+            </p>
           </motion.div>
         ) : (
           <div className="space-y-6">

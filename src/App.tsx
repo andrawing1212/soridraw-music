@@ -874,9 +874,7 @@ export function getTimestampMs(value: any): number {
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
-      <Router>
-        <App />
-      </Router>
+      <App />
     </ErrorBoundary>
   );
 }

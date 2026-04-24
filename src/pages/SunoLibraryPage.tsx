@@ -8,7 +8,7 @@ import {
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 
 export default function SunoLibraryPage() {
@@ -17,6 +17,9 @@ export default function SunoLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [isSharedView, setIsSharedView] = useState(false);
+  const [isSharedOwner, setIsSharedOwner] = useState(false);
+  const [sharedTrackLoading, setSharedTrackLoading] = useState(false);
   
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +30,52 @@ export default function SunoLibraryPage() {
   const { currentTrack, isPlaying, playTrack } = useGlobalPlayer();
 
   useEffect(() => {
+    const searchParams = new URL(window.location.href).searchParams;
+    const trackId = searchParams.get('track');
+
+    if (trackId) {
+      setIsSharedView(true);
+      setSharedTrackLoading(true);
+
+      const unsubAuth = auth.onAuthStateChanged(async (currentUser) => {
+        setUser(currentUser);
+        try {
+          if (currentUser) {
+            const trackRef = doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId);
+            const snap = await getDoc(trackRef);
+            if (snap.exists() && !snap.data().hidden) {
+              setTracks([{ id: snap.id, ...snap.data() }]);
+              setIsSharedOwner(true);
+              setSharedTrackLoading(false);
+              setLoading(false);
+              return;
+            }
+          }
+          
+          const q = query(
+            collectionGroup(db, 'tracks'),
+            where('isPublic', '==', true)
+          );
+          const querySnapshot = await getDocs(q);
+          const publicTrack = querySnapshot.docs.find(d => d.id === trackId && !d.data().hidden);
+          
+          if (publicTrack) {
+            setTracks([{ id: publicTrack.id, ...publicTrack.data() }]);
+          } else {
+            setTracks([]);
+            alert('공유된 곡을 찾을 수 없거나 접근할 수 없습니다.');
+          }
+        } catch (e) {
+          console.error(e);
+          setTracks([]);
+        } finally {
+          setSharedTrackLoading(false);
+          setLoading(false);
+        }
+      });
+      return () => unsubAuth();
+    }
+
     const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
 
@@ -211,27 +260,38 @@ export default function SunoLibraryPage() {
     window.open(url, '_blank');
   };
 
-  const handleShare = async (url: string) => {
-    if (!url) {
-       alert('공유할 주소가 없습니다.');
-       return;
-    }
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Suno Music',
-          url: url
+  const handleShare = async (group: any, item: any) => {
+    if (!group) return;
+    try {
+      if (user) {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+        await updateDoc(trackRef, {
+          isPublic: true,
+          publicSharedAt: serverTimestamp()
         });
-      } catch (e) {
-        console.log('Share failed', e);
       }
-    } else {
-      try {
-        await navigator.clipboard.writeText(url);
+      
+      const shareUrl = `${window.location.origin}/suno-library?track=${group.id}`;
+      const title = `SORIDRAW Music - ${item?.title || group.title || 'Untitled'}`;
+      const text = `SORIDRAW에서 만든 음악을 들어보세요.`;
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: title,
+            text: text,
+            url: shareUrl
+          });
+        } catch (e) {
+          console.log('Share failed', e);
+        }
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
         alert('공유 링크를 복사했습니다.');
-      } catch (e) {
-        alert('링크 복사에 실패했습니다.');
       }
+    } catch (e) {
+      console.error('Error sharing:', e);
+      alert('공유 처리 중 오류가 발생했습니다.');
     }
   };
 
@@ -297,10 +357,10 @@ export default function SunoLibraryPage() {
             <div>
               <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
                 <Music className="w-8 h-8 text-brand-orange" />
-                Suno Library
+                {isSharedView ? '공유된 음악' : 'Suno Library'}
               </h1>
               <p className="text-sm text-[var(--text-secondary)] mt-1">
-                Suno API로 생성한 곡을 조회하고 재생합니다.
+                {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Suno API로 생성한 곡을 조회하고 재생합니다.'}
               </p>
             </div>
           </div>
@@ -318,33 +378,35 @@ export default function SunoLibraryPage() {
         {/* Main Music Player relocated to GlobalPlayer */}
 
         {/* Search & Filter */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
-            <input 
-              type="text" 
-              placeholder="음악 제목이나 스타일 검색..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 outline-none focus:border-brand-orange/50 transition-all text-sm"
-            />
+        {!isSharedView && (
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+              <input 
+                type="text" 
+                placeholder="음악 제목이나 스타일 검색..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 outline-none focus:border-brand-orange/50 transition-all text-sm"
+              />
+            </div>
+            <div className="flex bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl">
+              {(['all', 'completed', 'favorite'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                    filter === f ? 'bg-brand-orange text-white' : 'hover:bg-white/5 opacity-60'
+                  }`}
+                >
+                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : '즐겨찾기'}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl">
-            {(['all', 'completed', 'favorite'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  filter === f ? 'bg-brand-orange text-white' : 'hover:bg-white/5 opacity-60'
-                }`}
-              >
-                {f === 'all' ? '전체' : f === 'completed' ? '완료' : '즐겨찾기'}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
-        {loading ? (
+        {loading || sharedTrackLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
           </div>
@@ -475,10 +537,10 @@ export default function SunoLibraryPage() {
                                       { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...group, itemIndex: idx }); setActiveMenu(null); } },
                                       { icon: Download, label: '다운로드', action: () => { handleDownload(audioUrl); setActiveMenu(null); } },
                                       { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } },
-                                      { icon: Share2, label: '공유', action: () => { handleShare(audioUrl || window.location.href); setActiveMenu(null); } },
+                                      { icon: Share2, label: '공유', action: () => { handleShare(group, item); setActiveMenu(null); } },
                                       { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } },
-                                      { icon: Trash2, label: '삭제', action: () => { handleDelete(group.id); setActiveMenu(null); }, danger: true },
-                                    ].map((m, i) => (
+                                      (!isSharedView || isSharedOwner) ? { icon: Trash2, label: '삭제', action: () => { handleDelete(group.id); setActiveMenu(null); }, danger: true } : null,
+                                    ].filter(Boolean).map((m: any, i) => (
                                       <button
                                         key={i}
                                         onClick={m.action}

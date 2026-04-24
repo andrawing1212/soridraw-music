@@ -1,0 +1,67 @@
+import * as functions from 'firebase-functions/v2';
+import * as admin from 'firebase-admin';
+
+admin.initializeApp();
+
+export const saveSunoApiKey = functions.https.onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { apiKey } = request.data;
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+    throw new functions.https.HttpsError('invalid-argument', 'API Key is required.');
+  }
+
+  const uid = auth.uid;
+  const db = admin.firestore();
+
+  await db.collection('user_api_keys').doc(uid).set({
+    sunoApiKey: apiKey.trim(),
+    hasSunoApiKey: true,
+    provider: 'sunoapi.org',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { ok: true, hasSunoApiKey: true };
+});
+
+export const deleteSunoApiKey = functions.https.onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const uid = auth.uid;
+  const db = admin.firestore();
+
+  await db.collection('user_api_keys').doc(uid).delete();
+
+  return { ok: true, hasSunoApiKey: false };
+});
+
+export const getSunoApiKeyStatus = functions.https.onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const uid = auth.uid;
+  const db = admin.firestore();
+
+  const docSnap = await db.collection('user_api_keys').doc(uid).get();
+
+  if (!docSnap.exists) {
+    return { ok: true, hasSunoApiKey: false };
+  }
+
+  const data = docSnap.data();
+  return {
+    ok: true,
+    hasSunoApiKey: data?.hasSunoApiKey || false,
+    provider: data?.provider || null,
+    updatedAt: data?.updatedAt ? data.updatedAt.toDate().toISOString() : null,
+  };
+});

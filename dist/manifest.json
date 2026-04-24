@@ -1,0 +1,17 @@
+{
+  "name": "SORIDRAW's Studio",
+  "short_name": "SORIDRAW",
+  "description": "세상에 단 하나뿐인 노래의 완성!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#ff8200",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

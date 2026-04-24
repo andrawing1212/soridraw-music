@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // 2. Collection Rules
+
+    // [Section Tags] Managed by admin, read by all
+    match /section_tags/{tagId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // [Admin only] Live & Draft collections
+    match /section_tags_live/{tagId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /section_tags_draft/{tagId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Users collection
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.role == 'free';
+      allow update: if isAdmin() || (isOwner(uid) && request.resource.data.role == resource.data.role);
+    }
+
+    // Favorites collection
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // User recent songs
+    match /user_recent_songs/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid) || isAdmin();
+    }
+
+    // User custom structures
+    match /user_structures/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // Suno API Global Settings
+    match /app_settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Suno API User Keys - Handled entirely by Firebase Functions
+    match /user_api_keys/{uid} {
+      allow read, write: if false;
+    }
+
+    // Suno API Tracks
+    match /suno_tracks/{uid}/tracks/{trackId} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // Suno API Shares
+    match /suno_shares/{shareId} {
+      allow read: if resource == null || resource.data.isPublic == true || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
+    // 3. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

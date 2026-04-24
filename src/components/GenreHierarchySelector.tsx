@@ -1,0 +1,789 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CategoryItem, GenreGroupItem } from '../types';
+import { GENRE_HIERARCHY, GENRES } from '../constants';
+import { ChevronDown, ChevronUp, RotateCcw, Dices, X, Check, ArrowLeft, ChevronRight, Info } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+type ModalStep = 'main' | 'sub';
+
+type SubGenreItem = {
+  id: string;
+  label: string;
+  labelKo?: string;
+  description?: string;
+  descriptionKo?: string;
+};
+
+type MainGenreItem = {
+  id: string;
+  label: string;
+  labelKo?: string;
+  description?: string;
+  descriptionKo?: string;
+  children: SubGenreItem[];
+};
+
+type GroupItem = {
+  id: string;
+  label: string;
+  labelKo?: string;
+  description?: string;
+  descriptionKo?: string;
+  children: MainGenreItem[];
+};
+
+interface Props {
+  selectedGenre: string[];
+  selectedSubGenre: string[];
+  onSelectGenre: (id: string) => void;
+  onSelectSubGenre: (id: string) => void;
+  onClear: () => void;
+  onRandom: () => void;
+  onHover: (item: CategoryItem | null) => void;
+  onCommitSelection?: (mainId: string | null, subId: string | null) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  isRandomized?: boolean;
+  onHeightChange?: (height: number) => void;
+  forcedHeight?: number;
+  onModalStateChange?: (isOpen: boolean) => void;
+}
+
+const DEFAULT_GROUP_DESCRIPTION = '대분류를 선택한 뒤 메인 장르와 세부 장르를 고를 수 있습니다.';
+const DEFAULT_MAIN_DESCRIPTION = '메인 장르를 선택한 뒤 세부장르를 더 구체적으로 고를 수 있습니다.';
+const DEFAULT_SUB_DESCRIPTION = '세부 장르를 선택해 장르의 방향을 더 구체적으로 설정하세요.';
+
+const GENRE_TITLE_MAP: Record<string, string> = {
+  'group_pop_global': 'Pop & Global',
+  'group_hiphop_rnb': 'Hip-hop & R&B',
+  'group_rock_band': 'Rock & Band',
+  'group_edm_dance': 'Electronic & Dance',
+  'group_jazz_classical': 'Jazz & Classical',
+  'group_folk_world': 'Folk & World',
+  'group_trot_adult': 'Trot & Adult',
+  'group_cinematic_bgm': 'Cinematic & BGM',
+  'pop': 'Pop',
+  'kpop': 'K-Pop',
+  'jpop_style': 'J-Style',
+  'hiphop': 'Hip-hop',
+  'rnb': 'R&B',
+  'rock': 'Rock',
+  'metal': 'Metal',
+  'edm': 'EDM',
+  'jazz': 'Jazz',
+  'classical': 'Classical',
+  'acoustic_folk': 'Acoustic/Folk',
+  'world_music_folk': 'World Music',
+  'trot': 'Trot',
+  '7080_gayo': '7080 Gayo',
+  'ost': 'OST',
+  'dance_pop': 'Dance Pop',
+  'synth_pop': 'Synth Pop',
+  'teen_pop': 'Teen Pop',
+  'ballad_pop': 'Ballad Pop',
+  'city_pop': 'City Pop',
+  'indie_pop': 'Indie Pop',
+  'boom_bap': 'Boom Bap',
+  'trap': 'Trap',
+  'drill': 'Drill',
+  'lofi_hiphop': 'Lo-fi Hip-hop',
+  'contemporary_rnb': 'Contemporary R&B',
+  'neo_soul': 'Neo Soul',
+  'alternative_rock': 'Alternative Rock',
+  'punk_rock': 'Punk Rock',
+  'heavy_metal': 'Heavy Metal',
+  'house': 'House',
+  'techno': 'Techno',
+  'trance': 'Trance',
+  'swing_jazz': 'Swing Jazz',
+  'bossa_nova': 'Bossa Nova',
+  'traditional_folk': 'Traditional Folk',
+  'country': 'Country',
+  'reggae': 'Reggae',
+  'traditional_trot': 'Traditional Trot',
+  'semi_trot': 'Semi Trot',
+  'orchestral_score': 'Orchestral Score',
+  'piano_solo': 'Piano Solo',
+  'ambient': 'Ambient',
+};
+
+export default function GenreHierarchySelector({
+  selectedGenre,
+  selectedSubGenre,
+  onSelectGenre,
+  onSelectSubGenre,
+  onClear,
+  onRandom,
+  onHover,
+  onCommitSelection,
+  isExpanded,
+  onToggleExpand,
+  isRandomized = false,
+  onHeightChange,
+  forcedHeight,
+  onModalStateChange
+}: Props) {
+  const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
+  const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
+  const [modalStep, setModalStep] = useState<ModalStep>('main');
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [hoveredModalItem, setHoveredModalItem] = useState<{ label: string; description: string } | null>(null);
+  const lastSyncedGenreRef = useRef<string[]>([]);
+  const lastSyncedSubGenreRef = useRef<string[]>([]);
+
+  const modalHistoryDepthRef = useRef(0);
+  const modalScrollYRef = useRef(0);
+
+  // committed selections from parent
+  const committedGenre = selectedGenre ?? [];
+  const committedSubGenre = selectedSubGenre ?? [];
+
+  // pending selections inside modal
+  const [pendingMainId, setPendingMainId] = useState<string | null>(null);
+  const [pendingSubId, setPendingSubId] = useState<string | null>(null);
+  const [hasChangedInModal, setHasChangedInModal] = useState(false);
+
+  useEffect(() => {
+    onModalStateChange?.(!!activeGroup);
+  }, [activeGroup, onModalStateChange]);
+
+  const groups = useMemo<GroupItem[]>(() => {
+    const genreDescMap = new Map(GENRES.map(g => [g.id, g.description]));
+
+    return GENRE_HIERARCHY.map((group) => ({
+      id: group.id,
+      label: group.label,
+      labelKo: group.labelKo,
+      description: (group as any).description ?? DEFAULT_GROUP_DESCRIPTION,
+      descriptionKo: (group as any).descriptionKo,
+      children: group.children.map((main) => ({
+        id: main.id,
+        label: main.label,
+        labelKo: main.labelKo,
+        description: (main as any).description ?? genreDescMap.get(main.id) ?? DEFAULT_MAIN_DESCRIPTION,
+        descriptionKo: (main as any).descriptionKo,
+        children: main.children.map((sub) => ({
+          id: sub.id,
+          label: sub.label,
+          labelKo: sub.labelKo,
+          description: (sub as any).description ?? genreDescMap.get(sub.id) ?? DEFAULT_SUB_DESCRIPTION,
+          descriptionKo: (sub as any).descriptionKo,
+        })),
+      })),
+    }));
+  }, []);
+
+  useEffect(() => {
+    const genreChanged = JSON.stringify(committedGenre) !== JSON.stringify(lastSyncedGenreRef.current);
+    const subGenreChanged = JSON.stringify(committedSubGenre) !== JSON.stringify(lastSyncedSubGenreRef.current);
+
+    if (genreChanged || subGenreChanged) {
+      lastSyncedGenreRef.current = committedGenre;
+      lastSyncedSubGenreRef.current = committedSubGenre;
+
+      if (committedGenre.length > 0) {
+        const mainId = committedGenre[0];
+        setPendingMainId(mainId);
+
+        let foundGroup: GroupItem | null = null;
+        let foundMain: MainGenreItem | null = null;
+        let foundSubId: string | null = null;
+
+        for (const group of groups) {
+          const main = group.children.find(m => m.id === mainId);
+          if (main) {
+            foundGroup = group;
+            foundMain = main;
+            foundSubId = main.children.find(s => committedSubGenre.includes(s.id))?.id || null;
+            break;
+          }
+        }
+
+        setPendingSubId(foundSubId);
+
+        // Sync modal view if open
+        if (activeGroup && foundGroup && activeGroup.id !== foundGroup.id) {
+          setActiveGroup(foundGroup);
+        }
+        if (modalStep === 'sub' && foundMain && activeMain?.id !== foundMain.id) {
+          setActiveMain(foundMain);
+        }
+      } else {
+        setPendingMainId(null);
+        setPendingSubId(null);
+      }
+    }
+  }, [committedGenre, committedSubGenre, groups, activeGroup, activeMain, modalStep]);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | string>(0);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      const height = contentRef.current.scrollHeight;
+      setContentHeight(height);
+      if (onHeightChange) {
+        onHeightChange(height);
+      }
+    }
+  }, [groups, onHeightChange]);
+
+  const totalCount = useMemo(() => {
+    return groups.reduce((count, group) => {
+      return count + group.children.length + group.children.reduce((subCount, main) => subCount + main.children.length, 0);
+    }, 0);
+  }, [groups]);
+
+  const selectedCount = committedGenre.length + committedSubGenre.length;
+
+  const selectedMainLabel = useMemo(() => {
+    for (const group of groups) {
+      const matched = group.children.find((main) => committedGenre.includes(main.id));
+      if (matched) return matched.labelKo || matched.label;
+    }
+    return null;
+  }, [groups, committedGenre]);
+
+  const selectedSubLabels = useMemo(() => {
+    const labels: string[] = [];
+    for (const group of groups) {
+      for (const main of group.children) {
+        for (const sub of main.children) {
+          if (committedSubGenre.includes(sub.id)) labels.push(sub.labelKo || sub.label);
+        }
+      }
+    }
+    return labels;
+  }, [groups, committedSubGenre]);
+
+  const finalizeAndClose = (shouldCommit = true, skipHistory = false) => {
+    if (shouldCommit && hasChangedInModal && pendingMainId) {
+      commitSelection(pendingMainId, pendingSubId);
+    }
+    if (!skipHistory && modalHistoryDepthRef.current > 0) {
+      window.history.go(-modalHistoryDepthRef.current);
+    }
+    setActiveGroup(null);
+    setActiveMain(null);
+    setPendingMainId(null);
+    setPendingSubId(null);
+    setModalStep('main');
+    setHasChangedInModal(false);
+    modalHistoryDepthRef.current = 0;
+  };
+
+  const openMainModal = (group: GroupItem) => {
+    const currentMainId = committedGenre[0] ?? null;
+    const currentMain =
+      group.children.find((main) => main.id === currentMainId) ?? null;
+
+    const currentSubId =
+      currentMain?.children.find((sub) => committedSubGenre.includes(sub.id))?.id ?? null;
+
+    setActiveGroup(group);
+    setActiveMain(null);
+    setModalStep('main');
+    setPendingMainId(currentMainId);
+    setPendingSubId(currentSubId);
+    setHasChangedInModal(false);
+
+    window.history.pushState({ genreModal: 'main' }, '');
+    modalHistoryDepthRef.current = 1;
+  };
+
+  const closeModal = () => {
+    finalizeAndClose();
+  };
+
+  const handleBack = () => {
+    if (modalStep === 'sub') {
+      window.history.back();
+      return;
+    }
+    finalizeAndClose(true);
+  };
+
+  const handleMainClick = (main: MainGenreItem) => {
+    if (pendingMainId === main.id) {
+      setPendingMainId(null);
+      setPendingSubId(null);
+    } else {
+      setPendingMainId(main.id);
+      setPendingSubId(null);
+    }
+    setHasChangedInModal(true);
+  };
+
+  const handleOpenSub = (main: MainGenreItem) => {
+    setPendingMainId(main.id);
+    if (!main.children.some((sub) => sub.id === pendingSubId)) {
+      setPendingSubId(null);
+    }
+    setHasChangedInModal(true);
+    setActiveMain(main);
+    setModalStep('sub');
+
+    window.history.pushState({ genreModal: 'sub' }, '');
+    modalHistoryDepthRef.current = 2;
+  };
+
+  const handleSubClick = (subId: string) => {
+    if (pendingSubId === subId) {
+      setPendingSubId(null);
+    } else {
+      setPendingSubId(subId);
+    }
+    setHasChangedInModal(true);
+  };
+
+  const commitSelection = (mainId: string | null, subId: string | null) => {
+    if (onCommitSelection) {
+      onCommitSelection(mainId, subId);
+      return;
+    }
+
+    committedGenre.forEach((genreId) => onSelectGenre(genreId));
+    committedSubGenre.forEach((subGenreId) => onSelectSubGenre(subGenreId));
+
+    if (mainId) onSelectGenre(mainId);
+    if (subId) onSelectSubGenre(subId);
+  };
+
+  const applyMain = () => {
+    if (!pendingMainId) return;
+    commitSelection(pendingMainId, null);
+    setHasChangedInModal(false);
+    finalizeAndClose(false);
+  };
+
+  const applySub = () => {
+    if (!pendingMainId) return;
+    commitSelection(pendingMainId, pendingSubId);
+    setHasChangedInModal(false);
+    finalizeAndClose(false);
+  };
+
+  const handleRandom = () => {
+    const allMainGenres = groups.flatMap((group) => group.children);
+    if (allMainGenres.length === 0) return;
+
+    const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
+    const randomSub = randomMain.children.length > 0
+      ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
+      : null;
+
+    onSelectGenre(randomMain.id);
+    if (randomSub) {
+      onSelectSubGenre(randomSub.id);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeGroup) return;
+
+    modalScrollYRef.current = window.scrollY;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyPosition = document.body.style.position;
+    const originalBodyTop = document.body.style.top;
+    const originalBodyWidth = document.body.style.width;
+    const originalBodyTouchAction = document.body.style.touchAction;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        finalizeAndClose(true);
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${modalScrollYRef.current}px`;
+    document.body.style.width = '100%';
+    document.body.style.touchAction = 'none';
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.position = originalBodyPosition;
+      document.body.style.top = originalBodyTop;
+      document.body.style.width = originalBodyWidth;
+      document.body.style.touchAction = originalBodyTouchAction;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscroll;
+
+      window.removeEventListener('keydown', handleKeyDown);
+
+      window.scrollTo(0, modalScrollYRef.current);
+    };
+  }, [activeGroup, hasChangedInModal, pendingMainId, pendingSubId]);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (!activeGroup) return;
+
+      const state = event.state;
+
+      // If we landed on a state that doesn't belong to this modal, close it.
+      if (!state || !state.genreModal) {
+        finalizeAndClose(true, true);
+        return;
+      }
+
+      // If we landed on 'main' state
+      if (state.genreModal === 'main') {
+        setModalStep('main');
+        setActiveMain(null);
+        modalHistoryDepthRef.current = 1;
+        return;
+      }
+
+      // If we landed on 'sub' state
+      if (state.genreModal === 'sub') {
+        setModalStep('sub');
+        modalHistoryDepthRef.current = 2;
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeGroup]);
+
+  return (
+    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative min-w-0">
+              <h3 
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
+              >
+                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className="truncate">장르</span>
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selectedCount}/{totalCount})</span>
+              </h3>
+              <AnimatePresence>
+                {showTitleTooltip && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                  >
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
+                      곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류를 선택하고 메인 장르와 세부 장르를 조합하여 원하는 음악적 색깔을 만드세요.
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRandom}
+              onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random Selection', labelKo: '랜덤 선택', description: '장르를 무작위로 선택합니다.', _ts: Date.now() })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                isRandomized
+                  ? "bg-brand-orange text-white border-brand-orange"
+                  : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
+              )}
+              title="랜덤 선택"
+            >
+              <Dices className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClear}
+              onMouseEnter={() => onHover({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.', _ts: Date.now() })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2.5 rounded-xl transition-all border shadow-btn",
+                selectedCount > 0 || isRandomized
+                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+              )}
+              title="초기화"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <motion.div
+          initial={false}
+          animate={{ 
+            height: isExpanded ? (forcedHeight || contentHeight) : 64,
+            opacity: 1
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="overflow-hidden"
+        >
+          <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+            {groups.map((group) => {
+              const hasSelectedMain = group.children.some((main) => committedGenre.includes(main.id));
+              return (
+                <button
+                  key={group.id}
+                  onClick={() => openMainModal(group)}
+                  onMouseEnter={() => onHover({ id: group.id, label: group.label, labelKo: group.labelKo, description: group.description || DEFAULT_GROUP_DESCRIPTION, descriptionKo: group.descriptionKo, _ts: Date.now() } as CategoryItem)}
+                  onMouseLeave={() => onHover(null)}
+                  className={cn(
+                    'min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center shadow-btn',
+                    hasSelectedMain
+                      ? 'bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20'
+                      : 'bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover'
+                  )}
+                >
+                  <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                    {group.labelKo || group.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      </div>
+
+      <div 
+        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
+      >
+        {selectedMainLabel ? (
+          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
+            {selectedMainLabel}
+            {selectedSubLabels.length > 0 ? ` · ${selectedSubLabels.join(', ')}` : ''}
+          </p>
+        ) : (
+          <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
+            메인 장르를 선택하세요.
+          </p>
+        )}
+      </div>
+
+      <button
+        onClick={onToggleExpand}
+        className={cn(
+          "absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+          isExpanded
+            ? "bg-brand-orange text-white border-brand-orange"
+            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+        )}
+        title={isExpanded ? '접기' : '펼치기'}
+      >
+        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </button>
+
+      <AnimatePresence>
+        {activeGroup && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 overscroll-none">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={closeModal}
+              />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
+              className="w-full max-w-md rounded-[32px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]">
+                <button
+                  onClick={handleBack}
+                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
+                  title="뒤로가기"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                
+                <h3 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
+                  {modalStep === 'main' ? (activeGroup.labelKo || activeGroup.label) : (activeMain?.labelKo || activeMain?.label)}
+                </h3>
+
+                <button
+                  onClick={() => closeModal()}
+                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
+                  title="닫기"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Selection Status Bar */}
+              <div className="px-6 py-2.5 bg-brand-orange/5 border-b border-brand-orange/10 flex items-center justify-center gap-2 overflow-hidden">
+                <span className="text-[10px] font-black text-brand-orange uppercase tracking-widest shrink-0">Selection</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
+                  <span className={cn(pendingMainId ? "text-brand-orange" : "text-[var(--text-secondary)]")}>
+                    {pendingMainId ? (activeGroup.children.find(m => m.id === pendingMainId)?.labelKo || activeGroup.children.find(m => m.id === pendingMainId)?.label) : "미선택"}
+                  </span>
+                  {modalStep === 'sub' && activeMain && (
+                    <>
+                      <ChevronRight className="w-3 h-3 text-[var(--text-secondary)]" />
+                      <span className={cn(pendingSubId ? "text-brand-orange" : "text-[var(--text-secondary)]")}>
+                        {pendingSubId ? (activeMain.children.find(s => s.id === pendingSubId)?.labelKo || activeMain.children.find(s => s.id === pendingSubId)?.label) : "전체/기본"}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="p-5 space-y-4 max-h-[60vh] overflow-y-auto overscroll-contain custom-scrollbar"
+                onWheel={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+              >
+                {modalStep === 'main' && (
+                  <div className="grid grid-cols-1 gap-3">
+                    {activeGroup.children.map((main) => {
+                      const isCommitted = committedGenre.includes(main.id);
+                      const isPending = pendingMainId === main.id;
+                      const isActiveVisual = pendingMainId ? isPending : isCommitted;
+
+                      return (
+                        <div
+                          key={main.id}
+                          className="group/card relative"
+                          onMouseEnter={() => setHoveredModalItem({ 
+                            label: main.labelKo || main.label, 
+                            description: main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION 
+                          })}
+                          onMouseLeave={() => setHoveredModalItem(null)}
+                        >
+                          <button
+                            onClick={() => handleMainClick(main)}
+                            className={cn(
+                              'w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-between hover:scale-[1.02] active:scale-[0.98]',
+                              isActiveVisual
+                                ? 'bg-brand-orange border-transparent text-white shadow-lg shadow-brand-orange/30'
+                                : 'bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 text-[var(--text-primary)] shadow-btn'
+                            )}
+                          >
+                            {/* Left Spacer to maintain center alignment of text within the card */}
+                            <div className="w-16 flex-shrink-0" aria-hidden="true" />
+
+                            {/* Text Area */}
+                            <div className="flex-1 min-w-0 text-center pr-4">
+                              <div className="font-bold text-lg tracking-tight break-keep truncate">
+                                {main.labelKo || main.label}
+                              </div>
+                              <div className={cn(
+                                'text-xs truncate w-full break-keep',
+                                isActiveVisual ? 'text-white/90' : 'text-[var(--text-secondary)]'
+                              )}>
+                                {main.descriptionKo || main.description || DEFAULT_MAIN_DESCRIPTION}
+                              </div>
+                            </div>
+                            
+                            {/* Right Button Area */}
+                            <div className="w-16 flex-shrink-0 flex items-center justify-center gap-2">
+                              {isActiveVisual && <Check className="w-5 h-5" />}
+                              {main.children.length > 0 && (
+                                <div 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenSub(main);
+                                  }}
+                                  className={cn(
+                                    "p-2 rounded-xl border transition-all hover:scale-110 active:scale-90",
+                                    isActiveVisual 
+                                      ? "bg-white/30 border-white/40 text-white" 
+                                      : "bg-btn-bg border-btn-border text-brand-orange shadow-btn hover:border-brand-orange/50"
+                                  )}
+                                  title="세부장르 더보기"
+                                >
+                                  <ChevronRight className="w-4 h-4" />
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {modalStep === 'sub' && activeMain && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {activeMain.children.map((sub) => {
+                      const isCommitted = committedSubGenre.includes(sub.id) && committedGenre.includes(activeMain.id);
+                      const isPending = pendingSubId === sub.id;
+                      const isActiveVisual = pendingSubId !== null ? isPending : isCommitted;
+
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => handleSubClick(sub.id)}
+                          onMouseEnter={() => setHoveredModalItem({ 
+                            label: sub.labelKo || sub.label, 
+                            description: sub.descriptionKo || sub.description || DEFAULT_SUB_DESCRIPTION 
+                          })}
+                          onMouseLeave={() => setHoveredModalItem(null)}
+                          className={cn(
+                            'px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep',
+                            isActiveVisual
+                              ? 'bg-brand-orange text-white border-transparent shadow-lg shadow-brand-orange/30'
+                              : 'bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 shadow-btn',
+                          )}
+                        >
+                          {sub.labelKo || sub.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Info Area */}
+              <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
+                <div className="p-2.5 rounded-xl bg-brand-orange/10 text-brand-orange shrink-0 shadow-inner hidden md:flex">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1 text-center">
+                  {hoveredModalItem ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={hoveredModalItem.label}
+                      className="flex flex-col items-center"
+                    >
+                      <div className="text-sm font-bold text-[var(--text-primary)] mb-1 break-keep">
+                        {hoveredModalItem.label}
+                      </div>
+                      <div className="text-[12px] text-[var(--text-secondary)] leading-relaxed line-clamp-2 font-medium break-keep">
+                        {hoveredModalItem.description}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <div className="text-xs text-[var(--text-secondary)] italic font-medium opacity-60 break-keep">
+                      장르 항목에 마우스를 올리면 자세한 설명을 볼 수 있어요.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

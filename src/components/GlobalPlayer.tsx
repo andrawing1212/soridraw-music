@@ -126,12 +126,32 @@ export default function GlobalPlayer() {
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
     if (savedMode === 'collapsed' || savedMode === 'normal' || savedMode === 'expanded') {
       setMode(savedMode as 'collapsed' | 'normal' | 'expanded');
+      if (savedMode === 'expanded') {
+         enforceStrictViewportClamp();
+      }
     }
   }, []);
+
+  const enforceStrictViewportClamp = () => {
+    if (window.innerWidth < 768) return;
+    setTimeout(() => {
+      if (!playerRef.current) return;
+      setPosition(prev => {
+        const width = playerRef.current!.offsetWidth;
+        const height = playerRef.current!.offsetHeight;
+        const newY = Math.max(32 + height - window.innerHeight, Math.min(prev.y, 0));
+        const newX = Math.max(48 + width - window.innerWidth, Math.min(prev.x, 16));
+        return { x: newX, y: newY };
+      });
+    }, 100);
+  };
 
   const handleModeChange = (newMode: 'collapsed' | 'normal' | 'expanded') => {
     setMode(newMode);
     localStorage.setItem('soridraw_global_player_mode', newMode);
+    if (newMode === 'expanded') {
+      enforceStrictViewportClamp();
+    }
   };
 
   useEffect(() => {
@@ -182,6 +202,18 @@ export default function GlobalPlayer() {
     window.open(url, '_blank');
   };
 
+  const handleCopyShareLink = async () => {
+    if (!currentTrack?.parent?.id) return;
+    const shareUrl = `${window.location.origin}/suno-library?track=${currentTrack.parent.id}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('링크 복사를 완료했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert('링크 복사에 실패했습니다.');
+    }
+  };
+
   const handleShare = async () => {
     if (!currentTrack) return;
     
@@ -193,6 +225,8 @@ export default function GlobalPlayer() {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
         await updateDoc(trackRef, {
           isPublic: true,
+          hidden: false,
+          shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
       }
@@ -209,7 +243,10 @@ export default function GlobalPlayer() {
             url: shareUrl
           });
         } catch (e) {
-          console.log('Share failed', e);
+          if ((e as Error).name !== 'AbortError') {
+            await navigator.clipboard.writeText(shareUrl);
+            alert('공개 공유 링크를 복사했습니다.');
+          }
         }
       } else {
         await navigator.clipboard.writeText(shareUrl);
@@ -317,6 +354,8 @@ export default function GlobalPlayer() {
       />
 
       <motion.div
+        layout
+        transition={{ type: 'spring', bounce: 0.1, duration: 0.35 }}
         ref={playerRef}
         drag={isSharedPlayerMode ? false : isMobile ? (mode === 'expanded' ? false : "x") : true}
         dragConstraints={isMobile ? undefined : {
@@ -350,7 +389,7 @@ export default function GlobalPlayer() {
         }`}
         style={{ touchAction: 'none' }}
       >
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="popLayout">
           {mode === 'collapsed' && (
             <motion.div
               key="collapsed"
@@ -521,14 +560,14 @@ export default function GlobalPlayer() {
                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
                          className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-2 z-30"
                        >
-                         {[
+                       {[
                            { icon: Info, label: '상세정보', action: () => { alert('상세정보는 라이브러리 목록에서 확인해주세요.'); setShowMenu(false); } },
-                           { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url); setShowMenu(false); } },
-                           { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } },
-                           { icon: Share2, label: '공유', action: () => { handleShare(); setShowMenu(false); } },
-                           { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } },
-                           { icon: Trash2, label: '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true },
-                         ].map((m, i) => (
+                           !isSharedPlayerMode ? { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url); setShowMenu(false); } } : null,
+                           !isSharedPlayerMode ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } } : null,
+                           { icon: Share2, label: isSharedPlayerMode ? '링크 복사' : '공유', action: () => { isSharedPlayerMode ? handleCopyShareLink() : handleShare(); setShowMenu(false); } },
+                           !isSharedPlayerMode ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } } : null,
+                           !isSharedPlayerMode ? { icon: Trash2, label: '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true } : null,
+                         ].filter(Boolean).map((m: any, i) => (
                            <button
                              key={i}
                              onClick={(e) => { e.stopPropagation(); m.action(); }}

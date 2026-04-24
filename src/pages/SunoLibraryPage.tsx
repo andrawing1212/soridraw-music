@@ -298,6 +298,17 @@ export default function SunoLibraryPage() {
     setSharePopupInfo({ group, item });
   };
 
+  const handleCopyShareLink = async (group: any) => {
+    const shareUrl = `${window.location.origin}/suno-library?track=${group.id}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('링크 복사를 완료했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert('링크 복사에 실패했습니다.');
+    }
+  };
+
   const handlePublicShare = async () => {
     if (!sharePopupInfo) return;
     const { group, item } = sharePopupInfo;
@@ -511,6 +522,7 @@ export default function SunoLibraryPage() {
             </div>
           </div>
           <div className="flex gap-2 items-center self-end md:self-center">
+          {!isSharedView && (
             <button
               onClick={() => navigate('/suno-api-settings')}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
@@ -518,6 +530,7 @@ export default function SunoLibraryPage() {
               <Settings className="w-4 h-4" />
               API 설정
             </button>
+          )}
           </div>
         </motion.div>
 
@@ -711,11 +724,11 @@ export default function SunoLibraryPage() {
                                   >
                                     {[
                                       { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...group, itemIndex: idx }); setActiveMenu(null); } },
-                                      { icon: Download, label: '다운로드', action: () => { handleDownload(audioUrl); setActiveMenu(null); } },
-                                      { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } },
-                                      { icon: Share2, label: '공유', action: () => { handleShare(group, item); setActiveMenu(null); } },
-                                      { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } },
-                                      (!isSharedView || isSharedOwner) ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(group.id); setActiveMenu(null); }, danger: true } : null,
+                                      !isSharedView ? { icon: Download, label: '다운로드', action: () => { handleDownload(audioUrl); setActiveMenu(null); } } : null,
+                                      !isSharedView ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } } : null,
+                                      { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(group) : handleShare(group, item); setActiveMenu(null); } },
+                                      !isSharedView ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } } : null,
+                                      !isSharedView ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(group.id); setActiveMenu(null); }, danger: true } : null,
                                     ].filter(Boolean).map((m: any, i) => (
                                       <button
                                         key={i}

@@ -60,7 +60,8 @@ export default function GlobalPlayer() {
     handleTimeUpdate,
     handleEnded,
     setIsPlaying,
-    clearPlayer
+    clearPlayer,
+    isSharedPlayerMode
   } = useGlobalPlayer();
 
   const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
@@ -258,6 +259,7 @@ export default function GlobalPlayer() {
   };
 
   const handleDragEnd = (e: any, info: any) => {
+    if (isSharedPlayerMode) return;
     setTimeout(() => { isDragging.current = false; }, 100);
 
     if (isMobile && mode !== 'expanded') {
@@ -316,7 +318,7 @@ export default function GlobalPlayer() {
 
       <motion.div
         ref={playerRef}
-        drag={isMobile ? (mode === 'expanded' ? false : "x") : true}
+        drag={isSharedPlayerMode ? false : isMobile ? (mode === 'expanded' ? false : "x") : true}
         dragConstraints={isMobile ? undefined : {
           left: -(window.innerWidth - 80),
           right: Math.max(16, (playerRef.current?.offsetWidth || 384) - 80),
@@ -328,15 +330,21 @@ export default function GlobalPlayer() {
         onDragEnd={handleDragEnd}
         initial={false}
         animate={{ 
-          x: isMobile 
+          x: isSharedPlayerMode
+            ? '-50%'
+            : isMobile 
             ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? 'calc(50vw - 48px)' : '-50%'))
             : position.x,
-          y: isMobile
+          y: isSharedPlayerMode
+            ? (mode === 'expanded' ? '-50%' : 0)
+            : isMobile
             ? (mode === 'expanded' ? '-50%' : 0)
             : position.y
         }}
         className={`fixed z-[100] flex flex-col ${
-          isMobile 
+          isSharedPlayerMode
+            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
+            : isMobile 
             ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
             : (mode === 'expanded' ? 'bottom-4 right-3 md:left-auto md:right-8 items-end w-full md:w-auto' : 'bottom-4 right-4 md:left-auto md:right-8 items-end w-full md:w-auto')
         }`}

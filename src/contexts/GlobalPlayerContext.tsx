@@ -33,6 +33,8 @@ interface GlobalPlayerContextType {
   handleEnded: () => void;
   setIsPlaying: (v: boolean) => void;
   clearPlayer: () => void;
+  isSharedPlayerMode: boolean;
+  setIsSharedPlayerMode: (v: boolean) => void;
 }
 
 const GlobalPlayerContext = createContext<GlobalPlayerContextType | null>(null);
@@ -49,6 +51,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const [isMuted, setIsMuted] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+  const [isSharedPlayerMode, setIsSharedPlayerMode] = useState(false);
 
   const clearPlayer = () => {
     if (audioRef.current) {
@@ -171,7 +174,9 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
         handleTimeUpdate,
         handleEnded,
         setIsPlaying,
-        clearPlayer
+        clearPlayer,
+        isSharedPlayerMode,
+        setIsSharedPlayerMode
       }}
     >
       {children}

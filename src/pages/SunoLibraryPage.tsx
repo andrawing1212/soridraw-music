@@ -31,7 +31,13 @@ export default function SunoLibraryPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { currentTrack, isPlaying, playTrack, togglePlayPause } = useGlobalPlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
+
+  useEffect(() => {
+    return () => {
+      setIsSharedPlayerMode(false);
+    };
+  }, []);
 
   useEffect(() => {
     const searchParams = new URL(window.location.href).searchParams;
@@ -39,6 +45,7 @@ export default function SunoLibraryPage() {
 
     if (trackId) {
       setIsSharedView(true);
+      setIsSharedPlayerMode(true);
       setSharedTrackLoading(true);
 
       const unsubAuth = auth.onAuthStateChanged(async (currentUser) => {
@@ -299,6 +306,7 @@ export default function SunoLibraryPage() {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
         await updateDoc(trackRef, {
           isPublic: true,
+          hidden: false,
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
@@ -341,6 +349,7 @@ export default function SunoLibraryPage() {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
         await updateDoc(trackRef, {
           isPublic: true,
+          hidden: false,
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
@@ -413,6 +422,7 @@ export default function SunoLibraryPage() {
       const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
       await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget), {
         hidden: true,
+        isPublic: false,
         deletedAt: serverTimestamp()
       });
       setTracks(prev => prev.filter(t => t.id !== deleteTarget));

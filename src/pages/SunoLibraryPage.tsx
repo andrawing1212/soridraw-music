@@ -219,24 +219,27 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'completed':
-        return null;
+  const getStatusBadge = (group: any) => {
+    const badges = [];
+    if (group.isPublic) {
+      badges.push(<span key="public" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">공개</span>);
+    }
+    switch (group.status) {
       case 'failed':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>;
+        badges.push(<span key="failed" className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>);
+        break;
       case 'processing':
       case 'submitted':
       case 'pending':
-        return (
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+        badges.push(
+          <span key="processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
              <Loader2 className="w-3 h-3 animate-spin" />
              생성 중...
           </span>
         );
-      default:
-        return null;
+        break;
     }
+    return badges;
   };
 
   const formatCreatedAt = (createdAt: any) => {
@@ -293,7 +296,7 @@ export default function SunoLibraryPage() {
             text: text,
             url: shareUrl
           });
-          alert('공개 공유 링크를 복사했습니다.');
+          alert('공개 공유 링크를 복사했습니다.'); // Keep alert? Navigator share might not need this. No wait, requested: "공개 공유 링크를 복사했습니다." or just sharing.
         } catch (e) {
           if ((e as Error).name !== 'AbortError') {
             await navigator.clipboard.writeText(shareUrl);
@@ -304,10 +307,32 @@ export default function SunoLibraryPage() {
         await navigator.clipboard.writeText(shareUrl);
         alert('공개 공유 링크를 복사했습니다.');
       }
-      setSharePopupInfo(null);
+      closeModal();
     } catch (e) {
       console.error('Error sharing:', e);
       alert('공유 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handlePublicStatus = async () => {
+    if (!sharePopupInfo) return;
+    const { group } = sharePopupInfo;
+    try {
+      if (user) {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+        await updateDoc(trackRef, {
+          isPublic: true,
+          shareType: 'public',
+          publicSharedAt: serverTimestamp()
+        });
+        
+        // update local state so popup reflects it
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
+        alert('공개 상태로 전환했습니다.');
+      }
+    } catch (e) {
+      console.error('Error setting public:', e);
+      alert('공개 전환 중 오류가 발생했습니다.');
     }
   };
 
@@ -322,9 +347,9 @@ export default function SunoLibraryPage() {
           shareType: 'private',
           privateUpdatedAt: serverTimestamp()
         });
-        alert('비공개로 전환했습니다.');
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: false } } : null);
+        alert('비공개 상태로 전환했습니다.');
       }
-      setSharePopupInfo(null);
     } catch (e) {
       console.error('Error setting private:', e);
       alert('비공개 전환 중 오류가 발생했습니다.');
@@ -380,6 +405,50 @@ export default function SunoLibraryPage() {
       setIsDeleting(false);
     }
   };
+
+  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget;
+
+  const closeModal = () => {
+    if (isModalOpen && window.history.state?.modalOpen) {
+      window.history.back();
+    } else {
+      setSharePopupInfo(null);
+      setShowDetails(null);
+      setDeleteTarget(null);
+    }
+  };
+
+  useEffect(() => {
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.overscrollBehavior = 'contains'; // Actually it's 'contain', but let's use document.body.style.overscrollBehavior = 'contain'
+      document.body.style.overscrollBehavior = 'contain';
+
+      window.history.pushState({ modalOpen: true }, '');
+
+      const handlePopState = () => {
+        setSharePopupInfo(null);
+        setShowDetails(null);
+        setDeleteTarget(null);
+      };
+
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          window.history.back();
+        }
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      window.addEventListener('keydown', handleEsc);
+
+      return () => {
+        document.body.style.overflow = '';
+        document.body.style.overscrollBehavior = '';
+        window.removeEventListener('popstate', handlePopState);
+        window.removeEventListener('keydown', handleEsc);
+      };
+    }
+  }, [isModalOpen]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
@@ -505,7 +574,7 @@ export default function SunoLibraryPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      {getStatusBadge(group.status)}
+                      {getStatusBadge(group)}
                       {group.status !== 'completed' && group.status !== 'failed' && (
                         <button
                           onClick={() => checkStatus(group.id, group.taskId)}
@@ -643,7 +712,7 @@ export default function SunoLibraryPage() {
       {/* Share Modal */}
       <AnimatePresence>
         {sharePopupInfo && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -653,7 +722,7 @@ export default function SunoLibraryPage() {
             >
               <h2 className="text-xl font-bold mb-2">공유 설정</h2>
               <p className="text-sm text-white/50 mb-6 leading-relaxed">
-                공개 공유를 켜면 링크를 가진 누구나 로그인 없이 들을 수 있습니다.
+                링크 공유를 누르면 자동으로 공개 상태로 전환된 후 링크가 복사됩니다.
               </p>
 
               <div className="flex flex-col gap-3">
@@ -661,19 +730,30 @@ export default function SunoLibraryPage() {
                   onClick={handlePublicShare}
                   className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all"
                 >
-                  <Share2 className="w-5 h-5" /> 공개 링크 만들기
+                  <Share2 className="w-5 h-5" /> 링크 공유
                 </button>
+                <div className="mt-4 border-t border-white/5 pt-4">
+                  <div className="text-xs text-white/50 mb-2 font-bold tracking-wider">공개 범위</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handlePublicStatus}
+                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all border ${sharePopupInfo.group?.isPublic ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}
+                    >
+                      공개
+                    </button>
+                    <button
+                      onClick={handlePrivateShare}
+                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all border ${!sharePopupInfo.group?.isPublic ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}
+                    >
+                      비공개
+                    </button>
+                  </div>
+                </div>
                 <button
-                  onClick={handlePrivateShare}
-                  className="w-full py-3 bg-white/5 text-white/80 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/10 hover:text-white transition-all"
-                >
-                  비공개로 전환
-                </button>
-                <button
-                  onClick={() => setSharePopupInfo(null)}
+                  onClick={closeModal}
                   className="w-full py-3 text-white/40 font-medium hover:text-white transition-all mt-2"
                 >
-                  취소
+                  닫기
                 </button>
               </div>
             </motion.div>
@@ -684,24 +764,25 @@ export default function SunoLibraryPage() {
       {/* Details Modal */}
       <AnimatePresence>
         {showDetails && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={closeModal}>
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={() => setShowDetails(null)}
+              onClick={closeModal}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative w-full max-w-2xl bg-[var(--bg-secondary)] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-6 border-b border-white/5">
                 <h3 className="text-xl font-bold">상세 정보</h3>
                 <button 
-                  onClick={() => setShowDetails(null)}
+                  onClick={closeModal}
                   className="p-2 hover:bg-white/5 rounded-full transition-all"
                 >
                   <X className="w-6 h-6 opacity-40" />
@@ -721,7 +802,7 @@ export default function SunoLibraryPage() {
               </div>
               <div className="p-6 border-t border-white/5 text-center">
                 <button 
-                  onClick={() => setShowDetails(null)}
+                  onClick={closeModal}
                   className="px-8 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all"
                 >
                   닫기
@@ -734,7 +815,7 @@ export default function SunoLibraryPage() {
 
       <AnimatePresence>
         {deleteTarget && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -759,7 +840,7 @@ export default function SunoLibraryPage() {
                  
                  <div className="flex w-full gap-3">
                    <button
-                     onClick={() => setDeleteTarget(null)}
+                     onClick={closeModal}
                      disabled={isDeleting}
                      className="flex-1 py-3 px-4 rounded-xl font-bold bg-white/5 hover:bg-white/10 transition-all text-white/70 hover:text-white disabled:opacity-50"
                    >

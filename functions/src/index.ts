@@ -326,26 +326,33 @@ export const getSunoTrackStatus = onRequest(
       let audioUrl = "";
       let streamAudioUrl = "";
       let imageUrl = "";
+      const sunoData = Array.isArray(data?.data) ? data.data : [data?.data || data];
+      const audioUrls: string[] = [];
 
-      const candidates = Array.isArray(data?.data) ? data.data : [data?.data || data];
-      
-      for (const item of candidates) {
+      for (const item of sunoData) {
         if (!item) continue;
-        if (item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl) {
-          audioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || "";
-          streamAudioUrl = item.streamAudioUrl || item.stream_audio_url || "";
+        
+        const itemAudioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || "";
+        const itemStreamUrl = item.streamAudioUrl || item.stream_audio_url || "";
+        
+        if (itemAudioUrl) audioUrls.push(itemAudioUrl);
+        else if (itemStreamUrl) audioUrls.push(itemStreamUrl);
+
+        if (!audioUrl && (itemAudioUrl || itemStreamUrl)) {
+          audioUrl = itemAudioUrl || itemStreamUrl;
+          streamAudioUrl = itemStreamUrl || itemAudioUrl;
           imageUrl = item.imageUrl || item.image_url || "";
-          
-          if (item.status === "SUCCESS" || item.status === "completed") {
-            status = "completed";
-          } else if (item.status === "FAILED" || item.status === "failed") {
-            status = "failed";
-          } else if (item.status) {
-            status = item.status.toLowerCase();
-          } else if (audioUrl || streamAudioUrl) {
-            status = "completed";
-          }
-          break;
+        }
+
+        // Determine overall status
+        if (item.status === "SUCCESS" || item.status === "completed") {
+          status = "completed";
+        } else if (item.status === "FAILED" || item.status === "failed") {
+          if (status !== "completed") status = "failed";
+        } else if (item.status && status !== "completed") {
+          status = item.status.toLowerCase();
+        } else if ((itemAudioUrl || itemStreamUrl) && status !== "completed") {
+          status = "completed";
         }
       }
 
@@ -355,6 +362,8 @@ export const getSunoTrackStatus = onRequest(
 
       const updates: any = {
         apiStatusResponse: data,
+        sunoData: sunoData,
+        audioUrls: audioUrls,
         status: status,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
@@ -371,6 +380,8 @@ export const getSunoTrackStatus = onRequest(
         audioUrl: audioUrl || streamAudioUrl,
         streamAudioUrl: streamAudioUrl,
         imageUrl: imageUrl,
+        audioUrls: audioUrls,
+        sunoData: sunoData,
         apiStatusResponse: data
       });
       

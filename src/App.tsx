@@ -871,10 +871,15 @@ export function getTimestampMs(value: any): number {
   return 0;
 }
 
+import { GlobalPlayerProvider } from './contexts/GlobalPlayerContext';
+import GlobalPlayer from './components/GlobalPlayer';
+
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
-      <App />
+      <GlobalPlayerProvider>
+        <App />
+      </GlobalPlayerProvider>
     </ErrorBoundary>
   );
 }
@@ -4855,6 +4860,7 @@ ${result.prompt}
           </>
         )}
       </Routes>
+      <GlobalPlayer />
 
       {/* Tooltip / Description Overlay */}
       <AnimatePresence>

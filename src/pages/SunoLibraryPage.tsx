@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, Home, Music, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
+import { 
+  Settings, Home, Music, RefreshCw, Loader2, AlertCircle, 
+  Search, Filter, PlayCircle, MoreVertical, Download, 
+  Share2, Star, Trash2, Info, ChevronRight, X, Play,
+  Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX
+} from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
+import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 
 export default function SunoLibraryPage() {
   const navigate = useNavigate();
@@ -11,12 +17,17 @@ export default function SunoLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  
+  // UI States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite'>('all');
+  const [showDetails, setShowDetails] = useState<any>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  const { currentTrack, isPlaying, playTrack } = useGlobalPlayer();
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
-      console.log('Suno Library 현재 uid:', currentUser?.uid);
-      console.log('Suno Library 현재 email:', currentUser?.email);
-
       setUser(currentUser);
 
       if (!currentUser) {
@@ -53,6 +64,61 @@ export default function SunoLibraryPage() {
 
     return () => unsubscribeAuth();
   }, []);
+
+  const filteredTracks = useMemo(() => {
+    return tracks.filter(t => {
+      const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filter === 'all' || 
+                            (filter === 'completed' && t.status === 'completed') || 
+                            (filter === 'favorite' && t.favorite); // Favorite is placeholder for now
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [tracks, searchTerm, filter]);
+
+  const allPlayables = useMemo(() => {
+    const list: any[] = [];
+    filteredTracks.forEach(group => {
+      const items = group.sunoData || (group.audioUrl ? [{ audioUrl: group.audioUrl, title: group.title, imageUrl: group.imageUrl }] : []);
+      items.forEach((item: any, idx: number) => {
+        const audioUrl = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl || group.audioUrls?.[idx] || group.audioUrl || group.streamAudioUrl;
+        if (audioUrl) {
+          list.push({ group, item, idx, url: audioUrl });
+        }
+      });
+    });
+    return list;
+  }, [filteredTracks]);
+
+  const handlePlayTrack = (track: any, subIndex: number = 0) => {
+    let url = '';
+    let title = track.title || 'Untitled';
+    let imageUrl = track.imageUrl || track.image_url || '';
+    
+    if (track.sunoData && track.sunoData[subIndex]) {
+      const item = track.sunoData[subIndex];
+      url = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl;
+      if (item.title) title = item.title;
+      if (item.imageUrl || item.image_url) imageUrl = item.imageUrl || item.image_url;
+    } else if (track.audioUrls && track.audioUrls[subIndex]) {
+      url = track.audioUrls[subIndex];
+    } else {
+      url = track.audioUrl || track.streamAudioUrl;
+    }
+
+    if (url) {
+      const newQueue = allPlayables.map(p => ({
+        url: p.url,
+        title: p.item?.title || p.group?.title || 'Untitled',
+        imageUrl: p.item?.imageUrl || p.item?.image_url || p.group?.imageUrl || p.group?.image_url || '',
+        parent: p.group,
+        index: p.idx
+      }));
+      playTrack({ url, title, imageUrl, parent: track, index: subIndex }, newQueue);
+    }
+  };
 
   const checkStatus = async (trackId: string, taskId: string) => {
     if (!taskId) {
@@ -104,15 +170,15 @@ export default function SunoLibraryPage() {
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'completed':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30">완료됨</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">완료됨</span>;
       case 'failed':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>;
       case 'processing':
       case 'submitted':
       case 'pending':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">생성 중...</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">생성 중...</span>;
       default:
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30">{status || '대기 중'}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/20 text-gray-400 border border-gray-500/30">{status || '대기 중'}</span>;
     }
   };
 
@@ -133,7 +199,7 @@ export default function SunoLibraryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-16 text-[var(--text-primary)]">
+    <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header Block */}
@@ -170,16 +236,34 @@ export default function SunoLibraryPage() {
           </div>
         </motion.div>
 
-        {/* Info Box */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="p-6 rounded-2xl bg-brand-orange/5 border border-brand-orange/20 text-[var(--text-secondary)] text-sm space-y-2 leading-relaxed"
-        >
-          <p>💡 음원 파일은 서버에 저장되지 않고 외부 URL을 통해 바로 재생됩니다.</p>
-          <p>💡 생성 중인 곡은 <strong>해당 곡 카드의 &quot;상태 확인&quot; 버튼</strong>을 눌러 결과를 가져올 수 있습니다.</p>
-        </motion.div>
+        {/* Main Music Player relocated to GlobalPlayer */}
+
+        {/* Search & Filter */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+            <input 
+              type="text" 
+              placeholder="음악 제목이나 스타일 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 outline-none focus:border-brand-orange/50 transition-all text-sm"
+            />
+          </div>
+          <div className="flex bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl">
+            {(['all', 'completed', 'favorite'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  filter === f ? 'bg-brand-orange text-white' : 'hover:bg-white/5 opacity-60'
+                }`}
+              >
+                {f === 'all' ? '전체' : f === 'completed' ? '완료' : '즐겨찾기'}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -190,84 +274,160 @@ export default function SunoLibraryPage() {
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
-        ) : tracks.length === 0 ? (
+        ) : filteredTracks.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
             className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />
             </div>
-            <h2 className="text-xl font-bold mb-2">아직 생성된 Suno API 곡이 없습니다.</h2>
-            <p className="text-[var(--text-secondary)] mb-8">
-              설정에서 API Key를 등록한 후 새로운 곡을 생성해보세요.
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              className="px-6 py-3 rounded-xl bg-brand-orange text-white font-bold hover:bg-brand-orange/90 transition-all active:scale-95"
-            >
-              생성 페이지로 가기
-            </button>
+            <h2 className="text-xl font-bold mb-2">검색 결과가 없습니다</h2>
+            <p className="text-[var(--text-secondary)] mb-8">다른 검색어를 사용하거나 필터를 변경해보세요.</p>
           </motion.div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tracks.map((track) => {
-              const audioSrc = track.audioUrl || track.streamAudioUrl || '';
-              const status = track.status || 'pending';
-              const failedMessage = track.apiStatusResponse?.msg || track.apiResponse?.msg || track.errorMessage;
-
+          <div className="space-y-6">
+            {filteredTracks.map((group) => {
+              const items = group.sunoData || (group.audioUrl ? [{ audioUrl: group.audioUrl, title: group.title }] : []);
+              const dateStr = formatCreatedAt(group.createdAt);
+              
               return (
                 <motion.div
-                  key={track.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-[var(--bg-secondary)] border border-white/10 rounded-2xl p-5 flex flex-col"
+                  key={group.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-[var(--bg-secondary)] border border-white/10 rounded-2xl"
                 >
-                  <div className="flex justify-between items-start mb-3 gap-3">
-                    <h3 className="font-bold text-lg leading-tight line-clamp-1">{track.title || 'Untitled'}</h3>
-                    {getStatusBadge(status)}
-                  </div>
-                  
-                  <div className="text-xs text-[var(--text-secondary)] flex flex-col gap-1 mb-4 flex-1">
-                    <span className="line-clamp-2"><strong>스타일:</strong> {track.style || track.prompt || '없음'}</span>
-                    <span className="line-clamp-3"><strong>가사:</strong> {track.lyrics || '없음'}</span>
-                    <span className="text-white/30 text-[10px] mt-1 break-all">Task ID: {track.taskId || '없음'}</span>
-                    {failedMessage && status === 'failed' && (
-                      <span className="text-red-400/80 bg-red-400/10 p-1.5 rounded mt-2 flex gap-1.5 items-start">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        {failedMessage}
-                      </span>
-                    )}
+                  {/* Group Header */}
+                  <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-orange">
+                        <Music className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold leading-tight">{group.title || 'Untitled Generation'}</h3>
+                        <div className="flex items-center gap-2 mt-0.5 opacity-40 text-[10px]">
+                          <span>{dateStr}</span>
+                          <span>•</span>
+                          <span>{items.length}곡</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {getStatusBadge(group.status)}
+                      {group.status !== 'completed' && group.status !== 'failed' && (
+                        <button
+                          onClick={() => checkStatus(group.id, group.taskId)}
+                          disabled={statusChecking === group.id || !group.taskId}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
+                        >
+                          {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          상태 확인
+                        </button>
+                      )}
+                      {!group.taskId && <span className="text-[10px] opacity-30">Task ID 없음</span>}
+                    </div>
                   </div>
 
-                  <div className="space-y-3 mt-auto">
-                    {audioSrc ? (
-                      <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-                        <audio controls className="w-full h-10 outline-none" preload="metadata">
-                          <source src={audioSrc} type="audio/mpeg" />
-                          브라우저가 오디오 재생을 지원하지 않습니다.
-                        </audio>
-                      </div>
-                    ) : status !== 'failed' && status !== 'completed' ? (
-                      <button
-                        onClick={() => checkStatus(track.id, track.taskId)}
-                        disabled={statusChecking === track.id || !track.taskId}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {statusChecking === track.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                  {/* Tracks List */}
+                  <div className="divide-y divide-white/5">
+                    {items.length > 0 ? items.map((item: any, idx: number) => {
+                      const audioUrl = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl;
+                      const isCurrent = currentTrack?.parent?.id === group.id && currentTrack?.index === idx;
+                      
+                      return (
+                        <div 
+                          key={`${group.id}-${idx}`} 
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${isCurrent ? 'bg-brand-orange/5' : ''}`}
+                          onClick={(e) => {
+                             if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
+                             if (audioUrl) handlePlayTrack(group, idx);
+                          }}
+                        >
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); if (audioUrl) handlePlayTrack(group, idx); }}
+                            disabled={!audioUrl}
+                            className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all ${
+                              isCurrent && isPlaying ? 'bg-brand-orange text-white ring-4 ring-brand-orange/20 shadow-lg shadow-brand-orange/40' : 
+                              isCurrent ? 'bg-brand-orange/50 text-white' :
+                              'bg-white/5 hover:bg-brand-orange/20 text-white group-hover:scale-105'
+                            } disabled:opacity-20`}
+                          >
+                            {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-white" /> : <Play className={`w-3.5 h-3.5 ${isCurrent ? 'fill-white' : ''} ml-0.5`} />}
+                          </button>
+                          
+                          <div className="hidden md:flex w-24 lg:w-32 shrink-0 items-center justify-center bg-white/5 border border-white/5 rounded-lg px-2 py-1.5 text-[10px] text-[var(--text-secondary)] font-medium truncate">
+                            {group.style || group.tags || 'Music'}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0 pr-2">
+                            <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              {item.title || group.title || `Track ${idx + 1}`}
+                            </h4>
+                            <p className="md:hidden text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{group.style || group.tags || 'Music'}</p>
+                          </div>
+
+                          <div className="text-[10px] opacity-40 font-mono shrink-0 tabular-nums">
+                            {item.duration ? `${Math.floor(item.duration / 60)}:${String(Math.floor(item.duration % 60)).padStart(2, '0')}` : '--:--'}
+                          </div>
+
+                          <div className="relative shrink-0 ml-2">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === `${group.id}-${idx}` ? null : `${group.id}-${idx}`); }}
+                              className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-all"
+                            >
+                              <MoreVertical className="w-4 h-4 opacity-50" />
+                            </button>
+                            
+                            {/* Actions Menu */}
+                            <AnimatePresence>
+                              {activeMenu === `${group.id}-${idx}` && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
+                                  <motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                    className="absolute right-0 top-10 z-50 w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {[
+                                      { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...group, itemIndex: idx }); setActiveMenu(null); } },
+                                      { icon: Download, label: '다운로드', action: () => { alert('다운로드 준비 중입니다.'); setActiveMenu(null); } },
+                                      { icon: Music, label: '다음곡에 적용', action: () => { alert('프롬프트 적용 기능 준비 중...'); setActiveMenu(null); } },
+                                      { icon: Share2, label: '공유', action: () => { alert('공유 링크 생성 중...'); setActiveMenu(null); } },
+                                      { icon: Star, label: '플레이리스트 저장', action: () => { alert('플레이리스트 저장 완료!'); setActiveMenu(null); } },
+                                      { icon: Trash2, label: '삭제', action: () => { alert('삭제 기능은 다음 단계에서 연결됩니다.'); setActiveMenu(null); }, danger: true },
+                                    ].map((m, i) => (
+                                      <button
+                                        key={i}
+                                        onClick={m.action}
+                                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all ${m.danger ? 'text-red-400' : ''}`}
+                                      >
+                                        <m.icon className="w-4 h-4" />
+                                        {m.label}
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                </>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      );
+                    }) : (
+                      <div className="px-6 py-8 text-center opacity-30 text-xs">
+                        {group.status === 'failed' ? (
+                          <div className="flex flex-col items-center gap-2">
+                             <AlertCircle className="w-6 h-6 text-red-500/50" />
+                             <span>생성 실패: {group.apiStatusResponse?.msg || group.apiResponse?.msg || '알 수 없는 오류'}</span>
+                          </div>
                         ) : (
-                          <RefreshCw className="w-4 h-4" />
+                          <span>오디오를 기다리는 중...</span>
                         )}
-                        상태 확인
-                      </button>
-                    ) : null}
-                    
-                    <div className="text-right text-[10px] text-[var(--text-secondary)] opacity-50">
-                      {formatCreatedAt(track.createdAt)}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               );
@@ -275,6 +435,78 @@ export default function SunoLibraryPage() {
           </div>
         )}
       </div>
+
+      {/* Details Modal */}
+      <AnimatePresence>
+        {showDetails && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowDetails(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-[var(--bg-secondary)] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-white/5">
+                <h3 className="text-xl font-bold">상세 정보</h3>
+                <button 
+                  onClick={() => setShowDetails(null)}
+                  className="p-2 hover:bg-white/5 rounded-full transition-all"
+                >
+                  <X className="w-6 h-6 opacity-40" />
+                </button>
+              </div>
+              <div className="p-8 max-h-[70vh] overflow-y-auto space-y-6 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-6">
+                  <DetailItem label="제목" value={showDetails.title || 'Untitled'} />
+                  <DetailItem label="상태" value={showDetails.status} isStatus />
+                  <DetailItem label="생성일" value={formatCreatedAt(showDetails.createdAt)} />
+                  <DetailItem label="Task ID" value={showDetails.taskId} isMono />
+                  <DetailItem label="Suno Version" value={showDetails.requestPayload?.model || 'V5_5'} />
+                  <DetailItem label="키워드/스타일" value={showDetails.style || showDetails.prompt || '없음'} full />
+                  <DetailItem label="가사" value={showDetails.lyrics || '가사 없음'} full isPre />
+                  <DetailItem label="오디오 URL" value={showDetails.audioUrl || showDetails.streamAudioUrl} full isMono />
+                </div>
+              </div>
+              <div className="p-6 border-t border-white/5 text-center">
+                <button 
+                  onClick={() => setShowDetails(null)}
+                  className="px-8 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+function DetailItem({ label, value, full = false, isStatus = false, isMono = false, isPre = false }: any) {
+  return (
+    <div className={`${full ? 'col-span-2' : 'col-span-1'} space-y-1.5`}>
+      <span className="text-[10px] font-bold uppercase tracking-wider opacity-30">{label}</span>
+      <div className={`p-3 rounded-xl bg-white/5 border border-white/5 text-sm ${isMono ? 'font-mono break-all' : ''}`}>
+        {isStatus ? (
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${value === 'completed' ? 'bg-green-500' : value === 'failed' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'}`} />
+            <span className="capitalize">{value}</span>
+          </div>
+        ) : isPre ? (
+          <pre className="whitespace-pre-wrap font-sans leading-relaxed opacity-70 italic">{value}</pre>
+        ) : (
+          <span className="opacity-80">{value || 'N/A'}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+

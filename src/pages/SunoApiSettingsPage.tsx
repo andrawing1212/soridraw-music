@@ -165,19 +165,29 @@ export default function SunoApiSettingsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col gap-4"
         >
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/')}
-              className="px-4 py-2 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center gap-2"
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/')}
+                className="px-4 py-2 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center gap-2"
+              >
+                <Home className="w-4 h-4" />홈
+              </button>
+              <button
+                onClick={() => navigate('/suno-library')}
+                className="px-4 py-2 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+              >
+                Library
+              </button>
+            </div>
+            <a
+              href="https://sunoapi.org/ko"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 text-sm font-bold rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 hover:bg-purple-600/30 transition-all"
             >
-              <Home className="w-4 h-4" />홈
-            </button>
-            <button
-              onClick={() => navigate('/suno-library')}
-              className="px-4 py-2 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
-            >
-              Library
-            </button>
+              API 생성
+            </a>
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">

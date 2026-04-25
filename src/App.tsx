@@ -101,7 +101,7 @@ import {
 import { VOCAL_TONES } from './constants/vocalTones';
 import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
-import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay } from './lib/songUtils';
+import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   if (!input || !Array.isArray(input)) return [];
@@ -158,6 +158,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
+import MusicApiGenerateModal, { LanguageCode } from './components/MusicApiGenerateModal';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
@@ -1228,7 +1229,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 }
 
 function App() {
-  const generateMusic = async () => {
+  const generateMusic = async (titleLanguage?: LanguageCode, lyricLanguage?: LanguageCode) => {
     if (isMusicApiGenerating) return;
 
     try {
@@ -1247,6 +1248,16 @@ function App() {
 
       const token = await user.getIdToken();
 
+      let rawExtractedTitle = "Untitled";
+      if (titleLanguage === 'en') {
+        rawExtractedTitle = result.englishTitle || (result.title?.includes('│') ? result.title.split('│')[0] : result.title?.split('|')[0]) || result.title || "Untitled";
+      } else {
+        rawExtractedTitle = result.koreanTitle || (result.title?.includes('│') ? result.title.split('│')[1] : result.title?.split('|')[1]) || result.title || "Untitled";
+      }
+      
+      const resolvedGenre = getResolvedGenre(result);
+      const finalTitle = formatDisplayTitle(resolvedGenre, rawExtractedTitle);
+
       const res = await fetch(
         "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
         {
@@ -1256,11 +1267,15 @@ function App() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            title: result.title || "Untitled",
+            title: finalTitle,
             prompt: result.prompt || "",
             style: result.prompt || "",
-            lyrics: result.lyrics?.korean || result.lyrics?.english || "",
+            lyrics: lyricLanguage === 'en'
+              ? (result.lyrics?.english || result.lyrics?.korean || "")
+              : (result.lyrics?.korean || result.lyrics?.english || ""),
             appliedKeywords: result.appliedKeywords || {},
+            titleLanguage,
+            lyricLanguage
           }),
         }
       );
@@ -1269,11 +1284,11 @@ function App() {
       console.log("생성 결과:", data);
 
       if (!res.ok || !data.ok) {
-        showToast(`Music API 생성 요청에 실패했습니다.\n${data.error || "unknown error"}`);
+        showToast(`Music API 생성 요청에 실패했습니다.\n${data.error || "알 수 없는 오류"}`);
         return;
       }
 
-      showToast("Music API 생성 요청이 접수되었습니다.\nMusic Library에서 진행 상태를 확인해주세요.");
+      showToast("Music API 생성 요청이 완료되었습니다.\n생성 중인 곡은 라이브러리에서 자동으로 상태가 갱신됩니다.");
     } catch (err) {
       console.error("생성 실패:", err);
       showToast("Music API 생성 요청 중 오류가 발생했습니다.");
@@ -1307,6 +1322,15 @@ function App() {
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [favorites, setFavorites] = useState<any[]>([]);
+
+  const [showMusicApiModal, setShowMusicApiModal] = useState(false);
+  const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // 2. CORE FUNCTIONS NEXT (BEFORE ANY USEEFFECT)
   const handleLogout = async () => {
@@ -4763,20 +4787,37 @@ ${result.prompt}
                     </div>
                   </div>
                 )}
-                  <div className="mt-4">
-                  <button
-                    onClick={generateMusic}
-                    disabled={isMusicApiGenerating}
-                    className={cn(
-                      "w-full py-3 rounded-xl text-white font-bold transition-all",
-                      isMusicApiGenerating
-                        ? "bg-purple-600/40 cursor-not-allowed"
-                        : "bg-purple-600 hover:bg-purple-700"
-                    )}
-                  >
-                    {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
-                  </button>
-                </div>
+                  <div className="mt-4 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => navigate('/suno-api-settings')}
+                      className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5"
+                      title="Music API 설정"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setHasSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
+                        setShowMusicApiModal(true);
+                      }}
+                      disabled={isMusicApiGenerating}
+                      className={cn(
+                        "flex-1 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap",
+                        isMusicApiGenerating
+                          ? "bg-purple-600/40 cursor-not-allowed"
+                          : "bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/20"
+                      )}
+                    >
+                      {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
+                    </button>
+                    <button
+                      onClick={() => navigate('/suno-library')}
+                      className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
+                      title="라이브러리로 이동"
+                    >
+                      Library
+                    </button>
+                  </div>
               </div>
             </motion.div>
           )}
@@ -4904,11 +4945,25 @@ ${result.prompt}
             initial={{ opacity: 0, y: 20, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: 20, x: '-50%' }}
-            className="fixed bottom-24 left-1/2 z-[100] px-4 py-2 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl text-xs font-bold text-[var(--text-primary)] flex items-center gap-2"
+            className="fixed bottom-24 left-1/2 z-[100] px-4 py-2 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl text-xs font-bold text-[var(--text-primary)] flex items-center gap-2 block whitespace-pre-line text-center"
           >
-            <Check className="w-3 h-3 text-brand-orange" />
+            <Check className="w-3 h-3 text-brand-orange shrink-0" />
             {toast.message}
           </motion.div>
+        )}
+      </AnimatePresence>
+      
+      <AnimatePresence>
+        {showMusicApiModal && (
+          <MusicApiGenerateModal
+            hasApiKey={hasSunoApiKey}
+            isNoLyrics={(!result?.lyrics?.korean && !result?.lyrics?.english) || (result?.lyrics?.korean === "" && result?.lyrics?.english === "")}
+            onClose={() => setShowMusicApiModal(false)}
+            onConfirm={(titleLang, lyricLang) => {
+              setShowMusicApiModal(false);
+              generateMusic(titleLang, lyricLang);
+            }}
+          />
         )}
       </AnimatePresence>
 

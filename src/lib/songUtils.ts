@@ -200,49 +200,58 @@ export const getResolvedGenre = (song: Partial<SongResult> | any): string => {
 };
 
 /**
+ * Formats a given raw title into a standard display string.
+ * Result: [Genre] 'Title'
+ */
+export const formatDisplayTitle = (genre: string, rawTitle: string | undefined): string => {
+  if (!rawTitle) return genre ? `[${genre}] 'Untitled'` : `'Untitled'`;
+  
+  let cleaned = rawTitle.replace(/^\[[^\]]+\]\s*/, '').trim();
+  cleaned = cleaned.replace(/^['"]+|['"]+$/g, '').trim();
+  
+  if (!cleaned) cleaned = 'Untitled';
+  
+  if (genre) return `[${genre}] '${cleaned}'`;
+  return `'${cleaned}'`;
+};
+
+/**
  * Extracts and resolves the most specific genre (Sub Genre) label.
  * @deprecated Use getResolvedGenre instead for clearer intent.
  */
 export const getSubGenre = getResolvedGenre;
 
 /**
- * Cleans a title string by removing existing bracketed genre tags like [Pop].
- */
-const cleanTitle = (text: string | undefined): string => {
-  if (!text) return '';
-  return text.replace(/^\[[^\]]+\]\s*/, '').trim();
-};
-
-/**
- * Formats: "[장르] 한글제목"
+ * Formats: "[장르] '한글제목'"
  */
 export const formatKoreanTitle = (song: Partial<SongResult> | any): string => {
   const genre = getSubGenre(song);
-  const rawKo = song.koreanTitle || (song.title?.includes('|') ? song.title.split('|')[1].trim() : song.title);
-  const ko = cleanTitle(rawKo);
-  return `[${genre}] ${ko || 'Untitled'}`;
+  const rawKo = song.koreanTitle || (song.title?.includes('│') ? song.title.split('│')[1]?.trim() : song.title?.includes('|') ? song.title.split('|')[1]?.trim() : song.title);
+  return formatDisplayTitle(genre, rawKo);
 };
 
 /**
- * Formats: "[장르] 영어제목"
+ * Formats: "[장르] '영어제목'"
  */
 export const formatEnglishTitle = (song: Partial<SongResult> | any): string => {
   const genre = getSubGenre(song);
-  const rawEn = song.englishTitle || (song.title?.includes('|') ? song.title.split('|')[0].trim() : song.title);
-  const en = cleanTitle(rawEn);
-  return `[${genre}] ${en || 'Untitled'}`;
+  const rawEn = song.englishTitle || (song.title?.includes('│') ? song.title.split('│')[0]?.trim() : song.title?.includes('|') ? song.title.split('|')[0]?.trim() : song.title);
+  return formatDisplayTitle(genre, rawEn);
 };
 
 /**
- * Formats: "[장르] 한글제목 | 영어제목"
+ * Formats: "[장르] '한글제목 | 영어제목'"
  */
 export const formatInlineTitle = (song: Partial<SongResult> | any): string => {
   const genre = getSubGenre(song);
-  const ko = cleanTitle(song.koreanTitle || (song.title?.includes('|') ? song.title.split('|')[1].trim() : song.title));
-  const en = cleanTitle(song.englishTitle || (song.title?.includes('|') ? song.title.split('|')[0].trim() : song.title));
+  const rawKo = song.koreanTitle || (song.title?.includes('│') ? song.title.split('│')[1]?.trim() : song.title?.includes('|') ? song.title.split('|')[1]?.trim() : song.title);
+  const rawEn = song.englishTitle || (song.title?.includes('│') ? song.title.split('│')[0]?.trim() : song.title?.includes('|') ? song.title.split('|')[0]?.trim() : song.title);
   
-  if (ko && en) {
-    return `[${genre}] ${ko} | ${en}`;
+  const ko = rawKo?.replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]+|['"]+$/g, '').trim();
+  const en = rawEn?.replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]+|['"]+$/g, '').trim();
+  
+  if (ko && en && ko !== en) {
+    return `[${genre}] '${ko} | ${en}'`;
   }
-  return `[${genre}] ${ko || en || cleanTitle(song.title) || 'Untitled'}`;
+  return formatDisplayTitle(genre, ko || en || song.title);
 };

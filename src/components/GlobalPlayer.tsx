@@ -46,7 +46,8 @@ export default function GlobalPlayer() {
     duration,
     volume,
     isMuted,
-    playMode,
+    isShuffle,
+    repeatMode,
     audioRef,
     togglePlayPause,
     playNext,
@@ -54,7 +55,8 @@ export default function GlobalPlayer() {
     setVolume,
     toggleMute,
     seek,
-    setPlayMode,
+    setIsShuffle,
+    setRepeatMode,
     handleTimeUpdate,
     handleEnded,
     setIsPlaying,
@@ -86,6 +88,36 @@ export default function GlobalPlayer() {
     setMode(newMode);
     localStorage.setItem('soridraw_global_player_mode', newMode);
   };
+
+
+
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title || 'Untitled',
+        artist: "SORIDRAW's Studio",
+        album: currentTrack.parent?.style || currentTrack.parent?.prompt || 'Suno Library',
+        artwork: [
+           { src: currentTrack.imageUrl || currentTrack.parent?.imageUrl || currentTrack.parent?.image_url || 'https://images.unsplash.com/photo-1614149162883-504ce4d13909?w=512&auto=format&fit=crop', sizes: '512x512', type: 'image/jpeg' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+         if (audioRef.current) audioRef.current.play();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+         if (audioRef.current) audioRef.current.pause();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+      navigator.mediaSession.setActionHandler('nexttrack', playNext);
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+         if (audioRef.current) audioRef.current.currentTime = Math.max(audioRef.current.currentTime - (details.seekOffset || 10), 0);
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+         if (audioRef.current) audioRef.current.currentTime = Math.min(audioRef.current.currentTime + (details.seekOffset || 10), duration);
+      });
+    }
+  }, [currentTrack, playNext, playPrev, audioRef, duration]);
 
   const handleDownload = (url: string) => {
     if (!url) {
@@ -474,10 +506,7 @@ export default function GlobalPlayer() {
                 </div>
 
                 <div className="w-full flex items-center justify-between gap-2 mb-6">
-                   <button 
-                    onClick={() => setPlayMode(playMode === 'shuffle' ? 'sequential' : 'shuffle')} 
-                    className={`p-2 transition-all ${playMode === 'shuffle' ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}
-                   >
+                   <button onClick={() => setIsShuffle(!isShuffle)} className={`p-2 transition-all ${isShuffle ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}>
                       <Shuffle className="w-5 h-5" />
                    </button>
                    <button onClick={playPrev} className="p-2 text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95">
@@ -492,18 +521,10 @@ export default function GlobalPlayer() {
                       <SkipForward className="w-7 h-7 fill-current" />
                    </button>
                    <button 
-                    onClick={() => {
-                        const nextModes: Record<PlayMode, PlayMode> = {
-                            'sequential': 'repeat-all',
-                            'repeat-all': 'repeat-one',
-                            'repeat-one': 'sequential',
-                            'shuffle': 'repeat-all'
-                        };
-                        setPlayMode(nextModes[playMode]);
-                    }} 
-                    className={`p-2 transition-all ${playMode !== 'shuffle' && playMode !== 'sequential' ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}
+                    onClick={() => setRepeatMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')} 
+                    className={`p-2 transition-all ${repeatMode !== 'none' ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}
                    >
-                      {playMode === 'repeat-one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
+                      {repeatMode === 'one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                    </button>
                 </div>
 

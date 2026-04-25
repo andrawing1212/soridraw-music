@@ -14,9 +14,11 @@ export default function SunoApiSettingsPage() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   
   const [apiKey, setApiKey] = useState('');
-  const [isRegistered, setIsRegistered] = useState(false);
+  const [statusText, setStatusText] = useState<'확인 중...' | '등록됨' | '미등록' | '확인 실패'>('확인 중...');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
+
+  const isRegistered = statusText === '등록됨';
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -27,6 +29,7 @@ export default function SunoApiSettingsPage() {
 
   const loadSunoApiKeyStatus = useCallback(async () => {
     if (!user) return;
+    setStatusText('확인 중...');
     try {
       const token = await user.getIdToken();
       const res = await fetch(`${BASE_URL}/getSunoApiKeyStatus`, {
@@ -39,13 +42,16 @@ export default function SunoApiSettingsPage() {
       });
       const result = await res.json();
 
-      if (result && result.hasSunoApiKey) {
-        setIsRegistered(true);
+      if (res.ok && result && (result.hasSunoApiKey || result.registered)) {
+        setStatusText('등록됨');
+      } else if (res.ok) {
+        setStatusText('미등록');
       } else {
-        setIsRegistered(false);
+        setStatusText('확인 실패');
       }
     } catch (e) {
       console.error('Failed to load API key status:', e);
+      setStatusText('확인 실패');
     }
   }, [user]);
 
@@ -67,9 +73,9 @@ export default function SunoApiSettingsPage() {
       const result = await res.json();
       
       if (res.ok && result.ok) {
-        setIsRegistered(true);
         setApiKey('');
         setMessage('API Key가 안전하게 등록되었습니다.');
+        loadSunoApiKeyStatus();
       } else {
         setMessage('저장에 실패했습니다.');
       }
@@ -99,8 +105,8 @@ export default function SunoApiSettingsPage() {
       const result = await res.json();
 
       if (res.ok && result.ok) {
-        setIsRegistered(false);
         setMessage('API Key가 삭제되었습니다.');
+        loadSunoApiKeyStatus();
       } else {
         setMessage('삭제에 실패했습니다.');
       }
@@ -179,12 +185,15 @@ export default function SunoApiSettingsPage() {
           {/* Status */}
           <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/5">
             <div className="font-medium text-[var(--text-secondary)]">등록 상태</div>
-            <div className={`flex items-center gap-2 font-bold px-3 py-1.5 rounded-lg ${isRegistered ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-              {isRegistered ? (
-                <><CheckCircle2 className="w-4 h-4" /> 등록됨</>
-              ) : (
-                <><XCircle className="w-4 h-4" /> 미등록</>
-              )}
+            <div className={`flex items-center gap-2 font-bold px-3 py-1.5 rounded-lg ${
+              statusText === '등록됨' ? 'bg-green-500/10 text-green-400' 
+              : statusText === '미등록' ? 'bg-red-500/10 text-red-400'
+              : 'bg-white/10 text-white/50'
+            }`}>
+              {statusText === '등록됨' && <CheckCircle2 className="w-4 h-4" />}
+              {statusText === '미등록' && <XCircle className="w-4 h-4" />}
+              {(statusText === '확인 중...' || statusText === '확인 실패') && <AlertTriangle className="w-4 h-4" />}
+              {statusText}
             </div>
           </div>
 

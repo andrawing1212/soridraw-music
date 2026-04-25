@@ -271,7 +271,7 @@ export default function SunoLibraryPage() {
             firstAudioDetectedAtRef.current.set(group.id, Date.now());
           }
           const detectedTime = firstAudioDetectedAtRef.current.get(group.id)!;
-          if (now - detectedTime >= 180000) {
+          if (now - detectedTime >= 480000) {
             return false;
           }
         }

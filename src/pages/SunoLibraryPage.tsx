@@ -48,6 +48,7 @@ export default function SunoLibraryPage() {
 
   const checkingIdsRef = React.useRef<Set<string>>(new Set());
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
+  const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
 
   const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
 
@@ -260,11 +261,20 @@ export default function SunoLibraryPage() {
       const eligibleGroups = tracks.filter(group => {
         if (group.status === 'completed' || group.status === 'failed') return false;
 
+        if (!group.taskId) return false;
+
         const items = extractSunoData(group);
         const hasAudio = items.some((item: any) => getAudioUrl(item, group));
-        if (hasAudio) return false;
-
-        if (!group.taskId) return false;
+        
+        if (hasAudio) {
+          if (!firstAudioDetectedAtRef.current.has(group.id)) {
+            firstAudioDetectedAtRef.current.set(group.id, Date.now());
+          }
+          const detectedTime = firstAudioDetectedAtRef.current.get(group.id)!;
+          if (now - detectedTime >= 180000) {
+            return false;
+          }
+        }
 
         let createdTime = 0;
         if (group.createdAt?.seconds) {

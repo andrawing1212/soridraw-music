@@ -91,33 +91,6 @@ export default function GlobalPlayer() {
 
 
 
-  useEffect(() => {
-    if ('mediaSession' in navigator && currentTrack) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title || 'Untitled',
-        artist: "SORIDRAW's Studio",
-        album: currentTrack.parent?.style || currentTrack.parent?.prompt || 'Suno Library',
-        artwork: [
-           { src: currentTrack.imageUrl || currentTrack.parent?.imageUrl || currentTrack.parent?.image_url || 'https://images.unsplash.com/photo-1614149162883-504ce4d13909?w=512&auto=format&fit=crop', sizes: '512x512', type: 'image/jpeg' }
-        ]
-      });
-
-      navigator.mediaSession.setActionHandler('play', () => {
-         if (audioRef.current) audioRef.current.play();
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-         if (audioRef.current) audioRef.current.pause();
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-      navigator.mediaSession.setActionHandler('nexttrack', playNext);
-      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-         if (audioRef.current) audioRef.current.currentTime = Math.max(audioRef.current.currentTime - (details.seekOffset || 10), 0);
-      });
-      navigator.mediaSession.setActionHandler('seekforward', (details) => {
-         if (audioRef.current) audioRef.current.currentTime = Math.min(audioRef.current.currentTime + (details.seekOffset || 10), duration);
-      });
-    }
-  }, [currentTrack, playNext, playPrev, audioRef, duration]);
 
   const handleDownload = (url: string) => {
     if (!url) {
@@ -233,17 +206,6 @@ export default function GlobalPlayer() {
           100% { transform: translateX(-50%); }
         }
       `}</style>
-      <audio 
-        ref={audioRef}
-        className="hidden" 
-        src={currentTrack.url}
-        onLoadedMetadata={handleTimeUpdate}
-        onTimeUpdate={handleTimeUpdate}
-        onEnded={handleEnded}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        autoPlay
-      />
 
       <motion.div
         layout

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 
 export interface Track {
   url: string;
@@ -40,7 +40,11 @@ interface GlobalPlayerContextType {
 const GlobalPlayerContext = createContext<GlobalPlayerContextType | null>(null);
 
 export function GlobalPlayerProvider({ children }: { children: React.ReactNode }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  // Use a permanent audio instance as a singleton for the app lifecycle
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  if (!audioRef.current && typeof window !== 'undefined') {
+    audioRef.current = new Audio();
+  }
   
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [queue, setQueue] = useState<Track[]>([]);
@@ -53,60 +57,137 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
   const [isSharedPlayerMode, setIsSharedPlayerMode] = useState(false);
 
+  // Sync volume and mute state to the audio object
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+      audioRef.current.muted = isMuted;
+    }
+  }, [volume, isMuted]);
+
+  const updateMediaSession = (track: Track, state: 'playing' | 'paused') => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || 'Untitled',
+        artist: "SORIDRAW's Studio",
+        album: track.parent?.style || track.parent?.prompt || 'SORIDRAW',
+        artwork: [
+          { 
+            src: track.imageUrl || track.parent?.imageUrl || track.parent?.image_url || 'https://images.unsplash.com/photo-1614149162883-504ce4d13909?w=512&auto=format&fit=crop', 
+            sizes: '512x512', 
+            type: 'image/jpeg' 
+          }
+        ]
+      });
+      navigator.mediaSession.playbackState = state;
+    }
+  };
+
   const clearPlayer = () => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = '';
       audioRef.current.currentTime = 0;
+    }
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = 'none';
+      navigator.mediaSession.metadata = null;
     }
     setIsPlaying(false);
     setCurrentTrack(null);
   };
 
-  const playTrack = (track: Track, newQueue?: Track[]) => {
+  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     if (newQueue) {
       setQueue(newQueue);
     }
+
+    // 1. Update MediaSession Metadata FIRST to prevent OS player flickering
+    updateMediaSession(track, 'playing');
+
+    // 2. Set src and play imperatively
+    if (audioRef.current) {
+      // Use URL object comparison or just string comparison
+      // The browser might normalize URLs, so be careful
+      const currentSrc = audioRef.current.src;
+      const targetSrc = track.url;
+      
+      // If URLs are actually different (or empty), update src
+      if (currentSrc !== targetSrc && !currentSrc.endsWith(targetSrc)) {
+        audioRef.current.src = targetSrc;
+        audioRef.current.load();
+      }
+      
+      // Attempt play - OS Media Session is already updated to 'playing'
+      audioRef.current.play().catch(err => {
+        console.error("Audio play failed:", err);
+        // If play completely fails, update state back to paused
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+        setIsPlaying(false);
+      });
+    }
+
     setCurrentTrack(track);
     setIsPlaying(true);
-  };
+  }, []);
 
-  const playNext = () => {
+  const playNext = useCallback(() => {
+    // Need access to latest state. Since we're in the same scope, 
+    // we should use dependencies or refs.
+    // However, if we want these to be stable, we need to be careful.
+    // For now, let's just include them in dependencies.
     if (!currentTrack || queue.length === 0) return;
+    
+    let nextTrack: Track | null = null;
     if (isShuffle) {
       const nextIdx = Math.floor(Math.random() * queue.length);
-      playTrack(queue[nextIdx]);
-      return;
+      nextTrack = queue[nextIdx];
+    } else {
+      const currentIdx = queue.findIndex(t => t.url === currentTrack.url);
+      if (currentIdx >= 0 && currentIdx < queue.length - 1) {
+        nextTrack = queue[currentIdx + 1];
+      } else if (repeatMode === 'all' && queue.length > 0) {
+        nextTrack = queue[0];
+      }
     }
-    const currentIdx = queue.findIndex(t => t.url === currentTrack.url);
-    if (currentIdx >= 0 && currentIdx < queue.length - 1) {
-      playTrack(queue[currentIdx + 1]);
-    } else if (repeatMode === 'all' && queue.length > 0) {
-      playTrack(queue[0]);
-    }
-  };
 
-  const playPrev = () => {
+    if (nextTrack) {
+      playTrack(nextTrack);
+    }
+  }, [currentTrack, queue, isShuffle, repeatMode, playTrack]);
+
+  const playPrev = useCallback(() => {
     if (!currentTrack || queue.length === 0) return;
-    if (currentTime > 3) {
-      if (audioRef.current) audioRef.current.currentTime = 0;
+    
+    if (audioRef.current && audioRef.current.currentTime > 3) {
+      audioRef.current.currentTime = 0;
       return;
     }
+
+    let prevTrack: Track | null = null;
     const currentIdx = queue.findIndex(t => t.url === currentTrack.url);
     if (currentIdx > 0) {
-      playTrack(queue[currentIdx - 1]);
+      prevTrack = queue[currentIdx - 1];
     } else if (repeatMode === 'all' && queue.length > 0) {
-      playTrack(queue[queue.length - 1]);
+      prevTrack = queue[queue.length - 1];
     }
-  };
 
-  const togglePlayPause = () => {
+    if (prevTrack) {
+      playTrack(prevTrack);
+    }
+  }, [currentTrack, queue, repeatMode, playTrack]);
+
+  const togglePlayPause = useCallback(() => {
     if (!audioRef.current || !currentTrack) return;
     if (isPlaying) {
       audioRef.current.pause();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     } else {
-      audioRef.current.play();
+      audioRef.current.play().catch(err => console.error("Play failed:", err));
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      setIsPlaying(true);
     }
-  };
+  }, [isPlaying, currentTrack]);
 
   const seek = (time: number) => {
     if (audioRef.current) {
@@ -117,18 +198,11 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
 
   const handleVolumeChange = (v: number) => {
     setVolume(v);
-    if (audioRef.current) {
-      audioRef.current.volume = v;
-      audioRef.current.muted = v === 0;
-    }
     setIsMuted(v === 0);
   };
 
   const toggleMute = () => {
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
+    setIsMuted(!isMuted);
   };
 
   const handleTimeUpdate = () => {
@@ -141,7 +215,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const handleEnded = () => {
+  const handleEnded = useCallback(() => {
     if (repeatMode === 'one') {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
@@ -150,7 +224,56 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     } else {
       playNext();
     }
-  };
+  }, [repeatMode, playNext]);
+
+  // Set up audio event listeners and Media Session action handlers
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => handleEnded();
+    const onTimeUpdate = () => handleTimeUpdate();
+
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('loadedmetadata', onTimeUpdate);
+
+    return () => {
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('loadedmetadata', onTimeUpdate);
+    };
+  }, [currentTrack, queue, isShuffle, repeatMode]); // Re-attach when navigation logic dependencies change
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', togglePlayPause);
+      navigator.mediaSession.setActionHandler('pause', togglePlayPause);
+      navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+      navigator.mediaSession.setActionHandler('nexttrack', playNext);
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = Math.max(audioRef.current.currentTime - (details.seekOffset || 10), 0);
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        if (audioRef.current) {
+          audioRef.current.currentTime = Math.min(audioRef.current.currentTime + (details.seekOffset || 10), duration);
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined && audioRef.current) {
+          audioRef.current.currentTime = details.seekTime;
+        }
+      });
+    }
+  }, [currentTrack, togglePlayPause, playNext, playPrev, duration]);
 
   return (
     <GlobalPlayerContext.Provider

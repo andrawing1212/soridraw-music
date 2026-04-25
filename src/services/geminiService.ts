@@ -1379,6 +1379,52 @@ Examples:
 - "아직 그대로야"
 - "오늘은 그냥 가"
 
+[KOREAN NUANCE TITLE RULES]
+
+- Korean titles should NOT feel like fully completed sentences.
+- Avoid combining two complete phrases into one title.
+- Prefer slightly incomplete, open-ended expressions.
+
+- Good titles often feel like:
+  - something left unsaid
+  - a thought that trails off
+  - a phrase that implies more context
+
+- It is often better to remove one part of a sentence than to keep everything.
+
+---
+
+[NUANCE CONTROL]
+
+- If a title feels too complete, shorten it.
+- Reduce unnecessary words.
+- Avoid "A + B" combined sentence structures.
+
+Examples:
+
+Too complete:
+- 오늘따라 운이 좋았어
+→ Better:
+- 오늘따라
+- 운이 좋았던 날
+
+Too combined:
+- 아직 여길 못 떠나
+→ Better:
+- 아직 여길
+- 못 떠나서
+
+Too explanatory:
+- 그냥 늘 있던 곳에
+→ Better:
+- 늘 있던 곳에
+- 그냥 거기
+
+Natural:
+- 비어있는 옆자리 (OK)
+- 그날 이후로 (GOOD)
+- 아직 그대로야 (GOOD)
+
 ${params.isNoLyrics ? "LYRICS RULE (MANDATORY):\n- DO NOT generate any lyrics. The user requested an instrumental-only track or a track without lyrics.\n- Omit the 'lyrics' field from the JSON output." : `Lyrics rules:
 ${lyricGuidancePrompt}
 

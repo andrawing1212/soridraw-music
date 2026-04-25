@@ -24,12 +24,30 @@ export default function SunoLibraryPage() {
   
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite'>('all');
+  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'trash'>('all');
   const [showDetails, setShowDetails] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  interface MenuState {
+    id: string;
+    position: { top: number; right: number };
+    group: any;
+    item: any;
+    idx: number;
+    audioUrl: string;
+  }
+  const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
+  interface DeleteAction {
+    groupId: string;
+    itemIndex: number;
+    group: any;
+    action: 'hide' | 'restore' | 'permanentDelete';
+  }
+  const [deleteTarget, setDeleteTarget] = useState<DeleteAction | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const checkingIdsRef = React.useRef<Set<string>>(new Set());
+  const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
 
   const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
 
@@ -122,7 +140,7 @@ export default function SunoLibraryPage() {
         const list = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        })).filter((docData: any) => !docData.hidden);
+        }));
 
         list.sort((a: any, b: any) => {
           const t1 = a.createdAt?.seconds || 0;
@@ -143,19 +161,6 @@ export default function SunoLibraryPage() {
     return () => unsubscribeAuth();
   }, []);
 
-  const filteredTracks = useMemo(() => {
-    return tracks.filter(t => {
-      const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFilter = filter === 'all' || 
-                            (filter === 'completed' && t.status === 'completed') || 
-                            (filter === 'favorite' && t.favorite); // Favorite is placeholder for now
-
-      return matchesSearch && matchesFilter;
-    });
-  }, [tracks, searchTerm, filter]);
-
   const extractSunoData = (group: any) => {
     let sunoData = null;
     if (Array.isArray(group?.sunoData) && group.sunoData.length > 0) {
@@ -174,9 +179,32 @@ export default function SunoLibraryPage() {
       audioUrl: group?.audioUrl || group?.streamAudioUrl,
       title: group?.title,
       imageUrl: group?.imageUrl,
-      duration: group?.duration
+      duration: group?.duration,
+      hidden: !!group?.hidden
     }];
   };
+
+  const filteredTracks = useMemo(() => {
+    return tracks.filter(t => {
+      if (filter === 'trash') {
+        const hasHiddenItem = extractSunoData(t).some((i: any) => i.hidden);
+        if (!t.hidden && !hasHiddenItem) return false;
+      } else {
+        if (t.hidden) return false;
+        const allHidden = extractSunoData(t).every((i: any) => i.hidden);
+        if (allHidden) return false;
+      }
+
+      const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filter === 'all' || filter === 'trash' ||
+                            (filter === 'completed' && t.status === 'completed') || 
+                            (filter === 'favorite' && t.favorite);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [tracks, searchTerm, filter]);
 
   const getAudioUrl = (item: any, group: any) => {
     return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
@@ -223,13 +251,82 @@ export default function SunoLibraryPage() {
     }
   };
 
+  useEffect(() => {
+    if (isSharedView || !user) return;
+
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      
+      const eligibleGroups = tracks.filter(group => {
+        if (group.status === 'completed' || group.status === 'failed') return false;
+
+        const items = extractSunoData(group);
+        const hasAudio = items.some((item: any) => getAudioUrl(item, group));
+        if (hasAudio) return false;
+
+        if (!group.taskId) return false;
+
+        let createdTime = 0;
+        if (group.createdAt?.seconds) {
+          createdTime = group.createdAt.seconds * 1000;
+        } else if (group.createdAt?.toDate) {
+          createdTime = group.createdAt.toDate().getTime();
+        } else if (typeof group.createdAt === 'string' || typeof group.createdAt === 'number') {
+          createdTime = new Date(group.createdAt).getTime();
+        }
+        
+        if (now - createdTime < 60000) return false;
+
+        const count = autoCheckCountsRef.current.get(group.id) || 0;
+        if (count >= 20) return false;
+
+        if (checkingIdsRef.current.has(group.id)) return false;
+
+        return true;
+      });
+
+      eligibleGroups.forEach(async (group) => {
+        const id = group.id;
+        checkingIdsRef.current.add(id);
+        const currentCount = autoCheckCountsRef.current.get(id) || 0;
+        autoCheckCountsRef.current.set(id, currentCount + 1);
+
+        try {
+          const token = await user.getIdToken();
+          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ trackId: id, taskId: group.taskId })
+          });
+          
+          if (!res.ok) {
+            console.warn(`Auto check failed for ${id}`);
+          }
+        } catch (e) {
+          console.warn(`Auto check error for ${id}:`, e);
+        } finally {
+          checkingIdsRef.current.delete(id);
+        }
+      });
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [tracks, user, isSharedView]);
+
   const checkStatus = async (trackId: string, taskId: string) => {
     if (!taskId) {
       alert('taskId가 없어 상태 확인을 할 수 없습니다.');
       return;
     }
+    if (checkingIdsRef.current.has(trackId)) {
+      return;
+    }
 
     try {
+      checkingIdsRef.current.add(trackId);
       setStatusChecking(trackId);
       const user = auth.currentUser;
 
@@ -266,6 +363,7 @@ export default function SunoLibraryPage() {
       console.error(error);
       alert('상태 확인 중 오류가 발생했습니다.');
     } finally {
+      checkingIdsRef.current.delete(trackId);
       setStatusChecking(null);
     }
   };
@@ -445,8 +543,8 @@ export default function SunoLibraryPage() {
     alert('플레이리스트 저장 준비가 완료되었습니다.');
   };
 
-  const handleDeleteClick = (groupId: string) => {
-    setDeleteTarget(groupId);
+  const handleDeleteClick = (groupId: string, itemIndex: number, group: any, action: 'hide' | 'restore' | 'permanentDelete') => {
+    setDeleteTarget({ groupId, itemIndex, group, action });
     setDeleteError(null);
   };
 
@@ -455,17 +553,51 @@ export default function SunoLibraryPage() {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget), {
-        hidden: true,
-        isPublic: false,
-        deletedAt: serverTimestamp()
-      });
-      setTracks(prev => prev.filter(t => t.id !== deleteTarget));
+      const { doc, updateDoc, serverTimestamp, deleteDoc } = await import('firebase/firestore');
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget.groupId);
+
+      const items = extractSunoData(deleteTarget.group);
+      let newSunoData = [...items];
+
+      if (items.length > 0 && !(!deleteTarget.group.sunoData?.length && newSunoData.length === 1 && !newSunoData[0].audioUrl && !newSunoData[0].streamAudioUrl)) {
+        // Normal case: treat extracted items as the root sunoData array.
+        if (deleteTarget.action === 'hide') {
+            newSunoData[deleteTarget.itemIndex] = { ...newSunoData[deleteTarget.itemIndex], hidden: true };
+        } else if (deleteTarget.action === 'restore') {
+            newSunoData[deleteTarget.itemIndex] = { ...newSunoData[deleteTarget.itemIndex], hidden: false };
+        } else if (deleteTarget.action === 'permanentDelete') {
+            newSunoData.splice(deleteTarget.itemIndex, 1);
+        }
+
+        if (deleteTarget.action === 'permanentDelete' && newSunoData.length === 0) {
+            await deleteDoc(trackRef);
+        } else {
+            const allHidden = newSunoData.length > 0 && newSunoData.every(i => i.hidden === true);
+            const updatePayload: any = { sunoData: newSunoData };
+            if (allHidden) {
+              updatePayload.hidden = true;
+              updatePayload.isPublic = false;
+              updatePayload.deletedAt = serverTimestamp();
+            } else if (deleteTarget.action === 'restore') {
+              updatePayload.hidden = false;
+            }
+            await updateDoc(trackRef, updatePayload);
+        }
+      } else {
+        // Fallback case: just update document hidden field.
+        if (deleteTarget.action === 'hide') {
+            await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt: serverTimestamp() });
+        } else if (deleteTarget.action === 'restore') {
+            await updateDoc(trackRef, { hidden: false });
+        } else if (deleteTarget.action === 'permanentDelete') {
+            await deleteDoc(trackRef);
+        }
+      }
+
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
-      setDeleteError('삭제에 실패했습니다. 다시 시도해주세요.');
+      setDeleteError('작업에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsDeleting(false);
     }
@@ -575,7 +707,7 @@ export default function SunoLibraryPage() {
               />
             </div>
             <div className="flex bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl">
-              {(['all', 'completed', 'favorite'] as const).map((f) => (
+              {(['all', 'completed', 'favorite', 'trash'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -583,7 +715,7 @@ export default function SunoLibraryPage() {
                     filter === f ? 'bg-brand-orange text-white' : 'hover:bg-white/5 opacity-60'
                   }`}
                 >
-                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : '즐겨찾기'}
+                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : '휴지통'}
                 </button>
               ))}
             </div>
@@ -663,6 +795,14 @@ export default function SunoLibraryPage() {
                   {/* Tracks List */}
                   <div className="divide-y divide-white/5">
                     {items.map((item: any, idx: number) => {
+                      if (filter === 'trash') {
+                        // Only show hidden ones
+                        if (!item.hidden && !group.hidden) return null;
+                      } else {
+                        // Only show non-hidden ones
+                        if (item.hidden || group.hidden) return null;
+                      }
+
                       const audioUrl = getAudioUrl(item, group);
                       const isDummy = !audioUrl && !item.audioUrl && !item.audio_url && !group.sunoData?.length && !group.audioUrl;
                       const isCurrent = currentTrack?.parent?.id === group.id && currentTrack?.index === idx;
@@ -670,7 +810,7 @@ export default function SunoLibraryPage() {
                       return (
                         <div 
                           key={`${group.id}-${idx}`} 
-                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${isCurrent ? 'bg-brand-orange/5' : ''}`}
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${isCurrent ? 'bg-brand-orange/5' : ''} ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (audioUrl) {
@@ -729,45 +869,33 @@ export default function SunoLibraryPage() {
 
                           <div className="relative shrink-0 ml-2">
                             <button 
-                              onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === `${group.id}-${idx}` ? null : `${group.id}-${idx}`); }}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                const id = `${group.id}-${idx}`;
+                                if (activeMenuState?.id === id) {
+                                  setActiveMenuState(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  let top = rect.bottom + 8;
+                                  let right = window.innerWidth - rect.right;
+                                  // check overflow bottom
+                                  if (top + 280 > window.innerHeight) {
+                                    top = rect.top - 280; // roughly display above
+                                  }
+                                  setActiveMenuState({
+                                    id,
+                                    position: { top, right },
+                                    group,
+                                    item,
+                                    idx,
+                                    audioUrl
+                                  });
+                                }
+                              }}
                               className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-all"
                             >
                               <MoreVertical className="w-4 h-4 opacity-50" />
                             </button>
-                            
-                            {/* Actions Menu */}
-                            <AnimatePresence>
-                              {activeMenu === `${group.id}-${idx}` && (
-                                <>
-                                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
-                                  <motion.div
-                                    initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                    className="absolute right-0 top-10 z-50 w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {[
-                                      { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...group, itemIndex: idx }); setActiveMenu(null); } },
-                                      !isSharedView ? { icon: Download, label: '다운로드', action: () => { handleDownload(audioUrl); setActiveMenu(null); } } : null,
-                                      !isSharedView ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } } : null,
-                                      { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(group) : handleShare(group, item); setActiveMenu(null); } },
-                                      { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } },
-                                      !isSharedView ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(group.id); setActiveMenu(null); }, danger: true } : null,
-                                    ].filter(Boolean).map((m: any, i) => (
-                                      <button
-                                        key={i}
-                                        onClick={m.action}
-                                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all ${m.danger ? 'text-red-400' : ''}`}
-                                      >
-                                        <m.icon className="w-4 h-4" />
-                                        {m.label}
-                                      </button>
-                                    ))}
-                                  </motion.div>
-                                </>
-                              )}
-                            </AnimatePresence>
                           </div>
                         </div>
                       );
@@ -829,6 +957,45 @@ export default function SunoLibraryPage() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeMenuState && (
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setActiveMenuState(null); }} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              style={{
+                top: activeMenuState.position.top,
+                right: activeMenuState.position.right,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {[
+                { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...activeMenuState.group, itemIndex: activeMenuState.idx }); setActiveMenuState(null); } },
+                !isSharedView && filter !== 'trash' ? { icon: Download, label: '다운로드', action: () => { handleDownload(activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(activeMenuState.group) : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
+                !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
+                !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,
+              ].filter(Boolean).map((m: any, i) => (
+                <button
+                  key={i}
+                  onClick={m.action}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all ${m.danger ? 'text-red-400' : ''}`}
+                >
+                  <m.icon className="w-4 h-4" />
+                  {m.label}
+                </button>
+              ))}
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -898,9 +1065,15 @@ export default function SunoLibraryPage() {
                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
                     <AlertCircle className="w-6 h-6 text-red-500" />
                  </div>
-                 <h3 className="text-xl font-bold mb-2">라이브러리에서 이 항목을 숨길까요?</h3>
+                 <h3 className="text-xl font-bold mb-2">
+                   {deleteTarget.action === 'permanentDelete' ? '이 곡을 영구 삭제할까요?' : 
+                    deleteTarget.action === 'restore' ? '이 곡을 복구할까요?' : 
+                    '이 곡을 휴지통으로 이동할까요?'}
+                 </h3>
                  <p className="text-sm text-[var(--text-secondary)] mb-6">
-                   숨긴 항목은 더 이상 목록에 표시되지 않습니다.
+                   {deleteTarget.action === 'permanentDelete' ? '이 작업은 앱에서 복구할 수 없습니다.' : 
+                    deleteTarget.action === 'restore' ? '복구된 곡은 다시 라이브러리에 표시됩니다.' : 
+                    '휴지통에서 나중에 복구하거나 영구 삭제할 수 있습니다.'}
                  </p>
                  
                  {deleteError && (
@@ -920,9 +1093,15 @@ export default function SunoLibraryPage() {
                    <button
                      onClick={confirmDelete}
                      disabled={isDeleting}
-                     className="flex-1 py-3 px-4 rounded-xl font-bold bg-red-500 hover:bg-red-600 text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                     className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg ${
+                       deleteTarget.action === 'permanentDelete' ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20' :
+                       deleteTarget.action === 'restore' ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/20' :
+                       'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20'
+                     }`}
                    >
-                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : '숨기기'}
+                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 
+                      deleteTarget.action === 'permanentDelete' ? '영구 삭제' : 
+                      deleteTarget.action === 'restore' ? '복구' : '휴지통으로 이동'}
                    </button>
                  </div>
               </div>

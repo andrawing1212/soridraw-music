@@ -27,9 +27,18 @@ export default function SunoApiSettingsPage() {
     return () => unsubscribe();
   }, []);
 
-  const loadSunoApiKeyStatus = useCallback(async () => {
+  const loadSunoApiKeyStatus = useCallback(async (isRetry = false) => {
     if (!user) return;
-    setStatusText('확인 중...');
+    
+    if (!isRetry) {
+      const cached = localStorage.getItem('soridraw_suno_api_key_registered');
+      if (cached === 'true') {
+        setStatusText('등록됨');
+      } else {
+        setStatusText('확인 중...');
+      }
+    }
+    
     try {
       const token = await user.getIdToken();
       const res = await fetch(`${BASE_URL}/getSunoApiKeyStatus`, {
@@ -42,16 +51,35 @@ export default function SunoApiSettingsPage() {
       });
       const result = await res.json();
 
-      if (res.ok && result && (result.hasSunoApiKey || result.registered)) {
+      if (res.ok && result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists)) {
         setStatusText('등록됨');
+        localStorage.setItem('soridraw_suno_api_key_registered', 'true');
       } else if (res.ok) {
         setStatusText('미등록');
+        localStorage.removeItem('soridraw_suno_api_key_registered');
       } else {
-        setStatusText('확인 실패');
+        if (isRetry) {
+          console.warn('Failed to load API key status after save/delete (server error)');
+        } else {
+          const cached = localStorage.getItem('soridraw_suno_api_key_registered');
+          if (cached !== 'true') {
+            setStatusText('확인 실패');
+          } else {
+            console.warn('Server error, but assumed registered by cached status.');
+          }
+        }
       }
     } catch (e) {
-      console.error('Failed to load API key status:', e);
-      setStatusText('확인 실패');
+      if (isRetry) {
+        console.warn('Failed to load API key status after save/delete:', e);
+      } else {
+        const cached = localStorage.getItem('soridraw_suno_api_key_registered');
+        if (cached !== 'true') {
+          setStatusText('확인 실패');
+        } else {
+          console.warn('Network error, but assumed registered by cached status.', e);
+        }
+      }
     }
   }, [user]);
 
@@ -73,9 +101,11 @@ export default function SunoApiSettingsPage() {
       const result = await res.json();
       
       if (res.ok && result.ok) {
+        setStatusText('등록됨');
+        localStorage.setItem('soridraw_suno_api_key_registered', 'true');
         setApiKey('');
         setMessage('API Key가 안전하게 등록되었습니다.');
-        loadSunoApiKeyStatus();
+        loadSunoApiKeyStatus(true);
       } else {
         setMessage('저장에 실패했습니다.');
       }
@@ -105,8 +135,10 @@ export default function SunoApiSettingsPage() {
       const result = await res.json();
 
       if (res.ok && result.ok) {
+        setStatusText('미등록');
+        localStorage.removeItem('soridraw_suno_api_key_registered');
         setMessage('API Key가 삭제되었습니다.');
-        loadSunoApiKeyStatus();
+        loadSunoApiKeyStatus(true);
       } else {
         setMessage('삭제에 실패했습니다.');
       }
@@ -119,7 +151,7 @@ export default function SunoApiSettingsPage() {
   };
 
   useEffect(() => {
-    loadSunoApiKeyStatus();
+    loadSunoApiKeyStatus(false);
   }, [loadSunoApiKeyStatus]);
 
 

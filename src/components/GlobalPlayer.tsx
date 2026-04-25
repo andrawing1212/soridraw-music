@@ -115,13 +115,15 @@ export default function GlobalPlayer() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem('global_player_pos');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Wait for next tick so ref has dimensions
-        setTimeout(() => setPosition(getClampedPosition(parsed.x, parsed.y)), 0);
-      } catch (e) {}
+    if (!isMobile) {
+      const saved = localStorage.getItem('global_player_pos');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Wait for next tick so ref has dimensions
+          setTimeout(() => setPosition(getClampedPosition(parsed.x, parsed.y)), 0);
+        } catch (e) {}
+      }
     }
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
     if (savedMode === 'collapsed' || savedMode === 'normal' || savedMode === 'expanded') {
@@ -299,18 +301,20 @@ export default function GlobalPlayer() {
     if (isSharedPlayerMode) return;
     setTimeout(() => { isDragging.current = false; }, 100);
 
-    if (isMobile && mode !== 'expanded') {
-      const swipeThreshold = 80;
-      if (mobileDockSide === 'right') {
-        if (info.offset.x < -swipeThreshold) {
-          setMobileDockSide('center');
-        }
-      } else {
-        if (info.offset.x < -swipeThreshold) {
-          clearPlayer();
-          setMobileDockSide('center');
-        } else if (info.offset.x > swipeThreshold) {
-          setMobileDockSide('right');
+    if (isMobile) {
+      if (mode !== 'expanded') {
+        const swipeThreshold = 80;
+        if (mobileDockSide === 'right') {
+          if (info.offset.x < -swipeThreshold) {
+            setMobileDockSide('center');
+          }
+        } else {
+          if (info.offset.x < -120) {
+            clearPlayer();
+            setMobileDockSide('center');
+          } else if (info.offset.x > swipeThreshold) {
+            setMobileDockSide('right');
+          }
         }
       }
       return;
@@ -370,9 +374,9 @@ export default function GlobalPlayer() {
         initial={false}
         animate={{ 
           x: isSharedPlayerMode
-            ? '-50%'
+            ? (mode === 'expanded' ? '-50%' : 0)
             : isMobile 
-            ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? 'calc(50vw - 48px)' : '-50%'))
+            ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? (typeof window !== 'undefined' ? (window.innerWidth / 2) + (Math.min(window.innerWidth - 24, 420) / 2) - 56 : 150) : 0))
             : position.x,
           y: isSharedPlayerMode
             ? (mode === 'expanded' ? '-50%' : 0)
@@ -382,9 +386,9 @@ export default function GlobalPlayer() {
         }}
         className={`fixed z-[100] flex flex-col ${
           isSharedPlayerMode
-            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
+            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-0 right-0 mx-auto w-[calc(100vw-24px)] max-w-[420px] items-center')
             : isMobile 
-            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
+            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-0 right-0 mx-auto w-[calc(100vw-24px)] max-w-[420px] items-center')
             : (mode === 'expanded' ? 'bottom-4 right-3 md:left-auto md:right-8 items-end w-full md:w-auto' : 'bottom-4 right-4 md:left-auto md:right-8 items-end w-full md:w-auto')
         }`}
         style={{ touchAction: 'none' }}

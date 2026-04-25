@@ -66,39 +66,12 @@ export default function GlobalPlayer() {
 
   const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [showMenu, setShowMenu] = useState(false);
-  const [position, setPosition] = useState<{x: number, y: number} | null>(null);
-  const isDragging = useRef(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
-
-  const getClampedPosition = (x: number, y: number, w?: number, h?: number) => {
-    const minVisible = 80;
-    
-    let width = w || 384; 
-    let height = h || 100;
-    if (!w && !h && playerRef.current) {
-      width = playerRef.current.offsetWidth;
-      height = playerRef.current.offsetHeight;
-    }
-
-    const minX = -width + minVisible; 
-    const maxX = window.innerWidth - minVisible; 
-    const minY = -height + minVisible;
-    const maxY = window.innerHeight - minVisible;
-
-    return {
-      x: Math.max(minX, Math.min(x, maxX)),
-      y: Math.max(minY, Math.min(y, maxY))
-    };
-  };
 
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
-      setPosition(prev => {
-        if (!prev) return prev;
-        return getClampedPosition(prev.x, prev.y);
-      });
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -111,88 +84,10 @@ export default function GlobalPlayer() {
     }
   }, []);
 
-  useEffect(() => {
-    if (isMobile || isSharedPlayerMode || !currentTrack) return;
-    if (position !== null) return;
-
-    let frameId: number;
-    const initPos = () => {
-      if (!playerRef.current) {
-        frameId = requestAnimationFrame(initPos);
-        return;
-      }
-      const w = playerRef.current.offsetWidth;
-      const h = playerRef.current.offsetHeight;
-      if (w === 0 || h === 0) {
-        frameId = requestAnimationFrame(initPos);
-        return;
-      }
-
-      let defaultX = window.innerWidth - w - 24;
-      let defaultY = window.innerHeight - h - 24;
-
-      const saved = localStorage.getItem('global_player_pos');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-            defaultX = parsed.x;
-            defaultY = parsed.y;
-          }
-        } catch(e) {}
-      }
-
-      const cl = getClampedPosition(defaultX, defaultY, w, h);
-      setPosition({ x: cl.x, y: cl.y });
-    };
-
-    frameId = requestAnimationFrame(initPos);
-    return () => cancelAnimationFrame(frameId);
-  }, [currentTrack, isMobile, isSharedPlayerMode, position]);
-
-  const enforceStrictViewportClamp = () => {
-    if (window.innerWidth < 768 || isSharedPlayerMode) return;
-    setTimeout(() => {
-      if (!playerRef.current) return;
-      setPosition(prev => {
-        if (!prev) return prev;
-        const width = playerRef.current!.offsetWidth;
-        const height = playerRef.current!.offsetHeight;
-        // Safe strict bounds to prevent jumping far off-screen
-        let safeX = prev.x;
-        let safeY = prev.y;
-        
-        // If mode expands and it overflows bottom, nudge it up
-        if (safeY + height + 24 > window.innerHeight) {
-          safeY = window.innerHeight - height - 24;
-        }
-        // If it overflows right, nudge it left
-        if (safeX + width + 24 > window.innerWidth) {
-          safeX = window.innerWidth - width - 24;
-        }
-        
-        return getClampedPosition(safeX, safeY, width, height);
-      });
-    }, 100);
-  };
-
   const handleModeChange = (newMode: 'collapsed' | 'normal' | 'expanded') => {
     setMode(newMode);
     localStorage.setItem('soridraw_global_player_mode', newMode);
-    if (newMode === 'expanded') {
-      enforceStrictViewportClamp();
-    }
   };
-
-  useEffect(() => {
-    if (mode === 'expanded') {
-      const prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prevOverflow || '';
-      };
-    }
-  }, [mode]);
 
 
 
@@ -321,22 +216,6 @@ export default function GlobalPlayer() {
     alert('삭제 기능은 라이브러리 화면에서 이용 가능합니다.');
   };
 
-  const handleDragStart = () => {
-    isDragging.current = true;
-  };
-
-  const handleDragEnd = (e: any, info: any) => {
-    if (isSharedPlayerMode || isMobile || position === null) return;
-    setTimeout(() => { isDragging.current = false; }, 100);
-
-    let newX = position.x + info.offset.x;
-    let newY = position.y + info.offset.y;
-    
-    const newPos = getClampedPosition(newX, newY);
-    setPosition(newPos);
-    localStorage.setItem('global_player_pos', JSON.stringify(newPos));
-  };
-
   if (!currentTrack) return null;
 
   const formatTime = (time: number) => {
@@ -373,32 +252,18 @@ export default function GlobalPlayer() {
           duration: 0.35,
         }}
         ref={playerRef}
-        drag={isSharedPlayerMode || isMobile ? false : true}
-        dragConstraints={{
-          left: -(typeof window !== 'undefined' ? window.innerWidth : 1000) - 80,
-          right: Math.max(16, (playerRef.current?.offsetWidth || 384) - 80),
-          top: -(typeof window !== 'undefined' ? window.innerHeight : 1000) - 80,
-          bottom: Math.max(16, (playerRef.current?.offsetHeight || 100) - 80)
-        }}
-        dragElastic={0.2}
-        dragMomentum={false}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
         initial={false}
         animate={{ 
-          x: isSharedPlayerMode || isMobile
-            ? '-50%'
-            : (position?.x || 0),
-          y: isSharedPlayerMode || isMobile
-            ? (mode === 'expanded' ? '-50%' : 0)
-            : (position?.y || 0)
+          x: mode === 'expanded' || isSharedPlayerMode || isMobile ? '-50%' : 0,
+          y: mode === 'expanded' ? '-50%' : 0
         }}
         className={`fixed z-[100] flex flex-col ${
-          isSharedPlayerMode || isMobile
-            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
-            : 'top-0 left-0 w-full md:w-auto'
+          mode === 'expanded'
+            ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]'
+            : isSharedPlayerMode || isMobile
+            ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
+            : 'bottom-6 right-6 w-auto items-end'
         }`}
-        style={{ touchAction: 'none', visibility: (!isMobile && !isSharedPlayerMode && position === null) ? 'hidden' : 'visible' }}
       >
         <AnimatePresence mode="popLayout">
           {mode === 'collapsed' && (
@@ -408,9 +273,7 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => {
-                 if (!isDragging.current) {
-                    handleModeChange('normal');
-                 }
+                 handleModeChange('normal');
               }}
               className="w-full bg-[var(--bg-secondary)] border border-white/10 rounded-full py-2 px-4 shadow-xl flex items-center justify-between cursor-pointer"
             >
@@ -457,9 +320,7 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => {
-                 if (!isDragging.current) {
-                    handleModeChange('expanded');
-                 }
+                 handleModeChange('expanded');
               }}
               className="w-full md:w-96 bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-2xl p-3 shadow-2xl flex flex-col cursor-pointer relative overflow-hidden"
             >

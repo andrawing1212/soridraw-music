@@ -180,7 +180,7 @@ export default function SunoLibraryPage() {
       audioUrl: group?.audioUrl || group?.streamAudioUrl,
       title: group?.title,
       imageUrl: group?.imageUrl,
-      duration: group?.duration,
+      duration: getDuration(group, group),
       hidden: !!group?.hidden
     }];
   };
@@ -217,6 +217,14 @@ export default function SunoLibraryPage() {
 
   const getImageUrl = (item: any, group: any) => {
     return item?.imageUrl || item?.image_url || group?.imageUrl || '';
+  };
+
+  const getDuration = (item: any, group: any) => {
+    const rawVal = item?.duration ?? item?.durationSeconds ?? item?.metadata?.duration ?? item?.metadata?.durationSeconds ?? group?.duration;
+    if (rawVal === undefined || rawVal === null) return null;
+    const num = Number(rawVal);
+    if (Number.isFinite(num) && num > 0) return num;
+    return null;
   };
 
   const allPlayables = useMemo(() => {
@@ -259,22 +267,17 @@ export default function SunoLibraryPage() {
       const now = Date.now();
       
       const eligibleGroups = tracks.filter(group => {
-        if (group.status === 'completed' || group.status === 'failed') return false;
+        if (group.status === 'failed') return false;
 
-        if (!group.taskId) return false;
+        const count = autoCheckCountsRef.current.get(group.id) || 0;
+        if (count >= 25) return false;
 
         const items = extractSunoData(group);
-        const hasAudio = items.some((item: any) => getAudioUrl(item, group));
-        
-        if (hasAudio) {
-          if (!firstAudioDetectedAtRef.current.has(group.id)) {
-            firstAudioDetectedAtRef.current.set(group.id, Date.now());
-          }
-          const detectedTime = firstAudioDetectedAtRef.current.get(group.id)!;
-          if (now - detectedTime >= 540000) { // 9 minutes
-            return false;
-          }
-        }
+        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
+
+        if (isFullyCompleted) return false;
+
+        if (!group.taskId) return false;
 
         let createdTime = 0;
         if (group.createdAt?.seconds) {
@@ -285,10 +288,8 @@ export default function SunoLibraryPage() {
           createdTime = new Date(group.createdAt).getTime();
         }
         
+        const now = Date.now();
         if (now - createdTime < 30000) return false; // Initial wait 30 seconds
-
-        const count = autoCheckCountsRef.current.get(group.id) || 0;
-        if (count >= 25) return false; // Max 25 checks
 
         if (checkingIdsRef.current.has(group.id)) return false;
 
@@ -814,7 +815,12 @@ export default function SunoLibraryPage() {
                       }
 
                       const audioUrl = getAudioUrl(item, group);
-                      const isDummy = !audioUrl && !item.audioUrl && !item.audio_url && !group.sunoData?.length && !group.audioUrl;
+                      const duration = getDuration(item, group);
+                      const hasValidDuration = duration !== null;
+                      const isFailed = group.status === 'failed';
+                      const isCompleted = group.status === 'completed' && hasValidDuration;
+                      const isPending = !isFailed && !isCompleted;
+                      
                       const isCurrent = currentTrack?.parent?.id === group.id && currentTrack?.index === idx;
                       
                       return (
@@ -855,26 +861,26 @@ export default function SunoLibraryPage() {
                             <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
                               {getTitle(item, group, idx)}
                             </h4>
-                            {isDummy && (
+                            {isFailed ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
-                                {group.status === 'failed' ? (
-                                  <>
-                                    <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                                    생성 실패: {group.apiStatusResponse?.msg || group.apiResponse?.msg || '알 수 없는 오류'}
-                                  </>
-                                ) : (
-                                  <>
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    오디오 대기중...
-                                  </>
-                                )}
+                                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                                생성 실패: {group.apiStatusResponse?.msg || group.apiResponse?.msg || '알 수 없는 오류'}
                               </span>
-                            )}
+                            ) : isPending ? (
+                              <span className="text-xs opacity-50 truncate flex items-center gap-1.5 text-blue-400">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                {audioUrl ? '최종 파일 확인중...' : '오디오 대기중...'}
+                              </span>
+                            ) : null}
                             <p className="md:hidden text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{group.style || group.tags || 'Music'}</p>
                           </div>
 
                           <div className="text-[10px] opacity-40 font-mono shrink-0 tabular-nums">
-                            {item.duration ? `${Math.floor(item.duration / 60)}:${String(Math.floor(item.duration % 60)).padStart(2, '0')}` : '--:--'}
+                            {(() => {
+                              if (isFailed) return '--:--';
+                              if (isPending && !hasValidDuration) return '대기중';
+                              return hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : '--:--';
+                            })()}
                           </div>
 
                           <div className="relative shrink-0 ml-2">

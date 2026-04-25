@@ -218,8 +218,8 @@ export default function GlobalPlayer() {
 
   if (!currentTrack) return null;
 
-  const formatTime = (time: number) => {
-    if (!time || isNaN(time)) return '0:00';
+  const formatTime = (time: number | null | undefined) => {
+    if (time === null || time === undefined || !Number.isFinite(time) || isNaN(time) || time < 0) return '--:--';
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -237,6 +237,7 @@ export default function GlobalPlayer() {
         ref={audioRef}
         className="hidden" 
         src={currentTrack.url}
+        onLoadedMetadata={handleTimeUpdate}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onPlay={() => setIsPlaying(true)}

@@ -134,7 +134,10 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const handleTimeUpdate = () => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
-      setDuration(audioRef.current.duration || 0);
+      const audioDuration = audioRef.current.duration;
+      if (Number.isFinite(audioDuration) && audioDuration > 0) {
+        setDuration(audioDuration);
+      }
     }
   };
 

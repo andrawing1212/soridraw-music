@@ -156,12 +156,46 @@ export default function SunoLibraryPage() {
     });
   }, [tracks, searchTerm, filter]);
 
+  const extractSunoData = (group: any) => {
+    let sunoData = null;
+    if (Array.isArray(group?.sunoData) && group.sunoData.length > 0) {
+      sunoData = group.sunoData;
+    } else if (Array.isArray(group?.apiStatusResponse?.data?.response?.sunoData) && group.apiStatusResponse.data.response.sunoData.length > 0) {
+      sunoData = group.apiStatusResponse.data.response.sunoData;
+    } else if (Array.isArray(group?.apiResponse?.response?.sunoData) && group.apiResponse.response.sunoData.length > 0) {
+      sunoData = group.apiResponse.response.sunoData;
+    }
+
+    if (sunoData) {
+      return sunoData;
+    }
+
+    return [{
+      audioUrl: group?.audioUrl || group?.streamAudioUrl,
+      title: group?.title,
+      imageUrl: group?.imageUrl,
+      duration: group?.duration
+    }];
+  };
+
+  const getAudioUrl = (item: any, group: any) => {
+    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
+  };
+
+  const getTitle = (item: any, group: any, idx: number) => {
+    return item?.title || item?.name || group?.title || `Suno Track ${idx + 1}`;
+  };
+
+  const getImageUrl = (item: any, group: any) => {
+    return item?.imageUrl || item?.image_url || group?.imageUrl || '';
+  };
+
   const allPlayables = useMemo(() => {
     const list: any[] = [];
     filteredTracks.forEach(group => {
-      const items = group.sunoData || (group.audioUrl ? [{ audioUrl: group.audioUrl, title: group.title, imageUrl: group.imageUrl }] : []);
+      const items = extractSunoData(group);
       items.forEach((item: any, idx: number) => {
-        const audioUrl = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl || group.audioUrls?.[idx] || group.audioUrl || group.streamAudioUrl;
+        const audioUrl = getAudioUrl(item, group);
         if (audioUrl) {
           list.push({ group, item, idx, url: audioUrl });
         }
@@ -171,26 +205,17 @@ export default function SunoLibraryPage() {
   }, [filteredTracks]);
 
   const handlePlayTrack = (track: any, subIndex: number = 0) => {
-    let url = '';
-    let title = track.title || 'Untitled';
-    let imageUrl = track.imageUrl || track.image_url || '';
-    
-    if (track.sunoData && track.sunoData[subIndex]) {
-      const item = track.sunoData[subIndex];
-      url = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl;
-      if (item.title) title = item.title;
-      if (item.imageUrl || item.image_url) imageUrl = item.imageUrl || item.image_url;
-    } else if (track.audioUrls && track.audioUrls[subIndex]) {
-      url = track.audioUrls[subIndex];
-    } else {
-      url = track.audioUrl || track.streamAudioUrl;
-    }
+    const items = extractSunoData(track);
+    const item = items[subIndex] || {};
+    const url = getAudioUrl(item, track);
+    const title = getTitle(item, track, subIndex);
+    const imageUrl = getImageUrl(item, track);
 
     if (url) {
       const newQueue = allPlayables.map(p => ({
         url: p.url,
-        title: p.item?.title || p.group?.title || 'Untitled',
-        imageUrl: p.item?.imageUrl || p.item?.image_url || p.group?.imageUrl || p.group?.image_url || '',
+        title: getTitle(p.item, p.group, p.idx),
+        imageUrl: getImageUrl(p.item, p.group),
         parent: p.group,
         index: p.idx
       }));
@@ -593,7 +618,7 @@ export default function SunoLibraryPage() {
         ) : (
           <div className="space-y-6">
             {filteredTracks.map((group) => {
-              const dataItems = group.sunoData || (group.audioUrl ? [{ audioUrl: group.audioUrl, title: group.title }] : []);
+              const dataItems = extractSunoData(group);
               const items = dataItems.length > 0 ? dataItems : [{}];
               const dateStr = formatCreatedAt(group.createdAt);
               
@@ -638,8 +663,8 @@ export default function SunoLibraryPage() {
                   {/* Tracks List */}
                   <div className="divide-y divide-white/5">
                     {items.map((item: any, idx: number) => {
-                      const isDummy = !item.audioUrl && !item.audio_url && !group.sunoData?.length && !group.audioUrl;
-                      const audioUrl = item.audioUrl || item.audio_url || item.streamAudioUrl || item.stream_audio_url || item.sourceAudioUrl;
+                      const audioUrl = getAudioUrl(item, group);
+                      const isDummy = !audioUrl && !item.audioUrl && !item.audio_url && !group.sunoData?.length && !group.audioUrl;
                       const isCurrent = currentTrack?.parent?.id === group.id && currentTrack?.index === idx;
                       
                       return (
@@ -678,7 +703,7 @@ export default function SunoLibraryPage() {
                           
                           <div className="flex-1 min-w-0 pr-2 flex items-center gap-3">
                             <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              {item.title || group.title || `Track ${idx + 1}`}
+                              {getTitle(item, group, idx)}
                             </h4>
                             {isDummy && (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
@@ -690,7 +715,7 @@ export default function SunoLibraryPage() {
                                 ) : (
                                   <>
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    오디오 생성 중...
+                                    오디오 대기중...
                                   </>
                                 )}
                               </span>

@@ -66,25 +66,25 @@ export default function GlobalPlayer() {
 
   const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [showMenu, setShowMenu] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState<{x: number, y: number} | null>(null);
   const isDragging = useRef(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  const getClampedPosition = (x: number, y: number) => {
+  const getClampedPosition = (x: number, y: number, w?: number, h?: number) => {
     const minVisible = 80;
     
-    let width = 384; 
-    let height = 100;
-    if (playerRef.current) {
+    let width = w || 384; 
+    let height = h || 100;
+    if (!w && !h && playerRef.current) {
       width = playerRef.current.offsetWidth;
       height = playerRef.current.offsetHeight;
     }
 
-    const minX = -(window.innerWidth - minVisible); 
-    const maxX = Math.max(16, width - minVisible); 
-    const minY = -(window.innerHeight - minVisible);
-    const maxY = Math.max(16, height - minVisible);
+    const minX = -width + minVisible; 
+    const maxX = window.innerWidth - minVisible; 
+    const minY = -height + minVisible;
+    const maxY = window.innerHeight - minVisible;
 
     return {
       x: Math.max(minX, Math.min(x, maxX)),
@@ -96,17 +96,8 @@ export default function GlobalPlayer() {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
       setPosition(prev => {
-        const minVisible = 80;
-        let width = playerRef.current?.offsetWidth || 384;
-        let height = playerRef.current?.offsetHeight || 100;
-        const minX = -(window.innerWidth - minVisible); 
-        const maxX = Math.max(16, width - minVisible); 
-        const minY = -(window.innerHeight - minVisible);
-        const maxY = Math.max(16, height - minVisible);
-        return {
-          x: Math.max(minX, Math.min(prev.x, maxX)),
-          y: Math.max(minY, Math.min(prev.y, maxY))
-        };
+        if (!prev) return prev;
+        return getClampedPosition(prev.x, prev.y);
       });
     };
     window.addEventListener('resize', handleResize);
@@ -114,35 +105,73 @@ export default function GlobalPlayer() {
   }, []);
 
   useEffect(() => {
-    if (!isMobile) {
+    const savedMode = localStorage.getItem('soridraw_global_player_mode');
+    if (savedMode === 'collapsed' || savedMode === 'normal' || savedMode === 'expanded') {
+      setMode(savedMode as 'collapsed' | 'normal' | 'expanded');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMobile || isSharedPlayerMode || !currentTrack) return;
+    if (position !== null) return;
+
+    let frameId: number;
+    const initPos = () => {
+      if (!playerRef.current) {
+        frameId = requestAnimationFrame(initPos);
+        return;
+      }
+      const w = playerRef.current.offsetWidth;
+      const h = playerRef.current.offsetHeight;
+      if (w === 0 || h === 0) {
+        frameId = requestAnimationFrame(initPos);
+        return;
+      }
+
+      let defaultX = window.innerWidth - w - 24;
+      let defaultY = window.innerHeight - h - 24;
+
       const saved = localStorage.getItem('global_player_pos');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          // Wait for next tick so ref has dimensions
-          setTimeout(() => setPosition(getClampedPosition(parsed.x, parsed.y)), 0);
-        } catch (e) {}
+          if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+            defaultX = parsed.x;
+            defaultY = parsed.y;
+          }
+        } catch(e) {}
       }
-    }
-    const savedMode = localStorage.getItem('soridraw_global_player_mode');
-    if (savedMode === 'collapsed' || savedMode === 'normal' || savedMode === 'expanded') {
-      setMode(savedMode as 'collapsed' | 'normal' | 'expanded');
-      if (savedMode === 'expanded') {
-         enforceStrictViewportClamp();
-      }
-    }
-  }, []);
+
+      const cl = getClampedPosition(defaultX, defaultY, w, h);
+      setPosition({ x: cl.x, y: cl.y });
+    };
+
+    frameId = requestAnimationFrame(initPos);
+    return () => cancelAnimationFrame(frameId);
+  }, [currentTrack, isMobile, isSharedPlayerMode, position]);
 
   const enforceStrictViewportClamp = () => {
-    if (window.innerWidth < 768) return;
+    if (window.innerWidth < 768 || isSharedPlayerMode) return;
     setTimeout(() => {
       if (!playerRef.current) return;
       setPosition(prev => {
+        if (!prev) return prev;
         const width = playerRef.current!.offsetWidth;
         const height = playerRef.current!.offsetHeight;
-        const newY = Math.max(32 + height - window.innerHeight, Math.min(prev.y, 0));
-        const newX = Math.max(48 + width - window.innerWidth, Math.min(prev.x, 16));
-        return { x: newX, y: newY };
+        // Safe strict bounds to prevent jumping far off-screen
+        let safeX = prev.x;
+        let safeY = prev.y;
+        
+        // If mode expands and it overflows bottom, nudge it up
+        if (safeY + height + 24 > window.innerHeight) {
+          safeY = window.innerHeight - height - 24;
+        }
+        // If it overflows right, nudge it left
+        if (safeX + width + 24 > window.innerWidth) {
+          safeX = window.innerWidth - width - 24;
+        }
+        
+        return getClampedPosition(safeX, safeY, width, height);
       });
     }, 100);
   };
@@ -154,6 +183,16 @@ export default function GlobalPlayer() {
       enforceStrictViewportClamp();
     }
   };
+
+  useEffect(() => {
+    if (mode === 'expanded') {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow || '';
+      };
+    }
+  }, [mode]);
 
 
 
@@ -287,7 +326,7 @@ export default function GlobalPlayer() {
   };
 
   const handleDragEnd = (e: any, info: any) => {
-    if (isSharedPlayerMode || isMobile) return;
+    if (isSharedPlayerMode || isMobile || position === null) return;
     setTimeout(() => { isDragging.current = false; }, 100);
 
     let newX = position.x + info.offset.x;
@@ -349,17 +388,17 @@ export default function GlobalPlayer() {
         animate={{ 
           x: isSharedPlayerMode || isMobile
             ? '-50%'
-            : position.x,
+            : (position?.x || 0),
           y: isSharedPlayerMode || isMobile
             ? (mode === 'expanded' ? '-50%' : 0)
-            : position.y
+            : (position?.y || 0)
         }}
         className={`fixed z-[100] flex flex-col ${
           isSharedPlayerMode || isMobile
             ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
-            : (mode === 'expanded' ? 'bottom-4 right-3 md:left-auto md:right-8 items-end w-full md:w-auto' : 'bottom-4 right-4 md:left-auto md:right-8 items-end w-full md:w-auto')
+            : 'top-0 left-0 w-full md:w-auto'
         }`}
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: 'none', visibility: (!isMobile && !isSharedPlayerMode && position === null) ? 'hidden' : 'visible' }}
       >
         <AnimatePresence mode="popLayout">
           {mode === 'collapsed' && (

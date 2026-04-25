@@ -271,7 +271,7 @@ export default function SunoLibraryPage() {
             firstAudioDetectedAtRef.current.set(group.id, Date.now());
           }
           const detectedTime = firstAudioDetectedAtRef.current.get(group.id)!;
-          if (now - detectedTime >= 480000) {
+          if (now - detectedTime >= 540000) { // 9 minutes
             return false;
           }
         }
@@ -285,10 +285,10 @@ export default function SunoLibraryPage() {
           createdTime = new Date(group.createdAt).getTime();
         }
         
-        if (now - createdTime < 60000) return false;
+        if (now - createdTime < 30000) return false; // Initial wait 30 seconds
 
         const count = autoCheckCountsRef.current.get(group.id) || 0;
-        if (count >= 20) return false;
+        if (count >= 25) return false; // Max 25 checks
 
         if (checkingIdsRef.current.has(group.id)) return false;
 
@@ -321,7 +321,7 @@ export default function SunoLibraryPage() {
           checkingIdsRef.current.delete(id);
         }
       });
-    }, 30000);
+    }, 20000); // 20 seconds interval
 
     return () => clearInterval(intervalId);
   }, [tracks, user, isSharedView]);

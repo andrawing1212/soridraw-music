@@ -273,6 +273,8 @@ export interface SunoApiKeyStatus {
 
 export type SunoTrackStatus = "draft" | "generating" | "completed" | "failed";
 
+export type PlayMode = 'shuffle' | 'repeat-one' | 'sequential' | 'repeat-all';
+
 export interface SunoTrack {
   id?: string;
   title: string;

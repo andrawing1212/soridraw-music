@@ -69,10 +69,6 @@ export default function GlobalPlayer() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [mobileDockSide, setMobileDockSide] = useState<'center' | 'left' | 'right'>('center');
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchDeltaX, setTouchDeltaX] = useState(0);
-  const [isTouching, setIsTouching] = useState(false);
   const playerRef = useRef<HTMLDivElement>(null);
 
   const getClampedPosition = (x: number, y: number) => {
@@ -346,81 +342,30 @@ export default function GlobalPlayer() {
           type: 'spring', 
           bounce: 0.1, 
           duration: 0.35,
-          x: isTouching ? { type: 'spring', bounce: 0, duration: 0.1 } : undefined
         }}
         ref={playerRef}
         drag={isSharedPlayerMode || isMobile ? false : true}
-        dragConstraints={isMobile ? { left: 0, right: 0 } : {
-          left: -(window.innerWidth - 80),
+        dragConstraints={{
+          left: -(typeof window !== 'undefined' ? window.innerWidth : 1000) - 80,
           right: Math.max(16, (playerRef.current?.offsetWidth || 384) - 80),
-          top: -(window.innerHeight - 80),
+          top: -(typeof window !== 'undefined' ? window.innerHeight : 1000) - 80,
           bottom: Math.max(16, (playerRef.current?.offsetHeight || 100) - 80)
         }}
-        dragElastic={isMobile ? 0 : 0.2}
+        dragElastic={0.2}
         dragMomentum={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        onPointerDown={(e) => {
-          if (!isMobile || mode === 'expanded' || isSharedPlayerMode) return;
-          setTouchStartX(e.clientX);
-          setTouchDeltaX(0);
-          setIsTouching(true);
-        }}
-        onPointerMove={(e) => {
-          if (!isTouching || touchStartX === null || !isMobile || mode === 'expanded' || isSharedPlayerMode) return;
-          const delta = e.clientX - touchStartX;
-          if (Math.abs(delta) > 5) {
-             isDragging.current = true;
-          }
-          setTouchDeltaX(Math.max(-40, Math.min(delta, 40)));
-        }}
-        onPointerUp={(e) => {
-          if (!isTouching || !isMobile || mode === 'expanded' || isSharedPlayerMode) return;
-          setIsTouching(false);
-          setTouchStartX(null);
-          setTimeout(() => { isDragging.current = false; }, 100);
-
-          if (touchStartX !== null) {
-            const deltaX = e.clientX - touchStartX;
-            const swipeThreshold = 80;
-            if (mobileDockSide === 'right') {
-                if (deltaX < -swipeThreshold) {
-                  setMobileDockSide('center');
-                }
-            } else {
-                if (deltaX < -120) {
-                     clearPlayer();
-                     setMobileDockSide('center');
-                } else if (deltaX > swipeThreshold) {
-                     setMobileDockSide('right');
-                }
-            }
-          }
-          setTouchDeltaX(0);
-        }}
-        onPointerCancel={() => {
-           setIsTouching(false);
-           setTouchStartX(null);
-           setTouchDeltaX(0);
-           setTimeout(() => { isDragging.current = false; }, 100);
-        }}
         initial={false}
         animate={{ 
-          x: isSharedPlayerMode
-            ? (mode === 'expanded' ? '-50%' : '-50%')
-            : isMobile 
-            ? (mode === 'expanded' ? '-50%' : (mobileDockSide === 'right' ? 'calc(50vw - 48px)' : `calc(-50% + ${touchDeltaX}px)`))
+          x: isSharedPlayerMode || isMobile
+            ? '-50%'
             : position.x,
-          y: isSharedPlayerMode
-            ? (mode === 'expanded' ? '-50%' : 0)
-            : isMobile
+          y: isSharedPlayerMode || isMobile
             ? (mode === 'expanded' ? '-50%' : 0)
             : position.y
         }}
         className={`fixed z-[100] flex flex-col ${
-          isSharedPlayerMode
-            ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
-            : isMobile 
+          isSharedPlayerMode || isMobile
             ? (mode === 'expanded' ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]' : 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center')
             : (mode === 'expanded' ? 'bottom-4 right-3 md:left-auto md:right-8 items-end w-full md:w-auto' : 'bottom-4 right-4 md:left-auto md:right-8 items-end w-full md:w-auto')
         }`}
@@ -434,10 +379,8 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => {
-                 if (!isDragging.current && mobileDockSide === 'center') {
+                 if (!isDragging.current) {
                     handleModeChange('normal');
-                 } else if (isMobile && mobileDockSide !== 'center') {
-                    setMobileDockSide('center');
                  }
               }}
               className="w-full bg-[var(--bg-secondary)] border border-white/10 rounded-full py-2 px-4 shadow-xl flex items-center justify-between cursor-pointer"
@@ -485,10 +428,8 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => {
-                 if (!isDragging.current && mobileDockSide === 'center') {
+                 if (!isDragging.current) {
                     handleModeChange('expanded');
-                 } else if (isMobile && mobileDockSide !== 'center') {
-                    setMobileDockSide('center');
                  }
               }}
               className="w-full md:w-96 bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-2xl p-3 shadow-2xl flex flex-col cursor-pointer relative overflow-hidden"

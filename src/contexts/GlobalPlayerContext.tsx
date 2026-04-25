@@ -44,7 +44,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (!audioRef.current && typeof window !== 'undefined') {
     audioRef.current = new Audio();
-    audioRef.current.preload = 'auto';
   }
   
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -58,11 +57,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
   const [isSharedPlayerMode, setIsSharedPlayerMode] = useState(false);
 
-  const currentTrackRef = useRef<Track | null>(currentTrack);
-  useEffect(() => {
-    currentTrackRef.current = currentTrack;
-  }, [currentTrack]);
-
   // Sync volume and mute state to the audio object
   useEffect(() => {
     if (audioRef.current) {
@@ -71,21 +65,23 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     }
   }, [volume, isMuted]);
 
-  const updateMediaSession = useCallback((track: Track, state: 'playing' | 'paused') => {
+  const updateMediaSession = (track: Track, state: 'playing' | 'paused') => {
     if ('mediaSession' in navigator) {
-      const fixedArtwork = [
-        { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }
-      ];
-
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title || 'Untitled',
         artist: "SORIDRAW's Studio",
         album: track.parent?.style || track.parent?.prompt || 'SORIDRAW',
-        artwork: fixedArtwork
+        artwork: [
+          { 
+            src: track.imageUrl || track.parent?.imageUrl || track.parent?.image_url || 'https://images.unsplash.com/photo-1614149162883-504ce4d13909?w=512&auto=format&fit=crop', 
+            sizes: '512x512', 
+            type: 'image/jpeg' 
+          }
+        ]
       });
       navigator.mediaSession.playbackState = state;
     }
-  }, []);
+  };
 
   const clearPlayer = () => {
     if (audioRef.current) {
@@ -106,22 +102,26 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       setQueue(newQueue);
     }
 
-    // 1. Maintain 'playing' state to prevent OS player from flickering/disappearing
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.playbackState = 'playing';
-    }
+    // 1. Update MediaSession Metadata FIRST to prevent OS player flickering
+    updateMediaSession(track, 'playing');
 
     // 2. Set src and play imperatively
     if (audioRef.current) {
+      // Use URL object comparison or just string comparison
+      // The browser might normalize URLs, so be careful
       const currentSrc = audioRef.current.src;
       const targetSrc = track.url;
       
+      // If URLs are actually different (or empty), update src
       if (currentSrc !== targetSrc && !currentSrc.endsWith(targetSrc)) {
         audioRef.current.src = targetSrc;
+        audioRef.current.load();
       }
       
+      // Attempt play - OS Media Session is already updated to 'playing'
       audioRef.current.play().catch(err => {
         console.error("Audio play failed:", err);
+        // If play completely fails, update state back to paused
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         setIsPlaying(false);
       });
@@ -232,17 +232,11 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     if (!audio) return;
 
     const onPlay = () => setIsPlaying(true);
-    const onPlaying = () => {
-      if (currentTrackRef.current) {
-        updateMediaSession(currentTrackRef.current, 'playing');
-      }
-    };
     const onPause = () => setIsPlaying(false);
     const onEnded = () => handleEnded();
     const onTimeUpdate = () => handleTimeUpdate();
 
     audio.addEventListener('play', onPlay);
-    audio.addEventListener('playing', onPlaying);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -250,7 +244,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
 
     return () => {
       audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('playing', onPlaying);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('timeupdate', onTimeUpdate);

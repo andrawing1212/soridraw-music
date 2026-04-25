@@ -5,7 +5,8 @@ import {
   Settings, Home, Music, RefreshCw, Loader2, AlertCircle, 
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
-  Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX
+  Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -51,6 +52,12 @@ export default function SunoLibraryPage() {
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
 
   const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
+
+  useEffect(() => {
+    if ((window as any).Kakao && !(window as any).Kakao.isInitialized()) {
+      (window as any).Kakao.init("YOUR_KAKAO_JAVASCRIPT_KEY");
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -426,20 +433,29 @@ export default function SunoLibraryPage() {
     window.open(url, '_blank');
   };
 
-  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any } | null>(null);
+  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, mode: 'default' | 'pc-panel' } | null>(null);
+  const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setShareToastInfo(msg);
+    setTimeout(() => setShareToastInfo(null), 3000);
+  };
 
   const handleShare = (group: any, item: any) => {
-    setSharePopupInfo({ group, item });
+    setSharePopupInfo({ group, item, mode: 'default' });
   };
 
   const handleCopyShareLink = async (group: any) => {
-    const shareUrl = `${window.location.origin}/suno-library?track=${group.id}`;
+    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+        ? "https://soridraw-music.vercel.app"
+        : window.location.origin;
+    const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
+    const shareText = `SORIDRAW Music\n공유 음악 재생하기🎵\n${shareUrl}`;
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      alert('링크 복사를 완료했습니다.');
+      await navigator.clipboard.writeText(shareText);
+      showToast("링크가 복사되었습니다");
     } catch (e) {
-      console.error(e);
-      alert('링크 복사에 실패했습니다.');
+      showToast("링크 복사에 실패했습니다.");
     }
   };
 
@@ -455,34 +471,42 @@ export default function SunoLibraryPage() {
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
       }
       
-      const shareUrl = `${window.location.origin}/suno-library?track=${group.id}`;
-      const title = `SORIDRAW Music - ${item?.title || group.title || 'Untitled'}`;
-      const text = `SORIDRAW에서 만든 음악을 들어보세요.`;
+      const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+        ? "https://soridraw-music.vercel.app"
+        : window.location.origin;
+        
+      const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
+      const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
+      const shareText = `${title}\n공유 음악 재생하기🎵\n${shareUrl}`;
 
-      if (navigator.share) {
+      const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+      
+      if (isMobile && navigator.share) {
         try {
           await navigator.share({
             title: title,
-            text: text,
+            text: '공유 음악 재생하기🎵',
             url: shareUrl
           });
-          alert('공개 공유 링크를 복사했습니다.'); // Keep alert? Navigator share might not need this. No wait, requested: "공개 공유 링크를 복사했습니다." or just sharing.
+          closeModal();
+          return;
         } catch (e) {
           if ((e as Error).name !== 'AbortError') {
-            await navigator.clipboard.writeText(shareUrl);
-            alert('공개 공유 링크를 복사했습니다.');
+             await navigator.clipboard.writeText(shareText);
+             showToast("링크가 복사되었습니다");
+             closeModal();
           }
+          return;
         }
       } else {
-        await navigator.clipboard.writeText(shareUrl);
-        alert('공개 공유 링크를 복사했습니다.');
+        setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
       }
-      closeModal();
     } catch (e) {
-      console.error('Error sharing:', e);
-      alert('공유 처리 중 오류가 발생했습니다.');
+      console.error(e);
+      showToast('공유 처리 중 오류가 발생했습니다.');
     }
   };
 
@@ -498,14 +522,12 @@ export default function SunoLibraryPage() {
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
-        
-        // update local state so popup reflects it
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
-        alert('공개 상태로 전환했습니다.');
+        showToast('공개 상태로 전환되었습니다');
       }
     } catch (e) {
-      console.error('Error setting public:', e);
-      alert('공개 전환 중 오류가 발생했습니다.');
+      console.error(e);
+      showToast('공개 전환 중 오류가 발생했습니다.');
     }
   };
 
@@ -521,13 +543,69 @@ export default function SunoLibraryPage() {
           privateUpdatedAt: serverTimestamp()
         });
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: false } } : null);
-        alert('비공개 상태로 전환했습니다.');
+        showToast('비공개 상태로 전환되었습니다');
       }
     } catch (e) {
-      console.error('Error setting private:', e);
-      alert('비공개 전환 중 오류가 발생했습니다.');
+      console.error(e);
+      showToast('비공개 전환 중 오류가 발생했습니다.');
     }
   };
+
+  const handlePlatformShare = async (platform: string) => {
+    if (!sharePopupInfo) return;
+    const { group, item } = sharePopupInfo;
+    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+        ? "https://soridraw-music.vercel.app"
+        : window.location.origin;
+        
+    const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
+    const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
+    const shareText = `${title}\n공유 음악 재생하기🎵\n${shareUrl}`;
+
+    try {
+      if (platform === 'copy') {
+        await navigator.clipboard.writeText(shareText);
+        showToast("링크가 복사되었습니다");
+      } else if (platform === 'email') {
+        window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`;
+      } else if (platform === 'facebook') {
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
+      } else if (platform === 'twitter') {
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank');
+      } else if (platform === 'telegram') {
+        window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(title)}`, '_blank');
+      } else if (platform === 'kakao' || platform === 'kakao_me') {
+        const kakao = (window as any).Kakao;
+        if (kakao && kakao.isInitialized()) {
+          try {
+            kakao.Share.sendDefault({
+              objectType: 'feed',
+              content: {
+                title: title,
+                description: '공유 음악 재생하기🎵',
+                imageUrl: getImageUrl(item, group) || 'https://soridraw-music.vercel.app/og-image.png',
+                link: {
+                  mobileWebUrl: shareUrl,
+                  webUrl: shareUrl,
+                },
+              },
+            });
+          } catch (e) {
+            console.error("Kakao share failed", e);
+            showToast("카카오톡 공유에 실패했습니다.");
+          }
+        } else {
+          showToast("카카오톡 SDK가 초기화되지 않았습니다.");
+        }
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        showToast("링크가 복사되었습니다. 원하는 앱에 붙여넣어 공유해주세요.");
+      }
+    } catch(e) {
+      showToast("공유 실패");
+    }
+  };
+
 
   const handleApplyNext = (group: any, item: any) => {
     const data = {
@@ -924,6 +1002,20 @@ export default function SunoLibraryPage() {
         )}
       </div>
 
+      <AnimatePresence>
+        {shareToastInfo && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center"
+          >
+            <Share2 className="w-4 h-4 text-brand-orange shrink-0" />
+            <span className="text-sm font-bold tracking-tight whitespace-nowrap">{shareToastInfo}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Share Modal */}
       <AnimatePresence>
         {sharePopupInfo && (
@@ -932,45 +1024,93 @@ export default function SunoLibraryPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 shadow-2xl relative"
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-bold mb-2">공유 설정</h2>
-              <p className="text-sm text-white/50 mb-6 leading-relaxed">
-                링크 공유를 누르면 자동으로 공개 상태로 전환된 후 링크가 복사됩니다.
-              </p>
-
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={handlePublicShare}
-                  className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all"
-                >
-                  <Share2 className="w-5 h-5" /> 링크 공유
-                </button>
-                <div className="mt-4 border-t border-white/5 pt-4">
-                  <div className="text-xs text-white/50 mb-2 font-bold tracking-wider">공개 범위</div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handlePublicStatus}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all border ${sharePopupInfo.group?.isPublic ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}
-                    >
-                      공개
-                    </button>
-                    <button
-                      onClick={handlePrivateShare}
-                      className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all border ${!sharePopupInfo.group?.isPublic ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}
-                    >
-                      비공개
-                    </button>
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-black tracking-tight text-white mb-1">공유 설정</h2>
+                <p className="text-xs text-white/40 font-medium lowercase">공유할 방법을 선택해주세요.</p>
+              </div>
+              
+              {sharePopupInfo.mode === 'default' ? (
+                <div className="space-y-6">
+                  <button
+                    onClick={handlePublicShare}
+                    className="w-full py-4 bg-brand-orange text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all shadow-lg shadow-brand-orange/20"
+                  >
+                    <Share2 className="w-5 h-5" /> 링크 공유하기
+                  </button>
+                  
+                  <div className="pt-4 border-t border-white/5">
+                    <div className="text-[10px] text-white/30 mb-3 font-bold uppercase tracking-widest text-center">공개 범위 설정</div>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'public', label: '공개', active: sharePopupInfo.group?.isPublic, action: handlePublicStatus, color: 'green' },
+                        { id: 'private', label: '비공개', active: !sharePopupInfo.group?.isPublic, action: handlePrivateShare, color: 'red' }
+                      ].map(btn => (
+                        <button
+                          key={btn.id}
+                          onClick={btn.action}
+                          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${
+                            btn.active 
+                              ? btn.color === 'green' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
+                              : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={closeModal}
-                  className="w-full py-3 text-white/40 font-medium hover:text-white transition-all mt-2"
-                >
-                  닫기
-                </button>
-              </div>
+              ) : (
+                <div className="space-y-6">
+                  <button
+                    onClick={() => handlePlatformShare('copy')}
+                    className="w-full py-4 bg-white text-black rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/90 transition-all shadow-lg"
+                  >
+                    <Copy className="w-5 h-5" /> 링크 복사하기
+                  </button>
+
+                  <div className="grid grid-cols-4 gap-y-6 gap-x-2">
+                    {[
+                      { id: 'kakao', label: '카카오톡', icon: MessageCircle, bgColor: 'bg-[#FEE500]', iconColor: 'text-[#3C1E1E]', disabled: !(window as any).Kakao?.isInitialized() },
+                      { id: 'email', label: '이메일', icon: Mail, bgColor: 'bg-white/10', iconColor: 'text-white' },
+                      { id: 'facebook', label: 'Facebook', icon: Facebook, bgColor: 'bg-[#1877F2]', iconColor: 'text-white' },
+                      { id: 'twitter', label: 'X (Twitter)', icon: Twitter, bgColor: 'bg-black border border-white/20', iconColor: 'text-white' },
+                      { id: 'telegram', label: '텔레그램', icon: Send, bgColor: 'bg-[#0088cc]', iconColor: 'text-white' },
+                    ].map(platform => (
+                      <button
+                        key={platform.id}
+                        disabled={platform.disabled}
+                        onClick={() => handlePlatformShare(platform.id)}
+                        className={`flex flex-col items-center gap-2 group transition-opacity ${platform.disabled ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl ${platform.bgColor} flex items-center justify-center transition-all group-hover:scale-110 shadow-lg`}>
+                          <platform.icon className={`w-6 h-6 ${platform.iconColor}`} />
+                        </div>
+                        <span className="text-[10px] font-bold text-white/50 group-hover:text-white transition-colors text-center">
+                          {platform.label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setSharePopupInfo(prev => prev ? { ...prev, mode: 'default' } : null)}
+                    className="w-full py-3 text-xs text-white/50 hover:text-white transition-all font-bold tracking-tight"
+                  >
+                    기본 설정으로 돌아가기
+                  </button>
+                </div>
+              )}
+              
+              <button
+                onClick={closeModal}
+                className="w-full py-3 text-white/20 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all mt-4"
+              >
+                닫기
+              </button>
             </motion.div>
           </div>
         )}

@@ -155,17 +155,7 @@ export default function GlobalPlayer() {
     }
   };
 
-  useEffect(() => {
-    if (isMobile && mode === 'expanded') {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
 
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mode, isMobile]);
 
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack) {

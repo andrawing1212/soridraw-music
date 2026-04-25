@@ -162,6 +162,26 @@ export default function SunoLibraryPage() {
     return () => unsubscribeAuth();
   }, []);
 
+  const getAudioUrl = (item: any, group: any) => {
+    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
+  };
+
+  const getTitle = (item: any, group: any, idx: number) => {
+    return item?.title || item?.name || group?.title || `Suno Track ${idx + 1}`;
+  };
+
+  const getImageUrl = (item: any, group: any) => {
+    return item?.imageUrl || item?.image_url || group?.imageUrl || '';
+  };
+
+  const getDuration = (item: any, group: any) => {
+    const rawVal = item?.duration ?? item?.durationSeconds ?? item?.metadata?.duration ?? item?.metadata?.durationSeconds ?? group?.duration;
+    if (rawVal === undefined || rawVal === null) return null;
+    const num = Number(rawVal);
+    if (Number.isFinite(num) && num > 0) return num;
+    return null;
+  };
+
   const extractSunoData = (group: any) => {
     let sunoData = null;
     if (Array.isArray(group?.sunoData) && group.sunoData.length > 0) {
@@ -206,26 +226,6 @@ export default function SunoLibraryPage() {
       return matchesSearch && matchesFilter;
     });
   }, [tracks, searchTerm, filter]);
-
-  const getAudioUrl = (item: any, group: any) => {
-    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
-  };
-
-  const getTitle = (item: any, group: any, idx: number) => {
-    return item?.title || item?.name || group?.title || `Suno Track ${idx + 1}`;
-  };
-
-  const getImageUrl = (item: any, group: any) => {
-    return item?.imageUrl || item?.image_url || group?.imageUrl || '';
-  };
-
-  const getDuration = (item: any, group: any) => {
-    const rawVal = item?.duration ?? item?.durationSeconds ?? item?.metadata?.duration ?? item?.metadata?.durationSeconds ?? group?.duration;
-    if (rawVal === undefined || rawVal === null) return null;
-    const num = Number(rawVal);
-    if (Number.isFinite(num) && num > 0) return num;
-    return null;
-  };
 
   const allPlayables = useMemo(() => {
     const list: any[] = [];

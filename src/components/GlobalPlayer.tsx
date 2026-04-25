@@ -300,18 +300,17 @@ export default function GlobalPlayer() {
     setTimeout(() => { isDragging.current = false; }, 100);
 
     if (isMobile && mode !== 'expanded') {
+      const swipeThreshold = 80;
       if (mobileDockSide === 'right') {
-        if (info.offset.x < -40) {
+        if (info.offset.x < -swipeThreshold) {
           setMobileDockSide('center');
         }
       } else {
-        if (info.offset.x < -100) {
+        if (info.offset.x < -swipeThreshold) {
           clearPlayer();
           setMobileDockSide('center');
-        } else if (info.offset.x > 80) {
+        } else if (info.offset.x > swipeThreshold) {
           setMobileDockSide('right');
-        } else {
-          setMobileDockSide('center');
         }
       }
       return;
@@ -358,12 +357,13 @@ export default function GlobalPlayer() {
         transition={{ type: 'spring', bounce: 0.1, duration: 0.35 }}
         ref={playerRef}
         drag={isSharedPlayerMode ? false : isMobile ? (mode === 'expanded' ? false : "x") : true}
-        dragConstraints={isMobile ? undefined : {
+        dragConstraints={isMobile ? { left: 0, right: 0 } : {
           left: -(window.innerWidth - 80),
           right: Math.max(16, (playerRef.current?.offsetWidth || 384) - 80),
           top: -(window.innerHeight - 80),
           bottom: Math.max(16, (playerRef.current?.offsetHeight || 100) - 80)
         }}
+        dragElastic={isMobile ? 0.2 : 0}
         dragMomentum={false}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -565,7 +565,7 @@ export default function GlobalPlayer() {
                            !isSharedPlayerMode ? { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url); setShowMenu(false); } } : null,
                            !isSharedPlayerMode ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } } : null,
                            { icon: Share2, label: isSharedPlayerMode ? '링크 복사' : '공유', action: () => { isSharedPlayerMode ? handleCopyShareLink() : handleShare(); setShowMenu(false); } },
-                           !isSharedPlayerMode ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } } : null,
+                           { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } },
                            !isSharedPlayerMode ? { icon: Trash2, label: '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true } : null,
                          ].filter(Boolean).map((m: any, i) => (
                            <button

@@ -727,7 +727,7 @@ export default function SunoLibraryPage() {
                                       !isSharedView ? { icon: Download, label: '다운로드', action: () => { handleDownload(audioUrl); setActiveMenu(null); } } : null,
                                       !isSharedView ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(group, item); setActiveMenu(null); } } : null,
                                       { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(group) : handleShare(group, item); setActiveMenu(null); } },
-                                      !isSharedView ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } } : null,
+                                      { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(group, item, audioUrl); setActiveMenu(null); } },
                                       !isSharedView ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(group.id); setActiveMenu(null); }, danger: true } : null,
                                     ].filter(Boolean).map((m: any, i) => (
                                       <button

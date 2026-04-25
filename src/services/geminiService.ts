@@ -1282,6 +1282,8 @@ Return JSON:
 }
 
 TITLE RULES (CRITICAL):
+
+
 - Generate ONE English title and ONE Korean title as a pair.
 - They MUST be independent titles, NOT direct translations of each other.
 - They should share the same vibe, theme, and genre of the song.
@@ -1290,11 +1292,130 @@ TITLE RULES (CRITICAL):
 - The title must contain ONLY the song title itself.
 - DO NOT include genre, style, production terms, era, nationality, or descriptors.
 - DO NOT include words taken from STYLE such as: "Traditional Korean Fusion", "Gugak-pop", "New Jack Swing", "City Pop", "K-pop", "J-pop", "ballad pacing", "global pop approach", etc.
+- DO NOT include words taken from STYLE such as: "K-pop", "City Pop", etc.
 - The genre label will be attached later by the app, so return the title body only.
 - Format: 'English Title' │ 'Korean Title'
 
+
+[REALISTIC TITLE RULES]
+- The title must feel like a real phrase, not a keyword combination.
+- Avoid cliché poetic titles (echo, warmth, shadow, etc. combinations).
+- Prefer:
+  - a line from the song
+  - a specific moment
+  - a phrase that sounds like something someone would actually say
+- Avoid stacking abstract emotional nouns.
+- Natural phrasing is more important than poetic wording.
+
+
+[HIT TITLE RULES]
+
+- Titles should be short, memorable, and easy to say.
+- Prefer 2–5 words for English titles.
+- Prefer 3–10 syllables for Korean titles.
+- The title should feel like something someone would actually say or remember.
+- Avoid complex or overly poetic phrasing.
+
+---
+
+[TITLE STYLE]
+
+Prefer titles that:
+- sound like a real sentence fragment
+- feel like a moment or a thought
+- could be used in conversation
+
+Examples:
+- "Stayed a Little Longer"
+- "We Didn’t Say Goodbye"
+- "Call Me Back"
+- "I Thought You Knew"
+
+Korean examples:
+- "조금 더 있다가 가"
+- "말 안 해도 알 줄 알았어"
+- "그날 이후로"
+- "아직 그대로야"
+
+---
+
+[AVOID THESE PATTERNS]
+
+- Avoid abstract noun stacking:
+  (e.g. "Echo of Warmth", "Shadow of Memory")
+
+- Avoid single vague poetic words:
+  (e.g. "Velvet", "Echo", "Warmth")
+
+- Avoid titles that sound like generated keywords.
+
+---
+
+[STRUCTURE VARIATION]
+
+- Titles can be:
+  - a short sentence
+  - a phrase
+  - a question
+  - a line someone might say
+
+---
+
+[FINAL CHECK]
+
+- If the title sounds like a real song name someone would remember → OK
+- If it sounds like AI-generated poetry → rewrite
+
+[KOREAN TITLE STYLE]
+
+- Korean titles should feel like natural spoken phrases.
+- Prefer everyday language over poetic wording.
+- Avoid overly literary or abstract expressions.
+- Titles should sound like something someone might actually say.
+
+Examples:
+- "조금만 더 있다가 가"
+- "그때 말 안 했잖아"
+- "아직 그대로야"
+- "오늘은 그냥 가"
+
 ${params.isNoLyrics ? "LYRICS RULE (MANDATORY):\n- DO NOT generate any lyrics. The user requested an instrumental-only track or a track without lyrics.\n- Omit the 'lyrics' field from the JSON output." : `Lyrics rules:
 ${lyricGuidancePrompt}
+
+[LYRIC STYLE SYSTEM]
+
+Write lyrics that feel like they were written by a real person, not an AI.
+
+[CORE RULES]
+- Do NOT write like a poem generator.
+- Avoid overused abstract words unless absolutely necessary.
+- Do NOT stack emotional nouns (e.g. echo, warmth, shadow, light, darkness).
+- Keywords (theme, mood) must NOT be directly repeated as words.
+
+[WRITING STYLE]
+- Focus on specific moments, not general emotions.
+- Show feelings through actions and scenes.
+- Use small, relatable details (places, objects, time, gestures).
+- Write like someone recalling a memory, not describing a concept.
+- Slight imperfection is okay — natural > perfect.
+
+[LANGUAGE STYLE]
+- Use natural, conversational phrasing.
+- Avoid overly dramatic or artificial expressions.
+- Mix short and long lines naturally.
+- Do NOT repeat the same structure every line.
+
+[EMOTION EXPRESSION]
+Instead of:
+"I feel lonely in the darkness"
+Write like:
+"The streetlight stayed on longer than usual, and I didn’t go home"
+
+[KEYWORD USAGE RULE]
+- Theme and mood should guide the situation, not appear as direct words.
+- If a keyword-like word is used, use it only once and naturally.
+- Never build the whole lyric around a single abstract word.
+
 - If lyricDraft exists, it must be treated as the primary lyrical source.
 - The generated lyrics should preserve the user’s draft as much as possible.
 - Only expand, refine, and restructure where necessary.

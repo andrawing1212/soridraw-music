@@ -7,6 +7,7 @@ import {
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { downloadAudioWithTitle } from '../lib/songUtils';
 
 function ScrollText({ text, className = '' }: { text: string; className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,12 +93,12 @@ export default function GlobalPlayer() {
 
 
 
-  const handleDownload = (url: string) => {
+  const handleDownload = (url: string, title?: string) => {
     if (!url) {
       alert('아직 다운로드할 음원이 없습니다.');
       return;
     }
-    window.open(url, '_blank');
+    downloadAudioWithTitle(url, title);
   };
 
   const handleCopyShareLink = async () => {
@@ -393,7 +394,7 @@ export default function GlobalPlayer() {
                        >
                        {[
                            { icon: Info, label: '상세정보', action: () => { alert('상세정보는 라이브러리 목록에서 확인해주세요.'); setShowMenu(false); } },
-                           !isSharedPlayerMode ? { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url); setShowMenu(false); } } : null,
+                           !isSharedPlayerMode ? { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url, currentTrack.title); setShowMenu(false); } } : null,
                            !isSharedPlayerMode ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } } : null,
                            { icon: Share2, label: isSharedPlayerMode ? '링크 복사' : '공유', action: () => { isSharedPlayerMode ? handleCopyShareLink() : handleShare(); setShowMenu(false); } },
                            { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } },

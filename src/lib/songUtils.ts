@@ -255,3 +255,55 @@ export const formatInlineTitle = (song: Partial<SongResult> | any): string => {
   }
   return formatDisplayTitle(genre, ko || en || song.title);
 };
+
+/**
+ * Sanitizes a string for use as a filename.
+ */
+export const sanitizeFileName = (name: string) => {
+  if (!name) return '';
+  return name
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+};
+
+/**
+ * Extracts the audio extension from a URL.
+ */
+export const getAudioExtension = (url: string) => {
+  if (!url) return 'mp3';
+  const cleanUrl = url.split('?')[0];
+  const match = cleanUrl.match(/\.(mp3|wav|m4a|aac|ogg|flac)$/i);
+  return match ? match[1].toLowerCase() : 'mp3';
+};
+
+/**
+ * Downloads an audio file with a specific title using fetch and blob.
+ */
+export const downloadAudioWithTitle = async (url: string, title?: string) => {
+  if (!url) return;
+
+  const safeTitle = sanitizeFileName(title || 'SORIDRAW') || 'SORIDRAW';
+  const ext = getAudioExtension(url);
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Audio download failed');
+
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `${safeTitle}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error('Download error:', error);
+    alert('다운로드에 실패했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.');
+  }
+};

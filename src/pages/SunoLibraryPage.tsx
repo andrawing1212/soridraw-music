@@ -11,6 +11,7 @@ import {
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
+import { downloadAudioWithTitle } from '../lib/songUtils';
 
 export default function SunoLibraryPage() {
   const navigate = useNavigate();
@@ -425,12 +426,13 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const handleDownload = (url: string) => {
+  const handleDownload = (url: string, title?: string) => {
     if (!url) {
       alert('아직 다운로드할 음원이 없습니다.');
       return;
     }
-    window.open(url, '_blank');
+    // Use the optimized blob downloader instead of window.open
+    downloadAudioWithTitle(url, title);
   };
 
   const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, mode: 'default' | 'pc-panel' } | null>(null);
@@ -1133,7 +1135,15 @@ export default function SunoLibraryPage() {
             >
               {[
                 { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...activeMenuState.group, itemIndex: activeMenuState.idx }); setActiveMenuState(null); } },
-                !isSharedView && filter !== 'trash' ? { icon: Download, label: '다운로드', action: () => { handleDownload(activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { 
+                  icon: Download, 
+                  label: '다운로드', 
+                  action: () => { 
+                    const title = getTitle(activeMenuState.item, activeMenuState.group, activeMenuState.idx);
+                    handleDownload(activeMenuState.audioUrl, title); 
+                    setActiveMenuState(null); 
+                  } 
+                } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(activeMenuState.group) : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl); setActiveMenuState(null); } } : null,

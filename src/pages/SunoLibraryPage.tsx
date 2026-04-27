@@ -48,6 +48,25 @@ export default function SunoLibraryPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
+
+  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent);
+
+  const openInChrome = () => {
+    const currentUrl = window.location.href.replace(/^https?:\/\//, "");
+    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+  };
+
+  const checkKakaoLogin = () => {
+    if (!user) {
+      if (isKakaoInAppBrowser) {
+        setShowKakaoWarning(true);
+      }
+      return false;
+    }
+    return true;
+  };
+
   const checkingIdsRef = React.useRef<Set<string>>(new Set());
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
@@ -79,6 +98,16 @@ export default function SunoLibraryPage() {
       setIsSharedView(true);
       setIsSharedPlayerMode(true);
       setSharedTrackLoading(true);
+
+      console.log("Shared page browser check:", {
+        userAgent: navigator.userAgent,
+        isKakaoInAppBrowser,
+        isSharedView: true
+      });
+
+      if (isKakaoInAppBrowser) {
+        setShowKakaoWarning(true);
+      }
 
       const unsubAuth = auth.onAuthStateChanged(async (currentUser) => {
         setUser(currentUser);
@@ -533,6 +562,11 @@ export default function SunoLibraryPage() {
   };
 
   const handleDownload = (url: string, title?: string) => {
+    if (isSharedView && !user) {
+      console.log("Login required for shared download");
+      showToast("로그인이 필요합니다.");
+      return;
+    }
     if (!url) {
       alert('아직 다운로드할 음원이 없습니다.');
       return;
@@ -543,24 +577,6 @@ export default function SunoLibraryPage() {
 
   const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, mode: 'default' | 'pc-panel' } | null>(null);
   const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
-  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
-
-  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent);
-
-  const openInChrome = () => {
-    const currentUrl = window.location.href.replace(/^https?:\/\//, "");
-    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
-  };
-
-  const checkKakaoLogin = () => {
-    if (!user) {
-      if (isKakaoInAppBrowser) {
-        setShowKakaoWarning(true);
-      }
-      return false;
-    }
-    return true;
-  };
 
   const showToast = (msg: string) => {
     setShareToastInfo(msg);
@@ -648,28 +664,30 @@ export default function SunoLibraryPage() {
       console.log("Share Step 2: create suno_shares start");
       let shareRef;
       try {
-        const shareData = cleanForFirestore({
-          ownerUid,
-          trackId,
-          taskId: taskId || '',
-          title: group.title || item?.title || 'Untitled',
-          audioUrl: audioUrl || '',
-          imageUrl: getImageUrl(item, group) || '',
-          duration: getDuration(item, group) || null,
-          status: group.status || 'completed',
-          prompt: group.prompt || '',
-          style: group.style || '',
-          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
-          sunoData: group.sunoData || null,
-          apiResponse: group.apiResponse || null,
-          apiStatusResponse: group.apiStatusResponse || null,
-          requestPayload: group.requestPayload || null,
-          appliedKeywords: appliedKeywords,
+        const shareData = {
+          ...cleanForFirestore({
+            ownerUid,
+            trackId,
+            taskId: taskId || '',
+            title: group.title || item?.title || 'Untitled',
+            audioUrl: audioUrl || '',
+            imageUrl: getImageUrl(item, group) || '',
+            duration: getDuration(item, group) || null,
+            status: group.status || 'completed',
+            prompt: group.prompt || '',
+            style: group.style || '',
+            lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+            sunoData: group.sunoData || null,
+            apiResponse: group.apiResponse || null,
+            apiStatusResponse: group.apiStatusResponse || null,
+            requestPayload: group.requestPayload || null,
+            appliedKeywords: appliedKeywords || null,
+            isPublic: true,
+            shareType: 'public'
+          }),
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          isPublic: true,
-          shareType: 'public'
-        });
+          updatedAt: serverTimestamp()
+        };
 
         console.log("Share Step 2: create suno_shares data:", shareData);
 
@@ -907,6 +925,11 @@ export default function SunoLibraryPage() {
   };
 
   const handleSavePlaylist = (group: any, item: any, url: string) => {
+    if (isSharedView && !user) {
+      console.log("Login required for playlist save");
+      showToast("로그인이 필요합니다.");
+      return;
+    }
     const data = {
       title: item?.title || group.title,
       url: url,
@@ -1537,14 +1560,14 @@ export default function SunoLibraryPage() {
                 </div>
                 <h3 className="text-lg font-bold mb-2">Chrome에서 열어주세요</h3>
                 <p className="text-sm text-white/70 mb-6">
-                  카카오톡 브라우저에서는 Google 로그인이 제한될 수 있습니다. 정상적인 이용을 위해 Chrome에서 열어주세요.
+                  카카오톡 브라우저에서는 Google 로그인 및 일부 기능이 제한될 수 있습니다. 정상적인 음악 감상과 저장 기능 사용을 위해 Chrome에서 열어주세요.
                 </p>
                 <div className="space-y-3">
                   <button
                     onClick={openInChrome}
                     className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors hover:bg-brand-orange/90 shadow-lg shadow-brand-orange/20"
                   >
-                    Chrome에서 열기
+                    공유 음악 듣기
                   </button>
                   <button
                     onClick={async () => {

@@ -86,9 +86,23 @@ service cloud.firestore {
 
     // Suno API Shares
     match /suno_shares/{shareId} {
-      allow read: if resource == null || resource.data.isPublic == true || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+      function isValidShare(data) {
+        return data.trackId is string &&
+               data.title is string &&
+               data.audioUrl is string &&
+               data.appliedKeywords is map &&
+               data.ownerUid is string &&
+               data.ownerUid.size() <= 128;
+      }
+      allow read: if resource.data.isPublic == true || isOwner(resource.data.ownerUid) || isAdmin();
+      allow create: if isAuthenticated() && 
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      isValidShare(request.resource.data) &&
+                      request.resource.data.createdAt == request.time;
+      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+                      isValidShare(request.resource.data) &&
+                      request.resource.data.createdAt == resource.data.createdAt; // Immutable createdAt
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
     }
 
     // 3. Default Deny

@@ -149,6 +149,24 @@
         }
       },
       "required": ["structures"]
+    },
+    "SunoShare": {
+      "title": "Suno Shared Track",
+      "description": "A self-contained snapshot of a track for sharing.",
+      "type": "object",
+      "properties": {
+        "trackId": { "type": "string" },
+        "title": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "prompt": { "type": "string" },
+        "lyrics": { "type": "string" },
+        "appliedKeywords": { "type": "object" },
+        "createdAt": { "type": "object" },
+        "ownerUid": { "type": "string" },
+        "isPublic": { "type": "boolean" }
+      },
+      "required": ["trackId", "title", "audioUrl", "appliedKeywords", "createdAt", "ownerUid"]
     }
   },
   "firestore": {
@@ -179,6 +197,10 @@
     "/section_tags_live/{tagId}": {
       "schema": "SectionTag",
       "description": "Live collection of section tags for production use."
+    },
+    "/suno_shares/{shareId}": {
+      "schema": "SunoShare",
+      "description": "Snapshots of shared tracks for robust access."
     }
   }
 }

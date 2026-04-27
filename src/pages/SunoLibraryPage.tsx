@@ -9,7 +9,7 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 
@@ -85,6 +85,27 @@ export default function SunoLibraryPage() {
         try {
           console.log("shared track search start", { trackId, isSharedView: true, hasUser: !!currentUser });
           
+          // 1. Try to fetch from suno_shares first (Snapshot-based sharing)
+          const shareRef = doc(db, 'suno_shares', trackId);
+          const shareSnap = await getDoc(shareRef);
+          
+          if (shareSnap.exists()) {
+            const data = shareSnap.data();
+            console.log("shared snapshot found", data);
+            setTracks([{ 
+              id: trackId, 
+              isSharedSnapshot: true,
+              ...data,
+              // Map snapshot fields to expected group structure
+              appliedKeywords: data.appliedKeywords || null
+            }]);
+            setIsSharedOwner(currentUser?.uid === data.ownerUid);
+            setSharedTrackLoading(false);
+            setLoading(false);
+            return;
+          }
+
+          // 2. Legacy fallback: Check user's own tracks if logged in
           if (currentUser) {
             const trackRef = doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId);
             const snap = await getDoc(trackRef);
@@ -97,6 +118,7 @@ export default function SunoLibraryPage() {
             }
           }
           
+          // 3. Legacy fallback: Check all public tracks
           const q = query(
             collectionGroup(db, 'tracks'),
             where('isPublic', '==', true)
@@ -508,6 +530,22 @@ export default function SunoLibraryPage() {
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
+
+        // Create a snapshot in suno_shares for robust sharing
+        const shareRef = doc(db, 'suno_shares', group.id);
+        await setDoc(shareRef, {
+          trackId: group.id,
+          title: group.title || item?.title || 'Untitled',
+          audioUrl: getAudioUrl(item, group),
+          imageUrl: getImageUrl(item, group) || '',
+          prompt: group.prompt || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          appliedKeywords: group.appliedKeywords || null,
+          createdAt: serverTimestamp(),
+          ownerUid: user.uid,
+          isPublic: true
+        });
+
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
       }
       
@@ -647,25 +685,28 @@ export default function SunoLibraryPage() {
   const handleApplyNext = (group: any, item: any) => {
     if (!group) return;
     
+    const appliedKeywords = group.appliedKeywords;
+    
+    if (!appliedKeywords) {
+      showToast('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
+      return;
+    }
+
+    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
+
     // Check if the user is logged in
     if (!user) {
+      showToast('로그인 후 다음 곡에 설정이 적용됩니다.');
       if (confirm('이 기능을 사용하려면 로그인이 필요합니다. 로그인 화면으로 이동할까요?')) {
         navigate('/');
       }
       return;
     }
 
-    const appliedKeywords = group.appliedKeywords || {};
-    
-    // Fallback logic if appliedKeywords is missing but we have prompt/style (legacy support)
-    if (Object.keys(appliedKeywords).length === 0) {
-      appliedKeywords.prompt = group.prompt || "";
-      appliedKeywords.genre = group.style ? [group.style] : (group.tags ? [group.tags] : []);
-    }
-
-    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
-    alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
-    navigate('/');
+    showToast('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
+    setTimeout(() => {
+      navigate('/');
+    }, 1000);
   };
 
   const handleSavePlaylist = (group: any, item: any, url: string) => {

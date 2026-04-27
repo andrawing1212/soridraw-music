@@ -9,7 +9,7 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 
@@ -596,88 +596,120 @@ export default function SunoLibraryPage() {
     const audioUrl = getAudioUrl(item, group);
     const appliedKeywords = group.appliedKeywords || group.requestPayload?.appliedKeywords || group.tracks?.[0]?.appliedKeywords || group.tracks?.[0]?.requestPayload?.appliedKeywords || null;
 
+    console.log("share auth uid:", auth.currentUser?.uid);
+    console.log("share ownerUid:", ownerUid);
     console.log("share target group:", group);
     console.log("share target track:", item);
-    console.log("share ownerUid:", ownerUid);
     console.log("share trackId:", trackId);
     console.log("share taskId:", taskId);
     console.log("share audioUrl:", audioUrl);
     console.log("share appliedKeywords:", appliedKeywords);
 
     try {
-      if (user && user.uid === ownerUid) {
+      console.log("Share Step 1: update original track public start");
+      if (ownerUid && trackId && auth.currentUser?.uid === ownerUid) {
         try {
-          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+          const trackRef = doc(db, 'suno_tracks', ownerUid, 'tracks', trackId);
           await updateDoc(trackRef, {
             isPublic: true,
-            hidden: false,
-            shareType: 'public',
-            publicSharedAt: serverTimestamp()
+            publicSharedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
           });
+          console.log("Share Step 1 success");
         } catch (updateErr) {
-          console.error("Failed to update original track permissions:", updateErr);
-        }
-      }
-
-      const shareData = {
-        trackId,
-        taskId: taskId || '',
-        title: group.title || item?.title || 'Untitled',
-        audioUrl: audioUrl || '',
-        imageUrl: getImageUrl(item, group) || '',
-        duration: getDuration(item, group) || null,
-        status: group.status || 'completed',
-        prompt: group.prompt || '',
-        style: group.style || '',
-        lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
-        sunoData: group.sunoData || null,
-        apiResponse: group.apiResponse || null,
-        apiStatusResponse: group.apiStatusResponse || null,
-        requestPayload: group.requestPayload || null,
-        appliedKeywords: appliedKeywords,
-        createdAt: group.createdAt || serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        ownerUid,
-        isPublic: true,
-        shareType: 'public'
-      };
-
-      const cleanShareData = cleanForFirestore(shareData);
-
-      const shareRef = doc(db, 'suno_shares', trackId);
-      await setDoc(shareRef, cleanShareData);
-
-      setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
-      
-      const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
-        ? "https://soridraw-music.vercel.app"
-        : window.location.origin;
-        
-      const shareUrl = `${appOrigin}/suno-library?track=${trackId}`;
-      const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
-      const shareText = `${title}\n공유 음악 재생하기🎵\n${shareUrl}`;
-
-      const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-      
-      if (isMobile && navigator.share) {
-        try {
-          await navigator.share({
-            title: title,
-            text: '공유 음악 재생하기🎵',
-            url: shareUrl
-          });
-          closeModal();
-          return;
-        } catch (e) {
-          if ((e as Error).name !== 'AbortError') {
-             await navigator.clipboard.writeText(shareText);
-             showToast("링크가 복사되었습니다");
-             closeModal();
-          }
-          return;
+          console.error("Share Step 1 failed:", updateErr);
         }
       } else {
-        setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
+        console.warn("Share Step 1 skipped: current user is not owner", {
+          authUid: auth.currentUser?.uid,
+          ownerUid,
+          trackId
+        });
+      }
+
+      console.log("Share Step 2: create suno_shares start");
+      let shareRef;
+      try {
+        const shareData = cleanForFirestore({
+          ownerUid,
+          trackId,
+          taskId: taskId || '',
+          title: group.title || item?.title || 'Untitled',
+          audioUrl: audioUrl || '',
+          imageUrl: getImageUrl(item, group) || '',
+          duration: getDuration(item, group) || null,
+          status: group.status || 'completed',
+          prompt: group.prompt || '',
+          style: group.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
+          requestPayload: group.requestPayload || null,
+          appliedKeywords: appliedKeywords,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          isPublic: true,
+          shareType: 'public'
+        });
+
+        console.log("Share Step 2: create suno_shares data:", shareData);
+
+        shareRef = await addDoc(collection(db, 'suno_shares'), shareData);
+        console.log("Share Step 2 success:", shareRef.id);
+      } catch (shareErr) {
+        console.error("Share Step 2 failed:", {
+          error: shareErr,
+          authUid: auth.currentUser?.uid,
+          ownerUid,
+          trackId
+        });
+        showToast("공유 문서 생성 권한 오류가 발생했습니다.");
+        return;
+      }
+
+      console.log("Share Step 3: copy link start");
+      try {
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
+        
+        const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+          ? "https://soridraw-music.vercel.app"
+          : window.location.origin;
+          
+        const shareUrl = `${appOrigin}/suno-library?track=${shareRef.id}`;
+        const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
+        const shareText = `${title}\n공유 음악 재생하기🎵\n${shareUrl}`;
+
+        const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+        
+        if (isMobile && navigator.share) {
+          try {
+            await navigator.share({
+              title: title,
+              text: '공유 음악 재생하기🎵',
+              url: shareUrl
+            });
+            console.log("Share Step 3 success");
+            closeModal();
+            return;
+          } catch (e) {
+            if ((e as Error).name !== 'AbortError') {
+               await navigator.clipboard.writeText(shareUrl);
+               console.log("Share Step 3 success");
+               showToast("링크가 복사되었습니다");
+               closeModal();
+            }
+            return;
+          }
+        } else {
+          await navigator.clipboard.writeText(shareUrl);
+          console.log("Share Step 3 success");
+          showToast("링크가 복사되었습니다");
+          setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
+        }
+      } catch (copyErr) {
+        console.error("Share Step 3 failed:", copyErr);
+        showToast("링크 복사에 실패했습니다.");
       }
     } catch (e) {
       console.error("Suno share failed:", e);

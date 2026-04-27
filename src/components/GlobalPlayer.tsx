@@ -142,9 +142,13 @@ export default function GlobalPlayer() {
           duration: currentTrack.duration || group.duration || null,
           status: group.status || 'completed',
           prompt: group.prompt || '',
+          style: group.style || '',
           lyrics: group.lyrics || group.lyricsText || currentTrack.lyrics || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
           appliedKeywords: group.appliedKeywords || {},
-          createdAt: serverTimestamp(),
+          createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
           isPublic: true
         });

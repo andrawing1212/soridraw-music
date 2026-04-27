@@ -347,8 +347,9 @@ export default function SunoLibraryPage() {
   };
 
   useEffect(() => {
-    // Only skip if no tracks or user is not logged in
-    if (!tracks.length || !user) return; 
+    // Polling logic for status updates
+    // Allow polling if we have tracks AND (user is logged in OR we are in shared view mode)
+    if (!tracks.length || (!user && !isSharedView)) return; 
 
     const intervalId = setInterval(() => {
       const now = Date.now();
@@ -379,7 +380,7 @@ export default function SunoLibraryPage() {
         }
         
         const now = Date.now();
-        if (now - createdTime < 10000) return false; // Initial wait 10 seconds (Changed from 30s)
+        if (now - createdTime < 10000) return false; // Initial wait 10 seconds
 
         if (checkingIdsRef.current.has(group.id)) return false;
 
@@ -393,15 +394,25 @@ export default function SunoLibraryPage() {
         autoCheckCountsRef.current.set(id, currentCount + 1);
 
         try {
-          const token = await user.getIdToken();
-          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+          // If no user, we might be in shared view.
+          const token = user ? await user.getIdToken() : null;
+          const fetchOptions: RequestInit = {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ trackId: id, taskId: group.taskId })
-          });
+            body: JSON.stringify({ 
+              trackId: id, 
+              taskId: group.taskId,
+              ownerUid: group.ownerUid // Pass ownerUid for shared view polling
+            })
+          };
+          
+          if (token) {
+            (fetchOptions.headers as any)['Authorization'] = `Bearer ${token}`;
+          }
+
+          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', fetchOptions);
           
           if (!res.ok) {
             console.warn(`Auto check failed for ${id}`);
@@ -430,21 +441,26 @@ export default function SunoLibraryPage() {
       checkingIdsRef.current.add(trackId);
       setStatusChecking(trackId);
       const user = auth.currentUser;
+      const group = tracks.find(t => t.id === trackId);
 
-      if (!user) {
-        alert('로그인이 필요합니다.');
-        return;
-      }
-
-      const token = await user.getIdToken();
-      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+      const token = user ? await user.getIdToken() : null;
+      const fetchOptions: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ trackId, taskId })
-      });
+        body: JSON.stringify({ 
+          trackId, 
+          taskId,
+          ownerUid: group?.ownerUid 
+        })
+      };
+      
+      if (token) {
+        (fetchOptions.headers as any)['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', fetchOptions);
 
       const data = await res.json();
 
@@ -567,9 +583,13 @@ export default function SunoLibraryPage() {
           duration: getDuration(item, group) || null,
           status: group.status || 'completed',
           prompt: group.prompt || '',
+          style: group.style || '',
           lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
           appliedKeywords: group.appliedKeywords || {},
-          createdAt: serverTimestamp(),
+          createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
           isPublic: true
         });

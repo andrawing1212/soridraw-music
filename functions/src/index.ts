@@ -148,15 +148,26 @@ export const createSunoTrack = onRequest(
     const uid = await verifyAuth(req, res);
     if (!uid) return;
 
-    const body = req.body || {};
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        // Fallback to empty if parse fails
+      }
+    }
+    body = body || {};
+
     const title = body.title || "Untitled";
     const lyricsText = body.lyrics || "";
     const stylePrompt = body.style || body.prompt || "";
+    const appliedKeywords = body.appliedKeywords || null;
+    const dryRun = body.dryRun === true || body.dryRun === "true";
 
     const db = admin.firestore();
     const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
 
-    if (!apiKeyDoc.exists) {
+    if (!apiKeyDoc.exists && !dryRun) {
       res.status(400).json({ error: "Suno API Key not found. Please set it in settings." });
       return;
     }
@@ -164,13 +175,13 @@ export const createSunoTrack = onRequest(
     const apiKeyData = apiKeyDoc.data();
     const sunoApiKey = apiKeyData?.sunoApiKey;
 
-    if (!sunoApiKey) {
+    if (!sunoApiKey && !dryRun) {
       res.status(400).json({ error: "Suno API Key is empty." });
       return;
     }
 
     try {
-        const sunoPayload = {
+        const sunoPayload: any = {
           custom_mode: true,
           customMode: true,
           instrumental: typeof body.instrumental === "boolean" ? body.instrumental : false,
@@ -179,27 +190,46 @@ export const createSunoTrack = onRequest(
           prompt: lyricsText,
           style: stylePrompt,
           lyrics: lyricsText,
+          appliedKeywords: appliedKeywords,
           callBackUrl: "playground"
         };
+
+        if (dryRun) {
+          sunoPayload.dryRun = true;
+        }
         
       const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc();
 
-      if (body.dryRun === true) {
+      if (dryRun) {
+        const trackId = trackRef.id;
         const trackData = {
-          taskId: "dry_run",
-          apiResponse: { ok: true, dryRun: true },
-          requestPayload: sunoPayload,
+          taskId: `dryrun_${Date.now()}`,
+          title: title,
           prompt: stylePrompt,
           style: stylePrompt,
-          title: sunoPayload.title,
           lyrics: lyricsText,
-          status: "dry_run",
-          provider: "sunoapi.org",
+          status: 'completed',
+          provider: 'dryRun',
+          audioUrl: '',
+          imageUrl: '',
+          appliedKeywords: appliedKeywords,
+          requestPayload: {
+            ...sunoPayload
+          },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
 
         await trackRef.set(trackData);
-        res.json({ ok: true, dryRun: true, trackId: trackRef.id, requestPayload: sunoPayload });
+
+        res.json({
+          ok: true,
+          dryRun: true,
+          trackId: trackId,
+          taskId: trackData.taskId,
+          appliedKeywords: trackData.appliedKeywords,
+          requestPayload: trackData.requestPayload
+        });
         return;
       }
 
@@ -236,6 +266,7 @@ export const createSunoTrack = onRequest(
         lyrics: lyricsText,
         status: isFailed ? "failed" : "submitted",
         provider: "sunoapi.org",
+        appliedKeywords: appliedKeywords,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -264,20 +295,44 @@ export const getSunoTrackStatus = onRequest(
       return;
     }
 
-    const uid = await verifyAuth(req, res);
-    if (!uid) return;
-
-    const { trackId, taskId } = req.body;
+    const body = req.body || {};
+    const { trackId, taskId, ownerUid } = body;
     if (!trackId || !taskId) {
       res.status(400).json({ error: "trackId and taskId are required" });
       return;
     }
 
+    const authUid = await verifyAuth(req, res).catch(() => null);
+    
+    // Determine which UID to use for API key and track path
+    let targetUid = authUid;
+    let isPublicCheckRequired = false;
+
+    if (!targetUid) {
+      if (ownerUid) {
+        targetUid = ownerUid;
+        isPublicCheckRequired = true;
+      } else {
+        res.status(401).json({ error: "Unauthorized. Login required or provide ownerUid." });
+        return;
+      }
+    }
+
     const db = admin.firestore();
-    const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
+    
+    // Check if public if we are using ownerUid without auth
+    if (isPublicCheckRequired) {
+      const publicTrackSnap = await db.collection('suno_tracks').doc(targetUid).collection('tracks').doc(trackId).get();
+      if (!publicTrackSnap.exists || publicTrackSnap.data()?.isPublic !== true) {
+        res.status(403).json({ error: "Track is not public or not found." });
+        return;
+      }
+    }
+
+    const apiKeyDoc = await db.collection('user_api_keys').doc(targetUid).get();
 
     if (!apiKeyDoc.exists) {
-      res.status(400).json({ error: "Suno API Key not found. Please set it in settings." });
+      res.status(400).json({ error: "Suno API Key not found for this user." });
       return;
     }
 
@@ -289,7 +344,7 @@ export const getSunoTrackStatus = onRequest(
       return;
     }
 
-    const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId);
+    const trackRef = db.collection('suno_tracks').doc(targetUid).collection('tracks').doc(trackId);
     const trackSnap = await trackRef.get();
     if (!trackSnap.exists) {
       res.status(404).json({ error: "Track not found" });
@@ -326,6 +381,7 @@ export const getSunoTrackStatus = onRequest(
       let audioUrl = "";
       let streamAudioUrl = "";
       let imageUrl = "";
+      let duration = 0;
       const sunoData = Array.isArray(data?.data) ? data.data : [data?.data || data];
       const audioUrls: string[] = [];
 
@@ -342,6 +398,7 @@ export const getSunoTrackStatus = onRequest(
           audioUrl = itemAudioUrl || itemStreamUrl;
           streamAudioUrl = itemStreamUrl || itemAudioUrl;
           imageUrl = item.imageUrl || item.image_url || "";
+          duration = item.duration || item.durationSeconds || item.metadata?.duration || 0;
         }
 
         // Determine overall status
@@ -373,6 +430,24 @@ export const getSunoTrackStatus = onRequest(
       if (imageUrl) updates.imageUrl = imageUrl;
 
       await trackRef.update(updates);
+
+      // Also update suno_shares snapshot if it exists
+      const shareRef = db.collection('suno_shares').doc(trackId);
+      const shareSnap = await shareRef.get();
+      if (shareSnap.exists) {
+        // If status completed, update snapshot fields
+        const shareUpdate: any = {
+          status: status,
+          sunoData: sunoData,
+          apiStatusResponse: data,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        if (audioUrl) shareUpdate.audioUrl = audioUrl;
+        if (imageUrl) shareUpdate.imageUrl = imageUrl;
+        if (duration) shareUpdate.duration = duration;
+
+        await shareRef.update(shareUpdate);
+      }
 
       res.json({
         ok: true,

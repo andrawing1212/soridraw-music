@@ -1258,6 +1258,63 @@ function App() {
       const resolvedGenre = getResolvedGenre(result);
       const finalTitle = formatDisplayTitle(resolvedGenre, rawExtractedTitle);
 
+      const vocalData = {
+        male: maleCount,
+        female: femaleCount,
+        rap: rapEnabled,
+        mode: vocalMode,
+        isToneSelected: !!selectedVocalToneId,
+        toneId: selectedVocalToneId,
+        members: vocalMembers
+      };
+
+      const tempoData = {
+        enabled: tempoEnabled,
+        min: minBPM,
+        max: maxBPM
+      };
+
+      const appliedKeywords = {
+        ...(result.appliedKeywords || {}),
+        // Unified naming for both current state and user requested fields
+        genre: selectedGenres,
+        subGenre: subGenre,
+        selectedSubGenres: subGenre,
+        midGenre: selectedGenres,
+        selectedMidGenres: selectedGenres,
+        style: selectedStyles,
+        selectedStyles: selectedStyles,
+        sound: selectedInstrumentSounds,
+        selectedSounds: selectedInstrumentSounds,
+        instrumentSound: selectedInstrumentSounds,
+        selectedInstrumentSounds: selectedInstrumentSounds,
+        mood: selectedMoods,
+        selectedMoods: selectedMoods,
+        theme: selectedThemes,
+        selectedThemes: selectedThemes,
+        vocal: vocalData,
+        selectedVocal: vocalData,
+        vocalConfig: vocalData,
+        vocalType: vocalMode === 'solo' ? (maleCount > 0 ? '남성 솔로' : '여성 솔로') : (vocalMode === 'duo' ? '듀엣' : '그룹'),
+        tempoConfig: tempoData,
+        tempo: `${minBPM}-${maxBPM} BPM`,
+        songStructure: songStructure,
+        selectedSections: customStructure,
+        customStructure: customStructure,
+        lyricsMode: isLyricMode ? lyricMode : 'assist',
+        lyricMode: isLyricMode ? lyricMode : 'assist',
+        userInput: userInput,
+        isLyricMode: isLyricMode,
+        lyricDraft: isLyricMode ? lyricDraft : undefined,
+        kpopMode: kpopMode,
+        isKoreanEnglishMix: isKoreanEnglishMix,
+        isNoLyrics: isNoLyrics,
+        maleCount: maleCount,
+        femaleCount: femaleCount,
+        rapEnabled: rapEnabled,
+        vocalMode: vocalMode
+      };
+
       const res = await fetch(
         "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
         {
@@ -1273,7 +1330,7 @@ function App() {
             lyrics: lyricLanguage === 'en'
               ? (result.lyrics?.english || result.lyrics?.korean || "")
               : (result.lyrics?.korean || result.lyrics?.english || ""),
-            appliedKeywords: result.appliedKeywords || {},
+            appliedKeywords: appliedKeywords,
             titleLanguage,
             lyricLanguage
           }),

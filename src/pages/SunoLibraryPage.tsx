@@ -814,10 +814,43 @@ export default function SunoLibraryPage() {
   };
 
 
+  const resolveSunoAppliedKeywords = (...sources: any[]) => {
+    for (const source of sources) {
+      if (!source) continue;
+      const keywords =
+        source?.appliedKeywords ||
+        source?.requestPayload?.appliedKeywords ||
+        source?.shareData?.appliedKeywords ||
+        source?.shareData?.requestPayload?.appliedKeywords ||
+        source?.track?.appliedKeywords ||
+        source?.track?.requestPayload?.appliedKeywords ||
+        source?.group?.appliedKeywords ||
+        source?.group?.requestPayload?.appliedKeywords;
+
+      if (keywords && typeof keywords === "object" && Object.keys(keywords).length > 0) {
+        return keywords;
+      }
+    }
+    return null;
+  };
+
   const handleApplyNext = (group: any, item: any) => {
     if (!group) return;
     
-    const appliedKeywords = group.appliedKeywords;
+    const appliedKeywords = resolveSunoAppliedKeywords(
+      item,
+      group
+    );
+
+    console.log("Shared apply source:", {
+      sharedTrack: item,
+      sharedSong: item,
+      shareData: group,
+      selectedTrack: item,
+      group: group,
+      track: item,
+      resolvedAppliedKeywords: appliedKeywords
+    });
     
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       showToast('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
@@ -825,15 +858,6 @@ export default function SunoLibraryPage() {
     }
 
     sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
-
-    // Check if the user is logged in
-    if (!user) {
-      showToast('로그인 후 다음 곡에 설정이 적용됩니다.');
-      if (confirm('이 기능을 사용하려면 로그인이 필요합니다. 로그인 화면으로 이동할까요?')) {
-        navigate('/');
-      }
-      return;
-    }
 
     showToast('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
     setTimeout(() => {

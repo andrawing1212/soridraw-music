@@ -75,7 +75,7 @@ service cloud.firestore {
     // Suno API Tracks
     match /suno_tracks/{uid}/tracks/{trackId} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      allow read: if resource.data.isPublic == true;
+      allow read: if resource.data.isPublic == true
       allow write: if request.auth != null && request.auth.uid == uid;
     }
 
@@ -84,12 +84,35 @@ service cloud.firestore {
       allow read: if resource.data.isPublic == true;
     }
 
-    // Suno API Shares
-    match /suno_shares/{shareId} {
-      allow read: if resource.data.isPublic == true || isOwner(resource.data.ownerUid) || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
-    }
+// Suno API Shares
+match /suno_shares/{shareId} {
+  function isValidShare(data) {
+    return data.ownerUid is string &&
+           data.ownerUid.size() <= 128 &&
+           data.trackId is string &&
+           data.title is string &&
+           data.isPublic == true &&
+           (!('audioUrl' in data) || data.audioUrl is string) &&
+           (!('imageUrl' in data) || data.imageUrl is string) &&
+           (!('taskId' in data) || data.taskId is string) &&
+           (!('appliedKeywords' in data) || data.appliedKeywords is map) &&
+           (!('requestPayload' in data) || data.requestPayload is map);
+  }
+
+  allow read: if resource.data.isPublic == true ||
+                 isOwner(resource.data.ownerUid) ||
+                 isAdmin();
+
+  allow create: if isAuthenticated() &&
+                   request.resource.data.ownerUid == request.auth.uid &&
+                   isValidShare(request.resource.data);
+
+  allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+                   request.resource.data.ownerUid == resource.data.ownerUid &&
+                   isValidShare(request.resource.data);
+
+  allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+}
 
     // 3. Default Deny
     match /{document=**} {

@@ -888,6 +888,16 @@ export default function SunoLibraryPage() {
       "pendingAppliedKeywords",
       JSON.stringify(appliedKeywords)
     );
+    localStorage.setItem(
+      "pendingAppliedKeywordsBackup",
+      JSON.stringify(appliedKeywords)
+    );
+
+    console.log("Saved pendingAppliedKeywords:", {
+      appliedKeywords,
+      sessionValue: sessionStorage.getItem("pendingAppliedKeywords"),
+      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup")
+    });
 
     showToast("다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.");
 

@@ -368,7 +368,8 @@ export default function SunoLibraryPage() {
 
         if (isFullyCompleted) return false;
 
-        if (!group.taskId) return false;
+        const tId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId;
+        if (!tId) return false;
 
         let createdTime = 0;
         if (group.createdAt?.seconds) {
@@ -389,6 +390,13 @@ export default function SunoLibraryPage() {
 
       eligibleGroups.forEach(async (group) => {
         const id = group.id;
+        const taskId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId;
+        
+        if (!taskId) {
+          console.warn("Skip status check: missing taskId", group);
+          return;
+        }
+
         checkingIdsRef.current.add(id);
         const currentCount = autoCheckCountsRef.current.get(id) || 0;
         autoCheckCountsRef.current.set(id, currentCount + 1);
@@ -403,7 +411,7 @@ export default function SunoLibraryPage() {
             },
             body: JSON.stringify({ 
               trackId: id, 
-              taskId: group.taskId,
+              taskId: taskId,
               ownerUid: group.ownerUid // Pass ownerUid for shared view polling
             })
           };
@@ -1003,16 +1011,37 @@ export default function SunoLibraryPage() {
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(group)}
-                      {group.status !== 'completed' && group.status !== 'failed' && (
-                        <button
-                          onClick={() => checkStatus(group.id, group.taskId)}
-                          disabled={statusChecking === group.id || !group.taskId}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
-                        >
-                          {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                          상태 확인
-                        </button>
-                      )}
+                      {(() => {
+                        const hasTaskId = !!(group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId || group.apiResponse?.data?.taskId);
+                        const isMissingAudio = !(group.audioUrl || group.tracks?.[0]?.audioUrl);
+                        const isProcessing = group.status !== 'completed' && group.status !== 'failed';
+                        const isFailed = group.status === 'failed';
+                        const isErrorTask = group.apiStatusResponse?.msg === "The taskId cannot be empty" || group.apiStatusResponse?.code === 400;
+                        const shouldShowBtn = isProcessing || isFailed || isErrorTask || (hasTaskId && isMissingAudio);
+
+                        if (!shouldShowBtn) return null;
+
+                        return (
+                          <button
+                            onClick={() => {
+                              const taskId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId || group.apiResponse?.data?.taskId || null;
+                              const trackId = group.id || null;
+                              
+                              if (!taskId || !trackId) {
+                                  alert('상태 확인에 필요한 taskId 또는 trackId가 없습니다.');
+                                  return;
+                              }
+                              
+                              checkStatus(trackId, taskId);
+                            }}
+                            disabled={statusChecking === group.id || !hasTaskId}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
+                          >
+                            {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                            {isFailed || isErrorTask || (hasTaskId && isMissingAudio) ? "상태 재확인" : "상태 확인"}
+                          </button>
+                        );
+                      })()}
                       {!group.taskId && <span className="text-[10px] opacity-30">Task ID 없음</span>}
                     </div>
                   </div>

@@ -295,22 +295,49 @@ export const getSunoTrackStatus = onRequest(
       return;
     }
 
-    const body = req.body || {};
-    const { trackId, taskId, ownerUid } = body;
-    if (!trackId || !taskId) {
-      res.status(400).json({ error: "trackId and taskId are required" });
+    let body = req.body;
+    if (typeof body === "string") {
+      try { body = JSON.parse(body); } catch(e) {}
+    }
+    body = body || {};
+
+    const taskId =
+      body.taskId ||
+      body.data?.taskId ||
+      req.body?.taskId ||
+      req.body?.data?.taskId ||
+      null;
+
+    const trackId =
+      body.trackId ||
+      body.data?.trackId ||
+      req.body?.trackId ||
+      req.body?.data?.trackId ||
+      null;
+
+    const ownerUid =
+      body.ownerUid ||
+      body.data?.ownerUid ||
+      null;
+
+    if (!taskId) {
+      res.status(400).json({ error: "The taskId cannot be empty" });
+      return;
+    }
+    if (!trackId) {
+      res.status(400).json({ error: "The trackId cannot be empty" });
       return;
     }
 
     const authUid = await verifyAuth(req, res).catch(() => null);
     
     // Determine which UID to use for API key and track path
-    let targetUid = authUid;
+    let targetUid: string | null = authUid;
     let isPublicCheckRequired = false;
 
     if (!targetUid) {
-      if (ownerUid) {
-        targetUid = ownerUid;
+      if (typeof ownerUid === "string" && ownerUid.trim()) {
+        targetUid = ownerUid.trim();
         isPublicCheckRequired = true;
       } else {
         res.status(401).json({ error: "Unauthorized. Login required or provide ownerUid." });
@@ -318,18 +345,29 @@ export const getSunoTrackStatus = onRequest(
       }
     }
 
+    // After the guard above, targetUid is guaranteed to be a string.
+    const safeTargetUid: string = targetUid;
+
     const db = admin.firestore();
     
     // Check if public if we are using ownerUid without auth
     if (isPublicCheckRequired) {
-      const publicTrackSnap = await db.collection('suno_tracks').doc(targetUid).collection('tracks').doc(trackId).get();
+      const publicTrackSnap = await db
+      .collection("suno_tracks")
+      .doc(safeTargetUid)
+      .collection("tracks")
+      .doc(trackId)
+      .get();
       if (!publicTrackSnap.exists || publicTrackSnap.data()?.isPublic !== true) {
         res.status(403).json({ error: "Track is not public or not found." });
         return;
       }
     }
 
-    const apiKeyDoc = await db.collection('user_api_keys').doc(targetUid).get();
+      const apiKeyDoc = await db
+      .collection("user_api_keys")
+      .doc(safeTargetUid)
+      .get();
 
     if (!apiKeyDoc.exists) {
       res.status(400).json({ error: "Suno API Key not found for this user." });
@@ -344,7 +382,11 @@ export const getSunoTrackStatus = onRequest(
       return;
     }
 
-    const trackRef = db.collection('suno_tracks').doc(targetUid).collection('tracks').doc(trackId);
+    const trackRef = db
+    .collection("suno_tracks")
+    .doc(safeTargetUid)
+    .collection("tracks")
+    .doc(trackId);
     const trackSnap = await trackRef.get();
     if (!trackSnap.exists) {
       res.status(404).json({ error: "Track not found" });
@@ -357,9 +399,16 @@ export const getSunoTrackStatus = onRequest(
     }
 
     try {
+      console.log("getSunoTrackStatus resolved taskId:", taskId);
+      console.log("getSunoTrackStatus resolved trackId:", trackId);
+
       const SUNO_STATUS_URL = "https://api.sunoapi.org/api/v1/generate/record-info";
       
-      const sunoRes = await fetch(`${SUNO_STATUS_URL}?taskIds=${taskId}`, {
+      const reqUrl = `${SUNO_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`;
+      
+      console.log("getSunoTrackStatus calling URL:", reqUrl);
+
+      const sunoRes = await fetch(reqUrl, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${sunoApiKey}`
@@ -375,59 +424,98 @@ export const getSunoTrackStatus = onRequest(
 
       const data = await sunoRes.json();
       
-      const isFailed = typeof data?.code === 'number' && data.code >= 400;
+      const isFailed = (typeof data?.code === 'number' && data.code >= 400) || data?.status === 'FAILED' || data?.status === 'failed';
+      const isMissingTaskIdError = isFailed && typeof data?.msg === 'string' && data.msg.includes("taskId cannot be empty");
       
-      let status = "processing";
-      let audioUrl = "";
-      let streamAudioUrl = "";
-      let imageUrl = "";
-      let duration = 0;
-      const sunoData = Array.isArray(data?.data) ? data.data : [data?.data || data];
+      let status = trackData?.status || "processing";
+      let duration = trackData?.duration || 0;
+
+      const responseData = data?.data;
+      const responseObj = responseData?.response || {};
+      const sunoDataRaw =
+        responseObj?.sunoData ||
+        responseObj?.data ||
+        responseData?.sunoData ||
+        (Array.isArray(responseData) ? responseData : (responseData ? [responseData] : [data]));
+      const sunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
+
       const audioUrls: string[] = [];
 
-      for (const item of sunoData) {
-        if (!item) continue;
-        
-        const itemAudioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || "";
-        const itemStreamUrl = item.streamAudioUrl || item.stream_audio_url || "";
-        
-        if (itemAudioUrl) audioUrls.push(itemAudioUrl);
-        else if (itemStreamUrl) audioUrls.push(itemStreamUrl);
+      // If it's just a missing taskId error from API, do not mark as failed.
+      if (!isMissingTaskIdError) {
+        for (const item of sunoData) {
+          if (!item) continue;
+          
+          const itemAudioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || item.streamAudioUrl || item.stream_audio_url || "";
+          
+          if (itemAudioUrl) audioUrls.push(itemAudioUrl);
 
-        if (!audioUrl && (itemAudioUrl || itemStreamUrl)) {
-          audioUrl = itemAudioUrl || itemStreamUrl;
-          streamAudioUrl = itemStreamUrl || itemAudioUrl;
-          imageUrl = item.imageUrl || item.image_url || "";
-          duration = item.duration || item.durationSeconds || item.metadata?.duration || 0;
+          if (item.duration || item.durationSeconds || item.metadata?.duration) {
+            duration = item.duration || item.durationSeconds || item.metadata?.duration;
+          }
+
+          // Determine overall status
+          if (item.status === "SUCCESS" || item.status === "COMPLETED" || item.status === "completed" || item.status === "success") {
+            status = "completed";
+          } else if (item.status === "FAILED" || item.status === "failed") {
+            if (status !== "completed") status = "failed";
+          } else if (item.status && status !== "completed") {
+            status = item.status.toLowerCase();
+          } else if (itemAudioUrl && status !== "completed") {
+            status = "completed";
+          }
         }
 
-        // Determine overall status
-        if (item.status === "SUCCESS" || item.status === "completed") {
-          status = "completed";
-        } else if (item.status === "FAILED" || item.status === "failed") {
-          if (status !== "completed") status = "failed";
-        } else if (item.status && status !== "completed") {
-          status = item.status.toLowerCase();
-        } else if ((itemAudioUrl || itemStreamUrl) && status !== "completed") {
+        if (isFailed) {
+          status = "failed";
+        }
+        if (data?.status === "SUCCESS" || data?.status === "COMPLETED" || data?.status === "completed" || data?.status === "success") {
           status = "completed";
         }
-      }
-
-      if (isFailed) {
-        status = "failed";
+      } else {
+         console.warn("External API reported missing taskId. Not changing track status to failed.", data);
       }
 
       const updates: any = {
         apiStatusResponse: data,
         sunoData: sunoData,
         audioUrls: audioUrls,
-        status: status,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
+      
+      if (!isMissingTaskIdError) {
+        updates.status = status;
+      }
 
-      if (audioUrl) updates.audioUrl = audioUrl;
-      if (streamAudioUrl) updates.streamAudioUrl = streamAudioUrl;
-      if (imageUrl) updates.imageUrl = imageUrl;
+      let finalAudioUrl = "";
+      let finalImageUrl = "";
+
+      if (status === "completed" || status === "success") {
+        const first = Array.isArray(sunoData) ? sunoData[0] : null;
+
+        finalAudioUrl =
+          first?.audioUrl ||
+          first?.audio_url ||
+          first?.sourceAudioUrl ||
+          first?.sourceStreamAudioUrl ||
+          responseObj?.audioUrl ||
+          responseObj?.audio_url ||
+          "";
+
+        finalImageUrl =
+          first?.imageUrl ||
+          first?.image_url ||
+          first?.sourceImageUrl ||
+          responseObj?.imageUrl ||
+          responseObj?.image_url ||
+          "";
+
+        if (finalAudioUrl) {
+          updates.audioUrl = finalAudioUrl;
+          updates.streamAudioUrl = finalAudioUrl;
+        }
+        if (finalImageUrl) updates.imageUrl = finalImageUrl;
+      }
 
       await trackRef.update(updates);
 
@@ -442,8 +530,8 @@ export const getSunoTrackStatus = onRequest(
           apiStatusResponse: data,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         };
-        if (audioUrl) shareUpdate.audioUrl = audioUrl;
-        if (imageUrl) shareUpdate.imageUrl = imageUrl;
+        if (finalAudioUrl) shareUpdate.audioUrl = finalAudioUrl;
+        if (finalImageUrl) shareUpdate.imageUrl = finalImageUrl;
         if (duration) shareUpdate.duration = duration;
 
         await shareRef.update(shareUpdate);
@@ -452,9 +540,9 @@ export const getSunoTrackStatus = onRequest(
       res.json({
         ok: true,
         status: status,
-        audioUrl: audioUrl || streamAudioUrl,
-        streamAudioUrl: streamAudioUrl,
-        imageUrl: imageUrl,
+        audioUrl: finalAudioUrl,
+        streamAudioUrl: finalAudioUrl,
+        imageUrl: finalImageUrl,
         audioUrls: audioUrls,
         sunoData: sunoData,
         apiStatusResponse: data

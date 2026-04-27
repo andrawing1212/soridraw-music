@@ -90,19 +90,43 @@ export default function SunoLibraryPage() {
           const shareSnap = await getDoc(shareRef);
           
           if (shareSnap.exists()) {
-            const data = shareSnap.data();
-            console.log("shared snapshot found", data);
-            setTracks([{ 
+            const shareData = shareSnap.data();
+            console.log("shared snapshot found", shareData);
+            
+            const initialTrackData = { 
               id: trackId, 
               isSharedSnapshot: true,
-              ...data,
-              // Map snapshot fields to expected group structure
-              appliedKeywords: data.appliedKeywords || null
-            }]);
-            setIsSharedOwner(currentUser?.uid === data.ownerUid);
+              ...shareData,
+              appliedKeywords: shareData.appliedKeywords || null
+            };
+            setTracks([initialTrackData]);
+            setIsSharedOwner(currentUser?.uid === shareData.ownerUid);
             setSharedTrackLoading(false);
             setLoading(false);
-            return;
+
+            // 2. Try to listen to the LATEST original track data for real-time status if we have ownerUid
+            if (shareData.ownerUid) {
+              const originalTrackRef = doc(db, 'suno_tracks', shareData.ownerUid, 'tracks', trackId || shareData.trackId);
+              const unsubOriginal = onSnapshot(originalTrackRef, (originalSnap) => {
+                if (originalSnap.exists()) {
+                  const latestData = originalSnap.data();
+                  console.log("latest original track update", latestData);
+                  setTracks(prev => prev.map(t => t.id === trackId ? {
+                    ...t,
+                    ...latestData,
+                    appliedKeywords: latestData.appliedKeywords || t.appliedKeywords || null,
+                    isSharedSnapshot: true
+                  } : t));
+                }
+              }, (err) => {
+                console.warn("Could not listen to latest original track status (might be private)", err);
+              });
+              return () => {
+                unsubAuth();
+                unsubOriginal();
+              };
+            }
+            return () => unsubAuth();
           }
 
           // 2. Legacy fallback: Check user's own tracks if logged in
@@ -323,7 +347,8 @@ export default function SunoLibraryPage() {
   };
 
   useEffect(() => {
-    if (isSharedView || !user) return;
+    // Only skip if no tracks or user is not logged in
+    if (!tracks.length || !user) return; 
 
     const intervalId = setInterval(() => {
       const now = Date.now();
@@ -335,7 +360,7 @@ export default function SunoLibraryPage() {
         if (count >= 25) return false;
 
         const items = extractSunoData(group);
-        // Polling stops only when status is completed/complete AND all items have audioUrl AND all items have duration
+        // Polling stops only when status is completed/complete AND items are generated
         const isFullyCompleted = (group.status === 'completed' || group.status === 'complete') && 
                                   items.length >= 2 &&
                                   items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
@@ -535,12 +560,15 @@ export default function SunoLibraryPage() {
         const shareRef = doc(db, 'suno_shares', group.id);
         await setDoc(shareRef, {
           trackId: group.id,
+          taskId: group.taskId || '',
           title: group.title || item?.title || 'Untitled',
           audioUrl: getAudioUrl(item, group),
           imageUrl: getImageUrl(item, group) || '',
+          duration: getDuration(item, group) || null,
+          status: group.status || 'completed',
           prompt: group.prompt || '',
           lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
-          appliedKeywords: group.appliedKeywords || null,
+          appliedKeywords: group.appliedKeywords || {},
           createdAt: serverTimestamp(),
           ownerUid: user.uid,
           isPublic: true
@@ -687,7 +715,7 @@ export default function SunoLibraryPage() {
     
     const appliedKeywords = group.appliedKeywords;
     
-    if (!appliedKeywords) {
+    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       showToast('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
       return;
     }

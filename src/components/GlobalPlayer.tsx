@@ -135,12 +135,15 @@ export default function GlobalPlayer() {
         const shareRef = doc(db, 'suno_shares', group.id);
         await setDoc(shareRef, {
           trackId: group.id,
+          taskId: group.taskId || '',
           title: currentTrack.title || group.title || 'Untitled',
           audioUrl: currentTrack.url,
           imageUrl: currentTrack.imageUrl || '',
+          duration: currentTrack.duration || group.duration || null,
+          status: group.status || 'completed',
           prompt: group.prompt || '',
           lyrics: group.lyrics || group.lyricsText || currentTrack.lyrics || null,
-          appliedKeywords: group.appliedKeywords || null,
+          appliedKeywords: group.appliedKeywords || {},
           createdAt: serverTimestamp(),
           ownerUid: user.uid,
           isPublic: true
@@ -180,7 +183,7 @@ export default function GlobalPlayer() {
 
     const appliedKeywords = group.appliedKeywords;
     
-    if (!appliedKeywords) {
+    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       alert('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
       return;
     }

@@ -543,6 +543,24 @@ export default function SunoLibraryPage() {
 
   const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, mode: 'default' | 'pc-panel' } | null>(null);
   const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
+  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
+
+  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent);
+
+  const openInChrome = () => {
+    const currentUrl = window.location.href.replace(/^https?:\/\//, "");
+    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+  };
+
+  const checkKakaoLogin = () => {
+    if (!user) {
+      if (isKakaoInAppBrowser) {
+        setShowKakaoWarning(true);
+      }
+      return false;
+    }
+    return true;
+  };
 
   const showToast = (msg: string) => {
     setShareToastInfo(msg);
@@ -858,6 +876,7 @@ export default function SunoLibraryPage() {
       group,
       item,
       resolvedAppliedKeywords: appliedKeywords,
+      isKakaoInAppBrowser
     });
 
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
@@ -1486,6 +1505,54 @@ export default function SunoLibraryPage() {
                 >
                   닫기
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showKakaoWarning && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowKakaoWarning(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#1e1e1e] border border-white/10 rounded-3xl p-6 w-full max-w-sm"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-brand-orange/20 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-orange">
+                  <Info className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold mb-2">Chrome에서 열어주세요</h3>
+                <p className="text-sm text-white/70 mb-6">
+                  카카오톡 브라우저에서는 Google 로그인이 제한될 수 있습니다. 정상적인 이용을 위해 Chrome에서 열어주세요.
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={openInChrome}
+                    className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors hover:bg-brand-orange/90 shadow-lg shadow-brand-orange/20"
+                  >
+                    Chrome에서 열기
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(window.location.href);
+                      showToast("링크가 복사되었습니다.");
+                    }}
+                    className="w-full py-3 bg-white/10 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                    링크 복사
+                  </button>
+                  <button
+                    onClick={() => setShowKakaoWarning(false)}
+                    className="w-full py-3 text-white/50 hover:text-white font-medium transition-colors"
+                  >
+                    닫기
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

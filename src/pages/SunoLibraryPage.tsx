@@ -176,7 +176,16 @@ export default function SunoLibraryPage() {
   }, []);
 
   const getAudioUrl = (item: any, group: any) => {
-    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
+    return item?.audioUrl || 
+           item?.sourceAudioUrl || 
+           item?.streamAudioUrl || 
+           item?.audio_url || 
+           item?.url || 
+           item?.songUrl || 
+           group?.audioUrl || 
+           group?.streamAudioUrl || 
+           group?.url || 
+           '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -197,12 +206,28 @@ export default function SunoLibraryPage() {
 
   const extractSunoData = (group: any) => {
     let sunoData = null;
+    
+    // 1. Primary sunoData field
     if (Array.isArray(group?.sunoData) && group.sunoData.length > 0) {
       sunoData = group.sunoData;
-    } else if (Array.isArray(group?.apiStatusResponse?.data?.response?.sunoData) && group.apiStatusResponse.data.response.sunoData.length > 0) {
+    } 
+    // 2. Nesting in apiStatusResponse
+    else if (Array.isArray(group?.apiStatusResponse?.data?.response?.sunoData) && group.apiStatusResponse.data.response.sunoData.length > 0) {
       sunoData = group.apiStatusResponse.data.response.sunoData;
-    } else if (Array.isArray(group?.apiResponse?.response?.sunoData) && group.apiResponse.response.sunoData.length > 0) {
+    } 
+    else if (Array.isArray(group?.apiStatusResponse?.sunoData) && group.apiStatusResponse.sunoData.length > 0) {
+      sunoData = group.apiStatusResponse.sunoData;
+    }
+    // 3. Nesting in apiResponse
+    else if (Array.isArray(group?.apiResponse?.response?.sunoData) && group.apiResponse.response.sunoData.length > 0) {
       sunoData = group.apiResponse.response.sunoData;
+    }
+    else if (Array.isArray(group?.apiResponse?.sunoData) && group.apiResponse.sunoData.length > 0) {
+      sunoData = group.apiResponse.sunoData;
+    }
+    // 4. Check data directly if it is an array
+    else if (Array.isArray(group?.data) && group.data.length > 0 && group.data[0]?.id) {
+       sunoData = group.data;
     }
 
     if (sunoData) {
@@ -210,7 +235,7 @@ export default function SunoLibraryPage() {
     }
 
     return [{
-      audioUrl: group?.audioUrl || group?.streamAudioUrl,
+      audioUrl: group?.audioUrl || group?.streamAudioUrl || group?.url || group?.songUrl,
       title: group?.title,
       imageUrl: group?.imageUrl,
       duration: getDuration(group, group),
@@ -232,8 +257,10 @@ export default function SunoLibraryPage() {
       const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
       
+      const isCompletedStatus = t.status === 'completed' || t.status === 'complete' || !!getDuration(t, t);
+      
       const matchesFilter = filter === 'all' || filter === 'trash' ||
-                            (filter === 'completed' && t.status === 'completed') || 
+                            (filter === 'completed' && isCompletedStatus) || 
                             (filter === 'favorite' && t.favorite);
 
       return matchesSearch && matchesFilter;
@@ -286,7 +313,10 @@ export default function SunoLibraryPage() {
         if (count >= 25) return false;
 
         const items = extractSunoData(group);
-        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
+        // Polling stops only when status is completed/complete AND all items have audioUrl AND all items have duration
+        const isFullyCompleted = (group.status === 'completed' || group.status === 'complete') && 
+                                  items.length >= 2 &&
+                                  items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
 
         if (isFullyCompleted) return false;
 

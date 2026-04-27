@@ -817,6 +817,7 @@ export default function SunoLibraryPage() {
   const resolveSunoAppliedKeywords = (...sources: any[]) => {
     for (const source of sources) {
       if (!source) continue;
+
       const keywords =
         source?.appliedKeywords ||
         source?.requestPayload?.appliedKeywords ||
@@ -825,44 +826,55 @@ export default function SunoLibraryPage() {
         source?.track?.appliedKeywords ||
         source?.track?.requestPayload?.appliedKeywords ||
         source?.group?.appliedKeywords ||
-        source?.group?.requestPayload?.appliedKeywords;
+        source?.group?.requestPayload?.appliedKeywords ||
+        source?.tracks?.[0]?.appliedKeywords ||
+        source?.tracks?.[0]?.requestPayload?.appliedKeywords ||
+        null;
 
-      if (keywords && typeof keywords === "object" && Object.keys(keywords).length > 0) {
+      if (
+        keywords &&
+        typeof keywords === "object" &&
+        !Array.isArray(keywords) &&
+        Object.keys(keywords).length > 0
+      ) {
         return keywords;
       }
     }
+
     return null;
   };
 
   const handleApplyNext = (group: any, item: any) => {
-    if (!group) return;
-    
     const appliedKeywords = resolveSunoAppliedKeywords(
       item,
-      group
+      group,
+      group?.item,
+      group?.track,
+      group?.shareData,
+      group?.tracks?.[0]
     );
 
-    console.log("Shared apply source:", {
-      sharedTrack: item,
-      sharedSong: item,
-      shareData: group,
-      selectedTrack: item,
-      group: group,
-      track: item,
-      resolvedAppliedKeywords: appliedKeywords
+    console.log("Shared/Library apply source:", {
+      group,
+      item,
+      resolvedAppliedKeywords: appliedKeywords,
     });
-    
+
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
-      showToast('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
+      showToast("이 곡은 키워드 정보가 없어 적용할 수 없습니다.");
       return;
     }
 
-    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
+    sessionStorage.setItem(
+      "pendingAppliedKeywords",
+      JSON.stringify(appliedKeywords)
+    );
 
-    showToast('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
+    showToast("다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.");
+
     setTimeout(() => {
-      navigate('/');
-    }, 1000);
+      navigate("/");
+    }, 700);
   };
 
   const handleSavePlaylist = (group: any, item: any, url: string) => {

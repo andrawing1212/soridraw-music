@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
   Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2
@@ -65,6 +66,7 @@ export default function GlobalPlayer() {
     isSharedPlayerMode
   } = useGlobalPlayer();
 
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [showMenu, setShowMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -160,17 +162,29 @@ export default function GlobalPlayer() {
   const handleApplyNext = () => {
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
-    const data = {
-      title: currentTrack.title || group.title,
-      lyrics: group.lyrics,
-      prompt: group.prompt,
-      keywords: group.tags || group.style,
-      genre: group.style || group.tags,
-      taskId: group.taskId,
-      source: 'suno-library'
-    };
-    localStorage.setItem('soridraw_next_suno_apply', JSON.stringify(data));
-    alert('다음 곡에 적용할 정보가 저장되었습니다.');
+
+    // Check if the user is logged in
+    if (!auth.currentUser) {
+      if (confirm('이 기능을 사용하려면 로그인이 필요합니다. 로그인 화면으로 이동할까요?')) {
+        navigate('/');
+      }
+      return;
+    }
+
+    const appliedKeywords = group.appliedKeywords || {};
+    
+    // Fallback logic
+    if (Object.keys(appliedKeywords).length === 0) {
+      appliedKeywords.prompt = group.prompt || "";
+      appliedKeywords.genre = group.style ? [group.style] : (group.tags ? [group.tags] : []);
+    }
+
+    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
+    alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
+    
+    // Switch to collapsed mode before navigating to avoid player obscuring Home
+    handleModeChange('collapsed');
+    navigate('/');
   };
 
   const handleSavePlaylist = () => {
@@ -394,8 +408,8 @@ export default function GlobalPlayer() {
                        >
                        {[
                            { icon: Info, label: '상세정보', action: () => { alert('상세정보는 라이브러리 목록에서 확인해주세요.'); setShowMenu(false); } },
-                           !isSharedPlayerMode ? { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url, currentTrack.title); setShowMenu(false); } } : null,
-                           !isSharedPlayerMode ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } } : null,
+                           { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url, currentTrack.title); setShowMenu(false); } },
+                           { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } },
                            { icon: Share2, label: isSharedPlayerMode ? '링크 복사' : '공유', action: () => { isSharedPlayerMode ? handleCopyShareLink() : handleShare(); setShowMenu(false); } },
                            { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } },
                            !isSharedPlayerMode ? { icon: Trash2, label: '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true } : null,

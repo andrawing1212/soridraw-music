@@ -54,6 +54,11 @@ export default function SunoLibraryPage() {
 
   const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
 
+  // Scroll to top on page enter
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
+
   useEffect(() => {
     if ((window as any).Kakao && !(window as any).Kakao.isInitialized()) {
       (window as any).Kakao.init("YOUR_KAKAO_JAVASCRIPT_KEY");
@@ -297,7 +302,7 @@ export default function SunoLibraryPage() {
         }
         
         const now = Date.now();
-        if (now - createdTime < 30000) return false; // Initial wait 30 seconds
+        if (now - createdTime < 10000) return false; // Initial wait 10 seconds (Changed from 30s)
 
         if (checkingIdsRef.current.has(group.id)) return false;
 
@@ -610,17 +615,27 @@ export default function SunoLibraryPage() {
 
 
   const handleApplyNext = (group: any, item: any) => {
-    const data = {
-      title: item?.title || group.title,
-      lyrics: group.lyrics,
-      prompt: group.prompt,
-      keywords: group.tags || group.style,
-      genre: group.style || group.tags,
-      taskId: group.taskId,
-      source: 'suno-library'
-    };
-    localStorage.setItem('soridraw_next_suno_apply', JSON.stringify(data));
-    alert('다음 곡에 적용할 정보가 저장되었습니다.');
+    if (!group) return;
+    
+    // Check if the user is logged in
+    if (!user) {
+      if (confirm('이 기능을 사용하려면 로그인이 필요합니다. 로그인 화면으로 이동할까요?')) {
+        navigate('/');
+      }
+      return;
+    }
+
+    const appliedKeywords = group.appliedKeywords || {};
+    
+    // Fallback logic if appliedKeywords is missing but we have prompt/style (legacy support)
+    if (Object.keys(appliedKeywords).length === 0) {
+      appliedKeywords.prompt = group.prompt || "";
+      appliedKeywords.genre = group.style ? [group.style] : (group.tags ? [group.tags] : []);
+    }
+
+    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
+    alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
+    navigate('/');
   };
 
   const handleSavePlaylist = (group: any, item: any, url: string) => {
@@ -1135,7 +1150,7 @@ export default function SunoLibraryPage() {
             >
               {[
                 { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...activeMenuState.group, itemIndex: activeMenuState.idx }); setActiveMenuState(null); } },
-                !isSharedView && filter !== 'trash' ? { 
+                filter !== 'trash' ? { 
                   icon: Download, 
                   label: '다운로드', 
                   action: () => { 
@@ -1144,7 +1159,7 @@ export default function SunoLibraryPage() {
                     setActiveMenuState(null); 
                   } 
                 } : null,
-                !isSharedView && filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(activeMenuState.group) : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,

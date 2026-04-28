@@ -9,7 +9,7 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 
@@ -48,25 +48,6 @@ export default function SunoLibraryPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
-
-  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent);
-
-  const openInChrome = () => {
-    const currentUrl = window.location.href.replace(/^https?:\/\//, "");
-    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
-  };
-
-  const checkKakaoLogin = () => {
-    if (!user) {
-      if (isKakaoInAppBrowser) {
-        setShowKakaoWarning(true);
-      }
-      return false;
-    }
-    return true;
-  };
-
   const checkingIdsRef = React.useRef<Set<string>>(new Set());
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
@@ -99,66 +80,11 @@ export default function SunoLibraryPage() {
       setIsSharedPlayerMode(true);
       setSharedTrackLoading(true);
 
-      console.log("Shared page browser check:", {
-        userAgent: navigator.userAgent,
-        isKakaoInAppBrowser,
-        isSharedView: true
-      });
-
-      if (isKakaoInAppBrowser) {
-        setShowKakaoWarning(true);
-      }
-
       const unsubAuth = auth.onAuthStateChanged(async (currentUser) => {
         setUser(currentUser);
         try {
           console.log("shared track search start", { trackId, isSharedView: true, hasUser: !!currentUser });
           
-          // 1. Try to fetch from suno_shares first (Snapshot-based sharing)
-          const shareRef = doc(db, 'suno_shares', trackId);
-          const shareSnap = await getDoc(shareRef);
-          
-          if (shareSnap.exists()) {
-            const shareData = shareSnap.data();
-            console.log("shared snapshot found", shareData);
-            
-            const initialTrackData = { 
-              id: trackId, 
-              isSharedSnapshot: true,
-              ...shareData,
-              appliedKeywords: shareData.appliedKeywords || null
-            };
-            setTracks([initialTrackData]);
-            setIsSharedOwner(currentUser?.uid === shareData.ownerUid);
-            setSharedTrackLoading(false);
-            setLoading(false);
-
-            // 2. Try to listen to the LATEST original track data for real-time status if we have ownerUid
-            if (shareData.ownerUid) {
-              const originalTrackRef = doc(db, 'suno_tracks', shareData.ownerUid, 'tracks', trackId || shareData.trackId);
-              const unsubOriginal = onSnapshot(originalTrackRef, (originalSnap) => {
-                if (originalSnap.exists()) {
-                  const latestData = originalSnap.data();
-                  console.log("latest original track update", latestData);
-                  setTracks(prev => prev.map(t => t.id === trackId ? {
-                    ...t,
-                    ...latestData,
-                    appliedKeywords: latestData.appliedKeywords || t.appliedKeywords || null,
-                    isSharedSnapshot: true
-                  } : t));
-                }
-              }, (err) => {
-                console.warn("Could not listen to latest original track status (might be private)", err);
-              });
-              return () => {
-                unsubAuth();
-                unsubOriginal();
-              };
-            }
-            return () => unsubAuth();
-          }
-
-          // 2. Legacy fallback: Check user's own tracks if logged in
           if (currentUser) {
             const trackRef = doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId);
             const snap = await getDoc(trackRef);
@@ -171,7 +97,6 @@ export default function SunoLibraryPage() {
             }
           }
           
-          // 3. Legacy fallback: Check all public tracks
           const q = query(
             collectionGroup(db, 'tracks'),
             where('isPublic', '==', true)
@@ -251,16 +176,7 @@ export default function SunoLibraryPage() {
   }, []);
 
   const getAudioUrl = (item: any, group: any) => {
-    return item?.audioUrl || 
-           item?.sourceAudioUrl || 
-           item?.streamAudioUrl || 
-           item?.audio_url || 
-           item?.url || 
-           item?.songUrl || 
-           group?.audioUrl || 
-           group?.streamAudioUrl || 
-           group?.url || 
-           '';
+    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -281,28 +197,12 @@ export default function SunoLibraryPage() {
 
   const extractSunoData = (group: any) => {
     let sunoData = null;
-    
-    // 1. Primary sunoData field
     if (Array.isArray(group?.sunoData) && group.sunoData.length > 0) {
       sunoData = group.sunoData;
-    } 
-    // 2. Nesting in apiStatusResponse
-    else if (Array.isArray(group?.apiStatusResponse?.data?.response?.sunoData) && group.apiStatusResponse.data.response.sunoData.length > 0) {
+    } else if (Array.isArray(group?.apiStatusResponse?.data?.response?.sunoData) && group.apiStatusResponse.data.response.sunoData.length > 0) {
       sunoData = group.apiStatusResponse.data.response.sunoData;
-    } 
-    else if (Array.isArray(group?.apiStatusResponse?.sunoData) && group.apiStatusResponse.sunoData.length > 0) {
-      sunoData = group.apiStatusResponse.sunoData;
-    }
-    // 3. Nesting in apiResponse
-    else if (Array.isArray(group?.apiResponse?.response?.sunoData) && group.apiResponse.response.sunoData.length > 0) {
+    } else if (Array.isArray(group?.apiResponse?.response?.sunoData) && group.apiResponse.response.sunoData.length > 0) {
       sunoData = group.apiResponse.response.sunoData;
-    }
-    else if (Array.isArray(group?.apiResponse?.sunoData) && group.apiResponse.sunoData.length > 0) {
-      sunoData = group.apiResponse.sunoData;
-    }
-    // 4. Check data directly if it is an array
-    else if (Array.isArray(group?.data) && group.data.length > 0 && group.data[0]?.id) {
-       sunoData = group.data;
     }
 
     if (sunoData) {
@@ -310,7 +210,7 @@ export default function SunoLibraryPage() {
     }
 
     return [{
-      audioUrl: group?.audioUrl || group?.streamAudioUrl || group?.url || group?.songUrl,
+      audioUrl: group?.audioUrl || group?.streamAudioUrl,
       title: group?.title,
       imageUrl: group?.imageUrl,
       duration: getDuration(group, group),
@@ -332,10 +232,8 @@ export default function SunoLibraryPage() {
       const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
       
-      const isCompletedStatus = t.status === 'completed' || t.status === 'complete' || !!getDuration(t, t);
-      
       const matchesFilter = filter === 'all' || filter === 'trash' ||
-                            (filter === 'completed' && isCompletedStatus) || 
+                            (filter === 'completed' && t.status === 'completed') || 
                             (filter === 'favorite' && t.favorite);
 
       return matchesSearch && matchesFilter;
@@ -376,9 +274,7 @@ export default function SunoLibraryPage() {
   };
 
   useEffect(() => {
-    // Polling logic for status updates
-    // Allow polling if we have tracks AND (user is logged in OR we are in shared view mode)
-    if (!tracks.length || (!user && !isSharedView)) return; 
+    if (isSharedView || !user) return;
 
     const intervalId = setInterval(() => {
       const now = Date.now();
@@ -390,15 +286,11 @@ export default function SunoLibraryPage() {
         if (count >= 25) return false;
 
         const items = extractSunoData(group);
-        // Polling stops only when status is completed/complete AND items are generated
-        const isFullyCompleted = (group.status === 'completed' || group.status === 'complete') && 
-                                  items.length >= 2 &&
-                                  items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
+        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
 
         if (isFullyCompleted) return false;
 
-        const tId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId;
-        if (!tId) return false;
+        if (!group.taskId) return false;
 
         let createdTime = 0;
         if (group.createdAt?.seconds) {
@@ -410,7 +302,7 @@ export default function SunoLibraryPage() {
         }
         
         const now = Date.now();
-        if (now - createdTime < 10000) return false; // Initial wait 10 seconds
+        if (now - createdTime < 10000) return false; // Initial wait 10 seconds (Changed from 30s)
 
         if (checkingIdsRef.current.has(group.id)) return false;
 
@@ -419,37 +311,20 @@ export default function SunoLibraryPage() {
 
       eligibleGroups.forEach(async (group) => {
         const id = group.id;
-        const taskId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId;
-        
-        if (!taskId) {
-          console.warn("Skip status check: missing taskId", group);
-          return;
-        }
-
         checkingIdsRef.current.add(id);
         const currentCount = autoCheckCountsRef.current.get(id) || 0;
         autoCheckCountsRef.current.set(id, currentCount + 1);
 
         try {
-          // If no user, we might be in shared view.
-          const token = user ? await user.getIdToken() : null;
-          const fetchOptions: RequestInit = {
+          const token = await user.getIdToken();
+          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ 
-              trackId: id, 
-              taskId: taskId,
-              ownerUid: group.ownerUid // Pass ownerUid for shared view polling
-            })
-          };
-          
-          if (token) {
-            (fetchOptions.headers as any)['Authorization'] = `Bearer ${token}`;
-          }
-
-          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', fetchOptions);
+            body: JSON.stringify({ trackId: id, taskId: group.taskId })
+          });
           
           if (!res.ok) {
             console.warn(`Auto check failed for ${id}`);
@@ -478,26 +353,21 @@ export default function SunoLibraryPage() {
       checkingIdsRef.current.add(trackId);
       setStatusChecking(trackId);
       const user = auth.currentUser;
-      const group = tracks.find(t => t.id === trackId);
 
-      const token = user ? await user.getIdToken() : null;
-      const fetchOptions: RequestInit = {
+      if (!user) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      const token = await user.getIdToken();
+      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          trackId, 
-          taskId,
-          ownerUid: group?.ownerUid 
-        })
-      };
-      
-      if (token) {
-        (fetchOptions.headers as any)['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', fetchOptions);
+        body: JSON.stringify({ trackId, taskId })
+      });
 
       const data = await res.json();
 
@@ -567,6 +437,7 @@ export default function SunoLibraryPage() {
       showToast("로그인이 필요합니다.");
       return;
     }
+
     if (!url) {
       alert('아직 다운로드할 음원이 없습니다.');
       return;
@@ -587,186 +458,108 @@ export default function SunoLibraryPage() {
     setSharePopupInfo({ group, item, mode: 'default' });
   };
 
-  const handleShareLink = async () => {
+  const getSharePageUrl = (group?: any) => {
+    if (isSharedView) return window.location.href;
+
+    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+      ? "https://soridraw-music.vercel.app"
+      : window.location.origin;
+
+    return `${appOrigin}/suno-library?track=${group?.id || ''}`;
+  };
+
+  const handleShareCurrentPage = async () => {
     const shareUrl = window.location.href;
+
     console.log("Shared page share action:", {
       shareUrl,
-      canUseNativeShare: !!navigator.share
+      canUseNativeShare: !!navigator.share,
     });
 
-    if (navigator.share) {
-      try {
+    try {
+      if (navigator.share) {
         await navigator.share({
           title: "SORIDRAW Music 공유 음악",
           text: "SORIDRAW에서 공유된 음악입니다.",
-          url: shareUrl
+          url: shareUrl,
         });
         return;
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') {
-          // fallback
-        } else {
-          return;
-        }
       }
-    }
 
-    try {
       await navigator.clipboard.writeText(shareUrl);
       showToast("공유 링크가 복사되었습니다.");
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return;
+      console.error("Shared page share failed:", e);
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast("공유 링크가 복사되었습니다.");
+      } catch {
+        showToast("공유에 실패했습니다.");
+      }
+    }
+  };
+
+  const handleCopyShareLink = async (group: any) => {
+    if (isSharedView) {
+      await handleShareCurrentPage();
+      return;
+    }
+
+    const shareUrl = getSharePageUrl(group);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast("링크가 복사되었습니다");
     } catch (e) {
       showToast("링크 복사에 실패했습니다.");
     }
   };
 
-  const cleanForFirestore = (value: any): any => {
-    if (value === undefined) return null;
-    if (Array.isArray(value)) return value.map(cleanForFirestore);
-    if (value && typeof value === 'object') {
-      // Keep Firebase Timestamp objects intact
-      if (typeof value.toDate === 'function') return value;
-      return Object.fromEntries(
-        Object.entries(value).map(([k, v]) => [k, cleanForFirestore(v)])
-      );
-    }
-    return value;
-  };
-
   const handlePublicShare = async () => {
     if (!sharePopupInfo) return;
     const { group, item } = sharePopupInfo;
-    
-    const ownerUid = group.uid || group.ownerUid || item?.uid || item?.ownerUid || user?.uid || null;
-    const trackId = group.id || group.trackId || null;
-
-    if (!ownerUid || !trackId) {
-      showToast("공유에 필요한 곡 정보가 없습니다.");
-      return;
-    }
-
-    const taskId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId || group.apiResponse?.data?.taskId || null;
-    const audioUrl = getAudioUrl(item, group);
-    const appliedKeywords = group.appliedKeywords || group.requestPayload?.appliedKeywords || group.tracks?.[0]?.appliedKeywords || group.tracks?.[0]?.requestPayload?.appliedKeywords || null;
-
-    console.log("share auth uid:", auth.currentUser?.uid);
-    console.log("share ownerUid:", ownerUid);
-    console.log("share target group:", group);
-    console.log("share target track:", item);
-    console.log("share trackId:", trackId);
-    console.log("share taskId:", taskId);
-    console.log("share audioUrl:", audioUrl);
-    console.log("share appliedKeywords:", appliedKeywords);
-
     try {
-      console.log("Share Step 1: update original track public start");
-      if (ownerUid && trackId && auth.currentUser?.uid === ownerUid) {
+      if (user) {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+        await updateDoc(trackRef, {
+          isPublic: true,
+          hidden: false,
+          shareType: 'public',
+          publicSharedAt: serverTimestamp()
+        });
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
+      }
+      
+      const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+        ? "https://soridraw-music.vercel.app"
+        : window.location.origin;
+        
+      const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
+      const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
+            const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+      
+      if (isMobile && navigator.share) {
         try {
-          const trackRef = doc(db, 'suno_tracks', ownerUid, 'tracks', trackId);
-          await updateDoc(trackRef, {
-            isPublic: true,
-            publicSharedAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
+          await navigator.share({
+            title: title,
+            text: '공유 음악 재생하기🎵',
+            url: shareUrl
           });
-          console.log("Share Step 1 success");
-        } catch (updateErr) {
-          console.error("Share Step 1 failed:", updateErr);
+          closeModal();
+          return;
+        } catch (e) {
+          if ((e as Error).name !== 'AbortError') {
+             await navigator.clipboard.writeText(shareUrl);
+             showToast("링크가 복사되었습니다");
+             closeModal();
+          }
+          return;
         }
       } else {
-        console.warn("Share Step 1 skipped: current user is not owner", {
-          authUid: auth.currentUser?.uid,
-          ownerUid,
-          trackId
-        });
-      }
-
-      console.log("Share Step 2: create suno_shares start");
-      let shareRef;
-      try {
-        const shareData = {
-          ...cleanForFirestore({
-            ownerUid,
-            trackId,
-            taskId: taskId || '',
-            title: group.title || item?.title || 'Untitled',
-            audioUrl: audioUrl || '',
-            imageUrl: getImageUrl(item, group) || '',
-            duration: getDuration(item, group) || null,
-            status: group.status || 'completed',
-            prompt: group.prompt || '',
-            style: group.style || '',
-            lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
-            sunoData: group.sunoData || null,
-            apiResponse: group.apiResponse || null,
-            apiStatusResponse: group.apiStatusResponse || null,
-            requestPayload: group.requestPayload || null,
-            appliedKeywords: appliedKeywords || null,
-            isPublic: true,
-            shareType: 'public'
-          }),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-
-        console.log("Share Step 2: create suno_shares data:", shareData);
-
-        shareRef = await addDoc(collection(db, 'suno_shares'), shareData);
-        console.log("Share Step 2 success:", shareRef.id);
-      } catch (shareErr) {
-        console.error("Share Step 2 failed:", {
-          error: shareErr,
-          authUid: auth.currentUser?.uid,
-          ownerUid,
-          trackId
-        });
-        showToast("공유 문서 생성 권한 오류가 발생했습니다.");
-        return;
-      }
-
-      console.log("Share Step 3: copy link start");
-      try {
-        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
-        
-        const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
-          ? "https://soridraw-music.vercel.app"
-          : window.location.origin;
-          
-        const shareUrl = `${appOrigin}/suno-library?track=${shareRef.id}`;
-        const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
-        const shareText = `${title}\n공유 음악 재생하기🎵\n${shareUrl}`;
-
-        const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-        
-        if (isMobile && navigator.share) {
-          try {
-            await navigator.share({
-              title: title,
-              text: '공유 음악 재생하기🎵',
-              url: shareUrl
-            });
-            console.log("Share Step 3 success");
-            closeModal();
-            return;
-          } catch (e) {
-            if ((e as Error).name !== 'AbortError') {
-               await navigator.clipboard.writeText(shareUrl);
-               console.log("Share Step 3 success");
-               showToast("링크가 복사되었습니다");
-               closeModal();
-            }
-            return;
-          }
-        } else {
-          await navigator.clipboard.writeText(shareUrl);
-          console.log("Share Step 3 success");
-          showToast("링크가 복사되었습니다");
-          setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
-        }
-      } catch (copyErr) {
-        console.error("Share Step 3 failed:", copyErr);
-        showToast("링크 복사에 실패했습니다.");
+        setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
       }
     } catch (e) {
-      console.error("Suno share failed:", e);
+      console.error(e);
       showToast('공유 처리 중 오류가 발생했습니다.');
     }
   };
@@ -815,24 +608,19 @@ export default function SunoLibraryPage() {
   const handlePlatformShare = async (platform: string) => {
     if (!sharePopupInfo) return;
     const { group, item } = sharePopupInfo;
-    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
-        ? "https://soridraw-music.vercel.app"
-        : window.location.origin;
-        
-    const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
+    const shareUrl = getSharePageUrl(group);
     const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
-    const shareText = `${title}\n공유 음악 재생하기🎵\n${shareUrl}`;
 
     try {
       if (platform === 'copy') {
         await navigator.clipboard.writeText(shareUrl);
-        showToast("링크가 복사되었습니다.");
+        showToast("링크가 복사되었습니다");
       } else if (platform === 'email') {
-        window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`;
+        window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`;
       } else if (platform === 'facebook') {
         window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
       } else if (platform === 'twitter') {
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank');
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
       } else if (platform === 'telegram') {
         window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(title)}`, '_blank');
       } else if (platform === 'kakao' || platform === 'kakao_me') {
@@ -859,10 +647,11 @@ export default function SunoLibraryPage() {
           showToast("카카오톡 SDK가 초기화되지 않았습니다.");
         }
       } else {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(shareUrl);
         showToast("링크가 복사되었습니다. 원하는 앱에 붙여넣어 공유해주세요.");
       }
     } catch(e) {
+      console.error("Platform share failed:", e);
       showToast("공유 실패");
     }
   };
@@ -899,6 +688,8 @@ export default function SunoLibraryPage() {
   };
 
   const handleApplyNext = (group: any, item: any) => {
+    if (!group && !item) return;
+
     const appliedKeywords = resolveSunoAppliedKeywords(
       item,
       group,
@@ -912,7 +703,6 @@ export default function SunoLibraryPage() {
       group,
       item,
       resolvedAppliedKeywords: appliedKeywords,
-      isKakaoInAppBrowser
     });
 
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
@@ -920,22 +710,17 @@ export default function SunoLibraryPage() {
       return;
     }
 
-    sessionStorage.setItem(
-      "pendingAppliedKeywords",
-      JSON.stringify(appliedKeywords)
-    );
-    localStorage.setItem(
-      "pendingAppliedKeywordsBackup",
-      JSON.stringify(appliedKeywords)
-    );
+    const serialized = JSON.stringify(appliedKeywords);
+    sessionStorage.setItem("pendingAppliedKeywords", serialized);
+    localStorage.setItem("pendingAppliedKeywordsBackup", serialized);
 
     console.log("Saved pendingAppliedKeywords:", {
       appliedKeywords,
       sessionValue: sessionStorage.getItem("pendingAppliedKeywords"),
-      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup")
+      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup"),
     });
 
-    showToast("다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.");
+    showToast("다음 곡에 곡 설정이 복원되었습니다.");
 
     setTimeout(() => {
       navigate("/");
@@ -948,6 +733,7 @@ export default function SunoLibraryPage() {
       showToast("로그인이 필요합니다.");
       return;
     }
+
     const data = {
       title: item?.title || group.title,
       url: url,
@@ -1193,37 +979,16 @@ export default function SunoLibraryPage() {
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(group)}
-                      {(() => {
-                        const hasTaskId = !!(group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId || group.apiResponse?.data?.taskId);
-                        const isMissingAudio = !(group.audioUrl || group.tracks?.[0]?.audioUrl);
-                        const isProcessing = group.status !== 'completed' && group.status !== 'failed';
-                        const isFailed = group.status === 'failed';
-                        const isErrorTask = group.apiStatusResponse?.msg === "The taskId cannot be empty" || group.apiStatusResponse?.code === 400;
-                        const shouldShowBtn = isProcessing || isFailed || isErrorTask || (hasTaskId && isMissingAudio);
-
-                        if (!shouldShowBtn) return null;
-
-                        return (
-                          <button
-                            onClick={() => {
-                              const taskId = group.taskId || group.tracks?.[0]?.taskId || group.requestPayload?.taskId || group.apiResponse?.data?.taskId || null;
-                              const trackId = group.id || null;
-                              
-                              if (!taskId || !trackId) {
-                                  alert('상태 확인에 필요한 taskId 또는 trackId가 없습니다.');
-                                  return;
-                              }
-                              
-                              checkStatus(trackId, taskId);
-                            }}
-                            disabled={statusChecking === group.id || !hasTaskId}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
-                          >
-                            {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                            {isFailed || isErrorTask || (hasTaskId && isMissingAudio) ? "상태 재확인" : "상태 확인"}
-                          </button>
-                        );
-                      })()}
+                      {group.status !== 'completed' && group.status !== 'failed' && (
+                        <button
+                          onClick={() => checkStatus(group.id, group.taskId)}
+                          disabled={statusChecking === group.id || !group.taskId}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
+                        >
+                          {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          상태 확인
+                        </button>
+                      )}
                       {!group.taskId && <span className="text-[10px] opacity-30">Task ID 없음</span>}
                     </div>
                   </div>
@@ -1416,7 +1181,7 @@ export default function SunoLibraryPage() {
                     onClick={() => handlePlatformShare('copy')}
                     className="w-full py-4 bg-white text-black rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/90 transition-all shadow-lg"
                   >
-                    <Copy className="w-5 h-5" /> 링크 복사하기
+                    <Share2 className="w-5 h-5" /> 공유하기
                   </button>
 
                   <div className="grid grid-cols-4 gap-y-6 gap-x-2">
@@ -1490,7 +1255,7 @@ export default function SunoLibraryPage() {
                   } 
                 } : null,
                 filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareLink() : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
@@ -1556,51 +1321,6 @@ export default function SunoLibraryPage() {
                 >
                   닫기
                 </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showKakaoWarning && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowKakaoWarning(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[#1e1e1e] border border-white/10 rounded-3xl p-6 w-full max-w-sm"
-            >
-              <div className="text-center">
-                <div className="w-16 h-16 bg-brand-orange/20 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-orange">
-                  <Info className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-bold mb-2">Chrome에서 열어주세요</h3>
-                <p className="text-sm text-white/70 mb-6">
-                  카카오톡 브라우저에서는 Google 로그인 및 일부 기능이 제한될 수 있습니다. 정상적인 음악 감상과 저장 기능 사용을 위해 Chrome에서 열어주세요.
-                </p>
-                <div className="space-y-3">
-                  <button
-                    onClick={openInChrome}
-                    className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors hover:bg-brand-orange/90 shadow-lg shadow-brand-orange/20"
-                  >
-                    공유 음악 듣기
-                  </button>
-                  <button
-                    onClick={handleShareLink}
-                    className="w-full py-3 bg-white/10 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    공유하기
-                  </button>
-                  <button
-                    onClick={() => setShowKakaoWarning(false)}
-                    className="w-full py-3 text-white/50 hover:text-white font-medium transition-colors"
-                  >
-                    닫기
-                  </button>
-                </div>
               </div>
             </motion.div>
           </div>

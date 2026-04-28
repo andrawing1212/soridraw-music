@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 
@@ -446,19 +447,57 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const handleDownload = (url: string, title?: string) => {
-    if (isSharedView && !user) {
-      console.log("Login required for shared download");
-      showToast("로그인이 필요합니다.");
-      return;
-    }
-
-    if (!url) {
-      alert('아직 다운로드할 음원이 없습니다.');
+  const runDownload = async (audioUrl?: string, title?: string) => {
+    if (!audioUrl) {
+      showToast('아직 다운로드할 음원이 없습니다.');
       return;
     }
     // Use the optimized blob downloader instead of window.open
-    downloadAudioWithTitle(url, title);
+    downloadAudioWithTitle(audioUrl, title);
+  };
+
+  const handleDownload = async (url: string, title?: string) => {
+    if (isSharedView && !user) {
+      console.log("Login required for shared download");
+
+      if (isKakaoInAppBrowser) {
+        setShowKakaoWarning(true);
+        return;
+      }
+      
+      const shareUrl = window.location.href;
+      sessionStorage.setItem("pendingSharedDownload", JSON.stringify({
+        audioUrl: url,
+        title,
+        shareUrl
+      }));
+      
+      showToast("다운로드하려면 로그인이 필요합니다.");
+      
+      const googleProvider = new GoogleAuthProvider();
+      try {
+        await signInWithPopup(auth, googleProvider);
+        
+        // 로그인 성공 후 같은 페이지에서 다운로드 실행
+        const pendingStr = sessionStorage.getItem("pendingSharedDownload");
+        if (pendingStr) {
+          const pending = JSON.parse(pendingStr);
+          sessionStorage.removeItem("pendingSharedDownload");
+          await runDownload(pending.audioUrl, pending.title);
+        }
+      } catch (error: any) {
+        console.error("Shared download login failed:", error);
+        if (error?.code === 'auth/popup-blocked') {
+          showToast("팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.");
+        } else {
+          showToast("로그인이 취소되었거나 실패했습니다.");
+        }
+        sessionStorage.removeItem("pendingSharedDownload");
+      }
+      return;
+    }
+
+    await runDownload(url, title);
   };
 
   const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, mode: 'default' | 'pc-panel' } | null>(null);

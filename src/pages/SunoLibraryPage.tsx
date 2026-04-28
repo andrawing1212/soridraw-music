@@ -587,15 +587,33 @@ export default function SunoLibraryPage() {
     setSharePopupInfo({ group, item, mode: 'default' });
   };
 
-  const handleCopyShareLink = async (group: any) => {
-    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
-        ? "https://soridraw-music.vercel.app"
-        : window.location.origin;
-    const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
-    const shareText = `SORIDRAW Music\n공유 음악 재생하기🎵\n${shareUrl}`;
+  const handleShareLink = async () => {
+    const shareUrl = window.location.href;
+    console.log("Shared page share action:", {
+      shareUrl,
+      canUseNativeShare: !!navigator.share
+    });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "SORIDRAW Music 공유 음악",
+          text: "SORIDRAW에서 공유된 음악입니다.",
+          url: shareUrl
+        });
+        return;
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') {
+          // fallback
+        } else {
+          return;
+        }
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(shareText);
-      showToast("링크가 복사되었습니다");
+      await navigator.clipboard.writeText(shareUrl);
+      showToast("공유 링크가 복사되었습니다.");
     } catch (e) {
       showToast("링크 복사에 실패했습니다.");
     }
@@ -807,8 +825,8 @@ export default function SunoLibraryPage() {
 
     try {
       if (platform === 'copy') {
-        await navigator.clipboard.writeText(shareText);
-        showToast("링크가 복사되었습니다");
+        await navigator.clipboard.writeText(shareUrl);
+        showToast("링크가 복사되었습니다.");
       } else if (platform === 'email') {
         window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`;
       } else if (platform === 'facebook') {
@@ -1472,7 +1490,7 @@ export default function SunoLibraryPage() {
                   } 
                 } : null,
                 filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '링크 복사' : '공유', action: () => { isSharedView ? handleCopyShareLink(activeMenuState.group) : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareLink() : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
@@ -1570,14 +1588,11 @@ export default function SunoLibraryPage() {
                     공유 음악 듣기
                   </button>
                   <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(window.location.href);
-                      showToast("링크가 복사되었습니다.");
-                    }}
+                    onClick={handleShareLink}
                     className="w-full py-3 bg-white/10 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors"
                   >
-                    <Copy className="w-4 h-4" />
-                    링크 복사
+                    <Share2 className="w-4 h-4" />
+                    공유하기
                   </button>
                   <button
                     onClick={() => setShowKakaoWarning(false)}

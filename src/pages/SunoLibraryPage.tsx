@@ -13,6 +13,20 @@ import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, ge
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
+import { ensureDefaultPlaylists } from '../services/playlistService';
+import { Playlist } from '../types';
+
+const fallbackNormalPlaylists: Playlist[] = [
+  { id: "fallback-normal-1", title: "1", type: "normal", order: 1, isDefault: true },
+  { id: "fallback-normal-2", title: "2", type: "normal", order: 2, isDefault: true },
+  { id: "fallback-normal-3", title: "3", type: "normal", order: 3, isDefault: true },
+];
+
+const fallbackSharedPlaylists: Playlist[] = [
+  { id: "fallback-shared-1", title: "1", type: "shared", order: 1, isDefault: true },
+  { id: "fallback-shared-2", title: "2", type: "shared", order: 2, isDefault: true },
+  { id: "fallback-shared-3", title: "3", type: "shared", order: 3, isDefault: true },
+];
 
 export default function SunoLibraryPage() {
   const navigate = useNavigate();
@@ -26,6 +40,11 @@ export default function SunoLibraryPage() {
   const [sharedError, setSharedError] = useState(false);
   const [showKakaoWarning, setShowKakaoWarning] = useState(false);
   
+  const [libraryViewMode, setLibraryViewMode] = useState<"workspace" | "playlist">("workspace");
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedNormalPlaylistId, setSelectedNormalPlaylistId] = useState<string | null>(null);
+  const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
+
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
   // UI States
@@ -190,6 +209,73 @@ export default function SunoLibraryPage() {
 
     return () => unsubscribeAuth();
   }, []);
+
+  useEffect(() => {
+    if (!user || libraryViewMode !== 'playlist' || isSharedView) {
+      if (!user) {
+        setPlaylists([]);
+      }
+      return;
+    }
+
+    let unsub: (() => void) | undefined;
+
+    const initPlaylists = async () => {
+      try {
+        await ensureDefaultPlaylists(user.uid);
+      } catch (error) {
+        console.error("ensureDefaultPlaylists failed:", error);
+      }
+
+      const listsRef = collection(db, 'user_playlists', user.uid, 'lists');
+      unsub = onSnapshot(listsRef, (snapshot) => {
+        const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Playlist));
+        setPlaylists(lists);
+      }, (error) => {
+        console.error("playlist snapshot failed:", error);
+      });
+    };
+
+    initPlaylists();
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [user, libraryViewMode, isSharedView]);
+
+  const actualNormalPlaylists = useMemo(() => playlists.filter(p => p.type === 'normal').sort((a, b) => a.order - b.order), [playlists]);
+  const actualSharedPlaylists = useMemo(() => playlists.filter(p => p.type === 'shared').sort((a, b) => a.order - b.order), [playlists]);
+
+  const visibleNormalPlaylists = actualNormalPlaylists.length > 0 ? actualNormalPlaylists : fallbackNormalPlaylists;
+  const visibleSharedPlaylists = actualSharedPlaylists.length > 0 ? actualSharedPlaylists : fallbackSharedPlaylists;
+
+  useEffect(() => {
+    if (libraryViewMode !== 'playlist') return;
+    
+    console.log("Playlist mode data:", {
+      userId: user?.uid,
+      normalCount: actualNormalPlaylists.length,
+      sharedCount: actualSharedPlaylists.length,
+      usingNormalFallback: actualNormalPlaylists.length === 0,
+      usingSharedFallback: actualSharedPlaylists.length === 0
+    });
+
+    if (!selectedNormalPlaylistId && visibleNormalPlaylists.length > 0) {
+      setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
+    }
+    if (!selectedSharedPlaylistId && visibleSharedPlaylists.length > 0) {
+      setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
+    }
+  }, [
+    libraryViewMode, 
+    user?.uid, 
+    actualNormalPlaylists.length, 
+    actualSharedPlaylists.length, 
+    visibleNormalPlaylists, 
+    visibleSharedPlaylists, 
+    selectedNormalPlaylistId, 
+    selectedSharedPlaylistId
+  ]);
 
   const getAudioUrl = (item: any, group: any) => {
     return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
@@ -999,7 +1085,27 @@ export default function SunoLibraryPage() {
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
-        {/* Search & Filter */}
+        {/* View Mode Tabs */}
+        {!isSharedView && (
+          <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10">
+            <button
+              onClick={() => setLibraryViewMode('workspace')}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'workspace' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              워크스페이스
+            </button>
+            <button
+              onClick={() => setLibraryViewMode('playlist')}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'playlist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              플레이리스트
+            </button>
+          </div>
+        )}
+
+        {libraryViewMode === 'workspace' && (
+          <>
+            {/* Search & Filter */}
         {!isSharedView && (
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -1215,6 +1321,93 @@ export default function SunoLibraryPage() {
                 </motion.div>
               );
             })}
+          </div>
+        )}
+          </>
+        )}
+
+        {libraryViewMode === 'playlist' && (
+          <div className="space-y-6 mt-8">
+            {/* Playlist Tabs Layout */}
+            
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+                {visibleNormalPlaylists.map((playlist) => (
+                  <button 
+                    key={playlist.id} 
+                    onClick={() => setSelectedNormalPlaylistId(playlist.id!)}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${
+                      selectedNormalPlaylistId === playlist.id 
+                        ? 'bg-brand-orange text-white border-brand-orange shadow-lg' 
+                        : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {playlist.title}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => {
+                    if (actualNormalPlaylists.length >= 6) {
+                      showToast('최대 개수까지 생성되었습니다.');
+                    } else {
+                      showToast('플레이리스트 추가 기능은 다음 단계에서 연결됩니다.');
+                    }
+                  }}
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
+                >
+                  <span className="text-lg font-light leading-none">+</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+                {visibleSharedPlaylists.map((playlist) => (
+                  <button 
+                    key={playlist.id} 
+                    onClick={() => setSelectedSharedPlaylistId(playlist.id!)}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 ${
+                      selectedSharedPlaylistId === playlist.id 
+                        ? 'bg-brand-orange text-white border-brand-orange shadow-lg' 
+                        : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {playlist.order === 1 && <Share2 className="w-3.5 h-3.5" />}
+                    {playlist.title}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => {
+                    if (actualSharedPlaylists.length >= 3) {
+                      showToast('최대 개수까지 생성되었습니다.');
+                    } else {
+                      showToast('플레이리스트 추가 기능은 다음 단계에서 연결됩니다.');
+                    }
+                  }}
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
+                >
+                  <span className="text-lg font-light leading-none">+</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Empty State */}
+            <div className="flex flex-col items-center justify-center py-16 text-center border-t border-white/5 mt-4">
+              <Music className="w-12 h-12 text-brand-orange/40 mb-4" />
+              <h2 className="text-xl font-bold mb-2">플레이리스트 준비 중</h2>
+              <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
+                생성한 곡과 공유받은 곡을 취향별로 정리할 수 있는 공간입니다.<br />
+                다음 단계에서 곡 저장과 정렬 기능이 연결됩니다.
+              </p>
+              <button
+                onClick={() => setLibraryViewMode('workspace')}
+                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all"
+              >
+                워크스페이스로 이동
+              </button>
+            </div>
           </div>
         )}
       </div>

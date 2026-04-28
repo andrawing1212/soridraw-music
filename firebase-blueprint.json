@@ -167,6 +167,45 @@
         "isPublic": { "type": "boolean" }
       },
       "required": ["trackId", "title", "audioUrl", "appliedKeywords", "createdAt", "ownerUid"]
+    },
+    "Playlist": {
+      "title": "Playlist",
+      "description": "User's playlist metadata.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["normal", "shared"] },
+        "order": { "type": "number" },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["title", "type", "order", "isDefault", "createdAt", "updatedAt"]
+    },
+    "PlaylistItem": {
+      "title": "Playlist Item",
+      "description": "A track stored inside a playlist.",
+      "type": "object",
+      "properties": {
+        "sourceType": { "type": "string", "enum": ["suno_track", "shared_track"] },
+        "sourceId": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "creatorDisplayId": { "type": ["string", "null"] },
+        "title": { "type": "string" },
+        "audioUrl": { "type": ["string", "null"] },
+        "imageUrl": { "type": ["string", "null"] },
+        "duration": { "type": ["number", "null"] },
+        "genreLabels": { "type": "array", "items": { "type": "string" } },
+        "appliedKeywords": { "type": ["object", "null"] },
+        "colorTag": { "type": ["string", "null"] },
+        "likeCount": { "type": "number" },
+        "order": { "type": "number" },
+        "addedAt": { "type": "object" },
+        "updatedAt": { "type": "object" },
+        "isUnavailable": { "type": "boolean" },
+        "unavailableReason": { "type": ["string", "null"] }
+      },
+      "required": ["sourceType", "sourceId", "ownerUid", "title", "likeCount", "order", "addedAt", "updatedAt", "isUnavailable"]
     }
   },
   "firestore": {
@@ -198,9 +237,17 @@
       "schema": "SectionTag",
       "description": "Live collection of section tags for production use."
     },
-    "/suno_shares/{shareId}": {
+    "suno_shares/{shareId}": {
       "schema": "SunoShare",
       "description": "Snapshots of shared tracks for robust access."
+    },
+    "/user_playlists/{uid}/lists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "A user's playlist."
+    },
+    "/user_playlists/{uid}/lists/{playlistId}/items/{itemId}": {
+      "schema": "PlaylistItem",
+      "description": "An item inside a user's playlist."
     }
   }
 }

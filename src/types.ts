@@ -310,3 +310,38 @@ export interface SunoShare {
   createdAt?: number;
   updatedAt?: number;
 }
+
+// ==========================================
+// Playlist Types
+// ==========================================
+
+export interface Playlist {
+  id?: string;
+  title: string;
+  type: 'normal' | 'shared';
+  order: number;
+  isDefault: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface PlaylistItem {
+  id?: string;
+  sourceType: 'suno_track' | 'shared_track';
+  sourceId: string;
+  ownerUid: string;
+  creatorDisplayId: string | null;
+  title: string;
+  audioUrl: string | null;
+  imageUrl: string | null;
+  duration: number | null;
+  genreLabels: string[];
+  appliedKeywords: Record<string, any> | null;
+  colorTag: string | null;
+  likeCount: number;
+  order: number;
+  addedAt?: any;
+  updatedAt?: any;
+  isUnavailable: boolean;
+  unavailableReason: string | null;
+}

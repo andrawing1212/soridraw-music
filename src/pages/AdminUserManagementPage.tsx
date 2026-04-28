@@ -70,10 +70,10 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
 // 자리비움 기준 (10분)
 const AWAY_MS = 10 * 60 * 1000;
 
-// 휴면 기준 (30분)
-const IDLE_MS = 30 * 60 * 1000;
+// 미사용 기준 (60분)
+const IDLE_MS = 60 * 60 * 1000;
 
-// 로그아웃 표시 기준 (2시간) 
+// 로그아웃 추정 기준 (2시간)
 const LOGGED_OUT_MS = 2 * 60 * 60 * 1000;
 
 // 장기 미접속 기준 (180일)
@@ -104,17 +104,27 @@ const getPresenceState = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'l
   const logoutTime = user.lastLogoutAt || 0;
   const lastSeen = user.lastSeenAt || 0;
   const isOnline = Boolean(user.isOnline);
-  const referenceSeen = lastSeen || loginTime;
+  const latestActivity = Math.max(lastSeen, loginTime);
 
-  if (!loginTime && !logoutTime) return 'loggedOut';
-  if (!isOnline) return 'loggedOut';
-  if (!referenceSeen) return 'loggedIn';
+  if (!latestActivity && !logoutTime) return 'loggedOut';
 
-  const diff = Date.now() - referenceSeen;
+  // A real logout should win only when it is newer than the latest login/activity.
+  // If a user logged in or was active after an old logout record, do not display them as logged out.
+  if (logoutTime > 0 && logoutTime >= latestActivity) return 'loggedOut';
+
+  if (!latestActivity) return 'loggedOut';
+
+  const diff = Date.now() - latestActivity;
+
+  // isOnline can remain false after browser close/background or stale sessions.
+  // Use the latest activity time as the source of truth and treat old activity as an estimated logout.
   if (diff < AWAY_MS) return 'loggedIn';
   if (diff < IDLE_MS) return 'away';
   if (diff < LOGGED_OUT_MS) return 'idle';
-  return 'loggedOut';
+
+  // 2시간 이상 활동이 없고 isOnline이 false이면 로그아웃으로 추정합니다.
+  // isOnline이 true로 남아 있는 예외 상황은 미사용 상태로 유지합니다.
+  return isOnline ? 'idle' : 'loggedOut';
 };
 
 const getRecentStatusLabel = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>, formatLastSeen: (timestamp?: number) => string) => {
@@ -122,24 +132,25 @@ const getRecentStatusLabel = (user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' 
   const logoutTime = user.lastLogoutAt || 0;
   const forceTime = user.forceLogoutAt || 0;
   const lastSeen = user.lastSeenAt || 0;
+  const latestActivity = Math.max(lastSeen, loginTime);
   const presence = getPresenceState(user);
 
   switch (presence) {
     case 'forced':
-      return { icon: LogOut, className: 'text-red-500', text: `로그아웃: ${formatLastSeen(logoutTime || forceTime)}` };
+      return { icon: LogOut, className: 'text-red-500', text: `강제 로그아웃: ${formatLastSeen(forceTime || logoutTime)}` };
     case 'loggedIn':
-      return { icon: LogIn, className: 'text-emerald-500', text: `로그인: ${formatLastSeen(lastSeen || loginTime)}` };
+      return { icon: LogIn, className: 'text-emerald-500', text: `활동중: ${formatLastSeen(latestActivity)}` };
     case 'away':
-      return { icon: Clock, className: 'text-amber-500', text: `자리비움: ${formatLastSeen(lastSeen || loginTime)}` };
+      return { icon: Clock, className: 'text-amber-500', text: `자리비움: ${formatLastSeen(latestActivity)}` };
     case 'idle':
-      return { icon: Clock, className: 'text-yellow-500', text: `휴면: ${formatLastSeen(lastSeen || loginTime)}` };
+      return { icon: Clock, className: 'text-yellow-500', text: `미사용: ${formatLastSeen(latestActivity)}` };
     default: {
-      const baseTime = logoutTime || lastSeen || loginTime;
-      const isRealLogout = logoutTime > 0;
+      const isRealLogout = logoutTime > 0 && logoutTime >= latestActivity;
+      const baseTime = isRealLogout ? logoutTime : (latestActivity || logoutTime);
 
       return {
         icon: LogOut,
-        className: 'text-red-400',
+        className: isRealLogout ? 'text-red-400' : 'text-zinc-400',
         text: isRealLogout
           ? `로그아웃: ${formatLastSeen(baseTime)}`
           : `로그아웃 추정: ${formatLastSeen(baseTime)}`

@@ -1380,6 +1380,12 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [favorites, setFavorites] = useState<any[]>([]);
 
+  // Presence/activity writes are intentionally throttled to minimize Firestore cost.
+  // Do not use this as a heartbeat. It only records meaningful user activity at a low frequency.
+  const ACTIVITY_UPDATE_THROTTLE_MS = 10 * 60 * 1000;
+  const lastPresenceUpdateRef = useRef(0);
+  const presenceUpdateInFlightRef = useRef(false);
+
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
@@ -2307,6 +2313,17 @@ const cycleFamilySelection = (
               isOnline: true,
             };
 
+            // Root/admin bootstrap guard:
+            // Activity/login sync must never downgrade an admin account to free.
+            // Only use this when the user document is missing or was accidentally reset.
+            const bootstrapAdminEmails = new Set([
+              'andrawing1212@gmail.com',
+              'andrawing1213@gmail.com',
+              'legend3636@gmail.com',
+            ]);
+            const normalizedEmail = (currentUser.email ?? '').toLowerCase();
+            const isBootstrapAdmin = bootstrapAdminEmails.has(normalizedEmail);
+
             if (!userSnap.exists()) {
               const favsSnap = await getDocs(
                 query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
@@ -2319,7 +2336,7 @@ const cycleFamilySelection = (
                 favoriteCount: favsSnap.size,
                 songGeneratedCount: songCount,
                 createdAt: Date.now(),
-                role: 'free',
+                role: isBootstrapAdmin ? 'admin' : 'free',
                 accountStatus: 'active',
                 paymentStatus: 'none',
               });
@@ -2330,8 +2347,18 @@ const cycleFamilySelection = (
                 setIsBanModalOpen(true);
               }
 
-              // Existing users: never touch role/plan/account status from the client.
+              // Existing users: never touch role/plan/account status from regular activity sync.
               await updateDoc(userRef, safeSessionData);
+
+              // Safety repair for root admin accounts only: if a root admin email was
+              // accidentally reset to free by an older client, restore admin once.
+              if (isBootstrapAdmin && currentData.role !== 'admin') {
+                console.warn('[Auth Debug] Restoring bootstrap admin role for:', normalizedEmail);
+                await updateDoc(userRef, {
+                  role: 'admin',
+                  accountStatus: currentData.accountStatus || 'active',
+                });
+              }
             }
           } catch (error) {
             console.error('Failed to sync user document:', error);
@@ -2372,6 +2399,67 @@ const cycleFamilySelection = (
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
   }, []);
 
+  const markUserActivity = useCallback(async (reason: string, options?: { force?: boolean }) => {
+    const currentUser = auth.currentUser || user;
+    if (!currentUser?.uid) return;
+
+    const now = Date.now();
+    const shouldSkip =
+      !options?.force &&
+      lastPresenceUpdateRef.current > 0 &&
+      now - lastPresenceUpdateRef.current < ACTIVITY_UPDATE_THROTTLE_MS;
+
+    if (shouldSkip || presenceUpdateInFlightRef.current) return;
+
+    lastPresenceUpdateRef.current = now;
+    presenceUpdateInFlightRef.current = true;
+
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        lastSeenAt: now,
+        isOnline: true,
+      });
+      console.log('[Presence] lastSeenAt updated:', { reason, uid: currentUser.uid });
+    } catch (error) {
+      console.warn('[Presence] Failed to update lastSeenAt:', { reason, error });
+    } finally {
+      presenceUpdateInFlightRef.current = false;
+    }
+  }, [user]);
+
+  // Low-cost global activity detector: no scroll/mousemove heartbeat, only throttled meaningful interactions.
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const handleActivity = () => {
+      markUserActivity('global_interaction');
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        markUserActivity('visibility_visible');
+      }
+    };
+
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('keydown', handleActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pointerdown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.uid, markUserActivity]);
+
+  // Page changes count as activity, but still obey the 10-minute throttle.
+  useEffect(() => {
+    if (!user?.uid) return;
+    markUserActivity(`route:${location.pathname}`);
+  }, [location.pathname, user?.uid, markUserActivity]);
+
   const toggleFavorite = async (song: SongResult) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
@@ -2379,8 +2467,8 @@ const cycleFamilySelection = (
       return;
     }
 
-    // Activity indicator
-    updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
+    // Low-cost activity indicator (throttled).
+    markUserActivity('favorite_toggle');
 
     const existingFav = favorites.find(f => f.title === song.title && f.prompt === song.prompt);
 
@@ -3314,9 +3402,9 @@ const saveRecentSong = async (newSong: any) => {
     abortControllerRef.current = new AbortController();
 
     try {
-      // Activity indicator
+      // Low-cost activity indicator (throttled).
       if (user) {
-        updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
+        markUserActivity('generate_song');
       }
       let finalGenres = [...selectedGenres];
       let finalMoods = [...selectedMoods];

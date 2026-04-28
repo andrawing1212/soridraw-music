@@ -25,9 +25,10 @@ export const ensureDefaultPlaylists = async (uid: string) => {
   let hasBatchOperations = false;
 
   const defaultNormals = [
-    { title: '1', order: 1 },
-    { title: '2', order: 2 },
-    { title: '3', order: 3 }
+    { title: '기본', order: 1 },
+    { title: '1', order: 2 },
+    { title: '2', order: 3 },
+    { title: '3', order: 4 }
   ];
 
   defaultNormals.forEach((def) => {
@@ -46,9 +47,9 @@ export const ensureDefaultPlaylists = async (uid: string) => {
   });
 
   const defaultShared = [
-    { title: '1', order: 1 },
-    { title: '2', order: 2 },
-    { title: '3', order: 3 }
+    { title: '기본', order: 1 },
+    { title: '1', order: 2 },
+    { title: '2', order: 3 }
   ];
 
   defaultShared.forEach((def) => {

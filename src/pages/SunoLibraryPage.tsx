@@ -17,15 +17,16 @@ import { ensureDefaultPlaylists, createPlaylist, renamePlaylist, deletePlaylist,
 import { Playlist, PlaylistItem } from '../types';
 
 const fallbackNormalPlaylists: Playlist[] = [
-  { id: "fallback-normal-1", title: "1", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
-  { id: "fallback-normal-2", title: "2", type: "normal", order: 2, isDefault: true, isFallback: true } as any,
-  { id: "fallback-normal-3", title: "3", type: "normal", order: 3, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-0", title: "기본", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-1", title: "1", type: "normal", order: 2, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-2", title: "2", type: "normal", order: 3, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-3", title: "3", type: "normal", order: 4, isDefault: true, isFallback: true } as any,
 ];
 
 const fallbackSharedPlaylists: Playlist[] = [
-  { id: "fallback-shared-1", title: "1", type: "shared", order: 1, isDefault: true, isFallback: true } as any,
-  { id: "fallback-shared-2", title: "2", type: "shared", order: 2, isDefault: true, isFallback: true } as any,
-  { id: "fallback-shared-3", title: "3", type: "shared", order: 3, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-0", title: "기본", type: "shared", order: 1, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-1", title: "1", type: "shared", order: 2, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-2", title: "2", type: "shared", order: 3, isDefault: true, isFallback: true } as any,
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -54,6 +55,9 @@ export default function SunoLibraryPage() {
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
+
+  const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
+  const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
@@ -299,36 +303,9 @@ export default function SunoLibraryPage() {
     selectedSharedPlaylistId
   ]);
 
-  const handleRenamePlaylist = async (playlist: Playlist) => {
+  const handleRenamePlaylist = (playlist: Playlist) => {
     if (!user || (playlist as any).isFallback) return;
-
-    const newTitle = prompt('플레이리스트 이름을 입력하세요. (최대 20자)', playlist.title);
-    if (newTitle === null) return;
-    
-    const trimmedTitle = newTitle.trim();
-    if (!trimmedTitle) {
-      showToast('이름을 입력해주세요.');
-      return;
-    }
-    if (trimmedTitle.length > 20) {
-      showToast('이름은 최대 20자까지 가능합니다.');
-      return;
-    }
-
-    const isNormal = playlist.type === 'normal';
-    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-    
-    if (currentList.some(p => p.id !== playlist.id && p.title === trimmedTitle)) {
-      showToast('같은 이름의 플레이리스트가 이미 있습니다.');
-      return;
-    }
-
-    try {
-      await renamePlaylist(user.uid, playlist.id!, trimmedTitle);
-    } catch (error) {
-      console.error(error);
-      showToast('이름 변경에 실패했습니다.');
-    }
+    setRenameModalArgs({ playlist, newTitle: playlist.title });
   };
 
   const handleDeletePlaylist = async (playlist: Playlist) => {
@@ -371,7 +348,7 @@ export default function SunoLibraryPage() {
     if (!user) return;
     const isNormal = type === 'normal';
     const listCount = isNormal ? actualNormalPlaylists.length : actualSharedPlaylists.length;
-    const maxCount = isNormal ? 6 : 3;
+    const maxCount = isNormal ? 10 : 5;
 
     if (listCount >= maxCount) {
       showToast('최대 개수까지 생성되었습니다.');
@@ -508,42 +485,19 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const handleMoveToOtherPlaylist = async (item: PlaylistItem) => {
+  const handleMoveToOtherPlaylist = (item: PlaylistItem) => {
     if (!user || !activePlaylistId) return;
 
     const isShared = item.sourceType === 'shared_track';
     const targetLists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
-    const availableLists = targetLists.filter(p => p.id !== activePlaylistId);
+    const availableLists = targetLists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
 
     if (availableLists.length === 0) {
       showToast("이동할 대상 플레이리스트가 없습니다.");
       return;
     }
 
-    const optionsText = availableLists.map((p, idx) => `${idx + 1}. ${p.title}`).join('\n');
-    const input = window.prompt(`이동할 플레이리스트 번호를 입력하세요:\n${optionsText}`);
-    
-    if (!input) return;
-    
-    const idx = parseInt(input) - 1;
-    if (idx < 0 || idx >= availableLists.length) {
-      showToast("올바른 번호를 입력해주세요.");
-      return;
-    }
-
-    const targetPlaylist = availableLists[idx];
-
-    try {
-      await movePlaylistItem(user.uid, activePlaylistId, targetPlaylist.id!, item);
-      showToast(`'${targetPlaylist.title}'(으)로 이동되었습니다.`);
-    } catch (e: any) {
-      console.error(e);
-      if (e.message === 'DUPLICATE') {
-        showToast("이미 대상 플레이리스트에 있는 곡입니다.");
-      } else {
-        showToast("곡 이동에 실패했습니다.");
-      }
-    }
+    setMoveModalArgs({ item });
   };
 
   const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
@@ -1326,7 +1280,7 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget;
+  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs;
 
   const closeModal = () => {
     if (isModalOpen && window.history.state?.modalOpen) {
@@ -1335,6 +1289,8 @@ export default function SunoLibraryPage() {
       setSharePopupInfo(null);
       setShowDetails(null);
       setDeleteTarget(null);
+      setRenameModalArgs(null);
+      setMoveModalArgs(null);
     }
   };
 
@@ -1372,6 +1328,134 @@ export default function SunoLibraryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
+      <AnimatePresence>
+        {renameModalArgs && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+               onClick={() => setRenameModalArgs(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-white/10"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                <h3 className="font-bold text-white">플레이리스트 이름 변경</h3>
+                <button onClick={() => setRenameModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 flex flex-col gap-4">
+                <input 
+                  type="text" 
+                  value={renameModalArgs.newTitle} 
+                  onChange={e => setRenameModalArgs({ ...renameModalArgs, newTitle: e.target.value })}
+                  placeholder="플레이리스트 이름 (최대 20자)"
+                  maxLength={20}
+                  className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-white/5 focus:border-brand-orange/50 transition-colors"
+                  autoFocus
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      if (!user || (renameModalArgs.playlist as any).isFallback) return;
+                      const trimmedTitle = renameModalArgs.newTitle.trim();
+                      if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
+                      if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
+                      const isNormal = renameModalArgs.playlist.type === 'normal';
+                      const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+                      if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
+                        showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
+                      }
+                      try {
+                        await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
+                        setRenameModalArgs(null);
+                        showToast('플레이리스트 이름이 변경되었습니다.');
+                      } catch (error) { showToast('이름 변경에 실패했습니다.'); }
+                    }
+                  }}
+                />
+              </div>
+              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/5">
+                <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
+                <button className="px-4 py-2 font-bold bg-brand-orange text-white rounded-xl hover:bg-brand-orange/90 transition-colors" onClick={async () => {
+                  if (!user || (renameModalArgs.playlist as any).isFallback) return;
+                  const trimmedTitle = renameModalArgs.newTitle.trim();
+                  if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
+                  if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
+                  const isNormal = renameModalArgs.playlist.type === 'normal';
+                  const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+                  if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
+                    showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
+                  }
+                  try {
+                    await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
+                    setRenameModalArgs(null);
+                    showToast('플레이리스트 이름이 변경되었습니다.');
+                  } catch (error) { showToast('이름 변경에 실패했습니다.'); }
+                }}>저장</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {moveModalArgs && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+               onClick={() => setMoveModalArgs(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-white/10 max-h-[80vh]"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
+                <h3 className="font-bold text-white">다른 플레이리스트로 이동</h3>
+                <button onClick={() => setMoveModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex flex-col gap-2">
+                {(() => {
+                  const isShared = moveModalArgs.item.sourceType === 'shared_track';
+                  const targetLists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
+                  const availableLists = targetLists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
+                  
+                  return availableLists.map(list => (
+                    <button
+                      key={list.id}
+                      onClick={async () => {
+                        if (!user || !activePlaylistId) return;
+                        try {
+                          const targetItemsRef = collection(db, 'user_playlists', user.uid, 'lists', list.id!, 'items');
+                          const q = query(targetItemsRef, where('sourceId', '==', moveModalArgs.item.sourceId));
+                          const targetDocs = await getDocs(q);
+                          
+                          if (!targetDocs.empty) {
+                            showToast("이미 대상 플레이리스트에 있는 곡입니다.");
+                            return;
+                          }
+
+                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item.id!);
+                          showToast("플레이리스트를 이동했습니다.");
+                          setMoveModalArgs(null);
+                        } catch (e) { showToast("곡 이동에 실패했습니다."); }
+                      }}
+                      className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors font-medium text-white flex items-center"
+                    >
+                      [{list.title}]
+                    </button>
+                  ));
+                })()}
+              </div>
+              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/5 shrink-0">
+                <button className="px-4 py-2 font-bold bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors" onClick={() => setMoveModalArgs(null)}>닫기</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {isSharedView && showKakaoWarning && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">

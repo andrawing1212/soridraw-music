@@ -62,10 +62,10 @@ service cloud.firestore {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
-    // User Playlists
+    // User Suno Playlists
     match /user_playlists/{uid}/lists/{playlistId} {
       allow read, write: if isOwner(uid) || isAdmin();
-      
+
       match /items/{itemId} {
         allow read, write: if isOwner(uid) || isAdmin();
       }
@@ -93,35 +93,48 @@ service cloud.firestore {
       allow read: if resource.data.isPublic == true;
     }
 
-// Suno API Shares
-match /suno_shares/{shareId} {
-  function isValidShare(data) {
-    return data.ownerUid is string &&
-           data.ownerUid.size() <= 128 &&
-           data.trackId is string &&
-           data.title is string &&
-           data.isPublic == true &&
-           (!('audioUrl' in data) || data.audioUrl is string) &&
-           (!('imageUrl' in data) || data.imageUrl is string) &&
-           (!('taskId' in data) || data.taskId is string) &&
-           (!('appliedKeywords' in data) || data.appliedKeywords is map) &&
-           (!('requestPayload' in data) || data.requestPayload is map);
-  }
+    // Suno API Shares
+    match /suno_shares/{shareId} {
+      function isValidShare(data) {
+        return data.ownerUid is string &&
+               data.ownerUid.size() <= 128 &&
+               data.trackId is string &&
+               data.title is string &&
+               data.isPublic == true &&
+               (!('audioUrl' in data) || data.audioUrl is string) &&
+               (!('imageUrl' in data) || data.imageUrl is string) &&
+               (!('taskId' in data) || data.taskId is string) &&
+               (!('appliedKeywords' in data) || data.appliedKeywords is map) &&
+               (!('requestPayload' in data) || data.requestPayload is map);
+      }
 
-  allow read: if resource.data.isPublic == true ||
-                 isOwner(resource.data.ownerUid) ||
-                 isAdmin();
+      allow read: if resource.data.isPublic == true ||
+                   isOwner(resource.data.ownerUid) ||
+                   isAdmin();
 
-  allow create: if isAuthenticated() &&
-                   request.resource.data.ownerUid == request.auth.uid &&
-                   isValidShare(request.resource.data);
+      allow create: if isAuthenticated() &&
+                     request.resource.data.ownerUid == request.auth.uid &&
+                     isValidShare(request.resource.data);
 
-  allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
-                   request.resource.data.ownerUid == resource.data.ownerUid &&
-                   isValidShare(request.resource.data);
+      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+                    request.resource.data.ownerUid == resource.data.ownerUid &&
+                    isValidShare(request.resource.data);
 
-  allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
-}
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
+    // Playlist Likes
+    match /playlist_like_counts/{trackGlobalId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /playlist_likes/{trackGlobalId}/users/{uid} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isOwner(uid);
+      allow update: if false;
+    }
 
     // 3. Default Deny
     match /{document=**} {

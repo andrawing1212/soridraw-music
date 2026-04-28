@@ -6,27 +6,29 @@ import {
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
-  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
-import { ensureDefaultPlaylists } from '../services/playlistService';
-import { Playlist } from '../types';
+import { ensureDefaultPlaylists, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
+import { Playlist, PlaylistItem } from '../types';
 
 const fallbackNormalPlaylists: Playlist[] = [
-  { id: "fallback-normal-1", title: "1", type: "normal", order: 1, isDefault: true },
-  { id: "fallback-normal-2", title: "2", type: "normal", order: 2, isDefault: true },
-  { id: "fallback-normal-3", title: "3", type: "normal", order: 3, isDefault: true },
+  { id: "fallback-normal-1", title: "1", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-2", title: "2", type: "normal", order: 2, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-3", title: "3", type: "normal", order: 3, isDefault: true, isFallback: true } as any,
 ];
 
 const fallbackSharedPlaylists: Playlist[] = [
-  { id: "fallback-shared-1", title: "1", type: "shared", order: 1, isDefault: true },
-  { id: "fallback-shared-2", title: "2", type: "shared", order: 2, isDefault: true },
-  { id: "fallback-shared-3", title: "3", type: "shared", order: 3, isDefault: true },
+  { id: "fallback-shared-1", title: "1", type: "shared", order: 1, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-2", title: "2", type: "shared", order: 2, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-3", title: "3", type: "shared", order: 3, isDefault: true, isFallback: true } as any,
 ];
+
+const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export default function SunoLibraryPage() {
   const navigate = useNavigate();
@@ -44,8 +46,26 @@ export default function SunoLibraryPage() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [selectedNormalPlaylistId, setSelectedNormalPlaylistId] = useState<string | null>(null);
   const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
+  const [activePlaylistSection, setActivePlaylistSection] = useState<'normal' | 'shared'>('normal');
+  const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
+  const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
+  const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
+  const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
+  
+  const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
+  const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveMenuState(null);
+      setActivePlaylistItemMenu(null);
+      setActiveColorMenu(null);
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
 
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,6 +81,8 @@ export default function SunoLibraryPage() {
     audioUrl: string;
   }
   const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
+  const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
+  const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
   interface DeleteAction {
     groupId: string;
     itemIndex: number;
@@ -276,6 +298,316 @@ export default function SunoLibraryPage() {
     selectedNormalPlaylistId, 
     selectedSharedPlaylistId
   ]);
+
+  const handleRenamePlaylist = async (playlist: Playlist) => {
+    if (!user || (playlist as any).isFallback) return;
+
+    const newTitle = prompt('플레이리스트 이름을 입력하세요. (최대 20자)', playlist.title);
+    if (newTitle === null) return;
+    
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) {
+      showToast('이름을 입력해주세요.');
+      return;
+    }
+    if (trimmedTitle.length > 20) {
+      showToast('이름은 최대 20자까지 가능합니다.');
+      return;
+    }
+
+    const isNormal = playlist.type === 'normal';
+    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+    
+    if (currentList.some(p => p.id !== playlist.id && p.title === trimmedTitle)) {
+      showToast('같은 이름의 플레이리스트가 이미 있습니다.');
+      return;
+    }
+
+    try {
+      await renamePlaylist(user.uid, playlist.id!, trimmedTitle);
+    } catch (error) {
+      console.error(error);
+      showToast('이름 변경에 실패했습니다.');
+    }
+  };
+
+  const handleDeletePlaylist = async (playlist: Playlist) => {
+    if (!user || (playlist as any).isFallback) return;
+
+    const isNormal = playlist.type === 'normal';
+    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+
+    if (currentList.length <= 1) {
+      showToast(isNormal ? '최소 1개의 플레이리스트는 남겨야 합니다.' : '최소 1개의 공유 받은 곡 플레이리스트는 남겨야 합니다.');
+      return;
+    }
+
+    if (!window.confirm('이 플레이리스트를 삭제할까요? 저장된 곡도 내 목록에서 함께 제거됩니다.')) {
+      return;
+    }
+
+    try {
+      await deletePlaylist(user.uid, playlist.id!);
+      
+      // Update selection if the deleted one was selected
+      if (isNormal && selectedNormalPlaylistId === playlist.id) {
+        const remaining = currentList.filter(p => p.id !== playlist.id);
+        if (remaining.length > 0) {
+          setSelectedNormalPlaylistId(remaining[0].id!);
+        }
+      } else if (!isNormal && selectedSharedPlaylistId === playlist.id) {
+        const remaining = currentList.filter(p => p.id !== playlist.id);
+        if (remaining.length > 0) {
+          setSelectedSharedPlaylistId(remaining[0].id!);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      showToast('삭제에 실패했습니다.');
+    }
+  };
+
+  const handleAddPlaylist = async (type: 'normal' | 'shared') => {
+    if (!user) return;
+    const isNormal = type === 'normal';
+    const listCount = isNormal ? actualNormalPlaylists.length : actualSharedPlaylists.length;
+    const maxCount = isNormal ? 6 : 3;
+
+    if (listCount >= maxCount) {
+      showToast('최대 개수까지 생성되었습니다.');
+      return;
+    }
+
+    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+    let nextNum = 1;
+    while (currentList.some(p => p.title === String(nextNum))) {
+      nextNum++;
+    }
+    const newTitle = String(nextNum);
+    const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
+
+    try {
+      const newId = await createPlaylist(user.uid, type, newTitle, newOrder);
+      if (isNormal) {
+        setSelectedNormalPlaylistId(newId);
+      } else {
+        setSelectedSharedPlaylistId(newId);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('플레이리스트 생성에 실패했습니다.');
+    }
+  };
+
+  const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
+
+  useEffect(() => {
+    if (!user || libraryViewMode !== 'playlist' || !activePlaylistId) {
+      setPlaylistItems([]);
+      return;
+    }
+
+    setLoadingPlaylistItems(true);
+    const itemsRef = collection(db, 'user_playlists', user.uid, 'lists', activePlaylistId, 'items');
+    
+    // Subscribe to items without ordering first, or order by order asc
+    const unsub = onSnapshot(itemsRef, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlaylistItem));
+      items.sort((a, b) => a.order - b.order);
+      setPlaylistItems(items);
+      setLoadingPlaylistItems(false);
+    }, (error) => {
+      console.error("Failed to fetch playlist items:", error);
+      setLoadingPlaylistItems(false);
+    });
+
+    return () => unsub();
+  }, [user, libraryViewMode, activePlaylistId]);
+
+  // Handle caching of likes and shared statuses
+  useEffect(() => {
+    if (playlistItems.length === 0 || libraryViewMode !== 'playlist') return;
+
+    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+    const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
+    const checkedAt = checkedAtStr ? parseInt(checkedAtStr, 10) : 0;
+    
+    setLikesCache(currentLikesCache);
+
+    const now = Date.now();
+    const needsLikeUpdate = (now - checkedAt) > CACHE_EXPIRY_MS;
+
+    const currentSharedCache = JSON.parse(localStorage.getItem('soridraw_shared_track_status_cache') || '{}');
+    setSharedStatusCache(currentSharedCache);
+
+    const checkCaches = async () => {
+      let updatedLikes = { ...currentLikesCache };
+      let updatedShared = { ...currentSharedCache };
+      let didUpdateLikes = false;
+      let didUpdateShared = false;
+
+      // 1. Likes Cache
+      if (needsLikeUpdate) {
+        const globalIds = playlistItems.map(p => getTrackGlobalId(p));
+        // unique
+        const uniqueGlobalIds = Array.from(new Set<string>(globalIds));
+        const fetchedLikes = await fetchTrackLikes(uniqueGlobalIds, user?.uid);
+        updatedLikes = { ...updatedLikes, ...fetchedLikes };
+        didUpdateLikes = true;
+      }
+
+      // 2. Shared Status Cache
+      const sharedSourceIdsToFetch = playlistItems
+        .filter(p => p.sourceType === 'shared_track')
+        .map(p => p.sourceId!)
+        .filter(sid => {
+           const cached = currentSharedCache[sid];
+           return !cached || (now - cached.checkedAt > CACHE_EXPIRY_MS);
+        });
+
+      if (sharedSourceIdsToFetch.length > 0) {
+        // unique
+        const uniqueSourceIds = Array.from(new Set<string>(sharedSourceIdsToFetch));
+        const fetchedShared = await fetchSharedTracksStatus(uniqueSourceIds);
+        updatedShared = { ...updatedShared, ...fetchedShared };
+        didUpdateShared = true;
+      }
+      
+      if (didUpdateLikes) {
+        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(updatedLikes));
+        localStorage.setItem('soridraw_like_count_cache_checked_at', now.toString());
+        setLikesCache(updatedLikes);
+      }
+
+      if (didUpdateShared) {
+        localStorage.setItem('soridraw_shared_track_status_cache', JSON.stringify(updatedShared));
+        setSharedStatusCache(updatedShared);
+      }
+    };
+
+    checkCaches();
+
+  }, [playlistItems, libraryViewMode, user]);
+
+  const handleRemoveFromPlaylist = async (item: PlaylistItem) => {
+    if (!user || !activePlaylistId) return;
+    
+    const isShared = item.sourceType === 'shared_track';
+    const msg = isShared 
+      ? "이 공유곡을 내 플레이리스트에서 삭제할까요? 원곡자 데이터에는 영향이 없습니다."
+      : "이 곡을 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.";
+      
+    if (!window.confirm(msg)) return;
+
+    try {
+      await deletePlaylistItem(user.uid, activePlaylistId, item.id!);
+      showToast("곡이 삭제되었습니다.");
+    } catch (e) {
+      console.error(e);
+      showToast("곡 삭제에 실패했습니다.");
+    }
+  };
+
+  const handleMoveToOtherPlaylist = async (item: PlaylistItem) => {
+    if (!user || !activePlaylistId) return;
+
+    const isShared = item.sourceType === 'shared_track';
+    const targetLists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
+    const availableLists = targetLists.filter(p => p.id !== activePlaylistId);
+
+    if (availableLists.length === 0) {
+      showToast("이동할 대상 플레이리스트가 없습니다.");
+      return;
+    }
+
+    const optionsText = availableLists.map((p, idx) => `${idx + 1}. ${p.title}`).join('\n');
+    const input = window.prompt(`이동할 플레이리스트 번호를 입력하세요:\n${optionsText}`);
+    
+    if (!input) return;
+    
+    const idx = parseInt(input) - 1;
+    if (idx < 0 || idx >= availableLists.length) {
+      showToast("올바른 번호를 입력해주세요.");
+      return;
+    }
+
+    const targetPlaylist = availableLists[idx];
+
+    try {
+      await movePlaylistItem(user.uid, activePlaylistId, targetPlaylist.id!, item);
+      showToast(`'${targetPlaylist.title}'(으)로 이동되었습니다.`);
+    } catch (e: any) {
+      console.error(e);
+      if (e.message === 'DUPLICATE') {
+        showToast("이미 대상 플레이리스트에 있는 곡입니다.");
+      } else {
+        showToast("곡 이동에 실패했습니다.");
+      }
+    }
+  };
+
+  const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
+    if (!user || !activePlaylistId) return;
+    try {
+      await updatePlaylistItemColor(user.uid, activePlaylistId, item.id!, color);
+    } catch (e) {
+      console.error(e);
+      showToast("색상 변경에 실패했습니다.");
+    }
+  };
+
+  const handleCustomSort = async (itemA: PlaylistItem, itemB: PlaylistItem) => {
+    if (!user || !activePlaylistId) return;
+    try {
+      await swapPlaylistItemOrder(user.uid, activePlaylistId, itemA, itemB);
+    } catch (e) {
+      console.error(e);
+      showToast("순서 변경에 실패했습니다.");
+    }
+  };
+
+  const handleToggleLike = async (item: PlaylistItem) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
+      return;
+    }
+    
+    const globalId = getTrackGlobalId(item);
+    const cached = likesCache[globalId] || { likeCount: 0, likedByMe: false };
+    
+    // Optimistic UI update
+    const newLikedByMe = !cached.likedByMe;
+    const newCount = newLikedByMe ? cached.likeCount + 1 : Math.max(0, cached.likeCount - 1);
+    
+    const newCacheValue = { likeCount: newCount, likedByMe: newLikedByMe };
+    setLikesCache(prev => ({ ...prev, [globalId]: newCacheValue }));
+    
+    // Also update localStorage immediately so it doesn't revert during re-render
+    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+    currentLikesCache[globalId] = newCacheValue;
+    localStorage.setItem('soridraw_like_count_cache', JSON.stringify(currentLikesCache));
+
+    try {
+      const actualCount = await toggleTrackLike(globalId, user.uid, cached.likedByMe);
+      // Sync with actual count
+      if (actualCount !== newCount) {
+        const syncedCacheValue = { likeCount: actualCount, likedByMe: newLikedByMe };
+        setLikesCache(prev => ({ ...prev, [globalId]: syncedCacheValue }));
+        
+        const finalCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+        finalCache[globalId] = syncedCacheValue;
+        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(finalCache));
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("좋아요 변경에 실패했습니다.");
+      // Rollback
+      setLikesCache(prev => ({ ...prev, [globalId]: cached }));
+      const rbCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+      rbCache[globalId] = cached;
+      localStorage.setItem('soridraw_like_count_cache', JSON.stringify(rbCache));
+    }
+  };
 
   const getAudioUrl = (item: any, group: any) => {
     return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
@@ -876,21 +1208,62 @@ export default function SunoLibraryPage() {
     }, 700);
   };
 
-  const handleSavePlaylist = (group: any, item: any, url: string) => {
-    if (isSharedView && !user) {
-      console.log("Login required for playlist save");
+  const handleSavePlaylist = async (group: any, item: any, url: string, idx: number) => {
+    if (!user) {
       showToast("로그인이 필요합니다.");
       return;
     }
 
-    const data = {
-      title: item?.title || group.title,
-      url: url,
-      source: 'suno-library',
-      groupId: group.id
+    const isShared = isSharedView;
+    const targetPlaylists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
+
+    if (targetPlaylists.length === 0) {
+      showToast('저장할 플레이리스트가 없습니다.');
+      return;
+    }
+
+    // Default to the lowest order playlist
+    const targetPlaylist = targetPlaylists[0];
+
+    const sourceId = isShared ? (group.shareId || group.id) : (item?.id || `${group.id}-${idx}`);
+
+    const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
+      sourceType: isShared ? 'shared_track' : 'suno_track',
+      sourceId: sourceId,
+      ownerUid: (isShared ? (group.ownerUid || group.uid || '') : (user.uid || group.ownerUid)) || '',
+      creatorDisplayId: group.creatorDisplayId || group.ownerNickname || group.ownerUid || null,
+      title: getTitle(item, group, idx),
+      audioUrl: url || null,
+      imageUrl: getImageUrl(item, group) || null,
+      duration: getDuration(item, group) || null,
+      genreLabels: [],
+      appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group.appliedKeywords || null,
+      colorTag: null,
+      likeCount: 0,
+      order: 0,
+      isUnavailable: false,
+      unavailableReason: null
     };
-    localStorage.setItem('soridraw_playlists_pending', JSON.stringify(data));
-    alert('플레이리스트 저장 준비가 완료되었습니다.');
+
+    if (itemData.appliedKeywords) {
+      const labels: string[] = [];
+      if (itemData.appliedKeywords.genre) labels.push(...itemData.appliedKeywords.genre);
+      if (itemData.appliedKeywords.subGenre) labels.push(...itemData.appliedKeywords.subGenre);
+      if (itemData.appliedKeywords.style) labels.push(...itemData.appliedKeywords.style);
+      itemData.genreLabels = labels;
+    }
+
+    try {
+      await addPlaylistItem(user.uid, targetPlaylist.id!, itemData);
+      showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
+    } catch (e: any) {
+      console.error(e);
+      if (e.message === 'DUPLICATE') {
+        showToast("이미 이 플레이리스트에 저장된 곡입니다.");
+      } else {
+        showToast("플레이리스트 저장에 실패했습니다.");
+      }
+    }
   };
 
   const handleDeleteClick = (groupId: string, itemIndex: number, group: any, action: 'hide' | 'restore' | 'permanentDelete') => {
@@ -1336,7 +1709,10 @@ export default function SunoLibraryPage() {
                 {visibleNormalPlaylists.map((playlist) => (
                   <button 
                     key={playlist.id} 
-                    onClick={() => setSelectedNormalPlaylistId(playlist.id!)}
+                    onClick={() => {
+                      setSelectedNormalPlaylistId(playlist.id!);
+                      setActivePlaylistSection('normal');
+                    }}
                     className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${
                       selectedNormalPlaylistId === playlist.id 
                         ? 'bg-brand-orange text-white border-brand-orange shadow-lg' 
@@ -1347,13 +1723,7 @@ export default function SunoLibraryPage() {
                   </button>
                 ))}
                 <button 
-                  onClick={() => {
-                    if (actualNormalPlaylists.length >= 6) {
-                      showToast('최대 개수까지 생성되었습니다.');
-                    } else {
-                      showToast('플레이리스트 추가 기능은 다음 단계에서 연결됩니다.');
-                    }
-                  }}
+                  onClick={() => handleAddPlaylist('normal')}
                   className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
                 >
                   <span className="text-lg font-light leading-none">+</span>
@@ -1367,7 +1737,10 @@ export default function SunoLibraryPage() {
                 {visibleSharedPlaylists.map((playlist) => (
                   <button 
                     key={playlist.id} 
-                    onClick={() => setSelectedSharedPlaylistId(playlist.id!)}
+                    onClick={() => {
+                      setSelectedSharedPlaylistId(playlist.id!);
+                      setActivePlaylistSection('shared');
+                    }}
                     className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 ${
                       selectedSharedPlaylistId === playlist.id 
                         ? 'bg-brand-orange text-white border-brand-orange shadow-lg' 
@@ -1379,13 +1752,7 @@ export default function SunoLibraryPage() {
                   </button>
                 ))}
                 <button 
-                  onClick={() => {
-                    if (actualSharedPlaylists.length >= 3) {
-                      showToast('최대 개수까지 생성되었습니다.');
-                    } else {
-                      showToast('플레이리스트 추가 기능은 다음 단계에서 연결됩니다.');
-                    }
-                  }}
+                  onClick={() => handleAddPlaylist('shared')}
                   className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
                 >
                   <span className="text-lg font-light leading-none">+</span>
@@ -1393,21 +1760,348 @@ export default function SunoLibraryPage() {
               </div>
             </div>
 
-            {/* Empty State */}
-            <div className="flex flex-col items-center justify-center py-16 text-center border-t border-white/5 mt-4">
-              <Music className="w-12 h-12 text-brand-orange/40 mb-4" />
-              <h2 className="text-xl font-bold mb-2">플레이리스트 준비 중</h2>
-              <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
-                생성한 곡과 공유받은 곡을 취향별로 정리할 수 있는 공간입니다.<br />
-                다음 단계에서 곡 저장과 정렬 기능이 연결됩니다.
-              </p>
-              <button
-                onClick={() => setLibraryViewMode('workspace')}
-                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all"
-              >
-                워크스페이스로 이동
-              </button>
+            {/* Selected Playlist Header */}
+            {(() => {
+              const activePlaylist = activePlaylistSection === 'normal' 
+                ? visibleNormalPlaylists.find(p => p.id === selectedNormalPlaylistId)
+                : visibleSharedPlaylists.find(p => p.id === selectedSharedPlaylistId);
+                
+              if (!activePlaylist) return null;
+              const isFallback = (activePlaylist as any).isFallback;
+              
+              return (
+                <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border border-white/5 rounded-2xl mb-4 mt-6 shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-white/40 mb-1">
+                      {activePlaylistSection === 'normal' ? '선택된 플레이리스트' : '선택된 공유 플레이리스트'}
+                    </span>
+                    <span className="text-base font-bold text-white flex items-center gap-1.5">
+                      {activePlaylistSection === 'shared' && activePlaylist.order === 1 && <Share2 className="w-4 h-4 text-brand-orange" />}
+                      {activePlaylist.title}
+                    </span>
+                  </div>
+                  {!isFallback && user && (
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => handleRenamePlaylist(activePlaylist)}
+                        className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeletePlaylist(activePlaylist)}
+                        className="p-2 text-white/50 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Playlist Controls (Sort & Filter) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-2 mt-2">
+              {/* Sort Options */}
+              <div className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 border border-white/5">
+                {[
+                  { value: 'added', label: '저장순' },
+                  { value: 'genre', label: '장르순' },
+                  { value: 'custom', label: '사용자' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistSortMode(opt.value as any)}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                      playlistSortMode === opt.value
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Color Filter */}
+              <div className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 px-2 border border-white/5 overflow-x-auto hide-scrollbar">
+                <button
+                  onClick={() => setPlaylistColorFilter('all')}
+                  className={`text-xs font-bold px-2 py-1 transition-all rounded-lg ${playlistColorFilter === 'all' ? 'text-white bg-white/10' : 'text-white/40 hover:text-white/70'}`}
+                >
+                  전체
+                </button>
+                <div className="w-px h-3 bg-white/10 mx-1"></div>
+                {[
+                  { value: 'gray', color: '#6b7280' },
+                  { value: 'red', color: '#ef4444' },
+                  { value: 'orange', color: '#f97316' },
+                  { value: 'yellow', color: '#eab308' },
+                  { value: 'green', color: '#22c55e' },
+                  { value: 'blue', color: '#3b82f6' },
+                  { value: 'purple', color: '#a855f7' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistColorFilter(opt.value)}
+                    className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                      playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
+                  >
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Playlist Items */}
+            {loadingPlaylistItems ? (
+              <div className="flex justify-center p-8 mt-2 border-t border-white/5">
+                <Loader2 className="w-6 h-6 animate-spin text-brand-orange" />
+              </div>
+            ) : playlistItems.length > 0 ? (
+              <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
+                {(() => {
+                  let items = playlistItems.filter(item => {
+                    if (playlistColorFilter === 'all') return true;
+                    if (playlistColorFilter === 'gray' && !item.colorTag) return true;
+                    return item.colorTag === playlistColorFilter;
+                  });
+
+                  if (playlistSortMode === 'added') {
+                    items = items.sort((a, b) => {
+                      if (a.order !== b.order) return a.order - b.order;
+                      const timeA = a.addedAt ? (typeof a.addedAt.toMillis === 'function' ? a.addedAt.toMillis() : 0) : 0;
+                      const timeB = b.addedAt ? (typeof b.addedAt.toMillis === 'function' ? b.addedAt.toMillis() : 0) : 0;
+                      return timeA - timeB;
+                    });
+                  } else if (playlistSortMode === 'genre') {
+                    items = items.sort((a, b) => {
+                      const genreA = (a.genreLabels && a.genreLabels[0]) || '';
+                      const genreB = (b.genreLabels && b.genreLabels[0]) || '';
+                      return genreA.localeCompare(genreB);
+                    });
+                  } else if (playlistSortMode === 'custom') {
+                    items = items.sort((a, b) => a.order - b.order);
+                  }
+
+                  return items.map((item, index) => {
+                  const isActive = currentTrack?.trackId === item.id || currentTrack?.id === item.id;
+                  const isShared = item.sourceType === 'shared_track';
+                  const cachedSharedStatus = sharedStatusCache[item.sourceId];
+                  const isUnavailable = isShared && cachedSharedStatus && cachedSharedStatus.isPublic === false;
+                  
+                  const globalId = getTrackGlobalId(item);
+                  const likeData = likesCache[globalId] || { likeCount: 0, likedByMe: false };
+                  
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent ${
+                        isActive ? 'bg-brand-orange/10 border-brand-orange/30' : 'hover:bg-white/5 hover:border-white/10'
+                      } ${isUnavailable ? 'opacity-50 grayscale' : ''}`}
+                    >
+                      {/* Left: Play/Pause */}
+                      <button 
+                        disabled={isUnavailable}
+                        onClick={async () => {
+                          if (isUnavailable) return;
+                          
+                          if (item.sourceType === 'shared_track') {
+                            const { getDoc } = await import('firebase/firestore');
+                            const { doc } = await import('firebase/firestore');
+                            try {
+                              const shareRef = doc(db, 'suno_shares', item.sourceId);
+                              const shareSnap = await getDoc(shareRef);
+                              
+                              if (!shareSnap.exists() || shareSnap.data().isPublic !== true) {
+                                showToast("원곡자가 비공개로 전환하여 재생할 수 없습니다.");
+                                setSharedStatusCache(prev => ({ ...prev, [item.sourceId]: { isPublic: false, checkedAt: Date.now() } }));
+                                return;
+                              } else {
+                                setSharedStatusCache(prev => ({ ...prev, [item.sourceId]: { isPublic: true, checkedAt: Date.now() } }));
+                              }
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }
+                          
+                          if (isActive) {
+                            togglePlayPause();
+                          } else {
+                            const newQueue = playlistItems.map(p => ({
+                              url: p.audioUrl!,
+                              title: p.title,
+                              imageUrl: p.imageUrl,
+                              parent: { id: p.sourceId },
+                              index: 0,
+                              trackId: p.id
+                            })).filter(q => q.url);
+
+                            if (item.audioUrl) {
+                              playTrack({
+                                url: item.audioUrl,
+                                title: item.title,
+                                imageUrl: item.imageUrl,
+                                parent: { id: item.sourceId },
+                                index: 0,
+                                trackId: item.id
+                              }, newQueue);
+                            } else {
+                              showToast('이 곡은 재생할 수 없습니다.');
+                            }
+                          }
+                        }}
+                        className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl bg-[var(--bg-secondary)] shadow-sm transition-all relative ${
+                          isUnavailable ? 'opacity-50 cursor-not-allowed text-white/20' : 
+                          isActive && isPlaying ? 'text-brand-orange' : 'text-white hover:text-brand-orange hover:bg-white/5'
+                        }`}
+                      >
+                        {isActive && isPlaying ? (
+                          <Pause className="w-5 h-5 fill-current" />
+                        ) : (
+                          <Play className="w-5 h-5 fill-current ml-0.5" />
+                        )}
+                      </button>
+
+                      {/* Main Info */}
+                      <div className="flex flex-col ml-3 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 relative">
+                          {/* Color Point */}
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); }}
+                            className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center hover:scale-110 transition-transform"
+                            style={{ backgroundColor: item.colorTag === 'red' ? '#ef4444' : item.colorTag === 'orange' ? '#f97316' : item.colorTag === 'yellow' ? '#eab308' : item.colorTag === 'green' ? '#22c55e' : item.colorTag === 'blue' ? '#3b82f6' : item.colorTag === 'purple' ? '#a855f7' : '#6b7280' }}
+                          />
+                          {activeColorMenu === item.id && (
+                            <div className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10">
+                              {[
+                                { value: 'gray', color: '#6b7280' },
+                                { value: 'red', color: '#ef4444' },
+                                { value: 'orange', color: '#f97316' },
+                                { value: 'yellow', color: '#eab308' },
+                                { value: 'green', color: '#22c55e' },
+                                { value: 'blue', color: '#3b82f6' },
+                                { value: 'purple', color: '#a855f7' }
+                              ].map(c => (
+                                <button
+                                  key={c.value}
+                                  onClick={(e) => { e.stopPropagation(); handleChangeColor(item, c.value); setActiveColorMenu(null); }}
+                                  className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                  style={{ backgroundColor: c.color }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          
+                          <h3 className={`text-sm font-bold truncate ${isActive ? 'text-brand-orange' : 'text-white'}`}>
+                            {item.title}
+                          </h3>
+                        </div>
+                        
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <div className="flex items-center gap-2 text-xs text-white/50">
+                            <span className="truncate">
+                              {item.creatorDisplayId || 'Unknown'}
+                            </span>
+                            {item.duration && (
+                              <>
+                                <span>•</span>
+                                <span>{Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}</span>
+                              </>
+                            )}
+                          </div>
+                          {isUnavailable && (
+                            <span className="text-[10px] text-red-400 font-bold bg-red-400/10 px-1.5 py-0.5 rounded w-fit pb-0">
+                              원곡자가 비공개로 전환했습니다.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="flex items-center pr-2 ml-2">
+                        {playlistSortMode === 'custom' && (
+                          <div className="flex flex-col items-center mr-3 gap-1">
+                            <button 
+                              onClick={() => { if (index > 0) handleCustomSort(item, items[index - 1]); }}
+                              disabled={index === 0}
+                              className={`p-1 rounded-sm ${index === 0 ? 'text-white/20' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                            </button>
+                            <button 
+                              onClick={() => { if (index < items.length - 1) handleCustomSort(item, items[index + 1]); }}
+                              disabled={index === items.length - 1}
+                              className={`p-1 rounded-sm ${index === items.length - 1 ? 'text-white/20' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                          </div>
+                        )}
+                        
+                        <button 
+                          onClick={() => handleToggleLike(item)}
+                          className={`flex items-center gap-1 text-xs font-medium mr-3 p-1.5 rounded-lg transition-colors ${
+                            likeData.likedByMe ? 'text-red-500 hover:bg-red-500/10' : 'text-white/40 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {likeData.likedByMe ? (
+                            <Heart className="w-4 h-4 fill-current" />
+                          ) : (
+                            <Heart className="w-4 h-4" />
+                          )}
+                          <span>{likeData.likeCount}</span>
+                        </button>
+                        
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!); setActiveColorMenu(null); }}
+                            className="p-2 -mr-2 text-white/40 hover:text-white transition-colors"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {activePlaylistItemMenu === item.id && (
+                            <div className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-white/5 text-sm py-1">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group"
+                              >
+                                <span>다른 플레이리스트로 이동</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleRemoveFromPlaylist(item); setActivePlaylistItemMenu(null); }}
+                                className="w-full text-left px-4 py-2 hover:bg-red-400/10 text-red-400 font-bold transition-colors"
+                              >
+                                <span>삭제</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })})()}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center border-t border-white/5 mt-4">
+                <Music className="w-12 h-12 text-brand-orange/40 mb-4" />
+                <h2 className="text-xl font-bold mb-2">
+                  {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}
+                </h2>
+                <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
+                  {activePlaylistSection === 'normal' 
+                    ? '워크스페이스에서 플레이리스트 저장을 눌러 곡을 추가하세요.' 
+                    : '공유받은 곡에서 플레이리스트 저장을 누르면 여기에 추가됩니다.'}
+                </p>
+                <button
+                  onClick={() => setLibraryViewMode('workspace')}
+                  className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all"
+                >
+                  워크스페이스로 이동
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1554,7 +2248,7 @@ export default function SunoLibraryPage() {
                 } : null,
                 filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
                 !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,

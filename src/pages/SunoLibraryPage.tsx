@@ -23,7 +23,10 @@ export default function SunoLibraryPage() {
   const [isSharedOwner, setIsSharedOwner] = useState(false);
   const [sharedTrackLoading, setSharedTrackLoading] = useState(false);
   const [sharedError, setSharedError] = useState(false);
+  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
   
+  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
+
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'trash'>('all');
@@ -58,6 +61,18 @@ export default function SunoLibraryPage() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, []);
+
+  useEffect(() => {
+    console.log("Shared page browser check:", {
+      userAgent: navigator.userAgent,
+      isKakaoInAppBrowser,
+      isSharePage: isSharedView,
+    });
+
+    if (isSharedView && isKakaoInAppBrowser) {
+      setShowKakaoWarning(true);
+    }
+  }, [isSharedView, isKakaoInAppBrowser]);
 
   useEffect(() => {
     if ((window as any).Kakao && !(window as any).Kakao.isInitialized()) {
@@ -500,6 +515,15 @@ export default function SunoLibraryPage() {
     }
   };
 
+  const openCurrentShareInChrome = () => {
+    const currentUrl = window.location.href.replace(/^https?:\/\//, '');
+    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+  };
+
+  const handleKakaoModalShare = async () => {
+    await handleShareCurrentPage();
+  };
+
   const handleCopyShareLink = async (group: any) => {
     if (isSharedView) {
       await handleShareCurrentPage();
@@ -850,6 +874,48 @@ export default function SunoLibraryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
+      <AnimatePresence>
+        {isSharedView && showKakaoWarning && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              className="w-full max-w-sm rounded-[2rem] bg-[#1f1f1f] border border-white/10 shadow-2xl p-7 text-center"
+            >
+              <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-brand-orange/20 text-brand-orange flex items-center justify-center">
+                <Info className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-black text-white mb-3">Chrome에서 열어주세요</h2>
+              <p className="text-sm leading-relaxed text-white/60 mb-6">
+                카카오톡 브라우저에서는 Google 로그인 및 일부 기능이 제한될 수 있습니다.<br />
+                정상적인 음악 감상과 저장 기능 사용을 위해 Chrome에서 열어주세요.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={openCurrentShareInChrome}
+                  className="w-full py-4 rounded-2xl bg-brand-orange text-white font-black text-lg shadow-lg shadow-brand-orange/20 hover:bg-brand-orange/90 transition-all"
+                >
+                  공유 음악 듣기
+                </button>
+                <button
+                  onClick={handleKakaoModalShare}
+                  className="w-full py-4 rounded-2xl bg-white/10 text-white font-black text-lg flex items-center justify-center gap-2 hover:bg-white/15 transition-all"
+                >
+                  <Share2 className="w-5 h-5" /> 공유하기
+                </button>
+                <button
+                  onClick={() => setShowKakaoWarning(false)}
+                  className="w-full pt-3 pb-1 text-white/40 hover:text-white/70 font-bold transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header Block */}

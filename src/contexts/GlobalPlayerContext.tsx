@@ -68,8 +68,13 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const repeatModeRef = useRef<'none' | 'all' | 'one'>('none');
   const volumeRef = useRef(1);
   const isMutedRef = useRef(false);
-  // Prevent mobile lock-screen controls from treating track switching as a full stop/start.
-  const trackSwitchInProgressRef = useRef(false);
+
+  // Media Session handlers are registered once. These refs keep their implementation fresh.
+  const mediaPlayRef = useRef<() => void>(() => {});
+  const mediaPauseRef = useRef<() => void>(() => {});
+  const mediaNextRef = useRef<() => void>(() => {});
+  const mediaPrevRef = useRef<() => void>(() => {});
+  const mediaSeekRef = useRef<(time: number) => void>(() => {});
 
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
   useEffect(() => { queueRef.current = queue; }, [queue]);
@@ -152,43 +157,24 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
 
     try {
       const currentSrc = audio.currentSrc || audio.src || '';
-      const shouldSwitchSrc = currentSrc !== targetSrc;
-
-      if (shouldSwitchSrc) {
-        trackSwitchInProgressRef.current = true;
-        // Do not call audio.load() here. On mobile lock screens, load() often
-        // tears down the current media session and re-opens it as a new session.
+      if (currentSrc !== targetSrc) {
         audio.src = targetSrc;
+        audio.load();
       }
 
       const playPromise = audio.play();
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise
-          .then(() => {
-            setIsPlaying(true);
-            isPlayingRef.current = true;
-            updateMediaSession(track, 'playing');
-            // Keep the flag briefly so pause/emptied events fired during src
-            // switching do not hide the player or mark playback as stopped.
-            window.setTimeout(() => {
-              trackSwitchInProgressRef.current = false;
-            }, 300);
-          })
-          .catch((err) => {
-            trackSwitchInProgressRef.current = false;
-            console.error('Audio play failed:', err);
-            setIsPlaying(false);
-            isPlayingRef.current = false;
-            updateMediaSession(track, 'paused');
-          });
-      } else {
-        trackSwitchInProgressRef.current = false;
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch((err) => {
+          console.error('Audio play failed:', err);
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          updateMediaSession(track, 'paused');
+        });
       }
 
       setIsPlaying(true);
       isPlayingRef.current = true;
     } catch (error) {
-      trackSwitchInProgressRef.current = false;
       console.error('Audio play failed:', error);
       setIsPlaying(false);
       isPlayingRef.current = false;
@@ -298,6 +284,44 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     }
   }, [updateMediaSessionPosition]);
 
+  // Keep Media Session action implementations current without re-registering OS handlers.
+  useEffect(() => {
+    mediaPlayRef.current = () => {
+      const audio = audioRef.current;
+      const track = currentTrackRef.current;
+      if (!audio || !track) return;
+
+      updateMediaSession(track, 'playing');
+      audio.play()
+        .then(() => {
+          setIsPlaying(true);
+          isPlayingRef.current = true;
+        })
+        .catch((err) => {
+          console.error('MediaSession play failed:', err);
+          updateMediaSession(track, 'paused');
+        });
+    };
+
+    mediaPauseRef.current = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.pause();
+    };
+
+    mediaNextRef.current = () => {
+      playNext();
+    };
+
+    mediaPrevRef.current = () => {
+      playPrev();
+    };
+
+    mediaSeekRef.current = (time: number) => {
+      seek(time);
+    };
+  }, [playNext, playPrev, seek, updateMediaSession]);
+
   const handleVolumeChange = useCallback((v: number) => {
     const nextVolume = Math.max(0, Math.min(1, v));
     setVolumeState(nextVolume);
@@ -385,10 +409,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     };
 
     const onPause = () => {
-      // During next/prev src switching, mobile browsers can emit a transient
-      // pause. Treat it as part of the transition, not as a user stop.
-      if (trackSwitchInProgressRef.current) return;
-
+      // If pause fires during an immediate src switch, the next play event will set this back.
       if (!audio.ended) {
         setIsPlaying(false);
         isPlayingRef.current = false;
@@ -418,59 +439,58 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     };
   }, [handleEnded, handleTimeUpdate, updateMediaSession]);
 
-  // Media Session action handlers for lock-screen controls. Stable callbacks use refs internally.
+  // Media Session action handlers for lock-screen controls.
+  // Register these once only; each handler delegates to refs above.
+  // Re-registering handlers on every track/queue change can make mobile OS lock-screen
+  // controls briefly close and reopen the media session.
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
 
     try {
-      navigator.mediaSession.setActionHandler('play', () => {
-        const audio = audioRef.current;
-        const track = currentTrackRef.current;
-        if (!audio || !track) return;
-        updateMediaSession(track, 'playing');
-        audio.play().catch((err) => console.error('MediaSession play failed:', err));
-      });
-
-      navigator.mediaSession.setActionHandler('pause', () => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        audio.pause();
-      });
-
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        // User action from the OS media controls. Keep it on the same audio
-        // session and let playTrack switch only the src.
-        playPrev();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        playNext();
-      });
+      navigator.mediaSession.setActionHandler('play', () => mediaPlayRef.current());
+      navigator.mediaSession.setActionHandler('pause', () => mediaPauseRef.current());
+      navigator.mediaSession.setActionHandler('previoustrack', () => mediaPrevRef.current());
+      navigator.mediaSession.setActionHandler('nexttrack', () => mediaNextRef.current());
 
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = Math.max(audioRef.current.currentTime - (details.seekOffset || 10), 0);
-          updateMediaSessionPosition();
-        }
+        const audio = audioRef.current;
+        if (!audio) return;
+        const nextTime = Math.max(audio.currentTime - (details.seekOffset || 10), 0);
+        mediaSeekRef.current(nextTime);
       });
 
       navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        if (audioRef.current) {
-          const maxDuration = Number.isFinite(audioRef.current.duration) ? audioRef.current.duration : Number.MAX_SAFE_INTEGER;
-          audioRef.current.currentTime = Math.min(audioRef.current.currentTime + (details.seekOffset || 10), maxDuration);
-          updateMediaSessionPosition();
-        }
+        const audio = audioRef.current;
+        if (!audio) return;
+        const maxDuration = Number.isFinite(audio.duration) ? audio.duration : Number.MAX_SAFE_INTEGER;
+        const nextTime = Math.min(audio.currentTime + (details.seekOffset || 10), maxDuration);
+        mediaSeekRef.current(nextTime);
       });
 
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && audioRef.current) {
-          audioRef.current.currentTime = details.seekTime;
-          updateMediaSessionPosition();
+        if (details.seekTime !== undefined) {
+          mediaSeekRef.current(details.seekTime);
         }
       });
     } catch (error) {
       console.warn('MediaSession action handler setup failed:', error);
     }
-  }, [playNext, playPrev, updateMediaSession, updateMediaSessionPosition]);
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', null);
+        navigator.mediaSession.setActionHandler('seekto', null);
+      } catch {
+        // Ignore unsupported cleanup cases.
+      }
+    };
+  }, []);
+
 
   return (
     <GlobalPlayerContext.Provider

@@ -164,11 +164,22 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   
   // Add to new playlist
   const newItemRef = doc(toItemsRef);
-  const newItemData = { ...item, id: undefined, order: maxOrder + 1, addedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  
+  if (!item.id) {
+    throw new Error("MISSING_ITEM_ID");
+  }
+
+  const { id, ...itemWithoutId } = item;
+  const newItemData = {
+    ...itemWithoutId,
+    order: maxOrder + 1,
+    addedAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
   batch.set(newItemRef, newItemData);
 
   // Delete from old playlist
-  const oldItemRef = doc(db, 'user_playlists', uid, 'lists', fromPlaylistId, 'items', item.id!);
+  const oldItemRef = doc(db, 'user_playlists', uid, 'lists', fromPlaylistId, 'items', item.id);
   batch.delete(oldItemRef);
 
   await batch.commit();

@@ -381,11 +381,19 @@ export default function SunoLibraryPage() {
     }
 
     const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-    let nextNum = 1;
-    while (currentList.some(p => p.title === String(nextNum))) {
-      nextNum++;
-    }
-    const newTitle = String(nextNum);
+    
+    const getNextNewFolderTitle = (playlists: Playlist[]) => {
+      const titles = new Set(playlists.map(p => p.title));
+      if (!titles.has("새폴더")) return "새폴더";
+
+      let index = 2;
+      while (titles.has(`새폴더 ${index}`)) {
+        index++;
+      }
+      return `새폴더 ${index}`;
+    };
+
+    const newTitle = getNextNewFolderTitle(currentList);
     const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
 
     try {
@@ -1249,7 +1257,17 @@ export default function SunoLibraryPage() {
     // Default to the lowest order playlist
     const targetPlaylist = targetPlaylists[0];
 
-    const sourceId = isShared ? (group.shareId || group.id) : (item?.id || `${group.id}-${idx}`);
+    if (!url) {
+      showToast("저장할 오디오 URL이 없습니다.");
+      return;
+    }
+
+    const safeGroupId = group?.shareId || group?.id || group?.trackId || 'unknown-group';
+    const safeItemId = item?.id || item?.audioId || item?.taskId || null;
+
+    const sourceId = isShared
+      ? String(group?.shareId || group?.id || group?.trackId || safeItemId || `shared_${safeGroupId}_${idx}`)
+      : String(safeItemId || `${safeGroupId}_${idx}`);
 
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
@@ -1280,9 +1298,16 @@ export default function SunoLibraryPage() {
     try {
       await addPlaylistItem(user.uid, targetPlaylist.id!, itemData);
       showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
-    } catch (e: any) {
-      console.error(e);
-      if (e.message === 'DUPLICATE') {
+    } catch (error: any) {
+      console.error("save playlist failed:", {
+        error,
+        targetPlaylist,
+        sourceType: isShared ? "shared_track" : "suno_track",
+        sourceId,
+        group,
+        item
+      });
+      if (error.message === 'DUPLICATE') {
         showToast("이미 이 플레이리스트에 저장된 곡입니다.");
       } else {
         showToast("플레이리스트 저장에 실패했습니다.");

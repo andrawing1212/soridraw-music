@@ -1566,7 +1566,17 @@ export default function SunoLibraryPage() {
                           await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
                           showToast("플레이리스트를 이동했습니다.");
                           setMoveModalArgs(null);
-                        } catch (e) { showToast("곡 이동에 실패했습니다."); }
+                        } catch (error) {
+                          console.error("move playlist item failed:", {
+                            error,
+                            fromPlaylistId: activePlaylistId,
+                            toPlaylistId: list.id,
+                            itemId: moveModalArgs.item?.id,
+                            item: moveModalArgs.item,
+                            activePlaylistType: activePlaylistSection
+                          });
+                          showToast("곡 이동에 실패했습니다."); 
+                        }
                       }}
                       className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors font-medium text-white flex items-center"
                     >

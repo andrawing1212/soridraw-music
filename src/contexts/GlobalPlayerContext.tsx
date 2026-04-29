@@ -41,40 +41,19 @@ interface GlobalPlayerContextType {
 
 const GlobalPlayerContext = createContext<GlobalPlayerContextType | null>(null);
 
-// One audio element and one playback snapshot should survive provider remounts.
-// Without this, mobile browsers can keep playing old audio while React loses currentTrack UI state.
-let globalAudioElement: HTMLAudioElement | null = null;
-let globalCurrentTrack: Track | null = null;
-let globalQueue: Track[] = [];
-let globalIsPlaying = false;
-let globalCurrentTime = 0;
-let globalDuration = 0;
-
-function getGlobalAudioElement() {
-  if (typeof window === 'undefined') return null;
-  if (!globalAudioElement) {
-    globalAudioElement = new Audio();
-    globalAudioElement.preload = 'auto';
-  }
-  return globalAudioElement;
-}
-
 export function GlobalPlayerProvider({ children }: { children: React.ReactNode }) {
-  // App lifecycle singleton audio instance. Do not recreate this per track or route.
-  const audioRef = useRef<HTMLAudioElement | null>(getGlobalAudioElement());
-  const isSwitchingTrackRef = useRef(false);
+  // App lifecycle singleton audio instance. Do not recreate this per track.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  if (!audioRef.current && typeof window !== 'undefined') {
+    audioRef.current = new Audio();
+    audioRef.current.preload = 'auto';
+  }
 
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(() => globalCurrentTrack);
-  const [queue, setQueue] = useState<Track[]>(() => globalQueue);
-  const [isPlaying, setIsPlaying] = useState(() => {
-    const audio = audioRef.current;
-    return globalIsPlaying || !!(audio && !audio.paused && !audio.ended && audio.src);
-  });
-  const [currentTime, setCurrentTime] = useState(() => audioRef.current?.currentTime || globalCurrentTime || 0);
-  const [duration, setDuration] = useState(() => {
-    const d = audioRef.current?.duration;
-    return Number.isFinite(d) ? (d || globalDuration || 0) : (globalDuration || 0);
-  });
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const [queue, setQueue] = useState<Track[]>([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(1);
   const [isMuted, setIsMutedState] = useState(false);
   const [isShuffle, setIsShuffleState] = useState(false);
@@ -89,10 +68,12 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const repeatModeRef = useRef<'none' | 'all' | 'one'>('none');
   const volumeRef = useRef(1);
   const isMutedRef = useRef(false);
+  // Prevent mobile lock-screen controls from treating track switching as a full stop/start.
+  const trackSwitchInProgressRef = useRef(false);
 
-  useEffect(() => { currentTrackRef.current = currentTrack; globalCurrentTrack = currentTrack; }, [currentTrack]);
-  useEffect(() => { queueRef.current = queue; globalQueue = queue; }, [queue]);
-  useEffect(() => { isPlayingRef.current = isPlaying; globalIsPlaying = isPlaying; }, [isPlaying]);
+  useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
+  useEffect(() => { queueRef.current = queue; }, [queue]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
@@ -171,46 +152,46 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
 
     try {
       const currentSrc = audio.currentSrc || audio.src || '';
-      const shouldSwitchSource = currentSrc !== targetSrc;
+      const shouldSwitchSrc = currentSrc !== targetSrc;
 
-      if (shouldSwitchSource) {
-        isSwitchingTrackRef.current = true;
-        // Keep the same audio element. Setting src is enough; avoid audio.load() to reduce lock-screen session flicker.
+      if (shouldSwitchSrc) {
+        trackSwitchInProgressRef.current = true;
+        // Do not call audio.load() here. On mobile lock screens, load() often
+        // tears down the current media session and re-opens it as a new session.
         audio.src = targetSrc;
-        audio.currentTime = 0;
       }
 
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise
           .then(() => {
-            isSwitchingTrackRef.current = false;
             setIsPlaying(true);
             isPlayingRef.current = true;
-            globalIsPlaying = true;
             updateMediaSession(track, 'playing');
+            // Keep the flag briefly so pause/emptied events fired during src
+            // switching do not hide the player or mark playback as stopped.
+            window.setTimeout(() => {
+              trackSwitchInProgressRef.current = false;
+            }, 300);
           })
           .catch((err) => {
-            isSwitchingTrackRef.current = false;
+            trackSwitchInProgressRef.current = false;
             console.error('Audio play failed:', err);
             setIsPlaying(false);
             isPlayingRef.current = false;
-            globalIsPlaying = false;
             updateMediaSession(track, 'paused');
           });
-      } else if (typeof window !== 'undefined') {
-        window.setTimeout(() => { isSwitchingTrackRef.current = false; }, 0);
+      } else {
+        trackSwitchInProgressRef.current = false;
       }
 
       setIsPlaying(true);
       isPlayingRef.current = true;
-      globalIsPlaying = true;
     } catch (error) {
-      isSwitchingTrackRef.current = false;
+      trackSwitchInProgressRef.current = false;
       console.error('Audio play failed:', error);
       setIsPlaying(false);
       isPlayingRef.current = false;
-      globalIsPlaying = false;
       updateMediaSession(track, 'paused');
     }
   }, [updateMediaSession]);
@@ -343,12 +324,9 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
 
   const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
-      const nextTime = audioRef.current.currentTime || 0;
-      globalCurrentTime = nextTime;
-      setCurrentTime(nextTime);
+      setCurrentTime(audioRef.current.currentTime || 0);
       const audioDuration = audioRef.current.duration;
       if (Number.isFinite(audioDuration) && audioDuration > 0) {
-        globalDuration = audioDuration;
         setDuration(audioDuration);
       }
       updateMediaSessionPosition();
@@ -386,11 +364,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     currentTrackRef.current = null;
     queueRef.current = [];
     isPlayingRef.current = false;
-    globalCurrentTrack = null;
-    globalQueue = [];
-    globalIsPlaying = false;
-    globalCurrentTime = 0;
-    globalDuration = 0;
 
     setIsPlaying(false);
     setCurrentTrack(null);
@@ -412,12 +385,13 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     };
 
     const onPause = () => {
-      // Ignore the synthetic pause emitted by some browsers while switching src to the next track.
-      if (isSwitchingTrackRef.current) return;
+      // During next/prev src switching, mobile browsers can emit a transient
+      // pause. Treat it as part of the transition, not as a user stop.
+      if (trackSwitchInProgressRef.current) return;
+
       if (!audio.ended) {
         setIsPlaying(false);
         isPlayingRef.current = false;
-        globalIsPlaying = false;
         updateMediaSession(currentTrackRef.current, 'paused');
       }
     };
@@ -426,12 +400,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     const onTimeUpdate = () => handleTimeUpdate();
     const onLoadedMetadata = () => handleTimeUpdate();
     const onDurationChange = () => handleTimeUpdate();
-    const onError = () => {
-      console.warn('Global audio error:', audio.error, { src: audio.currentSrc || audio.src, track: currentTrackRef.current });
-    };
-    const onStalled = () => console.warn('Global audio stalled:', { src: audio.currentSrc || audio.src, track: currentTrackRef.current });
-    const onWaiting = () => console.log('Global audio waiting:', { src: audio.currentSrc || audio.src });
-    const onCanPlay = () => updateMediaSessionPosition();
 
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
@@ -439,10 +407,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('durationchange', onDurationChange);
-    audio.addEventListener('error', onError);
-    audio.addEventListener('stalled', onStalled);
-    audio.addEventListener('waiting', onWaiting);
-    audio.addEventListener('canplay', onCanPlay);
 
     return () => {
       audio.removeEventListener('play', onPlay);
@@ -451,12 +415,8 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('durationchange', onDurationChange);
-      audio.removeEventListener('error', onError);
-      audio.removeEventListener('stalled', onStalled);
-      audio.removeEventListener('waiting', onWaiting);
-      audio.removeEventListener('canplay', onCanPlay);
     };
-  }, [handleEnded, handleTimeUpdate, updateMediaSession, updateMediaSessionPosition]);
+  }, [handleEnded, handleTimeUpdate, updateMediaSession]);
 
   // Media Session action handlers for lock-screen controls. Stable callbacks use refs internally.
   useEffect(() => {
@@ -477,8 +437,14 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
         audio.pause();
       });
 
-      navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-      navigator.mediaSession.setActionHandler('nexttrack', playNext);
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        // User action from the OS media controls. Keep it on the same audio
+        // session and let playTrack switch only the src.
+        playPrev();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        playNext();
+      });
 
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
         if (audioRef.current) {

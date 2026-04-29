@@ -13,12 +13,13 @@ export const ensureDefaultPlaylists = async (uid: string) => {
   const listsRef = collection(db, 'user_playlists', uid, 'lists');
   const listsSnap = await getDocs(listsRef);
 
-  const existingPlaylists = new Set<string>();
+  let normalCount = 0;
+  let sharedCount = 0;
+
   listsSnap.forEach((doc) => {
     const data = doc.data() as Playlist;
-    if (data.title && data.type) {
-      existingPlaylists.add(`${data.type}:${data.title}`);
-    }
+    if (data.type === 'normal') normalCount++;
+    if (data.type === 'shared') sharedCount++;
   });
 
   const batch = writeBatch(db);
@@ -31,8 +32,8 @@ export const ensureDefaultPlaylists = async (uid: string) => {
     { title: '3', order: 4 }
   ];
 
-  defaultNormals.forEach((def) => {
-    if (!existingPlaylists.has(`normal:${def.title}`)) {
+  if (normalCount === 0) {
+    defaultNormals.forEach((def) => {
       const newDocRef = doc(listsRef);
       batch.set(newDocRef, {
         title: def.title,
@@ -42,9 +43,9 @@ export const ensureDefaultPlaylists = async (uid: string) => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      hasBatchOperations = true;
-    }
-  });
+    });
+    hasBatchOperations = true;
+  }
 
   const defaultShared = [
     { title: '기본', order: 1 },
@@ -52,8 +53,8 @@ export const ensureDefaultPlaylists = async (uid: string) => {
     { title: '2', order: 3 }
   ];
 
-  defaultShared.forEach((def) => {
-    if (!existingPlaylists.has(`shared:${def.title}`)) {
+  if (sharedCount === 0) {
+    defaultShared.forEach((def) => {
       const newDocRef = doc(listsRef);
       batch.set(newDocRef, {
         title: def.title,
@@ -63,9 +64,9 @@ export const ensureDefaultPlaylists = async (uid: string) => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      hasBatchOperations = true;
-    }
-  });
+    });
+    hasBatchOperations = true;
+  }
 
   if (hasBatchOperations) {
     try {

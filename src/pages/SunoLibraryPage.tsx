@@ -9,7 +9,7 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
@@ -157,6 +157,26 @@ export default function SunoLibraryPage() {
               return;
             }
           }
+
+          const shareSnap = await getDoc(doc(db, 'suno_shares', trackId));
+          if (shareSnap.exists() && shareSnap.data().isPublic) {
+            const shareData = shareSnap.data();
+            let safeSunoData = shareData.sunoData || [];
+            if (typeof shareData.subTrackIndex === 'number' && safeSunoData.length > shareData.subTrackIndex) {
+               safeSunoData = [safeSunoData[shareData.subTrackIndex]];
+            }
+            
+            setTracks([{ 
+              ...shareData,
+              id: trackId,
+              trackId: shareData.trackId,
+              sunoData: safeSunoData
+            }]);
+            setIsSharedOwner(currentUser?.uid === shareData.ownerUid);
+            setSharedTrackLoading(false);
+            setLoading(false);
+            return;
+          }
           
           const q = query(
             collectionGroup(db, 'tracks'),
@@ -286,10 +306,10 @@ export default function SunoLibraryPage() {
       usingSharedFallback: actualSharedPlaylists.length === 0
     });
 
-    if (!selectedNormalPlaylistId && visibleNormalPlaylists.length > 0) {
+    if (visibleNormalPlaylists.length > 0 && !visibleNormalPlaylists.some(p => p.id === selectedNormalPlaylistId)) {
       setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
     }
-    if (!selectedSharedPlaylistId && visibleSharedPlaylists.length > 0) {
+    if (visibleSharedPlaylists.length > 0 && !visibleSharedPlaylists.some(p => p.id === selectedSharedPlaylistId)) {
       setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
     }
   }, [
@@ -298,8 +318,8 @@ export default function SunoLibraryPage() {
     actualNormalPlaylists.length, 
     actualSharedPlaylists.length, 
     visibleNormalPlaylists, 
-    visibleSharedPlaylists, 
-    selectedNormalPlaylistId, 
+    visibleSharedPlaylists,
+    selectedNormalPlaylistId,
     selectedSharedPlaylistId
   ]);
 
@@ -313,6 +333,11 @@ export default function SunoLibraryPage() {
 
     const isNormal = playlist.type === 'normal';
     const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+
+    if (currentList.length > 0 && currentList[0].id === playlist.id) {
+      showToast("기본 플레이리스트는 삭제할 수 없습니다.");
+      return;
+    }
 
     if (currentList.length <= 1) {
       showToast(isNormal ? '최소 1개의 플레이리스트는 남겨야 합니다.' : '최소 1개의 공유 받은 곡 플레이리스트는 남겨야 합니다.');
@@ -872,7 +897,7 @@ export default function SunoLibraryPage() {
     await runDownload(url, title);
   };
 
-  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, mode: 'default' | 'pc-panel' } | null>(null);
+  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, idx: number, mode: 'default' | 'pc-panel' } | null>(null);
   const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -880,18 +905,19 @@ export default function SunoLibraryPage() {
     setTimeout(() => setShareToastInfo(null), 3000);
   };
 
-  const handleShare = (group: any, item: any) => {
-    setSharePopupInfo({ group, item, mode: 'default' });
+  const handleShare = (group: any, item: any, idx: number) => {
+    setSharePopupInfo({ group, item, idx, mode: 'default' });
   };
 
-  const getSharePageUrl = (group?: any) => {
+  const getSharePageUrl = (group?: any, idx?: number) => {
     if (isSharedView) return window.location.href;
 
     const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
       ? "https://soridraw-music.vercel.app"
       : window.location.origin;
 
-    return `${appOrigin}/suno-library?track=${group?.id || ''}`;
+    const shareId = idx !== undefined && group ? `${group.id}_${idx}` : group?.id || '';
+    return `${appOrigin}/suno-library?track=${shareId}`;
   };
 
   const handleShareCurrentPage = async () => {
@@ -952,7 +978,7 @@ export default function SunoLibraryPage() {
 
   const handlePublicShare = async () => {
     if (!sharePopupInfo) return;
-    const { group, item } = sharePopupInfo;
+    const { group, item, idx } = sharePopupInfo;
     try {
       if (user) {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
@@ -962,16 +988,36 @@ export default function SunoLibraryPage() {
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
+
+        const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
+        const shareRef = doc(db, 'suno_shares', shareId);
+        await setDoc(shareRef, {
+          trackId: group.id,
+          subTrackIndex: idx,
+          taskId: group.taskId || '',
+          title: item?.title || item?.name || group.title || 'Untitled',
+          audioUrl: item?.audio_url || item?.url || '',
+          imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
+          duration: item?.duration || group.duration || null,
+          status: group.status || 'completed',
+          prompt: group.prompt || '',
+          style: group.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
+          appliedKeywords: group.appliedKeywords || {},
+          createdAt: group.createdAt || serverTimestamp(),
+          ownerUid: user.uid,
+          isPublic: true
+        });
+
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
       }
       
-      const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
-        ? "https://soridraw-music.vercel.app"
-        : window.location.origin;
-        
-      const shareUrl = `${appOrigin}/suno-library?track=${group.id}`;
+      const shareUrl = getSharePageUrl(group, idx);
       const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
-            const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+      const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
       
       if (isMobile && navigator.share) {
         try {
@@ -1001,7 +1047,7 @@ export default function SunoLibraryPage() {
 
   const handlePublicStatus = async () => {
     if (!sharePopupInfo) return;
-    const { group } = sharePopupInfo;
+    const { group, item, idx } = sharePopupInfo;
     try {
       if (user) {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
@@ -1011,6 +1057,30 @@ export default function SunoLibraryPage() {
           shareType: 'public',
           publicSharedAt: serverTimestamp()
         });
+
+        const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
+        const shareRef = doc(db, 'suno_shares', shareId);
+        await setDoc(shareRef, {
+          trackId: group.id,
+          subTrackIndex: idx,
+          taskId: group.taskId || '',
+          title: item?.title || item?.name || group.title || 'Untitled',
+          audioUrl: item?.audio_url || item?.url || '',
+          imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
+          duration: item?.duration || group.duration || null,
+          status: group.status || 'completed',
+          prompt: group.prompt || '',
+          style: group.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
+          appliedKeywords: group.appliedKeywords || {},
+          createdAt: group.createdAt || serverTimestamp(),
+          ownerUid: user.uid,
+          isPublic: true
+        });
+
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
         showToast('공개 상태로 전환되었습니다');
       }
@@ -1042,8 +1112,8 @@ export default function SunoLibraryPage() {
 
   const handlePlatformShare = async (platform: string) => {
     if (!sharePopupInfo) return;
-    const { group, item } = sharePopupInfo;
-    const shareUrl = getSharePageUrl(group);
+    const { group, item, idx } = sharePopupInfo;
+    const shareUrl = getSharePageUrl(group, idx);
     const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
 
     try {
@@ -1436,7 +1506,7 @@ export default function SunoLibraryPage() {
                             return;
                           }
 
-                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item.id!);
+                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
                           showToast("플레이리스트를 이동했습니다.");
                           setMoveModalArgs(null);
                         } catch (e) { showToast("곡 이동에 실패했습니다."); }
@@ -1552,7 +1622,18 @@ export default function SunoLibraryPage() {
               워크스페이스
             </button>
             <button
-              onClick={() => setLibraryViewMode('playlist')}
+              onClick={() => {
+                if (libraryViewMode !== 'playlist') {
+                  setLibraryViewMode('playlist');
+                  if (visibleNormalPlaylists.length > 0) {
+                    setActivePlaylistSection('normal');
+                    setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
+                  } else if (visibleSharedPlaylists.length > 0) {
+                    setActivePlaylistSection('shared');
+                    setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
+                  }
+                }
+              }}
               className={`px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'playlist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
             >
               플레이리스트
@@ -2331,7 +2412,7 @@ export default function SunoLibraryPage() {
                   } 
                 } : null,
                 filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,

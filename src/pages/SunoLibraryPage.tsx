@@ -6,7 +6,7 @@ import {
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
-  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -505,7 +505,7 @@ export default function SunoLibraryPage() {
     const isShared = item.sourceType === 'shared_track';
     const msg = isShared 
       ? "이 공유곡을 내 플레이리스트에서 삭제할까요? 원곡자 데이터에는 영향이 없습니다."
-      : "이 곡을 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.";
+      : "이 곡을 현재 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.";
       
     if (!window.confirm(msg)) return;
 
@@ -905,7 +905,7 @@ export default function SunoLibraryPage() {
     await runDownload(url, title);
   };
 
-  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, idx: number, mode: 'default' | 'pc-panel' } | null>(null);
+  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, idx?: number, mode: 'default' | 'pc-panel' } | null>(null);
   const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -989,19 +989,21 @@ export default function SunoLibraryPage() {
     const { group, item, idx } = sharePopupInfo;
     try {
       if (user) {
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
-        await updateDoc(trackRef, {
-          isPublic: true,
-          hidden: false,
-          shareType: 'public',
-          publicSharedAt: serverTimestamp()
-        });
+        if (!group.isPlaylistItem) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+          await updateDoc(trackRef, {
+            isPublic: true,
+            hidden: false,
+            shareType: 'public',
+            publicSharedAt: serverTimestamp()
+          });
+        }
 
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
           trackId: group.id,
-          subTrackIndex: idx,
+          subTrackIndex: idx ?? null,
           taskId: group.taskId || '',
           title: item?.title || item?.name || group.title || 'Untitled',
           audioUrl: item?.audio_url || item?.url || '',
@@ -1058,19 +1060,21 @@ export default function SunoLibraryPage() {
     const { group, item, idx } = sharePopupInfo;
     try {
       if (user) {
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
-        await updateDoc(trackRef, {
-          isPublic: true,
-          hidden: false,
-          shareType: 'public',
-          publicSharedAt: serverTimestamp()
-        });
+        if (!group.isPlaylistItem) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+          await updateDoc(trackRef, {
+            isPublic: true,
+            hidden: false,
+            shareType: 'public',
+            publicSharedAt: serverTimestamp()
+          });
+        }
 
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
           trackId: group.id,
-          subTrackIndex: idx,
+          subTrackIndex: idx ?? null,
           taskId: group.taskId || '',
           title: item?.title || item?.name || group.title || 'Untitled',
           audioUrl: item?.audio_url || item?.url || '',
@@ -1103,12 +1107,14 @@ export default function SunoLibraryPage() {
     const { group } = sharePopupInfo;
     try {
       if (user) {
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
-        await updateDoc(trackRef, {
-          isPublic: false,
-          shareType: 'private',
-          privateUpdatedAt: serverTimestamp()
-        });
+        if (!group.isPlaylistItem) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+          await updateDoc(trackRef, {
+            isPublic: false,
+            shareType: 'private',
+            privateUpdatedAt: serverTimestamp()
+          });
+        }
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: false } } : null);
         showToast('비공개 상태로 전환되었습니다');
       }
@@ -1537,7 +1543,7 @@ export default function SunoLibraryPage() {
               className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-white/10 max-h-[80vh]"
             >
               <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
-                <h3 className="font-bold text-white">다른 플레이리스트로 이동</h3>
+                <h3 className="font-bold text-white">폴더 이동</h3>
                 <button onClick={() => setMoveModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -2296,16 +2302,72 @@ export default function SunoLibraryPage() {
                           {activePlaylistItemMenu === item.id && (
                             <div className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-white/5 text-sm py-1">
                               <button 
-                                onClick={(e) => { e.stopPropagation(); handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group"
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setShowDetails({ 
+                                    title: item.title,
+                                    status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
+                                    createdAt: item.addedAt,
+                                    taskId: item.sourceId,
+                                    style: item.appliedKeywords?.style || item.appliedKeywords?.genre || item.appliedKeywords?.prompt || '',
+                                    prompt: item.appliedKeywords?.lyrics || item.appliedKeywords?.lyricsText || '',
+                                    lyrics: item.appliedKeywords?.lyrics || item.appliedKeywords?.lyricsText || '가사 없음',
+                                    audioUrl: item.audioUrl || '',
+                                    streamAudioUrl: item.audioUrl || ''
+                                  }); 
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
                               >
-                                <span>다른 플레이리스트로 이동</span>
+                                <span className="flex items-center gap-2"><Info className="w-4 h-4 opacity-70" />상세정보</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (!item.audioUrl) { showToast("다운로드할 오디오 URL이 없습니다."); return; }
+                                  if (item.sourceType === 'shared_track' && !user) { showToast("로그인이 필요합니다."); return; }
+                                  handleDownload(item.audioUrl, item.title); 
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                              >
+                                <span className="flex items-center gap-2"><Download className="w-4 h-4 opacity-70" />다운로드</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (!item.appliedKeywords || Object.keys(item.appliedKeywords).length === 0) {
+                                    showToast("적용할 곡 설정 정보가 없습니다."); return;
+                                  }
+                                  handleApplyNext(item, item); 
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                              >
+                                <span className="flex items-center gap-2"><Music className="w-4 h-4 opacity-70" />다음곡에 적용</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, isPlaylistItem: true };
+                                  setSharePopupInfo({ group: fakeItem, item: fakeItem, idx: undefined, mode: 'default' });
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                              >
+                                <span className="flex items-center gap-2"><Share2 className="w-4 h-4 opacity-70" />공유</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                              >
+                                <span className="flex items-center gap-2"><FolderOutput className="w-4 h-4 opacity-70" />폴더 이동</span>
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleRemoveFromPlaylist(item); setActivePlaylistItemMenu(null); }}
                                 className="w-full text-left px-4 py-2 hover:bg-red-400/10 text-red-400 font-bold transition-colors"
                               >
-                                <span>삭제</span>
+                                <span className="flex items-center gap-2"><Trash2 className="w-4 h-4 opacity-70" />리스트 삭제</span>
                               </button>
                             </div>
                           )}

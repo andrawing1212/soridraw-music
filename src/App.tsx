@@ -1154,13 +1154,20 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
               {/* Suno Library Icon */}
               <button 
                 onClick={() => {
+                  if (!user) {
+                    handleLogin();
+                    return;
+                  }
                   navigate('/suno-library');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  setIsExpanded(false);
+                  setIsProfileOpen(false);
+                  if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                  if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                 }}
-                className={`p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all ${location.pathname === '/suno-library' ? 'ring-1 ring-white/50' : ''}`}
+                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="Suno Library"
               >
-                <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-brand-orange">
+                <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6">
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm opacity-80" />
                   <div className="w-[4px] h-[16px] md:h-[18px] border-[1.5px] border-current rounded-sm" />
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm transform origin-bottom -rotate-12 translate-x-[1px] opacity-90" />
@@ -1258,63 +1265,6 @@ function App() {
       const resolvedGenre = getResolvedGenre(result);
       const finalTitle = formatDisplayTitle(resolvedGenre, rawExtractedTitle);
 
-      const vocalData = {
-        male: maleCount,
-        female: femaleCount,
-        rap: rapEnabled,
-        mode: vocalMode,
-        isToneSelected: !!selectedVocalToneId,
-        toneId: selectedVocalToneId,
-        members: vocalMembers
-      };
-
-      const tempoData = {
-        enabled: tempoEnabled,
-        min: minBPM,
-        max: maxBPM
-      };
-
-      const appliedKeywords = {
-        ...(result.appliedKeywords || {}),
-        // Unified naming for both current state and user requested fields
-        genre: selectedGenres,
-        subGenre: subGenre,
-        selectedSubGenres: subGenre,
-        midGenre: selectedGenres,
-        selectedMidGenres: selectedGenres,
-        style: selectedStyles,
-        selectedStyles: selectedStyles,
-        sound: selectedInstrumentSounds,
-        selectedSounds: selectedInstrumentSounds,
-        instrumentSound: selectedInstrumentSounds,
-        selectedInstrumentSounds: selectedInstrumentSounds,
-        mood: selectedMoods,
-        selectedMoods: selectedMoods,
-        theme: selectedThemes,
-        selectedThemes: selectedThemes,
-        vocal: vocalData,
-        selectedVocal: vocalData,
-        vocalConfig: vocalData,
-        vocalType: vocalMode === 'solo' ? (maleCount > 0 ? '남성 솔로' : '여성 솔로') : (vocalMode === 'duo' ? '듀엣' : '그룹'),
-        tempoConfig: tempoData,
-        tempo: `${minBPM}-${maxBPM} BPM`,
-        songStructure: songStructure,
-        selectedSections: customStructure,
-        customStructure: customStructure,
-        lyricsMode: isLyricMode ? lyricMode : 'assist',
-        lyricMode: isLyricMode ? lyricMode : 'assist',
-        userInput: userInput,
-        isLyricMode: isLyricMode,
-        lyricDraft: isLyricMode ? lyricDraft : undefined,
-        kpopMode: kpopMode,
-        isKoreanEnglishMix: isKoreanEnglishMix,
-        isNoLyrics: isNoLyrics,
-        maleCount: maleCount,
-        femaleCount: femaleCount,
-        rapEnabled: rapEnabled,
-        vocalMode: vocalMode
-      };
-
       const res = await fetch(
         "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
         {
@@ -1330,7 +1280,7 @@ function App() {
             lyrics: lyricLanguage === 'en'
               ? (result.lyrics?.english || result.lyrics?.korean || "")
               : (result.lyrics?.korean || result.lyrics?.english || ""),
-            appliedKeywords: appliedKeywords,
+            appliedKeywords: result.appliedKeywords || {},
             titleLanguage,
             lyricLanguage
           }),
@@ -1379,12 +1329,6 @@ function App() {
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [favorites, setFavorites] = useState<any[]>([]);
-
-  // Presence/activity writes are intentionally throttled to minimize Firestore cost.
-  // Do not use this as a heartbeat. It only records meaningful user activity at a low frequency.
-  const ACTIVITY_UPDATE_THROTTLE_MS = 10 * 60 * 1000;
-  const lastPresenceUpdateRef = useRef(0);
-  const presenceUpdateInFlightRef = useRef(false);
 
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
@@ -1459,21 +1403,8 @@ function App() {
     }
   };
 
-  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent);
-  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
-
-  const openInChrome = () => {
-    const currentUrl = window.location.href.replace(/^https?:\/\//, "");
-    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
-  };
-
   const handleLogin = async () => {
     if (isLoggingIn) return;
-    if (isKakaoInAppBrowser) {
-      setShowKakaoWarning(true);
-      return;
-    }
-    
     setIsLoggingIn(true);
     try {
       // Save rememberLogin preference to localStorage immediately on login attempt
@@ -2313,17 +2244,6 @@ const cycleFamilySelection = (
               isOnline: true,
             };
 
-            // Root/admin bootstrap guard:
-            // Activity/login sync must never downgrade an admin account to free.
-            // Only use this when the user document is missing or was accidentally reset.
-            const bootstrapAdminEmails = new Set([
-              'andrawing1212@gmail.com',
-              'andrawing1213@gmail.com',
-              'legend3636@gmail.com',
-            ]);
-            const normalizedEmail = (currentUser.email ?? '').toLowerCase();
-            const isBootstrapAdmin = bootstrapAdminEmails.has(normalizedEmail);
-
             if (!userSnap.exists()) {
               const favsSnap = await getDocs(
                 query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
@@ -2336,7 +2256,7 @@ const cycleFamilySelection = (
                 favoriteCount: favsSnap.size,
                 songGeneratedCount: songCount,
                 createdAt: Date.now(),
-                role: isBootstrapAdmin ? 'admin' : 'free',
+                role: 'free',
                 accountStatus: 'active',
                 paymentStatus: 'none',
               });
@@ -2347,18 +2267,8 @@ const cycleFamilySelection = (
                 setIsBanModalOpen(true);
               }
 
-              // Existing users: never touch role/plan/account status from regular activity sync.
+              // Existing users: never touch role/plan/account status from the client.
               await updateDoc(userRef, safeSessionData);
-
-              // Safety repair for root admin accounts only: if a root admin email was
-              // accidentally reset to free by an older client, restore admin once.
-              if (isBootstrapAdmin && currentData.role !== 'admin') {
-                console.warn('[Auth Debug] Restoring bootstrap admin role for:', normalizedEmail);
-                await updateDoc(userRef, {
-                  role: 'admin',
-                  accountStatus: currentData.accountStatus || 'active',
-                });
-              }
             }
           } catch (error) {
             console.error('Failed to sync user document:', error);
@@ -2399,67 +2309,6 @@ const cycleFamilySelection = (
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
   }, []);
 
-  const markUserActivity = useCallback(async (reason: string, options?: { force?: boolean }) => {
-    const currentUser = auth.currentUser || user;
-    if (!currentUser?.uid) return;
-
-    const now = Date.now();
-    const shouldSkip =
-      !options?.force &&
-      lastPresenceUpdateRef.current > 0 &&
-      now - lastPresenceUpdateRef.current < ACTIVITY_UPDATE_THROTTLE_MS;
-
-    if (shouldSkip || presenceUpdateInFlightRef.current) return;
-
-    lastPresenceUpdateRef.current = now;
-    presenceUpdateInFlightRef.current = true;
-
-    try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        lastSeenAt: now,
-        isOnline: true,
-      });
-      console.log('[Presence] lastSeenAt updated:', { reason, uid: currentUser.uid });
-    } catch (error) {
-      console.warn('[Presence] Failed to update lastSeenAt:', { reason, error });
-    } finally {
-      presenceUpdateInFlightRef.current = false;
-    }
-  }, [user]);
-
-  // Low-cost global activity detector: no scroll/mousemove heartbeat, only throttled meaningful interactions.
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    const handleActivity = () => {
-      markUserActivity('global_interaction');
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        markUserActivity('visibility_visible');
-      }
-    };
-
-    window.addEventListener('pointerdown', handleActivity, { passive: true });
-    window.addEventListener('touchstart', handleActivity, { passive: true });
-    window.addEventListener('keydown', handleActivity);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('pointerdown', handleActivity);
-      window.removeEventListener('touchstart', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user?.uid, markUserActivity]);
-
-  // Page changes count as activity, but still obey the 10-minute throttle.
-  useEffect(() => {
-    if (!user?.uid) return;
-    markUserActivity(`route:${location.pathname}`);
-  }, [location.pathname, user?.uid, markUserActivity]);
-
   const toggleFavorite = async (song: SongResult) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
@@ -2467,8 +2316,8 @@ const cycleFamilySelection = (
       return;
     }
 
-    // Low-cost activity indicator (throttled).
-    markUserActivity('favorite_toggle');
+    // Activity indicator
+    updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
 
     const existingFav = favorites.find(f => f.title === song.title && f.prompt === song.prompt);
 
@@ -3149,82 +2998,34 @@ const cycleFamilySelection = (
     }
   };
 
-  const pendingAppliedRef = useRef(false);
-
   // Reset filters on navigation to Home, but preserve generated song history
   useEffect(() => {
     if (location.pathname !== '/') return;
 
-    const applyPendingKeywords = () => {
-      if (pendingAppliedRef.current) return false;
-
-      const rawPending =
-        sessionStorage.getItem("pendingAppliedKeywords") ||
-        localStorage.getItem("pendingAppliedKeywordsBackup");
-
-      if (!rawPending) return false;
-
-      pendingAppliedRef.current = true;
-
-      try {
-        const pending = JSON.parse(rawPending);
-        console.log("Home detected pendingAppliedKeywords:", pending);
-
-        const normalized = {
-          genre: pending.selectedGenres || pending.genre || [],
-          subGenre: pending.selectedSubGenres || pending.subGenre || [],
-          midGenre: pending.selectedMidGenres || pending.midGenre || [],
-          style: pending.selectedStyles || pending.style || [],
-          sound: pending.selectedSounds || pending.sound || [],
-          instrumentSound: pending.selectedInstrumentSounds || pending.instrumentSound || [],
-          mood: pending.selectedMoods || pending.mood || [],
-          theme: pending.selectedThemes || pending.theme || [],
-          vocal: pending.selectedVocal || pending.vocalConfig || pending.vocal || null,
-          tempoConfig: pending.tempoConfig || null,
-          songStructure: pending.songStructure || null,
-          customStructure: pending.customStructure || [],
-          selectedSections: pending.selectedSections || [],
-          lyricsMode: pending.lyricsMode || pending.lyricMode || "assist",
-          isNoLyrics: pending.isNoLyrics || false,
-          userInput: pending.userInput || "",
-          tempo: pending.tempo || null,
-          vocalType: pending.vocalType || pending.selectedVocal || null,
-          vocalTone: pending.vocalTone || null,
-        };
-        console.log("Normalized pendingAppliedKeywords:", normalized);
-        console.log("Pending applied successfully, skip normal home reset");
-
-        // Since normal keywords application might depend on cleared state,
-        // clear everything before applying if we are doing this.
-        clearAll({ preserveHistory: true, preservePinned: true }).then(() => {
-          applyKeywordsToNext(normalized as any);
-          
-          sessionStorage.removeItem("pendingAppliedKeywords");
-          localStorage.removeItem("pendingAppliedKeywordsBackup");
-
-          showToast("공유곡 설정이 다음 곡에 적용되었습니다.");
-        });
-
-        return true;
-      } catch (error) {
-        console.error("Failed to apply pendingAppliedKeywords:", error);
-        return false;
-      }
-    };
-
     const initializeHome = async () => {
-      const applied = applyPendingKeywords();
-      if (applied) {
-        window.scrollTo(0, 0);
-        return;
-      }
       if (!hasInitializedHomeRef.current) {
         hasInitializedHomeRef.current = true;
         window.scrollTo(0, 0);
         return;
       }
 
+      // 1. Clear current state (preserving history)
       await clearAll({ preserveHistory: true, preservePinned: true });
+
+      // 2. Check for pending keywords from Favorites
+      const pending = sessionStorage.getItem('pendingAppliedKeywords');
+      if (pending) {
+        try {
+          const keywords = JSON.parse(pending);
+          // This function clears pinned keywords and sets new ones
+          applyKeywordsToNext(keywords);
+          // 3. Prevent duplicate application
+          sessionStorage.removeItem('pendingAppliedKeywords');
+        } catch (e) {
+          console.error('Failed to parse pending keywords', e);
+        }
+      }
+
       window.scrollTo(0, 0);
     };
 
@@ -3402,9 +3203,9 @@ const saveRecentSong = async (newSong: any) => {
     abortControllerRef.current = new AbortController();
 
     try {
-      // Low-cost activity indicator (throttled).
+      // Activity indicator
       if (user) {
-        markUserActivity('generate_song');
+        updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
       }
       let finalGenres = [...selectedGenres];
       let finalMoods = [...selectedMoods];
@@ -3992,54 +3793,6 @@ ${result.prompt}
           </div>
         </Portal>
       )}
-
-      <AnimatePresence>
-        {showKakaoWarning && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowKakaoWarning(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[#1e1e1e] border border-white/10 rounded-3xl p-6 w-full max-w-sm"
-            >
-              <div className="text-center">
-                <div className="w-16 h-16 bg-brand-orange/20 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-orange">
-                  <Info className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-bold mb-2">Chrome에서 열어주세요</h3>
-                <p className="text-sm text-white/70 mb-6">
-                  카카오톡 브라우저에서는 Google 로그인이 제한될 수 있습니다. 정상적인 이용을 위해 Chrome에서 열어주세요.
-                </p>
-                <div className="space-y-3">
-                  <button
-                    onClick={openInChrome}
-                    className="w-full py-3 bg-brand-orange text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors hover:bg-brand-orange/90 shadow-lg shadow-brand-orange/20"
-                  >
-                    Chrome에서 열기
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(window.location.href);
-                      showToast("링크가 복사되었습니다.");
-                    }}
-                    className="w-full py-3 bg-white/10 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                    링크 복사
-                  </button>
-                  <button
-                    onClick={() => setShowKakaoWarning(false)}
-                    className="w-full py-3 text-white/50 hover:text-white font-medium transition-colors"
-                  >
-                    닫기
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} />
 

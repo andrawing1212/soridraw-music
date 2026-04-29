@@ -164,7 +164,8 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   
   // Add to new playlist
   const newItemRef = doc(toItemsRef);
-  const newItemData = { ...item, id: undefined, order: maxOrder + 1, addedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  const newItemData: any = { ...item, order: maxOrder + 1, addedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  delete newItemData.id;
   batch.set(newItemRef, newItemData);
 
   // Delete from old playlist

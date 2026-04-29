@@ -381,11 +381,12 @@ export default function SunoLibraryPage() {
     }
 
     const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-    let nextNum = 1;
-    while (currentList.some(p => p.title === String(nextNum))) {
-      nextNum++;
+    let newTitle = "새폴더";
+    let suffix = 2;
+    while (currentList.some(p => p.title === newTitle)) {
+      newTitle = `새폴더 ${suffix}`;
+      suffix++;
     }
-    const newTitle = String(nextNum);
     const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
 
     try {
@@ -1249,19 +1250,29 @@ export default function SunoLibraryPage() {
     // Default to the lowest order playlist
     const targetPlaylist = targetPlaylists[0];
 
-    const sourceId = isShared ? (group.shareId || group.id) : (item?.id || `${group.id}-${idx}`);
+    let sourceId = '';
+    if (isShared) {
+      // Very safe extraction for shared tracks
+      sourceId = group?.shareId || group?.id || item?.id || `shared_${group?.id}_${idx}`;
+    } else {
+      sourceId = item?.id || `${group?.id}_${idx}`;
+    }
+    
+    if (!sourceId || sourceId === `shared_undefined_${idx}` || sourceId === `undefined_${idx}`) {
+        sourceId = `fallback_${Date.now()}`;
+    }
 
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
-      ownerUid: (isShared ? (group.ownerUid || group.uid || '') : (user.uid || group.ownerUid)) || '',
-      creatorDisplayId: group.creatorDisplayId || group.ownerNickname || group.ownerUid || null,
-      title: getTitle(item, group, idx),
-      audioUrl: url || null,
-      imageUrl: getImageUrl(item, group) || null,
-      duration: getDuration(item, group) || null,
+      ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
+      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.ownerUid || null,
+      title: getTitle(item, group, idx) || 'Untitled',
+      audioUrl: url || item?.audio_url || item?.url || null,
+      imageUrl: getImageUrl(item, group) || item?.image_url || item?.imageUrl || group?.imageUrl || null,
+      duration: getDuration(item, group) || item?.duration || group?.duration || null,
       genreLabels: [],
-      appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group.appliedKeywords || null,
+      appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group?.appliedKeywords || null,
       colorTag: null,
       likeCount: 0,
       order: 0,
@@ -1281,7 +1292,14 @@ export default function SunoLibraryPage() {
       await addPlaylistItem(user.uid, targetPlaylist.id!, itemData);
       showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
     } catch (e: any) {
-      console.error(e);
+      console.error("save playlist failed:", {
+        error: e,
+        targetPlaylist,
+        sourceType: itemData.sourceType,
+        sourceId: itemData.sourceId,
+        group,
+        item
+      });
       if (e.message === 'DUPLICATE') {
         showToast("이미 이 플레이리스트에 저장된 곡입니다.");
       } else {
@@ -1487,7 +1505,7 @@ export default function SunoLibraryPage() {
               </div>
               <div className="p-4 overflow-y-auto flex flex-col gap-2">
                 {(() => {
-                  const isShared = moveModalArgs.item.sourceType === 'shared_track';
+                  const isShared = activePlaylistSection === 'shared';
                   const targetLists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
                   const availableLists = targetLists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
                   
@@ -1509,7 +1527,17 @@ export default function SunoLibraryPage() {
                           await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
                           showToast("플레이리스트를 이동했습니다.");
                           setMoveModalArgs(null);
-                        } catch (e) { showToast("곡 이동에 실패했습니다."); }
+                        } catch (e) {
+                          console.error("move playlist item failed:", {
+                            error: e,
+                            fromPlaylistId: activePlaylistId,
+                            toPlaylistId: list.id,
+                            itemId: moveModalArgs.item.id,
+                            item: moveModalArgs.item,
+                            activePlaylistType: activePlaylistSection
+                          });
+                          showToast("곡 이동에 실패했습니다.");
+                        }
                       }}
                       className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors font-medium text-white flex items-center"
                     >

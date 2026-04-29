@@ -13,7 +13,7 @@ import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, ge
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
-import { ensureDefaultPlaylists, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
+import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
 
 const fallbackNormalPlaylists: Playlist[] = [
@@ -1247,39 +1247,70 @@ export default function SunoLibraryPage() {
     }
 
     const isShared = isSharedView;
-    const targetPlaylists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
 
-    if (targetPlaylists.length === 0) {
-      showToast('저장할 플레이리스트가 없습니다.');
+    try {
+      await ensureDefaultPlaylists(user.uid);
+    } catch (e) {
+      console.error("Failed to ensure default playlists", e);
+    }
+
+    let targetPlaylist: Playlist | undefined;
+    try {
+      const dbLists = await getPlaylistsByType(user.uid, isShared ? "shared" : "normal");
+      targetPlaylist = dbLists[0];
+    } catch (e) {
+      console.error("Failed to fetch target playlists", e);
+    }
+
+    if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
+      showToast(`저장할 ${isShared ? '공유 받은 곡 ' : ''}플레이리스트가 없습니다.`);
       return;
     }
 
-    // Default to the lowest order playlist
-    const targetPlaylist = targetPlaylists[0];
+    const finalAudioUrl =
+      url ||
+      item?.audioUrl ||
+      item?.streamAudioUrl ||
+      item?.sourceAudioUrl ||
+      item?.sourceStreamAudioUrl ||
+      group?.audioUrl ||
+      group?.streamAudioUrl ||
+      group?.sourceAudioUrl ||
+      group?.sourceStreamAudioUrl ||
+      "";
 
-    if (!url) {
+    if (!finalAudioUrl) {
       showToast("저장할 오디오 URL이 없습니다.");
       return;
     }
 
-    const safeGroupId = group?.shareId || group?.id || group?.trackId || 'unknown-group';
-    const safeItemId = item?.id || item?.audioId || item?.taskId || null;
+    const safeShareId =
+      group?.shareId ||
+      group?.id ||
+      group?.trackId ||
+      group?.sourceId ||
+      group?.shareData?.id ||
+      item?.shareId ||
+      item?.id ||
+      item?.audioId ||
+      item?.taskId ||
+      `shared_${Date.now()}_${idx}`;
 
     const sourceId = isShared
-      ? String(group?.shareId || group?.id || group?.trackId || safeItemId || `shared_${safeGroupId}_${idx}`)
-      : String(safeItemId || `${safeGroupId}_${idx}`);
+      ? String(safeShareId)
+      : String(item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
 
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
-      ownerUid: (isShared ? (group.ownerUid || group.uid || '') : (user.uid || group.ownerUid)) || '',
-      creatorDisplayId: group.creatorDisplayId || group.ownerNickname || group.ownerUid || null,
-      title: getTitle(item, group, idx),
-      audioUrl: url || null,
-      imageUrl: getImageUrl(item, group) || null,
-      duration: getDuration(item, group) || null,
+      ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
+      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.ownerUid || null,
+      title: getTitle(item, group, idx) || "Shared Track",
+      audioUrl: finalAudioUrl,
+      imageUrl: item?.image_url || item?.imageUrl || group?.imageUrl || getImageUrl(item, group) || null,
+      duration: item?.duration || group?.duration || getDuration(item, group) || null,
       genreLabels: [],
-      appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group.appliedKeywords || null,
+      appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group?.appliedKeywords || null,
       colorTag: null,
       likeCount: 0,
       order: 0,
@@ -1299,13 +1330,14 @@ export default function SunoLibraryPage() {
       await addPlaylistItem(user.uid, targetPlaylist.id!, itemData);
       showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
     } catch (error: any) {
-      console.error("save playlist failed:", {
+      console.error("shared playlist save failed:", {
         error,
         targetPlaylist,
-        sourceType: isShared ? "shared_track" : "suno_track",
+        finalAudioUrl,
         sourceId,
         group,
-        item
+        item,
+        isSharedView
       });
       if (error.message === 'DUPLICATE') {
         showToast("이미 이 플레이리스트에 저장된 곡입니다.");

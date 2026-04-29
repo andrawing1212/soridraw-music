@@ -1,6 +1,18 @@
 import { db } from '../firebase';
-import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { Playlist, PlaylistItem } from '../types';
+
+export const getPlaylistsByType = async (uid: string, type: "normal" | "shared"): Promise<Playlist[]> => {
+  if (!uid) return [];
+  const listsRef = collection(db, 'user_playlists', uid, 'lists');
+  const q = query(listsRef, where('type', '==', type));
+  const snap = await getDocs(q);
+  const lists: Playlist[] = [];
+  snap.forEach(doc => {
+    lists.push({ id: doc.id, ...doc.data() } as Playlist);
+  });
+  return lists.sort((a, b) => a.order - b.order);
+};
 
 /**
  * Ensures the default playlists exist for the user.

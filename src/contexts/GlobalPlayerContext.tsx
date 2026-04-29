@@ -68,6 +68,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const repeatModeRef = useRef<'none' | 'all' | 'one'>('none');
   const volumeRef = useRef(1);
   const isMutedRef = useRef(false);
+  const wasClearedRef = useRef(false);
 
   // Media Session handlers are registered once. These refs keep their implementation fresh.
   const mediaPlayRef = useRef<() => void>(() => {});
@@ -157,10 +158,18 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
 
     try {
       const currentSrc = audio.currentSrc || audio.src || '';
-      if (currentSrc !== targetSrc) {
+      const shouldResetSource = wasClearedRef.current || currentSrc !== targetSrc;
+
+      if (shouldResetSource) {
+        audio.pause();
         audio.src = targetSrc;
-        audio.load();
+        audio.currentTime = 0;
+        if (wasClearedRef.current) {
+           audio.load();
+        }
       }
+
+      wasClearedRef.current = false;
 
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
@@ -378,6 +387,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   }, [playNext, updateMediaSessionPosition]);
 
   const clearPlayer = useCallback(() => {
+    wasClearedRef.current = true;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.removeAttribute('src');

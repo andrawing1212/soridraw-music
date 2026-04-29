@@ -43,7 +43,7 @@ export default function SunoLibraryPage() {
   const [sharedError, setSharedError] = useState(false);
   const [showKakaoWarning, setShowKakaoWarning] = useState(false);
   
-  const [libraryViewMode, setLibraryViewMode] = useState<"workspace" | "playlist">("workspace");
+  const [libraryViewMode, setLibraryViewMode] = useState<"workspace" | "playlist" | "sharedPlaylist">("workspace");
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [selectedNormalPlaylistId, setSelectedNormalPlaylistId] = useState<string | null>(null);
   const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
@@ -257,7 +257,7 @@ export default function SunoLibraryPage() {
   }, []);
 
   useEffect(() => {
-    if (!user || libraryViewMode !== 'playlist' || isSharedView) {
+    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || isSharedView) {
       if (!user) {
         setPlaylists([]);
       }
@@ -296,7 +296,7 @@ export default function SunoLibraryPage() {
   const visibleSharedPlaylists = actualSharedPlaylists.length > 0 ? actualSharedPlaylists : fallbackSharedPlaylists;
 
   useEffect(() => {
-    if (libraryViewMode !== 'playlist') return;
+    if (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') return;
     
     console.log("Playlist mode data:", {
       userId: user?.uid,
@@ -325,6 +325,14 @@ export default function SunoLibraryPage() {
 
   const handleRenamePlaylist = (playlist: Playlist) => {
     if (!user || (playlist as any).isFallback) return;
+
+    const isShared = playlist.type === 'shared';
+    const firstPlaylist = isShared ? visibleSharedPlaylists[0] : visibleNormalPlaylists[0];
+    if (firstPlaylist && firstPlaylist.id === playlist.id) {
+      showToast("기본 플레이리스트 이름은 변경할 수 없습니다.");
+      return;
+    }
+
     setRenameModalArgs({ playlist, newTitle: playlist.title });
   };
 
@@ -412,7 +420,7 @@ export default function SunoLibraryPage() {
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
 
   useEffect(() => {
-    if (!user || libraryViewMode !== 'playlist' || !activePlaylistId) {
+    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || !activePlaylistId) {
       setPlaylistItems([]);
       return;
     }
@@ -436,7 +444,7 @@ export default function SunoLibraryPage() {
 
   // Handle caching of likes and shared statuses
   useEffect(() => {
-    if (playlistItems.length === 0 || libraryViewMode !== 'playlist') return;
+    if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
 
     const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
     const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
@@ -1687,10 +1695,10 @@ export default function SunoLibraryPage() {
 
         {/* View Mode Tabs */}
         {!isSharedView && (
-          <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10">
+          <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10 overflow-x-auto custom-scrollbar whitespace-nowrap max-w-full">
             <button
               onClick={() => setLibraryViewMode('workspace')}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'workspace' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+              className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'workspace' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
             >
               워크스페이스
             </button>
@@ -1698,18 +1706,29 @@ export default function SunoLibraryPage() {
               onClick={() => {
                 if (libraryViewMode !== 'playlist') {
                   setLibraryViewMode('playlist');
-                  if (visibleNormalPlaylists.length > 0) {
-                    setActivePlaylistSection('normal');
+                  setActivePlaylistSection('normal');
+                  if (visibleNormalPlaylists.length > 0 && !selectedNormalPlaylistId) {
                     setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
-                  } else if (visibleSharedPlaylists.length > 0) {
-                    setActivePlaylistSection('shared');
+                  }
+                }
+              }}
+              className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'playlist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              플레이리스트
+            </button>
+            <button
+              onClick={() => {
+                if (libraryViewMode !== 'sharedPlaylist') {
+                  setLibraryViewMode('sharedPlaylist');
+                  setActivePlaylistSection('shared');
+                  if (visibleSharedPlaylists.length > 0 && !selectedSharedPlaylistId) {
                     setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
                   }
                 }
               }}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'playlist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+              className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'sharedPlaylist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
             >
-              플레이리스트
+              공유 플레이리스트
             </button>
           </div>
         )}
@@ -1937,10 +1956,11 @@ export default function SunoLibraryPage() {
           </>
         )}
 
-        {libraryViewMode === 'playlist' && (
+        {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
           <div className="space-y-6 mt-8">
             {/* Playlist Tabs Layout */}
             
+            {libraryViewMode === 'playlist' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
               <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
@@ -1952,7 +1972,7 @@ export default function SunoLibraryPage() {
                       setActivePlaylistSection('normal');
                     }}
                     className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${
-                      selectedNormalPlaylistId === playlist.id 
+                      activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
                         ? 'bg-brand-orange text-white border-brand-orange shadow-lg' 
                         : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                     }`}
@@ -1968,7 +1988,9 @@ export default function SunoLibraryPage() {
                 </button>
               </div>
             </div>
+            )}
 
+            {libraryViewMode === 'sharedPlaylist' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
               <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
@@ -1980,7 +2002,7 @@ export default function SunoLibraryPage() {
                       setActivePlaylistSection('shared');
                     }}
                     className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 ${
-                      selectedSharedPlaylistId === playlist.id 
+                      activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
                         ? 'bg-brand-orange text-white border-brand-orange shadow-lg' 
                         : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                     }`}
@@ -1997,6 +2019,7 @@ export default function SunoLibraryPage() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Selected Playlist Header */}
             {(() => {
@@ -2020,12 +2043,14 @@ export default function SunoLibraryPage() {
                   </div>
                   {!isFallback && user && (
                     <div className="flex items-center gap-1">
-                      <button 
-                        onClick={() => handleRenamePlaylist(activePlaylist)}
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      {!(activePlaylist.id === (activePlaylistSection === 'normal' ? visibleNormalPlaylists[0]?.id : visibleSharedPlaylists[0]?.id)) && (
+                        <button 
+                          onClick={() => handleRenamePlaylist(activePlaylist)}
+                          className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
                       <button 
                         onClick={() => handleDeletePlaylist(activePlaylist)}
                         className="p-2 text-white/50 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"

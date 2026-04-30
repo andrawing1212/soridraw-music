@@ -2290,10 +2290,6 @@ export default function SunoLibraryPage() {
                             {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-white" /> : <Play className={`w-3.5 h-3.5 ${isCurrent ? 'fill-white' : ''} ml-0.5`} />}
                           </button>
                           
-                          <div className="hidden md:flex w-24 lg:w-32 shrink-0 items-center justify-center bg-white/5 border border-white/5 rounded-lg px-2 py-1.5 text-[10px] text-[var(--text-secondary)] font-medium truncate">
-                            {group.style || group.tags || 'Music'}
-                          </div>
-                          
                           <div className="flex-1 min-w-0 pr-2 flex items-center gap-3">
                             <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
                               {getTitle(item, group, idx)}
@@ -2309,7 +2305,6 @@ export default function SunoLibraryPage() {
                                 {audioUrl ? '최종 파일 확인중...' : '오디오 대기중...'}
                               </span>
                             ) : null}
-                            <p className="md:hidden text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{group.style || group.tags || 'Music'}</p>
                           </div>
 
                           <div className="text-[10px] opacity-40 font-mono shrink-0 tabular-nums">

@@ -55,6 +55,7 @@ export default function SunoLibraryPage() {
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
+  const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
@@ -446,6 +447,53 @@ export default function SunoLibraryPage() {
   useEffect(() => {
     if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
 
+    const ownerUids = Array.from(new Set(
+      playlistItems
+        .map((item) => item.ownerUid)
+        .filter((uid): uid is string => Boolean(uid && typeof uid === 'string' && !userNameMap[uid]))
+    ));
+
+    if (ownerUids.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchOwnerNames = async () => {
+      const entries: Record<string, string> = {};
+
+      await Promise.all(ownerUids.map(async (uid) => {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', uid));
+          if (!userSnap.exists()) return;
+
+          const userData = userSnap.data() as any;
+          const label =
+            userData.nickname ||
+            userData.displayName ||
+            userData.name ||
+            userData.email ||
+            uid;
+
+          if (label) entries[uid] = String(label);
+        } catch (error) {
+          console.warn('Failed to load playlist owner name:', { uid, error });
+        }
+      }));
+
+      if (!cancelled && Object.keys(entries).length > 0) {
+        setUserNameMap((prev) => ({ ...prev, ...entries }));
+      }
+    };
+
+    fetchOwnerNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, libraryViewMode, userNameMap]);
+
+  useEffect(() => {
+    if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
+
     const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
     const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
     const checkedAt = checkedAtStr ? parseInt(checkedAtStr, 10) : 0;
@@ -622,6 +670,88 @@ export default function SunoLibraryPage() {
     const num = Number(rawVal);
     if (Number.isFinite(num) && num > 0) return num;
     return null;
+  };
+
+  const normalizeDurationSeconds = (value: any): number | null => {
+    if (value === undefined || value === null || value === '') return null;
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return Math.round(num);
+  };
+
+  const formatDurationSeconds = (value: any): string | null => {
+    const totalSeconds = normalizeDurationSeconds(value);
+    if (totalSeconds === null) return null;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  const getPlaylistCreatorLabel = (item: PlaylistItem): string => {
+    return (
+      (item as any).creatorDisplayId ||
+      (item as any).ownerNickname ||
+      (item as any).creatorNickname ||
+      (item.ownerUid ? userNameMap[item.ownerUid] : null) ||
+      (item as any).ownerEmail ||
+      (item as any).creatorEmail ||
+      item.ownerUid ||
+      'Unknown'
+    );
+  };
+
+
+  const resolveCreatorProfile = async (ownerUid?: string | null, ...sources: any[]) => {
+    const firstValue = (...values: any[]) => {
+      const found = values.find((value) => typeof value === 'string' && value.trim().length > 0);
+      return found ? String(found).trim() : null;
+    };
+
+    const sourceNickname = firstValue(
+      ...sources.flatMap((source) => [
+        source?.creatorDisplayId,
+        source?.ownerNickname,
+        source?.creatorNickname,
+        source?.ownerName,
+        source?.nickname,
+        source?.displayName,
+        source?.name,
+      ])
+    );
+
+    const sourceEmail = firstValue(
+      ...sources.flatMap((source) => [
+        source?.ownerEmail,
+        source?.creatorEmail,
+        source?.email,
+      ])
+    );
+
+    let profileNickname = sourceNickname;
+    let profileEmail = sourceEmail;
+
+    if (ownerUid && (!profileNickname || !profileEmail)) {
+      try {
+        const userSnap = await getDoc(doc(db, 'users', ownerUid));
+        if (userSnap.exists()) {
+          const data = userSnap.data() as any;
+          profileNickname = profileNickname || firstValue(data.nickname, data.displayName, data.name);
+          profileEmail = profileEmail || firstValue(data.email);
+        }
+      } catch (error) {
+        console.warn('Failed to resolve creator profile:', { ownerUid, error });
+      }
+    }
+
+    const displayId = profileNickname || profileEmail || ownerUid || null;
+
+    return {
+      creatorDisplayId: displayId,
+      ownerNickname: profileNickname,
+      creatorNickname: profileNickname,
+      ownerEmail: profileEmail,
+      creatorEmail: profileEmail,
+    };
   };
 
   const extractSunoData = (group: any) => {
@@ -1008,6 +1138,7 @@ export default function SunoLibraryPage() {
         }
 
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
+        const creatorProfile = await resolveCreatorProfile(user.uid, group, item, user);
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
           trackId: group.id,
@@ -1027,6 +1158,11 @@ export default function SunoLibraryPage() {
           appliedKeywords: group.appliedKeywords || {},
           createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
+          creatorDisplayId: creatorProfile.creatorDisplayId,
+          ownerNickname: creatorProfile.ownerNickname,
+          creatorNickname: creatorProfile.creatorNickname,
+          ownerEmail: creatorProfile.ownerEmail,
+          creatorEmail: creatorProfile.creatorEmail,
           isPublic: true
         });
 
@@ -1079,6 +1215,7 @@ export default function SunoLibraryPage() {
         }
 
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
+        const creatorProfile = await resolveCreatorProfile(user.uid, group, item, user);
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
           trackId: group.id,
@@ -1098,6 +1235,11 @@ export default function SunoLibraryPage() {
           appliedKeywords: group.appliedKeywords || {},
           createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
+          creatorDisplayId: creatorProfile.creatorDisplayId,
+          ownerNickname: creatorProfile.ownerNickname,
+          creatorNickname: creatorProfile.creatorNickname,
+          ownerEmail: creatorProfile.ownerEmail,
+          creatorEmail: creatorProfile.creatorEmail,
           isPublic: true
         });
 
@@ -1314,15 +1456,21 @@ export default function SunoLibraryPage() {
       ? String(safeShareId)
       : String(item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
 
+    const ownerUidForItem = (isShared ? (group?.ownerUid || group?.uid || user.uid) : (group?.ownerUid || user.uid)) || '';
+    const creatorProfile = await resolveCreatorProfile(ownerUidForItem, group, item, user);
+
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
-      ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
-      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.ownerUid || null,
+      ownerUid: ownerUidForItem,
+      creatorDisplayId: creatorProfile.creatorDisplayId,
+      ownerNickname: creatorProfile.ownerNickname,
+      creatorNickname: creatorProfile.creatorNickname,
+      ownerEmail: creatorProfile.ownerEmail || (!isShared ? (user?.email || null) : null),
       title: getTitle(item, group, idx) || "Shared Track",
       audioUrl: finalAudioUrl,
       imageUrl: item?.image_url || item?.imageUrl || group?.imageUrl || getImageUrl(item, group) || null,
-      duration: item?.duration || group?.duration || getDuration(item, group) || null,
+      duration: normalizeDurationSeconds(item?.duration || group?.duration || getDuration(item, group)),
       genreLabels: [],
       appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group?.appliedKeywords || null,
       colorTag: null,
@@ -2265,12 +2413,12 @@ export default function SunoLibraryPage() {
                         <div className="flex flex-col gap-0.5 mt-0.5">
                           <div className="flex items-center gap-2 text-xs text-white/50">
                             <span className="truncate">
-                              {item.creatorDisplayId || 'Unknown'}
+                              {getPlaylistCreatorLabel(item)}
                             </span>
-                            {item.duration && (
+                            {formatDurationSeconds(item.duration) && (
                               <>
                                 <span>•</span>
-                                <span>{Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}</span>
+                                <span>{formatDurationSeconds(item.duration)}</span>
                               </>
                             )}
                           </div>
@@ -2374,7 +2522,20 @@ export default function SunoLibraryPage() {
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, isPlaylistItem: true };
+                                  const fakeItem = {
+                                    ...item,
+                                    id: item.sourceId,
+                                    trackId: item.sourceId,
+                                    duration: item.duration,
+                                    audio_url: item.audioUrl,
+                                    image_url: item.imageUrl,
+                                    creatorDisplayId: item.creatorDisplayId || getPlaylistCreatorLabel(item),
+                                    ownerNickname: item.ownerNickname || (item.ownerUid ? userNameMap[item.ownerUid] : null),
+                                    creatorNickname: item.creatorNickname || item.ownerNickname || (item.ownerUid ? userNameMap[item.ownerUid] : null),
+                                    ownerEmail: item.ownerEmail || item.creatorEmail || null,
+                                    creatorEmail: item.creatorEmail || item.ownerEmail || null,
+                                    isPlaylistItem: true
+                                  };
                                   setSharePopupInfo({ group: fakeItem, item: fakeItem, idx: undefined, mode: 'default' });
                                   setActivePlaylistItemMenu(null); 
                                 }}

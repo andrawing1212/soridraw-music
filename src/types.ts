@@ -331,6 +331,10 @@ export interface PlaylistItem {
   sourceId: string;
   ownerUid: string;
   creatorDisplayId: string | null;
+  ownerNickname?: string | null;
+  creatorNickname?: string | null;
+  ownerEmail?: string | null;
+  creatorEmail?: string | null;
   title: string;
   audioUrl: string | null;
   imageUrl: string | null;

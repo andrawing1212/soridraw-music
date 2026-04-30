@@ -1015,6 +1015,22 @@ export default function SunoLibraryPage() {
   const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, idx?: number, mode: 'default' | 'pc-panel' } | null>(null);
   const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
 
+  const canManageSharePrivacy = (info: typeof sharePopupInfo) => {
+    if (!info || !user) return false;
+
+    const group = info.group || {};
+
+    // Shared-link pages and shared playlist items are re-share only.
+    // Public/private scope control belongs to the original owner only.
+    if (isSharedView || group.sourceType === 'shared_track') return false;
+
+    if (group.isPlaylistItem) {
+      return group.sourceType === 'suno_track' && (!group.ownerUid || group.ownerUid === user.uid);
+    }
+
+    return !group.ownerUid || group.ownerUid === user.uid;
+  };
+
   const showToast = (msg: string) => {
     setShareToastInfo(msg);
     setTimeout(() => setShareToastInfo(null), 3000);
@@ -1207,27 +1223,31 @@ export default function SunoLibraryPage() {
       
       const shareUrl = getSharePageUrl(group, idx);
       const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
-      const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-      
-      if (isMobile && navigator.share) {
-        try {
+
+      try {
+        if (navigator.share) {
           await navigator.share({
-            title: title,
+            title,
             text: '공유 음악 재생하기🎵',
-            url: shareUrl
+            url: shareUrl,
           });
           closeModal();
           return;
-        } catch (e) {
-          if ((e as Error).name !== 'AbortError') {
-             await navigator.clipboard.writeText(shareUrl);
-             showToast("링크가 복사되었습니다");
-             closeModal();
-          }
-          return;
         }
-      } else {
-        setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
+
+        await navigator.clipboard.writeText(shareUrl);
+        showToast("공유 링크가 복사되었습니다.");
+        closeModal();
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return;
+        console.error('Native share failed:', e);
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          showToast("공유 링크가 복사되었습니다.");
+          closeModal();
+        } catch {
+          showToast("공유에 실패했습니다.");
+        }
       }
     } catch (e) {
       console.error(e);
@@ -1237,6 +1257,10 @@ export default function SunoLibraryPage() {
 
   const handlePublicStatus = async () => {
     if (!sharePopupInfo) return;
+    if (!canManageSharePrivacy(sharePopupInfo)) {
+      showToast('공개 범위 설정은 원제작자만 변경할 수 있습니다.');
+      return;
+    }
     const { group, item, idx } = sharePopupInfo;
     try {
       if (user) {
@@ -1294,6 +1318,10 @@ export default function SunoLibraryPage() {
 
   const handlePrivateShare = async () => {
     if (!sharePopupInfo) return;
+    if (!canManageSharePrivacy(sharePopupInfo)) {
+      showToast('공개 범위 설정은 원제작자만 변경할 수 있습니다.');
+      return;
+    }
     const { group } = sharePopupInfo;
     try {
       if (user) {
@@ -1322,8 +1350,22 @@ export default function SunoLibraryPage() {
 
     try {
       if (platform === 'copy') {
-        await navigator.clipboard.writeText(shareUrl);
-        showToast("링크가 복사되었습니다");
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title,
+              text: '공유 음악 재생하기🎵',
+              url: shareUrl,
+            });
+          } catch (e: any) {
+            if (e?.name === 'AbortError') return;
+            await navigator.clipboard.writeText(shareUrl);
+            showToast("공유 링크가 복사되었습니다.");
+          }
+        } else {
+          await navigator.clipboard.writeText(shareUrl);
+          showToast("공유 링크가 복사되었습니다.");
+        }
       } else if (platform === 'email') {
         window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`;
       } else if (platform === 'facebook') {
@@ -2818,27 +2860,29 @@ export default function SunoLibraryPage() {
                     <Share2 className="w-5 h-5" /> 링크 공유하기
                   </button>
                   
-                  <div className="pt-4 border-t border-white/5">
-                    <div className="text-[10px] text-white/30 mb-3 font-bold uppercase tracking-widest text-center">공개 범위 설정</div>
-                    <div className="flex gap-2">
-                      {[
-                        { id: 'public', label: '공개', active: sharePopupInfo.group?.isPublic, action: handlePublicStatus, color: 'green' },
-                        { id: 'private', label: '비공개', active: !sharePopupInfo.group?.isPublic, action: handlePrivateShare, color: 'red' }
-                      ].map(btn => (
-                        <button
-                          key={btn.id}
-                          onClick={btn.action}
-                          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${
-                            btn.active 
-                              ? btn.color === 'green' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
-                              : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white'
-                          }`}
-                        >
-                          {btn.label}
-                        </button>
-                      ))}
+                  {canManageSharePrivacy(sharePopupInfo) && (
+                    <div className="pt-4 border-t border-white/5">
+                      <div className="text-[10px] text-white/30 mb-3 font-bold uppercase tracking-widest text-center">공개 범위 설정</div>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'public', label: '공개', active: sharePopupInfo.group?.isPublic, action: handlePublicStatus, color: 'green' },
+                          { id: 'private', label: '비공개', active: !sharePopupInfo.group?.isPublic, action: handlePrivateShare, color: 'red' }
+                        ].map(btn => (
+                          <button
+                            key={btn.id}
+                            onClick={btn.action}
+                            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${
+                              btn.active 
+                                ? btn.color === 'green' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
+                                : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">

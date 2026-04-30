@@ -341,6 +341,13 @@ export interface PlaylistItem {
   duration: number | null;
   genreLabels: string[];
   appliedKeywords: Record<string, any> | null;
+  prompt?: string | null;
+  style?: string | null;
+  lyrics?: string | null;
+  lyricsText?: string | null;
+  koreanLyrics?: string | null;
+  englishLyrics?: string | null;
+  requestPayload?: any | null;
   colorTag: string | null;
   likeCount: number;
   order: number;

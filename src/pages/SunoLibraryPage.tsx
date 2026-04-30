@@ -55,7 +55,6 @@ export default function SunoLibraryPage() {
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
-  const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
@@ -447,53 +446,6 @@ export default function SunoLibraryPage() {
   useEffect(() => {
     if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
 
-    const ownerUids = Array.from(new Set(
-      playlistItems
-        .map((item) => item.ownerUid)
-        .filter((uid): uid is string => Boolean(uid && typeof uid === 'string' && !userNameMap[uid]))
-    ));
-
-    if (ownerUids.length === 0) return;
-
-    let cancelled = false;
-
-    const fetchOwnerNames = async () => {
-      const entries: Record<string, string> = {};
-
-      await Promise.all(ownerUids.map(async (uid) => {
-        try {
-          const userSnap = await getDoc(doc(db, 'users', uid));
-          if (!userSnap.exists()) return;
-
-          const userData = userSnap.data() as any;
-          const label =
-            userData.nickname ||
-            userData.displayName ||
-            userData.name ||
-            userData.email ||
-            uid;
-
-          if (label) entries[uid] = String(label);
-        } catch (error) {
-          console.warn('Failed to load playlist owner name:', { uid, error });
-        }
-      }));
-
-      if (!cancelled && Object.keys(entries).length > 0) {
-        setUserNameMap((prev) => ({ ...prev, ...entries }));
-      }
-    };
-
-    fetchOwnerNames();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playlistItems, libraryViewMode, userNameMap]);
-
-  useEffect(() => {
-    if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
-
     const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
     const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
     const checkedAt = checkedAtStr ? parseInt(checkedAtStr, 10) : 0;
@@ -670,179 +622,6 @@ export default function SunoLibraryPage() {
     const num = Number(rawVal);
     if (Number.isFinite(num) && num > 0) return num;
     return null;
-  };
-
-  const normalizeDurationSeconds = (value: any): number | null => {
-    if (value === undefined || value === null || value === '') return null;
-    const num = Number(value);
-    if (!Number.isFinite(num) || num <= 0) return null;
-    return Math.round(num);
-  };
-
-  const formatDurationSeconds = (value: any): string | null => {
-    const totalSeconds = normalizeDurationSeconds(value);
-    if (totalSeconds === null) return null;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
-  };
-
-  const getPlaylistCreatorLabel = (item: PlaylistItem): string => {
-    return (
-      (item as any).creatorDisplayId ||
-      (item as any).ownerNickname ||
-      (item as any).creatorNickname ||
-      (item.ownerUid ? userNameMap[item.ownerUid] : null) ||
-      (item as any).ownerEmail ||
-      (item as any).creatorEmail ||
-      item.ownerUid ||
-      'Unknown'
-    );
-  };
-
-  const formatDetailValue = (value: any): string => {
-    if (value === undefined || value === null || value === '') return '';
-    if (Array.isArray(value)) return value.filter(Boolean).map((entry) => formatDetailValue(entry)).filter(Boolean).join(', ');
-    if (typeof value === 'object') {
-      try {
-        return JSON.stringify(value, null, 2);
-      } catch {
-        return String(value);
-      }
-    }
-    return String(value);
-  };
-
-  const formatKeywordValue = (value: any): string => {
-    if (value === undefined || value === null || value === '') return '';
-    if (Array.isArray(value)) {
-      return value
-        .map((entry) => formatKeywordValue(entry))
-        .filter(Boolean)
-        .join(', ');
-    }
-    if (typeof value === 'object') return '';
-    return String(value).trim();
-  };
-
-  const pickFirstDetailText = (...values: any[]): string => {
-    for (const value of values) {
-      const formatted = formatDetailValue(value).trim();
-      if (formatted) return formatted;
-    }
-    return '';
-  };
-
-  const extractActualLyrics = (item: any, applied: any): string => {
-    const lyrics = pickFirstDetailText(
-      item?.lyrics,
-      item?.lyricsText,
-      item?.koreanLyrics,
-      item?.englishLyrics,
-      item?.lyrics?.korean,
-      item?.lyrics?.english,
-      applied?.lyrics,
-      applied?.lyricsText,
-      applied?.koreanLyrics,
-      applied?.englishLyrics,
-      applied?.lyrics?.korean,
-      applied?.lyrics?.english
-    );
-
-    return lyrics || '가사 정보 없음';
-  };
-
-  const extractKeywordStyleText = (applied: any): string => {
-    if (!applied || typeof applied !== 'object') return '없음';
-
-    const keywordParts = [
-      applied.genre,
-      applied.subGenre,
-      applied.style,
-      applied.sound,
-      applied.mood,
-      applied.theme ?? applied.selectedThemes,
-      applied.tempo,
-      applied.detailLayer,
-      applied.prompt,
-    ]
-      .map(formatKeywordValue)
-      .filter(Boolean);
-
-    return keywordParts.length > 0 ? keywordParts.join(' / ') : '없음';
-  };
-
-  const buildPlaylistItemDetails = (item: PlaylistItem) => {
-    const applied = (item as any).appliedKeywords || {};
-
-    return {
-      title: item.title,
-      status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
-      createdAt: item.addedAt,
-      taskId: item.sourceId,
-      style: extractKeywordStyleText(applied),
-      prompt: formatDetailValue(applied?.prompt || applied?.detailLayer || applied?.style || applied?.genre),
-      lyrics: extractActualLyrics(item, applied),
-      audioUrl: item.audioUrl || '',
-      streamAudioUrl: item.audioUrl || '',
-      requestPayload: applied,
-      creatorDisplayId: getPlaylistCreatorLabel(item),
-      playlistSourceType: item.sourceType,
-    };
-  };
-
-
-  const resolveCreatorProfile = async (ownerUid?: string | null, ...sources: any[]) => {
-    const firstValue = (...values: any[]) => {
-      const found = values.find((value) => typeof value === 'string' && value.trim().length > 0);
-      return found ? String(found).trim() : null;
-    };
-
-    const sourceNickname = firstValue(
-      ...sources.flatMap((source) => [
-        source?.creatorDisplayId,
-        source?.ownerNickname,
-        source?.creatorNickname,
-        source?.ownerName,
-        source?.nickname,
-        source?.displayName,
-        source?.name,
-      ])
-    );
-
-    const sourceEmail = firstValue(
-      ...sources.flatMap((source) => [
-        source?.ownerEmail,
-        source?.creatorEmail,
-        source?.email,
-      ])
-    );
-
-    let profileNickname = sourceNickname;
-    let profileEmail = sourceEmail;
-
-    if (ownerUid && (!profileNickname || !profileEmail)) {
-      try {
-        const userSnap = await getDoc(doc(db, 'users', ownerUid));
-        if (userSnap.exists()) {
-          const data = userSnap.data() as any;
-          profileNickname = profileNickname || firstValue(data.nickname, data.displayName, data.name);
-          profileEmail = profileEmail || firstValue(data.email);
-        }
-      } catch (error) {
-        console.warn('Failed to resolve creator profile:', { ownerUid, error });
-      }
-    }
-
-    const displayId = profileNickname || profileEmail || ownerUid || null;
-
-    return {
-      creatorDisplayId: displayId,
-      ownerNickname: profileNickname,
-      creatorNickname: profileNickname,
-      ownerEmail: profileEmail,
-      creatorEmail: profileEmail,
-    };
   };
 
   const extractSunoData = (group: any) => {
@@ -1229,7 +1008,6 @@ export default function SunoLibraryPage() {
         }
 
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
-        const creatorProfile = await resolveCreatorProfile(user.uid, group, item, user);
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
           trackId: group.id,
@@ -1240,20 +1018,19 @@ export default function SunoLibraryPage() {
           imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
           duration: item?.duration || group.duration || null,
           status: group.status || 'completed',
-          prompt: group.prompt || '',
-          style: group.style || '',
-          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          prompt: group.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || '',
+          style: group.style || group?.appliedKeywords?.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || item?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+          lyricsText: group.lyricsText || group.lyrics || item?.lyricsText || item?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+          koreanLyrics: group.koreanLyrics || item?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+          englishLyrics: group.englishLyrics || item?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+          requestPayload: group.requestPayload || group.appliedKeywords || null,
           sunoData: group.sunoData || null,
           apiResponse: group.apiResponse || null,
           apiStatusResponse: group.apiStatusResponse || null,
           appliedKeywords: group.appliedKeywords || {},
           createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
-          creatorDisplayId: creatorProfile.creatorDisplayId,
-          ownerNickname: creatorProfile.ownerNickname,
-          creatorNickname: creatorProfile.creatorNickname,
-          ownerEmail: creatorProfile.ownerEmail,
-          creatorEmail: creatorProfile.creatorEmail,
           isPublic: true
         });
 
@@ -1282,30 +1059,7 @@ export default function SunoLibraryPage() {
           return;
         }
       } else {
-        try {
-          if (navigator.share) {
-            await navigator.share({
-              title,
-              text: '공유 음악 재생하기🎵',
-              url: shareUrl,
-            });
-            closeModal();
-            return;
-          }
-          await navigator.clipboard.writeText(shareUrl);
-          showToast('공유 링크가 복사되었습니다.');
-          closeModal();
-        } catch (e: any) {
-          if (e?.name === 'AbortError') return;
-          console.error('Native share failed:', e);
-          try {
-            await navigator.clipboard.writeText(shareUrl);
-            showToast('공유 링크가 복사되었습니다.');
-            closeModal();
-          } catch {
-            showToast('공유에 실패했습니다.');
-          }
-        }
+        setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
       }
     } catch (e) {
       console.error(e);
@@ -1329,7 +1083,6 @@ export default function SunoLibraryPage() {
         }
 
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
-        const creatorProfile = await resolveCreatorProfile(user.uid, group, item, user);
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
           trackId: group.id,
@@ -1340,20 +1093,19 @@ export default function SunoLibraryPage() {
           imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
           duration: item?.duration || group.duration || null,
           status: group.status || 'completed',
-          prompt: group.prompt || '',
-          style: group.style || '',
-          lyrics: group.lyrics || group.lyricsText || item?.lyrics || null,
+          prompt: group.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || '',
+          style: group.style || group?.appliedKeywords?.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || item?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+          lyricsText: group.lyricsText || group.lyrics || item?.lyricsText || item?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+          koreanLyrics: group.koreanLyrics || item?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+          englishLyrics: group.englishLyrics || item?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+          requestPayload: group.requestPayload || group.appliedKeywords || null,
           sunoData: group.sunoData || null,
           apiResponse: group.apiResponse || null,
           apiStatusResponse: group.apiStatusResponse || null,
           appliedKeywords: group.appliedKeywords || {},
           createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
-          creatorDisplayId: creatorProfile.creatorDisplayId,
-          ownerNickname: creatorProfile.ownerNickname,
-          creatorNickname: creatorProfile.creatorNickname,
-          ownerEmail: creatorProfile.ownerEmail,
-          creatorEmail: creatorProfile.creatorEmail,
           isPublic: true
         });
 
@@ -1570,29 +1322,37 @@ export default function SunoLibraryPage() {
       ? String(safeShareId)
       : String(item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
 
-    const ownerUidForItem = (isShared ? (group?.ownerUid || group?.uid || user.uid) : (group?.ownerUid || user.uid)) || '';
-    const creatorProfile = await resolveCreatorProfile(ownerUidForItem, group, item, user);
-
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
-      ownerUid: ownerUidForItem,
-      creatorDisplayId: creatorProfile.creatorDisplayId,
-      ownerNickname: creatorProfile.ownerNickname,
-      creatorNickname: creatorProfile.creatorNickname,
-      ownerEmail: creatorProfile.ownerEmail || (!isShared ? (user?.email || null) : null),
+      ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
+      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.ownerUid || null,
       title: getTitle(item, group, idx) || "Shared Track",
       audioUrl: finalAudioUrl,
       imageUrl: item?.image_url || item?.imageUrl || group?.imageUrl || getImageUrl(item, group) || null,
-      duration: normalizeDurationSeconds(item?.duration || group?.duration || getDuration(item, group)),
+      duration: item?.duration || group?.duration || getDuration(item, group) || null,
       genreLabels: [],
       appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group?.appliedKeywords || null,
+      prompt: group?.prompt || item?.prompt || group?.shareData?.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || null,
+      style: group?.style || item?.style || group?.shareData?.style || group?.appliedKeywords?.style || null,
+      lyrics: group?.lyrics || group?.lyricsText || item?.lyrics || item?.lyricsText || group?.shareData?.lyrics || group?.shareData?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+      lyricsText: group?.lyricsText || group?.lyrics || item?.lyricsText || item?.lyrics || group?.shareData?.lyricsText || group?.shareData?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+      koreanLyrics: group?.koreanLyrics || item?.koreanLyrics || group?.shareData?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+      englishLyrics: group?.englishLyrics || item?.englishLyrics || group?.shareData?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+      requestPayload: group?.requestPayload || group?.shareData?.requestPayload || group?.appliedKeywords || null,
       colorTag: null,
       likeCount: 0,
       order: 0,
       isUnavailable: false,
       unavailableReason: null
     };
+
+    // Remove undefined values to prevent Firestore errors
+    (Object.keys(itemData) as Array<keyof typeof itemData>).forEach(key => {
+      if (itemData[key] === undefined) {
+        delete itemData[key];
+      }
+    });
 
     if (itemData.appliedKeywords) {
       const labels: string[] = [];
@@ -1686,15 +1446,11 @@ export default function SunoLibraryPage() {
   const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs;
 
   const closeModal = () => {
-    if (isModalOpen && window.history.state?.modalOpen) {
-      window.history.back();
-    } else {
-      setSharePopupInfo(null);
-      setShowDetails(null);
-      setDeleteTarget(null);
-      setRenameModalArgs(null);
-      setMoveModalArgs(null);
-    }
+    setSharePopupInfo(null);
+    setShowDetails(null);
+    setDeleteTarget(null);
+    setRenameModalArgs(null);
+    setMoveModalArgs(null);
   };
 
   useEffect(() => {
@@ -1703,17 +1459,13 @@ export default function SunoLibraryPage() {
       document.body.style.overscrollBehavior = 'contains'; // Actually it's 'contain', but let's use document.body.style.overscrollBehavior = 'contain'
       document.body.style.overscrollBehavior = 'contain';
 
-      window.history.pushState({ modalOpen: true }, '');
-
       const handlePopState = () => {
-        setSharePopupInfo(null);
-        setShowDetails(null);
-        setDeleteTarget(null);
+        closeModal();
       };
 
       const handleEsc = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          window.history.back();
+          closeModal();
         }
       };
 
@@ -1728,6 +1480,137 @@ export default function SunoLibraryPage() {
       };
     }
   }, [isModalOpen]);
+
+  const normalizeDetailText = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => normalizeDetailText(v))
+        .filter(Boolean)
+        .join(', ');
+    }
+    return '';
+  };
+
+  const firstMeaningfulText = (...values: any[]): string => {
+    for (const value of values) {
+      const text = normalizeDetailText(value);
+      if (text) return text;
+    }
+    return '';
+  };
+
+  const extractActualLyricsForDetails = (item: any, applied: any = {}, requestPayload: any = {}): string => {
+    const directLyrics = firstMeaningfulText(
+      item?.lyrics,
+      item?.lyricsText,
+      item?.koreanLyrics,
+      item?.englishLyrics,
+      item?.lyrics?.korean,
+      item?.lyrics?.english,
+      requestPayload?.lyrics,
+      requestPayload?.lyricsText,
+      applied?.lyrics,
+      applied?.lyricsText,
+      applied?.koreanLyrics,
+      applied?.englishLyrics,
+      applied?.generatedLyrics,
+      applied?.generatedLyricsText
+    );
+
+    return directLyrics || '가사 정보 없음';
+  };
+
+  const extractKeywordStyleTextForDetails = (item: any, applied: any = {}, requestPayload: any = {}): string => {
+    const parts: string[] = [];
+    const push = (value: any) => {
+      const text = normalizeDetailText(value);
+      if (text) parts.push(text);
+    };
+
+    push(item?.style);
+    if (parts.length === 0) {
+      push(item?.genreLabels);
+      push(applied?.genre);
+      push(applied?.selectedGenres);
+      push(applied?.subGenre);
+      push(applied?.selectedSubGenres);
+      push(applied?.style);
+      push(applied?.selectedStyles);
+      push(applied?.sound);
+      push(applied?.selectedSounds);
+      push(applied?.mood);
+      push(applied?.selectedMoods);
+      push(applied?.theme);
+      push(applied?.selectedThemes);
+      push(applied?.tempo);
+      push(applied?.bpm);
+      
+      push(requestPayload?.genre);
+      push(requestPayload?.subGenre);
+      push(requestPayload?.style);
+      push(requestPayload?.sound);
+      push(requestPayload?.mood);
+      push(requestPayload?.theme);
+      push(requestPayload?.tempo);
+    }
+
+    const unique = Array.from(new Set(parts.map((p) => p.trim()).filter(Boolean)));
+    return unique.length > 0 ? unique.join(' / ') : '없음';
+  };
+
+  const buildPlaylistItemDetails = (item: PlaylistItem) => {
+    const applied = (item as any).appliedKeywords || {};
+    const reqPayload = item.requestPayload || {};
+
+    return {
+      title: item.title || 'Untitled',
+      status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
+      createdAt: item.addedAt,
+      taskId: item.sourceId,
+      style: extractKeywordStyleTextForDetails(item, applied, reqPayload),
+      prompt: normalizeDetailText(item.prompt || applied?.prompt || applied?.detailLayer || reqPayload?.prompt) || '',
+      lyrics: extractActualLyricsForDetails(item, applied, reqPayload),
+      audioUrl: item.audioUrl || '',
+      streamAudioUrl: item.audioUrl || '',
+      requestPayload: reqPayload || applied,
+      creatorDisplayId: (item as any).creatorDisplayId || (item as any).ownerNickname || (item as any).creatorNickname || (item as any).ownerEmail || (item as any).creatorEmail || item.ownerUid || 'Unknown',
+    };
+  };
+
+  const handleShowPlaylistItemDetails = async (item: PlaylistItem) => {
+    let details = buildPlaylistItemDetails(item);
+    
+    // Fallback: If prompt and lyrics are missing, try fetching from the source
+    if (
+      (!details.prompt || details.prompt === '없음') && 
+      (!details.lyrics || details.lyrics === '가사 정보 없음')
+    ) {
+      try {
+        if (item.sourceType === 'shared_track') {
+          const shareDoc = await getDoc(doc(db, 'suno_shares', item.sourceId));
+          if (shareDoc.exists()) {
+            const data = shareDoc.data();
+            const enrichedItem = { ...item, ...data };
+            details = buildPlaylistItemDetails(enrichedItem as PlaylistItem);
+          }
+        } else if (item.sourceType === 'suno_track' && item.ownerUid) {
+          const trackDoc = await getDoc(doc(db, 'suno_tracks', item.ownerUid, 'tracks', item.sourceId));
+          if (trackDoc.exists()) {
+            const data = trackDoc.data();
+            const enrichedItem = { ...item, ...data };
+            details = buildPlaylistItemDetails(enrichedItem as PlaylistItem);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch fallback details:', error);
+      }
+    }
+
+    setShowDetails(details);
+  };
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
@@ -2527,12 +2410,12 @@ export default function SunoLibraryPage() {
                         <div className="flex flex-col gap-0.5 mt-0.5">
                           <div className="flex items-center gap-2 text-xs text-white/50">
                             <span className="truncate">
-                              {getPlaylistCreatorLabel(item)}
+                              {item.creatorDisplayId || 'Unknown'}
                             </span>
-                            {formatDurationSeconds(item.duration) && (
+                            {item.duration && (
                               <>
                                 <span>•</span>
-                                <span>{formatDurationSeconds(item.duration)}</span>
+                                <span>{Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}</span>
                               </>
                             )}
                           </div>
@@ -2591,7 +2474,7 @@ export default function SunoLibraryPage() {
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  setShowDetails(buildPlaylistItemDetails(item)); 
+                                  handleShowPlaylistItemDetails(item); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
                                 className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
@@ -2626,20 +2509,7 @@ export default function SunoLibraryPage() {
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  const fakeItem = {
-                                    ...item,
-                                    id: item.sourceId,
-                                    trackId: item.sourceId,
-                                    duration: item.duration,
-                                    audio_url: item.audioUrl,
-                                    image_url: item.imageUrl,
-                                    creatorDisplayId: item.creatorDisplayId || getPlaylistCreatorLabel(item),
-                                    ownerNickname: item.ownerNickname || (item.ownerUid ? userNameMap[item.ownerUid] : null),
-                                    creatorNickname: item.creatorNickname || item.ownerNickname || (item.ownerUid ? userNameMap[item.ownerUid] : null),
-                                    ownerEmail: item.ownerEmail || item.creatorEmail || null,
-                                    creatorEmail: item.creatorEmail || item.ownerEmail || null,
-                                    isPlaylistItem: true
-                                  };
+                                  const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, isPlaylistItem: true };
                                   setSharePopupInfo({ group: fakeItem, item: fakeItem, idx: undefined, mode: 'default' });
                                   setActivePlaylistItemMenu(null); 
                                 }}
@@ -2854,13 +2724,13 @@ export default function SunoLibraryPage() {
       {/* Details Modal */}
       <AnimatePresence>
         {showDetails && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={() => setShowDetails(null)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={closeModal}>
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={() => setShowDetails(null)}
+              onClick={closeModal}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -2882,9 +2752,9 @@ export default function SunoLibraryPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <DetailItem label="제목" value={showDetails.title || 'Untitled'} />
                   <DetailItem label="상태" value={showDetails.status} isStatus />
-                  <DetailItem label="제작자" value={showDetails.creatorDisplayId || showDetails.ownerNickname || showDetails.creatorNickname || showDetails.ownerEmail || showDetails.ownerUid || 'Unknown'} />
+                  <DetailItem label="제작자" value={showDetails.creatorDisplayId || showDetails.ownerNickname || showDetails.ownerEmail || 'Unknown'} />
                   <DetailItem label="생성일" value={formatCreatedAt(showDetails.createdAt)} />
-                  <DetailItem label="Task ID" value={showDetails.taskId} isMono />
+                  <DetailItem label="Task ID" value={showDetails.taskId || showDetails.id} isMono />
                   <DetailItem label="Suno Version" value={showDetails.requestPayload?.model || 'V5_5'} />
                   <DetailItem label="키워드/스타일" value={showDetails.style || showDetails.prompt || '없음'} full />
                   <DetailItem label="가사" value={showDetails.lyrics || '가사 정보 없음'} full isPre />

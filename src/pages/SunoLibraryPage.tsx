@@ -384,7 +384,7 @@ export default function SunoLibraryPage() {
     if (!user) return;
     const isNormal = type === 'normal';
     const listCount = isNormal ? actualNormalPlaylists.length : actualSharedPlaylists.length;
-    const maxCount = isNormal ? 10 : 5;
+    const maxCount = isNormal ? 10 : 10;
 
     if (listCount >= maxCount) {
       showToast('최대 개수까지 생성되었습니다.');

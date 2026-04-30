@@ -55,6 +55,7 @@ export default function SunoLibraryPage() {
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
+  const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
@@ -100,6 +101,7 @@ export default function SunoLibraryPage() {
   const checkingIdsRef = React.useRef<Set<string>>(new Set());
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
+  const modalHistoryPushedRef = React.useRef(false);
 
   const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
 
@@ -441,6 +443,50 @@ export default function SunoLibraryPage() {
 
     return () => unsub();
   }, [user, libraryViewMode, activePlaylistId]);
+
+  useEffect(() => {
+    if (playlistItems.length === 0) return;
+
+    const uniqueOwnerUids = Array.from(
+      new Set(
+        playlistItems
+          .map((item: any) => item.ownerUid)
+          .filter((uid): uid is string => typeof uid === 'string' && uid.trim().length > 0)
+      )
+    ).filter((uid) => !userNameMap[uid]);
+
+    if (uniqueOwnerUids.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchUserNames = async () => {
+      const nextMap: Record<string, string> = {};
+
+      await Promise.all(
+        uniqueOwnerUids.map(async (uid) => {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', uid));
+            if (!userSnap.exists()) return;
+            const data: any = userSnap.data();
+            const displayName = data.nickname || data.displayName || data.name || data.email || uid;
+            if (displayName) nextMap[uid] = String(displayName);
+          } catch (error) {
+            console.warn('Failed to fetch playlist creator name:', uid, error);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(nextMap).length > 0) {
+        setUserNameMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    fetchUserNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, userNameMap]);
 
   // Handle caching of likes and shared statuses
   useEffect(() => {
@@ -1446,6 +1492,7 @@ export default function SunoLibraryPage() {
   const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs;
 
   const closeModal = () => {
+    modalHistoryPushedRef.current = false;
     setSharePopupInfo(null);
     setShowDetails(null);
     setDeleteTarget(null);
@@ -1454,31 +1501,36 @@ export default function SunoLibraryPage() {
   };
 
   useEffect(() => {
-    if (isModalOpen) {
-      document.body.style.overflow = 'hidden';
-      document.body.style.overscrollBehavior = 'contains'; // Actually it's 'contain', but let's use document.body.style.overscrollBehavior = 'contain'
-      document.body.style.overscrollBehavior = 'contain';
+    if (!isModalOpen) return;
 
-      const handlePopState = () => {
-        closeModal();
-      };
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
 
-      const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          closeModal();
-        }
-      };
-
-      window.addEventListener('popstate', handlePopState);
-      window.addEventListener('keydown', handleEsc);
-
-      return () => {
-        document.body.style.overflow = '';
-        document.body.style.overscrollBehavior = '';
-        window.removeEventListener('popstate', handlePopState);
-        window.removeEventListener('keydown', handleEsc);
-      };
+    if (!modalHistoryPushedRef.current) {
+      window.history.pushState({ soridrawModal: true }, '', window.location.href);
+      modalHistoryPushedRef.current = true;
     }
+
+    const handlePopState = () => {
+      closeModal();
+    };
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.overscrollBehavior = '';
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleEsc);
+    };
   }, [isModalOpen]);
 
   const normalizeDetailText = (value: any): string => {
@@ -1561,6 +1613,28 @@ export default function SunoLibraryPage() {
     return unique.length > 0 ? unique.join(' / ') : '없음';
   };
 
+  const getPlaylistItemCreatorName = (item: any): string => {
+    return (
+      item?.creatorDisplayId ||
+      item?.ownerNickname ||
+      item?.creatorNickname ||
+      (item?.ownerUid ? userNameMap[item.ownerUid] : '') ||
+      item?.ownerEmail ||
+      item?.creatorEmail ||
+      item?.ownerUid ||
+      'Unknown'
+    );
+  };
+
+  const formatPlaylistDuration = (duration: any): string => {
+    const numeric = typeof duration === 'number' ? duration : Number(duration);
+    if (!Number.isFinite(numeric) || numeric <= 0) return '--:--';
+    const totalSeconds = Math.round(numeric);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
   const buildPlaylistItemDetails = (item: PlaylistItem) => {
     const applied = (item as any).appliedKeywords || {};
     const reqPayload = item.requestPayload || {};
@@ -1576,7 +1650,7 @@ export default function SunoLibraryPage() {
       audioUrl: item.audioUrl || '',
       streamAudioUrl: item.audioUrl || '',
       requestPayload: reqPayload || applied,
-      creatorDisplayId: (item as any).creatorDisplayId || (item as any).ownerNickname || (item as any).creatorNickname || (item as any).ownerEmail || (item as any).creatorEmail || item.ownerUid || 'Unknown',
+      creatorDisplayId: getPlaylistItemCreatorName(item),
     };
   };
 
@@ -2410,12 +2484,12 @@ export default function SunoLibraryPage() {
                         <div className="flex flex-col gap-0.5 mt-0.5">
                           <div className="flex items-center gap-2 text-xs text-white/50">
                             <span className="truncate">
-                              {item.creatorDisplayId || 'Unknown'}
+                              {getPlaylistItemCreatorName(item)}
                             </span>
-                            {item.duration && (
+                            {formatPlaylistDuration(item.duration) !== '--:--' && (
                               <>
                                 <span>•</span>
-                                <span>{Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}</span>
+                                <span>{formatPlaylistDuration(item.duration)}</span>
                               </>
                             )}
                           </div>
@@ -2724,13 +2798,24 @@ export default function SunoLibraryPage() {
       {/* Details Modal */}
       <AnimatePresence>
         {showDetails && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={closeModal}>
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              closeModal();
+            }}
+          >
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={closeModal}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                closeModal();
+              }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}

@@ -1154,20 +1154,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
               {/* Suno Library Icon */}
               <button 
                 onClick={() => {
-                  if (!user) {
-                    handleLogin();
-                    return;
-                  }
                   navigate('/suno-library');
-                  setIsExpanded(false);
-                  setIsProfileOpen(false);
-                  if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                  if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
+                className={`p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all ${location.pathname === '/suno-library' ? 'ring-1 ring-white/50' : ''}`}
                 title="Suno Library"
               >
-                <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6">
+                <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-brand-orange">
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm opacity-80" />
                   <div className="w-[4px] h-[16px] md:h-[18px] border-[1.5px] border-current rounded-sm" />
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm transform origin-bottom -rotate-12 translate-x-[1px] opacity-90" />
@@ -3002,35 +2995,61 @@ const cycleFamilySelection = (
   useEffect(() => {
     if (location.pathname !== '/') return;
 
+    let isCancelled = false;
+
+    const applyPendingKeywordsIfAny = async () => {
+      const pending =
+        sessionStorage.getItem('pendingAppliedKeywords') ||
+        localStorage.getItem('pendingAppliedKeywordsBackup');
+
+      if (!pending) return false;
+
+      try {
+        const keywords = JSON.parse(pending);
+
+        // Mark Home as initialized before applying pending data.
+        // Without this, opening a shared song from an external browser and navigating
+        // to Home can hit the first-entry return path and show a blank/unapplied screen
+        // until the user visits another page.
+        hasInitializedHomeRef.current = true;
+
+        await clearAll({ preserveHistory: true, preservePinned: true });
+        if (isCancelled) return true;
+
+        applyKeywordsToNext(keywords);
+        sessionStorage.removeItem('pendingAppliedKeywords');
+        localStorage.removeItem('pendingAppliedKeywordsBackup');
+        window.scrollTo(0, 0);
+        return true;
+      } catch (e) {
+        console.error('Failed to parse pending keywords', e);
+        sessionStorage.removeItem('pendingAppliedKeywords');
+        localStorage.removeItem('pendingAppliedKeywordsBackup');
+        return false;
+      }
+    };
+
     const initializeHome = async () => {
+      const appliedPending = await applyPendingKeywordsIfAny();
+      if (isCancelled || appliedPending) return;
+
       if (!hasInitializedHomeRef.current) {
         hasInitializedHomeRef.current = true;
         window.scrollTo(0, 0);
         return;
       }
 
-      // 1. Clear current state (preserving history)
+      // Clear current state only when there is no pending shared/playlist setting to apply.
       await clearAll({ preserveHistory: true, preservePinned: true });
-
-      // 2. Check for pending keywords from Favorites
-      const pending = sessionStorage.getItem('pendingAppliedKeywords');
-      if (pending) {
-        try {
-          const keywords = JSON.parse(pending);
-          // This function clears pinned keywords and sets new ones
-          applyKeywordsToNext(keywords);
-          // 3. Prevent duplicate application
-          sessionStorage.removeItem('pendingAppliedKeywords');
-        } catch (e) {
-          console.error('Failed to parse pending keywords', e);
-        }
-      }
-
-      window.scrollTo(0, 0);
+      if (!isCancelled) window.scrollTo(0, 0);
     };
 
     initializeHome();
-  }, [location.pathname, applyKeywordsToNext, clearAll]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [location.pathname, location.search, applyKeywordsToNext, clearAll]);
 
   const unpinAll = (category: 'genre' | 'mood' | 'theme') => {
     if (category === 'genre') {

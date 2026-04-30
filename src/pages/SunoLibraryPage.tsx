@@ -1474,7 +1474,7 @@ export default function SunoLibraryPage() {
     showToast("다음 곡에 곡 설정이 복원되었습니다.");
 
     setTimeout(() => {
-      navigate("/");
+      navigate(`/?applyPending=1&t=${Date.now()}`);
     }, 700);
   };
 

@@ -1020,6 +1020,69 @@ export default function SunoLibraryPage() {
     setTimeout(() => setShareToastInfo(null), 3000);
   };
 
+
+  const normalizeCreatorName = (value: any, ownerUid?: string | null) => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return '';
+    if (ownerUid && text === ownerUid) return '';
+    // Firebase UID-like values should not be treated as display names.
+    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+    return text;
+  };
+
+  const resolveCreatorSnapshot = (group: any, item: any, options?: { fallbackToCurrentUser?: boolean }) => {
+    const ownerUid = group?.ownerUid || item?.ownerUid || group?.uid || item?.uid || user?.uid || '';
+    const currentUserName = options?.fallbackToCurrentUser
+      ? (userNameMap[user?.uid || ''] || user?.displayName || user?.email || '')
+      : '';
+
+    const creatorName =
+      normalizeCreatorName(group?.ownerNickname, ownerUid) ||
+      normalizeCreatorName(group?.creatorNickname, ownerUid) ||
+      normalizeCreatorName(group?.creatorDisplayId, ownerUid) ||
+      normalizeCreatorName(group?.ownerName, ownerUid) ||
+      normalizeCreatorName(group?.nickname, ownerUid) ||
+      normalizeCreatorName(group?.displayName, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.ownerNickname, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.creatorNickname, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.creatorDisplayId, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.ownerName, ownerUid) ||
+      normalizeCreatorName(item?.ownerNickname, ownerUid) ||
+      normalizeCreatorName(item?.creatorNickname, ownerUid) ||
+      normalizeCreatorName(item?.creatorDisplayId, ownerUid) ||
+      normalizeCreatorName(item?.ownerName, ownerUid) ||
+      normalizeCreatorName(currentUserName, ownerUid) ||
+      '';
+
+    const ownerEmail =
+      group?.ownerEmail ||
+      group?.creatorEmail ||
+      group?.shareData?.ownerEmail ||
+      group?.shareData?.creatorEmail ||
+      item?.ownerEmail ||
+      item?.creatorEmail ||
+      (options?.fallbackToCurrentUser ? user?.email : null) ||
+      null;
+
+    const creatorEmail =
+      group?.creatorEmail ||
+      group?.ownerEmail ||
+      group?.shareData?.creatorEmail ||
+      group?.shareData?.ownerEmail ||
+      item?.creatorEmail ||
+      item?.ownerEmail ||
+      (options?.fallbackToCurrentUser ? user?.email : null) ||
+      null;
+
+    return {
+      creatorDisplayId: creatorName || null,
+      ownerNickname: creatorName || null,
+      creatorNickname: creatorName || null,
+      ownerEmail,
+      creatorEmail,
+    };
+  };
+
   const handleShare = (group: any, item: any, idx: number) => {
     setSharePopupInfo({ group, item, idx, mode: 'default' });
   };
@@ -1106,6 +1169,7 @@ export default function SunoLibraryPage() {
           });
         }
 
+        const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !group?.isPlaylistItem });
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
@@ -1130,6 +1194,11 @@ export default function SunoLibraryPage() {
           appliedKeywords: group.appliedKeywords || {},
           createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
+          creatorDisplayId: creatorMeta.creatorDisplayId,
+          ownerNickname: creatorMeta.ownerNickname,
+          creatorNickname: creatorMeta.creatorNickname,
+          ownerEmail: creatorMeta.ownerEmail,
+          creatorEmail: creatorMeta.creatorEmail,
           isPublic: true
         });
 
@@ -1181,6 +1250,7 @@ export default function SunoLibraryPage() {
           });
         }
 
+        const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !group?.isPlaylistItem });
         const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
         const shareRef = doc(db, 'suno_shares', shareId);
         await setDoc(shareRef, {
@@ -1205,6 +1275,11 @@ export default function SunoLibraryPage() {
           appliedKeywords: group.appliedKeywords || {},
           createdAt: group.createdAt || serverTimestamp(),
           ownerUid: user.uid,
+          creatorDisplayId: creatorMeta.creatorDisplayId,
+          ownerNickname: creatorMeta.ownerNickname,
+          creatorNickname: creatorMeta.creatorNickname,
+          ownerEmail: creatorMeta.ownerEmail,
+          creatorEmail: creatorMeta.creatorEmail,
           isPublic: true
         });
 
@@ -1421,15 +1496,17 @@ export default function SunoLibraryPage() {
       ? String(safeShareId)
       : String(item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
 
+    const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !isShared });
+
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
       ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
-      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.creatorNickname || null,
-      ownerNickname: group?.ownerNickname || group?.shareData?.ownerNickname || group?.creatorDisplayId || null,
-      creatorNickname: group?.creatorNickname || group?.shareData?.creatorNickname || null,
-      ownerEmail: group?.ownerEmail || group?.shareData?.ownerEmail || user?.email || null,
-      creatorEmail: group?.creatorEmail || group?.shareData?.creatorEmail || null,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
       title: getTitle(item, group, idx) || "Shared Track",
       audioUrl: finalAudioUrl,
       imageUrl: item?.image_url || item?.imageUrl || group?.imageUrl || getImageUrl(item, group) || null,
@@ -1674,16 +1751,17 @@ export default function SunoLibraryPage() {
     const normalizeCreatorValue = (value: any) => {
       const text = typeof value === 'string' ? value.trim() : '';
       if (!text) return '';
-      // Older shared playlist items sometimes stored Firebase UID in creatorDisplayId.
-      // Do not show that before trying nickname fallbacks.
+      // Older shared playlist items sometimes stored Firebase UID in display fields.
+      // Do not show UID-like values before trying nickname/email fallbacks.
       if (item?.ownerUid && text === item.ownerUid) return '';
+      if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
       return text;
     };
 
     return (
-      normalizeCreatorValue(item?.creatorDisplayId) ||
       normalizeCreatorValue(item?.ownerNickname) ||
       normalizeCreatorValue(item?.creatorNickname) ||
+      normalizeCreatorValue(item?.creatorDisplayId) ||
       (item?.sourceId ? shareCreatorNameMap[item.sourceId] : '') ||
       (item?.ownerUid ? userNameMap[item.ownerUid] : '') ||
       normalizeCreatorValue(item?.ownerEmail) ||
@@ -2650,7 +2728,7 @@ export default function SunoLibraryPage() {
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, isPlaylistItem: true };
+                                  const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, ownerNickname: item.ownerNickname, creatorNickname: item.creatorNickname, creatorDisplayId: getPlaylistItemCreatorName(item), ownerEmail: item.ownerEmail, creatorEmail: item.creatorEmail, isPlaylistItem: true };
                                   setSharePopupInfo({ group: fakeItem, item: fakeItem, idx: undefined, mode: 'default' });
                                   setActivePlaylistItemMenu(null); 
                                 }}

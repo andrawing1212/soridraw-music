@@ -700,6 +700,97 @@ export default function SunoLibraryPage() {
     );
   };
 
+  const formatDetailValue = (value: any): string => {
+    if (value === undefined || value === null || value === '') return '';
+    if (Array.isArray(value)) return value.filter(Boolean).map((entry) => formatDetailValue(entry)).filter(Boolean).join(', ');
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
+  const formatKeywordValue = (value: any): string => {
+    if (value === undefined || value === null || value === '') return '';
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => formatKeywordValue(entry))
+        .filter(Boolean)
+        .join(', ');
+    }
+    if (typeof value === 'object') return '';
+    return String(value).trim();
+  };
+
+  const pickFirstDetailText = (...values: any[]): string => {
+    for (const value of values) {
+      const formatted = formatDetailValue(value).trim();
+      if (formatted) return formatted;
+    }
+    return '';
+  };
+
+  const extractActualLyrics = (item: any, applied: any): string => {
+    const lyrics = pickFirstDetailText(
+      item?.lyrics,
+      item?.lyricsText,
+      item?.koreanLyrics,
+      item?.englishLyrics,
+      item?.lyrics?.korean,
+      item?.lyrics?.english,
+      applied?.lyrics,
+      applied?.lyricsText,
+      applied?.koreanLyrics,
+      applied?.englishLyrics,
+      applied?.lyrics?.korean,
+      applied?.lyrics?.english
+    );
+
+    return lyrics || '가사 정보 없음';
+  };
+
+  const extractKeywordStyleText = (applied: any): string => {
+    if (!applied || typeof applied !== 'object') return '없음';
+
+    const keywordParts = [
+      applied.genre,
+      applied.subGenre,
+      applied.style,
+      applied.sound,
+      applied.mood,
+      applied.theme ?? applied.selectedThemes,
+      applied.tempo,
+      applied.detailLayer,
+      applied.prompt,
+    ]
+      .map(formatKeywordValue)
+      .filter(Boolean);
+
+    return keywordParts.length > 0 ? keywordParts.join(' / ') : '없음';
+  };
+
+  const buildPlaylistItemDetails = (item: PlaylistItem) => {
+    const applied = (item as any).appliedKeywords || {};
+
+    return {
+      title: item.title,
+      status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
+      createdAt: item.addedAt,
+      taskId: item.sourceId,
+      style: extractKeywordStyleText(applied),
+      prompt: formatDetailValue(applied?.prompt || applied?.detailLayer || applied?.style || applied?.genre),
+      lyrics: extractActualLyrics(item, applied),
+      audioUrl: item.audioUrl || '',
+      streamAudioUrl: item.audioUrl || '',
+      requestPayload: applied,
+      creatorDisplayId: getPlaylistCreatorLabel(item),
+      playlistSourceType: item.sourceType,
+    };
+  };
+
 
   const resolveCreatorProfile = async (ownerUid?: string | null, ...sources: any[]) => {
     const firstValue = (...values: any[]) => {
@@ -1191,7 +1282,30 @@ export default function SunoLibraryPage() {
           return;
         }
       } else {
-        setSharePopupInfo(prev => prev ? { ...prev, mode: 'pc-panel' } : null);
+        try {
+          if (navigator.share) {
+            await navigator.share({
+              title,
+              text: '공유 음악 재생하기🎵',
+              url: shareUrl,
+            });
+            closeModal();
+            return;
+          }
+          await navigator.clipboard.writeText(shareUrl);
+          showToast('공유 링크가 복사되었습니다.');
+          closeModal();
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+          console.error('Native share failed:', e);
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+            showToast('공유 링크가 복사되었습니다.');
+            closeModal();
+          } catch {
+            showToast('공유에 실패했습니다.');
+          }
+        }
       }
     } catch (e) {
       console.error(e);
@@ -2477,17 +2591,7 @@ export default function SunoLibraryPage() {
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  setShowDetails({ 
-                                    title: item.title,
-                                    status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
-                                    createdAt: item.addedAt,
-                                    taskId: item.sourceId,
-                                    style: item.appliedKeywords?.style || item.appliedKeywords?.genre || item.appliedKeywords?.prompt || '',
-                                    prompt: item.appliedKeywords?.lyrics || item.appliedKeywords?.lyricsText || '',
-                                    lyrics: item.appliedKeywords?.lyrics || item.appliedKeywords?.lyricsText || '가사 없음',
-                                    audioUrl: item.audioUrl || '',
-                                    streamAudioUrl: item.audioUrl || ''
-                                  }); 
+                                  setShowDetails(buildPlaylistItemDetails(item)); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
                                 className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
@@ -2750,13 +2854,13 @@ export default function SunoLibraryPage() {
       {/* Details Modal */}
       <AnimatePresence>
         {showDetails && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={closeModal}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={() => setShowDetails(null)}>
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              onClick={closeModal}
+              onClick={() => setShowDetails(null)}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -2778,11 +2882,12 @@ export default function SunoLibraryPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <DetailItem label="제목" value={showDetails.title || 'Untitled'} />
                   <DetailItem label="상태" value={showDetails.status} isStatus />
+                  <DetailItem label="제작자" value={showDetails.creatorDisplayId || showDetails.ownerNickname || showDetails.creatorNickname || showDetails.ownerEmail || showDetails.ownerUid || 'Unknown'} />
                   <DetailItem label="생성일" value={formatCreatedAt(showDetails.createdAt)} />
                   <DetailItem label="Task ID" value={showDetails.taskId} isMono />
                   <DetailItem label="Suno Version" value={showDetails.requestPayload?.model || 'V5_5'} />
                   <DetailItem label="키워드/스타일" value={showDetails.style || showDetails.prompt || '없음'} full />
-                  <DetailItem label="가사" value={showDetails.lyrics || '가사 없음'} full isPre />
+                  <DetailItem label="가사" value={showDetails.lyrics || '가사 정보 없음'} full isPre />
                   <DetailItem label="오디오 URL" value={showDetails.audioUrl || showDetails.streamAudioUrl} full isMono />
                 </div>
               </div>

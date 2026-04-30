@@ -2514,7 +2514,7 @@ export default function SunoLibraryPage() {
                         : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                     }`}
                   >
-                    {playlist.order === 1 && <Share2 className="w-3.5 h-3.5" />}
+                    <Share2 className="w-3.5 h-3.5" />
                     {playlist.title}
                   </button>
                 ))}
@@ -2544,7 +2544,7 @@ export default function SunoLibraryPage() {
                       {activePlaylistSection === 'normal' ? '선택된 플레이리스트' : '선택된 공유 플레이리스트'}
                     </span>
                     <span className="text-base font-bold text-white flex items-center gap-1.5">
-                      {activePlaylistSection === 'shared' && activePlaylist.order === 1 && <Share2 className="w-4 h-4 text-brand-orange" />}
+                      {activePlaylistSection === 'shared' && <Share2 className="w-4 h-4 text-brand-orange" />}
                       {activePlaylist.title}
                     </span>
                   </div>

@@ -31,6 +31,21 @@ const fallbackSharedPlaylists: Playlist[] = [
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 
+const COLOR_OPTIONS = [
+  { value: 'gray', color: '#6b7280', label: '회색' },
+  { value: 'red', color: '#ef4444', label: '빨강' },
+  { value: 'orange', color: '#f97316', label: '주황' },
+  { value: 'yellow', color: '#eab308', label: '노랑' },
+  { value: 'green', color: '#22c55e', label: '초록' },
+  { value: 'blue', color: '#3b82f6', label: '파랑' },
+  { value: 'purple', color: '#a855f7', label: '보라' }
+];
+
+const getColorHex = (colorTag?: string | null) => {
+  const found = COLOR_OPTIONS.find(c => c.value === colorTag);
+  return found?.color || '#6b7280';
+};
+
 export default function SunoLibraryPage() {
   const navigate = useNavigate();
   const [tracks, setTracks] = useState<any[]>([]);
@@ -52,6 +67,7 @@ export default function SunoLibraryPage() {
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
+  const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
@@ -650,6 +666,47 @@ export default function SunoLibraryPage() {
     }
   };
 
+  const getWorkspaceItemColor = (group: any, idx: number): string => {
+    const raw = group?.colorTags?.[String(idx)] ?? group?.colorTags?.[idx] ?? null;
+    return raw || 'gray';
+  };
+
+  const isWorkspaceItemVisible = (group: any, item: any, idx: number): boolean => {
+    if (filter === 'trash') {
+      if (!item?.hidden && !group?.hidden) return false;
+    } else if (item?.hidden || group?.hidden) {
+      return false;
+    }
+
+    if (workspaceColorFilter === 'all') return true;
+
+    const color = getWorkspaceItemColor(group, idx);
+    return workspaceColorFilter === 'gray' ? color === 'gray' : color === workspaceColorFilter;
+  };
+
+  const handleChangeWorkspaceColor = async (group: any, idx: number, color: string | null) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
+      return;
+    }
+
+    if (!group?.id) {
+      showToast("색상 정보를 저장할 수 없습니다.");
+      return;
+    }
+
+    try {
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      await updateDoc(trackRef, {
+        [`colorTags.${idx}`]: color || null,
+        updatedAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.error('workspace color update failed:', e);
+      showToast("색상 변경에 실패했습니다.");
+    }
+  };
+
   const handleCustomSort = async (itemA: PlaylistItem, itemB: PlaylistItem) => {
     if (!user || !activePlaylistId) return;
     try {
@@ -764,15 +821,19 @@ export default function SunoLibraryPage() {
                             (filter === 'completed' && t.status === 'completed') || 
                             (filter === 'favorite' && t.favorite);
 
-      return matchesSearch && matchesFilter;
+      const matchesColor = extractSunoData(t).some((item: any, idx: number) => isWorkspaceItemVisible(t, item, idx));
+
+      return matchesSearch && matchesFilter && matchesColor;
     });
-  }, [tracks, searchTerm, filter]);
+  }, [tracks, searchTerm, filter, workspaceColorFilter]);
 
   const allPlayables = useMemo(() => {
     const list: any[] = [];
     filteredTracks.forEach(group => {
       const items = extractSunoData(group);
       items.forEach((item: any, idx: number) => {
+        if (!isWorkspaceItemVisible(group, item, idx)) return;
+
         const audioUrl = getAudioUrl(item, group);
         if (audioUrl) {
           list.push({ group, item, idx, url: audioUrl });
@@ -780,7 +841,7 @@ export default function SunoLibraryPage() {
       });
     });
     return list;
-  }, [filteredTracks]);
+  }, [filteredTracks, filter, workspaceColorFilter]);
 
   const handlePlayTrack = (track: any, subIndex: number = 0) => {
     const items = extractSunoData(track);
@@ -2154,7 +2215,28 @@ export default function SunoLibraryPage() {
                 className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 outline-none focus:border-brand-orange/50 transition-all text-sm"
               />
             </div>
-            <div className="flex bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl">
+            <div className="flex items-center gap-1.5 bg-[var(--bg-secondary)] border border-white/10 p-1.5 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <button
+                onClick={() => setWorkspaceColorFilter('all')}
+                className={`text-xs font-bold px-2 py-1 transition-all rounded-lg ${workspaceColorFilter === 'all' ? 'text-white bg-white/10' : 'text-white/40 hover:text-white/70'}`}
+              >
+                전체
+              </button>
+              <div className="w-px h-3 bg-white/10 mx-1"></div>
+              {COLOR_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setWorkspaceColorFilter(opt.value)}
+                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                    workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                  }`}
+                  title={opt.label}
+                >
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                </button>
+              ))}
+            </div>
+            <div className="flex bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl shrink-0">
               {(['all', 'completed', 'favorite', 'trash'] as const).map((f) => (
                 <button
                   key={f}
@@ -2199,7 +2281,9 @@ export default function SunoLibraryPage() {
           <div className="space-y-6">
             {filteredTracks.map((group) => {
               const dataItems = extractSunoData(group);
-              const items = dataItems.length > 0 ? dataItems : [{}];
+              const items = (dataItems.length > 0 ? dataItems : [{}])
+                .map((item: any, idx: number) => ({ item, idx }))
+                .filter(({ item, idx }: { item: any; idx: number }) => isWorkspaceItemVisible(group, item, idx));
               const dateStr = formatCreatedAt(group.createdAt);
               
               return (
@@ -2242,15 +2326,7 @@ export default function SunoLibraryPage() {
 
                   {/* Tracks List */}
                   <div className="divide-y divide-white/5">
-                    {items.map((item: any, idx: number) => {
-                      if (filter === 'trash') {
-                        // Only show hidden ones
-                        if (!item.hidden && !group.hidden) return null;
-                      } else {
-                        // Only show non-hidden ones
-                        if (item.hidden || group.hidden) return null;
-                      }
-
+                    {items.map(({ item, idx }: { item: any; idx: number }) => {
                       const audioUrl = getAudioUrl(item, group);
                       const duration = getDuration(item, group);
                       const hasValidDuration = duration !== null;
@@ -2290,7 +2366,36 @@ export default function SunoLibraryPage() {
                             {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-white" /> : <Play className={`w-3.5 h-3.5 ${isCurrent ? 'fill-white' : ''} ml-0.5`} />}
                           </button>
                           
-                          <div className="flex-1 min-w-0 pr-2 flex items-center gap-3">
+                          <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const colorMenuId = `workspace-${group.id}-${idx}`;
+                                setActiveColorMenu(activeColorMenu === colorMenuId ? null : colorMenuId);
+                                setActiveMenuState(null);
+                                setActivePlaylistItemMenu(null);
+                              }}
+                              className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
+                              style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
+                              title="색상 지정"
+                            />
+                            {activeColorMenu === `workspace-${group.id}-${idx}` && (
+                              <div className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                                {COLOR_OPTIONS.map(c => (
+                                  <button
+                                    key={c.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleChangeWorkspaceColor(group, idx, c.value);
+                                      setActiveColorMenu(null);
+                                    }}
+                                    className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                    style={{ backgroundColor: c.color }}
+                                    title={c.label}
+                                  />
+                                ))}
+                              </div>
+                            )}
                             <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
                               {getTitle(item, group, idx)}
                             </h4>

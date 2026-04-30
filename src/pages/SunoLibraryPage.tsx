@@ -56,6 +56,7 @@ export default function SunoLibraryPage() {
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
   const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
+  const [shareCreatorNameMap, setShareCreatorNameMap] = useState<Record<string, string>>({});
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
@@ -448,7 +449,7 @@ export default function SunoLibraryPage() {
     if (playlistItems.length === 0) return;
 
     const uniqueOwnerUids = Array.from(
-      new Set(
+      new Set<string>(
         playlistItems
           .map((item: any) => item.ownerUid)
           .filter((uid): uid is string => typeof uid === 'string' && uid.trim().length > 0)
@@ -487,6 +488,58 @@ export default function SunoLibraryPage() {
       cancelled = true;
     };
   }, [playlistItems, userNameMap]);
+
+  useEffect(() => {
+    const sharedSourceIds = Array.from(
+      new Set<string>(
+        playlistItems
+          .filter((item: any) => item.sourceType === 'shared_track')
+          .map((item: any) => item.sourceId)
+          .filter((sourceId): sourceId is string => typeof sourceId === 'string' && sourceId.trim().length > 0)
+      )
+    ).filter((sourceId) => !shareCreatorNameMap[sourceId]);
+
+    if (sharedSourceIds.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchSharedCreatorNames = async () => {
+      const nextMap: Record<string, string> = {};
+
+      await Promise.all(
+        sharedSourceIds.map(async (sourceId) => {
+          try {
+            const shareSnap = await getDoc(doc(db, 'suno_shares', sourceId));
+            if (!shareSnap.exists()) return;
+            const data: any = shareSnap.data();
+            const displayName =
+              data.creatorDisplayId ||
+              data.ownerNickname ||
+              data.creatorNickname ||
+              data.ownerName ||
+              data.nickname ||
+              data.displayName ||
+              data.ownerEmail ||
+              data.creatorEmail ||
+              '';
+            if (displayName) nextMap[sourceId] = String(displayName);
+          } catch (error) {
+            console.warn('Failed to fetch shared track creator name:', sourceId, error);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(nextMap).length > 0) {
+        setShareCreatorNameMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    fetchSharedCreatorNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, shareCreatorNameMap]);
 
   // Handle caching of likes and shared statuses
   useEffect(() => {
@@ -1372,7 +1425,11 @@ export default function SunoLibraryPage() {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
       ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
-      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.ownerUid || null,
+      creatorDisplayId: group?.creatorDisplayId || group?.ownerNickname || group?.creatorNickname || null,
+      ownerNickname: group?.ownerNickname || group?.shareData?.ownerNickname || group?.creatorDisplayId || null,
+      creatorNickname: group?.creatorNickname || group?.shareData?.creatorNickname || null,
+      ownerEmail: group?.ownerEmail || group?.shareData?.ownerEmail || user?.email || null,
+      creatorEmail: group?.creatorEmail || group?.shareData?.creatorEmail || null,
       title: getTitle(item, group, idx) || "Shared Track",
       audioUrl: finalAudioUrl,
       imageUrl: item?.image_url || item?.imageUrl || group?.imageUrl || getImageUrl(item, group) || null,
@@ -1614,13 +1671,23 @@ export default function SunoLibraryPage() {
   };
 
   const getPlaylistItemCreatorName = (item: any): string => {
+    const normalizeCreatorValue = (value: any) => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (!text) return '';
+      // Older shared playlist items sometimes stored Firebase UID in creatorDisplayId.
+      // Do not show that before trying nickname fallbacks.
+      if (item?.ownerUid && text === item.ownerUid) return '';
+      return text;
+    };
+
     return (
-      item?.creatorDisplayId ||
-      item?.ownerNickname ||
-      item?.creatorNickname ||
+      normalizeCreatorValue(item?.creatorDisplayId) ||
+      normalizeCreatorValue(item?.ownerNickname) ||
+      normalizeCreatorValue(item?.creatorNickname) ||
+      (item?.sourceId ? shareCreatorNameMap[item.sourceId] : '') ||
       (item?.ownerUid ? userNameMap[item.ownerUid] : '') ||
-      item?.ownerEmail ||
-      item?.creatorEmail ||
+      normalizeCreatorValue(item?.ownerEmail) ||
+      normalizeCreatorValue(item?.creatorEmail) ||
       item?.ownerUid ||
       'Unknown'
     );

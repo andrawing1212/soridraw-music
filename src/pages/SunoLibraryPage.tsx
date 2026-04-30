@@ -936,6 +936,45 @@ export default function SunoLibraryPage() {
     return `${appOrigin}/suno-library?track=${shareId}`;
   };
 
+
+  const getShareCoverImageUrl = (group?: any, item?: any) => {
+    return (
+      item?.imageUrl ||
+      item?.image_url ||
+      item?.sourceImageUrl ||
+      group?.imageUrl ||
+      group?.image_url ||
+      group?.sourceImageUrl ||
+      getImageUrl(item, group) ||
+      ''
+    );
+  };
+
+  const buildNativeShareData = async ({ title, text, url, imageUrl }: { title: string; text: string; url: string; imageUrl?: string }) => {
+    const baseShareData: ShareData = { title, text, url };
+
+    if (!imageUrl || !navigator.share || typeof navigator.canShare !== 'function') {
+      return baseShareData;
+    }
+
+    try {
+      const imageResponse = await fetch(imageUrl, { mode: 'cors' });
+      if (!imageResponse.ok) return baseShareData;
+
+      const blob = await imageResponse.blob();
+      if (!blob.type.startsWith('image/')) return baseShareData;
+
+      const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+      const file = new File([blob], `soridraw-cover.${extension}`, { type: blob.type });
+      const shareDataWithFile: ShareData = { ...baseShareData, files: [file] };
+
+      return navigator.canShare(shareDataWithFile) ? shareDataWithFile : baseShareData;
+    } catch (error) {
+      console.warn('Share cover image attach skipped:', error);
+      return baseShareData;
+    }
+  };
+
   const handleShareCurrentPage = async () => {
     const shareUrl = window.location.href;
 
@@ -946,11 +985,15 @@ export default function SunoLibraryPage() {
 
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: "SORIDRAW Music 공유 음악",
+        const sharedGroup = tracks[0];
+        const sharedItem = sharedGroup ? extractSunoData(sharedGroup)[0] : null;
+        const shareData = await buildNativeShareData({
+          title: sharedItem?.title || sharedGroup?.title || "SORIDRAW Music 공유 음악",
           text: "SORIDRAW에서 공유된 음악입니다.",
           url: shareUrl,
+          imageUrl: getShareCoverImageUrl(sharedGroup, sharedItem),
         });
+        await navigator.share(shareData);
         return;
       }
 
@@ -1039,11 +1082,13 @@ export default function SunoLibraryPage() {
       
       if (isMobile && navigator.share) {
         try {
-          await navigator.share({
-            title: title,
+          const shareData = await buildNativeShareData({
+            title,
             text: '공유 음악 재생하기🎵',
-            url: shareUrl
+            url: shareUrl,
+            imageUrl: getShareCoverImageUrl(group, item),
           });
+          await navigator.share(shareData);
           closeModal();
           return;
         } catch (e) {

@@ -71,6 +71,7 @@ export default function GlobalPlayer() {
   const [showMenu, setShowMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
+  const mobileExpandedHistoryPushedRef = useRef(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -79,6 +80,28 @@ export default function GlobalPlayer() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!isMobile || mode !== 'expanded') {
+      mobileExpandedHistoryPushedRef.current = false;
+      return;
+    }
+
+    if (!mobileExpandedHistoryPushedRef.current) {
+      window.history.pushState({ soridrawPlayerExpanded: true }, '');
+      mobileExpandedHistoryPushedRef.current = true;
+    }
+
+    const handlePopState = () => {
+      if (mobileExpandedHistoryPushedRef.current) {
+        mobileExpandedHistoryPushedRef.current = false;
+        handleModeChange('normal');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isMobile, mode]);
 
   useEffect(() => {
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
@@ -255,12 +278,14 @@ export default function GlobalPlayer() {
         ref={playerRef}
         initial={false}
         animate={{ 
-          x: mode === 'expanded' || isSharedPlayerMode || isMobile ? '-50%' : 0,
+          x: mode === 'expanded' ? (isMobile ? '-50%' : 0) : (isSharedPlayerMode || isMobile ? '-50%' : 0),
           y: mode === 'expanded' ? '-50%' : 0
         }}
         className={`fixed z-[100] flex flex-col ${
           mode === 'expanded'
-            ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]'
+            ? isMobile
+              ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]'
+              : 'top-1/2 right-8 xl:right-20 w-[400px] max-w-[calc(100vw-32px)]'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
             : 'bottom-6 right-6 w-auto items-end'

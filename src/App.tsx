@@ -1156,11 +1156,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
                 onClick={() => {
                   navigate('/suno-library');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
+                  setIsExpanded(false);
                 }}
-                className={`p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all ${location.pathname === '/suno-library' ? 'ring-1 ring-white/50' : ''}`}
+                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="Suno Library"
               >
-                <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-brand-orange">
+                <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-[var(--text-primary)]">
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm opacity-80" />
                   <div className="w-[4px] h-[16px] md:h-[18px] border-[1.5px] border-current rounded-sm" />
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm transform origin-bottom -rotate-12 translate-x-[1px] opacity-90" />

@@ -67,6 +67,7 @@ export default function SunoLibraryPage() {
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
+  const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
@@ -2569,57 +2570,71 @@ export default function SunoLibraryPage() {
               );
             })()}
 
-            {/* Playlist Controls (Sort & Filter) */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-2 mt-2">
-              {/* Sort Options */}
-              <div className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 border border-white/5">
-                {[
-                  { value: 'added', label: '저장순' },
-                  { value: 'genre', label: '장르순' },
-                  { value: 'custom', label: '사용자' }
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setPlaylistSortMode(opt.value as any)}
-                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                      playlistSortMode === opt.value
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/40 hover:text-white/70'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            {/* Playlist Controls (Search, Color Filter & Sort) */}
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3 px-2 mt-2">
+              {/* Search */}
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                <input
+                  type="text"
+                  value={playlistSearchTerm}
+                  onChange={(e) => setPlaylistSearchTerm(e.target.value)}
+                  placeholder="음악 제목이나 제작자 검색..."
+                  className="w-full bg-[var(--bg-secondary)] border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-brand-orange/50 transition-all"
+                />
               </div>
 
-              {/* Color Filter */}
-              <div className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 px-2 border border-white/5 overflow-x-auto hide-scrollbar">
-                <button
-                  onClick={() => setPlaylistColorFilter('all')}
-                  className={`text-xs font-bold px-2 py-1 transition-all rounded-lg ${playlistColorFilter === 'all' ? 'text-white bg-white/10' : 'text-white/40 hover:text-white/70'}`}
-                >
-                  전체
-                </button>
-                <div className="w-px h-3 bg-white/10 mx-1"></div>
-                {[
-                  { value: 'gray', color: '#6b7280' },
-                  { value: 'red', color: '#ef4444' },
-                  { value: 'orange', color: '#f97316' },
-                  { value: 'yellow', color: '#eab308' },
-                  { value: 'green', color: '#22c55e' },
-                  { value: 'blue', color: '#3b82f6' },
-                  { value: 'purple', color: '#a855f7' }
-                ].map(opt => (
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 lg:justify-end">
+                {/* Color Filter */}
+                <div className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 px-2 border border-white/5 overflow-x-auto hide-scrollbar">
                   <button
-                    key={opt.value}
-                    onClick={() => setPlaylistColorFilter(opt.value)}
-                    className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                      playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
-                    }`}
+                    onClick={() => setPlaylistColorFilter('all')}
+                    className={`text-xs font-bold px-2 py-1 transition-all rounded-lg ${playlistColorFilter === 'all' ? 'text-white bg-white/10' : 'text-white/40 hover:text-white/70'}`}
                   >
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                    전체
                   </button>
-                ))}
+                  <div className="w-px h-3 bg-white/10 mx-1"></div>
+                  {[
+                    { value: 'gray', color: '#6b7280' },
+                    { value: 'red', color: '#ef4444' },
+                    { value: 'orange', color: '#f97316' },
+                    { value: 'yellow', color: '#eab308' },
+                    { value: 'green', color: '#22c55e' },
+                    { value: 'blue', color: '#3b82f6' },
+                    { value: 'purple', color: '#a855f7' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPlaylistColorFilter(opt.value)}
+                      className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                        playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                      }`}
+                    >
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Sort Options */}
+                <div className="flex items-center gap-1 bg-[var(--bg-secondary)] rounded-xl p-1 border border-white/5">
+                  {[
+                    { value: 'added', label: '저장순' },
+                    { value: 'genre', label: '장르순' },
+                    { value: 'custom', label: '사용자' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPlaylistSortMode(opt.value as any)}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                        playlistSortMode === opt.value
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -2631,11 +2646,32 @@ export default function SunoLibraryPage() {
             ) : playlistItems.length > 0 ? (
               <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
                 {(() => {
+                  const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
                     if (playlistColorFilter === 'all') return true;
                     if (playlistColorFilter === 'gray' && !item.colorTag) return true;
                     return item.colorTag === playlistColorFilter;
                   });
+
+                  if (normalizedPlaylistSearch) {
+                    items = items.filter(item => {
+                      const searchable = [
+                        item.title,
+                        getPlaylistItemCreatorName(item),
+                        item.ownerNickname,
+                        item.creatorNickname,
+                        item.ownerEmail,
+                        item.creatorEmail,
+                        item.ownerUid,
+                        item.sourceId,
+                        ...(item.genreLabels || [])
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                        .toLowerCase();
+                      return searchable.includes(normalizedPlaylistSearch);
+                    });
+                  }
 
                   if (playlistSortMode === 'added') {
                     items = items.sort((a, b) => {

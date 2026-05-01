@@ -3204,8 +3204,10 @@ const saveRecentSong = async (newSong: any) => {
       }
     }
 
-    if (selectedGenres.length === 0) {
-      showToast('최소 장르 1개를 선택해주세요.');
+    const hasFreeTextDirectorNote = userInput.trim().length > 0;
+
+    if (selectedGenres.length === 0 && !hasFreeTextDirectorNote) {
+      showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
       return;
     }
 
@@ -3239,11 +3241,13 @@ const saveRecentSong = async (newSong: any) => {
       const hasTheme = finalThemes.length > 0;
       const hasStyle = finalStyles.length > 0;
       const hasSound = finalInstrumentSounds.length > 0;
+      const hasFreeTextDirectorNote = userInput.trim().length > 0;
 
       const selectedCount = [hasGenre, hasMood, hasTheme, hasStyle, hasSound].filter(Boolean).length;
 
-      // If nothing selected, pick random (5-15 total)
-      if (selectedCount === 0) {
+      // If nothing selected and no free-text direction exists, pick random (5-15 total).
+      // When the command box has text, let that text drive the whole prompt instead of injecting random keywords.
+      if (selectedCount === 0 && !hasFreeTextDirectorNote) {
         const allItems = [
           ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
           ...MOODS.map(i => ({ ...i, cat: 'mood' as const })),
@@ -3377,10 +3381,14 @@ const saveRecentSong = async (newSong: any) => {
 
         const genreStr = [...genreLabels, ...subGenreLabels].length > 0
           ? [...genreLabels, ...subGenreLabels].join(', ')
-          : 'Pop';
+          : hasFreeTextDirectorNote
+            ? 'Free-text director note defines the main genre and style'
+            : 'Pop';
         const moodStr = finalMoods.length > 0
           ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(', ')
-          : 'Emotional';
+          : hasFreeTextDirectorNote
+            ? 'Mood should follow the free-text director note'
+            : 'Emotional';
         const themeStr = buildThemeSentence(themeLabels);
 
         const selectedStyleText = styleLabels.length > 0 ? styleLabels.join(', ') : 'Core style kept close to the root genre';
@@ -3491,7 +3499,7 @@ const saveRecentSong = async (newSong: any) => {
 ·VOCAL STYLE: ${vocalStyle}
 ·ARRANGEMENT: ${arrangement}
 ·MOOD: ${moodStr}
-·THEME: ${themeStr || 'No explicit story theme selected.'}`.trim();
+·THEME: ${themeStr || (hasFreeTextDirectorNote ? 'Theme should follow the free-text director note.' : 'No explicit story theme selected.')}`.trim();
       };
 
       const songPrompt = buildSongPrompt();
@@ -3731,14 +3739,14 @@ ${result.prompt}
       <button
         onClick={() => {
           handleGenerate();
-          setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.(장르는 필수 선택)' });
+          setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '장르를 선택하거나 명령창에 곡 방향을 입력해 생성합니다.' });
         }}
-        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.(장르는 필수 선택)' })}
+        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '장르를 선택하거나 명령창에 곡 방향을 입력해 생성합니다.' })}
         onMouseLeave={() => {
           setHoveredItem(null);
           handleLongPressEnd();
         }}
-        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '입력한 키워드로 곡을 생성합니다.(장르는 필수 선택)' })}
+        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '장르를 선택하거나 명령창에 곡 방향을 입력해 생성합니다.' })}
         onTouchEnd={handleLongPressEnd}
         className={cn(
           "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",

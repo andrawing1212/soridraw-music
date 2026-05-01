@@ -1562,6 +1562,28 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     }
   };
 
+  const inferGenreTagFromFreeText = (): string => {
+    const rawUserInput = typeof params.userInput === "string" ? params.userInput.trim().toLowerCase() : "";
+    if (!rawUserInput) return "Song";
+
+    const has80sEra = ["80년대", "80s", "80's", "eighties"].some((keyword) => rawUserInput.includes(keyword));
+
+    if (["시티팝", "city pop", "city-pop", "citypop"].some((keyword) => rawUserInput.includes(keyword))) {
+      return has80sEra ? "80s City Pop" : "City Pop";
+    }
+    if (["케이팝", "k-pop", "kpop"].some((keyword) => rawUserInput.includes(keyword))) return "K-Pop";
+    if (["알앤비", "r&b", "rnb"].some((keyword) => rawUserInput.includes(keyword))) return "R&B";
+    if (["발라드", "ballad"].some((keyword) => rawUserInput.includes(keyword))) return "Ballad";
+    if (["트로트", "trot"].some((keyword) => rawUserInput.includes(keyword))) return "Trot";
+    if (["락", "록", "rock"].some((keyword) => rawUserInput.includes(keyword))) return "Rock";
+    if (["재즈", "jazz"].some((keyword) => rawUserInput.includes(keyword))) return "Jazz";
+    if (["힙합", "hip hop", "hip-hop"].some((keyword) => rawUserInput.includes(keyword))) return "Hip-Hop";
+    if (["edm", "댄스", "dance"].some((keyword) => rawUserInput.includes(keyword))) return "Dance Pop";
+    if (["포크", "folk", "어쿠스틱", "acoustic"].some((keyword) => rawUserInput.includes(keyword))) return "Folk Pop";
+
+    return "Song";
+  };
+
   if (subGenreIds.length > 0) {
     const subGenreMeta = GENRES.find(g => g.id === subGenreIds[0]);
     genreTag = subGenreMeta?.label ?? sentenceCase(subGenreIds[0]);
@@ -1577,7 +1599,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       if (genreMeta.labelKo) keywordsToRemove.add(genreMeta.labelKo.toLowerCase());
     }
   } else {
-    genreTag = "Song";
+    genreTag = inferGenreTagFromFreeText();
   }
   
   addVariations(genreTag);

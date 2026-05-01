@@ -51,7 +51,6 @@ import {
   RefreshCw,
   CheckCircle2,
   Mic2,
-  MicOff,
   Tag,
   Users,
   Shield,
@@ -1230,7 +1229,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 }
 
 function App() {
-  const generateMusic = async (titleLanguage?: LanguageCode, lyricLanguage?: LanguageCode) => {
+  const generateMusic = async (titleLanguage: LanguageCode = 'ko', includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko']) => {
     if (isMusicApiGenerating) return;
 
     try {
@@ -1259,6 +1258,43 @@ function App() {
       const resolvedGenre = getResolvedGenre(result);
       const finalTitle = formatDisplayTitle(resolvedGenre, rawExtractedTitle);
 
+      const getLyricsByLanguage = (lang: LanguageCode) => {
+        switch (lang) {
+          case 'en':
+            return result.lyrics?.english || '';
+          case 'ko':
+          default:
+            return result.lyrics?.korean || '';
+        }
+      };
+
+      const lyricLanguageLabels: Record<LanguageCode, string> = {
+        ko: 'Korean',
+        en: 'English',
+      };
+
+      const resolvedLyricLanguages = includeLyrics
+        ? Array.from(new Set((lyricLanguages || []).filter(Boolean))).slice(0, 2)
+        : [];
+
+      const resolvedLyrics = includeLyrics
+        ? resolvedLyricLanguages
+            .map((lang) => {
+              const text = getLyricsByLanguage(lang).trim();
+              if (!text) return '';
+              return resolvedLyricLanguages.length > 1
+                ? `[${lyricLanguageLabels[lang]} Lyrics]\n${text}`
+                : text;
+            })
+            .filter(Boolean)
+            .join('\n\n')
+        : '';
+
+      if (includeLyrics && !resolvedLyrics.trim()) {
+        showToast('선택한 언어의 가사가 없습니다. 가사 미포함으로 생성하거나, 먼저 가사를 포함해 곡을 생성해주세요.');
+        return;
+      }
+
       const res = await fetch(
         "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
         {
@@ -1271,12 +1307,12 @@ function App() {
             title: finalTitle,
             prompt: result.prompt || "",
             style: result.prompt || "",
-            lyrics: lyricLanguage === 'en'
-              ? (result.lyrics?.english || result.lyrics?.korean || "")
-              : (result.lyrics?.korean || result.lyrics?.english || ""),
+            lyrics: resolvedLyrics,
             appliedKeywords: result.appliedKeywords || {},
             titleLanguage,
-            lyricLanguage
+            includeLyrics,
+            lyricLanguages: resolvedLyricLanguages,
+            lyricLanguage: resolvedLyricLanguages[0] || null
           }),
         }
       );
@@ -1325,6 +1361,7 @@ function App() {
   const [favorites, setFavorites] = useState<any[]>([]);
 
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
+  const [showGenerateOptionsModal, setShowGenerateOptionsModal] = useState(false);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
@@ -1562,7 +1599,6 @@ function App() {
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
-  const [isNoLyrics, setIsNoLyrics] = useState(false);
   const [songStructure, setSongStructure] = useState<SongStructure>('2');
   const [vocalMode, setVocalMode] = useState<VocalMode>('solo');
   const [vocalTones, setVocalTones] = useState<VocalTone[]>(VOCAL_TONES);
@@ -2507,7 +2543,6 @@ const cycleFamilySelection = (
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
-    if (appliedKeywords.isNoLyrics !== undefined) setIsNoLyrics(appliedKeywords.isNoLyrics);
     if (appliedKeywords.songStructure) setSongStructure(appliedKeywords.songStructure);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
@@ -3182,7 +3217,7 @@ const saveRecentSong = async (newSong: any) => {
   }, []);
   */
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko']) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -3272,8 +3307,20 @@ const saveRecentSong = async (newSong: any) => {
       let currentMinBPM = minBPM;
       let currentMaxBPM = maxBPM;
 
-      // Apply optimal BPM for random selection or when tempo random is enabled
-      if (tempoEnabled) {
+      const isManualTempoMode = !tempoEnabled;
+      const isValidTempoRange =
+        currentMaxBPM >= currentMinBPM &&
+        currentMaxBPM - currentMinBPM <= 40 &&
+        (currentMinBPM !== 40 || currentMaxBPM !== 160);
+
+      // Tempo priority rule:
+      // - If the command box has text, random tempo must NOT be sent to Gemini.
+      // - Only manually specified BPM/range is sent with free-text generation.
+      // - If there is no command text, keep the existing random-tempo behavior.
+      const shouldUseRandomTempo = tempoEnabled && !hasFreeTextDirectorNote;
+      const shouldUseManualTempo = isManualTempoMode && isValidTempoRange;
+
+      if (shouldUseRandomTempo) {
         const { min, max } = calculateOptimalBPM(finalGenres, finalMoods, subGenre);
         currentMinBPM = min;
         currentMaxBPM = max;
@@ -3281,11 +3328,19 @@ const saveRecentSong = async (newSong: any) => {
         setMaxBPM(max);
       }
 
+      const shouldSendTempo = shouldUseRandomTempo || shouldUseManualTempo;
+
       const tempoInfo =
-        (currentMinBPM !== 40 || currentMaxBPM !== 160)
+        shouldSendTempo
           ? currentMinBPM === currentMaxBPM
             ? `Exactly ${currentMinBPM} BPM`
             : `Between ${currentMinBPM} and ${currentMaxBPM} BPM`
+          : undefined;
+
+      const tempoSource: 'random' | 'manual' | undefined = shouldUseRandomTempo
+        ? 'random'
+        : shouldUseManualTempo
+          ? 'manual'
           : undefined;
 
       // Trot specific prompt logic
@@ -3398,15 +3453,18 @@ const saveRecentSong = async (newSong: any) => {
         const hasStyleId = (...ids: string[]) => ids.some((id) => selectedStyleIds.has(id));
         const hasSoundFamily = (...ids: string[]) => ids.some((id) => selectedSoundFamilies.has(id));
 
-        const bpm = (tempoInfo || '')
-          .replace('Between ', '')
-          .replace('Exactly ', '')
-          .replace(' and ', '–')
-          || (finalMoods.includes('bright') || finalMoods.includes('hopeful') || finalMoods.includes('tense') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
-            ? '118–132 BPM'
-            : (hasBalladStyle || finalMoods.includes('calm') || finalMoods.includes('peaceful') || finalMoods.includes('sad') || finalMoods.includes('lonely'))
-              ? '72–96 BPM'
-              : '90–112 BPM';
+        const bpm = tempoInfo
+          ? tempoInfo
+              .replace('Between ', '')
+              .replace('Exactly ', '')
+              .replace(' and ', '–')
+          : hasFreeTextDirectorNote
+            ? ''
+            : (finalMoods.includes('bright') || finalMoods.includes('hopeful') || finalMoods.includes('tense') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style'))
+              ? '118–132 BPM'
+              : (hasBalladStyle || finalMoods.includes('calm') || finalMoods.includes('peaceful') || finalMoods.includes('sad') || finalMoods.includes('lonely'))
+                ? '72–96 BPM'
+                : '90–112 BPM';
 
         const drums = [
           hasSoundFamily('drums-family') ? `Primary drum character shaped by ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'drums-family'), finalInstrumentSounds).join(', ') || 'Drums'}` : null,
@@ -3490,7 +3548,9 @@ const saveRecentSong = async (newSong: any) => {
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
 
-        return `·GENRE: ${genreStr}, ${selectedStyleText}, ${bpm}
+        const genreLine = [genreStr, selectedStyleText, bpm].filter(Boolean).join(', ');
+
+        return `·GENRE: ${genreLine}
 ·DRUMS: ${drums}
 ·BASS: ${bass}
 ·SOUND: ${sound}
@@ -3530,11 +3590,15 @@ const saveRecentSong = async (newSong: any) => {
           members: vocalMembers,
         },
         tempo: tempoInfo,
+        isRandomTempo: tempoSource === 'random',
+        tempoSource,
         specialPrompt,
         kpopMode,
         isKoreanEnglishMix,
         customStructure,
-        isNoLyrics,
+        isNoLyrics: !includeLyrics,
+        lyricLanguages: includeLyrics ? lyricLanguages.slice(0, 2) : [],
+        lyricLanguage: includeLyrics ? lyricLanguages[0] : null,
         lyricDraft: isLyricMode ? lyricDraft : undefined,
         isLyricMode,
         lyricMode: isLyricMode ? lyricMode : undefined,
@@ -3548,8 +3612,15 @@ const saveRecentSong = async (newSong: any) => {
 
       if (abortControllerRef.current?.signal.aborted) return;
 
+      const selectedLyricLanguages = new Set(includeLyrics ? lyricLanguages.slice(0, 2) : []);
+      const resultLyrics = {
+        english: includeLyrics && selectedLyricLanguages.has('en') ? (song.lyrics?.english || '') : '',
+        korean: includeLyrics && selectedLyricLanguages.has('ko') ? (song.lyrics?.korean || '') : '',
+      };
+
       const newResult: SongResult = {
         ...song,
+        lyrics: resultLyrics,
         prompt: song.prompt,
         appliedKeywords: {
           ...song.appliedKeywords,
@@ -3561,7 +3632,7 @@ const saveRecentSong = async (newSong: any) => {
             ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
             : null,
           rapEnabled: rapEnabled,
-          isNoLyrics: isNoLyrics,
+          isNoLyrics: !includeLyrics,
           isKoreanEnglishMix: isKoreanEnglishMix,
           kpopMode,
           isBallad: hasBalladStyle,
@@ -3738,15 +3809,19 @@ ${result.prompt}
 
       <button
         onClick={() => {
-          handleGenerate();
-          setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '장르를 선택하거나 명령창에 곡 방향을 입력해 생성합니다.' });
+          if (isGenerating) {
+            handleGenerate();
+          } else {
+            setShowGenerateOptionsModal(true);
+          }
+          setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '가사 포함 여부와 언어를 선택한 뒤 생성합니다.' });
         }}
-        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '장르를 선택하거나 명령창에 곡 방향을 입력해 생성합니다.' })}
+        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '가사 포함 여부와 언어를 선택한 뒤 생성합니다.' })}
         onMouseLeave={() => {
           setHoveredItem(null);
           handleLongPressEnd();
         }}
-        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '곡 생성하기', description: isGenerating ? '생성을 중단합니다.' : '장르를 선택하거나 명령창에 곡 방향을 입력해 생성합니다.' })}
+        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '가사 포함 여부와 언어를 선택한 뒤 생성합니다.' })}
         onTouchEnd={handleLongPressEnd}
         className={cn(
           "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
@@ -3763,7 +3838,7 @@ ${result.prompt}
         ) : (
           <>
             <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
-            <span>곡 생성하기</span>
+            <span>생성하기</span>
           </>
         )}
       </button>
@@ -4120,8 +4195,6 @@ ${result.prompt}
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
               onLyricsLengthChange={setLyricsLength}
-              isNoLyrics={isNoLyrics}
-              onNoLyricsToggle={() => setIsNoLyrics(!isNoLyrics)}
               songStructure={songStructure}
               customStructure={customStructure}
               onSongStructureChange={setSongStructure}
@@ -4129,7 +4202,6 @@ ${result.prompt}
               onModalStateChange={setIsStructureModalOpen}
               onClear={() => {
                 setLyricsLength('normal');
-                setIsNoLyrics(false);
                 setSongStructure('2');
                 setCustomStructure([]);
               }}
@@ -4989,14 +5061,30 @@ ${result.prompt}
       </AnimatePresence>
       
       <AnimatePresence>
+        {showGenerateOptionsModal && (
+          <MusicApiGenerateModal
+            mode="song"
+            hideTitleLanguage
+            hasApiKey={true}
+            onClose={() => setShowGenerateOptionsModal(false)}
+            onConfirm={(_titleLang, includeLyrics, lyricLanguages) => {
+              setShowGenerateOptionsModal(false);
+              handleGenerate(includeLyrics, lyricLanguages);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {showMusicApiModal && (
           <MusicApiGenerateModal
+            mode="musicApi"
             hasApiKey={hasSunoApiKey}
             isNoLyrics={(!result?.lyrics?.korean && !result?.lyrics?.english) || (result?.lyrics?.korean === "" && result?.lyrics?.english === "")}
             onClose={() => setShowMusicApiModal(false)}
-            onConfirm={(titleLang, lyricLang) => {
+            onConfirm={(titleLang, includeLyrics, lyricLanguages) => {
               setShowMusicApiModal(false);
-              generateMusic(titleLang, lyricLang);
+              generateMusic(titleLang, includeLyrics, lyricLanguages);
             }}
           />
         )}
@@ -6087,8 +6175,6 @@ function CategorySection({
 interface SongStructureIntegratedControlProps {
   lyricsLength: LyricsLength;
   onLyricsLengthChange: (val: LyricsLength) => void;
-  isNoLyrics: boolean;
-  onNoLyricsToggle: () => void;
   songStructure: SongStructure;
   customStructure: CustomSectionItem[];
   onSongStructureChange: (val: SongStructure) => void;
@@ -6106,8 +6192,6 @@ interface SongStructureIntegratedControlProps {
 function SongStructureIntegratedControl({
   lyricsLength,
   onLyricsLengthChange,
-  isNoLyrics,
-  onNoLyricsToggle,
   songStructure,
   customStructure,
   onSongStructureChange,
@@ -6406,26 +6490,12 @@ function SongStructureIntegratedControl({
           </h3>
           <div className="flex items-center gap-2">
             <button
-              onClick={onNoLyricsToggle}
-              onMouseEnter={() => onHover({ id: 'no-lyrics', label: '가사없음', labelKo: '가사없음', description: isNoLyrics ? '가사 생성을 다시 활성화합니다.' : '가사 없이 연주곡 또는 가사 없는 노래를 생성합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border shadow-sm",
-                isNoLyrics 
-                  ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
-                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
-              )}
-            >
-              <MicOff className={cn("w-3 h-3", isNoLyrics ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
-              가사없음 {isNoLyrics ? 'ON' : 'OFF'}
-            </button>
-            <button
               onClick={onClear}
               onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2 rounded-lg transition-all border shadow-btn",
-                (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0 || isNoLyrics)
+                (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0)
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                   : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}

@@ -793,7 +793,7 @@ function buildStyle(params: GenerateSongParams): string {
   
   const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
 
-  return `STYLE: ${stylePart}${bpmPart}`;
+  return `GENRE: ${stylePart}${bpmPart}`;
 }
 
 function buildSound(params: GenerateSongParams): string {
@@ -913,7 +913,7 @@ function buildMoodTexture(params: GenerateSongParams): string {
 
   const textureDesc = "clear and polished";
 
-  return `MOOD & TEXTURE: ${moodValue}, ${textureDesc}`;
+  return `MOOD: ${moodValue}, ${textureDesc}`;
 }
 
 function buildVocal(params: GenerateSongParams): string {
@@ -1094,9 +1094,9 @@ function buildTheme(params: GenerateSongParams): string {
 function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string): string {
   const themeContent = buildTheme(params);
   const sections = [
-    { label: "STYLE", content: buildStyle(params) },
+    { label: "GENRE", content: buildStyle(params) },
     { label: "SOUND", content: buildSound(params) },
-    { label: "MOOD & TEXTURE", content: buildMoodTexture(params) },
+    { label: "MOOD", content: buildMoodTexture(params) },
     { label: "VOCAL", content: buildVocal(params) },
     { label: "ARRANGEMENT", content: buildArrangement(params, resolvedStructure) },
     ...(themeContent ? [{ label: "THEME", content: themeContent }] : []),

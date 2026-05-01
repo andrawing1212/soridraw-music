@@ -3482,7 +3482,7 @@ const saveRecentSong = async (newSong: any) => {
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
 
-        return `·STYLE: ${genreStr}, ${selectedStyleText}, ${bpm}
+        return `·GENRE: ${genreStr}, ${selectedStyleText}, ${bpm}
 ·DRUMS: ${drums}
 ·BASS: ${bass}
 ·SOUND: ${sound}

@@ -1230,13 +1230,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 
 function App() {
   const getAvailableMusicApiLyricLanguages = (song: SongResult | null): LanguageCode[] => {
-    if (!song) return [];
-    const generated = (((song.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
-    const secondary = generated.find((lang) => lang !== 'ko') || 'en';
-    const langs: LanguageCode[] = [];
-    if (song.lyrics?.korean?.trim() && (generated.length === 0 || generated.includes('ko'))) langs.push('ko');
-    if (song.lyrics?.english?.trim()) langs.push(secondary);
-    return Array.from(new Set(langs));
+    return getGeneratedLyricLanguages(song);
   };
 
   const getMusicApiBatchSongs = (): SongResult[] => {
@@ -1301,32 +1295,24 @@ function App() {
         fr: 'French',
       };
 
-      const getLyricsByLanguage = (song: SongResult, lang: LanguageCode) => {
-        switch (lang) {
-          case 'ko':
-            return song.lyrics?.korean || '';
-          case 'en':
-          case 'ja':
-          case 'zh':
-          case 'es':
-          case 'fr':
-          default:
-            return song.lyrics?.english || '';
-        }
+      const resolveMusicApiLyricsByLanguage = (song: SongResult, lang: LanguageCode) => {
+        return getLyricsByLanguage(song, lang);
       };
 
       const getMusicApiTitle = (song: SongResult, selectedLanguage: LanguageCode | null) => {
         const resolvedGenre = getResolvedGenre(song);
-        const koTitle = (song.koreanTitle || '').trim();
-        const secondaryTitle = (song.englishTitle || '').trim();
+        const titleMap = getTitleLanguageMap(song);
+        const koTitle = (titleMap.ko || song.koreanTitle || '').trim();
+        const selectedTitle = selectedLanguage ? (titleMap[selectedLanguage] || '').trim() : '';
+        const fallbackForeign = Object.entries(titleMap).find(([lang, value]) => lang !== 'ko' && String(value).trim())?.[1]?.trim() || (song.englishTitle || '').trim();
 
-        if (!selectedLanguage || selectedLanguage === 'ko') {
-          if (koTitle && secondaryTitle && koTitle !== secondaryTitle) return `[${resolvedGenre}] '${koTitle} | ${secondaryTitle}'`;
-          return `[${resolvedGenre}] '${koTitle || secondaryTitle || '무제'}'`;
+        if (selectedLanguage && selectedLanguage !== 'ko') {
+          if (selectedTitle && koTitle && selectedTitle !== koTitle) return `[${resolvedGenre}] '${selectedTitle} | ${koTitle}'`;
+          return `[${resolvedGenre}] '${selectedTitle || fallbackForeign || koTitle || 'Untitled'}'`;
         }
 
-        if (koTitle && secondaryTitle && koTitle !== secondaryTitle) return `[${resolvedGenre}] '${koTitle} | ${secondaryTitle}'`;
-        return `[${resolvedGenre}] '${secondaryTitle || koTitle || 'Untitled'}'`;
+        if (koTitle && fallbackForeign && koTitle !== fallbackForeign) return `[${resolvedGenre}] '${koTitle} | ${fallbackForeign}'`;
+        return `[${resolvedGenre}] '${koTitle || fallbackForeign || '무제'}'`;
       };
 
       for (let i = 0; i < targetSongs.length; i += 1) {
@@ -1340,7 +1326,7 @@ function App() {
 
         const resolvedLyricLanguages = includeLyrics && selectedLanguage ? [selectedLanguage] : [];
         const resolvedLyrics = includeLyrics && selectedLanguage
-          ? getLyricsByLanguage(song, selectedLanguage).trim()
+          ? resolveMusicApiLyricsByLanguage(song, selectedLanguage).trim()
           : '';
 
         if (includeLyrics && !resolvedLyrics) {
@@ -2129,6 +2115,7 @@ const cycleFamilySelection = (
   const pinnedInstrumentSoundsRef = useRef(pinnedInstrumentSounds);
   const historyRef = useRef(history);
   const historyIndexRef = useRef(historyIndex);
+  const preserveHistoryIndexOnNextSnapshotRef = useRef<number | null>(null);
   const userRef = useRef(user);
 
   useEffect(() => { pinnedGenresRef.current = pinnedGenres; }, [pinnedGenres]);
@@ -2780,12 +2767,21 @@ const cycleFamilySelection = (
         }
 
         if (finalSongs.length > 0) {
-          // Set to the first song (newest) on initial load/reconnect
-          const firstIndex = 0;
-          setHistoryIndex(firstIndex);
-          historyIndexRef.current = firstIndex;
-          setResult(finalSongs[firstIndex]);
+          const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
+          if (preservedIndex !== null && finalSongs[preservedIndex]) {
+            preserveHistoryIndexOnNextSnapshotRef.current = null;
+            setHistoryIndex(preservedIndex);
+            historyIndexRef.current = preservedIndex;
+            setResult(finalSongs[preservedIndex]);
+          } else {
+            // Set to the first song (newest) on initial load/reconnect
+            const firstIndex = 0;
+            setHistoryIndex(firstIndex);
+            historyIndexRef.current = firstIndex;
+            setResult(finalSongs[firstIndex]);
+          }
         } else {
+          preserveHistoryIndexOnNextSnapshotRef.current = null;
           setHistoryIndex(-1);
           setResult(null);
         }
@@ -3813,21 +3809,6 @@ ${result.prompt}
   };
 
 
-  const getSecondaryLyricLanguageLabel = (song: SongResult | null = result) => {
-    const languageLabels: Record<string, string> = {
-      en: '영어',
-      ja: '일본어',
-      zh: '중국어',
-      es: '스페인어',
-      fr: '프랑스어',
-      ko: '한글',
-    };
-    const langs = (((song?.appliedKeywords as any)?.lyricLanguages || []) as string[]);
-    const secondary = langs.find((lang) => lang !== 'ko') || 'en';
-    return languageLabels[secondary] || '영어';
-  };
-
-
   const lyricLanguageLabels: Record<LanguageCode, { ko: string; en: string; api: string }> = {
     ko: { ko: '한글', en: 'Korean', api: 'korean' },
     en: { ko: '영어', en: 'English', api: 'english' },
@@ -3837,21 +3818,81 @@ ${result.prompt}
     fr: { ko: '프랑스어', en: 'French', api: 'french' },
   };
 
+  const getLyricsLanguageMap = (song: SongResult | null = result): Partial<Record<LanguageCode, string>> => {
+    if (!song) return {};
+    const applied = (song.appliedKeywords || {}) as any;
+    const storedMap = (applied.lyricsByLanguage || {}) as Partial<Record<LanguageCode, string>>;
+    const storedLanguages = ((applied.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
+    const secondaryLanguage = (applied.secondaryLanguage || storedLanguages.find((lang) => lang !== 'ko') || 'en') as LanguageCode;
+    const map: Partial<Record<LanguageCode, string>> = { ...storedMap };
+
+    if (song.lyrics?.korean?.trim()) map.ko = song.lyrics.korean;
+    if (song.lyrics?.english?.trim()) {
+      const mappedForeign = storedLanguages.find((lang) => lang !== 'ko' && (storedMap as any)[lang] === song.lyrics.english) || secondaryLanguage || 'en';
+      map[mappedForeign as LanguageCode] = map[mappedForeign as LanguageCode] || song.lyrics.english;
+    }
+
+    return map;
+  };
+
+  const getTitleLanguageMap = (song: SongResult | null = result): Partial<Record<LanguageCode, string>> => {
+    if (!song) return {};
+    const applied = (song.appliedKeywords || {}) as any;
+    const storedMap = (applied.titlesByLanguage || {}) as Partial<Record<LanguageCode, string>>;
+    const storedLanguages = ((applied.titleLanguages || applied.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
+    const secondaryLanguage = (applied.secondaryLanguage || storedLanguages.find((lang) => lang !== 'ko') || 'en') as LanguageCode;
+    const map: Partial<Record<LanguageCode, string>> = { ...storedMap };
+
+    if (song.koreanTitle?.trim()) map.ko = song.koreanTitle;
+    if (song.englishTitle?.trim()) {
+      const mappedForeign = storedLanguages.find((lang) => lang !== 'ko' && (storedMap as any)[lang] === song.englishTitle) || secondaryLanguage || 'en';
+      map[mappedForeign as LanguageCode] = map[mappedForeign as LanguageCode] || song.englishTitle;
+    }
+
+    return map;
+  };
+
+  const getLyricsByLanguage = (song: SongResult | null, lang: LanguageCode): string => {
+    return (getLyricsLanguageMap(song)[lang] || '').trim();
+  };
+
+  const getTitleByLanguage = (song: SongResult | null, lang: LanguageCode): string => {
+    return (getTitleLanguageMap(song)[lang] || '').trim();
+  };
+
   const getGeneratedLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
-    if (!song) return [];
-    const stored = (((song.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
-    const secondary = (stored.find((lang) => lang !== 'ko') || (song.lyrics?.english?.trim() ? 'en' : null)) as LanguageCode | null;
-    const langs: LanguageCode[] = [];
-    if (song.lyrics?.korean?.trim()) langs.push('ko');
-    if (song.lyrics?.english?.trim() && secondary) langs.push(secondary);
-    return Array.from(new Set(langs));
+    const map = getLyricsLanguageMap(song);
+    const stored = ((((song?.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean));
+    const languageOrder: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+    const ordered = [
+      ...stored,
+      ...languageOrder,
+    ].filter((lang, index, arr) => arr.indexOf(lang) === index) as LanguageCode[];
+
+    return ordered.filter((lang) => Boolean(map[lang]?.trim())).slice(0, 2);
+  };
+
+  const getDisplayLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
+    const generated = getGeneratedLyricLanguages(song);
+    if (generated.includes('ko')) {
+      const foreign = generated.find((lang) => lang !== 'ko');
+      return foreign ? ['ko', foreign] : ['ko'];
+    }
+    return generated.slice(0, 2);
+  };
+
+  const getSecondaryLyricLanguageLabel = (song: SongResult | null = result) => {
+    const display = getDisplayLyricLanguages(song);
+    const secondary = display.find((lang) => lang !== 'ko') || display[0] || 'en';
+    return lyricLanguageLabels[secondary as LanguageCode]?.ko || '영어';
   };
 
   const getMissingLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
     const generated = getGeneratedLyricLanguages(song);
     if (!song || generated.length >= 2) return [];
-    if (!song.lyrics?.korean?.trim()) return ['ko'];
-    return (['en', 'ja', 'zh', 'es', 'fr'] as LanguageCode[]).filter((lang) => !generated.includes(lang));
+
+    const languageOrder: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+    return languageOrder.filter((lang) => !generated.includes(lang));
   };
 
   const handleAddLyricsLanguage = async (targetLanguage: LanguageCode) => {
@@ -3867,7 +3908,10 @@ ${result.prompt}
       return;
     }
 
-    const sourceLyrics = result.lyrics?.korean?.trim() || result.lyrics?.english?.trim() || '';
+    const existingLyricsMap = getLyricsLanguageMap(result);
+    const existingTitleMap = getTitleLanguageMap(result);
+    const sourceLanguage = existingLanguages[0] || 'ko';
+    const sourceLyrics = existingLyricsMap[sourceLanguage]?.trim() || result.lyrics?.korean?.trim() || result.lyrics?.english?.trim() || '';
     if (!sourceLyrics) {
       showToast('기준이 될 가사가 없습니다. 먼저 가사가 포함된 곡을 생성해주세요.');
       return;
@@ -3875,35 +3919,56 @@ ${result.prompt}
 
     try {
       setIsAddingLyricsLanguage(true);
+      const currentHistoryIndex = historyIndexRef.current;
       const label = lyricLanguageLabels[targetLanguage];
       const translatedLyrics = (await translateLyrics(sourceLyrics, label.api)).trim();
-      const sourceTitle = (result.koreanTitle || result.englishTitle || result.title || '').replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]|['"]$/g, '').trim();
+      const sourceTitle = (existingTitleMap[sourceLanguage] || result.koreanTitle || result.englishTitle || result.title || '').replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]|['"]$/g, '').trim();
       const translatedTitle = (await translateLyrics(sourceTitle, label.api)).replace(/\n/g, ' ').replace(/^['"]|['"]$/g, '').trim();
 
       const previousApplied = (result.appliedKeywords || {}) as any;
       const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];
+      const nextLyricsByLanguage: Partial<Record<LanguageCode, string>> = {
+        ...existingLyricsMap,
+        [targetLanguage]: translatedLyrics,
+      };
+      const nextTitlesByLanguage: Partial<Record<LanguageCode, string>> = {
+        ...existingTitleMap,
+        [targetLanguage]: translatedTitle,
+      };
+      const firstForeignLanguage = nextLanguages.find((lang) => lang !== 'ko') || previousApplied.secondaryLanguage || 'en';
+
       const nextSong: SongResult = {
         ...result,
-        koreanTitle: targetLanguage === 'ko' ? (translatedTitle || result.koreanTitle) : result.koreanTitle,
-        englishTitle: targetLanguage !== 'ko' ? (translatedTitle || result.englishTitle) : result.englishTitle,
+        koreanTitle: nextTitlesByLanguage.ko || '',
+        englishTitle: firstForeignLanguage ? (nextTitlesByLanguage[firstForeignLanguage as LanguageCode] || result.englishTitle || '') : (result.englishTitle || ''),
         lyrics: {
           ...(result.lyrics || { korean: '', english: '' }),
-          korean: targetLanguage === 'ko' ? translatedLyrics : (result.lyrics?.korean || ''),
-          english: targetLanguage !== 'ko' ? translatedLyrics : (result.lyrics?.english || ''),
+          korean: nextLyricsByLanguage.ko || '',
+          english: firstForeignLanguage ? (nextLyricsByLanguage[firstForeignLanguage as LanguageCode] || '') : '',
         },
         appliedKeywords: {
           ...previousApplied,
           lyricLanguages: nextLanguages,
           titleLanguages: nextLanguages,
-          secondaryLanguage: nextLanguages.find((lang) => lang !== 'ko') || previousApplied.secondaryLanguage || 'en',
+          secondaryLanguage: firstForeignLanguage,
+          lyricsByLanguage: nextLyricsByLanguage,
+          titlesByLanguage: nextTitlesByLanguage,
           isNoLyrics: false,
+          hasAddedLyricsLanguage: true,
+          addedLyricsLanguage: targetLanguage,
+          addedLyricsLanguageAt: Date.now(),
         } as any,
       };
 
       setResult(nextSong);
+      if (currentHistoryIndex >= 0) {
+        setHistoryIndex(currentHistoryIndex);
+        historyIndexRef.current = currentHistoryIndex;
+        preserveHistoryIndexOnNextSnapshotRef.current = currentHistoryIndex;
+      }
       setHistory(prev => {
-        const next = prev.map((song, index) => index === historyIndex ? nextSong : song);
-        if (historyIndex < 0) return prev;
+        const next = prev.map((song, index) => index === currentHistoryIndex ? nextSong : song);
+        if (currentHistoryIndex < 0) return prev;
         if (user) {
           const ref = doc(db, "user_recent_songs", user.uid);
           setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }).catch((error) => {
@@ -4775,8 +4840,9 @@ ${result.prompt}
                       {(() => {
                         const lines = getTitleLinesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
-                        const primaryClass = isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]';
-                        const secondaryClass = isRecent ? 'text-yellow-200/80' : 'text-[var(--text-primary)]/70';
+                        const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
+                        const primaryClass = hasAddedLyricsLanguage ? 'text-amber-400' : (isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-amber-300/90' : (isRecent ? 'text-yellow-200/80' : 'text-[var(--text-primary)]/70');
 
                         if (lines.length >= 2) {
                           return (
@@ -5049,104 +5115,94 @@ ${result.prompt}
               <div className="flex flex-col gap-6">
                 {!result.appliedKeywords.isNoLyrics && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* English Lyrics Section */}
-                    <div className={cn("aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500", !result.lyrics.english && "hidden")}>
-                      <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
-                        <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                          <Music className="w-4 h-4 text-brand-orange" />
-                          {getSecondaryLyricLanguageLabel(result)} 가사
-                        </h3>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
-                            onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: `${getSecondaryLyricLanguageLabel(result)} 가사 복사`, description: `${getSecondaryLyricLanguageLabel(result)} 가사 전체를 복사합니다.` })}
-                            onMouseLeave={() => setHoveredItem(null)}
-                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
-                          >
-                            {copiedType === 'lyrics-en' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                            <span className="hidden md:block text-sm font-bold">복사</span>
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                        <div className="flex-1" />
-                        <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                          {(result.lyrics.english || '')
-                            .replace(/\\n/g, '\n')
-                            .replace(sectionRegex, '\n\n$1')
-                            .replace(/\n{3,}/g, '\n\n')
-                            .trim()}
-                        </pre>
-                        <div className="flex-1" />
-                      </div>
-                    </div>
+                    {(() => {
+                      const displayLyricLanguages = getDisplayLyricLanguages(result);
+                      const missingLyricLanguages = getMissingLyricLanguages(result);
 
-                    {/* Korean Lyrics Section */}
-                    <div className={cn("aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500", !result.lyrics.korean && "hidden")}>
-                      <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
-                        <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                          <Music className="w-4 h-4 text-brand-orange" />
-                          한글 가사
-                        </h3>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => copyToClipboard(result.lyrics.korean, 'lyrics-ko')}
-                            onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 가사 전체를 복사합니다.' })}
-                            onMouseLeave={() => setHoveredItem(null)}
-                            className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
-                          >
-                            {copiedType === 'lyrics-ko' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
-                            <span className="hidden md:block text-sm font-bold">복사</span>
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                        <div className="flex-1" />
-                        <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                          {(result.lyrics.korean || '')
-                            .replace(/\\n/g, '\n')
-                            .replace(sectionRegex, '\n\n$1')
-                            .replace(/\n{3,}/g, '\n\n')
-                            .trim()}
-                        </pre>
-                        <div className="flex-1" />
-                      </div>
-                    </div>
-
-
-                    {getMissingLyricLanguages(result).length > 0 && (
-                      <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-brand-orange/30 overflow-hidden flex flex-col shadow-[var(--shadow-md)] transition-all duration-500">
-                        <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
-                          <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                            <Languages className="w-4 h-4 text-brand-orange" />
-                            가사 언어 추가
-                          </h3>
-                        </div>
-                        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
-                          <div className="text-center space-y-2">
-                            <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
-                            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                              현재 곡의 제목과 가사를 기준으로<br />추가 언어 가사를 생성합니다.
+                      const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
+                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-brand-orange/30 overflow-hidden flex flex-col shadow-[var(--shadow-md)] transition-all duration-500">
+                          <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
+                            <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                              <Languages className="w-4 h-4 text-brand-orange" />
+                              가사 언어 추가
+                            </h3>
+                          </div>
+                          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
+                            <div className="text-center space-y-2">
+                              <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
+                              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                                현재 곡의 제목과 가사를 기준으로<br />추가 언어 가사를 생성합니다.
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {missingLyricLanguages.map((lang) => (
+                                <button
+                                  key={lang}
+                                  onClick={() => handleAddLyricsLanguage(lang)}
+                                  disabled={isAddingLyricsLanguage}
+                                  className="px-3 py-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 hover:bg-brand-orange hover:text-white text-brand-orange text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isAddingLyricsLanguage ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-center text-[var(--text-secondary)]">
+                              가사 언어는 최대 2개까지 표시됩니다.
                             </p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {getMissingLyricLanguages(result).map((lang) => (
-                              <button
-                                key={lang}
-                                onClick={() => handleAddLyricsLanguage(lang)}
-                                disabled={isAddingLyricsLanguage}
-                                className="px-3 py-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 hover:bg-brand-orange hover:text-white text-brand-orange text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {isAddingLyricsLanguage ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
-                              </button>
-                            ))}
-                          </div>
-                          <p className="text-[10px] text-center text-[var(--text-secondary)]">
-                            가사 언어는 최대 2개까지 표시됩니다.
-                          </p>
                         </div>
-                      </div>
-                    )}
+                      ) : null;
+
+                      const renderLyricsCard = (lang: LanguageCode) => {
+                        const lyricsText = getLyricsByLanguage(result, lang);
+                        if (!lyricsText) return null;
+                        const label = lyricLanguageLabels[lang]?.ko || lang;
+                        const copyType = `lyrics-${lang}`;
+
+                        return (
+                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                            <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
+                              <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                                <Music className="w-4 h-4 text-brand-orange" />
+                                {label} 가사
+                              </h3>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => copyToClipboard(lyricsText, copyType)}
+                                  onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
+                                  onMouseLeave={() => setHoveredItem(null)}
+                                  className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
+                                >
+                                  {copiedType === copyType ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                                  <span className="hidden md:block text-sm font-bold">복사</span>
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                              <div className="flex-1" />
+                              <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
+                                {lyricsText
+                                  .replace(/\\n/g, '\n')
+                                  .replace(sectionRegex, '\n\n$1')
+                                  .replace(/\n{3,}/g, '\n\n')
+                                  .trim()}
+                              </pre>
+                              <div className="flex-1" />
+                            </div>
+                          </div>
+                        );
+                      };
+
+                      const firstCard = displayLyricLanguages[0] ? renderLyricsCard(displayLyricLanguages[0]) : renderAddLyricsLanguageCard();
+                      const secondCard = displayLyricLanguages[1] ? renderLyricsCard(displayLyricLanguages[1]) : renderAddLyricsLanguageCard();
+
+                      return (
+                        <>
+                          {firstCard}
+                          {secondCard}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
                   <div className="mt-4 flex items-center justify-between gap-2">

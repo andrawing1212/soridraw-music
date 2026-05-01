@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronLeft, Key, Languages, Music, X } from 'lucide-react';
+import { Check, ChevronLeft, Key, Languages, Music, X, ListMusic } from 'lucide-react';
 
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
 
@@ -13,7 +13,7 @@ type MusicApiGenerateModalProps = {
   availableLyricLanguages?: LanguageCode[];
   maxLyricLanguages?: number;
   onClose: () => void;
-  onConfirm: (titleLanguage: LanguageCode, includeLyrics: boolean, lyricLanguages: LanguageCode[]) => void;
+  onConfirm: (titleLanguage: LanguageCode, includeLyrics: boolean, lyricLanguages: LanguageCode[], generationCount: number) => void;
 };
 
 const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; short: string }[] = [
@@ -65,6 +65,7 @@ export default function MusicApiGenerateModal({
   const [step, setStep] = useState<1 | 2>(1);
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
+  const [generationCount, setGenerationCount] = useState<number>(1);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -94,6 +95,9 @@ export default function MusicApiGenerateModal({
 
   const toggleLyricLanguage = (lang: LanguageCode) => {
     setLyricLanguages((prev) => {
+      // Music API mode uses radio-style single selection: click another language to switch.
+      if (maxCount === 1) return [lang];
+
       if (prev.includes(lang)) {
         const next = prev.filter((item) => item !== lang);
         return next.length > 0 ? next : prev;
@@ -113,7 +117,7 @@ export default function MusicApiGenerateModal({
     if (!hasApiKey) return;
     const langs = includeLyrics ? lyricLanguages.slice(0, maxCount) : [];
     const titleLanguage = langs.find((lang) => lang !== 'ko') || langs[0] || 'ko';
-    onConfirm(titleLanguage, includeLyrics, langs);
+    onConfirm(titleLanguage, includeLyrics, langs, generationCount);
   };
 
   const subtitle = isMain
@@ -223,7 +227,7 @@ export default function MusicApiGenerateModal({
                       <div className="grid grid-cols-2 gap-2">
                         {filteredLanguages.map((item) => {
                           const selected = lyricLanguages.includes(item.id);
-                          const disabled = !selected && lyricLanguages.length >= maxCount;
+                          const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
                           return (
                             <button
                               key={item.id}
@@ -249,6 +253,32 @@ export default function MusicApiGenerateModal({
                   )}
                 </div>
 
+                <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-black text-[var(--text-secondary)] flex items-center gap-1.5">
+                      <ListMusic className="w-3.5 h-3.5" />
+                      생성 개수
+                    </p>
+                    <p className={`text-[10px] font-bold ${accentText}`}>최대 5곡</p>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[1, 2, 3, 4, 5].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setGenerationCount(count)}
+                        className={`rounded-xl px-2 py-3 border text-center transition-all ${
+                          generationCount === count
+                            ? accentSelected
+                            : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                        }`}
+                      >
+                        <p className="text-sm font-black">{count}곡</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleNext}
@@ -267,12 +297,16 @@ export default function MusicApiGenerateModal({
                 className="space-y-5"
               >
                 <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)]">
                     <span className="text-sm font-black text-[var(--text-secondary)]">가사 설정</span>
                     <span className={`text-sm font-black ${accentText} flex items-center gap-1.5 text-right`}>
                       {includeLyrics && <Languages className="w-4 h-4" />}
                       {selectedLyricLabel}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between px-5 py-4">
+                    <span className="text-sm font-black text-[var(--text-secondary)]">생성 개수</span>
+                    <span className={`text-sm font-black ${accentText}`}>{generationCount}곡</span>
                   </div>
                 </div>
 
@@ -282,7 +316,7 @@ export default function MusicApiGenerateModal({
                   disabled={!hasApiKey}
                   className={`w-full h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-black transition-all shadow-lg ${accentBg}`}
                 >
-                  생성하기
+                  {generationCount}곡 생성하기
                 </button>
               </motion.div>
             )}

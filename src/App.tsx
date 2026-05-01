@@ -1229,7 +1229,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 }
 
 function App() {
-  const generateMusic = async (_titleLanguage: LanguageCode = 'ko', includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko']) => {
+  const generateMusic = async (_titleLanguage: LanguageCode = 'ko', includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko'], generationCount: number = 1) => {
     if (isMusicApiGenerating) return;
 
     try {
@@ -1246,6 +1246,7 @@ function App() {
         return;
       }
 
+      const resolvedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationCount) || 1)));
       const token = await user.getIdToken();
 
       const resolvedGenre = getResolvedGenre(result);
@@ -1310,37 +1311,43 @@ function App() {
         return;
       }
 
-      const res = await fetch(
-        "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title: finalTitle,
-            prompt: result.prompt || "",
-            style: result.prompt || "",
-            lyrics: resolvedLyrics,
-            appliedKeywords: result.appliedKeywords || {},
-            titleLanguage: otherTitleLanguage,
-            includeLyrics,
-            lyricLanguages: resolvedLyricLanguages,
-            lyricLanguage: resolvedLyricLanguages[0] || null
-          }),
+      for (let i = 0; i < resolvedGenerationCount; i += 1) {
+        const res = await fetch(
+          "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              title: finalTitle,
+              prompt: result.prompt || "",
+              style: result.prompt || "",
+              lyrics: resolvedLyrics,
+              appliedKeywords: result.appliedKeywords || {},
+              titleLanguage: otherTitleLanguage,
+              includeLyrics,
+              lyricLanguages: resolvedLyricLanguages,
+              lyricLanguage: resolvedLyricLanguages[0] || null,
+              generationIndex: i + 1,
+              generationCount: resolvedGenerationCount
+            }),
+          }
+        );
+
+        const data = await res.json();
+        console.log(`생성 결과 ${i + 1}/${resolvedGenerationCount}:`, data);
+
+        if (!res.ok || !data.ok) {
+          showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${resolvedGenerationCount})
+${data.error || "알 수 없는 오류"}`);
+          return;
         }
-      );
-
-      const data = await res.json();
-      console.log("생성 결과:", data);
-
-      if (!res.ok || !data.ok) {
-        showToast(`Music API 생성 요청에 실패했습니다.\n${data.error || "알 수 없는 오류"}`);
-        return;
       }
 
-      showToast("Music API 생성 요청이 완료되었습니다.\n생성 중인 곡은 라이브러리에서 자동으로 상태가 갱신됩니다.");
+      showToast(`Music API 생성 요청이 완료되었습니다.
+${resolvedGenerationCount}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
     } catch (err) {
       console.error("생성 실패:", err);
       showToast("Music API 생성 요청 중 오류가 발생했습니다.");
@@ -3232,7 +3239,7 @@ const saveRecentSong = async (newSong: any) => {
   }, []);
   */
 
-  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[] }) => {
+  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[]; generationCount?: number }) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -3259,6 +3266,7 @@ const saveRecentSong = async (newSong: any) => {
     const requestedLyricLanguages = requestedIncludeLyrics
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko', 'en']).filter(Boolean))).slice(0, 2) as LanguageCode[]
       : [];
+    const requestedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions?.generationCount) || 1)));
 
     if (selectedGenres.length === 0 && !hasFreeTextDirectorNote) {
       showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
@@ -3627,49 +3635,68 @@ const saveRecentSong = async (newSong: any) => {
       console.log("SELECTED SUB GENRE:", subGenre);
       console.log("GENERATE PAYLOAD:", payload);
 
-      const song = await generateSong(payload);
+      const generatedResults: SongResult[] = [];
 
-      if (abortControllerRef.current?.signal.aborted) return;
+      for (let i = 0; i < requestedGenerationCount; i += 1) {
+        if (abortControllerRef.current?.signal.aborted) return;
 
-      const newResult: SongResult = {
-        ...song,
-        prompt: song.prompt,
-        appliedKeywords: {
-          ...song.appliedKeywords,
-          genre: selectedGenres,
-          subGenre: subGenre,
-          vocal: payload.vocal,
-          vocalType: formation || 'Default',
-          vocalTone: selectedVocalToneId 
-            ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
-            : null,
-          rapEnabled: rapEnabled,
-          isNoLyrics: !requestedIncludeLyrics,
-          lyricLanguages: requestedLyricLanguages,
-          isKoreanEnglishMix: isKoreanEnglishMix,
-          kpopMode,
-          isBallad: hasBalladStyle,
-          userInput: userInput,
-          lyricDraft: isLyricMode ? lyricDraft : undefined,
-          isLyricMode,
-          lyricMode: isLyricMode ? lyricMode : undefined,
-          tempoConfig: {
-            enabled: tempoEnabled,
-            min: minBPM,
-            max: maxBPM
-          }
-        },
-        randomKeywords
-      };
+        const song = await generateSong({
+          ...payload,
+          generationIndex: i + 1,
+          generationCount: requestedGenerationCount,
+        } as any);
 
-      setResult(newResult);
-      setHistory(prev => [newResult, ...prev].slice(0, 10));
-      await saveRecentSong(newResult);
+        if (abortControllerRef.current?.signal.aborted) return;
+
+        const newResult: SongResult = {
+          ...song,
+          prompt: song.prompt,
+          appliedKeywords: {
+            ...song.appliedKeywords,
+            genre: selectedGenres,
+            subGenre: subGenre,
+            vocal: payload.vocal,
+            vocalType: formation || 'Default',
+            vocalTone: selectedVocalToneId 
+              ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
+              : null,
+            rapEnabled: rapEnabled,
+            isNoLyrics: !requestedIncludeLyrics,
+            lyricLanguages: requestedLyricLanguages,
+            generationCount: requestedGenerationCount,
+            generationIndex: i + 1,
+            isKoreanEnglishMix: isKoreanEnglishMix,
+            kpopMode,
+            isBallad: hasBalladStyle,
+            userInput: userInput,
+            lyricDraft: isLyricMode ? lyricDraft : undefined,
+            isLyricMode,
+            lyricMode: isLyricMode ? lyricMode : undefined,
+            tempoConfig: {
+              enabled: tempoEnabled,
+              min: minBPM,
+              max: maxBPM
+            }
+          },
+          randomKeywords
+        };
+
+        generatedResults.push(newResult);
+      }
+
+      const [firstResult] = generatedResults;
+      if (!firstResult) return;
+
+      setResult(firstResult);
+      setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
+      for (const item of generatedResults) {
+        await saveRecentSong(item);
+      }
 
       // Increment songGeneratedCount in users document
       if (user) {
         await updateDoc(doc(db, 'users', user.uid), {
-          songGeneratedCount: increment(1)
+          songGeneratedCount: increment(generatedResults.length)
         }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
       }
 
@@ -5097,9 +5124,9 @@ ${result.prompt}
             isNoLyrics={false}
             maxLyricLanguages={2}
             onClose={() => setShowMainGenerationModal(false)}
-            onConfirm={(_titleLang, includeLyrics, lyricLanguages) => {
+            onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount) => {
               setShowMainGenerationModal(false);
-              handleGenerate({ includeLyrics, lyricLanguages });
+              handleGenerate({ includeLyrics, lyricLanguages, generationCount });
             }}
           />
         )}
@@ -5120,9 +5147,9 @@ ${result.prompt}
             })()}
             maxLyricLanguages={1}
             onClose={() => setShowMusicApiModal(false)}
-            onConfirm={(titleLang, includeLyrics, lyricLanguages) => {
+            onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount) => {
               setShowMusicApiModal(false);
-              generateMusic(titleLang, includeLyrics, lyricLanguages);
+              generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount);
             }}
           />
         )}
@@ -8160,9 +8187,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
         </div>
         
         <div className="flex justify-between mt-3 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">
-          <span>20 BPM</span>
+          <span>40 BPM</span>
           <span>100 BPM</span>
-          <span>200 BPM</span>
+          <span>160 BPM</span>
         </div>
       </div>
 

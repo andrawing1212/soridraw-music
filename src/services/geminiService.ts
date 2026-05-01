@@ -728,7 +728,7 @@ function buildStructureText(
   return structureMap[(selected as Exclude<SongStructure, "custom">) || "2"];
 }
 
-function buildStyle(params: GenerateSongParams): string {
+function buildStyle(params: GenerateSongParams, detailLayer = ""): string {
   const subGenreIds = params.subGenre ?? [];
   const genreId = (params.genre || "pop").toLowerCase();
   
@@ -754,14 +754,8 @@ function buildStyle(params: GenerateSongParams): string {
     }
   }
 
-  const tempoText = params.tempo
-    ? params.tempo
-        .replace(/^Between\s+/i, "")
-        .replace(/^Exactly\s+/i, "")
-        .replace(/\s+and\s+/i, "–")
-        .replace(/\s*BPM\s*/gi, "")
-        .trim()
-    : "";
+  const tempoDirective = resolveTempoDirective(detailLayer, params.tempo);
+  const tempoText = tempoDirective.primary.replace(/\s*BPM\s*$/i, "").trim();
 
   let stylePart = genreStyle;
   if (stylePrompts.length > 0) {
@@ -769,7 +763,7 @@ function buildStyle(params: GenerateSongParams): string {
     stylePart = `${genreStyle} with ${uniqueStylePrompts.join(", ")}`;
   }
   
-  const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
+  const bpmPart = tempoDirective.parts.length ? `, ${tempoDirective.parts.join(", ")}` : "";
 
   return `GENRE: ${stylePart}${bpmPart}`;
 }
@@ -1062,15 +1056,11 @@ function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStr
   return `ARRANGEMENT: ${combinedArrangements.join(", ")}`;
 }
 
-const DEFAULT_NO_THEME_DIRECTION = "No explicit story theme selected; create a simple original everyday emotional scene. Do not use genre, mood, vocal, sound, arrangement, tempo, hook, or structure terms as the lyrical topic.";
+const DEFAULT_NO_THEME_DIRECTION = "Open original everyday theme";
 
 const TECHNICAL_DIRECTION_LYRICS_GUARD = `
-TECHNICAL DIRECTION GUARD (MANDATORY):
-- Treat genre, mood, sound, vocal, tempo, hook, and arrangement words as production instructions only, unless the user explicitly states they are the story topic.
-- Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, R&B groove, indie-pop production, genre labels.
-- Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 장르명.
-- These terms should shape performance, phrasing, arrangement, and production, but must NOT become repeated lyric phrases, metaphors, title concepts, or the central story.
-- If the theme says “everyday freedom,” write about ordinary freedom or self-expression through concrete scenes, not about vocal rhythm or tempo.
+INTERNAL LYRIC GUARD:
+- Production directions must guide performance/arrangement only, not become the song topic, unless the user explicitly makes them the story theme.
 `;
 
 function buildTheme(params: GenerateSongParams): string {
@@ -1127,6 +1117,127 @@ function hasInfluenceBeforeMainGenre(source: string, influenceKeywords: string[]
 }
 
 
+type TempoFeel = "slow" | "fast" | "mid";
+
+type TempoDirective = {
+  primary: string;
+  feel: TempoFeel | "";
+  parts: string[];
+};
+
+function normalizeBpmRange(a: string, b: string): string {
+  const first = Number(a);
+  const second = Number(b);
+  if (!Number.isFinite(first) || !Number.isFinite(second)) return "";
+  const low = Math.min(first, second);
+  const high = Math.max(first, second);
+  return `${low}–${high} BPM`;
+}
+
+function normalizeExactBpm(value: string): string {
+  const bpm = Number(value);
+  if (!Number.isFinite(bpm)) return "";
+  return `${bpm} BPM`;
+}
+
+function extractBpmDirective(text: string, allowBareNumber = false): string {
+  const value = (text || "").trim();
+  if (!value) return "";
+
+  const rangeWithBpm = value.match(/(\d{2,3})\s*(?:~|-|–|—|to|and|에서|부터)\s*(\d{2,3})\s*(?:bpm|비피엠)/i);
+  if (rangeWithBpm) return normalizeBpmRange(rangeWithBpm[1], rangeWithBpm[2]);
+
+  const bpmBeforeRange = value.match(/(?:bpm|비피엠)\s*(\d{2,3})\s*(?:~|-|–|—|to|and|에서|부터)\s*(\d{2,3})/i);
+  if (bpmBeforeRange) return normalizeBpmRange(bpmBeforeRange[1], bpmBeforeRange[2]);
+
+  const exactWithBpm = value.match(/(\d{2,3})\s*(?:bpm|비피엠)/i);
+  if (exactWithBpm) return normalizeExactBpm(exactWithBpm[1]);
+
+  if (allowBareNumber) {
+    const normalized = value
+      .replace(/^Between\s+/i, "")
+      .replace(/^Exactly\s+/i, "")
+      .replace(/\s+BPM\s*/gi, "")
+      .trim();
+
+    const bareRange = normalized.match(/^(\d{2,3})\s*(?:~|-|–|—|to|and)\s*(\d{2,3})$/i);
+    if (bareRange) return normalizeBpmRange(bareRange[1], bareRange[2]);
+
+    const betweenRange = value.match(/Between\s+(\d{2,3})\s+and\s+(\d{2,3})/i);
+    if (betweenRange) return normalizeBpmRange(betweenRange[1], betweenRange[2]);
+
+    const exactBare = normalized.match(/^(\d{2,3})$/);
+    if (exactBare) return normalizeExactBpm(exactBare[1]);
+  }
+
+  return "";
+}
+
+function detectTempoFeel(text: string): TempoFeel | "" {
+  const source = (text || "").toLowerCase();
+  if (!source) return "";
+
+  if (includesAny(source, ["느린템포", "느린 템포", "느리게", "slow tempo", "잔잔한 템포", "gentle tempo", "laid-back tempo", "relaxed tempo"])) {
+    return "slow";
+  }
+  if (includesAny(source, ["빠른템포", "빠른 템포", "빠르게", "빠른 힙합", "빠른 랩", "속도감 있는 힙합", "속도감있는 힙합", "fast tempo", "fast hip-hop", "fast hip hop", "fast rap", "업템포", "up-tempo", "uptempo", "driving tempo"])) {
+    return "fast";
+  }
+  if (includesAny(source, ["미디엄템포", "미디엄 템포", "medium tempo", "mid tempo", "mid-tempo"])) {
+    return "mid";
+  }
+
+  return "";
+}
+
+function tempoFeelToPrompt(feel: TempoFeel): string {
+  if (feel === "slow") return "slow tempo feel";
+  if (feel === "fast") return "fast tempo feel";
+  return "mid-tempo feel";
+}
+
+function tempoFeelToSupplement(feel: TempoFeel): string {
+  if (feel === "slow") return "relaxed laid-back feel";
+  if (feel === "fast") return "driving rhythmic feel";
+  return "balanced mid-tempo feel";
+}
+
+function resolveTempoDirective(freeText: string, uiTempo?: string): TempoDirective {
+  const freeBpm = extractBpmDirective(freeText, false);
+  const uiBpm = extractBpmDirective(uiTempo || "", true);
+  const freeFeel = detectTempoFeel(freeText);
+  const uiFeel = detectTempoFeel(uiTempo || "");
+
+  // Priority: free-text exact/range BPM > UI exact/range BPM > free-text feel > UI feel.
+  // If a numeric BPM exists, slow/fast/mid wording becomes feel only and must not overwrite the number.
+  if (freeBpm) {
+    return {
+      primary: freeBpm,
+      feel: freeFeel,
+      parts: [freeBpm, ...(freeFeel ? [tempoFeelToSupplement(freeFeel)] : [])],
+    };
+  }
+
+  if (uiBpm) {
+    return {
+      primary: uiBpm,
+      feel: freeFeel || uiFeel,
+      parts: [uiBpm, ...(freeFeel ? [tempoFeelToSupplement(freeFeel)] : [])],
+    };
+  }
+
+  if (freeFeel) {
+    return { primary: tempoFeelToPrompt(freeFeel), feel: freeFeel, parts: [tempoFeelToPrompt(freeFeel)] };
+  }
+
+  if (uiFeel) {
+    return { primary: tempoFeelToPrompt(uiFeel), feel: uiFeel, parts: [tempoFeelToPrompt(uiFeel)] };
+  }
+
+  return { primary: "", feel: "", parts: [] };
+}
+
+
 type FreeTextVocalHint = { keywords: string[]; prompts: string[] };
 
 const FREE_TEXT_VOCAL_HINTS: FreeTextVocalHint[] = [
@@ -1167,7 +1278,7 @@ function applyFreeTextVocalHints(lowerNote: string, vocalParts: string[]) {
   });
 }
 
-function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
+function buildFreeTextDirectorProfile(note: string, uiTempo = ""): FreeTextDirectorProfile {
   const rawNote = (note || "").trim();
   const lower = rawNote.toLowerCase();
 
@@ -1183,21 +1294,35 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   const has = (keywords: string[]) => includesAny(lower, keywords);
   const has80sEra = has(["80년대", "80s", "80's", "eighties"]);
   const hasRetro = has80sEra || has(["레트로", "retro", "복고"]);
-  const hasSlowTempo = has(["느린템포", "느린 템포", "느리게", "slow tempo", "slow", "잔잔한 템포", "gentle tempo"]);
-  const hasFastTempo = has(["빠른템포", "빠른 템포", "빠르게", "fast tempo", "fast", "업템포", "up-tempo", "uptempo"]);
-  const hasMidTempo = has(["미디엄", "medium tempo", "mid tempo", "mid-tempo"]);
+  const tempoDirective = resolveTempoDirective(rawNote, uiTempo);
   const hasCalm = has(["잔잔", "차분", "담담", "calm", "quiet", "understated", "gentle"]);
 
   const rnbKeywords = ["알앤비", "알앤비느낌", "알앤비 느낌", "리듬앤블루스", "r&b", "rnb", "rhythm and blues"];
   const neoSoulKeywords = ["네오소울", "네오 소울", "neo soul", "neo-soul"];
   const indieKeywords = ["인디음악", "인디 음악", "인디곡", "인디 곡", "인디팝", "인디 팝", "indie", "indie song", "indie music", "indie pop", "indie-pop"];
   const cityPopKeywords = ["시티팝", "city pop", "city-pop", "citypop"];
+  const synthPopKeywords = ["시스팝", "신스팝", "신스 팝", "synth pop", "synth-pop", "synthpop"];
+  const idolKeywords = ["아이돌", "idol", "idol pop", "아이돌팝", "아이돌 팝"];
   const balladKeywords = ["발라드", "발라드곡", "ballad"];
   const rockKeywords = ["락", "록", "락곡", "록곡", "rock"];
   const rnbInfluenceOfIndie = hasInfluenceBeforeMainGenre(lower, rnbKeywords, indieKeywords);
   const neoSoulInfluenceOfCityPop = hasInfluenceBeforeMainGenre(lower, neoSoulKeywords, cityPopKeywords);
 
   // MAIN GENRE: one main identity first, then secondary influences.
+  if (has(synthPopKeywords)) {
+    pushUnique(mainGenreParts, has(idolKeywords) ? "Synth Pop / Idol Pop" : "Synth Pop");
+    pushUnique(soundParts, "layered synths", "polished electronic pop production", "bright synth texture", "punchy electronic groove");
+    pushUnique(moodParts, "stylish modern pop mood", "slightly quirky energy");
+    pushUnique(arrangementParts, "synth-pop progression", "clear electronic sectional contrast");
+  }
+
+  if (!has(synthPopKeywords) && has(idolKeywords)) {
+    pushUnique(mainGenreParts, "Idol Pop");
+    pushUnique(soundParts, "polished idol-pop production", "clean hook-focused mix");
+    pushUnique(moodParts, "stylish idol-pop energy");
+    pushUnique(arrangementParts, "idol-pop sectional progression");
+  }
+
   if (has(cityPopKeywords)) {
     pushUnique(mainGenreParts, has80sEra ? "80s City Pop" : "City Pop");
     pushUnique(soundParts, "smooth electric piano", "clean funk guitar", "warm analog synth", "polished retro-pop groove");
@@ -1213,7 +1338,7 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   }
 
   if (has(indieKeywords)) {
-    pushUnique(mainGenreParts, hasSlowTempo || hasCalm ? "Slow Indie Pop" : "Indie Pop");
+    pushUnique(mainGenreParts, tempoDirective.feel === "slow" || hasCalm ? "Slow Indie Pop" : "Indie Pop");
     pushUnique(soundParts, "minimal indie-pop production", "warm guitar or soft keys", "intimate clean mix");
     pushUnique(moodParts, "calm intimate mood", "understated emotional color");
     pushUnique(arrangementParts, "relaxed indie-pop progression");
@@ -1229,7 +1354,7 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   if (has(["힙합", "hip hop", "hip-hop"])) pushUnique(mainGenreParts, "Hip-Hop");
   if (has(rnbKeywords)) {
     if (rnbInfluenceOfIndie) {
-      pushUnique(mainGenreParts, hasSlowTempo || hasCalm ? "Slow Indie Pop" : "Indie Pop");
+      pushUnique(mainGenreParts, tempoDirective.feel === "slow" || hasCalm ? "Slow Indie Pop" : "Indie Pop");
       pushUnique(genreInfluenceParts, "R&B influence");
     } else if (mainGenreParts.length) {
       pushUnique(genreInfluenceParts, "R&B influence");
@@ -1348,7 +1473,11 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   if (has(["고백", "confession"])) pushUnique(themeParts, "tender confession");
   if (has(["성장", "growth", "coming of age"])) pushUnique(themeParts, "growth narrative");
   if (has(["추억", "memory", "memories"])) pushUnique(themeParts, "memory and nostalgia");
-  if (has(["일상의 자유", "자유에 대한", "자유로운 일상", "일상", "자유", "freedom", "everyday freedom"])) pushUnique(themeParts, "everyday freedom and self-expression");
+  if (has(["일상의 자유", "자유에 대한", "자유로운 일상", "자유", "freedom", "everyday freedom"])) {
+    pushUnique(themeParts, "everyday freedom and self-expression");
+  } else if (has(["일상에 관한", "일상적인", "일상 이야기", "일상", "everyday life", "daily life"])) {
+    pushUnique(themeParts, "everyday life story");
+  }
   if (has(["이순신", "명량", "명량해전", "해전", "전쟁", "장군", "역사", "historical", "battle", "naval battle"])) {
     pushUnique(themeParts, "historical heroic narrative", "naval battle drama");
     pushUnique(moodParts, "heroic tension", "grand cinematic weight");
@@ -1357,6 +1486,51 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   if (has(["드라마적인 서사", "드라마틱한 서사", "dramatic narrative", "cinematic narrative", "서사적"])) {
     pushUnique(themeParts, "dramatic narrative");
     pushUnique(arrangementParts, "cinematic story-driven progression");
+  }
+
+  // THEME GROUPS: detect broad topic groups with a few representative signals, not endless keyword lists.
+  if (has(["주식", "주가", "종목", "개미", "떡상", "상한가", "물림", "손절", "익절", "차트", "매수", "매도", "투자", "코인", "stock", "stocks", "crypto", "retail investor", "trading"])) {
+    pushUnique(themeParts, "retail investors hoping for a stock surge", "everyday stock-market obsession", "risky ambition and comic frustration");
+    pushUnique(moodParts, "ambitious comic tension", "witty urban energy");
+  }
+
+  if (has(["세상을 비난", "세상 비난", "세상을 욕", "세상 욕", "사회 비판", "사회비판", "현실 비판", "현실불만", "현실 불만", "답답한 현실", "더러운 세상", "좆같은 세상", "좆같은 현실", "좆같", "개같은 세상", "빌어먹을 세상", "세상이 싫", "frustrating world", "unfair world", "fuck the world", "social criticism", "social critique"])) {
+    pushUnique(themeParts, "social criticism and frustration", "anger toward a harsh unfair world", "rebellious everyday rage");
+    pushUnique(moodParts, "angry rebellious energy", "cynical confrontational mood");
+  }
+
+  const wantsExplicitProfanityTone = has(["욕하는", "욕하는 노래", "욕하는 가사", "욕 섞인", "욕섞인", "욕설", "쌍욕", "좆같", "씨발", "시발", "ㅅㅂ", "fuck", "fucking", "profanity", "cussing", "swearing"]);
+  if (wantsExplicitProfanityTone) {
+    pushUnique(moodParts, "raw angry attitude", "explicit confrontational energy");
+    pushUnique(vocalParts, "explicit profanity-laced lyrical tone", "raw confrontational wording");
+    if (has(["랩", "rap", "힙합", "hip hop", "hip-hop"])) {
+      pushUnique(vocalParts, "aggressive profanity-driven rap delivery");
+    }
+  }
+
+  // LYRICAL TONE GROUPS: convert wording style into lyric attitude, separate from vocal technique.
+  if (has(["건방진 말투", "건방진 가사", "건방진", "자신만만한 말투", "자신만만", "까칠한 말투", "까칠한", "도발적인 말투", "도발적인", "스웨그", "swagger", "cocky", "confident attitude"])) {
+    pushUnique(moodParts, "cocky confident attitude", "witty swagger energy");
+    pushUnique(vocalParts, "cocky confident lyrical attitude", "confident swagger delivery");
+    if (wantsExplicitProfanityTone) pushUnique(vocalParts, "more openly rude and profanity-tinged wording");
+    if (has(["랩", "rap", "힙합", "hip hop", "hip-hop"])) pushUnique(vocalParts, "sharp rhythmic rap flow");
+  }
+  if (has(["담담한 말투", "담담한 가사", "차분한 말투", "차분한 가사", "무심한 말투", "무심한 가사", "calm lyrical tone", "restrained lyrics"])) {
+    pushUnique(moodParts, "calm restrained emotional tone");
+    pushUnique(vocalParts, "calm restrained lyrical tone");
+  }
+  if (has(["귀여운 말투", "귀여운 가사", "장난스러운 말투", "장난스러운 가사", "발랄한 말투", "발랄한 가사", "능청스러운", "playful lyrics", "cute lyrical tone"])) {
+    pushUnique(moodParts, "playful cute energy");
+    pushUnique(vocalParts, "playful cute lyrical tone");
+  }
+  if (has(["거친 말투", "거친 가사", "공격적인 말투", "공격적인 가사", "직설적인 말투", "직설적인 가사", "날카로운 말투", "날카로운 가사", "aggressive lyrics", "direct lyrical tone"])) {
+    pushUnique(moodParts, "aggressive direct energy");
+    pushUnique(vocalParts, "aggressive direct lyrical tone", "sharp assertive delivery");
+    if (wantsExplicitProfanityTone) pushUnique(vocalParts, "explicit swear-word attitude when appropriate");
+  }
+  if (has(["시적인 말투", "시적인 가사", "은유적인 말투", "은유적인 가사", "감성적인 말투", "감성적인 가사", "몽환적인 가사", "poetic lyrics", "emotional lyrical tone", "metaphorical lyrics"])) {
+    pushUnique(moodParts, "poetic emotional atmosphere");
+    pushUnique(vocalParts, "poetic emotional lyrical tone");
   }
 
   // VOCAL / GENDER / PHRASING / LIMITS
@@ -1373,6 +1547,34 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
     "남성 같은 보이스", "남성같은 보이스", "남성 같은 목소리", "남성같은 목소리",
     "male-like voice", "masculine voice color"
   ]);
+
+  const koreanCountToEnglish = (value: string): string => {
+    const normalized = value.trim();
+    const map: Record<string, string> = { "1": "one", "한": "one", "하나": "one", "2": "two", "두": "two", "둘": "two", "3": "three", "세": "three", "셋": "three", "4": "four", "네": "four", "넷": "four", "5": "five", "다섯": "five" };
+    return map[normalized] || normalized;
+  };
+
+  const femaleIdolCountMatch = rawNote.match(/(?:여자|여성)\s*아이돌\s*([0-9]+|한|하나|두|둘|세|셋|네|넷|다섯)\s*명?/i);
+  const maleIdolCountMatch = rawNote.match(/(?:남자|남성)\s*아이돌\s*([0-9]+|한|하나|두|둘|세|셋|네|넷|다섯)\s*명?/i);
+
+  if (femaleIdolCountMatch) {
+    const count = koreanCountToEnglish(femaleIdolCountMatch[1]);
+    pushUnique(vocalParts, `${count} female idol vocalists`, "female vocal direction");
+    if (!mainGenreParts.length) pushUnique(mainGenreParts, has(synthPopKeywords) ? "Synth Pop / Idol Pop" : "Idol Pop");
+    pushUnique(arrangementParts, "member-by-member vocal part contrast");
+  }
+
+  if (maleIdolCountMatch) {
+    const count = koreanCountToEnglish(maleIdolCountMatch[1]);
+    pushUnique(vocalParts, `${count} male idol vocalists`, "male vocal direction");
+    if (!mainGenreParts.length) pushUnique(mainGenreParts, has(synthPopKeywords) ? "Synth Pop / Idol Pop" : "Idol Pop");
+    pushUnique(arrangementParts, "member-by-member vocal part contrast");
+  }
+
+  if (has(["각자 다른 보이스", "각자 다른 목소리", "각기 다른 보이스", "각기 다른 목소리", "서로 다른 보이스", "서로 다른 목소리", "다른 독특한 보이스", "다른 독특한 목소리", "different voices", "distinct voices", "different vocal colors"])) {
+    pushUnique(vocalParts, "distinct vocal colors", "different vocal characters", "characterful delivery");
+    pushUnique(arrangementParts, "shifting vocal parts between members");
+  }
 
   const wantsFemaleVocal =
     !femaleLikeVoice && (
@@ -1424,14 +1626,16 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   if (has(["랩 없이", "랩없", "no rap", "without rap"])) {
     pushUnique(vocalParts, "no rap, vocal-only delivery");
     pushUnique(constraintParts, "no rap section");
+  } else if (has(["묵직한 랩", "무거운 랩", "굵은 랩", "딥한 랩", "heavy rap", "deep rap", "weighty rap"])) {
+    pushUnique(vocalParts, "heavy rap section", "deep rhythmic rap delivery");
+    pushUnique(arrangementParts, "heavy rap section with strong rhythmic impact");
   } else if (has(["랩", "rap"])) {
-    pushUnique(vocalParts, "rap section if musically appropriate");
+    pushUnique(vocalParts, "rap section");
+    pushUnique(arrangementParts, "dedicated rap section");
   }
 
   // ARRANGEMENT / TEMPO / HOOK / STRUCTURE
-  if (hasSlowTempo) pushUnique(arrangementParts, "slow tempo feel");
-  if (hasFastTempo) pushUnique(arrangementParts, "fast tempo feel");
-  if (hasMidTempo) pushUnique(arrangementParts, "mid-tempo feel");
+  pushUnique(arrangementParts, ...tempoDirective.parts);
   if (has(["짧게", "짧은 곡", "short song", "short lyrics"])) pushUnique(arrangementParts, "compact song structure", "concise lyric flow");
   if (has(["길게", "긴 곡", "long song", "long lyrics"])) pushUnique(arrangementParts, "expanded song structure", "fuller lyric development");
   if (has(["중독성있는 후렴", "중독성 있는 후렴", "중독성 후렴", "귀에 남는 후렴", "후렴구", "훅", "hook", "catchy chorus", "addictive chorus"])) {
@@ -1499,8 +1703,8 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
     detail: rawNote,
   };
 }
-function buildFreeTextPrimarySections(detailLayer: string) {
-  const profile = buildFreeTextDirectorProfile(detailLayer);
+function buildFreeTextPrimarySections(detailLayer: string, params?: GenerateSongParams) {
+  const profile = buildFreeTextDirectorProfile(detailLayer, params?.tempo ?? "");
 
   return [
     { label: "GENRE", content: profile.genre },
@@ -1515,9 +1719,9 @@ function buildFreeTextPrimarySections(detailLayer: string) {
 function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string): string {
   const themeContent = buildTheme(params);
   const sections = isFreeTextPrimaryMode(params)
-    ? buildFreeTextPrimarySections(detailLayer)
+    ? buildFreeTextPrimarySections(detailLayer, params)
     : [
-        { label: "GENRE", content: buildStyle(params) },
+        { label: "GENRE", content: buildStyle(params, detailLayer) },
         { label: "SOUND", content: buildSound(params) },
         { label: "MOOD", content: buildMoodTexture(params) },
         { label: "VOCAL", content: buildVocal(params) },
@@ -1665,6 +1869,8 @@ ROLE OF USER INPUT:
 - If no explicit genre is selected in the UI, infer the main genre directly from this note and treat it as the primary genre identity.
 - If explicit UI selections exist, combine them with the note. When they conflict, prefer the user's clearly written natural-language direction unless a custom song structure is explicitly selected.
 - If the user mentions a song length, slow/fast tempo, short/long lyrics, verse/chorus/bridge, rap/no rap, or vocal formation, reflect that in the final song direction.
+- TEMPO PRIORITY: exact BPM or BPM range always beats vague slow/fast wording. Free-text BPM/range > UI BPM/range > free-text slow/fast feel > UI slow/fast feel > genre default tempo feel.
+- If a numeric BPM is selected in the UI and the free-text only says slow/fast, keep the numeric BPM and apply the wording only as a performance feel, such as relaxed laid-back feel or driving rhythmic feel.
 - If custom song structure mode is selected, keep the custom section order fixed, but still apply the note to mood, sound, theme, vocal expression, and section energy.
 
 GENRE COHERENCE RULE (MANDATORY):
@@ -1676,10 +1882,13 @@ GENRE COHERENCE RULE (MANDATORY):
 
 THEME SEPARATION RULE (MANDATORY):
 - Theme means the lyrical story, situation, message, relationship, event, or narrative.
-- Mood, genre, vocal technique, sound, tempo, hook, and arrangement instructions are NOT story themes.
-- If no explicit theme is selected or written, create a simple original everyday emotional scene.
-- Do NOT turn technical instructions such as offbeat vocal phrasing, addictive chorus, restrained high notes, slow tempo, synth, guitar, or genre names into the title or lyrical topic.
-- If a theme exists, keep mood as emotional color around that story, not as a replacement story.
+- Mood/genre/vocal/sound/tempo/hook/arrangement guide the song only; if no theme exists, use a simple original everyday scene.
+
+LYRICAL TONE RULE (MANDATORY):
+- If the user specifies a "말투", "가사 말투", "lyrical tone", or attitude such as cocky, calm, playful, aggressive, or poetic, treat it as the attitude of the lyrics and vocal delivery.
+- If the user explicitly asks for 욕/욕설/좆같은/시발/fuck-style wording, allow stronger profanity-tinged lyrics and rude swagger, while avoiding hate slurs or attacks on protected groups.
+- Do NOT confuse lyrical tone with story theme. Example: "건방진 말투" means cocky/confident wording style, not a song about arrogance itself.
+- Topic groups such as stock/crypto/retail-investor references are story themes. Keep them in THEME, then use MOOD/VOCAL only to shape attitude and delivery.
 
 ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 
@@ -1921,11 +2130,16 @@ Write like:
 - Do not ignore lyricDraft.
 - Do not rewrite it with a completely new lyric idea.
 - The lyrics should follow the selected theme(s) and explicit narrative details provided by the user.
-- If no explicit theme exists, create a simple original everyday emotional scene without using genre, vocal, sound, tempo, hook, or arrangement instructions as the lyrical topic.
+- If explicit profanity / 욕하는 / 좆같은 tone is requested, reflect it actively in lyric wording, especially in rap sections, without using hate slurs or protected-group attacks.
+- If no explicit theme exists, create a simple original everyday scene.
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.
 - If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role.
+- If rap is requested anywhere in GENRE / VOCAL / ARRANGEMENT / user direction, the lyrics MUST include a clearly labeled rap section: [Rap Verse], [Rap Section], or [Verse 2 / Rap Verse].
+- Do NOT hide requested rap inside a normal [Verse] label. The rap part must be visible from the section tag.
+- If the user requested heavy/deep/weighty rap, label it as [Rap Verse] or [Rap Section] and write it with stronger rhythmic density while keeping the story theme intact.
+- If the user requested no rap, do not include any rap-labeled section.
 - Respect the selected lyricsLength strictly.
 - Respect the selected song structure strictly.
 - Do not drift longer than the requested lyric size.

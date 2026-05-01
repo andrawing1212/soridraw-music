@@ -2254,16 +2254,17 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
 export async function translateLyrics(
   lyrics: string,
-  targetLanguage: "korean" | "english"
+  targetLanguage: "korean" | "english" | string
 ): Promise<string> {
   const model: string = "gemini-3-flash-preview";
 
   const systemInstruction = `
 You are a professional lyricist and translator.
-Translate the provided lyrics into ${targetLanguage}.
-- Maintain the original structure and line breaks.
+Translate the provided text into ${targetLanguage}.
+- Maintain the original structure and line breaks when the input is lyrics.
+- If the input is a title, return one short natural title only.
 - Do not translate literally. Keep it natural and lyrical.
-- Return only the translated lyrics text.
+- Return only the translated text.
 `.trim();
 
   const ai = getAI();

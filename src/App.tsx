@@ -132,7 +132,7 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   }
 };
 
-import { generateSong } from './services/geminiService';
+import { generateSong, translateLyrics } from './services/geminiService';
 import { 
   collection, 
   query, 
@@ -1422,6 +1422,7 @@ function App() {
 
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [showMainGenerationModal, setShowMainGenerationModal] = useState(false);
+  const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
@@ -3826,6 +3827,101 @@ ${result.prompt}
     return languageLabels[secondary] || '영어';
   };
 
+
+  const lyricLanguageLabels: Record<LanguageCode, { ko: string; en: string; api: string }> = {
+    ko: { ko: '한글', en: 'Korean', api: 'korean' },
+    en: { ko: '영어', en: 'English', api: 'english' },
+    ja: { ko: '일본어', en: 'Japanese', api: 'japanese' },
+    zh: { ko: '중국어', en: 'Chinese', api: 'chinese' },
+    es: { ko: '스페인어', en: 'Spanish', api: 'spanish' },
+    fr: { ko: '프랑스어', en: 'French', api: 'french' },
+  };
+
+  const getGeneratedLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
+    if (!song) return [];
+    const stored = (((song.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
+    const secondary = (stored.find((lang) => lang !== 'ko') || (song.lyrics?.english?.trim() ? 'en' : null)) as LanguageCode | null;
+    const langs: LanguageCode[] = [];
+    if (song.lyrics?.korean?.trim()) langs.push('ko');
+    if (song.lyrics?.english?.trim() && secondary) langs.push(secondary);
+    return Array.from(new Set(langs));
+  };
+
+  const getMissingLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
+    const generated = getGeneratedLyricLanguages(song);
+    if (!song || generated.length >= 2) return [];
+    if (!song.lyrics?.korean?.trim()) return ['ko'];
+    return (['en', 'ja', 'zh', 'es', 'fr'] as LanguageCode[]).filter((lang) => !generated.includes(lang));
+  };
+
+  const handleAddLyricsLanguage = async (targetLanguage: LanguageCode) => {
+    if (!result || isAddingLyricsLanguage) return;
+
+    const existingLanguages = getGeneratedLyricLanguages(result);
+    if (existingLanguages.includes(targetLanguage)) {
+      showToast('이미 생성된 가사 언어입니다.');
+      return;
+    }
+    if (existingLanguages.length >= 2) {
+      showToast('가사 언어는 최대 2개까지 표시됩니다.');
+      return;
+    }
+
+    const sourceLyrics = result.lyrics?.korean?.trim() || result.lyrics?.english?.trim() || '';
+    if (!sourceLyrics) {
+      showToast('기준이 될 가사가 없습니다. 먼저 가사가 포함된 곡을 생성해주세요.');
+      return;
+    }
+
+    try {
+      setIsAddingLyricsLanguage(true);
+      const label = lyricLanguageLabels[targetLanguage];
+      const translatedLyrics = (await translateLyrics(sourceLyrics, label.api)).trim();
+      const sourceTitle = (result.koreanTitle || result.englishTitle || result.title || '').replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]|['"]$/g, '').trim();
+      const translatedTitle = (await translateLyrics(sourceTitle, label.api)).replace(/\n/g, ' ').replace(/^['"]|['"]$/g, '').trim();
+
+      const previousApplied = (result.appliedKeywords || {}) as any;
+      const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];
+      const nextSong: SongResult = {
+        ...result,
+        koreanTitle: targetLanguage === 'ko' ? (translatedTitle || result.koreanTitle) : result.koreanTitle,
+        englishTitle: targetLanguage !== 'ko' ? (translatedTitle || result.englishTitle) : result.englishTitle,
+        lyrics: {
+          ...(result.lyrics || { korean: '', english: '' }),
+          korean: targetLanguage === 'ko' ? translatedLyrics : (result.lyrics?.korean || ''),
+          english: targetLanguage !== 'ko' ? translatedLyrics : (result.lyrics?.english || ''),
+        },
+        appliedKeywords: {
+          ...previousApplied,
+          lyricLanguages: nextLanguages,
+          titleLanguages: nextLanguages,
+          secondaryLanguage: nextLanguages.find((lang) => lang !== 'ko') || previousApplied.secondaryLanguage || 'en',
+          isNoLyrics: false,
+        } as any,
+      };
+
+      setResult(nextSong);
+      setHistory(prev => {
+        const next = prev.map((song, index) => index === historyIndex ? nextSong : song);
+        if (historyIndex < 0) return prev;
+        if (user) {
+          const ref = doc(db, "user_recent_songs", user.uid);
+          setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }).catch((error) => {
+            console.error('Failed to persist added lyric language:', error);
+          });
+        }
+        return next;
+      });
+
+      showToast(`${label.ko} 가사를 추가 생성했습니다.`);
+    } catch (error) {
+      console.error('Failed to add lyric language:', error);
+      showToast('가사 언어 추가 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsAddingLyricsLanguage(false);
+    }
+  };
+
   const isInLatestGenerationBatch = (song: SongResult | null = result) => {
     if (!song) return false;
     const batchId = (song.appliedKeywords as any)?.generationBatchId;
@@ -5016,6 +5112,41 @@ ${result.prompt}
                         <div className="flex-1" />
                       </div>
                     </div>
+
+
+                    {getMissingLyricLanguages(result).length > 0 && (
+                      <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-brand-orange/30 overflow-hidden flex flex-col shadow-[var(--shadow-md)] transition-all duration-500">
+                        <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
+                          <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                            <Languages className="w-4 h-4 text-brand-orange" />
+                            가사 언어 추가
+                          </h3>
+                        </div>
+                        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
+                          <div className="text-center space-y-2">
+                            <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
+                            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                              현재 곡의 제목과 가사를 기준으로<br />추가 언어 가사를 생성합니다.
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {getMissingLyricLanguages(result).map((lang) => (
+                              <button
+                                key={lang}
+                                onClick={() => handleAddLyricsLanguage(lang)}
+                                disabled={isAddingLyricsLanguage}
+                                className="px-3 py-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 hover:bg-brand-orange hover:text-white text-brand-orange text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isAddingLyricsLanguage ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-center text-[var(--text-secondary)]">
+                            가사 언어는 최대 2개까지 표시됩니다.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                   <div className="mt-4 flex items-center justify-between gap-2">

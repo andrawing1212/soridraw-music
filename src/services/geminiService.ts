@@ -1124,7 +1124,7 @@ const FREE_TEXT_VOCAL_HINTS: FreeTextVocalHint[] = [
   { keywords: ["담담한 보컬", "담백한 보컬", "calm vocal", "restrained vocal"], prompts: ["restrained emotional delivery", "calm intimate tone"] },
   { keywords: ["섬세한 보컬", "delicate vocal"], prompts: ["delicate vocal control", "subtle emotional nuance"] },
   { keywords: ["파워풀한 보컬", "강한 보컬", "powerful vocal"], prompts: ["powerful vocal delivery"] },
-  { keywords: ["시원한 고음", "고음", "high notes", "high note"], prompts: ["open bright high notes"] },
+  { keywords: ["시원한 고음", "고음 폭발", "high notes", "high note"], prompts: ["open bright high notes"] },
   { keywords: ["거친 보컬", "gritty vocal"], prompts: ["gritty vocal texture"] },
   { keywords: ["절규하듯", "절규", "belted", "belting"], prompts: ["intense belted emotional delivery"] },
   { keywords: ["폭발적인 후렴", "터지는 후렴", "explosive chorus"], prompts: ["explosive chorus vocal lift"] },
@@ -1147,142 +1147,198 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   const rawNote = (note || "").trim();
   const lower = rawNote.toLowerCase();
 
-  const genreParts: string[] = [];
+  const mainGenreParts: string[] = [];
+  const genreInfluenceParts: string[] = [];
   const soundParts: string[] = [];
   const moodParts: string[] = [];
   const arrangementParts: string[] = [];
   const themeParts: string[] = [];
   const vocalParts: string[] = [];
+  const constraintParts: string[] = [];
 
-  const has80sEra = includesAny(lower, ["80년대", "80s", "80's", "eighties", "레트로", "retro"]);
+  const has = (keywords: string[]) => includesAny(lower, keywords);
+  const has80sEra = has(["80년대", "80s", "80's", "eighties"]);
+  const hasRetro = has80sEra || has(["레트로", "retro", "복고"]);
+  const hasSlowTempo = has(["느린템포", "느린 템포", "느리게", "slow tempo", "slow", "잔잔한 템포", "gentle tempo"]);
+  const hasFastTempo = has(["빠른템포", "빠른 템포", "빠르게", "fast tempo", "fast", "업템포", "up-tempo", "uptempo"]);
+  const hasMidTempo = has(["미디엄", "medium tempo", "mid tempo", "mid-tempo"]);
+  const hasCalm = has(["잔잔", "차분", "담담", "calm", "quiet", "understated", "gentle"]);
 
-  // GENRE / STYLE
-  if (includesAny(lower, ["시티팝", "city pop", "city-pop", "citypop"])) {
-    pushUnique(genreParts, has80sEra ? "80s City Pop" : "City Pop");
+  // MAIN GENRE: one main identity first, then secondary influences.
+  if (has(["시티팝", "city pop", "city-pop", "citypop"])) {
+    pushUnique(mainGenreParts, has80sEra ? "80s City Pop" : "City Pop");
     pushUnique(soundParts, "smooth electric piano", "clean funk guitar", "warm analog synth", "polished retro-pop groove");
     pushUnique(moodParts, "urban night mood", "nostalgic retro mood");
     pushUnique(arrangementParts, has80sEra ? "80s city-pop progression" : "smooth city-pop progression");
   }
-  if (includesAny(lower, ["국악", "국악퓨전", "국악 퓨전", "전통 퓨전", "korean traditional fusion", "gugak", "gugak fusion"])) {
-    pushUnique(genreParts, "Korean Traditional Fusion");
-    pushUnique(soundParts, "traditional Korean instruments", "cinematic percussion", "modern fusion production", "deep resonant low-end");
+
+  if (has(["국악", "국악퓨전", "국악 퓨전", "전통 퓨전", "korean traditional fusion", "gugak", "gugak fusion"])) {
+    pushUnique(mainGenreParts, "Korean Traditional Fusion");
+    pushUnique(soundParts, "gayageum or haegeum color", "traditional Korean percussion", "cinematic drums", "modern fusion production");
     pushUnique(moodParts, "epic historical atmosphere", "solemn heroic mood");
     pushUnique(arrangementParts, "cinematic Korean traditional fusion progression", "dramatic dynamic structure");
   }
-  if (includesAny(lower, ["판소리", "pansori"])) {
-    pushUnique(soundParts, "pansori-inspired vocal tension");
-    pushUnique(vocalParts, "Korean traditional vocal inflection");
+
+  if (has(["인디음악", "인디 음악", "인디팝", "인디 팝", "indie", "indie pop", "indie-pop"])) {
+    pushUnique(mainGenreParts, hasSlowTempo || hasCalm ? "Slow Indie Pop" : "Indie Pop");
+    pushUnique(soundParts, "minimal indie-pop production", "warm guitar or soft keys", "intimate clean mix");
+    pushUnique(moodParts, "calm intimate mood", "understated emotional color");
+    pushUnique(arrangementParts, "relaxed indie-pop progression");
   }
-  if (includesAny(lower, ["해금", "haegeum"])) pushUnique(soundParts, "haegeum melodic color");
-  if (includesAny(lower, ["가야금", "gayageum"])) pushUnique(soundParts, "gayageum plucked texture");
-  if (includesAny(lower, ["대금", "daegeum"])) pushUnique(soundParts, "daegeum flute tone");
-  if (has80sEra) {
-    pushUnique(soundParts, "vintage 80s sheen", "retro analog warmth");
-    pushUnique(moodParts, "retro nostalgia");
+
+  if (has(["케이팝", "k-pop", "kpop"])) pushUnique(mainGenreParts, "K-Pop");
+  if (has(["발라드", "ballad"])) pushUnique(mainGenreParts, "Ballad");
+  if (has(["트로트", "trot"])) pushUnique(mainGenreParts, "Trot");
+  if (has(["락", "록", "rock"])) pushUnique(mainGenreParts, "Rock");
+  if (has(["재즈", "jazz"])) pushUnique(mainGenreParts, "Jazz");
+  if (has(["edm", "일렉트로닉", "electronic"])) pushUnique(mainGenreParts, "EDM");
+  if (has(["댄스", "dance"])) pushUnique(mainGenreParts, "Dance Pop");
+  if (has(["힙합", "hip hop", "hip-hop"])) pushUnique(mainGenreParts, "Hip-Hop");
+  if (has(["알앤비", "r&b", "rnb"])) {
+    if (mainGenreParts.length) {
+      pushUnique(genreInfluenceParts, "R&B influence");
+    } else {
+      pushUnique(mainGenreParts, "R&B");
+    }
   }
-  if (includesAny(lower, ["케이팝", "k-pop", "kpop"])) pushUnique(genreParts, "K-Pop");
-  if (includesAny(lower, ["알앤비", "r&b", "rnb"])) pushUnique(genreParts, "R&B");
-  if (includesAny(lower, ["발라드", "ballad"])) pushUnique(genreParts, "Ballad");
-  if (includesAny(lower, ["트로트", "trot"])) pushUnique(genreParts, "Trot");
-  if (includesAny(lower, ["락", "록", "rock"])) pushUnique(genreParts, "Rock");
-  if (includesAny(lower, ["재즈", "jazz"])) pushUnique(genreParts, "Jazz");
-  if (includesAny(lower, ["edm", "댄스", "dance"])) pushUnique(genreParts, "Dance Pop");
-  if (includesAny(lower, ["힙합", "hip hop", "hip-hop", "rap", "랩"])) pushUnique(genreParts, "Hip-Hop");
-  if (includesAny(lower, ["포크", "folk", "folk-pop", "어쿠스틱", "acoustic"])) {
-    pushUnique(genreParts, "Korean soft pop", "singer-songwriter pop");
+  if (has(["포크", "folk", "folk-pop", "어쿠스틱", "acoustic"])) {
+    if (mainGenreParts.length) {
+      pushUnique(genreInfluenceParts, "acoustic singer-songwriter influence");
+    } else {
+      pushUnique(mainGenreParts, "Korean soft pop", "singer-songwriter pop");
+    }
     pushUnique(soundParts, "clean acoustic guitar", "soft pop drums", "intimate mix");
     pushUnique(arrangementParts, "gentle singer-songwriter progression");
   }
 
-  // Artist references are already generalized by sanitizeUserInput(). Convert those traits into sections.
-  if (includesAny(lower, ["clear and delicate female vocal", "맑고 섬세한 여성 보컬"])) {
-    pushUnique(genreParts, "Korean soft pop");
+  // GENRE INFLUENCE / SUB COLOR: preserve the main genre while adding flavor.
+  if (has(["네오소울", "네오 소울", "neo soul", "neo-soul"])) {
+    if (mainGenreParts.length) pushUnique(genreInfluenceParts, "Neo Soul influence");
+    else pushUnique(mainGenreParts, "Neo Soul / R&B");
+    pushUnique(soundParts, "smooth neo-soul chord color", "warm electric piano", "laid-back groove");
+    pushUnique(moodParts, "mellow soulful atmosphere");
+  }
+  if (has(["재즈풍", "재즈 느낌", "jazz influence", "jazzy"])) {
+    if (!mainGenreParts.includes("Jazz")) pushUnique(genreInfluenceParts, "Jazz influence");
+    pushUnique(soundParts, "sophisticated jazz chord color", "soft swing nuance");
+  }
+  if (has(["소울", "soulful", "soul"]) && !has(["네오소울", "neo soul", "neo-soul"])) {
+    pushUnique(genreInfluenceParts, "Soul influence");
+    pushUnique(moodParts, "soulful emotional color");
+  }
+  if (hasRetro) {
+    pushUnique(soundParts, "vintage 80s sheen", "retro analog warmth");
+    pushUnique(moodParts, "retro nostalgia");
+  }
+  if (has(["오케스트라", "orchestra", "orchestral", "시네마틱", "cinematic"])) {
+    pushUnique(genreInfluenceParts, "cinematic orchestral influence");
+    pushUnique(soundParts, "cinematic orchestral layer");
+    pushUnique(moodParts, "grand cinematic weight");
+  }
+
+  // SOUND / INSTRUMENT DETAIL
+  if (has(["피아노", "piano"])) pushUnique(soundParts, "piano-led texture");
+  if (has(["일렉피아노", "electric piano", "epiano", "e-piano"])) pushUnique(soundParts, "warm electric piano");
+  if (has(["기타", "guitar"])) pushUnique(soundParts, "guitar texture");
+  if (has(["신스", "synth", "synthesizer"])) pushUnique(soundParts, "synth layer");
+  if (has(["베이스", "bass"])) pushUnique(soundParts, "focused bass groove");
+  if (has(["드럼", "drum", "drums"])) pushUnique(soundParts, "drum groove");
+  if (has(["해금", "haegeum"])) pushUnique(soundParts, "haegeum melodic color");
+  if (has(["가야금", "gayageum"])) pushUnique(soundParts, "gayageum plucked texture");
+  if (has(["대금", "daegeum"])) pushUnique(soundParts, "daegeum flute tone");
+  if (has(["장구", "janggu"])) pushUnique(soundParts, "janggu percussion groove");
+  if (has(["판소리", "pansori"])) {
+    pushUnique(soundParts, "pansori-inspired tension");
+    pushUnique(vocalParts, "Korean traditional vocal inflection");
+  }
+
+  // ARTIST REFERENCES: sanitizeUserInput() already turns names into traits.
+  if (has(["clear and delicate female vocal", "맑고 섬세한 여성 보컬"])) {
+    if (!mainGenreParts.length) pushUnique(mainGenreParts, "Korean soft pop");
     pushUnique(soundParts, "warm electric piano", "clean acoustic guitar", "soft pop drums", "intimate mix");
     pushUnique(moodParts, "bright", "delicate", "warm", "softly romantic");
     pushUnique(vocalParts, "clear and delicate female vocal", "intimate emotional delivery", "natural storytelling expression");
     pushUnique(arrangementParts, "gentle verse build-up", "soft chorus lift");
   }
-  if (includesAny(lower, ["clear and soulful female vocal", "dreamy and soulful female vocal", "몽환적이고 감각적인 여성 보컬"])) {
-    pushUnique(genreParts, "Korean soft pop", "R&B-influenced pop");
+  if (has(["clear and soulful female vocal", "dreamy and soulful female vocal", "몽환적이고 감각적인 여성 보컬"])) {
+    if (!mainGenreParts.length) pushUnique(mainGenreParts, "Korean soft pop");
+    pushUnique(genreInfluenceParts, "R&B influence");
     pushUnique(soundParts, "warm keys", "airy ambience", "intimate mix");
     pushUnique(moodParts, "dreamy", "soulful", "delicate");
     pushUnique(vocalParts, "soulful female vocal", "emotional breath control");
   }
-  if (includesAny(lower, ["palette", "팔레트"])) {
-    pushUnique(genreParts, "Korean soft pop", "singer-songwriter pop");
+  if (has(["palette", "팔레트"])) {
+    if (!mainGenreParts.length) pushUnique(mainGenreParts, "Korean soft pop", "singer-songwriter pop");
     pushUnique(soundParts, "warm electric piano", "clean guitar", "soft pop groove", "intimate polished mix");
     pushUnique(moodParts, "bright", "warm", "ethereal", "delicate");
     pushUnique(arrangementParts, "gentle verse progression", "warm chorus lift", "intimate bridge development");
   }
 
-  // VOCAL STYLE DETAILS FROM FREE TEXT
-  applyFreeTextVocalHints(lower, vocalParts);
-
-  // TEMPO / LENGTH / STRUCTURE FEEL
-  if (includesAny(lower, ["느린템포", "느린 템포", "slow tempo", "slow", "느리게", "gentle tempo"])) {
-    pushUnique(arrangementParts, "slow tempo feel");
-  }
-  if (includesAny(lower, ["빠른템포", "빠른 템포", "fast tempo", "fast", "빠르게"])) {
-    pushUnique(arrangementParts, "fast tempo feel");
-  }
-  if (includesAny(lower, ["미디엄", "medium tempo", "mid tempo", "mid-tempo"])) {
-    pushUnique(arrangementParts, "mid-tempo feel");
-  }
-  if (includesAny(lower, ["짧게", "짧은 곡", "short song", "short lyrics"])) {
-    pushUnique(arrangementParts, "compact song structure", "concise lyric flow");
-  }
-  if (includesAny(lower, ["길게", "긴 곡", "long song", "long lyrics"])) {
-    pushUnique(arrangementParts, "expanded song structure", "fuller lyric development");
-  }
-
-  // MOOD / SCENE / ATMOSPHERE
-  if (includesAny(lower, ["밤", "night", "midnight"])) pushUnique(moodParts, "night atmosphere");
-  if (includesAny(lower, ["가을", "autumn", "fall"])) pushUnique(moodParts, "autumn mood");
-  if (includesAny(lower, ["시원", "청량", "refreshing", "cool breeze", "breezy"])) {
-    pushUnique(moodParts, "refreshing and breezy feel");
+  // MOOD / SCENE / ATMOSPHERE: keep this separate from THEME.
+  if (has(["밤", "night", "midnight"])) pushUnique(moodParts, "night atmosphere");
+  if (has(["새벽", "dawn", "late night"])) pushUnique(moodParts, "late-night intimate atmosphere");
+  if (has(["가을", "autumn", "fall"])) pushUnique(moodParts, "autumn nostalgia");
+  if (has(["여름", "summer"])) pushUnique(moodParts, "summer brightness");
+  if (has(["겨울", "winter"])) pushUnique(moodParts, "winter loneliness");
+  if (has(["봄", "spring"])) pushUnique(moodParts, "spring warmth");
+  if (has(["시원", "청량", "refreshing", "cool breeze", "breezy"])) {
+    pushUnique(moodParts, "refreshing breezy feel");
     pushUnique(soundParts, "airy mix", "cool spacious texture");
   }
-  if (includesAny(lower, ["몽환", "dreamy", "ethereal"])) pushUnique(moodParts, "dreamy ethereal atmosphere");
-  if (includesAny(lower, ["슬픈", "sad", "이별"])) pushUnique(moodParts, "sad emotional color");
-  if (includesAny(lower, ["따뜻", "warm"])) pushUnique(moodParts, "warm emotional tone");
-  if (includesAny(lower, ["어두", "dark"])) pushUnique(moodParts, "dark atmosphere");
-  if (includesAny(lower, ["밝은", "bright"])) pushUnique(moodParts, "bright mood");
-  if (includesAny(lower, ["청춘", "youth"])) pushUnique(moodParts, "youthful emotional color");
+  if (has(["몽환", "dreamy", "ethereal"])) pushUnique(moodParts, "dreamy ethereal atmosphere");
+  if (has(["슬픈", "sad", "쓸쓸", "외로운", "lonely"])) pushUnique(moodParts, "sad restrained emotional color");
+  if (has(["따뜻", "warm"])) pushUnique(moodParts, "warm emotional tone");
+  if (has(["어두", "dark"])) pushUnique(moodParts, "dark atmosphere");
+  if (has(["밝은", "bright"])) pushUnique(moodParts, "bright mood");
+  if (has(["청춘", "youth"])) pushUnique(moodParts, "youthful emotional color");
+  if (hasCalm) pushUnique(moodParts, "calm gentle mood");
 
-  // THEME / STORY
-  if (includesAny(lower, ["사랑", "love"])) pushUnique(themeParts, "love story");
-  if (includesAny(lower, ["연인", "couple", "lover", "lovers"])) pushUnique(themeParts, "a couple's relationship");
-  if (includesAny(lower, ["이별", "breakup", "헤어"] )) pushUnique(themeParts, "breakup and longing");
-  if (includesAny(lower, ["비", "rain", "rainy"])) pushUnique(themeParts, "rainy scene");
-  if (includesAny(lower, ["바다", "sea", "ocean"])) pushUnique(themeParts, "ocean imagery");
-  if (includesAny(lower, ["드라이브", "drive", "night drive"])) pushUnique(themeParts, "drive scene");
-  if (includesAny(lower, ["고백", "confession"])) pushUnique(themeParts, "tender confession");
-  if (includesAny(lower, ["이순신", "명량", "명량해전", "해전", "전쟁", "장군", "역사", "historical", "battle", "naval battle"])) {
+  // THEME / STORY: people, relationship, event, narrative.
+  if (has(["사랑", "love"])) pushUnique(themeParts, "romantic love story");
+  if (has(["연인", "couple", "lover", "lovers"])) pushUnique(themeParts, "couple relationship");
+  if (has(["이별", "breakup", "헤어", "그리움", "longing"])) pushUnique(themeParts, "breakup and longing");
+  if (has(["비", "rain", "rainy"])) pushUnique(themeParts, "rainy scene");
+  if (has(["바다", "sea", "ocean"])) pushUnique(themeParts, "ocean imagery");
+  if (has(["드라이브", "drive", "night drive"])) pushUnique(themeParts, "drive scene");
+  if (has(["고백", "confession"])) pushUnique(themeParts, "tender confession");
+  if (has(["성장", "growth", "coming of age"])) pushUnique(themeParts, "growth narrative");
+  if (has(["추억", "memory", "memories"])) pushUnique(themeParts, "memory and nostalgia");
+  if (has(["이순신", "명량", "명량해전", "해전", "전쟁", "장군", "역사", "historical", "battle", "naval battle"])) {
     pushUnique(themeParts, "historical heroic narrative", "naval battle drama");
     pushUnique(moodParts, "heroic tension", "grand cinematic weight");
     pushUnique(arrangementParts, "battle-like rise and fall", "dramatic narrative arc");
   }
-  if (includesAny(lower, ["드라마적인 서사", "드라마틱한 서사", "dramatic narrative", "cinematic narrative"])) {
+  if (has(["드라마적인 서사", "드라마틱한 서사", "dramatic narrative", "cinematic narrative", "서사적"])) {
     pushUnique(themeParts, "dramatic narrative");
     pushUnique(arrangementParts, "cinematic story-driven progression");
   }
-  if (includesAny(lower, ["변화무쌍한 구조", "변화무쌍", "dynamic structure", "unpredictable structure"])) {
-    pushUnique(arrangementParts, "unpredictable dynamic structure", "strong sectional contrast");
-  }
 
-  // VOCAL / RAP
+  // VOCAL / GENDER / PHRASING / LIMITS
+  applyFreeTextVocalHints(lower, vocalParts);
+
   const wantsFemaleVocal =
-    includesAny(lower, ["여자가수", "여성가수", "여자 보컬", "여성 보컬", "여자", "여성"]) ||
+    has(["여자가수", "여성가수", "여자 보컬", "여성 보컬", "여자보컬", "여성보컬", "여자 목소리", "여성 목소리", "여자", "여성"]) ||
     /\b(female|woman|girl)\b/.test(lower) ||
     /\bfemale\s+(vocal|vocalist|singer|voice)\b/.test(lower);
 
   const wantsMaleVocal =
-    includesAny(lower, ["남자가수", "남성가수", "남자 보컬", "남성 보컬", "남자", "남성"]) ||
+    has(["남자가수", "남성가수", "남자 보컬", "남성 보컬", "남자보컬", "남성보컬", "남자 목소리", "남성 목소리", "남자", "남성"]) ||
     /\b(male|man|boy)\b/.test(lower) ||
     /\bmale\s+(vocal|vocalist|singer|voice)\b/.test(lower);
 
-  if (includesAny(lower, ["굵고 깊", "굵은", "깊은", "저음", "deep male", "deep vocal", "low male"])) {
+  if (has(["굵고 깊", "굵은", "깊은", "저음", "deep male", "deep vocal", "low male"])) {
     pushUnique(vocalParts, "deep resonant male vocal tone", "rich low vocal color");
+  }
+  if (has(["엇박자", "엇박", "박자를 밀고", "밀고 당기는", "syncopated", "offbeat"])) {
+    pushUnique(vocalParts, "offbeat vocal phrasing", "syncopated delivery", "distinctive timing");
+  }
+  if (has(["고음자제", "고음 자제", "고음 금지", "고음 피", "높은 음 피", "샤우팅 금지", "소리 지르지", "avoid high", "no high note", "no belting"])) {
+    pushUnique(vocalParts, "restrained high notes", "controlled vocal range", "avoid belting");
+    pushUnique(constraintParts, "avoid excessive high notes");
+  }
+  if (has(["과한 애드리브 금지", "애드리브 자제", "ad-lib restraint"])) {
+    pushUnique(vocalParts, "restrained ad-libs");
+    pushUnique(constraintParts, "avoid excessive ad-libs");
   }
 
   if (wantsFemaleVocal && !wantsMaleVocal) {
@@ -1293,28 +1349,66 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
     pushUnique(vocalParts, "mixed male and female vocal direction");
   }
 
-  if (includesAny(lower, ["솔로", "solo"])) pushUnique(vocalParts, "solo vocal focus");
-  if (includesAny(lower, ["듀엣", "duet"])) pushUnique(vocalParts, "duet-style vocal interaction");
-  if (includesAny(lower, ["랩 없이", "no rap", "without rap"])) {
+  if (has(["솔로", "solo"])) pushUnique(vocalParts, "solo vocal focus");
+  if (has(["듀엣", "duet"])) pushUnique(vocalParts, "duet-style vocal interaction");
+  if (has(["랩 없이", "랩없", "no rap", "without rap"])) {
     pushUnique(vocalParts, "no rap, vocal-only delivery");
-  } else if (includesAny(lower, ["랩", "rap"])) {
+    pushUnique(constraintParts, "no rap section");
+  } else if (has(["랩", "rap"])) {
     pushUnique(vocalParts, "rap section if musically appropriate");
   }
 
-  const inferredGenre = genreParts.length
-    ? genreParts.join(" with ")
-    : "Contemporary pop based on the free-text direction";
+  // ARRANGEMENT / TEMPO / HOOK / STRUCTURE
+  if (hasSlowTempo) pushUnique(arrangementParts, "slow tempo feel");
+  if (hasFastTempo) pushUnique(arrangementParts, "fast tempo feel");
+  if (hasMidTempo) pushUnique(arrangementParts, "mid-tempo feel");
+  if (has(["짧게", "짧은 곡", "short song", "short lyrics"])) pushUnique(arrangementParts, "compact song structure", "concise lyric flow");
+  if (has(["길게", "긴 곡", "long song", "long lyrics"])) pushUnique(arrangementParts, "expanded song structure", "fuller lyric development");
+  if (has(["중독성있는 후렴", "중독성 있는 후렴", "중독성 후렴", "귀에 남는 후렴", "후렴구", "훅", "hook", "catchy chorus", "addictive chorus"])) {
+    pushUnique(arrangementParts, "addictive chorus hook", "memorable refrain", "catchy melodic phrase");
+  }
+  if (has(["폭발적인 후렴", "터지는 후렴", "explosive chorus"])) {
+    pushUnique(arrangementParts, "explosive chorus lift");
+  }
+  if (has(["변화무쌍한 구조", "변화무쌍", "dynamic structure", "unpredictable structure", "구조 변화", "전개가 바뀌"])) {
+    pushUnique(arrangementParts, "unpredictable dynamic structure", "strong sectional contrast");
+  }
+  if (has(["드롭", "drop"])) pushUnique(arrangementParts, "strong drop section");
+  if (has(["브릿지", "bridge"])) pushUnique(arrangementParts, "distinct bridge section");
 
+  // NEGATIVE / CONSTRAINT: fold into relevant sections so it stays visible without extra DETAIL LAYER.
+  if (has(["너무 밝지", "과하게 밝", "not too bright"])) {
+    pushUnique(moodParts, "not overly bright, restrained emotional color");
+  }
+  if (has(["발라드처럼 가지 않", "발라드로 가지 않", "not ballad"])) {
+    pushUnique(constraintParts, "do not turn into a ballad");
+  }
+
+  // Remove contradictory vocal hints after constraints.
+  if (constraintParts.includes("avoid excessive high notes")) {
+    const highNoteTerms = new Set(["open bright high notes", "powerful vocal delivery", "intense belted emotional delivery"]);
+    for (let i = vocalParts.length - 1; i >= 0; i--) {
+      if (highNoteTerms.has(vocalParts[i])) vocalParts.splice(i, 1);
+    }
+  }
+
+  const mainGenre = mainGenreParts.length ? mainGenreParts[0] : "Contemporary Pop";
+  const extraMainGenres = mainGenreParts.slice(1);
+  const influenceText = [...extraMainGenres, ...genreInfluenceParts].slice(0, 3).join(" with ");
   const tempoPart = arrangementParts.find((part) => part.includes("tempo"));
-  const genre = tempoPart ? `${inferredGenre}, ${tempoPart}` : inferredGenre;
+  const genre = [mainGenre, influenceText ? `with ${influenceText}` : "", tempoPart && !mainGenre.toLowerCase().includes("slow") ? tempoPart : ""]
+    .filter(Boolean)
+    .join(", ");
+
+  const limit = (values: string[], max: number) => values.slice(0, max).join(", ");
 
   return {
     genre,
-    sound: soundParts.length ? soundParts.join(", ") : "clean focused production matching the free-text direction",
-    mood: moodParts.length ? moodParts.join(", ") : "emotional color matching the free-text direction",
-    vocal: vocalParts.length ? vocalParts.join(", ") : "natural genre-appropriate vocal tone",
-    arrangement: arrangementParts.length ? arrangementParts.join(", ") : "clear sectional contrast matching the free-text direction",
-    theme: themeParts.length ? themeParts.join(", ") : "story concept shaped by the free-text direction",
+    sound: soundParts.length ? limit(soundParts, 6) : "clean focused production matching the free-text direction",
+    mood: moodParts.length ? limit(moodParts, 5) : "emotional color matching the free-text direction",
+    vocal: vocalParts.length ? limit(vocalParts, 7) : "natural genre-appropriate vocal tone",
+    arrangement: arrangementParts.length ? limit(arrangementParts, 6) : "clear sectional contrast matching the free-text direction",
+    theme: themeParts.length ? limit(themeParts, 4) : "story concept shaped by the free-text direction",
     detail: rawNote,
   };
 }

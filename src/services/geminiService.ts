@@ -42,6 +42,7 @@ function getAI() {
 type LegacyGenreInput = string[];
 type LegacyMoodInput = string[];
 type LegacyThemeInput = string[];
+type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
 
 interface GenerateSongParams {
   genre: string | null;
@@ -62,14 +63,12 @@ interface GenerateSongParams {
   useAutoDuration?: boolean;
   vocal?: VocalConfig;
   tempo?: string;
-  /** Optional: true when the current BPM came from the random tempo button, not manual slider input. */
-  isRandomTempo?: boolean;
-  /** Optional explicit tempo source marker. Use "random" for random template tempo, "manual" for user-confirmed slider/input tempo. */
-  tempoSource?: "random" | "manual" | string;
   specialPrompt?: string;
   kpopMode?: 0 | 1 | 2;
   customStructure?: CustomSectionItem[];
   isNoLyrics?: boolean;
+  includeLyrics?: boolean;
+  lyricLanguages?: LanguageCode[];
 }
 
 type GenerateSongInput =
@@ -539,6 +538,8 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       isLyricMode: first.isLyricMode ?? false,
       lyricMode: first.lyricMode ?? 'assist',
       isNoLyrics: first.isNoLyrics ?? false,
+      includeLyrics: (first as any).includeLyrics ?? !(first.isNoLyrics ?? false),
+      lyricLanguages: ((first as any).lyricLanguages ?? ['ko', 'en']) as LanguageCode[],
     };
   }
 
@@ -732,7 +733,7 @@ function buildStructureText(
   return structureMap[(selected as Exclude<SongStructure, "custom">) || "2"];
 }
 
-function buildStyle(params: GenerateSongParams, detailLayer = ""): string {
+function buildStyle(params: GenerateSongParams): string {
   const subGenreIds = params.subGenre ?? [];
   const genreId = (params.genre || "pop").toLowerCase();
   
@@ -758,8 +759,14 @@ function buildStyle(params: GenerateSongParams, detailLayer = ""): string {
     }
   }
 
-  const tempoDirective = resolveTempoDirective(detailLayer, params.tempo, { isRandomTempo: params.isRandomTempo, tempoSource: params.tempoSource });
-  const tempoText = tempoDirective.primary.replace(/\s*BPM\s*$/i, "").trim();
+  const tempoText = params.tempo
+    ? params.tempo
+        .replace(/^Between\s+/i, "")
+        .replace(/^Exactly\s+/i, "")
+        .replace(/\s+and\s+/i, "–")
+        .replace(/\s*BPM\s*/gi, "")
+        .trim()
+    : "";
 
   let stylePart = genreStyle;
   if (stylePrompts.length > 0) {
@@ -767,7 +774,7 @@ function buildStyle(params: GenerateSongParams, detailLayer = ""): string {
     stylePart = `${genreStyle} with ${uniqueStylePrompts.join(", ")}`;
   }
   
-  const bpmPart = tempoDirective.parts.length ? `, ${tempoDirective.parts.join(", ")}` : "";
+  const bpmPart = tempoText ? `, ${tempoText} BPM` : "";
 
   return `GENRE: ${stylePart}${bpmPart}`;
 }
@@ -1060,11 +1067,15 @@ function buildArrangement(params: GenerateSongParams, resolvedStructure: SongStr
   return `ARRANGEMENT: ${combinedArrangements.join(", ")}`;
 }
 
-const DEFAULT_NO_THEME_DIRECTION = "Open original everyday theme";
+const DEFAULT_NO_THEME_DIRECTION = "No explicit story theme selected; create a simple original everyday emotional scene. Do not use genre, mood, vocal, sound, arrangement, tempo, hook, or structure terms as the lyrical topic.";
 
 const TECHNICAL_DIRECTION_LYRICS_GUARD = `
-INTERNAL LYRIC GUARD:
-- Production directions must guide performance/arrangement only, not become the song topic, unless the user explicitly makes them the story theme.
+TECHNICAL DIRECTION GUARD (MANDATORY):
+- Treat genre, mood, sound, vocal, tempo, hook, and arrangement words as production instructions only, unless the user explicitly states they are the story topic.
+- Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, R&B groove, indie-pop production, genre labels.
+- Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 장르명.
+- These terms should shape performance, phrasing, arrangement, and production, but must NOT become repeated lyric phrases, metaphors, title concepts, or the central story.
+- If the theme says “everyday freedom,” write about ordinary freedom or self-expression through concrete scenes, not about vocal rhythm or tempo.
 `;
 
 function buildTheme(params: GenerateSongParams): string {
@@ -1121,218 +1132,6 @@ function hasInfluenceBeforeMainGenre(source: string, influenceKeywords: string[]
 }
 
 
-type TempoFeel = "slow" | "fast" | "mid";
-
-type TempoDirective = {
-  primary: string;
-  feel: TempoFeel | "";
-  parts: string[];
-};
-
-type StrongTempoIntent = {
-  bpm?: string;
-  feel: TempoFeel | "";
-  prompt: string;
-  keywords: string[];
-};
-
-function normalizeBpmRange(a: string, b: string): string {
-  const first = Number(a);
-  const second = Number(b);
-  if (!Number.isFinite(first) || !Number.isFinite(second)) return "";
-  const low = Math.min(first, second);
-  const high = Math.max(first, second);
-  return `${low}–${high} BPM`;
-}
-
-function normalizeExactBpm(value: string): string {
-  const bpm = Number(value);
-  if (!Number.isFinite(bpm)) return "";
-  return `${bpm} BPM`;
-}
-
-function extractBpmDirective(text: string, allowBareNumber = false): string {
-  const value = (text || "").trim();
-  if (!value) return "";
-
-  const rangeWithBpm = value.match(/(\d{2,3})\s*(?:~|-|–|—|to|and|에서|부터)\s*(\d{2,3})\s*(?:bpm|비피엠)/i);
-  if (rangeWithBpm) return normalizeBpmRange(rangeWithBpm[1], rangeWithBpm[2]);
-
-  const bpmBeforeRange = value.match(/(?:bpm|비피엠)\s*(\d{2,3})\s*(?:~|-|–|—|to|and|에서|부터)\s*(\d{2,3})/i);
-  if (bpmBeforeRange) return normalizeBpmRange(bpmBeforeRange[1], bpmBeforeRange[2]);
-
-  const exactWithBpm = value.match(/(\d{2,3})\s*(?:bpm|비피엠)/i);
-  if (exactWithBpm) return normalizeExactBpm(exactWithBpm[1]);
-
-  if (allowBareNumber) {
-    const normalized = value
-      .replace(/^Between\s+/i, "")
-      .replace(/^Exactly\s+/i, "")
-      .replace(/\s+BPM\s*/gi, "")
-      .trim();
-
-    const bareRange = normalized.match(/^(\d{2,3})\s*(?:~|-|–|—|to|and)\s*(\d{2,3})$/i);
-    if (bareRange) return normalizeBpmRange(bareRange[1], bareRange[2]);
-
-    const betweenRange = value.match(/Between\s+(\d{2,3})\s+and\s+(\d{2,3})/i);
-    if (betweenRange) return normalizeBpmRange(betweenRange[1], betweenRange[2]);
-
-    const exactBare = normalized.match(/^(\d{2,3})$/);
-    if (exactBare) return normalizeExactBpm(exactBare[1]);
-  }
-
-  return "";
-}
-
-function detectTempoFeel(text: string): TempoFeel | "" {
-  const source = (text || "").toLowerCase();
-  if (!source) return "";
-
-  if (includesAny(source, ["느린템포", "느린 템포", "느리게", "slow tempo", "잔잔한 템포", "gentle tempo", "laid-back tempo", "relaxed tempo", "자기전에", "자기 전에", "잠들기 전", "잠자기 전", "수면", "자장가", "lullaby", "bedtime", "sleep music"])) {
-    return "slow";
-  }
-  if (includesAny(source, ["빠른템포", "빠른 템포", "빠르게", "빠른 힙합", "빠른 랩", "속도감 있는 힙합", "속도감있는 힙합", "fast tempo", "fast hip-hop", "fast hip hop", "fast rap", "업템포", "up-tempo", "uptempo", "driving tempo"])) {
-    return "fast";
-  }
-  if (includesAny(source, ["미디엄템포", "미디엄 템포", "medium tempo", "mid tempo", "mid-tempo"])) {
-    return "mid";
-  }
-
-  return "";
-}
-
-function tempoFeelToPrompt(feel: TempoFeel): string {
-  if (feel === "slow") return "slow tempo feel";
-  if (feel === "fast") return "fast tempo feel";
-  return "mid-tempo feel";
-}
-
-function tempoFeelToSupplement(feel: TempoFeel): string {
-  if (feel === "slow") return "relaxed laid-back feel";
-  if (feel === "fast") return "driving rhythmic feel";
-  return "balanced mid-tempo feel";
-}
-
-function detectStrongTempoIntent(text: string): StrongTempoIntent | null {
-  const source = (text || "").toLowerCase();
-  if (!source) return null;
-
-  const bedtimeKeywords = [
-    "자기전에", "자기 전에", "잠들기 전", "잠자기 전", "수면", "자장가", "잠잘 때", "잠잘때",
-    "잔잔한 피아노", "잔잔한 피아노곡", "피아노 자장가", "lullaby", "bedtime", "sleep music", "sleepy piano"
-  ];
-  if (includesAny(source, bedtimeKeywords)) {
-    return {
-      bpm: "60–75 BPM",
-      feel: "slow",
-      prompt: "slow lullaby tempo feel",
-      keywords: bedtimeKeywords,
-    };
-  }
-
-  const fastHipHopKeywords = [
-    "빠른 힙합", "빠른 랩", "속도감 있는 힙합", "속도감있는 힙합", "속도감 있는 랩", "속도감있는 랩",
-    "fast hip-hop", "fast hip hop", "fast rap"
-  ];
-  if (includesAny(source, fastHipHopKeywords)) {
-    return {
-      bpm: "120–145 BPM",
-      feel: "fast",
-      prompt: "fast hip-hop tempo feel",
-      keywords: fastHipHopKeywords,
-    };
-  }
-
-  const studyLofiKeywords = [
-    "공부할때", "공부할 때", "공부 때", "공부하면서", "공부용",
-    "독서할때", "독서할 때", "독서 때", "책 읽을 때", "책읽을때", "책 읽으며",
-    "조용한 로파이", "잔잔한 로파이", "로파이", "lofi", "lo-fi", "lo fi",
-    "study lofi", "study lo-fi", "reading lofi", "reading lo-fi", "focus music"
-  ];
-  if (includesAny(source, studyLofiKeywords)) {
-    return {
-      feel: "slow",
-      prompt: "relaxed lo-fi study tempo feel",
-      keywords: studyLofiKeywords,
-    };
-  }
-
-  return null;
-}
-
-function shouldTreatUiTempoAsRandom(uiTempo?: string, options?: { isRandomTempo?: boolean; tempoSource?: string }): boolean {
-  if (options?.isRandomTempo === true) return true;
-  if (String(options?.tempoSource || "").toLowerCase() === "random") return true;
-  const source = (uiTempo || "").toLowerCase();
-  return /랜덤|random/.test(source);
-}
-
-function resolveTempoDirective(
-  freeText: string,
-  uiTempo?: string,
-  options?: { isRandomTempo?: boolean; tempoSource?: string }
-): TempoDirective {
-  const freeBpm = extractBpmDirective(freeText, false);
-  const uiBpm = extractBpmDirective(uiTempo || "", true);
-  const freeFeel = detectTempoFeel(freeText);
-  const uiFeel = detectTempoFeel(uiTempo || "");
-  const strongIntent = detectStrongTempoIntent(freeText);
-  const uiTempoIsRandom = shouldTreatUiTempoAsRandom(uiTempo, options);
-
-  // Priority:
-  // 1) Free-text exact/range BPM
-  // 2) Manually fixed UI BPM/range
-  // 3) Strong free-text tempo intent such as bedtime/lullaby or fast hip-hop
-  // 4) Random UI BPM/range
-  // 5) Vague free-text feel
-  // 6) UI feel / genre fallback
-  // Numeric BPM should not be overwritten by vague slow/fast wording, but random BPM may be replaced by a strong free-text intent.
-  if (freeBpm) {
-    return {
-      primary: freeBpm,
-      feel: freeFeel,
-      parts: [freeBpm, ...(freeFeel ? [tempoFeelToSupplement(freeFeel)] : [])],
-    };
-  }
-
-  if (uiBpm && !uiTempoIsRandom) {
-    return {
-      primary: uiBpm,
-      feel: freeFeel || uiFeel,
-      parts: [uiBpm, ...(freeFeel ? [tempoFeelToSupplement(freeFeel)] : [])],
-    };
-  }
-
-  if (strongIntent) {
-    return {
-      primary: strongIntent.bpm || strongIntent.prompt,
-      feel: strongIntent.feel,
-      parts: [strongIntent.bpm || strongIntent.prompt, strongIntent.prompt].filter((value, index, arr) => value && arr.indexOf(value) === index),
-    };
-  }
-
-  // Random UI tempo is only allowed when there is no free-text director note.
-  // In free-text generation, random BPM should not leak into the final prompt.
-  if (uiBpm && !(uiTempoIsRandom && freeText.trim().length > 0)) {
-    return {
-      primary: uiBpm,
-      feel: freeFeel || uiFeel,
-      parts: [uiBpm, ...(freeFeel ? [tempoFeelToSupplement(freeFeel)] : [])],
-    };
-  }
-
-  if (freeFeel) {
-    return { primary: tempoFeelToPrompt(freeFeel), feel: freeFeel, parts: [tempoFeelToPrompt(freeFeel)] };
-  }
-
-  if (uiFeel) {
-    return { primary: tempoFeelToPrompt(uiFeel), feel: uiFeel, parts: [tempoFeelToPrompt(uiFeel)] };
-  }
-
-  return { primary: "", feel: "", parts: [] };
-}
-
-
 type FreeTextVocalHint = { keywords: string[]; prompts: string[] };
 
 const FREE_TEXT_VOCAL_HINTS: FreeTextVocalHint[] = [
@@ -1373,11 +1172,7 @@ function applyFreeTextVocalHints(lowerNote: string, vocalParts: string[]) {
   });
 }
 
-function buildFreeTextDirectorProfile(
-  note: string,
-  uiTempo = "",
-  tempoOptions?: { isRandomTempo?: boolean; tempoSource?: string }
-): FreeTextDirectorProfile {
+function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   const rawNote = (note || "").trim();
   const lower = rawNote.toLowerCase();
 
@@ -1393,21 +1188,16 @@ function buildFreeTextDirectorProfile(
   const has = (keywords: string[]) => includesAny(lower, keywords);
   const has80sEra = has(["80년대", "80s", "80's", "eighties"]);
   const hasRetro = has80sEra || has(["레트로", "retro", "복고"]);
-  const tempoDirective = resolveTempoDirective(rawNote, uiTempo, tempoOptions);
+  const hasSlowTempo = has(["느린템포", "느린 템포", "느리게", "slow tempo", "slow", "잔잔한 템포", "gentle tempo"]);
+  const hasFastTempo = has(["빠른템포", "빠른 템포", "빠르게", "fast tempo", "fast", "업템포", "up-tempo", "uptempo"]);
+  const hasMidTempo = has(["미디엄", "medium tempo", "mid tempo", "mid-tempo"]);
   const hasCalm = has(["잔잔", "차분", "담담", "calm", "quiet", "understated", "gentle"]);
-  const hasBedtimeLullaby = has(["자기전에", "자기 전에", "잠들기 전", "잠자기 전", "수면", "자장가", "잠잘 때", "잠잘때", "lullaby", "bedtime", "sleep music"]);
-  const hasGentlePiano = has(["잔잔한 피아노", "잔잔한 피아노곡", "피아노 자장가", "gentle piano", "soft piano"]);
 
   const rnbKeywords = ["알앤비", "알앤비느낌", "알앤비 느낌", "리듬앤블루스", "r&b", "rnb", "rhythm and blues"];
   const neoSoulKeywords = ["네오소울", "네오 소울", "neo soul", "neo-soul"];
   const indieKeywords = ["인디음악", "인디 음악", "인디곡", "인디 곡", "인디팝", "인디 팝", "indie", "indie song", "indie music", "indie pop", "indie-pop"];
   const cityPopKeywords = ["시티팝", "city pop", "city-pop", "citypop"];
   const synthPopKeywords = ["시스팝", "신스팝", "신스 팝", "synth pop", "synth-pop", "synthpop"];
-  const directLofiHipHopKeywords = ["로파이 힙합", "로파이힙합", "lofi hiphop", "lo-fi hip-hop", "lofi hip-hop", "lo-fi hiphop"];
-  const lofiKeywords = ["로파이", "lofi", "lo-fi", "lo fi", ...directLofiHipHopKeywords];
-  const studyReadingKeywords = ["공부할때", "공부할 때", "공부 때", "공부하면서", "공부용", "집중", "집중용", "독서할때", "독서할 때", "독서 때", "독서용", "책 읽을 때", "책읽을때", "책 읽으며", "study", "reading", "read", "focus", "concentration"];
-  const backgroundInstrumentalKeywords = ["배경음", "배경 음악", "배경음악", "연주곡", "인스트루멘탈", "instrumental", "background music", "study beat", "study beats", "reading music", "focus music"];
-  const explicitLofiVocalRequestKeywords = ["가사 있는 로파이", "가사있는 로파이", "보컬 있는 로파이", "보컬있는 로파이", "로파이 보컬", "로파이 랩", "lofi vocal", "lo-fi vocal", "lofi rap", "lo-fi rap"];
   const idolKeywords = ["아이돌", "idol", "idol pop", "아이돌팝", "아이돌 팝"];
   const balladKeywords = ["발라드", "발라드곡", "ballad"];
   const rockKeywords = ["락", "록", "락곡", "록곡", "rock"];
@@ -1415,14 +1205,6 @@ function buildFreeTextDirectorProfile(
   const neoSoulInfluenceOfCityPop = hasInfluenceBeforeMainGenre(lower, neoSoulKeywords, cityPopKeywords);
 
   // MAIN GENRE: one main identity first, then secondary influences.
-  if (hasBedtimeLullaby || hasGentlePiano) {
-    pushUnique(mainGenreParts, has(["사랑", "love"]) ? "Piano Lullaby Pop / Soft Ballad" : "Piano Lullaby Pop");
-    pushUnique(soundParts, "gentle piano", "soft warm keys", "minimal bedtime texture");
-    pushUnique(moodParts, "calm night mood", "cozy bedtime atmosphere", "tender quiet warmth");
-    pushUnique(vocalParts, "soft intimate vocal tone", "gentle low-volume delivery");
-    pushUnique(arrangementParts, "slow lullaby tempo feel");
-  }
-
   if (has(synthPopKeywords)) {
     pushUnique(mainGenreParts, has(idolKeywords) ? "Synth Pop / Idol Pop" : "Synth Pop");
     pushUnique(soundParts, "layered synths", "polished electronic pop production", "bright synth texture", "punchy electronic groove");
@@ -1435,32 +1217,6 @@ function buildFreeTextDirectorProfile(
     pushUnique(soundParts, "polished idol-pop production", "clean hook-focused mix");
     pushUnique(moodParts, "stylish idol-pop energy");
     pushUnique(arrangementParts, "idol-pop sectional progression");
-  }
-
-  if (has(lofiKeywords) || has(studyReadingKeywords) || has(backgroundInstrumentalKeywords)) {
-    const isExplicitLofiHipHop = has(directLofiHipHopKeywords);
-    const wantsLofiVocals = has(explicitLofiVocalRequestKeywords) || has(["랩", "rap"]);
-
-    if (isExplicitLofiHipHop) {
-      pushUnique(mainGenreParts, "Lo-Fi Hip-Hop");
-    } else if (wantsLofiVocals) {
-      pushUnique(mainGenreParts, "Lo-Fi Pop with vocals");
-    } else if (has(studyReadingKeywords) || has(backgroundInstrumentalKeywords)) {
-      pushUnique(mainGenreParts, "Instrumental Lo-Fi Study Beat");
-    } else {
-      pushUnique(mainGenreParts, "Instrumental Lo-Fi Beat");
-    }
-
-    pushUnique(soundParts, "dusty lo-fi beat", "warm vinyl texture", "mellow keys", "soft muted drums", "low-distraction mix");
-    pushUnique(moodParts, "quiet study atmosphere", "calm focused mood", "cozy reading-room mood");
-    pushUnique(
-      vocalParts,
-      isExplicitLofiHipHop || wantsLofiVocals
-        ? "minimal non-intrusive vocal presence"
-        : "no lead vocal, instrumental background track"
-    );
-    pushUnique(arrangementParts, "relaxed lo-fi loop progression", "low-distraction background flow");
-    pushUnique(themeParts, "quiet study and reading scene");
   }
 
   if (has(cityPopKeywords)) {
@@ -1478,7 +1234,7 @@ function buildFreeTextDirectorProfile(
   }
 
   if (has(indieKeywords)) {
-    pushUnique(mainGenreParts, tempoDirective.feel === "slow" || hasCalm ? "Slow Indie Pop" : "Indie Pop");
+    pushUnique(mainGenreParts, hasSlowTempo || hasCalm ? "Slow Indie Pop" : "Indie Pop");
     pushUnique(soundParts, "minimal indie-pop production", "warm guitar or soft keys", "intimate clean mix");
     pushUnique(moodParts, "calm intimate mood", "understated emotional color");
     pushUnique(arrangementParts, "relaxed indie-pop progression");
@@ -1494,7 +1250,7 @@ function buildFreeTextDirectorProfile(
   if (has(["힙합", "hip hop", "hip-hop"])) pushUnique(mainGenreParts, "Hip-Hop");
   if (has(rnbKeywords)) {
     if (rnbInfluenceOfIndie) {
-      pushUnique(mainGenreParts, tempoDirective.feel === "slow" || hasCalm ? "Slow Indie Pop" : "Indie Pop");
+      pushUnique(mainGenreParts, hasSlowTempo || hasCalm ? "Slow Indie Pop" : "Indie Pop");
       pushUnique(genreInfluenceParts, "R&B influence");
     } else if (mainGenreParts.length) {
       pushUnique(genreInfluenceParts, "R&B influence");
@@ -1547,7 +1303,7 @@ function buildFreeTextDirectorProfile(
   }
 
   // SOUND / INSTRUMENT DETAIL
-  if (has(["피아노", "piano"])) pushUnique(soundParts, hasGentlePiano || hasBedtimeLullaby ? "gentle piano-led texture" : "piano-led texture");
+  if (has(["피아노", "piano"])) pushUnique(soundParts, "piano-led texture");
   if (has(["일렉피아노", "electric piano", "epiano", "e-piano"])) pushUnique(soundParts, "warm electric piano");
   if (has(["기타", "guitar"])) pushUnique(soundParts, "guitar texture");
   if (has(["신스", "synth", "synthesizer"])) pushUnique(soundParts, "synth layer");
@@ -1626,51 +1382,6 @@ function buildFreeTextDirectorProfile(
   if (has(["드라마적인 서사", "드라마틱한 서사", "dramatic narrative", "cinematic narrative", "서사적"])) {
     pushUnique(themeParts, "dramatic narrative");
     pushUnique(arrangementParts, "cinematic story-driven progression");
-  }
-
-  // THEME GROUPS: detect broad topic groups with a few representative signals, not endless keyword lists.
-  if (has(["주식", "주가", "종목", "개미", "떡상", "상한가", "물림", "손절", "익절", "차트", "매수", "매도", "투자", "코인", "stock", "stocks", "crypto", "retail investor", "trading"])) {
-    pushUnique(themeParts, "retail investors hoping for a stock surge", "everyday stock-market obsession", "risky ambition and comic frustration");
-    pushUnique(moodParts, "ambitious comic tension", "witty urban energy");
-  }
-
-  if (has(["세상을 비난", "세상 비난", "세상을 욕", "세상 욕", "사회 비판", "사회비판", "현실 비판", "현실불만", "현실 불만", "답답한 현실", "더러운 세상", "좆같은 세상", "좆같은 현실", "좆같", "개같은 세상", "빌어먹을 세상", "세상이 싫", "frustrating world", "unfair world", "fuck the world", "social criticism", "social critique"])) {
-    pushUnique(themeParts, "social criticism and frustration", "anger toward a harsh unfair world", "rebellious everyday rage");
-    pushUnique(moodParts, "angry rebellious energy", "cynical confrontational mood");
-  }
-
-  const wantsExplicitProfanityTone = has(["욕하는", "욕하는 노래", "욕하는 가사", "욕 섞인", "욕섞인", "욕설", "쌍욕", "좆같", "씨발", "시발", "ㅅㅂ", "fuck", "fucking", "profanity", "cussing", "swearing"]);
-  if (wantsExplicitProfanityTone) {
-    pushUnique(moodParts, "raw angry attitude", "explicit confrontational energy");
-    pushUnique(vocalParts, "explicit profanity-laced lyrical tone", "raw confrontational wording");
-    if (has(["랩", "rap", "힙합", "hip hop", "hip-hop"])) {
-      pushUnique(vocalParts, "aggressive profanity-driven rap delivery");
-    }
-  }
-
-  // LYRICAL TONE GROUPS: convert wording style into lyric attitude, separate from vocal technique.
-  if (has(["건방진 말투", "건방진 가사", "건방진", "자신만만한 말투", "자신만만", "까칠한 말투", "까칠한", "도발적인 말투", "도발적인", "스웨그", "swagger", "cocky", "confident attitude"])) {
-    pushUnique(moodParts, "cocky confident attitude", "witty swagger energy");
-    pushUnique(vocalParts, "cocky confident lyrical attitude", "confident swagger delivery");
-    if (wantsExplicitProfanityTone) pushUnique(vocalParts, "more openly rude and profanity-tinged wording");
-    if (has(["랩", "rap", "힙합", "hip hop", "hip-hop"])) pushUnique(vocalParts, "sharp rhythmic rap flow");
-  }
-  if (has(["담담한 말투", "담담한 가사", "차분한 말투", "차분한 가사", "무심한 말투", "무심한 가사", "calm lyrical tone", "restrained lyrics"])) {
-    pushUnique(moodParts, "calm restrained emotional tone");
-    pushUnique(vocalParts, "calm restrained lyrical tone");
-  }
-  if (has(["귀여운 말투", "귀여운 가사", "장난스러운 말투", "장난스러운 가사", "발랄한 말투", "발랄한 가사", "능청스러운", "playful lyrics", "cute lyrical tone"])) {
-    pushUnique(moodParts, "playful cute energy");
-    pushUnique(vocalParts, "playful cute lyrical tone");
-  }
-  if (has(["거친 말투", "거친 가사", "공격적인 말투", "공격적인 가사", "직설적인 말투", "직설적인 가사", "날카로운 말투", "날카로운 가사", "aggressive lyrics", "direct lyrical tone"])) {
-    pushUnique(moodParts, "aggressive direct energy");
-    pushUnique(vocalParts, "aggressive direct lyrical tone", "sharp assertive delivery");
-    if (wantsExplicitProfanityTone) pushUnique(vocalParts, "explicit swear-word attitude when appropriate");
-  }
-  if (has(["시적인 말투", "시적인 가사", "은유적인 말투", "은유적인 가사", "감성적인 말투", "감성적인 가사", "몽환적인 가사", "poetic lyrics", "emotional lyrical tone", "metaphorical lyrics"])) {
-    pushUnique(moodParts, "poetic emotional atmosphere");
-    pushUnique(vocalParts, "poetic emotional lyrical tone");
   }
 
   // VOCAL / GENDER / PHRASING / LIMITS
@@ -1775,7 +1486,9 @@ function buildFreeTextDirectorProfile(
   }
 
   // ARRANGEMENT / TEMPO / HOOK / STRUCTURE
-  pushUnique(arrangementParts, ...tempoDirective.parts);
+  if (hasSlowTempo) pushUnique(arrangementParts, "slow tempo feel");
+  if (hasFastTempo) pushUnique(arrangementParts, "fast tempo feel");
+  if (hasMidTempo) pushUnique(arrangementParts, "mid-tempo feel");
   if (has(["짧게", "짧은 곡", "short song", "short lyrics"])) pushUnique(arrangementParts, "compact song structure", "concise lyric flow");
   if (has(["길게", "긴 곡", "long song", "long lyrics"])) pushUnique(arrangementParts, "expanded song structure", "fuller lyric development");
   if (has(["중독성있는 후렴", "중독성 있는 후렴", "중독성 후렴", "귀에 남는 후렴", "후렴구", "훅", "hook", "catchy chorus", "addictive chorus"])) {
@@ -1843,8 +1556,8 @@ function buildFreeTextDirectorProfile(
     detail: rawNote,
   };
 }
-function buildFreeTextPrimarySections(detailLayer: string, params?: GenerateSongParams) {
-  const profile = buildFreeTextDirectorProfile(detailLayer, params?.tempo ?? "", { isRandomTempo: params?.isRandomTempo, tempoSource: params?.tempoSource });
+function buildFreeTextPrimarySections(detailLayer: string) {
+  const profile = buildFreeTextDirectorProfile(detailLayer);
 
   return [
     { label: "GENRE", content: profile.genre },
@@ -1859,9 +1572,9 @@ function buildFreeTextPrimarySections(detailLayer: string, params?: GenerateSong
 function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string): string {
   const themeContent = buildTheme(params);
   const sections = isFreeTextPrimaryMode(params)
-    ? buildFreeTextPrimarySections(detailLayer, params)
+    ? buildFreeTextPrimarySections(detailLayer)
     : [
-        { label: "GENRE", content: buildStyle(params, detailLayer) },
+        { label: "GENRE", content: buildStyle(params) },
         { label: "SOUND", content: buildSound(params) },
         { label: "MOOD", content: buildMoodTexture(params) },
         { label: "VOCAL", content: buildVocal(params) },
@@ -1879,46 +1592,12 @@ function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStr
 }
 
 
-
-function shouldAutoPromptOnlyTrack(params: GenerateSongParams, finalPrompt: string): boolean {
-  const source = `${params.userInput || ""}\n${finalPrompt || ""}`.toLowerCase();
-  const has = (keywords: string[]) => includesAny(source, keywords);
-
-  const explicitLyricsOrVocalRequest = has([
-    "가사 있는", "가사 포함", "가사도", "가사 추가", "가사를", "가사 있는 로파이",
-    "보컬", "vocal", "vocals", "lyrics", "lyric", "rap", "랩", "노래로", "노래 가사"
-  ]);
-
-  const directNoLyricsRequest = has([
-    "가사 없음", "가사없음", "가사 없이", "가사없이", "무가사", "보컬 없음", "보컬없이",
-    "no lyrics", "without lyrics", "instrumental only", "no vocal", "no vocals"
-  ]);
-
-  const instrumentalKeywords = has([
-    "연주곡", "연주 음악", "instrumental", "bgm", "배경음", "배경 음악", "배경음악",
-    "ambient", "앰비언트", "명상음악", "명상 음악"
-  ]);
-
-  const lofiBackgroundKeywords = has([
-    "instrumental lo-fi", "instrumental lofi", "lo-fi study", "lofi study", "study beat",
-    "공부할때", "공부할 때", "공부용", "독서할때", "독서할 때", "독서용", "책 읽을 때", "책읽을때",
-    "집중용", "집중할때", "집중할 때", "조용한 로파이", "잔잔한 로파이", "로파이 공부", "로파이 독서"
-  ]);
-
-  const directLofiHipHop = has(["로파이 힙합", "로파이힙합", "lo-fi hip-hop", "lofi hiphop", "lofi hip-hop"]);
-  const plainLofiBackground = has(["로파이", "lofi", "lo-fi", "lo fi"]) && has(["공부", "독서", "집중", "책", "조용", "잔잔", "background", "study", "reading", "focus"]);
-
-  if (directNoLyricsRequest) return true;
-  if (explicitLyricsOrVocalRequest) return false;
-  if (instrumentalKeywords) return true;
-  if (lofiBackgroundKeywords) return true;
-  if (!directLofiHipHop && plainLofiBackground) return true;
-
-  return false;
-}
-
 export async function generateSong(...args: GenerateSongInput): Promise<SongResult> {
   const params = normalizeArgs(args);
+  const requestedLyricLanguages = Array.from(new Set((params.lyricLanguages?.length ? params.lyricLanguages : ['ko', 'en']).filter(Boolean))).slice(0, 2) as LanguageCode[];
+  const effectiveNoLyrics = Boolean(params.isNoLyrics || params.includeLyrics === false || requestedLyricLanguages.length === 0);
+  params.isNoLyrics = effectiveNoLyrics;
+  params.lyricLanguages = requestedLyricLanguages;
   const model: string = "gemini-3-flash-preview";
 
   const genresForDuration = params.genre ? [params.genre] : [];
@@ -1954,7 +1633,6 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   const detailLayer = await buildDetailLayer(params.userInput || "");
   
   const finalPrompt = buildFinalPrompt(params, resolvedStructure, detailLayer);
-  const effectiveNoLyrics = Boolean(params.isNoLyrics || shouldAutoPromptOnlyTrack(params, finalPrompt));
   console.log("🔥 generateSong called");
   console.log("🔥 FINAL PROMPT:", finalPrompt);
   const exactStructureText = buildStructureText(
@@ -1965,7 +1643,27 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
 
   const shouldUseMixedLyrics = Boolean(params.isKoreanEnglishMix || (params.isKpopSelected && params.kpopMode === 2));
 
-  const lyricsResponseSchema = effectiveNoLyrics 
+
+  const languageNameMap: Record<LanguageCode, string> = {
+    ko: 'Korean',
+    en: 'English',
+    ja: 'Japanese',
+    zh: 'Chinese',
+    es: 'Spanish',
+    fr: 'French',
+  };
+  const secondaryLanguage = requestedLyricLanguages.find((lang) => lang !== 'ko') || 'en';
+  const requestedLanguageInstruction = effectiveNoLyrics
+    ? ''
+    : `OUTPUT LANGUAGE RULE (MANDATORY):
+- Generate titles and lyrics only for the selected language setting: ${requestedLyricLanguages.map((lang) => languageNameMap[lang]).join(' + ')}.
+- If Korean is selected, put Korean lyrics in JSON field lyrics.korean and create a natural Korean title.
+- If a non-Korean language is selected, put that language's lyrics in JSON field lyrics.english, even when the selected language is not English.
+- The first title slot before │ must be the non-Korean selected language title (${languageNameMap[secondaryLanguage]}). The second title slot after │ must be Korean when Korean is selected.
+- If only Korean is selected, still return a compact compatible second title, but keep Korean as the main title.
+- Do not generate unselected lyric languages.`;
+
+  const lyricsResponseSchema = params.isNoLyrics 
     ? {} 
     : {
         lyrics: {
@@ -1978,9 +1676,9 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
         },
       };
 
-  const lyricsRequired = effectiveNoLyrics ? [] : ["lyrics"];
+  const lyricsRequired = params.isNoLyrics ? [] : ["lyrics"];
 
-  const mixedLyricsInstruction = (shouldUseMixedLyrics && !effectiveNoLyrics)
+  const mixedLyricsInstruction = (shouldUseMixedLyrics && !params.isNoLyrics)
     ? `MIXED LANGUAGE MODE (MANDATORY):
 - Use natural Korean/English mixed lyrics.
 - Ratio: about 70-75% primary language flow and 25-30% mixed-language accents.
@@ -2048,8 +1746,6 @@ ROLE OF USER INPUT:
 - If no explicit genre is selected in the UI, infer the main genre directly from this note and treat it as the primary genre identity.
 - If explicit UI selections exist, combine them with the note. When they conflict, prefer the user's clearly written natural-language direction unless a custom song structure is explicitly selected.
 - If the user mentions a song length, slow/fast tempo, short/long lyrics, verse/chorus/bridge, rap/no rap, or vocal formation, reflect that in the final song direction.
-- TEMPO PRIORITY: exact BPM or BPM range always beats vague slow/fast wording. Free-text BPM/range > manually fixed UI BPM/range > strong free-text tempo intent such as lullaby/bedtime or fast hip-hop > random UI BPM/range > vague free-text slow/fast feel > UI slow/fast feel > genre default tempo feel.
-- If a numeric BPM is manually selected in the UI and the free-text only says slow/fast, keep the numeric BPM and apply the wording only as a performance feel. If the BPM came from a random tempo/template and the free-text strongly implies a tempo family such as bedtime lullaby or fast hip-hop, follow the free-text tempo family instead.
 - If custom song structure mode is selected, keep the custom section order fixed, but still apply the note to mood, sound, theme, vocal expression, and section energy.
 
 GENRE COHERENCE RULE (MANDATORY):
@@ -2061,13 +1757,10 @@ GENRE COHERENCE RULE (MANDATORY):
 
 THEME SEPARATION RULE (MANDATORY):
 - Theme means the lyrical story, situation, message, relationship, event, or narrative.
-- Mood/genre/vocal/sound/tempo/hook/arrangement guide the song only; if no theme exists, use a simple original everyday scene.
-
-LYRICAL TONE RULE (MANDATORY):
-- If the user specifies a "말투", "가사 말투", "lyrical tone", or attitude such as cocky, calm, playful, aggressive, or poetic, treat it as the attitude of the lyrics and vocal delivery.
-- If the user explicitly asks for 욕/욕설/좆같은/시발/fuck-style wording, allow stronger profanity-tinged lyrics and rude swagger, while avoiding hate slurs or attacks on protected groups.
-- Do NOT confuse lyrical tone with story theme. Example: "건방진 말투" means cocky/confident wording style, not a song about arrogance itself.
-- Topic groups such as stock/crypto/retail-investor references are story themes. Keep them in THEME, then use MOOD/VOCAL only to shape attitude and delivery.
+- Mood, genre, vocal technique, sound, tempo, hook, and arrangement instructions are NOT story themes.
+- If no explicit theme is selected or written, create a simple original everyday emotional scene.
+- Do NOT turn technical instructions such as offbeat vocal phrasing, addictive chorus, restrained high notes, slow tempo, synth, guitar, or genre names into the title or lyrical topic.
+- If a theme exists, keep mood as emotional color around that story, not as a replacement story.
 
 ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 
@@ -2106,9 +1799,11 @@ ${lyricDraftInstruction}
 
 ${structureInstruction}
 
+${requestedLanguageInstruction}
+
 Return JSON:
 {
-  "title": "'English Title' │ 'Korean Title'"${effectiveNoLyrics ? "" : `,
+  "title": "'English Title' │ 'Korean Title'"${params.isNoLyrics ? "" : `,
   "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }`}
 }
 
@@ -2258,7 +1953,7 @@ Natural:
 - 그날 이후로 (GOOD)
 - 아직 그대로야 (GOOD)
 
-${effectiveNoLyrics ? "LYRICS RULE (MANDATORY):\n- DO NOT generate any lyrics. The user requested an instrumental-only track or a track without lyrics.\n- Omit the 'lyrics' field from the JSON output." : `Lyrics rules:
+${params.isNoLyrics ? "LYRICS RULE (MANDATORY):\n- DO NOT generate any lyrics. The user requested an instrumental-only track or a track without lyrics.\n- Omit the 'lyrics' field from the JSON output." : `Lyrics rules:
 ${lyricGuidancePrompt}
 
 [LYRIC STYLE SYSTEM]
@@ -2309,16 +2004,11 @@ Write like:
 - Do not ignore lyricDraft.
 - Do not rewrite it with a completely new lyric idea.
 - The lyrics should follow the selected theme(s) and explicit narrative details provided by the user.
-- If explicit profanity / 욕하는 / 좆같은 tone is requested, reflect it actively in lyric wording, especially in rap sections, without using hate slurs or protected-group attacks.
-- If no explicit theme exists, create a simple original everyday scene.
+- If no explicit theme exists, create a simple original everyday emotional scene without using genre, vocal, sound, tempo, hook, or arrangement instructions as the lyrical topic.
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.
 - If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role.
-- If rap is requested anywhere in GENRE / VOCAL / ARRANGEMENT / user direction, the lyrics MUST include a clearly labeled rap section: [Rap Verse], [Rap Section], or [Verse 2 / Rap Verse].
-- Do NOT hide requested rap inside a normal [Verse] label. The rap part must be visible from the section tag.
-- If the user requested heavy/deep/weighty rap, label it as [Rap Verse] or [Rap Section] and write it with stronger rhythmic density while keeping the story theme intact.
-- If the user requested no rap, do not include any rap-labeled section.
 - Respect the selected lyricsLength strictly.
 - Respect the selected song structure strictly.
 - Do not drift longer than the requested lyric size.
@@ -2500,18 +2190,22 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     result.title = `[${genreTag}] 'Untitled' │ '무제'`;
   }
 
-  // Ensure lyrics object and properties exist.
-  // For prompt-only / instrumental-auto results, force lyrics to stay empty even if the model returns them.
-  if (effectiveNoLyrics) {
-    result.lyrics = { english: "", korean: "" };
-  } else if (!result.lyrics || typeof result.lyrics !== 'object') {
+  // Ensure lyrics object and properties exist
+  if (!result.lyrics || typeof result.lyrics !== 'object') {
     result.lyrics = { english: "", korean: "" };
   } else {
     result.lyrics.english = typeof result.lyrics.english === 'string' ? result.lyrics.english : "";
     result.lyrics.korean = typeof result.lyrics.korean === 'string' ? result.lyrics.korean : "";
   }
 
-  if (shouldUseMixedLyrics && !effectiveNoLyrics) {
+  if (params.isNoLyrics) {
+    result.lyrics = { english: '', korean: '' };
+  } else {
+    if (!requestedLyricLanguages.includes('ko')) result.lyrics.korean = '';
+    if (!requestedLyricLanguages.some((lang) => lang !== 'ko')) result.lyrics.english = '';
+  }
+
+  if (shouldUseMixedLyrics && !params.isNoLyrics) {
     result.lyrics = enforceKpopMixedLyrics(result.lyrics);
   }
 
@@ -2525,12 +2219,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     style: params.styles ?? [],
     instrumentSound: params.instrumentSounds ?? [],
     tempo: params.tempo,
-    tempoSource: params.tempoSource,
-    isRandomTempo: params.isRandomTempo,
-    isNoLyrics: effectiveNoLyrics,
-    instrumentalOnlyRecommended: effectiveNoLyrics && !params.isNoLyrics,
     kpopMode: params.kpopMode ?? 0,
-  };
+    lyricLanguages: requestedLyricLanguages as any,
+    isNoLyrics: params.isNoLyrics as any,
+  } as any;
 
   return result as SongResult;
 }

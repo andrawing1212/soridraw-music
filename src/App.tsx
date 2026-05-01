@@ -1229,7 +1229,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 }
 
 function App() {
-  const generateMusic = async (titleLanguage: LanguageCode = 'ko', includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko']) => {
+  const generateMusic = async (_titleLanguage: LanguageCode = 'ko', includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko']) => {
     if (isMusicApiGenerating) return;
 
     try {
@@ -1248,29 +1248,44 @@ function App() {
 
       const token = await user.getIdToken();
 
-      let rawExtractedTitle = "Untitled";
-      if (titleLanguage === 'en') {
-        rawExtractedTitle = result.englishTitle || (result.title?.includes('│') ? result.title.split('│')[0] : result.title?.split('|')[0]) || result.title || "Untitled";
-      } else {
-        rawExtractedTitle = result.koreanTitle || (result.title?.includes('│') ? result.title.split('│')[1] : result.title?.split('|')[1]) || result.title || "Untitled";
-      }
-      
       const resolvedGenre = getResolvedGenre(result);
-      const finalTitle = formatDisplayTitle(resolvedGenre, rawExtractedTitle);
+      const storedLyricLanguages = ((result.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[];
+      const secondaryGeneratedLanguage = storedLyricLanguages.find((lang) => lang !== 'ko') || 'en';
+      const getTitleByLanguage = (lang: LanguageCode) => {
+        if (lang === 'ko') return result.koreanTitle || '';
+        return result.englishTitle || '';
+      };
+      const titleLanguages = includeLyrics && lyricLanguages.length > 0
+        ? Array.from(new Set(['ko', ...lyricLanguages])).slice(0, 2) as LanguageCode[]
+        : Array.from(new Set(['ko', secondaryGeneratedLanguage])).slice(0, 2) as LanguageCode[];
+      const koTitle = getTitleByLanguage('ko') || result.koreanTitle || '무제';
+      const otherTitleLanguage = titleLanguages.find((lang) => lang !== 'ko') || secondaryGeneratedLanguage;
+      const otherTitle = getTitleByLanguage(otherTitleLanguage) || result.englishTitle || '';
+      const finalTitle = otherTitle
+        ? `[${resolvedGenre}] '${koTitle} | ${otherTitle}'`
+        : `[${resolvedGenre}] '${koTitle}'`;
 
       const getLyricsByLanguage = (lang: LanguageCode) => {
         switch (lang) {
-          case 'en':
-            return result.lyrics?.english || '';
           case 'ko':
-          default:
             return result.lyrics?.korean || '';
+          case 'en':
+          case 'ja':
+          case 'zh':
+          case 'es':
+          case 'fr':
+          default:
+            return result.lyrics?.english || '';
         }
       };
 
       const lyricLanguageLabels: Record<LanguageCode, string> = {
         ko: 'Korean',
         en: 'English',
+        ja: 'Japanese',
+        zh: 'Chinese',
+        es: 'Spanish',
+        fr: 'French',
       };
 
       const resolvedLyricLanguages = includeLyrics
@@ -1309,7 +1324,7 @@ function App() {
             style: result.prompt || "",
             lyrics: resolvedLyrics,
             appliedKeywords: result.appliedKeywords || {},
-            titleLanguage,
+            titleLanguage: otherTitleLanguage,
             includeLyrics,
             lyricLanguages: resolvedLyricLanguages,
             lyricLanguage: resolvedLyricLanguages[0] || null
@@ -1361,7 +1376,7 @@ function App() {
   const [favorites, setFavorites] = useState<any[]>([]);
 
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
-  const [showGenerateOptionsModal, setShowGenerateOptionsModal] = useState(false);
+  const [showMainGenerationModal, setShowMainGenerationModal] = useState(false);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
@@ -3217,7 +3232,7 @@ const saveRecentSong = async (newSong: any) => {
   }, []);
   */
 
-  const handleGenerate = async (includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko']) => {
+  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[] }) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -3240,6 +3255,10 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     const hasFreeTextDirectorNote = userInput.trim().length > 0;
+    const requestedIncludeLyrics = generationOptions?.includeLyrics ?? true;
+    const requestedLyricLanguages = requestedIncludeLyrics
+      ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko', 'en']).filter(Boolean))).slice(0, 2) as LanguageCode[]
+      : [];
 
     if (selectedGenres.length === 0 && !hasFreeTextDirectorNote) {
       showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
@@ -3596,9 +3615,9 @@ const saveRecentSong = async (newSong: any) => {
         kpopMode,
         isKoreanEnglishMix,
         customStructure,
-        isNoLyrics: !includeLyrics,
-        lyricLanguages: includeLyrics ? lyricLanguages.slice(0, 2) : [],
-        lyricLanguage: includeLyrics ? lyricLanguages[0] : null,
+        isNoLyrics: !requestedIncludeLyrics,
+        includeLyrics: requestedIncludeLyrics,
+        lyricLanguages: requestedLyricLanguages,
         lyricDraft: isLyricMode ? lyricDraft : undefined,
         isLyricMode,
         lyricMode: isLyricMode ? lyricMode : undefined,
@@ -3612,15 +3631,8 @@ const saveRecentSong = async (newSong: any) => {
 
       if (abortControllerRef.current?.signal.aborted) return;
 
-      const selectedLyricLanguages = new Set(includeLyrics ? lyricLanguages.slice(0, 2) : []);
-      const resultLyrics = {
-        english: includeLyrics && selectedLyricLanguages.has('en') ? (song.lyrics?.english || '') : '',
-        korean: includeLyrics && selectedLyricLanguages.has('ko') ? (song.lyrics?.korean || '') : '',
-      };
-
       const newResult: SongResult = {
         ...song,
-        lyrics: resultLyrics,
         prompt: song.prompt,
         appliedKeywords: {
           ...song.appliedKeywords,
@@ -3632,7 +3644,8 @@ const saveRecentSong = async (newSong: any) => {
             ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
             : null,
           rapEnabled: rapEnabled,
-          isNoLyrics: !includeLyrics,
+          isNoLyrics: !requestedIncludeLyrics,
+          lyricLanguages: requestedLyricLanguages,
           isKoreanEnglishMix: isKoreanEnglishMix,
           kpopMode,
           isBallad: hasBalladStyle,
@@ -3725,6 +3738,21 @@ ${result.prompt}
     copyToClipboard(text, 'all');
   };
 
+
+  const getSecondaryLyricLanguageLabel = (song: SongResult | null = result) => {
+    const languageLabels: Record<string, string> = {
+      en: '영어',
+      ja: '일본어',
+      zh: '중국어',
+      es: '스페인어',
+      fr: '프랑스어',
+      ko: '한글',
+    };
+    const langs = (((song?.appliedKeywords as any)?.lyricLanguages || []) as string[]);
+    const secondary = langs.find((lang) => lang !== 'ko') || 'en';
+    return languageLabels[secondary] || '영어';
+  };
+
   const copyToClipboard = async (text: string, type: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -3812,16 +3840,16 @@ ${result.prompt}
           if (isGenerating) {
             handleGenerate();
           } else {
-            setShowGenerateOptionsModal(true);
+            setShowMainGenerationModal(true);
           }
-          setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '가사 포함 여부와 언어를 선택한 뒤 생성합니다.' });
+          setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
         }}
-        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '가사 포함 여부와 언어를 선택한 뒤 생성합니다.' })}
+        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
         onMouseLeave={() => {
           setHoveredItem(null);
           handleLongPressEnd();
         }}
-        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '가사 포함 여부와 언어를 선택한 뒤 생성합니다.' })}
+        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
         onTouchEnd={handleLongPressEnd}
         className={cn(
           "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
@@ -4830,16 +4858,16 @@ ${result.prompt}
                 {!result.appliedKeywords.isNoLyrics && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* English Lyrics Section */}
-                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                    <div className={cn("aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500", !result.lyrics.english && "hidden")}>
                       <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
                         <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                           <Music className="w-4 h-4 text-brand-orange" />
-                          영어 가사
+                          {getSecondaryLyricLanguageLabel(result)} 가사
                         </h3>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => copyToClipboard(result.lyrics.english, 'lyrics-en')}
-                            onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 가사 전체를 복사합니다.' })}
+                            onMouseEnter={() => setHoveredItem({ id: 'copy-lyrics-en', label: `${getSecondaryLyricLanguageLabel(result)} 가사 복사`, description: `${getSecondaryLyricLanguageLabel(result)} 가사 전체를 복사합니다.` })}
                             onMouseLeave={() => setHoveredItem(null)}
                             className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
                           >
@@ -4862,7 +4890,7 @@ ${result.prompt}
                     </div>
 
                     {/* Korean Lyrics Section */}
-                    <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
+                    <div className={cn("aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500", !result.lyrics.korean && "hidden")}>
                       <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
                         <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                           <Music className="w-4 h-4 text-brand-orange" />
@@ -5060,16 +5088,18 @@ ${result.prompt}
         )}
       </AnimatePresence>
       
+
       <AnimatePresence>
-        {showGenerateOptionsModal && (
+        {showMainGenerationModal && (
           <MusicApiGenerateModal
-            mode="song"
-            hideTitleLanguage
+            variant="main"
             hasApiKey={true}
-            onClose={() => setShowGenerateOptionsModal(false)}
+            isNoLyrics={false}
+            maxLyricLanguages={2}
+            onClose={() => setShowMainGenerationModal(false)}
             onConfirm={(_titleLang, includeLyrics, lyricLanguages) => {
-              setShowGenerateOptionsModal(false);
-              handleGenerate(includeLyrics, lyricLanguages);
+              setShowMainGenerationModal(false);
+              handleGenerate({ includeLyrics, lyricLanguages });
             }}
           />
         )}
@@ -5078,9 +5108,17 @@ ${result.prompt}
       <AnimatePresence>
         {showMusicApiModal && (
           <MusicApiGenerateModal
-            mode="musicApi"
+            variant="musicApi"
             hasApiKey={hasSunoApiKey}
             isNoLyrics={(!result?.lyrics?.korean && !result?.lyrics?.english) || (result?.lyrics?.korean === "" && result?.lyrics?.english === "")}
+            availableLyricLanguages={(() => {
+              const langs: LanguageCode[] = [];
+              const generated = (((result?.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]);
+              if (result?.lyrics?.korean) langs.push('ko');
+              if (result?.lyrics?.english) langs.push(generated.find((lang) => lang !== 'ko') || 'en');
+              return langs;
+            })()}
+            maxLyricLanguages={1}
             onClose={() => setShowMusicApiModal(false)}
             onConfirm={(titleLang, includeLyrics, lyricLanguages) => {
               setShowMusicApiModal(false);
@@ -8122,9 +8160,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
         </div>
         
         <div className="flex justify-between mt-3 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">
-          <span>40 BPM</span>
+          <span>20 BPM</span>
           <span>100 BPM</span>
-          <span>160 BPM</span>
+          <span>200 BPM</span>
         </div>
       </div>
 

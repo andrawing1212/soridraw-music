@@ -157,7 +157,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption } from './components/MusicApiGenerateModal';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
@@ -1229,7 +1229,44 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 }
 
 function App() {
-  const generateMusic = async (_titleLanguage: LanguageCode = 'ko', includeLyrics: boolean = true, lyricLanguages: LanguageCode[] = ['ko'], generationCount: number = 1) => {
+  const getAvailableMusicApiLyricLanguages = (song: SongResult | null): LanguageCode[] => {
+    if (!song) return [];
+    const generated = (((song.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
+    const secondary = generated.find((lang) => lang !== 'ko') || 'en';
+    const langs: LanguageCode[] = [];
+    if (song.lyrics?.korean?.trim() && (generated.length === 0 || generated.includes('ko'))) langs.push('ko');
+    if (song.lyrics?.english?.trim()) langs.push(secondary);
+    return Array.from(new Set(langs));
+  };
+
+  const getMusicApiBatchSongs = (): SongResult[] => {
+    if (!latestGenerationBatchId) return result ? [result] : [];
+    const batchSongs = history.filter((song) => (song.appliedKeywords as any)?.generationBatchId === latestGenerationBatchId);
+    return batchSongs.length > 0 ? batchSongs : (result ? [result] : []);
+  };
+
+  const getMusicApiTargetId = (song: SongResult, fallbackIndex = 0) => {
+    const batchId = (song.appliedKeywords as any)?.generationBatchId || 'single';
+    const index = (song.appliedKeywords as any)?.generationIndex || fallbackIndex + 1;
+    return `${batchId}-${index}`;
+  };
+
+  const getMusicApiTargetOptions = (): MusicApiTargetOption[] => {
+    return getMusicApiBatchSongs().map((song, index) => ({
+      id: getMusicApiTargetId(song, index),
+      label: (song.koreanTitle || song.englishTitle || song.title || `생성곡 ${index + 1}`).replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]|['"]$/g, ''),
+      subLabel: formatInlineTitle(song),
+      availableLyricLanguages: getAvailableMusicApiLyricLanguages(song),
+    }));
+  };
+
+  const generateMusic = async (
+    _titleLanguage: LanguageCode = 'ko',
+    includeLyrics: boolean = true,
+    lyricLanguages: LanguageCode[] = ['ko'],
+    _generationCount: number = 1,
+    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode> }
+  ) => {
     if (isMusicApiGenerating) return;
 
     try {
@@ -1246,39 +1283,14 @@ function App() {
         return;
       }
 
-      const resolvedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationCount) || 1)));
       const token = await user.getIdToken();
+      const targetMode = options?.targetMode === 'batch' ? 'batch' : 'current';
+      const targetSongs = targetMode === 'batch' ? getMusicApiBatchSongs() : [result];
 
-      const resolvedGenre = getResolvedGenre(result);
-      const storedLyricLanguages = ((result.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[];
-      const secondaryGeneratedLanguage = storedLyricLanguages.find((lang) => lang !== 'ko') || 'en';
-      const getTitleByLanguage = (lang: LanguageCode) => {
-        if (lang === 'ko') return result.koreanTitle || '';
-        return result.englishTitle || '';
-      };
-      const titleLanguages = includeLyrics && lyricLanguages.length > 0
-        ? Array.from(new Set(['ko', ...lyricLanguages])).slice(0, 2) as LanguageCode[]
-        : Array.from(new Set(['ko', secondaryGeneratedLanguage])).slice(0, 2) as LanguageCode[];
-      const koTitle = getTitleByLanguage('ko') || result.koreanTitle || '무제';
-      const otherTitleLanguage = titleLanguages.find((lang) => lang !== 'ko') || secondaryGeneratedLanguage;
-      const otherTitle = getTitleByLanguage(otherTitleLanguage) || result.englishTitle || '';
-      const finalTitle = otherTitle
-        ? `[${resolvedGenre}] '${koTitle} | ${otherTitle}'`
-        : `[${resolvedGenre}] '${koTitle}'`;
-
-      const getLyricsByLanguage = (lang: LanguageCode) => {
-        switch (lang) {
-          case 'ko':
-            return result.lyrics?.korean || '';
-          case 'en':
-          case 'ja':
-          case 'zh':
-          case 'es':
-          case 'fr':
-          default:
-            return result.lyrics?.english || '';
-        }
-      };
+      if (targetSongs.length === 0) {
+        showToast("Music API로 보낼 곡이 없습니다.");
+        return;
+      }
 
       const lyricLanguageLabels: Record<LanguageCode, string> = {
         ko: 'Korean',
@@ -1289,29 +1301,55 @@ function App() {
         fr: 'French',
       };
 
-      const resolvedLyricLanguages = includeLyrics
-        ? Array.from(new Set((lyricLanguages || []).filter(Boolean))).slice(0, 2)
-        : [];
+      const getLyricsByLanguage = (song: SongResult, lang: LanguageCode) => {
+        switch (lang) {
+          case 'ko':
+            return song.lyrics?.korean || '';
+          case 'en':
+          case 'ja':
+          case 'zh':
+          case 'es':
+          case 'fr':
+          default:
+            return song.lyrics?.english || '';
+        }
+      };
 
-      const resolvedLyrics = includeLyrics
-        ? resolvedLyricLanguages
-            .map((lang) => {
-              const text = getLyricsByLanguage(lang).trim();
-              if (!text) return '';
-              return resolvedLyricLanguages.length > 1
-                ? `[${lyricLanguageLabels[lang]} Lyrics]\n${text}`
-                : text;
-            })
-            .filter(Boolean)
-            .join('\n\n')
-        : '';
+      const getMusicApiTitle = (song: SongResult, selectedLanguage: LanguageCode | null) => {
+        const resolvedGenre = getResolvedGenre(song);
+        const koTitle = (song.koreanTitle || '').trim();
+        const secondaryTitle = (song.englishTitle || '').trim();
 
-      if (includeLyrics && !resolvedLyrics.trim()) {
-        showToast('선택한 언어의 가사가 없습니다. 가사 미포함으로 생성하거나, 먼저 가사를 포함해 곡을 생성해주세요.');
-        return;
-      }
+        if (!selectedLanguage || selectedLanguage === 'ko') {
+          if (koTitle && secondaryTitle && koTitle !== secondaryTitle) return `[${resolvedGenre}] '${koTitle} | ${secondaryTitle}'`;
+          return `[${resolvedGenre}] '${koTitle || secondaryTitle || '무제'}'`;
+        }
 
-      for (let i = 0; i < resolvedGenerationCount; i += 1) {
+        if (koTitle && secondaryTitle && koTitle !== secondaryTitle) return `[${resolvedGenre}] '${koTitle} | ${secondaryTitle}'`;
+        return `[${resolvedGenre}] '${secondaryTitle || koTitle || 'Untitled'}'`;
+      };
+
+      for (let i = 0; i < targetSongs.length; i += 1) {
+        const song = targetSongs[i];
+        const targetId = getMusicApiTargetId(song, i);
+        const selectedLanguage = includeLyrics
+          ? (targetMode === 'batch'
+              ? options?.perTargetLyricLanguages?.[targetId]
+              : (lyricLanguages || [])[0]) || getAvailableMusicApiLyricLanguages(song)[0]
+          : null;
+
+        const resolvedLyricLanguages = includeLyrics && selectedLanguage ? [selectedLanguage] : [];
+        const resolvedLyrics = includeLyrics && selectedLanguage
+          ? getLyricsByLanguage(song, selectedLanguage).trim()
+          : '';
+
+        if (includeLyrics && !resolvedLyrics) {
+          showToast(`${i + 1}번 곡에 선택한 언어의 가사가 없습니다. 다른 언어를 선택하거나 가사 미포함으로 생성해주세요.`);
+          return;
+        }
+
+        const finalTitle = getMusicApiTitle(song, selectedLanguage || null);
+
         const res = await fetch(
           "https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack",
           {
@@ -1322,32 +1360,31 @@ function App() {
             },
             body: JSON.stringify({
               title: finalTitle,
-              prompt: result.prompt || "",
-              style: result.prompt || "",
+              prompt: song.prompt || "",
+              style: song.prompt || "",
               lyrics: resolvedLyrics,
-              appliedKeywords: result.appliedKeywords || {},
-              titleLanguage: otherTitleLanguage,
+              appliedKeywords: song.appliedKeywords || {},
+              titleLanguage: selectedLanguage || null,
               includeLyrics,
               lyricLanguages: resolvedLyricLanguages,
-              lyricLanguage: resolvedLyricLanguages[0] || null,
+              lyricLanguage: selectedLanguage || null,
               generationIndex: i + 1,
-              generationCount: resolvedGenerationCount
+              generationCount: targetSongs.length,
+              sourceGenerationBatchId: (song.appliedKeywords as any)?.generationBatchId || null,
             }),
           }
         );
 
         const data = await res.json();
-        console.log(`생성 결과 ${i + 1}/${resolvedGenerationCount}:`, data);
+        console.log(`Music API 생성 결과 ${i + 1}/${targetSongs.length}:`, data);
 
         if (!res.ok || !data.ok) {
-          showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${resolvedGenerationCount})
-${data.error || "알 수 없는 오류"}`);
+          showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${targetSongs.length})\n${data.error || "알 수 없는 오류"}`);
           return;
         }
       }
 
-      showToast(`Music API 생성 요청이 완료되었습니다.
-${resolvedGenerationCount}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
+      showToast(`Music API 생성 요청이 완료되었습니다.\n${targetSongs.length}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
     } catch (err) {
       console.error("생성 실패:", err);
       showToast("Music API 생성 요청 중 오류가 발생했습니다.");
@@ -1380,6 +1417,7 @@ ${resolvedGenerationCount}곡은 라이브러리에서 자동으로 상태가 �
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [latestGenerationBatchId, setLatestGenerationBatchId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
 
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
@@ -2714,6 +2752,7 @@ const cycleFamilySelection = (
       setHistory([]);
       setResult(null);
       setHistoryIndex(-1);
+      setLatestGenerationBatchId(null);
       return;
     }
 
@@ -2734,6 +2773,10 @@ const cycleFamilySelection = (
         const finalSongs = sortedSongs;
 
         setHistory(finalSongs);
+        const newestBatchId = (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null;
+        if (newestBatchId) {
+          setLatestGenerationBatchId((prev) => prev || newestBatchId);
+        }
 
         if (finalSongs.length > 0) {
           // Set to the first song (newest) on initial load/reconnect
@@ -3636,6 +3679,7 @@ const saveRecentSong = async (newSong: any) => {
       console.log("GENERATE PAYLOAD:", payload);
 
       const generatedResults: SongResult[] = [];
+      const generationBatchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       for (let i = 0; i < requestedGenerationCount; i += 1) {
         if (abortControllerRef.current?.signal.aborted) return;
@@ -3665,6 +3709,7 @@ const saveRecentSong = async (newSong: any) => {
             lyricLanguages: requestedLyricLanguages,
             generationCount: requestedGenerationCount,
             generationIndex: i + 1,
+            generationBatchId,
             isKoreanEnglishMix: isKoreanEnglishMix,
             kpopMode,
             isBallad: hasBalladStyle,
@@ -3688,6 +3733,7 @@ const saveRecentSong = async (newSong: any) => {
       if (!firstResult) return;
 
       setResult(firstResult);
+      setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
       for (const item of generatedResults) {
         await saveRecentSong(item);
@@ -3778,6 +3824,32 @@ ${result.prompt}
     const langs = (((song?.appliedKeywords as any)?.lyricLanguages || []) as string[]);
     const secondary = langs.find((lang) => lang !== 'ko') || 'en';
     return languageLabels[secondary] || '영어';
+  };
+
+  const isInLatestGenerationBatch = (song: SongResult | null = result) => {
+    if (!song) return false;
+    const batchId = (song.appliedKeywords as any)?.generationBatchId;
+    if (batchId && latestGenerationBatchId) return batchId === latestGenerationBatchId;
+    return historyIndex === 0;
+  };
+
+  const getTitleLinesForDisplay = (song: SongResult): string[] => {
+    const langs = (((song.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
+    const hasKo = langs.includes('ko');
+    const hasSecondary = langs.some((lang) => lang !== 'ko');
+    const lines: string[] = [];
+
+    if (hasKo && song.koreanTitle) lines.push(formatKoreanTitle(song));
+    if (hasSecondary && song.englishTitle) lines.push(formatEnglishTitle(song));
+
+    if (lines.length === 0) {
+      if (song.koreanTitle && song.englishTitle) return [formatKoreanTitle(song), formatEnglishTitle(song)];
+      if (song.koreanTitle) return [formatKoreanTitle(song)];
+      if (song.englishTitle) return [formatEnglishTitle(song)];
+      return [formatInlineTitle(song)];
+    }
+
+    return lines.slice(0, 2);
   };
 
   const copyToClipboard = async (text: string, type: string) => {
@@ -4592,8 +4664,8 @@ ${result.prompt}
 
                 <div className="space-y-4">
                   <div className="flex flex-col items-center gap-2">
-                    {historyIndex === 0 && (
-                      <span className="px-3 py-1 bg-brand-white/10 text-brand-White text-[10px] font-bold rounded-full border border-brand-orange/17 normal-case tracking-normal mb-1">
+                    {isInLatestGenerationBatch(result) && (
+                      <span className="px-3 py-1 bg-yellow-400/10 text-yellow-300 text-[10px] font-bold rounded-full border border-yellow-400/25 normal-case tracking-normal mb-1">
                         최근 생성 곡
                       </span>
                     )}
@@ -4605,33 +4677,30 @@ ${result.prompt}
                   <div className="h-auto min-h-[60px] flex items-center justify-center w-full px-4 mt-2">
                     <div className="w-full max-w-2xl text-center flex flex-col items-center">
                       {(() => {
-                        const koLine = formatKoreanTitle(result);
-                        const enLine = formatEnglishTitle(result);
-                        const { koreanTitle, englishTitle, title } = result;
-                        
-                        if (koreanTitle && englishTitle) {
+                        const lines = getTitleLinesForDisplay(result);
+                        const isRecent = isInLatestGenerationBatch(result);
+                        const primaryClass = isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]';
+                        const secondaryClass = isRecent ? 'text-yellow-200/80' : 'text-[var(--text-primary)]/70';
+
+                        if (lines.length >= 2) {
                           return (
                             <div className="relative w-full flex items-center justify-center min-h-[100px] md:min-h-[120px]">
-                              {/* 중앙 제목 영역 */}
                               <div className="flex flex-col items-center justify-center gap-1.5 px-4 sm:px-10 w-full overflow-hidden">
-                                <h2 className="text-[15px] sm:text-xl md:text-2xl font-bold text-[var(--text-primary)] leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full">
-                                  {koLine}
+                                <h2 className={`text-[15px] sm:text-xl md:text-2xl font-bold ${primaryClass} leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full`}>
+                                  {lines[0]}
                                 </h2>
-                                <h2 className="text-[11px] sm:text-[15px] md:text-[18px] font-bold text-[var(--text-primary)]/70 leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full">
-                                  {enLine}
+                                <h2 className={`text-[11px] sm:text-[15px] md:text-[18px] font-bold ${secondaryClass} leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full`}>
+                                  {lines[1]}
                                 </h2>
                               </div>
-                              
-                              {/* 우측 복사 버튼 그룹 - 이제 상단에 통합됨 (코드 제거) */}
                             </div>
                           );
                         }
-                        
-                        const fallbackText = formatInlineTitle(result);
+
                         return (
                           <div className="relative w-full flex items-center justify-center min-h-[60px]">
-                            <h2 className="text-[15px] sm:text-xl md:text-2xl font-bold text-[var(--text-primary)] leading-tight text-center px-4 sm:px-10 whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full">
-                              {fallbackText}
+                            <h2 className={`text-[15px] sm:text-xl md:text-2xl font-bold ${primaryClass} leading-tight text-center px-4 sm:px-10 whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full`}>
+                              {lines[0]}
                             </h2>
                           </div>
                         );
@@ -5141,15 +5210,17 @@ ${result.prompt}
             availableLyricLanguages={(() => {
               const langs: LanguageCode[] = [];
               const generated = (((result?.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]);
-              if (result?.lyrics?.korean) langs.push('ko');
-              if (result?.lyrics?.english) langs.push(generated.find((lang) => lang !== 'ko') || 'en');
-              return langs;
+              const generatedSecondary = generated.find((lang) => lang !== 'ko');
+              if (result?.lyrics?.korean && (generated.length === 0 || generated.includes('ko'))) langs.push('ko');
+              if (result?.lyrics?.english) langs.push(generatedSecondary || 'en');
+              return Array.from(new Set(langs));
             })()}
             maxLyricLanguages={1}
+            musicApiTargets={getMusicApiTargetOptions()}
             onClose={() => setShowMusicApiModal(false)}
-            onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount) => {
+            onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
               setShowMusicApiModal(false);
-              generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount);
+              generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount, options);
             }}
           />
         )}

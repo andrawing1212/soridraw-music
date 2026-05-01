@@ -5,6 +5,14 @@ import { Check, ChevronLeft, Key, Languages, Music, X, ListMusic } from 'lucide-
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
 
 type ModalVariant = 'main' | 'musicApi';
+type MusicApiTargetMode = 'current' | 'batch';
+
+export type MusicApiTargetOption = {
+  id: string;
+  label: string;
+  subLabel?: string;
+  availableLyricLanguages: LanguageCode[];
+};
 
 type MusicApiGenerateModalProps = {
   hasApiKey?: boolean;
@@ -12,8 +20,18 @@ type MusicApiGenerateModalProps = {
   variant?: ModalVariant;
   availableLyricLanguages?: LanguageCode[];
   maxLyricLanguages?: number;
+  musicApiTargets?: MusicApiTargetOption[];
   onClose: () => void;
-  onConfirm: (titleLanguage: LanguageCode, includeLyrics: boolean, lyricLanguages: LanguageCode[], generationCount: number) => void;
+  onConfirm: (
+    titleLanguage: LanguageCode,
+    includeLyrics: boolean,
+    lyricLanguages: LanguageCode[],
+    generationCount: number,
+    options?: {
+      targetMode?: MusicApiTargetMode;
+      perTargetLyricLanguages?: Record<string, LanguageCode>;
+    }
+  ) => void;
 };
 
 const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; short: string }[] = [
@@ -33,6 +51,7 @@ export default function MusicApiGenerateModal({
   variant = 'musicApi',
   availableLyricLanguages,
   maxLyricLanguages,
+  musicApiTargets = [],
   onClose,
   onConfirm,
 }: MusicApiGenerateModalProps) {
@@ -66,6 +85,9 @@ export default function MusicApiGenerateModal({
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
+  const canUseBatchTargets = !isMain && musicApiTargets.length > 1;
+  const [targetMode, setTargetMode] = useState<MusicApiTargetMode>('current');
+  const [perTargetLyricLanguages, setPerTargetLyricLanguages] = useState<Record<string, LanguageCode>>({});
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -85,13 +107,27 @@ export default function MusicApiGenerateModal({
     });
   }, [filteredLanguages, includeLyrics, initialLangs, maxCount]);
 
+  useEffect(() => {
+    if (isMain || !includeLyrics || targetMode !== 'batch') return;
+    setPerTargetLyricLanguages((prev) => {
+      const next: Record<string, LanguageCode> = {};
+      musicApiTargets.forEach((target) => {
+        const available = target.availableLyricLanguages || [];
+        if (available.length === 0) return;
+        next[target.id] = available.includes(prev[target.id]) ? prev[target.id] : available[0];
+      });
+      return next;
+    });
+  }, [includeLyrics, isMain, musicApiTargets, targetMode]);
+
   const selectedLyricLabel = useMemo(() => {
     if (!includeLyrics) return '가사 미포함';
+    if (!isMain && targetMode === 'batch') return `곡별 언어 선택 (${musicApiTargets.length}곡)`;
     return lyricLanguages
       .map((lang) => getLanguageMeta(lang).label)
       .filter(Boolean)
       .join(' + ');
-  }, [includeLyrics, lyricLanguages]);
+  }, [includeLyrics, isMain, lyricLanguages, musicApiTargets.length, targetMode]);
 
   const toggleLyricLanguage = (lang: LanguageCode) => {
     setLyricLanguages((prev) => {
@@ -109,7 +145,12 @@ export default function MusicApiGenerateModal({
 
   const handleNext = () => {
     if (!hasApiKey) return;
-    if (includeLyrics && lyricLanguages.length === 0) return;
+    if (includeLyrics && targetMode === 'batch' && !isMain) {
+      const allSelected = musicApiTargets.every((target) => !target.availableLyricLanguages?.length || perTargetLyricLanguages[target.id]);
+      if (!allSelected) return;
+    } else if (includeLyrics && lyricLanguages.length === 0) {
+      return;
+    }
     setStep(2);
   };
 
@@ -117,12 +158,15 @@ export default function MusicApiGenerateModal({
     if (!hasApiKey) return;
     const langs = includeLyrics ? lyricLanguages.slice(0, maxCount) : [];
     const titleLanguage = langs.find((lang) => lang !== 'ko') || langs[0] || 'ko';
-    onConfirm(titleLanguage, includeLyrics, langs, generationCount);
+    onConfirm(titleLanguage, includeLyrics, langs, isMain ? generationCount : 1, {
+      targetMode: isMain ? 'current' : targetMode,
+      perTargetLyricLanguages: includeLyrics && targetMode === 'batch' && !isMain ? perTargetLyricLanguages : undefined,
+    });
   };
 
   const subtitle = isMain
     ? (step === 1 ? '가사 포함 여부와 생성할 가사 언어를 선택합니다.' : '선택한 설정으로 곡 생성을 시작합니다.')
-    : (step === 1 ? 'Music API로 보낼 가사 포함 여부를 선택합니다.' : '선택한 설정으로 생성을 요청합니다.');
+    : (step === 1 ? 'Music API로 보낼 대상과 가사를 선택합니다.' : '선택한 설정으로 생성을 요청합니다.');
 
   return (
     <div
@@ -188,6 +232,38 @@ export default function MusicApiGenerateModal({
                 className="space-y-4"
               >
                 <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 overflow-hidden">
+                  {!isMain && canUseBatchTargets && (
+                    <div className="p-4 border-b border-[var(--border-color)]">
+                      <p className="text-xs font-black text-[var(--text-secondary)] mb-3">생성 대상</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTargetMode('current')}
+                          className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                            targetMode === 'current'
+                              ? accentSelected
+                              : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                          }`}
+                        >
+                          <p className="text-sm font-black">현재 곡만</p>
+                          <p className="text-[10px] opacity-70 mt-0.5">보고 있는 곡 1개</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTargetMode('batch')}
+                          className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                            targetMode === 'batch'
+                              ? accentSelected
+                              : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                          }`}
+                        >
+                          <p className="text-sm font-black">최근 생성 묶음 전체</p>
+                          <p className="text-[10px] opacity-70 mt-0.5">각 곡을 따로 전송</p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="p-4 border-b border-[var(--border-color)]">
                     <p className="text-xs font-black text-[var(--text-secondary)] mb-3">가사 포함 여부</p>
                     <div className="grid grid-cols-2 gap-2">
@@ -220,64 +296,106 @@ export default function MusicApiGenerateModal({
 
                   {includeLyrics && (
                     <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs font-black text-[var(--text-secondary)]">가사/제목 언어</p>
-                        <p className={`text-[10px] font-bold ${accentText}`}>최대 {maxCount}개</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {filteredLanguages.map((item) => {
-                          const selected = lyricLanguages.includes(item.id);
-                          const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => toggleLyricLanguage(item.id)}
-                              className={`rounded-xl px-3 py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                                selected
-                                  ? accentSelected
-                                  : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
-                              }`}
-                            >
-                              <p className="text-sm font-black flex items-center gap-1.5">
-                                {selected && <Check className="w-3.5 h-3.5" />}
-                                {item.label}
-                              </p>
-                              <p className="text-[10px] opacity-70 mt-0.5">제목도 {item.short} 기준</p>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {targetMode === 'batch' && !isMain ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-black text-[var(--text-secondary)]">곡별 가사/제목 언어</p>
+                            <p className={`text-[10px] font-bold ${accentText}`}>각 곡 1개</p>
+                          </div>
+                          {musicApiTargets.map((target, idx) => (
+                            <div key={target.id} className="rounded-xl border border-[var(--border-color)] bg-black/10 p-3">
+                              <p className="text-xs font-black text-[var(--text-primary)] truncate">{idx + 1}. {target.label}</p>
+                              {target.subLabel && <p className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{target.subLabel}</p>}
+                              <div className="grid grid-cols-2 gap-2 mt-3">
+                                {(target.availableLyricLanguages || []).map((lang) => {
+                                  const meta = getLanguageMeta(lang);
+                                  const selected = perTargetLyricLanguages[target.id] === lang;
+                                  return (
+                                    <button
+                                      key={`${target.id}-${lang}`}
+                                      type="button"
+                                      onClick={() => setPerTargetLyricLanguages((prev) => ({ ...prev, [target.id]: lang }))}
+                                      className={`rounded-xl px-3 py-2.5 border text-left transition-all ${
+                                        selected
+                                          ? accentSelected
+                                          : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                                      }`}
+                                    >
+                                      <p className="text-xs font-black flex items-center gap-1.5">
+                                        {selected && <Check className="w-3.5 h-3.5" />}
+                                        {meta.short}
+                                      </p>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-black text-[var(--text-secondary)]">가사/제목 언어</p>
+                            <p className={`text-[10px] font-bold ${accentText}`}>최대 {maxCount}개</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {filteredLanguages.map((item) => {
+                              const selected = lyricLanguages.includes(item.id);
+                              const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => toggleLyricLanguage(item.id)}
+                                  className={`rounded-xl px-3 py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                    selected
+                                      ? accentSelected
+                                      : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                                  }`}
+                                >
+                                  <p className="text-sm font-black flex items-center gap-1.5">
+                                    {selected && <Check className="w-3.5 h-3.5" />}
+                                    {item.label}
+                                  </p>
+                                  <p className="text-[10px] opacity-70 mt-0.5">제목도 {item.short} 기준</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-black text-[var(--text-secondary)] flex items-center gap-1.5">
-                      <ListMusic className="w-3.5 h-3.5" />
-                      생성 개수
-                    </p>
-                    <p className={`text-[10px] font-bold ${accentText}`}>최대 5곡</p>
+                {isMain && (
+                  <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-black text-[var(--text-secondary)] flex items-center gap-1.5">
+                        <ListMusic className="w-3.5 h-3.5" />
+                        생성 개수
+                      </p>
+                      <p className={`text-[10px] font-bold ${accentText}`}>최대 5곡</p>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[1, 2, 3, 4, 5].map((count) => (
+                        <button
+                          key={count}
+                          type="button"
+                          onClick={() => setGenerationCount(count)}
+                          className={`rounded-xl px-2 py-3 border text-center transition-all ${
+                            generationCount === count
+                              ? accentSelected
+                              : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                          }`}
+                        >
+                          <p className="text-sm font-black">{count}곡</p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-5 gap-2">
-                    {[1, 2, 3, 4, 5].map((count) => (
-                      <button
-                        key={count}
-                        type="button"
-                        onClick={() => setGenerationCount(count)}
-                        className={`rounded-xl px-2 py-3 border text-center transition-all ${
-                          generationCount === count
-                            ? accentSelected
-                            : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
-                        }`}
-                      >
-                        <p className="text-sm font-black">{count}곡</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                )}
 
                 <button
                   type="button"
@@ -304,10 +422,18 @@ export default function MusicApiGenerateModal({
                       {selectedLyricLabel}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-5 py-4">
-                    <span className="text-sm font-black text-[var(--text-secondary)]">생성 개수</span>
-                    <span className={`text-sm font-black ${accentText}`}>{generationCount}곡</span>
-                  </div>
+                  {!isMain && canUseBatchTargets && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
+                      <span className="text-sm font-black text-[var(--text-secondary)]">생성 대상</span>
+                      <span className={`text-sm font-black ${accentText}`}>{targetMode === 'batch' ? `최근 묶음 ${musicApiTargets.length}곡` : '현재 곡 1곡'}</span>
+                    </div>
+                  )}
+                  {isMain && (
+                    <div className="flex items-center justify-between px-5 py-4">
+                      <span className="text-sm font-black text-[var(--text-secondary)]">생성 개수</span>
+                      <span className={`text-sm font-black ${accentText}`}>{generationCount}곡</span>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -316,7 +442,7 @@ export default function MusicApiGenerateModal({
                   disabled={!hasApiKey}
                   className={`w-full h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-black transition-all shadow-lg ${accentBg}`}
                 >
-                  {generationCount}곡 생성하기
+                  {isMain ? `${generationCount}곡 생성하기` : (targetMode === 'batch' ? `${musicApiTargets.length}곡 API 생성하기` : '1곡 API 생성하기')}
                 </button>
               </motion.div>
             )}

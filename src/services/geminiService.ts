@@ -1653,14 +1653,22 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
     fr: 'French',
   };
   const secondaryLanguage = requestedLyricLanguages.find((lang) => lang !== 'ko') || 'en';
+  const hasKoreanLanguage = requestedLyricLanguages.includes('ko');
+  const hasSecondaryLanguage = requestedLyricLanguages.some((lang) => lang !== 'ko');
+  const titleFormatInstruction = hasKoreanLanguage && hasSecondaryLanguage
+    ? `Return the title pair as: '${languageNameMap[secondaryLanguage]} Title' │ 'Korean Title'.`
+    : hasKoreanLanguage
+      ? `Return the title as: 'Korean Title'. Do not create an English or other-language title.`
+      : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
   const requestedLanguageInstruction = effectiveNoLyrics
     ? ''
     : `OUTPUT LANGUAGE RULE (MANDATORY):
 - Generate titles and lyrics only for the selected language setting: ${requestedLyricLanguages.map((lang) => languageNameMap[lang]).join(' + ')}.
+- The title language(s) MUST exactly match the selected lyric language(s).
+- ${titleFormatInstruction}
 - If Korean is selected, put Korean lyrics in JSON field lyrics.korean and create a natural Korean title.
 - If a non-Korean language is selected, put that language's lyrics in JSON field lyrics.english, even when the selected language is not English.
-- The first title slot before │ must be the non-Korean selected language title (${languageNameMap[secondaryLanguage]}). The second title slot after │ must be Korean when Korean is selected.
-- If only Korean is selected, still return a compact compatible second title, but keep Korean as the main title.
+- If a language is not selected, do not create a title or lyrics for that language.
 - Do not generate unselected lyric languages.`;
 
   const lyricsResponseSchema = params.isNoLyrics 
@@ -1803,15 +1811,15 @@ ${requestedLanguageInstruction}
 
 Return JSON:
 {
-  "title": "'English Title' │ 'Korean Title'"${params.isNoLyrics ? "" : `,
-  "lyrics": { "english": "Full English lyrics.", "korean": "Full Korean lyrics." }`}
+  "title": "Title text following the selected title language rule above"${params.isNoLyrics ? "" : `,
+  "lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }`}
 }
 
 TITLE RULES (CRITICAL):
 
 
-- Generate ONE English title and ONE Korean title as a pair.
-- They MUST be independent titles, NOT direct translations of each other.
+- Generate title(s) ONLY in the selected lyric language(s).
+- If two title languages are selected, they MUST be independent titles, NOT direct translations of each other.
 - They should share the same vibe, theme, and genre of the song.
 - Avoid feeling like a literal translation; they should sound natural in their respective languages.
 - Tone should match (e.g., both sophisticated, both playful, both dark).
@@ -1820,7 +1828,7 @@ TITLE RULES (CRITICAL):
 - DO NOT include words taken from STYLE such as: "Traditional Korean Fusion", "Gugak-pop", "New Jack Swing", "City Pop", "K-pop", "J-pop", "ballad pacing", "global pop approach", etc.
 - DO NOT include words taken from STYLE such as: "K-pop", "City Pop", etc.
 - The genre label will be attached later by the app, so return the title body only.
-- Format: 'English Title' │ 'Korean Title'
+- Format must follow the selected title language rule above.
 - Do NOT use technical direction words as the title concept unless the user explicitly made them the story theme.
 - Examples of forbidden title concepts when they are only instructions: offbeat, half-beat, slow tempo, hook, vocal tone, high-note restraint, 엇박자, 느린템포, 고음자제, 중독성 후렴, 보컬톤.
 
@@ -2141,11 +2149,17 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     const match = rawTitle.match(quotePairRegex);
     
     if (match) {
-      const engTitle = match[1].trim();
-      const korTitle = match[2].trim();
-      result.englishTitle = engTitle;
-      result.koreanTitle = korTitle;
-      result.title = `[${genreTag}] '${engTitle}' │ '${korTitle}'`;
+      const firstTitle = match[1].trim();
+      const secondTitle = match[2].trim();
+      result.englishTitle = hasSecondaryLanguage ? firstTitle : '';
+      result.koreanTitle = hasKoreanLanguage ? (hasSecondaryLanguage ? secondTitle : firstTitle) : '';
+      const titleParts = [
+        hasSecondaryLanguage ? result.englishTitle : '',
+        hasKoreanLanguage ? result.koreanTitle : '',
+      ].filter(Boolean);
+      result.title = titleParts.length > 1
+        ? `[${genreTag}] '${titleParts[0]}' │ '${titleParts[1]}'`
+        : `[${genreTag}] '${titleParts[0] || firstTitle}'`;
     } else {
       // 3. Fallback: Aggressive cleaning
       let title = rawTitle;
@@ -2172,22 +2186,31 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       // 4. Ensure it has a │ and is quoted
       if (title.includes("│")) {
         const parts = title.split("│").map(p => p.trim().replace(/^['"]+|['"]+$/g, ""));
-        const eng = parts[0] || "Untitled";
-        const kor = parts[1] || "무제";
-        result.englishTitle = eng;
-        result.koreanTitle = kor;
-        result.title = `[${genreTag}] '${eng}' │ '${kor}'`;
+        const first = parts[0] || "Untitled";
+        const second = parts[1] || "무제";
+        result.englishTitle = hasSecondaryLanguage ? first : '';
+        result.koreanTitle = hasKoreanLanguage ? (hasSecondaryLanguage ? second : first) : '';
+        const titleParts = [
+          hasSecondaryLanguage ? result.englishTitle : '',
+          hasKoreanLanguage ? result.koreanTitle : '',
+        ].filter(Boolean);
+        result.title = titleParts.length > 1
+          ? `[${genreTag}] '${titleParts[0]}' │ '${titleParts[1]}'`
+          : `[${genreTag}] '${titleParts[0] || first}'`;
       } else {
         const cleanTitle = title.replace(/^['"]+|['"]+$/g, "");
-        result.englishTitle = cleanTitle || 'Untitled';
-        result.koreanTitle = cleanTitle || '무제';
-        result.title = `[${genreTag}] '${cleanTitle || 'Untitled'}'`;
+        result.englishTitle = hasSecondaryLanguage ? (cleanTitle || 'Untitled') : '';
+        result.koreanTitle = hasKoreanLanguage ? (cleanTitle || '무제') : '';
+        result.title = `[${genreTag}] '${cleanTitle || (hasKoreanLanguage ? '무제' : 'Untitled')}'`;
       }
     }
   } else {
-    result.englishTitle = 'Untitled';
-    result.koreanTitle = '무제';
-    result.title = `[${genreTag}] 'Untitled' │ '무제'`;
+    result.englishTitle = hasSecondaryLanguage ? 'Untitled' : '';
+    result.koreanTitle = hasKoreanLanguage ? '무제' : '';
+    const fallbackParts = [result.englishTitle, result.koreanTitle].filter(Boolean);
+    result.title = fallbackParts.length > 1
+      ? `[${genreTag}] '${fallbackParts[0]}' │ '${fallbackParts[1]}'`
+      : `[${genreTag}] '${fallbackParts[0] || 'Untitled'}'`;
   }
 
   // Ensure lyrics object and properties exist
@@ -2221,6 +2244,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     tempo: params.tempo,
     kpopMode: params.kpopMode ?? 0,
     lyricLanguages: requestedLyricLanguages as any,
+    titleLanguages: requestedLyricLanguages as any,
+    secondaryLanguage: secondaryLanguage as any,
     isNoLyrics: params.isNoLyrics as any,
   } as any;
 

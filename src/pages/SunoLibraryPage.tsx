@@ -953,6 +953,115 @@ export default function SunoLibraryPage() {
     return sourceTrack?.id ? String(sourceTrack.id) : String(item?.sourceId || item?.trackId || '').trim();
   };
 
+  const hasBeenPlayed = (target: any) => Boolean(
+    target?.playedAt ||
+    target?.firstPlayedAt ||
+    target?.lastPlayedAt ||
+    target?.hasPlayed ||
+    target?.played === true
+  );
+
+  const isWorkspaceItemUnplayed = (group: any, item: any, idx: number) => {
+    const audioUrl = getAudioUrl(item, group);
+    const duration = getDuration(item, group);
+    const completed = Boolean(audioUrl && duration !== null && group?.status === 'completed');
+    if (!completed) return false;
+
+    const playedMap = group?.playedItemIndexes || group?.playedItems || {};
+    const playedByIndex = playedMap?.[String(idx)] || playedMap?.[idx];
+    return !(hasBeenPlayed(item) || hasBeenPlayed(playedByIndex));
+  };
+
+  const markWorkspaceItemPlayed = async (group: any, idx: number) => {
+    if (!user || !group?.id) return;
+    const playedAt = new Date().toISOString();
+
+    setTracks((prev) => prev.map((track: any) => {
+      if (track.id !== group.id) return track;
+      const next = { ...track, playedItemIndexes: { ...(track.playedItemIndexes || {}), [String(idx)]: { playedAt } } };
+      if (Array.isArray(track.sunoData)) {
+        next.sunoData = track.sunoData.map((entry: any, entryIndex: number) => entryIndex === idx ? { ...entry, playedAt, hasPlayed: true } : entry);
+      }
+      return next;
+    }));
+
+    try {
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      if (Array.isArray(group.sunoData) && group.sunoData.length > 0) {
+        const nextSunoData = group.sunoData.map((entry: any, entryIndex: number) => entryIndex === idx ? { ...entry, playedAt, hasPlayed: true } : entry);
+        await updateDoc(trackRef, {
+          sunoData: nextSunoData,
+          [`playedItemIndexes.${idx}`]: { playedAt },
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await updateDoc(trackRef, {
+          playedAt,
+          hasPlayed: true,
+          [`playedItemIndexes.${idx}`]: { playedAt },
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (e) {
+      console.warn('mark workspace item played failed:', e);
+    }
+  };
+
+  const isPlaylistItemUnplayed = (item: any) => {
+    if (!item?.audioUrl && !item?.streamAudioUrl && !item?.audio_url) return false;
+    if (formatPlaylistDuration(item.duration) === '--:--') return false;
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
+    const sourceItems = sourceTrack ? extractSunoData(sourceTrack) : [];
+    const sourceItem = sourceItems.find((entry: any) => String(getAudioUrl(entry, sourceTrack) || '').trim() === itemAudio);
+    return !(hasBeenPlayed(item) || hasBeenPlayed(sourceItem));
+  };
+
+  const markPlaylistItemPlayed = async (item: any) => {
+    if (!user || !item) return;
+    const playedAt = new Date().toISOString();
+    const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
+
+    setPlaylistItems((prev) => prev.map((playlistItem: any) => playlistItem.id === item.id ? { ...playlistItem, playedAt, hasPlayed: true } : playlistItem));
+
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    if (sourceTrack?.id && item?.sourceType !== 'shared_track') {
+      const sourceItems = extractSunoData(sourceTrack);
+      const sourceIdx = sourceItems.findIndex((entry: any) => String(getAudioUrl(entry, sourceTrack) || '').trim() === itemAudio);
+      setTracks((prev) => prev.map((track: any) => {
+        if (String(track.id) !== String(sourceTrack.id)) return track;
+        const next = { ...track };
+        if (sourceIdx >= 0) {
+          next.playedItemIndexes = { ...(track.playedItemIndexes || {}), [String(sourceIdx)]: { playedAt } };
+          if (Array.isArray(track.sunoData)) {
+            next.sunoData = track.sunoData.map((entry: any, entryIndex: number) => entryIndex === sourceIdx ? { ...entry, playedAt, hasPlayed: true } : entry);
+          }
+        } else {
+          next.playedAt = playedAt;
+          next.hasPlayed = true;
+        }
+        return next;
+      }));
+
+      try {
+        const ownerUid = String((sourceTrack as any)?.ownerUid || (item as any)?.ownerUid || user.uid);
+        const trackRef = doc(db, 'suno_tracks', ownerUid, 'tracks', sourceTrack.id);
+        if (sourceIdx >= 0 && Array.isArray((sourceTrack as any).sunoData)) {
+          const nextSunoData = (sourceTrack as any).sunoData.map((entry: any, entryIndex: number) => entryIndex === sourceIdx ? { ...entry, playedAt, hasPlayed: true } : entry);
+          await updateDoc(trackRef, {
+            sunoData: nextSunoData,
+            [`playedItemIndexes.${sourceIdx}`]: { playedAt },
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          await updateDoc(trackRef, { playedAt, hasPlayed: true, updatedAt: serverTimestamp() });
+        }
+      } catch (e) {
+        console.warn('mark playlist source item played failed:', e);
+      }
+    }
+  };
+
 
   const normalizePlayableUrl = (value: any) => String(value || '').trim();
 
@@ -1089,6 +1198,7 @@ export default function SunoLibraryPage() {
     const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
 
     if (url) {
+      markWorkspaceItemPlayed(track, subIndex);
       const newQueue = allPlayables.map(p => {
         const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
         return {
@@ -2780,13 +2890,16 @@ export default function SunoLibraryPage() {
                             ) : isPending ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5 text-blue-400">
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                {audioUrl ? '최종 파일 확인중...' : '오디오 대기중...'}
+                                생성 중...
                               </span>
                             ) : null}
                           </div>
 
-                          {isPending && !hasValidDuration && (
-                            <div className="text-[10px] opacity-40 font-mono shrink-0 tabular-nums">대기중</div>
+                          {isCompleted && isWorkspaceItemUnplayed(group, item, idx) && (
+                            <span
+                              className="w-2 h-2 rounded-full bg-brand-orange shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
+                              title="아직 재생하지 않은 완성곡"
+                            />
                           )}
 
                           <div className="relative shrink-0 ml-2">
@@ -3141,6 +3254,7 @@ export default function SunoLibraryPage() {
                             })).filter(q => q.url);
 
                             if (item.audioUrl) {
+                              markPlaylistItemPlayed(item);
                               playTrack({
                                 url: item.audioUrl,
                                 title: item.title,
@@ -3249,6 +3363,12 @@ export default function SunoLibraryPage() {
 
                       {/* Right: Actions */}
                       <div className="flex items-center pr-2 ml-2">
+                        {isPlaylistItemUnplayed(item) && (
+                          <span
+                            className="w-2 h-2 rounded-full bg-brand-orange shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
+                            title="아직 재생하지 않은 완성곡"
+                          />
+                        )}
                         {playlistSortMode === 'custom' && (
                           <div className="flex flex-col items-center mr-3 gap-1">
                             <button 

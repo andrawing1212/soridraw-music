@@ -93,7 +93,7 @@ export default function SunoLibraryPage() {
 
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'trash'>('all');
+  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showDetails, setShowDetails] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   interface MenuState {
@@ -709,6 +709,57 @@ export default function SunoLibraryPage() {
     }
   };
 
+  const handleToggleWorkspaceFavorite = async (group: any, nextValue?: boolean) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
+      return;
+    }
+
+    if (!group?.id) {
+      showToast("즐겨찾기 정보를 저장할 수 없습니다.");
+      return;
+    }
+
+    const next = typeof nextValue === 'boolean' ? nextValue : !Boolean(group.favorite);
+
+    try {
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      await updateDoc(trackRef, {
+        favorite: next,
+        favoriteUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      group.favorite = next;
+      showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
+    } catch (e) {
+      console.error('workspace favorite update failed:', e);
+      showToast("즐겨찾기 변경에 실패했습니다.");
+    }
+  };
+
+  const handleTogglePlaylistItemFavorite = async (item: PlaylistItem, nextValue?: boolean) => {
+    if (!user || !activePlaylistId || !item?.id) {
+      showToast("즐겨찾기 정보를 저장할 수 없습니다.");
+      return;
+    }
+
+    const next = typeof nextValue === 'boolean' ? nextValue : !(item as any).favorite;
+
+    try {
+      const itemRef = doc(db, 'user_playlists', user.uid, 'lists', activePlaylistId, 'items', item.id);
+      await updateDoc(itemRef, {
+        favorite: next,
+        favoriteUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      (item as any).favorite = next;
+      showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
+    } catch (e) {
+      console.error('playlist favorite update failed:', e);
+      showToast("즐겨찾기 변경에 실패했습니다.");
+    }
+  };
+
   const handleCustomSort = async (itemA: PlaylistItem, itemB: PlaylistItem) => {
     if (!user || !activePlaylistId) return;
     try {
@@ -821,7 +872,9 @@ export default function SunoLibraryPage() {
       
       const matchesFilter = filter === 'all' || filter === 'trash' ||
                             (filter === 'completed' && t.status === 'completed') || 
-                            (filter === 'favorite' && t.favorite);
+                            (filter === 'favorite' && t.favorite) ||
+                            (filter === 'public' && t.isPublic === true) ||
+                            (filter === 'private' && t.isPublic !== true);
 
       const matchesColor = extractSunoData(t).some((item: any, idx: number) => isWorkspaceItemVisible(t, item, idx));
 
@@ -1962,7 +2015,7 @@ export default function SunoLibraryPage() {
     const handleGlobalPlayerAction = (event: Event) => {
       const customEvent = event as CustomEvent<any>;
       const detail = customEvent.detail || {};
-      const action = detail.action as 'details' | 'applyNext' | 'saveOrMove' | 'delete' | undefined;
+      const action = detail.action as 'details' | 'applyNext' | 'saveOrMove' | 'delete' | 'favorite' | undefined;
       const track = detail.track || null;
       if (!action || !track) return;
 
@@ -2008,6 +2061,15 @@ export default function SunoLibraryPage() {
           handleMoveToOtherPlaylist(parent as PlaylistItem);
         } else {
           handleSavePlaylist(parent, workspaceItem || parent, track.url || '', itemIndex);
+        }
+        return;
+      }
+
+      if (action === 'favorite') {
+        if (isPlaylistTrack) {
+          handleTogglePlaylistItemFavorite(parent as PlaylistItem);
+        } else {
+          handleToggleWorkspaceFavorite(parent);
         }
         return;
       }
@@ -2330,7 +2392,7 @@ export default function SunoLibraryPage() {
               ))}
             </div>
             <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl shrink-0">
-              {(['all', 'completed', 'favorite', 'trash'] as const).map((f) => (
+              {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -2338,7 +2400,7 @@ export default function SunoLibraryPage() {
                     filter === f ? 'bg-brand-orange text-white' : 'hover:bg-white/5 opacity-60'
                   }`}
                 >
-                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : '휴지통'}
+                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
                 </button>
               ))}
             </div>
@@ -3027,6 +3089,12 @@ export default function SunoLibraryPage() {
                                 <span className="flex items-center gap-2"><Share2 className="w-4 h-4 opacity-70" />공유</span>
                               </button>
                               <button 
+                                onClick={(e) => { e.stopPropagation(); handleTogglePlaylistItemFavorite(item); setActivePlaylistItemMenu(null); }}
+                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                              >
+                                <span className="flex items-center gap-2"><Star className={`w-4 h-4 opacity-70 ${(item as any).favorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />{(item as any).favorite ? '즐겨찾기 해제' : '즐겨찾기'}</span>
+                              </button>
+                              <button 
                                 onClick={(e) => { e.stopPropagation(); handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
                                 className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
                               >
@@ -3213,7 +3281,8 @@ export default function SunoLibraryPage() {
                 } : null,
                 filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
                 !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,

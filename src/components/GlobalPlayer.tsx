@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
-  Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2
+  Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2, FolderOutput
 } from 'lucide-react';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { auth, db } from '../firebase';
@@ -205,6 +205,7 @@ export default function GlobalPlayer() {
   const lyricResumeTimeoutRef = useRef<number | null>(null);
   const [lyricAutoScrollResumeTick, setLyricAutoScrollResumeTick] = useState(0);
   const mobileExpandedHistoryPushedRef = useRef(false);
+  const [localFavoriteActive, setLocalFavoriteActive] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -217,6 +218,10 @@ export default function GlobalPlayer() {
   useEffect(() => {
     setShowLyrics(false);
   }, [currentTrack?.url, currentTrack?.title]);
+
+  useEffect(() => {
+    setLocalFavoriteActive(Boolean((currentTrack as any)?.favorite || currentTrack?.parent?.favorite));
+  }, [currentTrack?.url, currentTrack?.title, (currentTrack as any)?.favorite, currentTrack?.parent?.favorite]);
 
   useEffect(() => {
     if (!isMobile || mode !== 'expanded') {
@@ -403,7 +408,63 @@ export default function GlobalPlayer() {
     currentTrack?.parent?.sourceType
   );
 
-  const dispatchLibraryAction = (action: 'details' | 'applyNext' | 'saveOrMove' | 'delete') => {
+  const isFavoriteActive = Boolean(localFavoriteActive || (currentTrack as any)?.favorite || currentTrack?.parent?.favorite);
+
+  const markCurrentTrackFavorite = (next: boolean) => {
+    setLocalFavoriteActive(next);
+    if (currentTrack) {
+      (currentTrack as any).favorite = next;
+      if (currentTrack.parent) {
+        (currentTrack.parent as any).favorite = next;
+      }
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!currentTrack || isSharedPlayerMode) return;
+
+    const next = !isFavoriteActive;
+
+    if (dispatchLibraryAction('favorite')) {
+      markCurrentTrackFavorite(next);
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    const parent = currentTrack.parent || {};
+
+    if (isPlaylistTrack) {
+      alert('플레이리스트 곡의 즐겨찾기 변경은 라이브러리 화면에서 이용해주세요.');
+      return;
+    }
+
+    const trackId = parent.id || parent.trackId || parent.taskId;
+    if (!trackId) {
+      alert('즐겨찾기 정보를 저장할 곡 ID를 찾을 수 없습니다.');
+      return;
+    }
+
+    try {
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', String(trackId));
+      await updateDoc(trackRef, {
+        favorite: next,
+        favoriteUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      markCurrentTrackFavorite(next);
+      alert(next ? '즐겨찾기에 저장되었습니다.' : '즐겨찾기에서 제외되었습니다.');
+    } catch (error) {
+      console.error('Global player favorite update failed:', error);
+      alert('즐겨찾기 변경에 실패했습니다.');
+    }
+  };
+
+  const dispatchLibraryAction = (action: 'details' | 'applyNext' | 'saveOrMove' | 'delete' | 'favorite') => {
     if (!currentTrack || typeof window === 'undefined') return false;
     const detail: any = { action, track: currentTrack, handled: false };
     window.dispatchEvent(new CustomEvent('soridraw:global-player-action', { detail }));
@@ -835,7 +896,8 @@ export default function GlobalPlayer() {
                            { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url, currentTrack.title); setShowMenu(false); } },
                            { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } },
                            { icon: Share2, label: isSharedPlayerMode ? '링크 복사' : '공유', action: () => { isSharedPlayerMode ? handleCopyShareLink() : handleShare(); setShowMenu(false); } },
-                           { icon: Star, label: isPlaylistTrack ? '폴더 이동' : '플레이리스트 저장', action: () => { handleSaveOrMovePlaylist(); setShowMenu(false); } },
+                           !isSharedPlayerMode ? { icon: Star, label: isFavoriteActive ? '즐겨찾기 해제' : '즐겨찾기', action: () => { handleToggleFavorite(); setShowMenu(false); } } : null,
+                           { icon: FolderOutput, label: isPlaylistTrack ? '폴더 이동' : '플레이리스트 저장', action: () => { handleSaveOrMovePlaylist(); setShowMenu(false); } },
                            !isSharedPlayerMode ? { icon: Trash2, label: isPlaylistTrack ? '리스트 삭제' : '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true } : null,
                          ].filter(Boolean).map((m: any, i) => (
                            <button
@@ -945,8 +1007,8 @@ export default function GlobalPlayer() {
                    <div className="flex-1 min-w-0 pr-2 overflow-hidden">
                      <ScrollText text={currentTrack.title || 'Untitled Track'} className="text-xl font-bold leading-tight" />
                    </div>
-                   <button onClick={() => alert('즐겨찾기는 준비 중입니다.')} className="text-white/40 hover:text-brand-orange shrink-0">
-                      <Star className="w-5 h-5" />
+                   <button onClick={handleToggleFavorite} className={`shrink-0 transition-colors ${isFavoriteActive ? 'text-yellow-400 hover:text-yellow-300' : 'text-white/40 hover:text-brand-orange'}`} title={isFavoriteActive ? '즐겨찾기 해제' : '즐겨찾기'}>
+                      <Star className={`w-5 h-5 ${isFavoriteActive ? 'fill-yellow-400' : ''}`} />
                    </button>
                 </div>
                 <p className="text-sm opacity-60 mb-6 truncate">{artistDisplay}</p>

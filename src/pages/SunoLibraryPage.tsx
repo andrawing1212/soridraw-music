@@ -2738,9 +2738,15 @@ export default function SunoLibraryPage() {
                               url: p.audioUrl!,
                               title: p.title,
                               imageUrl: p.imageUrl,
-                              parent: { id: p.sourceId },
+                              parent: {
+                                ...p,
+                                id: p.sourceId,
+                                trackId: p.id,
+                                creatorDisplayId: getPlaylistItemCreatorName(p),
+                              },
                               index: 0,
-                              trackId: p.id
+                              trackId: p.id,
+                              lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null,
                             })).filter(q => q.url);
 
                             if (item.audioUrl) {
@@ -2748,9 +2754,15 @@ export default function SunoLibraryPage() {
                                 url: item.audioUrl,
                                 title: item.title,
                                 imageUrl: item.imageUrl,
-                                parent: { id: item.sourceId },
+                                parent: {
+                                  ...item,
+                                  id: item.sourceId,
+                                  trackId: item.id,
+                                  creatorDisplayId: getPlaylistItemCreatorName(item),
+                                },
                                 index: 0,
-                                trackId: item.id
+                                trackId: item.id,
+                                lyrics: item.lyrics || item.lyricsText || item.koreanLyrics || item.englishLyrics || null,
                               }, newQueue);
                             } else {
                               showToast('이 곡은 재생할 수 없습니다.');

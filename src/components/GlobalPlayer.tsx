@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -69,6 +69,7 @@ export default function GlobalPlayer() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [showMenu, setShowMenu] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
   const mobileExpandedHistoryPushedRef = useRef(false);
@@ -250,6 +251,96 @@ export default function GlobalPlayer() {
     alert('삭제 기능은 라이브러리 화면에서 이용 가능합니다.');
   };
 
+  const normalizeDisplayText = (value: any) => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return '';
+    if (/^·?(GENRE|SOUND|MOOD|VOCAL|ARRANGEMENT|THEME|STYLE)\s*:/i.test(text)) return '';
+    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+    if (text.length > 80) return '';
+    return text;
+  };
+
+  const getActiveItem = () => {
+    const parent = currentTrack?.parent || {};
+    const idx = typeof currentTrack?.index === 'number' ? currentTrack.index : 0;
+    const candidates = [
+      parent?.sunoData,
+      parent?.data,
+      parent?.tracks,
+      parent?.items,
+      parent?.apiResponse?.data,
+      parent?.apiStatusResponse?.data,
+    ];
+    for (const list of candidates) {
+      if (Array.isArray(list) && list[idx]) return list[idx];
+    }
+    return {};
+  };
+
+  const playerArtist = useMemo(() => {
+    const parent = currentTrack?.parent || {};
+    const item = getActiveItem();
+    return (
+      normalizeDisplayText(currentTrack?.parent?.creatorDisplayId) ||
+      normalizeDisplayText(currentTrack?.parent?.ownerNickname) ||
+      normalizeDisplayText(currentTrack?.parent?.creatorNickname) ||
+      normalizeDisplayText(currentTrack?.parent?.ownerName) ||
+      normalizeDisplayText(currentTrack?.parent?.nickname) ||
+      normalizeDisplayText(currentTrack?.parent?.displayName) ||
+      normalizeDisplayText(item?.creatorDisplayId) ||
+      normalizeDisplayText(item?.ownerNickname) ||
+      normalizeDisplayText(item?.creatorNickname) ||
+      normalizeDisplayText(item?.ownerName) ||
+      normalizeDisplayText(currentTrack?.parent?.ownerEmail) ||
+      normalizeDisplayText(currentTrack?.parent?.creatorEmail) ||
+      normalizeDisplayText(item?.ownerEmail) ||
+      normalizeDisplayText(item?.creatorEmail) ||
+      '원곡자 정보 없음'
+    );
+  }, [currentTrack]);
+
+  const playerLyrics = useMemo(() => {
+    const parent = currentTrack?.parent || {};
+    const item = getActiveItem();
+    const collect = (value: any): string => {
+      if (!value) return '';
+      if (typeof value === 'string') return value.trim();
+      if (typeof value === 'object') {
+        const preferred = [
+          value.korean, value.ko, value.koreanLyrics,
+          value.english, value.en, value.englishLyrics,
+          value.japanese, value.ja, value.japaneseLyrics,
+          value.chinese, value.zh, value.chineseLyrics,
+          value.spanish, value.es, value.spanishLyrics,
+          value.french, value.fr, value.frenchLyrics,
+        ];
+        return preferred.map(v => typeof v === 'string' ? v.trim() : '').filter(Boolean).join('\n\n');
+      }
+      return '';
+    };
+
+    return (
+      collect(currentTrack?.lyrics) ||
+      collect(item?.lyrics) ||
+      collect(item?.lyricsText) ||
+      collect(item?.koreanLyrics) ||
+      collect(item?.englishLyrics) ||
+      collect(item?.japaneseLyrics) ||
+      collect(parent?.lyrics) ||
+      collect(parent?.lyricsText) ||
+      collect(parent?.koreanLyrics) ||
+      collect(parent?.englishLyrics) ||
+      collect(parent?.japaneseLyrics) ||
+      collect(parent?.requestPayload?.lyrics) ||
+      collect(parent?.requestPayload?.lyricsText) ||
+      ''
+    );
+  }, [currentTrack]);
+
+  useEffect(() => {
+    setShowLyrics(false);
+  }, [currentTrack?.url, currentTrack?.title]);
+
   if (!currentTrack) return null;
 
   const formatTime = (time: number | null | undefined) => {
@@ -381,7 +472,7 @@ export default function GlobalPlayer() {
                 
                 <div className="flex-1 min-w-0 pr-16 relative overflow-hidden">
                    <ScrollText text={currentTrack.title || 'Untitled'} className="font-bold text-sm" />
-                   <p className="text-[10px] opacity-50 truncate">{currentTrack.parent?.style || currentTrack.parent?.prompt || 'Music'}</p>
+                   <p className="text-[10px] opacity-60 truncate">{playerArtist}</p>
                 </div>
 
                 <div className="flex items-center gap-1.5 relative z-30 pointer-events-auto shrink-0 mr-1">
@@ -493,13 +584,38 @@ export default function GlobalPlayer() {
                  </button>
               </div>
 
-              <div className="w-full aspect-square mt-8 mb-6 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/40 border border-white/5 flex items-center justify-center relative z-10">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowLyrics(v => !v); }}
+                className="w-full aspect-square mt-8 mb-6 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/40 border border-white/5 flex items-center justify-center relative z-10 group text-left"
+                title={showLyrics ? '가사 숨기기' : '가사 보기'}
+              >
                  {currentTrack.imageUrl ? (
-                    <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="w-full h-full object-cover" />
+                    <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`w-full h-full object-cover transition-all duration-300 ${showLyrics ? 'scale-105 opacity-25 blur-sm' : 'group-hover:scale-[1.02]'}`} />
                  ) : (
-                    <Music className="w-20 h-20 text-white/20" />
+                    <Music className={`w-20 h-20 transition-all ${showLyrics ? 'text-white/10' : 'text-white/20'}`} />
                  )}
-              </div>
+
+                 <div className={`absolute inset-0 transition-all duration-300 ${showLyrics ? 'bg-black/70' : 'bg-black/0 group-hover:bg-black/15'}`} />
+
+                 {!showLyrics && (
+                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/45 border border-white/10 text-[11px] text-white/75 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                     사진을 눌러 가사 보기
+                   </div>
+                 )}
+
+                 {showLyrics && (
+                   <div className="absolute inset-0 p-5 flex flex-col">
+                     <div className="flex items-center justify-between gap-3 mb-3 shrink-0">
+                       <span className="text-xs font-bold text-brand-orange">가사</span>
+                       <span className="text-[10px] text-white/45">다시 누르면 닫힘</span>
+                     </div>
+                     <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-white/90 pr-1 scrollbar-hide">
+                       {playerLyrics || '표시할 가사가 없습니다.'}
+                     </div>
+                   </div>
+                 )}
+              </button>
 
               <div className="relative z-10 flex-1 flex flex-col w-full min-w-0">
                 <div className="flex items-center justify-between gap-4 mb-1">
@@ -510,7 +626,7 @@ export default function GlobalPlayer() {
                       <Star className="w-5 h-5" />
                    </button>
                 </div>
-                <p className="text-sm opacity-60 mb-6 truncate">{currentTrack.parent?.style || currentTrack.parent?.prompt || 'No Genre Info'}</p>
+                <p className="text-sm opacity-70 mb-6 truncate">{playerArtist}</p>
 
                 <div className="w-full mb-6 group cursor-pointer">
                   <input 

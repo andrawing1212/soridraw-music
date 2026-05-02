@@ -6,7 +6,7 @@ import {
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
-  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -47,6 +47,88 @@ const getColorHex = (colorTag?: string | null) => {
   const found = COLOR_OPTIONS.find(c => c.value === colorTag);
   return found?.color || '#6b7280';
 };
+
+
+function AnimatedTrackPlayButton({
+  imageUrl,
+  isActive,
+  isPlaying,
+  onClick,
+  disabled,
+  durationLabel,
+  unavailable = false,
+}: {
+  imageUrl?: string | null;
+  isActive: boolean;
+  isPlaying: boolean;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
+  disabled?: boolean;
+  durationLabel?: string;
+  unavailable?: boolean;
+}) {
+  const isNowPlaying = isActive && isPlaying;
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full overflow-hidden flex items-center justify-center transition-all border border-white/10 ${
+        unavailable
+          ? 'opacity-50 cursor-not-allowed text-white/20'
+          : isNowPlaying
+            ? 'ring-[3px] ring-brand-orange/20 shadow-[0_12px_30px_rgba(249,115,22,0.22)] scale-[1.03]'
+            : isActive
+              ? 'ring-2 ring-brand-orange/45'
+              : 'hover:ring-2 hover:ring-brand-orange/35 group-hover:scale-[1.03]'
+      }`}
+      title={durationLabel || undefined}
+    >
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-white/5" />
+      )}
+
+      {isNowPlaying && <div className="pointer-events-none absolute inset-0 rounded-full suno-playing-ring" />}
+      {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-brand-orange/20 shadow-[0_0_18px_rgba(249,115,22,0.20)]" />}
+
+      <div className={`absolute inset-0 transition-colors ${isNowPlaying ? 'bg-black/30' : 'bg-black/45 group-hover:bg-black/35'}`} />
+
+      <div className="relative z-10 flex items-center justify-center text-white drop-shadow">
+        {isNowPlaying ? (
+          <span className="suno-icon-stack is-playing" aria-hidden="true">
+            <span className="suno-icon-pause">
+              <span className="suno-icon-pause-bar" />
+              <span className="suno-icon-pause-bar" />
+            </span>
+            <span className="suno-icon-wave">
+              {[0, 1, 2, 3].map((bar) => (
+                <span
+                  key={bar}
+                  className="suno-icon-wave-bar"
+                  style={{ animationDelay: `${bar * 0.12}s` }}
+                />
+              ))}
+            </span>
+          </span>
+        ) : (
+          <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
+        )}
+      </div>
+
+      {durationLabel && (
+        <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-white/10 tabular-nums">
+          {durationLabel}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export default function SunoLibraryPage() {
   const navigate = useNavigate();
@@ -115,6 +197,32 @@ export default function SunoLibraryPage() {
   const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
   const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
   const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
+
+  useEffect(() => {
+    const closeFloatingMenus = () => {
+      setActiveMenuState(null);
+      setActivePlaylistItemMenu(null);
+      setActiveColorMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeFloatingMenus();
+    };
+
+    document.addEventListener('scroll', closeFloatingMenus, true);
+    window.addEventListener('wheel', closeFloatingMenus, { passive: true });
+    window.addEventListener('touchmove', closeFloatingMenus, { passive: true });
+    window.addEventListener('resize', closeFloatingMenus);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('scroll', closeFloatingMenus, true);
+      window.removeEventListener('wheel', closeFloatingMenus);
+      window.removeEventListener('touchmove', closeFloatingMenus);
+      window.removeEventListener('resize', closeFloatingMenus);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
   interface DeleteAction {
     groupId: string;
     itemIndex: number;
@@ -1353,7 +1461,15 @@ export default function SunoLibraryPage() {
   const getStatusBadge = (group: any) => {
     const badges = [];
     if (group.isPublic) {
-      badges.push(<span key="public" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30">공개</span>);
+      badges.push(
+        <span
+          key="public"
+          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 md:px-3.5 text-[11px] font-semibold tracking-tight text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.14)]"
+        >
+          <Globe2 className="h-3.5 w-3.5" />
+          공개
+        </span>
+      );
     }
     switch (group.status) {
       case 'failed':
@@ -2396,6 +2512,97 @@ export default function SunoLibraryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
+      <style>{`
+        .suno-playing-ring {
+          background: conic-gradient(
+            from 0deg,
+            rgba(249,115,22,0) 0deg,
+            rgba(249,115,22,0.04) 105deg,
+            rgba(251,191,36,0.18) 142deg,
+            rgba(249,115,22,0.95) 174deg,
+            rgba(249,115,22,0.12) 210deg,
+            rgba(249,115,22,0) 360deg
+          );
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+          animation: sunoOrbitGlow 5.8s linear infinite;
+          filter: drop-shadow(0 0 7px rgba(249, 115, 22, 0.38));
+        }
+
+        .suno-icon-stack {
+          position: relative;
+          width: 22px;
+          height: 22px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .suno-icon-pause,
+        .suno-icon-wave {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .suno-icon-pause {
+          gap: 4px;
+        }
+
+        .suno-icon-pause-bar {
+          width: 4px;
+          height: 15px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.96);
+        }
+
+        .suno-icon-wave {
+          gap: 2px;
+          opacity: 0;
+          transform: scale(0.78);
+        }
+
+        .suno-icon-wave-bar {
+          width: 3px;
+          height: 8px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.96);
+          transform-origin: center bottom;
+          animation: sunoWaveBounce 0.92s ease-in-out infinite;
+        }
+
+        .is-playing .suno-icon-pause {
+          animation: sunoPauseMorph 4.2s ease-in-out infinite;
+        }
+
+        .is-playing .suno-icon-wave {
+          animation: sunoWaveMorph 4.2s ease-in-out infinite;
+        }
+
+        @keyframes sunoOrbitGlow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        @keyframes sunoWaveBounce {
+          0%, 100% { transform: scaleY(0.7); }
+          50% { transform: scaleY(1.45); }
+        }
+
+        @keyframes sunoPauseMorph {
+          0%, 24% { opacity: 1; transform: scale(1); }
+          34%, 72% { opacity: 0; transform: scale(0.72); }
+          82%, 100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes sunoWaveMorph {
+          0%, 24% { opacity: 0; transform: scale(0.72); }
+          34%, 68% { opacity: 1; transform: scale(1); }
+          78%, 100% { opacity: 0; transform: scale(0.82); }
+        }
+      `}</style>
       <AnimatePresence>
         {renameModalArgs && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
@@ -2754,7 +2961,7 @@ export default function SunoLibraryPage() {
                   className="bg-[var(--bg-secondary)] border border-white/10 rounded-2xl"
                 >
                   {/* Group Header */}
-                  <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02] rounded-t-2xl">
+                  <div className="px-4 md:px-6 py-4 border-b border-white/5 flex items-center justify-between gap-3 bg-white/[0.02] rounded-t-2xl">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-orange">
                         <Music className="w-5 h-5" />
@@ -2768,7 +2975,7 @@ export default function SunoLibraryPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-2 md:gap-3 flex-nowrap">
                       {getStatusBadge(group)}
                       {group.status !== 'completed' && group.status !== 'failed' && (
                         <button
@@ -2808,7 +3015,12 @@ export default function SunoLibraryPage() {
                              }
                           }}
                         >
-                          <button 
+                          <AnimatedTrackPlayButton
+                            imageUrl={getImageUrl(item, group)}
+                            isActive={isCurrent}
+                            isPlaying={isPlaying}
+                            disabled={!audioUrl}
+                            durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (audioUrl) {
@@ -2816,38 +3028,7 @@ export default function SunoLibraryPage() {
                                 else handlePlayTrack(group, idx);
                               }
                             }}
-                            disabled={!audioUrl}
-                            className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full overflow-hidden flex items-center justify-center transition-all border border-white/10 ${
-                              isCurrent && isPlaying ? 'ring-4 ring-brand-orange/25 shadow-lg shadow-brand-orange/40 scale-105' : 
-                              isCurrent ? 'ring-2 ring-brand-orange/50' :
-                              'hover:ring-2 hover:ring-brand-orange/40 group-hover:scale-105'
-                            } disabled:opacity-20`}
-                            title={hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
-                          >
-                            {getImageUrl(item, group) ? (
-                              <img
-                                src={getImageUrl(item, group)}
-                                alt=""
-                                className="absolute inset-0 w-full h-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="absolute inset-0 bg-white/5" />
-                            )}
-                            <div className={`absolute inset-0 ${isCurrent && isPlaying ? 'bg-black/35' : 'bg-black/45 group-hover:bg-black/35'} transition-colors`} />
-                            <div className="relative z-10 flex items-center justify-center text-white drop-shadow">
-                              {isCurrent && isPlaying ? (
-                                <Pause className="w-5 h-5 md:w-6 md:h-6 fill-white" />
-                              ) : (
-                                <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
-                              )}
-                            </div>
-                            {isCompleted && hasValidDuration && (
-                              <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-white/10 tabular-nums">
-                                {`${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`}
-                              </span>
-                            )}
-                          </button>
+                          />
                           
                           <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
                             <button
@@ -3206,9 +3387,15 @@ export default function SunoLibraryPage() {
                       } ${isUnavailable ? 'opacity-50 grayscale' : ''}`}
                     >
                       {/* Left: Play/Pause */}
-                      <button 
+                      <AnimatedTrackPlayButton
+                        imageUrl={item.imageUrl}
+                        isActive={isActive}
+                        isPlaying={isPlaying}
+                        unavailable={isUnavailable}
                         disabled={isUnavailable}
-                        onClick={async () => {
+                        durationLabel={formatPlaylistDuration(item.duration) !== '--:--' ? formatPlaylistDuration(item.duration) : undefined}
+                        onClick={async (e) => {
+                          e.stopPropagation();
                           if (isUnavailable) return;
                           
                           if (item.sourceType === 'shared_track') {
@@ -3280,37 +3467,7 @@ export default function SunoLibraryPage() {
                             }
                           }
                         }}
-                        className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center rounded-full overflow-hidden border border-white/10 shadow-sm transition-all ${
-                          isUnavailable ? 'opacity-50 cursor-not-allowed text-white/20' : 
-                          isActive && isPlaying ? 'ring-4 ring-brand-orange/25 shadow-lg shadow-brand-orange/40 scale-105' :
-                          isActive ? 'ring-2 ring-brand-orange/50' : 'hover:ring-2 hover:ring-brand-orange/40 hover:scale-105'
-                        }`}
-                        title={formatPlaylistDuration(item.duration) !== '--:--' ? formatPlaylistDuration(item.duration) : undefined}
-                      >
-                        {item.imageUrl ? (
-                          <img
-                            src={item.imageUrl}
-                            alt=""
-                            className="absolute inset-0 w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="absolute inset-0 bg-[var(--bg-secondary)]" />
-                        )}
-                        <div className={`absolute inset-0 ${isActive && isPlaying ? 'bg-black/35' : 'bg-black/45 group-hover:bg-black/35'} transition-colors`} />
-                        <div className="relative z-10 flex items-center justify-center text-white drop-shadow">
-                          {isActive && isPlaying ? (
-                            <Pause className="w-5 h-5 md:w-6 md:h-6 fill-white" />
-                          ) : (
-                            <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
-                          )}
-                        </div>
-                        {formatPlaylistDuration(item.duration) !== '--:--' && (
-                          <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-white/10 tabular-nums">
-                            {formatPlaylistDuration(item.duration)}
-                          </span>
-                        )}
-                      </button>
+                      />
 
                       {/* Main Info */}
                       <div className="flex flex-col ml-3 flex-1 min-w-0">
@@ -3656,7 +3813,7 @@ export default function SunoLibraryPage() {
                 } : null,
                 filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
-                !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
@@ -3667,7 +3824,7 @@ export default function SunoLibraryPage() {
                   onClick={m.action}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all ${m.danger ? 'text-red-400' : ''}`}
                 >
-                  <m.icon className="w-4 h-4" />
+                  <m.icon className={`w-4 h-4 ${m.filled ? 'fill-yellow-400 text-yellow-400' : ''}`} />
                   {m.label}
                 </button>
               ))}

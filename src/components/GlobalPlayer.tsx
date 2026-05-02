@@ -8,6 +8,7 @@ import {
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 
 function ScrollText({ text, className = '' }: { text: string; className?: string }) {
@@ -163,6 +164,7 @@ export default function GlobalPlayer() {
   const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [showMenu, setShowMenu] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
   const lyricScrollRef = useRef<HTMLDivElement>(null);
@@ -235,6 +237,16 @@ export default function GlobalPlayer() {
       }
     };
   }, []);
+
+
+  useEffect(() => {
+    if (!localDetailsOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLocalDetailsOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [localDetailsOpen]);
 
   useEffect(() => {
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
@@ -337,7 +349,26 @@ export default function GlobalPlayer() {
     }
   };
 
+  const isPlaylistTrack = Boolean(
+    currentTrack?.parent?.__playlistContext ||
+    (currentTrack as any)?.trackId ||
+    currentTrack?.parent?.sourceType
+  );
+
+  const dispatchLibraryAction = (action: 'details' | 'applyNext' | 'saveOrMove' | 'delete') => {
+    if (!currentTrack || typeof window === 'undefined') return false;
+    const detail: any = { action, track: currentTrack, handled: false };
+    window.dispatchEvent(new CustomEvent('soridraw:global-player-action', { detail }));
+    return Boolean(detail.handled);
+  };
+
+  const handleShowDetails = () => {
+    if (dispatchLibraryAction('details')) return;
+    setLocalDetailsOpen(true);
+  };
+
   const handleApplyNext = () => {
+    if (dispatchLibraryAction('applyNext')) return;
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
 
@@ -348,9 +379,10 @@ export default function GlobalPlayer() {
       return;
     }
 
-    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(appliedKeywords));
+    const serialized = JSON.stringify(appliedKeywords);
+    sessionStorage.setItem('pendingAppliedKeywords', serialized);
+    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
 
-    // Check if the user is logged in
     if (!auth.currentUser) {
       if (confirm('로그인 후 다음 곡에 설정이 적용됩니다. 로그인 화면으로 이동할까요?')) {
         handleModeChange('collapsed');
@@ -360,27 +392,88 @@ export default function GlobalPlayer() {
     }
 
     alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
-    
-    // Switch to collapsed mode before navigating to avoid player obscuring Home
     handleModeChange('collapsed');
-    navigate('/');
+    navigate('/?applyPending=1');
   };
 
-  const handleSavePlaylist = () => {
+  const handleSaveOrMovePlaylist = async () => {
+    if (dispatchLibraryAction('saveOrMove')) return;
     if (!currentTrack) return;
+    if (isPlaylistTrack) {
+      alert('폴더 이동은 라이브러리 화면에서 이용 가능합니다.');
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
     const group = currentTrack.parent || {};
-    const data = {
-      title: currentTrack.title || group.title,
-      url: currentTrack.url,
-      source: 'suno-library',
-      groupId: group.id
-    };
-    localStorage.setItem('soridraw_playlists_pending', JSON.stringify(data));
-    alert('플레이리스트 저장 준비가 완료되었습니다.');
+    try {
+      await ensureDefaultPlaylists(user.uid);
+      const lists = await getPlaylistsByType(user.uid, 'normal');
+      const targetPlaylist = lists.find((p: any) => p?.id && !p?.isFallback) || lists[0];
+
+      if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
+        alert('저장할 플레이리스트가 없습니다.');
+        return;
+      }
+
+      const audioUrl = currentTrack.url || group.audioUrl || group.streamAudioUrl || '';
+      if (!audioUrl) {
+        alert('저장할 오디오 URL이 없습니다.');
+        return;
+      }
+
+      const sourceId = String(
+        currentTrack.parent?.id ||
+        currentTrack.parent?.taskId ||
+        (currentTrack as any)?.trackId ||
+        currentTrack.url ||
+        `global_${Date.now()}`
+      );
+
+      const itemData: any = {
+        sourceType: 'suno_track',
+        sourceId,
+        ownerUid: user.uid || group.ownerUid || '',
+        creatorDisplayId: group.creatorDisplayId || group.ownerNickname || group.creatorNickname || group.ownerEmail || group.creatorEmail || user.displayName || user.email || '',
+        ownerNickname: group.ownerNickname || user.displayName || '',
+        creatorNickname: group.creatorNickname || user.displayName || '',
+        ownerEmail: group.ownerEmail || user.email || '',
+        creatorEmail: group.creatorEmail || user.email || '',
+        title: currentTrack.title || group.title || 'Untitled',
+        audioUrl,
+        imageUrl: currentTrack.imageUrl || group.imageUrl || group.image_url || null,
+        duration: currentTrack.duration || group.duration || null,
+        genreLabels: Array.isArray(group.genreLabels) ? group.genreLabels : [],
+        appliedKeywords: group.appliedKeywords || null,
+        prompt: group.prompt || '',
+        style: group.style || '',
+        lyrics: currentTrack.lyrics || group.lyrics || group.lyricsText || null,
+        lyricsText: currentTrack.lyrics || group.lyricsText || group.lyrics || null,
+        requestPayload: group.requestPayload || group.appliedKeywords || null,
+        colorTag: null,
+        likeCount: 0,
+        order: 0,
+        isUnavailable: false,
+        unavailableReason: null,
+      };
+      Object.keys(itemData).forEach((key) => itemData[key] === undefined && delete itemData[key]);
+
+      await addPlaylistItem(user.uid, targetPlaylist.id, itemData);
+      alert(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
+    } catch (error: any) {
+      console.error('Global player playlist save failed:', error);
+      alert(error?.message === 'DUPLICATE' ? '이미 이 플레이리스트에 저장된 곡입니다.' : '플레이리스트 저장에 실패했습니다.');
+    }
   };
 
   const handleDelete = () => {
-    alert('삭제 기능은 라이브러리 화면에서 이용 가능합니다.');
+    if (dispatchLibraryAction('delete')) return;
+    alert(isPlaylistTrack ? '리스트 삭제는 라이브러리 화면에서 이용 가능합니다.' : '삭제 기능은 라이브러리 화면에서 이용 가능합니다.');
   };
 
   const formatTime = (time: number | null | undefined) => {
@@ -520,7 +613,7 @@ export default function GlobalPlayer() {
           mode === 'expanded'
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]'
-              : 'top-1/2 right-8 xl:right-20 w-[400px] max-w-[calc(100vw-32px)]'
+              : 'top-1/2 right-4 xl:right-10 w-[400px] max-w-[calc(100vw-32px)]'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
             : 'bottom-6 right-6 w-auto items-end'
@@ -690,12 +783,12 @@ export default function GlobalPlayer() {
                          className="absolute top-full left-0 mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-2 z-30"
                        >
                        {[
-                           { icon: Info, label: '상세정보', action: () => { alert('상세정보는 라이브러리 목록에서 확인해주세요.'); setShowMenu(false); } },
+                           { icon: Info, label: '상세정보', action: () => { handleShowDetails(); setShowMenu(false); } },
                            { icon: Download, label: '다운로드', action: () => { handleDownload(currentTrack.url, currentTrack.title); setShowMenu(false); } },
                            { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(); setShowMenu(false); } },
                            { icon: Share2, label: isSharedPlayerMode ? '링크 복사' : '공유', action: () => { isSharedPlayerMode ? handleCopyShareLink() : handleShare(); setShowMenu(false); } },
-                           { icon: Star, label: '플레이리스트 저장', action: () => { handleSavePlaylist(); setShowMenu(false); } },
-                           !isSharedPlayerMode ? { icon: Trash2, label: '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true } : null,
+                           { icon: Star, label: isPlaylistTrack ? '폴더 이동' : '플레이리스트 저장', action: () => { handleSaveOrMovePlaylist(); setShowMenu(false); } },
+                           !isSharedPlayerMode ? { icon: Trash2, label: isPlaylistTrack ? '리스트 삭제' : '삭제', action: () => { handleDelete(); setShowMenu(false); }, danger: true } : null,
                          ].filter(Boolean).map((m: any, i) => (
                            <button
                              key={i}
@@ -757,9 +850,9 @@ export default function GlobalPlayer() {
                        initial={{ opacity: 0 }}
                        animate={{ opacity: 1 }}
                        exit={{ opacity: 0 }}
-                       className="absolute inset-0 z-10 flex flex-col p-5"
+                       className="absolute inset-0 z-10 flex flex-col p-4"
                      >
-                       <div className="flex items-center justify-between mb-4 shrink-0">
+                       <div className="flex items-center justify-between mb-2 shrink-0">
                          <span className="text-brand-orange text-sm font-bold">가사</span>
                          <span className="text-[11px] text-white/60">다시 누르면 닫힘</span>
                        </div>
@@ -770,7 +863,7 @@ export default function GlobalPlayer() {
                            onWheel={pauseLyricAutoScroll}
                            onTouchStart={pauseLyricAutoScroll}
                            onPointerDown={pauseLyricAutoScroll}
-                           className="flex-1 overflow-y-auto pr-1 space-y-3 text-sm leading-relaxed scrollbar-hide"
+                           className="flex-1 overflow-y-auto pr-1 space-y-1.5 text-[13px] leading-snug scrollbar-hide"
                          >
                            {lyricLines.map((line, index) => {
                              const isSection = isLyricSectionLine(line);
@@ -780,7 +873,7 @@ export default function GlobalPlayer() {
                                  ref={(el) => { lyricLineRefs.current[index] = el; }}
                                  className={`transition-colors duration-300 ${
                                    isSection
-                                     ? 'text-brand-orange/90 font-bold pt-4 pb-1 tracking-wide'
+                                     ? 'text-brand-orange/90 font-bold pt-2 pb-0.5 tracking-wide text-[12px]'
                                      : 'text-white/90'
                                  }`}
                                >
@@ -871,6 +964,86 @@ export default function GlobalPlayer() {
           )}
         </AnimatePresence>
       </motion.div>
+
+      <AnimatePresence>
+        {localDetailsOpen && currentTrack && (
+          <motion.div
+            className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/25"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLocalDetailsOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-2xl max-h-[82vh] overflow-hidden rounded-3xl border border-white/10 bg-[#1b1b1b] shadow-2xl flex flex-col"
+            >
+              <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
+                <h3 className="text-lg font-bold text-white">상세 정보</h3>
+                <button
+                  onClick={() => setLocalDetailsOpen(false)}
+                  className="p-2 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto custom-scrollbar space-y-5 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-white/40 text-xs font-bold mb-2">제목</p>
+                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-semibold break-words">
+                      {currentTrack.title || currentTrack.parent?.title || 'Untitled'}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-xs font-bold mb-2">원곡자</p>
+                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80 break-words">
+                      {artistDisplay}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-xs font-bold mb-2">길이</p>
+                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80">
+                      {formatTime(currentTrack.duration || duration)}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-xs font-bold mb-2">상태</p>
+                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80">
+                      {currentTrack.parent?.status || 'Completed'}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-white/40 text-xs font-bold mb-2">키워드/스타일</p>
+                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/75 whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto custom-scrollbar">
+                    {currentTrack.parent?.style || currentTrack.parent?.prompt || '정보 없음'}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-white/40 text-xs font-bold mb-2">가사</p>
+                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/75 whitespace-pre-wrap break-words leading-relaxed max-h-56 overflow-y-auto custom-scrollbar">
+                    {lyricsText || '가사 정보 없음'}
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-white/10 flex justify-center shrink-0">
+                <button
+                  onClick={() => setLocalDetailsOpen(false)}
+                  className="px-8 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold transition-all"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -856,10 +856,18 @@ export default function SunoLibraryPage() {
         url: p.url,
         title: getTitle(p.item, p.group, p.idx),
         imageUrl: getImageUrl(p.item, p.group),
-        parent: p.group,
-        index: p.idx
+        parent: { ...p.group, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        index: p.idx,
+        lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
       }));
-      playTrack({ url, title, imageUrl, parent: track, index: subIndex }, newQueue);
+      playTrack({
+        url,
+        title,
+        imageUrl,
+        parent: { ...track, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        index: subIndex,
+        lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
+      }, newQueue);
     }
   };
 
@@ -1935,11 +1943,79 @@ export default function SunoLibraryPage() {
     setShowDetails(details);
   };
 
+  useEffect(() => {
+    const handleGlobalPlayerAction = (event: Event) => {
+      const customEvent = event as CustomEvent<any>;
+      const detail = customEvent.detail || {};
+      const action = detail.action as 'details' | 'applyNext' | 'saveOrMove' | 'delete' | undefined;
+      const track = detail.track || null;
+      if (!action || !track) return;
+
+      detail.handled = true;
+
+      const parent = track.parent || {};
+      const itemIndex = Number.isInteger(track.index) ? track.index : 0;
+      const isPlaylistTrack = Boolean(parent.__playlistContext || track.trackId || parent.sourceType);
+      const workspaceItem = !isPlaylistTrack ? (extractSunoData(parent)[itemIndex] || {}) : null;
+
+      if (action === 'details') {
+        if (isPlaylistTrack) {
+          handleShowPlaylistItemDetails(parent as PlaylistItem);
+        } else {
+          setShowDetails({
+            ...parent,
+            itemIndex,
+            title: track.title || parent.title || 'Untitled',
+            status: parent.status || 'completed',
+            audioUrl: track.url || workspaceItem?.audioUrl || workspaceItem?.streamAudioUrl || parent.audioUrl || parent.streamAudioUrl || '',
+            streamAudioUrl: track.url || workspaceItem?.streamAudioUrl || workspaceItem?.audioUrl || parent.streamAudioUrl || parent.audioUrl || '',
+            lyrics: track.lyrics || workspaceItem?.lyrics || workspaceItem?.lyricsText || parent.lyrics || parent.lyricsText || '',
+            style: parent.style || workspaceItem?.style || parent.prompt || '',
+            prompt: parent.prompt || workspaceItem?.prompt || '',
+            creatorDisplayId: parent.creatorDisplayId || parent.ownerNickname || parent.creatorNickname || parent.ownerEmail || parent.creatorEmail || ''
+          });
+        }
+        return;
+      }
+
+      if (action === 'applyNext') {
+        if (isPlaylistTrack) {
+          handleApplyNext(parent, parent);
+        } else {
+          handleApplyNext(parent, workspaceItem || parent);
+        }
+        return;
+      }
+
+      if (action === 'saveOrMove') {
+        if (isPlaylistTrack) {
+          handleMoveToOtherPlaylist(parent as PlaylistItem);
+        } else {
+          handleSavePlaylist(parent, workspaceItem || parent, track.url || '', itemIndex);
+        }
+        return;
+      }
+
+      if (action === 'delete') {
+        if (isPlaylistTrack) {
+          handleRemoveFromPlaylist(parent as PlaylistItem);
+        } else if (parent?.id) {
+          handleDeleteClick(parent.id, itemIndex, parent, 'hide');
+        } else {
+          showToast('삭제할 곡 정보를 찾을 수 없습니다.');
+        }
+      }
+    };
+
+    window.addEventListener('soridraw:global-player-action', handleGlobalPlayerAction as EventListener);
+    return () => window.removeEventListener('soridraw:global-player-action', handleGlobalPlayerAction as EventListener);
+  }, [playlistItems, tracks, activePlaylistId, libraryViewMode, user, isSharedView]);
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
       <AnimatePresence>
         {renameModalArgs && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
                onClick={() => setRenameModalArgs(null)}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -2009,7 +2085,7 @@ export default function SunoLibraryPage() {
 
       <AnimatePresence>
         {moveModalArgs && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
                onClick={() => setMoveModalArgs(null)}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -2077,7 +2153,7 @@ export default function SunoLibraryPage() {
 
       <AnimatePresence>
         {isSharedView && showKakaoWarning && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/25">
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -2740,13 +2816,13 @@ export default function SunoLibraryPage() {
                               imageUrl: p.imageUrl,
                               parent: {
                                 ...p,
-                                id: p.sourceId,
-                                trackId: p.id,
-                                creatorDisplayId: getPlaylistItemCreatorName(p),
+                                __playlistContext: true,
+                                __activePlaylistId: activePlaylistId,
+                                __libraryViewMode: libraryViewMode
                               },
                               index: 0,
                               trackId: p.id,
-                              lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null,
+                              lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null
                             })).filter(q => q.url);
 
                             if (item.audioUrl) {
@@ -2756,13 +2832,13 @@ export default function SunoLibraryPage() {
                                 imageUrl: item.imageUrl,
                                 parent: {
                                   ...item,
-                                  id: item.sourceId,
-                                  trackId: item.id,
-                                  creatorDisplayId: getPlaylistItemCreatorName(item),
+                                  __playlistContext: true,
+                                  __activePlaylistId: activePlaylistId,
+                                  __libraryViewMode: libraryViewMode
                                 },
                                 index: 0,
                                 trackId: item.id,
-                                lyrics: item.lyrics || item.lyricsText || item.koreanLyrics || item.englishLyrics || null,
+                                lyrics: item.lyrics || item.lyricsText || item.koreanLyrics || item.englishLyrics || null
                               }, newQueue);
                             } else {
                               showToast('이 곡은 재생할 수 없습니다.');
@@ -2986,7 +3062,7 @@ export default function SunoLibraryPage() {
       {/* Share Modal */}
       <AnimatePresence>
         {sharePopupInfo && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeModal}>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -3147,7 +3223,7 @@ export default function SunoLibraryPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/25"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3198,7 +3274,7 @@ export default function SunoLibraryPage() {
 
       <AnimatePresence>
         {deleteTarget && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeModal}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

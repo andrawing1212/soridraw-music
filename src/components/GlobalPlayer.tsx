@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -40,6 +40,99 @@ function ScrollText({ text, className = '' }: { text: string; className?: string
   );
 }
 
+
+
+function toNonEmptyString(value: any): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getTrackArtistDisplay(track: any): string {
+  const group = track?.parent || {};
+  const candidates = [
+    track?.artist,
+    track?.creatorName,
+    track?.ownerName,
+    group.artist,
+    group.artistName,
+    group.author,
+    group.uploaderName,
+    group.creatorDisplayId,
+    group.ownerNickname,
+    group.creatorNickname,
+    group.ownerName,
+    group.creatorName,
+    group.ownerDisplayName,
+    group.createdByName,
+    group.userName,
+    group.ownerEmail,
+    group.creatorEmail,
+    group.createdByEmail,
+  ];
+
+  for (const item of candidates) {
+    const text = toNonEmptyString(item);
+    if (text && !text.startsWith('·GENRE:') && !text.startsWith('GENRE:')) return text;
+  }
+
+  return '원곡자 정보 없음';
+}
+
+function getLyricsText(track: any): string {
+  const group = track?.parent || {};
+  const candidates = [track?.lyrics, group.lyrics, group.lyricsText, group.lyric, group.promptLyrics];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+
+    if (typeof value === 'object') {
+      const preferredKeys = ['korean', 'ko', 'english', 'en', 'japanese', 'ja', 'chinese', 'zh', 'spanish', 'es', 'french', 'fr'];
+      for (const key of preferredKeys) {
+        const text = toNonEmptyString(value[key]);
+        if (text) return text;
+      }
+      for (const entry of Object.values(value)) {
+        const text = toNonEmptyString(entry);
+        if (text) return text;
+      }
+    }
+  }
+
+  return '';
+}
+
+function normalizeLyricLines(lyrics: string): string[] {
+  return lyrics
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function isLyricSectionLine(line: string): boolean {
+  // Section labels must not be treated as singable lyric lines.
+  // Supports [Verse 1], [Chorus / Drop], (Verse 1), and minor spacing/case variations.
+  const normalized = line.trim().toLowerCase();
+  if (/^[\[(]\s*(intro|verse|pre[-\s]?chorus|chorus|hook|drop|bridge|rap|rap verse|breakdown|instrumental|solo|final chorus|outro)[^\])]*[\])]$/.test(normalized)) {
+    return true;
+  }
+  return /^\[[^\]]+\]$/.test(normalized) && /intro|verse|chorus|hook|drop|bridge|rap|breakdown|instrumental|solo|outro/.test(normalized);
+}
+
+function getApproxActiveLyricIndex(lines: string[], currentTime: number, duration: number): number {
+  if (!lines.length || !Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime) || currentTime <= 0) return -1;
+
+  const singableLineIndexes = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => !isLyricSectionLine(line));
+
+  if (!singableLineIndexes.length) return -1;
+
+  const ratio = Math.min(0.999, Math.max(0, currentTime / duration));
+  const activeOrdinal = Math.floor(ratio * singableLineIndexes.length);
+  return singableLineIndexes[activeOrdinal]?.index ?? -1;
+}
+
 export default function GlobalPlayer() {
   const {
     currentTrack,
@@ -72,6 +165,16 @@ export default function GlobalPlayer() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
+  const lyricScrollRef = useRef<HTMLDivElement>(null);
+  const lyricLineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
+  const lyricAutoScrollFrameRef = useRef<number | null>(null);
+  const lyricTargetScrollTopRef = useRef(0);
+  const lyricSmoothScrollTopRef = useRef(0);
+  const lyricMetricsRef = useRef({ ready: false, singableStart: 0, singableEnd: 0, maxScroll: 0 });
+  const latestPlaybackRef = useRef({ currentTime: 0, duration: 0 });
+  const lyricUserPauseRef = useRef(false);
+  const lyricResumeTimeoutRef = useRef<number | null>(null);
+  const [lyricAutoScrollResumeTick, setLyricAutoScrollResumeTick] = useState(0);
   const mobileExpandedHistoryPushedRef = useRef(false);
 
   useEffect(() => {
@@ -81,6 +184,10 @@ export default function GlobalPlayer() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    setShowLyrics(false);
+  }, [currentTrack?.url, currentTrack?.title]);
 
   useEffect(() => {
     if (!isMobile || mode !== 'expanded') {
@@ -103,6 +210,31 @@ export default function GlobalPlayer() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isMobile, mode]);
+
+  const pauseLyricAutoScroll = () => {
+    lyricUserPauseRef.current = true;
+    if (lyricResumeTimeoutRef.current) {
+      window.clearTimeout(lyricResumeTimeoutRef.current);
+    }
+    lyricResumeTimeoutRef.current = window.setTimeout(() => {
+      if (lyricScrollRef.current) {
+        lyricSmoothScrollTopRef.current = lyricScrollRef.current.scrollTop;
+      }
+      lyricUserPauseRef.current = false;
+      setLyricAutoScrollResumeTick((value) => value + 1);
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (lyricAutoScrollFrameRef.current) {
+        cancelAnimationFrame(lyricAutoScrollFrameRef.current);
+      }
+      if (lyricResumeTimeoutRef.current) {
+        window.clearTimeout(lyricResumeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
@@ -251,104 +383,116 @@ export default function GlobalPlayer() {
     alert('삭제 기능은 라이브러리 화면에서 이용 가능합니다.');
   };
 
-  const normalizeDisplayText = (value: any) => {
-    const text = typeof value === 'string' ? value.trim() : '';
-    if (!text) return '';
-    if (/^·?(GENRE|SOUND|MOOD|VOCAL|ARRANGEMENT|THEME|STYLE)\s*:/i.test(text)) return '';
-    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
-    if (text.length > 80) return '';
-    return text;
-  };
-
-  const getActiveItem = () => {
-    const parent = currentTrack?.parent || {};
-    const idx = typeof currentTrack?.index === 'number' ? currentTrack.index : 0;
-    const candidates = [
-      parent?.sunoData,
-      parent?.data,
-      parent?.tracks,
-      parent?.items,
-      parent?.apiResponse?.data,
-      parent?.apiStatusResponse?.data,
-    ];
-    for (const list of candidates) {
-      if (Array.isArray(list) && list[idx]) return list[idx];
-    }
-    return {};
-  };
-
-  const playerArtist = useMemo(() => {
-    const parent = currentTrack?.parent || {};
-    const item = getActiveItem();
-    return (
-      normalizeDisplayText(currentTrack?.parent?.creatorDisplayId) ||
-      normalizeDisplayText(currentTrack?.parent?.ownerNickname) ||
-      normalizeDisplayText(currentTrack?.parent?.creatorNickname) ||
-      normalizeDisplayText(currentTrack?.parent?.ownerName) ||
-      normalizeDisplayText(currentTrack?.parent?.nickname) ||
-      normalizeDisplayText(currentTrack?.parent?.displayName) ||
-      normalizeDisplayText(item?.creatorDisplayId) ||
-      normalizeDisplayText(item?.ownerNickname) ||
-      normalizeDisplayText(item?.creatorNickname) ||
-      normalizeDisplayText(item?.ownerName) ||
-      normalizeDisplayText(currentTrack?.parent?.ownerEmail) ||
-      normalizeDisplayText(currentTrack?.parent?.creatorEmail) ||
-      normalizeDisplayText(item?.ownerEmail) ||
-      normalizeDisplayText(item?.creatorEmail) ||
-      '원곡자 정보 없음'
-    );
-  }, [currentTrack]);
-
-  const playerLyrics = useMemo(() => {
-    const parent = currentTrack?.parent || {};
-    const item = getActiveItem();
-    const collect = (value: any): string => {
-      if (!value) return '';
-      if (typeof value === 'string') return value.trim();
-      if (typeof value === 'object') {
-        const preferred = [
-          value.korean, value.ko, value.koreanLyrics,
-          value.english, value.en, value.englishLyrics,
-          value.japanese, value.ja, value.japaneseLyrics,
-          value.chinese, value.zh, value.chineseLyrics,
-          value.spanish, value.es, value.spanishLyrics,
-          value.french, value.fr, value.frenchLyrics,
-        ];
-        return preferred.map(v => typeof v === 'string' ? v.trim() : '').filter(Boolean).join('\n\n');
-      }
-      return '';
-    };
-
-    return (
-      collect(currentTrack?.lyrics) ||
-      collect(item?.lyrics) ||
-      collect(item?.lyricsText) ||
-      collect(item?.koreanLyrics) ||
-      collect(item?.englishLyrics) ||
-      collect(item?.japaneseLyrics) ||
-      collect(parent?.lyrics) ||
-      collect(parent?.lyricsText) ||
-      collect(parent?.koreanLyrics) ||
-      collect(parent?.englishLyrics) ||
-      collect(parent?.japaneseLyrics) ||
-      collect(parent?.requestPayload?.lyrics) ||
-      collect(parent?.requestPayload?.lyricsText) ||
-      ''
-    );
-  }, [currentTrack]);
-
-  useEffect(() => {
-    setShowLyrics(false);
-  }, [currentTrack?.url, currentTrack?.title]);
-
-  if (!currentTrack) return null;
-
   const formatTime = (time: number | null | undefined) => {
     if (time === null || time === undefined || !Number.isFinite(time) || isNaN(time) || time < 0) return '--:--';
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+
+  const artistDisplay = currentTrack ? getTrackArtistDisplay(currentTrack) : '';
+  const lyricsText = currentTrack ? getLyricsText(currentTrack) : '';
+  const lyricLines = normalizeLyricLines(lyricsText);
+
+  useEffect(() => {
+    latestPlaybackRef.current = { currentTime, duration };
+  }, [currentTime, duration]);
+
+  useEffect(() => {
+    if (!showLyrics || !lyricLines.length) {
+      lyricMetricsRef.current = { ready: false, singableStart: 0, singableEnd: 0, maxScroll: 0 };
+      return;
+    }
+
+    let frame = 0;
+    const measure = () => {
+      const container = lyricScrollRef.current;
+      if (!container) return;
+
+      const singableIndexes = lyricLines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => !isLyricSectionLine(line))
+        .map(({ index }) => index);
+
+      if (!singableIndexes.length) {
+        lyricMetricsRef.current = { ready: false, singableStart: 0, singableEnd: 0, maxScroll: 0 };
+        return;
+      }
+
+      const firstLine = lyricLineRefs.current[singableIndexes[0]];
+      const lastLine = lyricLineRefs.current[singableIndexes[singableIndexes.length - 1]];
+      if (!firstLine || !lastLine) return;
+
+      lyricMetricsRef.current = {
+        ready: true,
+        singableStart: firstLine.offsetTop,
+        singableEnd: lastLine.offsetTop + lastLine.offsetHeight,
+        maxScroll: Math.max(0, container.scrollHeight - container.clientHeight),
+      };
+      lyricSmoothScrollTopRef.current = container.scrollTop;
+    };
+
+    // Wait one frame so refs and layout are settled before measuring.
+    frame = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(frame);
+  }, [showLyrics, duration, lyricAutoScrollResumeTick, currentTrack?.id, currentTrack?.url, lyricLines.length]);
+
+  useEffect(() => {
+    if (!showLyrics) return;
+
+    let mounted = true;
+    const animate = () => {
+      if (!mounted) return;
+      const container = lyricScrollRef.current;
+
+      if (container && !lyricUserPauseRef.current && lyricMetricsRef.current.ready) {
+        const audioEl = audioRef?.current;
+        const liveCurrentTime = audioEl && Number.isFinite(audioEl.currentTime)
+          ? audioEl.currentTime
+          : latestPlaybackRef.current.currentTime;
+        const liveDuration = audioEl && Number.isFinite(audioEl.duration) && audioEl.duration > 0
+          ? audioEl.duration
+          : latestPlaybackRef.current.duration;
+
+        if (Number.isFinite(liveDuration) && liveDuration > 0) {
+          const metrics = lyricMetricsRef.current;
+          const ratio = Math.min(0.995, Math.max(0, liveCurrentTime / liveDuration));
+          const estimatedCurrentY = metrics.singableStart + (metrics.singableEnd - metrics.singableStart) * ratio;
+
+          // Put the estimated singing area slightly below center, closer to a natural reading position.
+          const target = Math.min(
+            metrics.maxScroll,
+            Math.max(0, estimatedCurrentY - container.clientHeight * 0.72)
+          );
+
+          lyricTargetScrollTopRef.current = target;
+          const distance = target - lyricSmoothScrollTopRef.current;
+
+          // Keep a floating internal scroll value so tiny sub-pixel movements do not get rounded away.
+          // This makes the motion feel closer to middle-mouse continuous scrolling.
+          lyricSmoothScrollTopRef.current += distance * 0.028;
+          container.scrollTop = lyricSmoothScrollTopRef.current;
+        }
+      } else if (container && lyricUserPauseRef.current) {
+        lyricSmoothScrollTopRef.current = container.scrollTop;
+      }
+
+      lyricAutoScrollFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    lyricAutoScrollFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      mounted = false;
+      if (lyricAutoScrollFrameRef.current) {
+        cancelAnimationFrame(lyricAutoScrollFrameRef.current);
+        lyricAutoScrollFrameRef.current = null;
+      }
+    };
+  }, [showLyrics, currentTrack?.id, currentTrack?.url, audioRef]);
+
+  if (!currentTrack) return null;
 
   return (
     <>
@@ -472,7 +616,7 @@ export default function GlobalPlayer() {
                 
                 <div className="flex-1 min-w-0 pr-16 relative overflow-hidden">
                    <ScrollText text={currentTrack.title || 'Untitled'} className="font-bold text-sm" />
-                   <p className="text-[10px] opacity-60 truncate">{playerArtist}</p>
+                   <p className="text-[10px] opacity-50 truncate">{artistDisplay}</p>
                 </div>
 
                 <div className="flex items-center gap-1.5 relative z-30 pointer-events-auto shrink-0 mr-1">
@@ -522,11 +666,11 @@ export default function GlobalPlayer() {
               `}</style>
               {currentTrack.imageUrl ? (
                 <div 
-                  className="absolute inset-0 bg-cover bg-center opacity-10 blur-xl saturate-200 pointer-events-none"
+                  className="absolute inset-0 bg-cover bg-center opacity-[0.06] saturate-150 pointer-events-none"
                   style={{ backgroundImage: `url(${currentTrack.imageUrl})` }}
                 />
               ) : (
-                 <div className="absolute inset-0 bg-gradient-to-br from-brand-orange/10 to-purple-500/10 opacity-20 blur-xl pointer-events-none" />
+                 <div className="absolute inset-0 bg-gradient-to-br from-brand-orange/10 to-purple-500/10 opacity-10 pointer-events-none" />
               )}
 
               <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
@@ -586,35 +730,73 @@ export default function GlobalPlayer() {
 
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setShowLyrics(v => !v); }}
-                className="w-full aspect-square mt-8 mb-6 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/40 border border-white/5 flex items-center justify-center relative z-10 group text-left"
-                title={showLyrics ? '가사 숨기기' : '가사 보기'}
+                onClick={() => setShowLyrics((v) => !v)}
+                className="w-full aspect-square mt-8 mb-6 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/25 border border-white/5 flex items-center justify-center relative z-10 text-left group focus:outline-none focus:ring-2 focus:ring-brand-orange/50"
+                aria-label={showLyrics ? '가사 닫기' : '가사 보기'}
               >
                  {currentTrack.imageUrl ? (
-                    <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`w-full h-full object-cover transition-all duration-300 ${showLyrics ? 'scale-105 opacity-25 blur-sm' : 'group-hover:scale-[1.02]'}`} />
+                    <img
+                      src={currentTrack.imageUrl}
+                      alt={currentTrack.title}
+                      draggable={false}
+                      onDragStart={(e) => e.preventDefault()}
+                      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${showLyrics ? 'opacity-75' : 'opacity-100'}`}
+                    />
                  ) : (
-                    <Music className={`w-20 h-20 transition-all ${showLyrics ? 'text-white/10' : 'text-white/20'}`} />
-                 )}
-
-                 <div className={`absolute inset-0 transition-all duration-300 ${showLyrics ? 'bg-black/70' : 'bg-black/0 group-hover:bg-black/15'}`} />
-
-                 {!showLyrics && (
-                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/45 border border-white/10 text-[11px] text-white/75 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                     사진을 눌러 가사 보기
-                   </div>
+                    <Music className={`w-20 h-20 text-white/20 transition-opacity ${showLyrics ? 'opacity-20' : 'opacity-100'}`} />
                  )}
 
                  {showLyrics && (
-                   <div className="absolute inset-0 p-5 flex flex-col">
-                     <div className="flex items-center justify-between gap-3 mb-3 shrink-0">
-                       <span className="text-xs font-bold text-brand-orange">가사</span>
-                       <span className="text-[10px] text-white/45">다시 누르면 닫힘</span>
-                     </div>
-                     <div className="flex-1 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-white/90 pr-1 scrollbar-hide">
-                       {playerLyrics || '표시할 가사가 없습니다.'}
-                     </div>
-                   </div>
+                   <div className="absolute inset-0 bg-black/10" />
                  )}
+
+                 <AnimatePresence mode="wait">
+                   {showLyrics ? (
+                     <motion.div
+                       key="lyrics"
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       exit={{ opacity: 0 }}
+                       className="absolute inset-0 z-10 flex flex-col p-5"
+                     >
+                       <div className="flex items-center justify-between mb-4 shrink-0">
+                         <span className="text-brand-orange text-sm font-bold">가사</span>
+                         <span className="text-[11px] text-white/60">다시 누르면 닫힘</span>
+                       </div>
+
+                       {lyricLines.length > 0 ? (
+                         <div
+                           ref={lyricScrollRef}
+                           onWheel={pauseLyricAutoScroll}
+                           onTouchStart={pauseLyricAutoScroll}
+                           onPointerDown={pauseLyricAutoScroll}
+                           className="flex-1 overflow-y-auto pr-1 space-y-3 text-sm leading-relaxed scrollbar-hide"
+                         >
+                           {lyricLines.map((line, index) => {
+                             const isSection = isLyricSectionLine(line);
+                             return (
+                               <p
+                                 key={`${line}-${index}`}
+                                 ref={(el) => { lyricLineRefs.current[index] = el; }}
+                                 className={`transition-colors duration-300 ${
+                                   isSection
+                                     ? 'text-brand-orange/90 font-bold pt-4 pb-1 tracking-wide'
+                                     : 'text-white/90'
+                                 }`}
+                               >
+                                 {line}
+                               </p>
+                             );
+                           })}
+                         </div>
+                       ) : (
+                         <div className="flex-1 flex items-center justify-center text-center text-white/70 text-sm leading-relaxed">
+                           표시할 가사가 없습니다.
+                         </div>
+                       )}
+                     </motion.div>
+                   ) : null}
+                 </AnimatePresence>
               </button>
 
               <div className="relative z-10 flex-1 flex flex-col w-full min-w-0">
@@ -626,7 +808,7 @@ export default function GlobalPlayer() {
                       <Star className="w-5 h-5" />
                    </button>
                 </div>
-                <p className="text-sm opacity-70 mb-6 truncate">{playerArtist}</p>
+                <p className="text-sm opacity-60 mb-6 truncate">{artistDisplay}</p>
 
                 <div className="w-full mb-6 group cursor-pointer">
                   <input 

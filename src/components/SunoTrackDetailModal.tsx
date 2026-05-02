@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
+import { auth } from '../firebase';
 
 interface SunoTrackDetailModalProps {
   open: boolean;
@@ -12,9 +13,7 @@ const normalizeText = (value: any): string => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) {
-    return value.map(normalizeText).filter(Boolean).join(', ');
-  }
+  if (Array.isArray(value)) return value.map(normalizeText).filter(Boolean).join(', ');
   return '';
 };
 
@@ -26,6 +25,15 @@ const firstText = (...values: any[]): string => {
   return '';
 };
 
+const safeCreatorText = (value: any, ownerUid?: string): string => {
+  const text = normalizeText(value);
+  if (!text) return '';
+  if (ownerUid && text === ownerUid) return '';
+  if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+  if (text.startsWith('·GENRE:') || text.startsWith('GENRE:')) return '';
+  return text;
+};
+
 const formatCreatedAt = (timestamp: any): string => {
   if (!timestamp) return '정보 없음';
   try {
@@ -34,7 +42,6 @@ const formatCreatedAt = (timestamp: any): string => {
     else if (timestamp instanceof Date) date = timestamp;
     else if (typeof timestamp === 'number') date = new Date(timestamp);
     else date = new Date(timestamp);
-
     if (Number.isNaN(date.getTime())) return '정보 없음';
     return date.toLocaleString('ko-KR');
   } catch {
@@ -105,44 +112,54 @@ const extractStyle = (track: any): string => {
 
 const getCreator = (track: any): string => {
   const parent = track?.parent || {};
-  const ownerUid = String(parent?.ownerUid || track?.ownerUid || parent?.uid || track?.uid || '');
+  const user = auth.currentUser;
+  const ownerUid = String(track?.ownerUid || parent?.ownerUid || track?.uid || parent?.uid || '');
   const candidates = [
+    track?.artist,
+    track?.artistName,
+    track?.author,
+    track?.uploaderName,
     track?.creatorDisplayId,
     track?.ownerNickname,
     track?.creatorNickname,
     track?.ownerName,
     track?.creatorName,
     track?.ownerDisplayName,
-    track?.displayName,
+    track?.createdByName,
+    track?.userName,
+    parent?.artist,
+    parent?.artistName,
+    parent?.author,
+    parent?.uploaderName,
     parent?.creatorDisplayId,
     parent?.ownerNickname,
     parent?.creatorNickname,
     parent?.ownerName,
     parent?.creatorName,
     parent?.ownerDisplayName,
-    parent?.displayName,
+    parent?.createdByName,
+    parent?.userName,
     parent?.shareData?.creatorDisplayId,
     parent?.shareData?.ownerNickname,
     parent?.shareData?.creatorNickname,
     parent?.shareData?.ownerName,
-    parent?.ownerEmail,
-    parent?.creatorEmail,
+    parent?.shareData?.creatorName,
     track?.ownerEmail,
     track?.creatorEmail,
+    parent?.ownerEmail,
+    parent?.creatorEmail,
   ];
 
   for (const value of candidates) {
-    const text = normalizeText(value);
-    if (!text) continue;
-    if (text === ownerUid) continue;
-    if (text.startsWith('·GENRE:') || text.startsWith('GENRE:')) continue;
-    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) continue;
-    return text;
+    const text = safeCreatorText(value, ownerUid);
+    if (text) return text;
   }
+
+  const fallback = safeCreatorText(user?.displayName, ownerUid) || safeCreatorText(user?.email, ownerUid);
+  if (fallback) return fallback;
 
   return '원곡자 정보 없음';
 };
-
 
 export default function SunoTrackDetailModal({ open, track, onClose }: SunoTrackDetailModalProps) {
   const parent = track?.parent || {};
@@ -159,24 +176,12 @@ export default function SunoTrackDetailModal({ open, track, onClose }: SunoTrack
   return (
     <AnimatePresence>
       {open && track && (
-        <div
-          className="fixed inset-0 z-[300] flex items-center justify-center px-4"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onClose();
-          }}
-        >
+        <div className="fixed inset-0 z-[300] flex items-center justify-center px-4" onClick={onClose}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/10"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onClose();
-            }}
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -187,10 +192,7 @@ export default function SunoTrackDetailModal({ open, track, onClose }: SunoTrack
           >
             <div className="flex items-center justify-between p-6 border-b border-white/5">
               <h3 className="text-xl font-bold">상세 정보</h3>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-white/5 rounded-full transition-all"
-              >
+              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-all">
                 <X className="w-6 h-6 opacity-40" />
               </button>
             </div>
@@ -208,10 +210,7 @@ export default function SunoTrackDetailModal({ open, track, onClose }: SunoTrack
               </div>
             </div>
             <div className="p-6 border-t border-white/5 text-center">
-              <button
-                onClick={onClose}
-                className="px-8 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all"
-              >
+              <button onClick={onClose} className="px-8 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all">
                 닫기
               </button>
             </div>

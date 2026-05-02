@@ -31,6 +31,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+const WORKSPACE_PAGE_SIZE = 30;
 
 const COLOR_OPTIONS = [
   { value: 'gray', color: '#6b7280', label: '회색' },
@@ -94,6 +95,13 @@ export default function SunoLibraryPage() {
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
+  const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
+  useEffect(() => {
+    if (libraryViewMode === 'workspace') {
+      setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
+    }
+  }, [libraryViewMode, searchTerm, filter, workspaceColorFilter]);
+
   const [showDetails, setShowDetails] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   interface MenuState {
@@ -669,7 +677,8 @@ export default function SunoLibraryPage() {
   };
 
   const getWorkspaceItemColor = (group: any, idx: number): string => {
-    const raw = group?.colorTags?.[String(idx)] ?? group?.colorTags?.[idx] ?? null;
+    const source = filter === 'favorite' ? group?.favoriteColorTags : group?.colorTags;
+    const raw = source?.[String(idx)] ?? source?.[idx] ?? null;
     return raw || 'gray';
   };
 
@@ -699,10 +708,26 @@ export default function SunoLibraryPage() {
 
     try {
       const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      const colorField = filter === 'favorite' ? 'favoriteColorTags' : 'colorTags';
       await updateDoc(trackRef, {
-        [`colorTags.${idx}`]: color || null,
+        [`${colorField}.${idx}`]: color || null,
         updatedAt: serverTimestamp()
       });
+      setTracks((prev) => prev.map((track) => {
+        if (track.id !== group.id) return track;
+        return {
+          ...track,
+          [colorField]: {
+            ...(track?.[colorField] || {}),
+            [String(idx)]: color || null,
+          }
+        };
+      }));
+      if (filter === 'favorite') {
+        group.favoriteColorTags = { ...(group.favoriteColorTags || {}), [String(idx)]: color || null };
+      } else {
+        group.colorTags = { ...(group.colorTags || {}), [String(idx)]: color || null };
+      }
     } catch (e) {
       console.error('workspace color update failed:', e);
       showToast("색상 변경에 실패했습니다.");
@@ -730,6 +755,10 @@ export default function SunoLibraryPage() {
         updatedAt: serverTimestamp()
       });
       group.favorite = next;
+      setTracks((prev) => prev.map((track) => track.id === group.id ? { ...track, favorite: next } : track));
+      window.dispatchEvent(new CustomEvent('soridraw:suno-favorite-changed', {
+        detail: { trackId: group.id, favorite: next }
+      }));
       showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
     } catch (e) {
       console.error('workspace favorite update failed:', e);
@@ -753,6 +782,10 @@ export default function SunoLibraryPage() {
         updatedAt: serverTimestamp()
       });
       (item as any).favorite = next;
+      setPlaylistItems((prev) => prev.map((playlistItem) => playlistItem.id === item.id ? { ...playlistItem, favorite: next } : playlistItem));
+      window.dispatchEvent(new CustomEvent('soridraw:suno-favorite-changed', {
+        detail: { trackId: item.sourceId || item.id, playlistItemId: item.id, favorite: next }
+      }));
       showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
     } catch (e) {
       console.error('playlist favorite update failed:', e);
@@ -881,6 +914,13 @@ export default function SunoLibraryPage() {
       return matchesSearch && matchesFilter && matchesColor;
     });
   }, [tracks, searchTerm, filter, workspaceColorFilter]);
+
+  const displayedWorkspaceTracks = useMemo(() => {
+    if (libraryViewMode !== 'workspace') return filteredTracks;
+    return filteredTracks.slice(0, workspaceVisibleCount);
+  }, [filteredTracks, libraryViewMode, workspaceVisibleCount]);
+
+  const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && workspaceVisibleCount < filteredTracks.length;
 
   const allPlayables = useMemo(() => {
     const list: any[] = [];
@@ -1191,6 +1231,10 @@ export default function SunoLibraryPage() {
       : '';
 
     const creatorName =
+      normalizeCreatorName(group?.artist, ownerUid) ||
+      normalizeCreatorName(group?.artistName, ownerUid) ||
+      normalizeCreatorName(group?.author, ownerUid) ||
+      normalizeCreatorName(group?.uploaderName, ownerUid) ||
       normalizeCreatorName(group?.ownerNickname, ownerUid) ||
       normalizeCreatorName(group?.creatorNickname, ownerUid) ||
       normalizeCreatorName(group?.creatorDisplayId, ownerUid) ||
@@ -1201,6 +1245,10 @@ export default function SunoLibraryPage() {
       normalizeCreatorName(group?.shareData?.creatorNickname, ownerUid) ||
       normalizeCreatorName(group?.shareData?.creatorDisplayId, ownerUid) ||
       normalizeCreatorName(group?.shareData?.ownerName, ownerUid) ||
+      normalizeCreatorName(item?.artist, ownerUid) ||
+      normalizeCreatorName(item?.artistName, ownerUid) ||
+      normalizeCreatorName(item?.author, ownerUid) ||
+      normalizeCreatorName(item?.uploaderName, ownerUid) ||
       normalizeCreatorName(item?.ownerNickname, ownerUid) ||
       normalizeCreatorName(item?.creatorNickname, ownerUid) ||
       normalizeCreatorName(item?.creatorDisplayId, ownerUid) ||
@@ -2434,7 +2482,7 @@ export default function SunoLibraryPage() {
           </motion.div>
         ) : (
           <div className="space-y-6">
-            {filteredTracks.map((group) => {
+            {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
                 .map((item: any, idx: number) => ({ item, idx }))
@@ -2612,6 +2660,20 @@ export default function SunoLibraryPage() {
                 </motion.div>
               );
             })}
+            {hasMoreWorkspaceTracks && (
+              <div className="flex flex-col items-center gap-2 pt-2 pb-4">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length))}
+                  className="px-6 py-3 rounded-2xl border border-brand-orange/40 bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange text-sm font-bold transition-all shadow-lg shadow-black/20"
+                >
+                  더보기 {Math.min(filteredTracks.length - workspaceVisibleCount, WORKSPACE_PAGE_SIZE)}곡
+                </button>
+                <p className="text-[11px] text-white/35">
+                  {Math.min(workspaceVisibleCount, filteredTracks.length)} / {filteredTracks.length}개 묶음 표시 중
+                </p>
+              </div>
+            )}
           </div>
         )}
           </>
@@ -3269,7 +3331,11 @@ export default function SunoLibraryPage() {
               onClick={(e) => e.stopPropagation()}
             >
               {[
-                { icon: Info, label: '상세정보', action: () => { setShowDetails({ ...activeMenuState.group, itemIndex: activeMenuState.idx }); setActiveMenuState(null); } },
+                { icon: Info, label: '상세정보', action: () => {
+                  const creatorMeta = resolveCreatorSnapshot(activeMenuState.group, activeMenuState.item, { fallbackToCurrentUser: !isSharedView });
+                  setShowDetails({ ...activeMenuState.group, ...creatorMeta, itemIndex: activeMenuState.idx });
+                  setActiveMenuState(null);
+                } },
                 filter !== 'trash' ? { 
                   icon: Download, 
                   label: '다운로드', 

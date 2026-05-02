@@ -224,6 +224,41 @@ export default function GlobalPlayer() {
   }, [currentTrack?.url, currentTrack?.title, (currentTrack as any)?.favorite, currentTrack?.parent?.favorite]);
 
   useEffect(() => {
+    const handleFavoriteChanged = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail || {};
+      const changedTrackId = String(detail.trackId || detail.sourceId || '');
+      const changedPlaylistItemId = String(detail.playlistItemId || '');
+      const parent = currentTrack?.parent || {};
+      const currentIds = [
+        parent.id,
+        parent.trackId,
+        parent.sourceId,
+        parent.taskId,
+        (currentTrack as any)?.trackId,
+        (currentTrack as any)?.sourceId,
+        (currentTrack as any)?.id,
+      ].filter(Boolean).map(String);
+
+      const matched =
+        (changedTrackId && currentIds.includes(changedTrackId)) ||
+        (changedPlaylistItemId && currentIds.includes(changedPlaylistItemId));
+
+      if (!matched) return;
+      const next = Boolean(detail.favorite);
+      setLocalFavoriteActive(next);
+      if (currentTrack) {
+        (currentTrack as any).favorite = next;
+        if (currentTrack.parent) {
+          (currentTrack.parent as any).favorite = next;
+        }
+      }
+    };
+
+    window.addEventListener('soridraw:suno-favorite-changed', handleFavoriteChanged as EventListener);
+    return () => window.removeEventListener('soridraw:suno-favorite-changed', handleFavoriteChanged as EventListener);
+  }, [currentTrack]);
+
+  useEffect(() => {
     if (!isMobile || mode !== 'expanded') {
       mobileExpandedHistoryPushedRef.current = false;
       return;

@@ -3994,23 +3994,32 @@ ${result.prompt}
     return historyIndex === 0;
   };
 
+  const formatTitleLineByLanguage = (song: SongResult, lang: LanguageCode): string => {
+    const rawTitle = getTitleByLanguage(song, lang);
+    if (!rawTitle) return '';
+    return formatDisplayTitle(getSubGenre(song), rawTitle);
+  };
+
   const getTitleLinesForDisplay = (song: SongResult): string[] => {
-    const langs = (((song.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean);
-    const hasKo = langs.includes('ko');
-    const hasSecondary = langs.some((lang) => lang !== 'ko');
-    const lines: string[] = [];
+    const generatedLanguages = getGeneratedLyricLanguages(song);
+    const displayLanguages = getDisplayLyricLanguages(song);
+    const addedLanguage = ((song.appliedKeywords as any)?.addedLyricsLanguage || '') as LanguageCode;
+    const orderedLanguages = [
+      ...displayLanguages,
+      ...(addedLanguage ? [addedLanguage] : []),
+      ...generatedLanguages,
+    ].filter((lang, index, arr) => Boolean(lang) && arr.indexOf(lang) === index) as LanguageCode[];
 
-    if (hasKo && song.koreanTitle) lines.push(formatKoreanTitle(song));
-    if (hasSecondary && song.englishTitle) lines.push(formatEnglishTitle(song));
+    const lines = orderedLanguages
+      .map((lang) => formatTitleLineByLanguage(song, lang))
+      .filter(Boolean);
 
-    if (lines.length === 0) {
-      if (song.koreanTitle && song.englishTitle) return [formatKoreanTitle(song), formatEnglishTitle(song)];
-      if (song.koreanTitle) return [formatKoreanTitle(song)];
-      if (song.englishTitle) return [formatEnglishTitle(song)];
-      return [formatInlineTitle(song)];
-    }
+    if (lines.length > 0) return lines.slice(0, 2);
 
-    return lines.slice(0, 2);
+    if (song.koreanTitle && song.englishTitle) return [formatKoreanTitle(song), formatEnglishTitle(song)];
+    if (song.koreanTitle) return [formatKoreanTitle(song)];
+    if (song.englishTitle) return [formatEnglishTitle(song)];
+    return [formatInlineTitle(song)];
   };
 
   const copyToClipboard = async (text: string, type: string) => {
@@ -4841,8 +4850,8 @@ ${result.prompt}
                         const lines = getTitleLinesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
-                        const primaryClass = hasAddedLyricsLanguage ? 'text-amber-400' : (isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]');
-                        const secondaryClass = hasAddedLyricsLanguage ? 'text-amber-300/90' : (isRecent ? 'text-yellow-200/80' : 'text-[var(--text-primary)]/70');
+                        const primaryClass = hasAddedLyricsLanguage ? 'text-amber-500' : (isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-amber-400/95' : (isRecent ? 'text-yellow-200/80' : 'text-[var(--text-primary)]/70');
 
                         if (lines.length >= 2) {
                           return (
@@ -8445,9 +8454,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
         </div>
         
         <div className="flex justify-between mt-3 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">
-          <span>40 BPM</span>
+          <span>20 BPM</span>
           <span>100 BPM</span>
-          <span>160 BPM</span>
+          <span>200 BPM</span>
         </div>
       </div>
 

@@ -329,6 +329,9 @@ export interface PlaylistItem {
   id?: string;
   sourceType: 'suno_track' | 'shared_track';
   sourceId: string;
+  sourceSubTrackId?: string | null;
+  sourceSubTrackIndex?: number | null;
+  playlistUniqueKey?: string | null;
   ownerUid: string;
   creatorDisplayId: string | null;
   ownerNickname?: string | null;
@@ -341,6 +344,13 @@ export interface PlaylistItem {
   duration: number | null;
   genreLabels: string[];
   appliedKeywords: Record<string, any> | null;
+  prompt?: string | null;
+  style?: string | null;
+  lyrics?: string | null;
+  lyricsText?: string | null;
+  koreanLyrics?: string | null;
+  englishLyrics?: string | null;
+  requestPayload?: Record<string, any> | null;
   colorTag: string | null;
   likeCount: number;
   order: number;

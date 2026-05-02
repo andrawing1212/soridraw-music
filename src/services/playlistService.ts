@@ -2,6 +2,31 @@ import { db } from '../firebase';
 import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { Playlist, PlaylistItem } from '../types';
 
+const normalizeKeyPart = (value: any) => {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+};
+
+const getPlaylistItemUniqueKey = (item: Partial<PlaylistItem> | any) => {
+  const sourceType = normalizeKeyPart(item?.sourceType);
+  const sourceId = normalizeKeyPart(item?.sourceId || item?.trackId);
+  const subTrackIndex = normalizeKeyPart(item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? item?.itemIndex);
+  const subTrackId = normalizeKeyPart(item?.sourceSubTrackId || item?.audioId || item?.subTrackId);
+  const audioUrl = normalizeKeyPart(item?.audioUrl || item?.streamAudioUrl || item?.audio_url);
+
+  if (item?.playlistUniqueKey) return normalizeKeyPart(item.playlistUniqueKey);
+  if (sourceId && subTrackIndex) return `${sourceType}:${sourceId}:idx:${subTrackIndex}`;
+  if (sourceId && subTrackId) return `${sourceType}:${sourceId}:sub:${subTrackId}`;
+  if (sourceId && audioUrl) return `${sourceType}:${sourceId}:url:${audioUrl}`;
+  return `${sourceType}:${sourceId}`;
+};
+
+const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<PlaylistItem> | any) => {
+  const keyA = getPlaylistItemUniqueKey(a);
+  const keyB = getPlaylistItemUniqueKey(b);
+  return Boolean(keyA && keyB && keyA === keyB);
+};
+
 export const getPlaylistsByType = async (uid: string, type: "normal" | "shared"): Promise<Playlist[]> => {
   if (!uid) return [];
   const listsRef = collection(db, 'user_playlists', uid, 'lists');
@@ -121,7 +146,7 @@ export const addPlaylistItem = async (uid: string, playlistId: string, itemData:
   
   itemsSnap.forEach((doc) => {
     const data = doc.data() as PlaylistItem;
-    if (data.sourceId === itemData.sourceId) {
+    if (isSamePlaylistSourceItem(data, itemData)) {
       isDuplicate = true;
     }
     if (data.order > maxOrder) {
@@ -138,6 +163,7 @@ export const addPlaylistItem = async (uid: string, playlistId: string, itemData:
   
   await setDoc(newItemRef, {
     ...itemData,
+    playlistUniqueKey: getPlaylistItemUniqueKey(itemData),
     order: newOrder,
     addedAt: serverTimestamp(),
     updatedAt: serverTimestamp()
@@ -160,7 +186,7 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   
   toItemsSnap.forEach((doc) => {
     const data = doc.data() as PlaylistItem;
-    if (data.sourceId === item.sourceId) {
+    if (isSamePlaylistSourceItem(data, item)) {
       isDuplicate = true;
     }
     if (data.order > maxOrder) {
@@ -184,6 +210,7 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   const { id, ...itemWithoutId } = item;
   const newItemData = {
     ...itemWithoutId,
+    playlistUniqueKey: getPlaylistItemUniqueKey(itemWithoutId),
     order: maxOrder + 1,
     addedAt: serverTimestamp(),
     updatedAt: serverTimestamp()
@@ -236,10 +263,11 @@ export const deletePlaylist = async (uid: string, playlistId: string) => {
 
 export const getTrackGlobalId = (item: PlaylistItem | any) => {
   const ownerUid = item.ownerUid || 'unknown';
+  const subKey = normalizeKeyPart(item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? item?.sourceSubTrackId ?? item?.playlistUniqueKey);
   if (item.sourceType === 'shared_track') {
-    return `shared_${ownerUid}_${item.sourceId}`;
+    return `shared_${ownerUid}_${item.sourceId}${subKey ? `_${subKey}` : ''}`;
   }
-  return `suno_${ownerUid}_${item.sourceId}`;
+  return `suno_${ownerUid}_${item.sourceId}${subKey ? `_${subKey}` : ''}`;
 };
 
 export const fetchTrackLikes = async (globalIds: string[], uid: string | undefined): Promise<Record<string, { likeCount: number, likedByMe: boolean }>> => {

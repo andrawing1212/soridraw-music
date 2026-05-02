@@ -6,7 +6,7 @@ import {
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
-  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, CheckSquare, Square, ListChecks, Palette
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -184,6 +184,12 @@ export default function SunoLibraryPage() {
     }
   }, [libraryViewMode, searchTerm, filter, workspaceColorFilter]);
 
+  useEffect(() => {
+    setMultiSelectMode(false);
+    setSelectedTrackMap({});
+    setBulkMenuState(null);
+  }, [libraryViewMode, selectedNormalPlaylistId, selectedSharedPlaylistId, activePlaylistSection, filter]);
+
   const [showDetails, setShowDetails] = useState<any>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   interface MenuState {
@@ -197,12 +203,28 @@ export default function SunoLibraryPage() {
   const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
   const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
   const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
+  type MultiSelectContext = 'workspace' | 'playlist' | 'sharedPlaylist';
+  type MultiSelectedTrack = {
+    key: string;
+    context: MultiSelectContext;
+    group?: any;
+    item: any;
+    idx: number;
+    audioUrl: string;
+    title: string;
+  };
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedTrackMap, setSelectedTrackMap] = useState<Record<string, MultiSelectedTrack>>({});
+  const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number } | null>(null);
+  const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
+  const selectedTrackCount = selectedTrackList.length;
 
   useEffect(() => {
     const closeFloatingMenus = () => {
       setActiveMenuState(null);
       setActivePlaylistItemMenu(null);
       setActiveColorMenu(null);
+      setBulkMenuState(null);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -238,6 +260,8 @@ export default function SunoLibraryPage() {
   }
   const [playlistConfirmAction, setPlaylistConfirmAction] = useState<PlaylistConfirmAction | null>(null);
   const [isPlaylistConfirming, setIsPlaylistConfirming] = useState(false);
+  const [bulkShareModalOpen, setBulkShareModalOpen] = useState(false);
+  const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteAction | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1602,6 +1626,81 @@ export default function SunoLibraryPage() {
     setTimeout(() => setShareToastInfo(null), 3000);
   };
 
+  const getWorkspaceSelectionKey = (group: any, idx: number, audioUrl?: string) => {
+    const item = extractSunoData(group)[idx] || {};
+    const subId = item?.id || item?.audioId || item?.taskId || idx;
+    return `workspace:${group?.id || group?.trackId || 'unknown'}:${idx}:${subId}:${audioUrl || ''}`;
+  };
+
+  const getPlaylistSelectionKey = (item: any) => {
+    return `${libraryViewMode}:${activePlaylistId || 'none'}:${item?.playlistUniqueKey || item?.id || item?.sourceSubTrackId || item?.sourceId || item?.audioUrl || ''}`;
+  };
+
+  const buildWorkspaceSelection = (group: any, item: any, idx: number): MultiSelectedTrack => {
+    const audioUrl = getAudioUrl(item, group);
+    return {
+      key: getWorkspaceSelectionKey(group, idx, audioUrl),
+      context: 'workspace',
+      group,
+      item,
+      idx,
+      audioUrl,
+      title: getTitle(item, group, idx),
+    };
+  };
+
+  const buildPlaylistSelection = (item: any): MultiSelectedTrack => ({
+    key: getPlaylistSelectionKey(item),
+    context: libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared' ? 'sharedPlaylist' : 'playlist',
+    group: item,
+    item,
+    idx: Number.isFinite(Number(item?.sourceSubTrackIndex)) ? Number(item.sourceSubTrackIndex) : 0,
+    audioUrl: item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '',
+    title: item?.title || 'Untitled',
+  });
+
+  const isTrackSelected = (key: string) => Boolean(selectedTrackMap[key]);
+
+  const toggleSelectedTrack = (selection: MultiSelectedTrack, force?: boolean) => {
+    setSelectedTrackMap((prev) => {
+      const exists = Boolean(prev[selection.key]);
+      const shouldSelect = typeof force === 'boolean' ? force : !exists;
+      if (!shouldSelect) {
+        const next = { ...prev };
+        delete next[selection.key];
+        return next;
+      }
+      return { ...prev, [selection.key]: selection };
+    });
+  };
+
+  const enterMultiSelectWith = (selection: MultiSelectedTrack) => {
+    setMultiSelectMode(true);
+    setBulkMenuState(null);
+    setBulkShareModalOpen(false);
+    setBulkMoveModalOpen(false);
+    setActiveMenuState(null);
+    setActivePlaylistItemMenu(null);
+    setActiveColorMenu(null);
+    toggleSelectedTrack(selection, true);
+  };
+
+  const clearMultiSelect = () => {
+    setMultiSelectMode(false);
+    setSelectedTrackMap({});
+    setBulkMenuState(null);
+    setBulkShareModalOpen(false);
+    setBulkMoveModalOpen(false);
+  };
+
+  const openBulkMenuFromButton = (button: HTMLButtonElement) => {
+    if (!multiSelectMode) return;
+    const rect = button.getBoundingClientRect();
+    let top = rect.bottom + 8;
+    if (top + 260 > window.innerHeight) top = Math.max(12, rect.top - 260);
+    setBulkMenuState({ top, right: window.innerWidth - rect.right });
+  };
+
 
   const normalizeCreatorName = (value: any, ownerUid?: string | null) => {
     const text = typeof value === 'string' ? value.trim() : '';
@@ -2058,7 +2157,7 @@ export default function SunoLibraryPage() {
       return;
     }
 
-    const isShared = isSharedView;
+    const isShared = Boolean(isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track');
 
     try {
       await ensureDefaultPlaylists(user.uid);
@@ -2180,6 +2279,344 @@ export default function SunoLibraryPage() {
     }
   };
 
+
+  const getBulkShareTarget = (selection: MultiSelectedTrack) => {
+    if (selection.context === 'workspace') {
+      return { group: selection.group, item: selection.item, idx: selection.idx };
+    }
+
+    const item = selection.item || {};
+    const subIndexRaw = item.sourceSubTrackIndex ?? item.subTrackIndex ?? item.trackIndex;
+    const subIndex = Number.isFinite(Number(subIndexRaw)) ? Number(subIndexRaw) : undefined;
+    const stableId = String(
+      item.shareId ||
+      item.playlistUniqueKey ||
+      (subIndex !== undefined ? `${item.sourceId || item.trackId || item.id}_${subIndex}` : '') ||
+      (item.sourceSubTrackId ? `${item.sourceId || item.trackId || item.id}_${item.sourceSubTrackId}` : '') ||
+      item.sourceId ||
+      item.trackId ||
+      item.id ||
+      selection.key
+    );
+    const fakeItem = {
+      ...item,
+      id: stableId,
+      trackId: item.sourceId || item.trackId || stableId,
+      duration: item.duration,
+      audio_url: item.audioUrl || item.streamAudioUrl || item.audio_url || selection.audioUrl,
+      url: item.audioUrl || item.streamAudioUrl || item.audio_url || selection.audioUrl,
+      image_url: item.imageUrl || item.image_url,
+      ownerNickname: item.ownerNickname,
+      creatorNickname: item.creatorNickname,
+      creatorDisplayId: getPlaylistItemCreatorName(item),
+      ownerEmail: item.ownerEmail,
+      creatorEmail: item.creatorEmail,
+      isPlaylistItem: true,
+      sourceType: item.sourceType,
+      title: item.title || selection.title,
+    };
+    return { group: fakeItem, item: fakeItem, idx: undefined };
+  };
+
+  const createShareRecordForSelection = async (selection: MultiSelectedTrack) => {
+    if (!user) throw new Error('NO_USER');
+    const { group, item, idx } = getBulkShareTarget(selection);
+    if (!group || !item) throw new Error('NO_TARGET');
+
+    if (!group.isPlaylistItem && group?.id) {
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      await updateDoc(trackRef, {
+        isPublic: true,
+        hidden: false,
+        shareType: 'public',
+        publicSharedAt: serverTimestamp()
+      });
+    }
+
+    const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !group?.isPlaylistItem });
+    const shareId = idx !== undefined ? `${group.id}_${idx}` : String(group.id || selection.key);
+    const shareRef = doc(db, 'suno_shares', shareId);
+    await setDoc(shareRef, {
+      trackId: group.id,
+      subTrackIndex: idx ?? null,
+      taskId: group.taskId || '',
+      title: item?.title || item?.name || group.title || selection.title || 'Untitled',
+      audioUrl: item?.audio_url || item?.url || selection.audioUrl || '',
+      imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
+      duration: item?.duration || group.duration || null,
+      status: group.status || 'completed',
+      prompt: group.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || '',
+      style: group.style || group?.appliedKeywords?.style || '',
+      lyrics: group.lyrics || group.lyricsText || item?.lyrics || item?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+      lyricsText: group.lyricsText || group.lyrics || item?.lyricsText || item?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+      koreanLyrics: group.koreanLyrics || item?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+      englishLyrics: group.englishLyrics || item?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+      requestPayload: group.requestPayload || group.appliedKeywords || item?.appliedKeywords || null,
+      sunoData: group.sunoData || null,
+      apiResponse: group.apiResponse || null,
+      apiStatusResponse: group.apiStatusResponse || null,
+      appliedKeywords: group.appliedKeywords || item?.appliedKeywords || {},
+      createdAt: group.createdAt || serverTimestamp(),
+      ownerUid: user.uid,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      isPublic: true
+    });
+
+    return getSharePageUrl({ ...group, id: shareId }, undefined);
+  };
+
+  const handleBulkChangeColor = async (color: string | null) => {
+    if (selectedTrackCount === 0) return;
+    try {
+      for (const selection of selectedTrackList) {
+        if (selection.context === 'workspace') {
+          await handleChangeWorkspaceColor(selection.group, selection.idx, color);
+        } else {
+          await handleChangeColor(selection.item as PlaylistItem, color);
+        }
+      }
+      showToast(`${selectedTrackCount}곡 색상이 변경되었습니다.`);
+    } catch (e) {
+      console.error(e);
+      showToast('선택한 곡 색상 변경에 실패했습니다.');
+    }
+  };
+
+  const handleBulkFavorite = async () => {
+    const targets = selectedTrackList.filter((selection) => {
+      if (selection.context === 'sharedPlaylist') return false;
+      if ((selection.item as any)?.sourceType === 'shared_track') return false;
+      return true;
+    });
+
+    if (targets.length === 0) {
+      showToast('공유 플레이리스트 곡은 즐겨찾기를 사용할 수 없습니다.');
+      return;
+    }
+
+    for (const selection of targets) {
+      if (selection.context === 'workspace') {
+        await handleToggleWorkspaceFavorite(selection.group, true);
+      } else {
+        await handleTogglePlaylistItemFavorite(selection.item as PlaylistItem, true);
+      }
+    }
+    setBulkMenuState(null);
+    showToast(`${targets.length}곡을 즐겨찾기에 저장했습니다.`);
+  };
+
+  const handleBulkDownload = async () => {
+    const targets = selectedTrackList.filter((selection) => selection.audioUrl);
+    if (targets.length === 0) {
+      showToast('다운로드할 오디오 URL이 없습니다.');
+      return;
+    }
+    for (const selection of targets) {
+      await runDownload(selection.audioUrl, selection.title);
+    }
+    setBulkMenuState(null);
+    showToast(`${targets.length}곡 다운로드를 시작했습니다.`);
+  };
+
+  const handleBulkPlaylistSave = async () => {
+    if (selectedTrackCount === 0) return;
+    for (const selection of selectedTrackList) {
+      if (selection.context === 'workspace') {
+        await handleSavePlaylist(selection.group, selection.item, selection.audioUrl, selection.idx);
+      } else {
+        const { group, item, idx } = getBulkShareTarget(selection);
+        await handleSavePlaylist(group, item, selection.audioUrl, idx ?? 0);
+      }
+    }
+    setBulkMenuState(null);
+  };
+
+  const createBulkShareLinks = async () => {
+    const links: string[] = [];
+    for (const selection of selectedTrackList) {
+      links.push(await createShareRecordForSelection(selection));
+    }
+    return links;
+  };
+
+  const canBulkManageSharePrivacy = () => selectedTrackList.some((selection) => (
+    selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track'
+  ));
+
+  const handleBulkAllPublic = async () => {
+    if (selectedTrackCount === 0) return;
+    if (!canBulkManageSharePrivacy()) {
+      showToast('공유 플레이리스트에서는 공개 전환을 사용할 수 없습니다.');
+      return;
+    }
+
+    try {
+      const links = await createBulkShareLinks();
+      setBulkShareModalOpen(false);
+      setBulkMenuState(null);
+      showToast(`${links.length}곡을 공개 공유 상태로 설정했습니다.`);
+    } catch (e) {
+      console.error(e);
+      showToast('선택한 곡 공개 처리에 실패했습니다.');
+    }
+  };
+
+  const handleBulkAllLinkShare = async () => {
+    if (selectedTrackCount === 0) return;
+
+    try {
+      const links = await createBulkShareLinks();
+      const title = `SORIDRAW 선택한 ${links.length}곡`;
+      const text = links.join('\n');
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title,
+            text,
+            url: links[0],
+          });
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+          await navigator.clipboard.writeText(text);
+          showToast(`${links.length}개 공유 링크가 복사되었습니다.`);
+        }
+      } else {
+        await navigator.clipboard.writeText(text);
+        showToast(`${links.length}개 공유 링크가 복사되었습니다.`);
+      }
+
+      setBulkShareModalOpen(false);
+      setBulkMenuState(null);
+    } catch (e) {
+      console.error(e);
+      showToast('선택한 곡 링크 공유에 실패했습니다.');
+    }
+  };
+
+  const handleBulkPrivateShare = async () => {
+    if (!user || selectedTrackCount === 0) return;
+    if (!canBulkManageSharePrivacy()) {
+      showToast('공유 플레이리스트에서는 비공개 전환을 사용할 수 없습니다.');
+      return;
+    }
+
+    let changed = 0;
+    for (const selection of selectedTrackList) {
+      try {
+        if (selection.context === 'workspace' && selection.group?.id) {
+          await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', selection.group.id), {
+            isPublic: false,
+            shareType: 'private',
+            privateUpdatedAt: serverTimestamp()
+          });
+          changed += 1;
+        } else if ((selection.item as any)?.sourceType !== 'shared_track') {
+          const sourceId = String((selection.item as any)?.sourceId || (selection.item as any)?.trackId || '').trim();
+          const ownerUid = String((selection.item as any)?.ownerUid || user.uid).trim();
+          if (sourceId) {
+            await updateDoc(doc(db, 'suno_tracks', ownerUid, 'tracks', sourceId), {
+              isPublic: false,
+              shareType: 'private',
+              privateUpdatedAt: serverTimestamp()
+            });
+            changed += 1;
+          }
+        }
+      } catch (e) {
+        console.error('bulk private share failed:', e);
+      }
+    }
+    setBulkShareModalOpen(false);
+    setBulkMenuState(null);
+    showToast(changed > 0 ? `${changed}곡을 비공개로 전환했습니다.` : '비공개로 전환할 수 있는 원곡이 없습니다.');
+  };
+
+  const handleBulkMoveToPlaylist = async (targetPlaylistId: string) => {
+    if (!user || !activePlaylistId || !targetPlaylistId) return;
+    const targets = selectedTrackList.filter((selection) => selection.context !== 'workspace' && (selection.item as any)?.id);
+    if (targets.length === 0) {
+      showToast('이동할 플레이리스트 곡이 없습니다.');
+      return;
+    }
+
+    let moved = 0;
+    for (const selection of targets) {
+      try {
+        await movePlaylistItem(user.uid, activePlaylistId, targetPlaylistId, selection.item as PlaylistItem);
+        moved += 1;
+      } catch (e: any) {
+        if (e?.message !== 'DUPLICATE') console.error('bulk move failed:', e);
+      }
+    }
+
+    setBulkMoveModalOpen(false);
+    setBulkMenuState(null);
+    clearMultiSelect();
+    showToast(moved > 0 ? `${moved}곡을 폴더 이동했습니다.` : '이미 대상 폴더에 있는 곡입니다.');
+  };
+
+  const handleBulkDeleteSelected = () => {
+    if (!user || selectedTrackCount === 0) return;
+
+    const hasWorkspace = selectedTrackList.some((selection) => selection.context === 'workspace');
+    const title = hasWorkspace ? '선택한 곡을 휴지통으로 이동' : '선택한 곡을 리스트에서 삭제';
+    const message = hasWorkspace
+      ? '선택한 워크스페이스 곡을 휴지통으로 이동할까요?'
+      : '선택한 곡을 현재 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.';
+
+    setBulkMenuState(null);
+    setPlaylistConfirmAction({
+      title,
+      message,
+      confirmLabel: '삭제',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const workspaceGroups = new Map<string, { group: any; indices: Set<number> }>();
+          for (const selection of selectedTrackList) {
+            if (selection.context === 'workspace') {
+              const groupId = selection.group?.id;
+              if (!groupId) continue;
+              if (!workspaceGroups.has(groupId)) workspaceGroups.set(groupId, { group: selection.group, indices: new Set<number>() });
+              workspaceGroups.get(groupId)!.indices.add(selection.idx);
+            } else if ((selection.item as any)?.id && activePlaylistId) {
+              await deletePlaylistItem(user.uid, activePlaylistId, (selection.item as any).id);
+            }
+          }
+
+          for (const [groupId, payload] of workspaceGroups.entries()) {
+            const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', groupId);
+            const items = extractSunoData(payload.group);
+            if (items.length > 0) {
+              const nextSunoData = items.map((entry: any, entryIndex: number) => payload.indices.has(entryIndex) ? { ...entry, hidden: true } : entry);
+              const allHidden = nextSunoData.length > 0 && nextSunoData.every((entry: any) => entry.hidden === true);
+              const updatePayload: any = { sunoData: nextSunoData };
+              if (allHidden) {
+                updatePayload.hidden = true;
+                updatePayload.isPublic = false;
+                updatePayload.deletedAt = serverTimestamp();
+              }
+              await updateDoc(trackRef, updatePayload);
+            } else {
+              await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt: serverTimestamp() });
+            }
+          }
+
+          clearMultiSelect();
+          showToast('선택한 곡을 삭제했습니다.');
+        } catch (e) {
+          console.error('bulk delete failed:', e);
+          showToast('선택한 곡 삭제에 실패했습니다.');
+        }
+      }
+    });
+  };
+
   const handleDeleteClick = (groupId: string, itemIndex: number, group: any, action: 'hide' | 'restore' | 'permanentDelete') => {
     setDeleteTarget({ groupId, itemIndex, group, action });
     setDeleteError(null);
@@ -2240,7 +2677,7 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs;
+  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!bulkShareModalOpen || !!bulkMoveModalOpen;
 
   const closeModal = () => {
     modalHistoryPushedRef.current = false;
@@ -2249,6 +2686,8 @@ export default function SunoLibraryPage() {
     setDeleteTarget(null);
     setRenameModalArgs(null);
     setMoveModalArgs(null);
+    setBulkShareModalOpen(false);
+    setBulkMoveModalOpen(false);
   };
 
   useEffect(() => {
@@ -2939,6 +3378,56 @@ export default function SunoLibraryPage() {
           </div>
         )}
 
+        {multiSelectMode && (
+          <div className="sticky top-20 z-40 mb-4 rounded-2xl border border-brand-orange/30 bg-[#1f1f1f]/95 px-3 py-3 shadow-2xl shadow-black/30">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <ListChecks className="h-4 w-4 text-brand-orange" />
+                <span>선택 모드</span>
+                <span className="rounded-full bg-brand-orange/15 px-2 py-0.5 text-xs text-brand-orange">{selectedTrackCount}곡 선택</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex h-10 items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-2">
+                  <button
+                    type="button"
+                    onClick={() => handleBulkChangeColor(null)}
+                    className="h-8 rounded-xl px-3 text-xs font-bold text-white/80 hover:bg-white/10"
+                  >
+                    전체
+                  </button>
+                  <div className="mx-1 h-3 w-px bg-white/10" />
+                  {COLOR_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleBulkChangeColor(opt.value)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full brightness-90 transition-all hover:scale-110 hover:brightness-110"
+                      title={`${opt.label}로 변경`}
+                    >
+                      <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: opt.color }} />
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearMultiSelect}
+                  className="h-10 rounded-xl border border-white/10 px-3 text-xs font-bold text-white/50 hover:bg-white/5 hover:text-white"
+                >
+                  선택해제
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => openBulkMenuFromButton(e.currentTarget)}
+                  className="flex h-10 w-10 items-center justify-center text-brand-orange transition-all hover:text-brand-orange/80"
+                  title="선택한 곡 메뉴"
+                >
+                  <MoreVertical className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading || sharedTrackLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
@@ -3022,6 +3511,8 @@ export default function SunoLibraryPage() {
                       const isPending = !isFailed && !isCompleted;
                       
                       const isCurrent = isCurrentWorkspaceItem(group, item, idx);
+                      const selection = buildWorkspaceSelection(group, item, idx);
+                      const isSelected = isTrackSelected(selection.key);
                       
                       return (
                         <div 
@@ -3029,6 +3520,10 @@ export default function SunoLibraryPage() {
                           className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${isCurrent ? 'bg-brand-orange/5' : ''} ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
+                             if (multiSelectMode) {
+                               toggleSelectedTrack(selection);
+                               return;
+                             }
                              if (audioUrl) {
                                if (isCurrent) togglePlayPause();
                                else handlePlayTrack(group, idx);
@@ -3043,12 +3538,26 @@ export default function SunoLibraryPage() {
                             durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (multiSelectMode) {
+                                toggleSelectedTrack(selection);
+                                return;
+                              }
                               if (audioUrl) {
                                 if (isCurrent) togglePlayPause();
                                 else handlePlayTrack(group, idx);
                               }
                             }}
                           />
+                          {multiSelectMode && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center transition-all ${isSelected ? 'text-brand-orange' : 'text-white/35 hover:text-white/70'}`}
+                              title={isSelected ? '선택 해제' : '선택'}
+                            >
+                              {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                            </button>
+                          )}
                           
                           <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
                             <button
@@ -3106,7 +3615,11 @@ export default function SunoLibraryPage() {
                           <div className="relative shrink-0 ml-2">
                             <button 
                               onClick={(e) => { 
-                                e.stopPropagation(); 
+                                e.stopPropagation();
+                                if (multiSelectMode) {
+                                  openBulkMenuFromButton(e.currentTarget);
+                                  return;
+                                }
                                 const id = `${group.id}-${idx}`;
                                 if (activeMenuState?.id === id) {
                                   setActiveMenuState(null);
@@ -3128,9 +3641,9 @@ export default function SunoLibraryPage() {
                                   });
                                 }
                               }}
-                              className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-all"
+                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-brand-orange hover:text-brand-orange/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
                             >
-                              <MoreVertical className="w-4 h-4 opacity-50" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -3334,6 +3847,33 @@ export default function SunoLibraryPage() {
               </div>
             </div>
 
+            {multiSelectMode && (
+              <div className="sticky top-20 z-40 mt-3 rounded-2xl border border-brand-orange/30 bg-[#1f1f1f]/95 px-3 py-3 shadow-2xl shadow-black/30">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-2 text-sm font-bold text-white">
+                    <ListChecks className="h-4 w-4 text-brand-orange" />
+                    <span>선택 모드</span>
+                    <span className="rounded-full bg-brand-orange/15 px-2 py-0.5 text-xs text-brand-orange">{selectedTrackCount}곡 선택</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex h-10 items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-2">
+                      <button type="button" onClick={() => handleBulkChangeColor(null)} className="h-8 rounded-xl px-3 text-xs font-bold text-white/80 hover:bg-white/10">전체</button>
+                      <div className="mx-1 h-3 w-px bg-white/10" />
+                      {COLOR_OPTIONS.map((opt) => (
+                        <button key={opt.value} type="button" onClick={() => handleBulkChangeColor(opt.value)} className="flex h-7 w-7 items-center justify-center rounded-full brightness-90 transition-all hover:scale-110 hover:brightness-110" title={`${opt.label}로 변경`}>
+                          <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: opt.color }} />
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" onClick={clearMultiSelect} className="h-10 rounded-xl border border-white/10 px-3 text-xs font-bold text-white/50 hover:bg-white/5 hover:text-white">선택해제</button>
+                    <button type="button" onClick={(e) => openBulkMenuFromButton(e.currentTarget)} className="flex h-10 w-10 items-center justify-center text-brand-orange transition-all hover:text-brand-orange/80" title="선택한 곡 메뉴">
+                      <MoreVertical className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
               <div className="flex justify-center p-8 mt-2 border-t border-white/5">
@@ -3398,13 +3938,18 @@ export default function SunoLibraryPage() {
                   
                   const globalId = getTrackGlobalId(item);
                   const likeData = likesCache[globalId] || { likeCount: 0, likedByMe: false };
+                  const selection = buildPlaylistSelection(item);
+                  const isSelected = isTrackSelected(selection.key);
                   
                   return (
                     <div 
                       key={item.id} 
-                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent ${
-                        isActive ? 'bg-brand-orange/10 border-brand-orange/30' : 'hover:bg-white/5 hover:border-white/10'
-                      } ${isUnavailable ? 'opacity-50 grayscale' : ''}`}
+                      onClick={() => {
+                        if (multiSelectMode) toggleSelectedTrack(selection);
+                      }}
+                      className={`group relative flex items-center p-2 rounded-2xl transition-all border ${
+                        isSelected ? 'border-brand-orange/50 bg-brand-orange/10' : isActive ? 'bg-brand-orange/10 border-brand-orange/30' : 'border-transparent hover:bg-white/5 hover:border-white/10'
+                      } ${isUnavailable ? 'opacity-50 grayscale' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}
                       <AnimatedTrackPlayButton
@@ -3416,6 +3961,10 @@ export default function SunoLibraryPage() {
                         durationLabel={formatPlaylistDuration(item.duration) !== '--:--' ? formatPlaylistDuration(item.duration) : undefined}
                         onClick={async (e) => {
                           e.stopPropagation();
+                          if (multiSelectMode) {
+                            toggleSelectedTrack(selection);
+                            return;
+                          }
                           if (isUnavailable) return;
                           
                           if (item.sourceType === 'shared_track') {
@@ -3488,6 +4037,16 @@ export default function SunoLibraryPage() {
                           }
                         }}
                       />
+                      {multiSelectMode && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
+                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center transition-all ${isSelected ? 'text-brand-orange' : 'text-white/35 hover:text-white/70'}`}
+                          title={isSelected ? '선택 해제' : '선택'}
+                        >
+                          {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                        </button>
+                      )}
 
                       {/* Main Info */}
                       <div className="flex flex-col ml-3 flex-1 min-w-0">
@@ -3581,8 +4140,16 @@ export default function SunoLibraryPage() {
                         
                         <div className="relative">
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!); setActiveColorMenu(null); }}
-                            className="p-2 -mr-2 text-white/40 hover:text-white transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (multiSelectMode) {
+                                openBulkMenuFromButton(e.currentTarget);
+                                return;
+                              }
+                              setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!);
+                              setActiveColorMenu(null);
+                            }}
+                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-brand-orange hover:text-brand-orange/80' : 'rounded-full text-white/40 hover:text-white'}`}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
@@ -3597,6 +4164,16 @@ export default function SunoLibraryPage() {
                                 className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
                               >
                                 <span className="flex items-center gap-2"><Info className="w-4 h-4 opacity-70" />상세정보</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  enterMultiSelectWith(selection);
+                                  setActivePlaylistItemMenu(null);
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-brand-orange/10 flex items-center justify-between group text-white/80 hover:text-brand-orange"
+                              >
+                                <span className="flex items-center gap-2"><CheckSquare className="w-4 h-4 opacity-70" />선택</span>
                               </button>
                               <button 
                                 onClick={(e) => { 
@@ -3802,6 +4379,175 @@ export default function SunoLibraryPage() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {bulkMenuState && multiSelectMode && (
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setBulkMenuState(null); }} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-brand-orange/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-2 text-[11px] font-bold text-brand-orange border-b border-white/5">
+                선택한 {selectedTrackCount}곡
+              </div>
+
+              {libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
+                <button
+                  onClick={handleBulkFavorite}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                >
+                  <Star className="w-4 h-4" />
+                  즐겨찾기
+                </button>
+              )}
+
+              <button
+                onClick={handleBulkDownload}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+              >
+                <Download className="w-4 h-4" />
+                다운로드
+              </button>
+
+              <button
+                onClick={() => { setBulkMenuState(null); setBulkShareModalOpen(true); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+              >
+                <Share2 className="w-4 h-4" />
+                공유
+              </button>
+
+              {libraryViewMode !== 'sharedPlaylist' && (
+                <button
+                  onClick={handleBulkPlaylistSave}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                >
+                  <FolderOutput className="w-4 h-4" />
+                  플레이리스트 저장
+                </button>
+              )}
+
+              {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
+                <button
+                  onClick={() => { setBulkMenuState(null); setBulkMoveModalOpen(true); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                >
+                  <FolderOutput className="w-4 h-4" />
+                  폴더 이동
+                </button>
+              )}
+
+              <button
+                onClick={handleBulkDeleteSelected}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
+              >
+                <Trash2 className="w-4 h-4" />
+                {libraryViewMode === 'workspace' ? '삭제(휴지통)' : '리스트 삭제'}
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bulkShareModalOpen && multiSelectMode && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkShareModalOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-black tracking-tight text-white mb-1">선택한 곡 공유</h2>
+                <p className="text-xs text-white/40 font-medium">선택한 {selectedTrackCount}곡에 적용할 공유 방식을 선택해주세요.</p>
+              </div>
+
+              <div className="space-y-3">
+                {libraryViewMode !== 'sharedPlaylist' && canBulkManageSharePrivacy() && (
+                  <>
+                    <button
+                      onClick={handleBulkAllPublic}
+                      className="w-full py-4 bg-brand-orange text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all shadow-lg shadow-brand-orange/20"
+                    >
+                      <Globe2 className="w-5 h-5" /> All 공개
+                    </button>
+                    <button
+                      onClick={handleBulkPrivateShare}
+                      className="w-full py-4 bg-white/5 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/10 transition-all border border-white/10"
+                    >
+                      <X className="w-5 h-5" /> All 비공개
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={handleBulkAllLinkShare}
+                  className="w-full py-4 bg-white text-black rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/90 transition-all shadow-lg"
+                >
+                  <Share2 className="w-5 h-5" /> All 링크공유하기
+                </button>
+              </div>
+
+              <button
+                onClick={() => setBulkShareModalOpen(false)}
+                className="w-full py-3 text-white/20 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all mt-4"
+              >
+                닫기
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bulkMoveModalOpen && multiSelectMode && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-5 shadow-2xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black tracking-tight text-white">폴더 이동</h2>
+                  <p className="text-xs text-white/40 mt-1">선택한 {selectedTrackCount}곡을 이동할 폴더를 선택해주세요.</p>
+                </div>
+                <button onClick={() => setBulkMoveModalOpen(false)} className="p-2 rounded-full text-white/40 hover:text-white hover:bg-white/5">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                {(() => {
+                  const lists = activePlaylistSection === 'shared' ? actualSharedPlaylists : actualNormalPlaylists;
+                  const availableLists = lists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
+                  if (availableLists.length === 0) {
+                    return <div className="px-4 py-8 text-center text-sm text-white/40">이동할 수 있는 다른 폴더가 없습니다.</div>;
+                  }
+                  return availableLists.map(list => (
+                    <button
+                      key={list.id}
+                      onClick={() => handleBulkMoveToPlaylist(list.id!)}
+                      className="w-full px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 text-left text-sm font-bold text-white/80 hover:text-white transition-all"
+                    >
+                      {list.title}
+                    </button>
+                  ));
+                })()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {activeMenuState && (
           <>
             <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setActiveMenuState(null); }} />
@@ -3822,6 +4568,10 @@ export default function SunoLibraryPage() {
                   setShowDetails({ ...activeMenuState.group, ...creatorMeta, itemIndex: activeMenuState.idx });
                   setActiveMenuState(null);
                 } },
+                { icon: CheckSquare, label: '선택', action: () => {
+                  enterMultiSelectWith(buildWorkspaceSelection(activeMenuState.group, activeMenuState.item, activeMenuState.idx));
+                  setActiveMenuState(null);
+                } },
                 filter !== 'trash' ? { 
                   icon: Download, 
                   label: '다운로드', 
@@ -3835,7 +4585,7 @@ export default function SunoLibraryPage() {
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
-                !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제(휴지통)', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                 !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
                 !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,
               ].filter(Boolean).map((m: any, i) => (

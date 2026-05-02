@@ -1199,12 +1199,28 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   const cityPopKeywords = ["시티팝", "city pop", "city-pop", "citypop"];
   const synthPopKeywords = ["시스팝", "신스팝", "신스 팝", "synth pop", "synth-pop", "synthpop"];
   const idolKeywords = ["아이돌", "idol", "idol pop", "아이돌팝", "아이돌 팝"];
+  const lofiKeywords = ["로파이", "로우파이", "lo-fi", "lofi", "lo fi", "lofi hiphop", "lo-fi hip hop", "lo-fi hiphop", "lofi hip-hop"];
+  const studyKeywords = ["공부", "공부할때", "공부할 때", "독서실", "도서관", "책 읽", "책읽", "study", "studying", "reading room", "library", "focus music", "background music"];
   const balladKeywords = ["발라드", "발라드곡", "ballad"];
   const rockKeywords = ["락", "록", "락곡", "록곡", "rock"];
   const rnbInfluenceOfIndie = hasInfluenceBeforeMainGenre(lower, rnbKeywords, indieKeywords);
   const neoSoulInfluenceOfCityPop = hasInfluenceBeforeMainGenre(lower, neoSoulKeywords, cityPopKeywords);
 
   // MAIN GENRE: one main identity first, then secondary influences.
+  if (has(lofiKeywords)) {
+    pushUnique(mainGenreParts, has(["힙합", "hip hop", "hip-hop"]) ? "Lo-fi Hip-Hop" : "Lo-fi Chill");
+    pushUnique(soundParts, "dusty lo-fi drum loop", "warm muted keys", "soft vinyl texture", "low-volume background mix", "gentle tape warmth");
+    pushUnique(moodParts, "quiet focused atmosphere", "dreamy mellow mood");
+    pushUnique(arrangementParts, "minimal loop-based progression", "very restrained dynamic movement");
+  }
+
+  if (!has(lofiKeywords) && has(studyKeywords)) {
+    pushUnique(mainGenreParts, "Study Chill Pop");
+    pushUnique(soundParts, "soft background-friendly production", "warm muted keys", "gentle rhythmic pulse", "non-distracting mix");
+    pushUnique(moodParts, "quiet focused atmosphere", "calm study mood");
+    pushUnique(arrangementParts, "minimal progression for concentration", "restrained repetitive flow");
+  }
+
   if (has(synthPopKeywords)) {
     pushUnique(mainGenreParts, has(idolKeywords) ? "Synth Pop / Idol Pop" : "Synth Pop");
     pushUnique(soundParts, "layered synths", "polished electronic pop production", "bright synth texture", "punchy electronic groove");
@@ -1309,6 +1325,8 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   if (has(["신스", "synth", "synthesizer"])) pushUnique(soundParts, "synth layer");
   if (has(["베이스", "bass"])) pushUnique(soundParts, "focused bass groove");
   if (has(["드럼", "drum", "drums"])) pushUnique(soundParts, "drum groove");
+  if (has(["빈티지", "vintage", "테이프", "tape", "바이닐", "vinyl"])) pushUnique(soundParts, "soft vinyl texture", "gentle tape warmth");
+  if (has(["잔잔한 로파이", "mellow lofi", "chill lofi", "lofi chill"])) pushUnique(soundParts, "mellow lo-fi beat", "soft background-friendly production");
   if (has(["해금", "haegeum"])) pushUnique(soundParts, "haegeum melodic color");
   if (has(["가야금", "gayageum"])) pushUnique(soundParts, "gayageum plucked texture");
   if (has(["대금", "daegeum"])) pushUnique(soundParts, "daegeum flute tone");
@@ -1358,6 +1376,10 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   if (has(["밝은", "bright"])) pushUnique(moodParts, "bright mood");
   if (has(["청춘", "youth"])) pushUnique(moodParts, "youthful emotional color");
   if (hasCalm) pushUnique(moodParts, "calm gentle mood");
+  if (has(studyKeywords)) {
+    pushUnique(moodParts, "quiet study-room focus", "non-distracting background atmosphere");
+    pushUnique(themeParts, "quiet study-room scene");
+  }
 
   // THEME / STORY: people, relationship, event, narrative.
   if (has(["사랑", "love"])) pushUnique(themeParts, "romantic love story");
@@ -1486,7 +1508,11 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
   }
 
   // ARRANGEMENT / TEMPO / HOOK / STRUCTURE
-  if (hasSlowTempo) pushUnique(arrangementParts, "slow tempo feel");
+  if (has(["아주 느린", "매우 느린", "엄청 느린", "very slow", "extra slow", "super slow"])) {
+    pushUnique(arrangementParts, "very slow tempo feel", "wide relaxed pacing");
+  } else if (hasSlowTempo) {
+    pushUnique(arrangementParts, "slow tempo feel");
+  }
   if (hasFastTempo) pushUnique(arrangementParts, "fast tempo feel");
   if (hasMidTempo) pushUnique(arrangementParts, "mid-tempo feel");
   if (has(["짧게", "짧은 곡", "short song", "short lyrics"])) pushUnique(arrangementParts, "compact song structure", "concise lyric flow");
@@ -1536,7 +1562,13 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
 
   prioritizeVocalGender();
 
-  const mainGenre = mainGenreParts.length ? mainGenreParts[0] : "Contemporary Pop";
+  const mainGenre = mainGenreParts.length
+    ? mainGenreParts[0]
+    : has(studyKeywords)
+      ? "Study Chill Pop"
+      : hasCalm || hasSlowTempo
+        ? "Slow Chill Pop"
+        : "Contemporary Pop";
   const extraMainGenres = mainGenreParts.slice(1);
   const influenceText = [...extraMainGenres, ...genreInfluenceParts].slice(0, 3).join(" with ");
   const tempoPart = arrangementParts.find((part) => part.includes("tempo"));
@@ -1752,6 +1784,8 @@ ROLE OF USER INPUT:
 - The user input is a free-text director note for users who prefer describing the whole song in words instead of selecting buttons.
 - It CAN define or influence genre, style, tempo feel, song length feel, vocal direction, rap direction, arrangement, structure density, theme, scene, season, relationship, mood, sound palette, and lyrical direction.
 - If no explicit genre is selected in the UI, infer the main genre directly from this note and treat it as the primary genre identity.
+- When the user writes 로파이/lo-fi/lofi, the core genre MUST be Lo-fi Chill or Lo-fi Hip-Hop, never generic Contemporary Pop.
+- When the user writes 공부/독서실/도서관/study/library, preserve that as a quiet focus/study-room scene and background-friendly listening context.
 - If explicit UI selections exist, combine them with the note. When they conflict, prefer the user's clearly written natural-language direction unless a custom song structure is explicitly selected.
 - If the user mentions a song length, slow/fast tempo, short/long lyrics, verse/chorus/bridge, rap/no rap, or vocal formation, reflect that in the final song direction.
 - If custom song structure mode is selected, keep the custom section order fixed, but still apply the note to mood, sound, theme, vocal expression, and section energy.
@@ -1827,6 +1861,7 @@ TITLE RULES (CRITICAL):
 - DO NOT include genre, style, production terms, era, nationality, or descriptors.
 - DO NOT include words taken from STYLE such as: "Traditional Korean Fusion", "Gugak-pop", "New Jack Swing", "City Pop", "K-pop", "J-pop", "ballad pacing", "global pop approach", etc.
 - DO NOT include words taken from STYLE such as: "K-pop", "City Pop", etc.
+- If the user described a concrete listening scene such as studying in a reading room/library, the title should reflect that quiet everyday scene, not a random unrelated emotional phrase.
 - The genre label will be attached later by the app, so return the title body only.
 - Format must follow the selected title language rule above.
 - Do NOT use technical direction words as the title concept unless the user explicitly made them the story theme.

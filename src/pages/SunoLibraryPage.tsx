@@ -229,6 +229,15 @@ export default function SunoLibraryPage() {
     group: any;
     action: 'hide' | 'restore' | 'permanentDelete';
   }
+  interface PlaylistConfirmAction {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => Promise<void> | void;
+  }
+  const [playlistConfirmAction, setPlaylistConfirmAction] = useState<PlaylistConfirmAction | null>(null);
+  const [isPlaylistConfirming, setIsPlaylistConfirming] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteAction | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -489,29 +498,34 @@ export default function SunoLibraryPage() {
       return;
     }
 
-    if (!window.confirm('이 플레이리스트를 삭제할까요? 저장된 곡도 내 목록에서 함께 제거됩니다.')) {
-      return;
-    }
-
-    try {
-      await deletePlaylist(user.uid, playlist.id!);
-      
-      // Update selection if the deleted one was selected
-      if (isNormal && selectedNormalPlaylistId === playlist.id) {
-        const remaining = currentList.filter(p => p.id !== playlist.id);
-        if (remaining.length > 0) {
-          setSelectedNormalPlaylistId(remaining[0].id!);
-        }
-      } else if (!isNormal && selectedSharedPlaylistId === playlist.id) {
-        const remaining = currentList.filter(p => p.id !== playlist.id);
-        if (remaining.length > 0) {
-          setSelectedSharedPlaylistId(remaining[0].id!);
+    setPlaylistConfirmAction({
+      title: '플레이리스트 삭제',
+      message: '이 플레이리스트를 삭제할까요? 저장된 곡도 내 목록에서 함께 제거됩니다.',
+      confirmLabel: '삭제',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deletePlaylist(user.uid, playlist.id!);
+          
+          // Update selection if the deleted one was selected
+          if (isNormal && selectedNormalPlaylistId === playlist.id) {
+            const remaining = currentList.filter(p => p.id !== playlist.id);
+            if (remaining.length > 0) {
+              setSelectedNormalPlaylistId(remaining[0].id!);
+            }
+          } else if (!isNormal && selectedSharedPlaylistId === playlist.id) {
+            const remaining = currentList.filter(p => p.id !== playlist.id);
+            if (remaining.length > 0) {
+              setSelectedSharedPlaylistId(remaining[0].id!);
+            }
+          }
+          showToast('플레이리스트가 삭제되었습니다.');
+        } catch (error) {
+          console.error(error);
+          showToast('삭제에 실패했습니다.');
         }
       }
-    } catch (error) {
-      console.error(error);
-      showToast('삭제에 실패했습니다.');
-    }
+    });
   };
 
   const handleAddPlaylist = async (type: 'normal' | 'shared') => {
@@ -747,16 +761,22 @@ export default function SunoLibraryPage() {
     const msg = isShared 
       ? "이 공유곡을 내 플레이리스트에서 삭제할까요? 원곡자 데이터에는 영향이 없습니다."
       : "이 곡을 현재 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.";
-      
-    if (!window.confirm(msg)) return;
 
-    try {
-      await deletePlaylistItem(user.uid, activePlaylistId, item.id!);
-      showToast("곡이 삭제되었습니다.");
-    } catch (e) {
-      console.error(e);
-      showToast("곡 삭제에 실패했습니다.");
-    }
+    setPlaylistConfirmAction({
+      title: '리스트에서 삭제',
+      message: msg,
+      confirmLabel: '삭제',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deletePlaylistItem(user.uid, activePlaylistId, item.id!);
+          showToast("곡이 삭제되었습니다.");
+        } catch (e) {
+          console.error(e);
+          showToast("곡 삭제에 실패했습니다.");
+        }
+      }
+    });
   };
 
   const handleMoveToOtherPlaylist = (item: PlaylistItem) => {
@@ -3830,6 +3850,66 @@ export default function SunoLibraryPage() {
               ))}
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {playlistConfirmAction && (
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/35"
+            onClick={() => {
+              if (!isPlaylistConfirming) setPlaylistConfirmAction(null);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[360px] overflow-hidden rounded-3xl border border-white/10 bg-[var(--bg-secondary)] shadow-2xl"
+            >
+              <div className="px-5 pt-5 pb-4 border-b border-white/5">
+                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange'}`}>
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <h3 className="text-center text-lg font-black text-white tracking-tight">
+                  {playlistConfirmAction.title}
+                </h3>
+                <p className="mt-2 text-center text-sm leading-relaxed text-white/55">
+                  {playlistConfirmAction.message}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 p-4 bg-black/10">
+                <button
+                  type="button"
+                  disabled={isPlaylistConfirming}
+                  onClick={() => setPlaylistConfirmAction(null)}
+                  className="h-11 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/65 transition-all hover:bg-white/10 hover:text-white disabled:opacity-40"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={isPlaylistConfirming}
+                  onClick={async () => {
+                    if (!playlistConfirmAction) return;
+                    setIsPlaylistConfirming(true);
+                    try {
+                      await playlistConfirmAction.onConfirm();
+                      setPlaylistConfirmAction(null);
+                    } finally {
+                      setIsPlaylistConfirming(false);
+                    }
+                  }}
+                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-brand-orange hover:bg-brand-orange/90 shadow-lg shadow-brand-orange/15'}`}
+                >
+                  {isPlaylistConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {playlistConfirmAction.confirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

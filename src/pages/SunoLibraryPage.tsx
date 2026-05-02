@@ -756,6 +756,10 @@ export default function SunoLibraryPage() {
       });
       group.favorite = next;
       setTracks((prev) => prev.map((track) => track.id === group.id ? { ...track, favorite: next } : track));
+      setPlaylistItems((prev) => prev.map((playlistItem: any) => {
+        const match = String(playlistItem.sourceId || playlistItem.trackId || '') === String(group.id);
+        return match && playlistItem.sourceType !== 'shared_track' ? { ...playlistItem, favorite: next } : playlistItem;
+      }));
       window.dispatchEvent(new CustomEvent('soridraw:suno-favorite-changed', {
         detail: { trackId: group.id, favorite: next }
       }));
@@ -767,28 +771,56 @@ export default function SunoLibraryPage() {
   };
 
   const handleTogglePlaylistItemFavorite = async (item: PlaylistItem, nextValue?: boolean) => {
-    if (!user || !activePlaylistId || !item?.id) {
+    if (!user || !item) {
       showToast("즐겨찾기 정보를 저장할 수 없습니다.");
       return;
     }
 
-    const next = typeof nextValue === 'boolean' ? nextValue : !(item as any).favorite;
+    if ((item as any).sourceType === 'shared_track' || libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared') {
+      showToast("공유 플레이리스트 곡은 즐겨찾기를 사용할 수 없습니다.");
+      return;
+    }
+
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    const sourceTrackId = String((sourceTrack as any)?.id || (sourceTrack as any)?.trackId || (item as any).sourceId || (item as any).trackId || '').trim();
+    if (!sourceTrackId) {
+      showToast("원본 곡 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    const itemAudio = String((item as any).audioUrl || (item as any).streamAudioUrl || (item as any).audio_url || '').trim();
+    const currentValue = Boolean((sourceTrack as any)?.favorite ?? (item as any).favorite);
+    const next = typeof nextValue === 'boolean' ? nextValue : !currentValue;
 
     try {
-      const itemRef = doc(db, 'user_playlists', user.uid, 'lists', activePlaylistId, 'items', item.id);
-      await updateDoc(itemRef, {
+      const ownerUid = String((sourceTrack as any)?.ownerUid || (item as any).ownerUid || user.uid);
+      const trackRef = doc(db, 'suno_tracks', ownerUid, 'tracks', sourceTrackId);
+      await updateDoc(trackRef, {
         favorite: next,
         favoriteUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+
       (item as any).favorite = next;
-      setPlaylistItems((prev) => prev.map((playlistItem) => playlistItem.id === item.id ? { ...playlistItem, favorite: next } : playlistItem));
+      setTracks((prev) => prev.map((track: any) => {
+        const match = String(track.id) === sourceTrackId || String(track.trackId || '') === sourceTrackId;
+        return match ? { ...track, favorite: next } : track;
+      }));
+      setPlaylistItems((prev) => prev.map((playlistItem: any) => {
+        const playlistSourceId = String(playlistItem.sourceId || playlistItem.trackId || '');
+        const playlistAudio = String(playlistItem.audioUrl || playlistItem.streamAudioUrl || playlistItem.audio_url || '').trim();
+        const match =
+          playlistItem.id === item.id ||
+          playlistSourceId === sourceTrackId ||
+          (itemAudio && playlistAudio === itemAudio);
+        return match ? { ...playlistItem, favorite: next, sourceId: playlistItem.sourceType === 'shared_track' ? playlistItem.sourceId : sourceTrackId } : playlistItem;
+      }));
       window.dispatchEvent(new CustomEvent('soridraw:suno-favorite-changed', {
-        detail: { trackId: item.sourceId || item.id, playlistItemId: item.id, favorite: next }
+        detail: { trackId: sourceTrackId, playlistItemId: item.id, favorite: next }
       }));
       showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
     } catch (e) {
-      console.error('playlist favorite update failed:', e);
+      console.error('playlist source favorite update failed:', e);
       showToast("즐겨찾기 변경에 실패했습니다.");
     }
   };
@@ -864,6 +896,116 @@ export default function SunoLibraryPage() {
     const num = Number(rawVal);
     if (Number.isFinite(num) && num > 0) return num;
     return null;
+  };
+
+  const getPlaylistItemSourceTrack = (item: any) => {
+    if (!item || item.sourceType === 'shared_track') return null;
+
+    const candidateIds = [
+      item.sourceId,
+      item.trackId,
+      item.originalTrackId,
+      item.parentTrackId
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value));
+
+    let found = tracks.find((track: any) => {
+      const trackIds = [track.id, track.trackId, track.sourceId, track.taskId]
+        .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+        .map((value) => String(value));
+      return candidateIds.some((id) => trackIds.includes(id));
+    });
+    if (found) return found;
+
+    const itemAudio = String(item.audioUrl || item.streamAudioUrl || item.audio_url || '').trim();
+    if (itemAudio) {
+      found = tracks.find((track: any) => {
+        const directAudio = String(track.audioUrl || track.streamAudioUrl || track.audio_url || '').trim();
+        if (directAudio && directAudio === itemAudio) return true;
+        return extractSunoData(track).some((subItem: any) => {
+          const subAudio = String(subItem.audioUrl || subItem.streamAudioUrl || subItem.audio_url || subItem.url || '').trim();
+          return subAudio && subAudio === itemAudio;
+        });
+      });
+      if (found) return found;
+    }
+
+    const itemTitle = String(item.title || '').trim();
+    const itemDuration = Number(item.duration || 0);
+    if (itemTitle) {
+      found = tracks.find((track: any) => {
+        const directTitle = String(track.title || '').trim();
+        if (directTitle && directTitle === itemTitle) return true;
+        return extractSunoData(track).some((subItem: any) => {
+          const subTitle = String(subItem.title || subItem.name || '').trim();
+          const subDuration = Number(subItem.duration || subItem.durationSeconds || 0);
+          return subTitle === itemTitle && (!itemDuration || !subDuration || Math.abs(subDuration - itemDuration) < 2);
+        });
+      });
+    }
+
+    return found || null;
+  };
+
+  const getPlaylistItemSourceTrackId = (item: any) => {
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    return sourceTrack?.id ? String(sourceTrack.id) : String(item?.sourceId || item?.trackId || '').trim();
+  };
+
+
+  const normalizePlayableUrl = (value: any) => String(value || '').trim();
+
+  const getCurrentPlayableUrl = () => {
+    const parent: any = currentTrack?.parent || {};
+    return normalizePlayableUrl(
+      (currentTrack as any)?.url ||
+      (currentTrack as any)?.audioUrl ||
+      parent.audioUrl ||
+      parent.streamAudioUrl ||
+      parent.audio_url
+    );
+  };
+
+  const isSamePlayableUrl = (candidateUrl: any) => {
+    const currentUrl = getCurrentPlayableUrl();
+    const nextUrl = normalizePlayableUrl(candidateUrl);
+    return Boolean(currentUrl && nextUrl && currentUrl === nextUrl);
+  };
+
+  const isCurrentWorkspaceItem = (group: any, item: any, idx: number) => {
+    if (!currentTrack) return false;
+    const audioUrl = getAudioUrl(item, group);
+    if (isSamePlayableUrl(audioUrl)) return true;
+
+    const parent: any = currentTrack.parent || {};
+    const groupId = String(group?.id || group?.trackId || group?.sourceId || '').trim();
+    const parentIds = [parent.id, parent.trackId, parent.sourceId]
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value));
+
+    return Boolean(groupId && parentIds.includes(groupId) && Number((currentTrack as any).index) === idx);
+  };
+
+  const isCurrentPlaylistItem = (item: any) => {
+    if (!currentTrack) return false;
+    if (isSamePlayableUrl(item?.audioUrl || item?.streamAudioUrl || item?.audio_url)) return true;
+
+    const itemId = String(item?.id || '').trim();
+    const sourceId = String(getPlaylistItemSourceTrackId(item) || item?.sourceId || item?.trackId || '').trim();
+    const parent: any = currentTrack.parent || {};
+    const currentIds = [
+      (currentTrack as any)?.trackId,
+      (currentTrack as any)?.id,
+      (currentTrack as any)?.sourceId,
+      parent.id,
+      parent.trackId,
+      parent.sourceId
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value));
+
+    return Boolean((itemId && currentIds.includes(itemId)) || (sourceId && currentIds.includes(sourceId)));
   };
 
   const extractSunoData = (group: any) => {
@@ -1722,13 +1864,14 @@ export default function SunoLibraryPage() {
 
     const sourceId = isShared
       ? String(safeShareId)
-      : String(item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
+      : String(group?.id || group?.trackId || item?.sourceId || item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
 
     const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !isShared });
 
     const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
       sourceType: isShared ? 'shared_track' : 'suno_track',
       sourceId: sourceId,
+      sourceSubTrackId: !isShared ? String(item?.id || item?.audioId || item?.taskId || idx || '') : null,
       ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
       creatorDisplayId: creatorMeta.creatorDisplayId,
       ownerNickname: creatorMeta.ownerNickname,
@@ -2115,6 +2258,10 @@ export default function SunoLibraryPage() {
 
       if (action === 'favorite') {
         if (isPlaylistTrack) {
+          if ((parent as any).sourceType === 'shared_track' || (parent as any).__libraryViewMode === 'sharedPlaylist') {
+            showToast('공유 플레이리스트 곡은 즐겨찾기를 사용할 수 없습니다.');
+            return;
+          }
           handleTogglePlaylistItemFavorite(parent as PlaylistItem);
         } else {
           handleToggleWorkspaceFavorite(parent);
@@ -2537,7 +2684,7 @@ export default function SunoLibraryPage() {
                       const isCompleted = group.status === 'completed' && hasValidDuration;
                       const isPending = !isFailed && !isCompleted;
                       
-                      const isCurrent = currentTrack?.parent?.id === group.id && currentTrack?.index === idx;
+                      const isCurrent = isCurrentWorkspaceItem(group, item, idx);
                       
                       return (
                         <div 
@@ -2560,13 +2707,36 @@ export default function SunoLibraryPage() {
                               }
                             }}
                             disabled={!audioUrl}
-                            className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all ${
-                              isCurrent && isPlaying ? 'bg-brand-orange text-white ring-4 ring-brand-orange/20 shadow-lg shadow-brand-orange/40' : 
-                              isCurrent ? 'bg-brand-orange/50 text-white' :
-                              'bg-white/5 hover:bg-brand-orange/20 text-white group-hover:scale-105'
+                            className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full overflow-hidden flex items-center justify-center transition-all border border-white/10 ${
+                              isCurrent && isPlaying ? 'ring-4 ring-brand-orange/25 shadow-lg shadow-brand-orange/40 scale-105' : 
+                              isCurrent ? 'ring-2 ring-brand-orange/50' :
+                              'hover:ring-2 hover:ring-brand-orange/40 group-hover:scale-105'
                             } disabled:opacity-20`}
+                            title={hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                           >
-                            {isCurrent && isPlaying ? <Pause className="w-3.5 h-3.5 fill-white" /> : <Play className={`w-3.5 h-3.5 ${isCurrent ? 'fill-white' : ''} ml-0.5`} />}
+                            {getImageUrl(item, group) ? (
+                              <img
+                                src={getImageUrl(item, group)}
+                                alt=""
+                                className="absolute inset-0 w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="absolute inset-0 bg-white/5" />
+                            )}
+                            <div className={`absolute inset-0 ${isCurrent && isPlaying ? 'bg-black/35' : 'bg-black/45 group-hover:bg-black/35'} transition-colors`} />
+                            <div className="relative z-10 flex items-center justify-center text-white drop-shadow">
+                              {isCurrent && isPlaying ? (
+                                <Pause className="w-5 h-5 md:w-6 md:h-6 fill-white" />
+                              ) : (
+                                <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
+                              )}
+                            </div>
+                            {isCompleted && hasValidDuration && (
+                              <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-white/10 tabular-nums">
+                                {`${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`}
+                              </span>
+                            )}
                           </button>
                           
                           <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
@@ -2615,13 +2785,9 @@ export default function SunoLibraryPage() {
                             ) : null}
                           </div>
 
-                          <div className="text-[10px] opacity-40 font-mono shrink-0 tabular-nums">
-                            {(() => {
-                              if (isFailed) return '--:--';
-                              if (isPending && !hasValidDuration) return '대기중';
-                              return hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : '--:--';
-                            })()}
-                          </div>
+                          {isPending && !hasValidDuration && (
+                            <div className="text-[10px] opacity-40 font-mono shrink-0 tabular-nums">대기중</div>
+                          )}
 
                           <div className="relative shrink-0 ml-2">
                             <button 
@@ -2907,8 +3073,12 @@ export default function SunoLibraryPage() {
                   }
 
                   return items.map((item, index) => {
-                  const isActive = currentTrack?.trackId === item.id || currentTrack?.id === item.id;
+                  const isActive = isCurrentPlaylistItem(item);
                   const isShared = item.sourceType === 'shared_track';
+                  const sourceTrackForPlaylist = !isShared
+                    ? getPlaylistItemSourceTrack(item)
+                    : null;
+                  const playlistFavoriteActive = Boolean(!isShared && (((sourceTrackForPlaylist as any)?.favorite) ?? ((item as any).favorite)));
                   const cachedSharedStatus = sharedStatusCache[item.sourceId];
                   const isUnavailable = isShared && cachedSharedStatus && cachedSharedStatus.isPublic === false;
                   
@@ -2961,7 +3131,8 @@ export default function SunoLibraryPage() {
                                 creatorNickname: getPlaylistItemCreatorName(p) || p.creatorNickname,
                                 __playlistContext: true,
                                 __activePlaylistId: activePlaylistId,
-                                __libraryViewMode: libraryViewMode
+                                __libraryViewMode: libraryViewMode,
+                                favorite: p.sourceType === 'shared_track' ? false : Boolean((getPlaylistItemSourceTrack(p) as any)?.favorite ?? (p as any).favorite)
                               },
                               index: 0,
                               trackId: p.id,
@@ -2981,7 +3152,9 @@ export default function SunoLibraryPage() {
                                   creatorNickname: getPlaylistItemCreatorName(item) || item.creatorNickname,
                                   __playlistContext: true,
                                   __activePlaylistId: activePlaylistId,
-                                  __libraryViewMode: libraryViewMode
+                                  __libraryViewMode: libraryViewMode,
+                                  favorite: playlistFavoriteActive,
+                                  sourceId: isShared ? item.sourceId : (sourceTrackForPlaylist as any)?.id || item.sourceId
                                 },
                                 index: 0,
                                 trackId: item.id,
@@ -2993,15 +3166,35 @@ export default function SunoLibraryPage() {
                             }
                           }
                         }}
-                        className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl bg-[var(--bg-secondary)] shadow-sm transition-all relative ${
+                        className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center rounded-full overflow-hidden border border-white/10 shadow-sm transition-all ${
                           isUnavailable ? 'opacity-50 cursor-not-allowed text-white/20' : 
-                          isActive && isPlaying ? 'text-brand-orange' : 'text-white hover:text-brand-orange hover:bg-white/5'
+                          isActive && isPlaying ? 'ring-4 ring-brand-orange/25 shadow-lg shadow-brand-orange/40 scale-105' :
+                          isActive ? 'ring-2 ring-brand-orange/50' : 'hover:ring-2 hover:ring-brand-orange/40 hover:scale-105'
                         }`}
+                        title={formatPlaylistDuration(item.duration) !== '--:--' ? formatPlaylistDuration(item.duration) : undefined}
                       >
-                        {isActive && isPlaying ? (
-                          <Pause className="w-5 h-5 fill-current" />
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover"
+                            loading="lazy"
+                          />
                         ) : (
-                          <Play className="w-5 h-5 fill-current ml-0.5" />
+                          <div className="absolute inset-0 bg-[var(--bg-secondary)]" />
+                        )}
+                        <div className={`absolute inset-0 ${isActive && isPlaying ? 'bg-black/35' : 'bg-black/45 group-hover:bg-black/35'} transition-colors`} />
+                        <div className="relative z-10 flex items-center justify-center text-white drop-shadow">
+                          {isActive && isPlaying ? (
+                            <Pause className="w-5 h-5 md:w-6 md:h-6 fill-white" />
+                          ) : (
+                            <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
+                          )}
+                        </div>
+                        {formatPlaylistDuration(item.duration) !== '--:--' && (
+                          <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-white/10 tabular-nums">
+                            {formatPlaylistDuration(item.duration)}
+                          </span>
                         )}
                       </button>
 
@@ -3045,12 +3238,6 @@ export default function SunoLibraryPage() {
                             <span className="truncate">
                               {getPlaylistItemCreatorName(item)}
                             </span>
-                            {formatPlaylistDuration(item.duration) !== '--:--' && (
-                              <>
-                                <span>•</span>
-                                <span>{formatPlaylistDuration(item.duration)}</span>
-                              </>
-                            )}
                           </div>
                           {isUnavailable && (
                             <span className="text-[10px] text-red-400 font-bold bg-red-400/10 px-1.5 py-0.5 rounded w-fit pb-0">
@@ -3150,12 +3337,14 @@ export default function SunoLibraryPage() {
                               >
                                 <span className="flex items-center gap-2"><Share2 className="w-4 h-4 opacity-70" />공유</span>
                               </button>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleTogglePlaylistItemFavorite(item); setActivePlaylistItemMenu(null); }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
-                              >
-                                <span className="flex items-center gap-2"><Star className={`w-4 h-4 opacity-70 ${(item as any).favorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />{(item as any).favorite ? '즐겨찾기 해제' : '즐겨찾기'}</span>
-                              </button>
+                              {!isShared && activePlaylistSection !== 'shared' && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleTogglePlaylistItemFavorite(item); setActivePlaylistItemMenu(null); }}
+                                  className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                >
+                                  <span className="flex items-center gap-2"><Star className={`w-4 h-4 opacity-70 ${playlistFavoriteActive ? 'fill-yellow-400 text-yellow-400' : ''}`} />{playlistFavoriteActive ? '즐겨찾기 해제' : '즐겨찾기'}</span>
+                                </button>
+                              )}
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
                                 className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"

@@ -10,6 +10,7 @@ import { auth, db } from '../firebase';
 import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
 import { downloadAudioWithTitle } from '../lib/songUtils';
+import SunoTrackDetailModal from './SunoTrackDetailModal';
 
 function ScrollText({ text, className = '' }: { text: string; className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,10 +50,17 @@ function toNonEmptyString(value: any): string {
 
 function getTrackArtistDisplay(track: any): string {
   const group = track?.parent || {};
+  const user = auth.currentUser;
   const candidates = [
     track?.artist,
+    track?.creatorDisplayId,
+    track?.ownerNickname,
+    track?.creatorNickname,
     track?.creatorName,
     track?.ownerName,
+    track?.ownerDisplayName,
+    track?.createdByName,
+    track?.userName,
     group.artist,
     group.artistName,
     group.author,
@@ -65,14 +73,32 @@ function getTrackArtistDisplay(track: any): string {
     group.ownerDisplayName,
     group.createdByName,
     group.userName,
+    group.shareData?.creatorDisplayId,
+    group.shareData?.ownerNickname,
+    group.shareData?.creatorNickname,
+    group.shareData?.ownerName,
+    group.shareData?.creatorName,
     group.ownerEmail,
     group.creatorEmail,
     group.createdByEmail,
+    track?.ownerEmail,
+    track?.creatorEmail,
   ];
 
   for (const item of candidates) {
     const text = toNonEmptyString(item);
-    if (text && !text.startsWith('·GENRE:') && !text.startsWith('GENRE:')) return text;
+    if (!text) continue;
+    if (text.startsWith('·GENRE:') || text.startsWith('GENRE:')) continue;
+    const ownerUid = String(group.ownerUid || track?.ownerUid || group.uid || track?.uid || '');
+    if (ownerUid && text === ownerUid) continue;
+    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) continue;
+    return text;
+  }
+
+  const ownerUid = String(group.ownerUid || track?.ownerUid || group.uid || track?.uid || '');
+  if (!ownerUid || (user?.uid && ownerUid === user.uid)) {
+    const fallback = toNonEmptyString(user?.displayName) || toNonEmptyString(user?.email);
+    if (fallback) return fallback;
   }
 
   return '원곡자 정보 없음';
@@ -167,6 +193,7 @@ export default function GlobalPlayer() {
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const playerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const lyricScrollRef = useRef<HTMLDivElement>(null);
   const lyricLineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const lyricAutoScrollFrameRef = useRef<number | null>(null);
@@ -247,6 +274,27 @@ export default function GlobalPlayer() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [localDetailsOpen]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && menuRef.current?.contains(target)) return;
+      setShowMenu(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowMenu(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMenu]);
 
   useEffect(() => {
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
@@ -767,7 +815,7 @@ export default function GlobalPlayer() {
               )}
 
               <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
-                 <div className="relative">
+                 <div ref={menuRef} className="relative">
                    <button 
                       onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
                       className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50"
@@ -965,85 +1013,22 @@ export default function GlobalPlayer() {
         </AnimatePresence>
       </motion.div>
 
-      <AnimatePresence>
-        {localDetailsOpen && currentTrack && (
-          <motion.div
-            className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/25"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setLocalDetailsOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 16, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              onClick={(event) => event.stopPropagation()}
-              className="w-full max-w-2xl max-h-[82vh] overflow-hidden rounded-3xl border border-white/10 bg-[#1b1b1b] shadow-2xl flex flex-col"
-            >
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 shrink-0">
-                <h3 className="text-lg font-bold text-white">상세 정보</h3>
-                <button
-                  onClick={() => setLocalDetailsOpen(false)}
-                  className="p-2 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto custom-scrollbar space-y-5 text-sm">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-white/40 text-xs font-bold mb-2">제목</p>
-                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-semibold break-words">
-                      {currentTrack.title || currentTrack.parent?.title || 'Untitled'}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-white/40 text-xs font-bold mb-2">원곡자</p>
-                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80 break-words">
-                      {artistDisplay}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-white/40 text-xs font-bold mb-2">길이</p>
-                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80">
-                      {formatTime(currentTrack.duration || duration)}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-white/40 text-xs font-bold mb-2">상태</p>
-                    <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80">
-                      {currentTrack.parent?.status || 'Completed'}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-xs font-bold mb-2">키워드/스타일</p>
-                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/75 whitespace-pre-wrap break-words leading-relaxed max-h-48 overflow-y-auto custom-scrollbar">
-                    {currentTrack.parent?.style || currentTrack.parent?.prompt || '정보 없음'}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-xs font-bold mb-2">가사</p>
-                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/75 whitespace-pre-wrap break-words leading-relaxed max-h-56 overflow-y-auto custom-scrollbar">
-                    {lyricsText || '가사 정보 없음'}
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 py-4 border-t border-white/10 flex justify-center shrink-0">
-                <button
-                  onClick={() => setLocalDetailsOpen(false)}
-                  className="px-8 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold transition-all"
-                >
-                  닫기
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SunoTrackDetailModal
+        open={localDetailsOpen}
+        track={{
+          ...currentTrack,
+          creatorDisplayId: artistDisplay,
+          lyrics: lyricsText || currentTrack.lyrics || currentTrack.parent?.lyrics,
+          style: currentTrack.parent?.style || currentTrack.parent?.prompt || currentTrack.style || currentTrack.prompt,
+          status: currentTrack.parent?.status || currentTrack.status || 'Completed',
+          createdAt: currentTrack.parent?.createdAt || currentTrack.createdAt,
+          taskId: currentTrack.parent?.taskId || currentTrack.taskId || currentTrack.parent?.id || currentTrack.id,
+          requestPayload: currentTrack.parent?.requestPayload || currentTrack.requestPayload,
+          audioUrl: currentTrack.audioUrl || currentTrack.url || currentTrack.parent?.audioUrl,
+          parent: currentTrack.parent,
+        }}
+        onClose={() => setLocalDetailsOpen(false)}
+      />
     </>
   );
 }

@@ -15,6 +15,7 @@ import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
+import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 
 const fallbackNormalPlaylists: Playlist[] = [
   { id: "fallback-normal-0", title: "기본", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
@@ -850,22 +851,36 @@ export default function SunoLibraryPage() {
     const url = getAudioUrl(item, track);
     const title = getTitle(item, track, subIndex);
     const imageUrl = getImageUrl(item, track);
+    const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
 
     if (url) {
-      const newQueue = allPlayables.map(p => ({
-        url: p.url,
-        title: getTitle(p.item, p.group, p.idx),
-        imageUrl: getImageUrl(p.item, p.group),
-        parent: { ...p.group, __workspaceContext: true, __libraryViewMode: 'workspace' },
-        index: p.idx,
-        lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
-      }));
+      const newQueue = allPlayables.map(p => {
+        const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
+        return {
+          url: p.url,
+          title: getTitle(p.item, p.group, p.idx),
+          imageUrl: getImageUrl(p.item, p.group),
+          parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+          index: p.idx,
+          creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
+          ownerNickname: queuedCreatorMeta.ownerNickname,
+          creatorNickname: queuedCreatorMeta.creatorNickname,
+          ownerEmail: queuedCreatorMeta.ownerEmail,
+          creatorEmail: queuedCreatorMeta.creatorEmail,
+          lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
+        };
+      });
       playTrack({
         url,
         title,
         imageUrl,
-        parent: { ...track, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        parent: { ...track, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
         index: subIndex,
+        creatorDisplayId: creatorMeta.creatorDisplayId,
+        ownerNickname: creatorMeta.ownerNickname,
+        creatorNickname: creatorMeta.creatorNickname,
+        ownerEmail: creatorMeta.ownerEmail,
+        creatorEmail: creatorMeta.creatorEmail,
         lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
       }, newQueue);
     }
@@ -1972,7 +1987,8 @@ export default function SunoLibraryPage() {
             lyrics: track.lyrics || workspaceItem?.lyrics || workspaceItem?.lyricsText || parent.lyrics || parent.lyricsText || '',
             style: parent.style || workspaceItem?.style || parent.prompt || '',
             prompt: parent.prompt || workspaceItem?.prompt || '',
-            creatorDisplayId: parent.creatorDisplayId || parent.ownerNickname || parent.creatorNickname || parent.ownerEmail || parent.creatorEmail || ''
+            ...resolveCreatorSnapshot(parent, workspaceItem || parent, { fallbackToCurrentUser: true }),
+            creatorDisplayId: resolveCreatorSnapshot(parent, workspaceItem || parent, { fallbackToCurrentUser: true }).creatorDisplayId || parent.creatorDisplayId || parent.ownerNickname || parent.creatorNickname || parent.ownerEmail || parent.creatorEmail || ''
           });
         }
         return;
@@ -2816,12 +2832,16 @@ export default function SunoLibraryPage() {
                               imageUrl: p.imageUrl,
                               parent: {
                                 ...p,
+                                creatorDisplayId: getPlaylistItemCreatorName(p),
+                                ownerNickname: getPlaylistItemCreatorName(p) || p.ownerNickname,
+                                creatorNickname: getPlaylistItemCreatorName(p) || p.creatorNickname,
                                 __playlistContext: true,
                                 __activePlaylistId: activePlaylistId,
                                 __libraryViewMode: libraryViewMode
                               },
                               index: 0,
                               trackId: p.id,
+                              creatorDisplayId: getPlaylistItemCreatorName(p),
                               lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null
                             })).filter(q => q.url);
 
@@ -2832,12 +2852,16 @@ export default function SunoLibraryPage() {
                                 imageUrl: item.imageUrl,
                                 parent: {
                                   ...item,
+                                  creatorDisplayId: getPlaylistItemCreatorName(item),
+                                  ownerNickname: getPlaylistItemCreatorName(item) || item.ownerNickname,
+                                  creatorNickname: getPlaylistItemCreatorName(item) || item.creatorNickname,
                                   __playlistContext: true,
                                   __activePlaylistId: activePlaylistId,
                                   __libraryViewMode: libraryViewMode
                                 },
                                 index: 0,
                                 trackId: item.id,
+                                creatorDisplayId: getPlaylistItemCreatorName(item),
                                 lyrics: item.lyrics || item.lyricsText || item.koreanLyrics || item.englishLyrics || null
                               }, newQueue);
                             } else {
@@ -3209,68 +3233,11 @@ export default function SunoLibraryPage() {
       </AnimatePresence>
 
       {/* Details Modal */}
-      <AnimatePresence>
-        {showDetails && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center px-4"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              closeModal();
-            }}
-          >
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/25"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                closeModal();
-              }}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-[var(--bg-secondary)] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-6 border-b border-white/5">
-                <h3 className="text-xl font-bold">상세 정보</h3>
-                <button 
-                  onClick={closeModal}
-                  className="p-2 hover:bg-white/5 rounded-full transition-all"
-                >
-                  <X className="w-6 h-6 opacity-40" />
-                </button>
-              </div>
-              <div className="p-8 max-h-[70vh] overflow-y-auto space-y-6 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-6">
-                  <DetailItem label="제목" value={showDetails.title || 'Untitled'} />
-                  <DetailItem label="상태" value={showDetails.status} isStatus />
-                  <DetailItem label="제작자" value={showDetails.creatorDisplayId || showDetails.ownerNickname || showDetails.ownerEmail || 'Unknown'} />
-                  <DetailItem label="생성일" value={formatCreatedAt(showDetails.createdAt)} />
-                  <DetailItem label="Task ID" value={showDetails.taskId || showDetails.id} isMono />
-                  <DetailItem label="Suno Version" value={showDetails.requestPayload?.model || 'V5_5'} />
-                  <DetailItem label="키워드/스타일" value={showDetails.style || showDetails.prompt || '없음'} full />
-                  <DetailItem label="가사" value={showDetails.lyrics || '가사 정보 없음'} full isPre />
-                  <DetailItem label="오디오 URL" value={showDetails.audioUrl || showDetails.streamAudioUrl} full isMono />
-                </div>
-              </div>
-              <div className="p-6 border-t border-white/5 text-center">
-                <button 
-                  onClick={closeModal}
-                  className="px-8 py-3 rounded-2xl bg-white/5 hover:bg-white/10 font-bold transition-all"
-                >
-                  닫기
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <SunoTrackDetailModal
+        open={!!showDetails}
+        track={showDetails}
+        onClose={closeModal}
+      />
 
       <AnimatePresence>
         {deleteTarget && (
@@ -3333,24 +3300,3 @@ export default function SunoLibraryPage() {
     </div>
   );
 }
-
-function DetailItem({ label, value, full = false, isStatus = false, isMono = false, isPre = false }: any) {
-  return (
-    <div className={`${full ? 'col-span-2' : 'col-span-1'} space-y-1.5`}>
-      <span className="text-[10px] font-bold uppercase tracking-wider opacity-30">{label}</span>
-      <div className={`p-3 rounded-xl bg-white/5 border border-white/5 text-sm ${isMono ? 'font-mono break-all' : ''}`}>
-        {isStatus ? (
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${value === 'completed' ? 'bg-green-500' : value === 'failed' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'}`} />
-            <span className="capitalize">{value}</span>
-          </div>
-        ) : isPre ? (
-          <pre className="whitespace-pre-wrap font-sans leading-relaxed opacity-70 italic">{value}</pre>
-        ) : (
-          <span className="opacity-80">{value || 'N/A'}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-

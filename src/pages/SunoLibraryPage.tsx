@@ -3487,13 +3487,13 @@ export default function SunoLibraryPage() {
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight flex items-center gap-3 text-white font-display">
                 <div className="flex gap-[5px] items-end justify-center w-8 h-8 text-brand-orange shrink-0">
                   <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] opacity-80" />
                   <div className="w-[6px] h-[26px] border-[2px] border-current rounded-[3px]" />
                   <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
                 </div>
-                {isSharedView ? '공유된 음악' : 'Suno Library'}
+                {isSharedView ? '공유된 음악' : <>Suno <span className="text-brand-orange">Library</span></>}
               </h1>
               <p className="text-sm text-[var(--text-secondary)] mt-1">
                 {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Suno API로 생성한 곡을 조회하고 재생합니다.'}
@@ -3516,9 +3516,11 @@ export default function SunoLibraryPage() {
         <div className="flex md:hidden items-center justify-between gap-3 -mt-2">
           <button
             onClick={() => navigate('/')}
-            className="h-12 px-4 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center gap-2"
+            className="h-12 w-12 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center justify-center"
+            title="홈"
+            aria-label="홈"
           >
-            <Home className="w-4 h-4" />홈
+            <Home className="w-4 h-4" />
           </button>
           {!isSharedView && (
             <button
@@ -3536,12 +3538,6 @@ export default function SunoLibraryPage() {
         {/* View Mode Tabs */}
         {!isSharedView && (
           <div className="flex items-center gap-3 max-w-full overflow-x-auto custom-scrollbar whitespace-nowrap">
-            <button
-              onClick={() => navigate('/')}
-              className="hidden md:flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all"
-            >
-              <Home className="w-4 h-4" />홈
-            </button>
             <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10 overflow-x-auto custom-scrollbar whitespace-nowrap max-w-full">
             <button
               onClick={() => setLibraryViewMode('workspace')}
@@ -3586,7 +3582,15 @@ export default function SunoLibraryPage() {
             {/* Search & Filter */}
         {!isSharedView && (
           <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-            <div className="relative flex-1">
+            <button
+              onClick={() => navigate('/')}
+              className="hidden md:inline-flex h-[46px] w-[58px] shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all shadow-btn"
+              title="홈"
+              aria-label="홈"
+            >
+              <Home className="w-4 h-4" />
+            </button>
+            <div className="relative flex-1 min-w-[220px]">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
               <input 
                 type="text" 
@@ -4594,16 +4598,6 @@ export default function SunoLibraryPage() {
                 선택해제
               </button>
 
-              {!isSharedView && libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
-                <button
-                  onClick={handleBulkFavorite}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
-                >
-                  <Star className="w-4 h-4" />
-                  즐겨찾기
-                </button>
-              )}
-
               <button
                 onClick={handleBulkDownload}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
@@ -4619,6 +4613,16 @@ export default function SunoLibraryPage() {
                 <Share2 className="w-4 h-4" />
                 공유
               </button>
+
+              {!isSharedView && libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
+                <button
+                  onClick={handleBulkFavorite}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                >
+                  <Star className="w-4 h-4" />
+                  즐겨찾기
+                </button>
+              )}
 
               {(libraryViewMode !== 'sharedPlaylist' || isSharedView) && (
                 <button
@@ -4646,7 +4650,7 @@ export default function SunoLibraryPage() {
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
                 >
                   <Trash2 className="w-4 h-4" />
-                  {libraryViewMode === 'workspace' ? '삭제(휴지통)' : '리스트 삭제'}
+                  {libraryViewMode === 'workspace' ? '선택삭제(휴지통)' : '리스트 삭제'}
                 </button>
               )}
             </motion.div>

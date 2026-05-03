@@ -15,6 +15,13 @@ import {
   Minimize2,
   Plus,
   Menu,
+  MoreVertical,
+  Info,
+  Share2,
+  FolderOutput,
+  CheckSquare,
+  Square,
+  SlidersHorizontal,
   Home as HomeIcon,
   Heart as HeartIcon,
   Lock,
@@ -359,6 +366,10 @@ export default function FavoritesPage({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
+  const [activeFavoriteMenuId, setActiveFavoriteMenuId] = useState<string | null>(null);
+  const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
+  const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
+  const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -373,8 +384,51 @@ export default function FavoritesPage({
     "분위기로 검색해보세요..."
   ];
 
+
+  const FAVORITE_COLOR_OPTIONS = [
+    { value: 'gray', color: '#6b7280', label: '회색' },
+    { value: 'red', color: '#ef4444', label: '빨강' },
+    { value: 'orange', color: '#f97316', label: '주황' },
+    { value: 'yellow', color: '#eab308', label: '노랑' },
+    { value: 'green', color: '#22c55e', label: '초록' },
+    { value: 'blue', color: '#3b82f6', label: '파랑' },
+    { value: 'purple', color: '#a855f7', label: '보라' },
+  ];
+
+  const getFavoriteColorHex = (songId: string) => {
+    const saved = favoriteColorMap[songId] || 'gray';
+    return FAVORITE_COLOR_OPTIONS.find(c => c.value === saved)?.color || '#6b7280';
+  };
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
+
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('soridraw.favoriteColorTags');
+      if (raw) setFavoriteColorMap(JSON.parse(raw));
+    } catch (error) {
+      console.warn('favorite color map load failed', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('soridraw.favoriteColorTags', JSON.stringify(favoriteColorMap));
+    } catch (error) {
+      console.warn('favorite color map save failed', error);
+    }
+  }, [favoriteColorMap]);
+
+  useEffect(() => {
+    const closeMenus = () => {
+      setActiveFavoriteMenuId(null);
+      setActiveFavoriteColorMenuId(null);
+    };
+    document.addEventListener('click', closeMenus);
+    return () => document.removeEventListener('click', closeMenus);
   }, []);
 
   useEffect(() => {
@@ -693,25 +747,9 @@ export default function FavoritesPage({
     setSelectedSongIds(allSongIds);
   };
 
-  const handleCardLongPressStart = (e: React.MouseEvent | React.TouchEvent, song: any) => {
-    if (isScrollingRef.current) return;
-    // Only trigger if not clicking a button
-    if ((e.target as HTMLElement).closest('button')) return;
-
-    longPressTriggeredRef.current = false;
+  const handleCardLongPressStart = (_e: React.MouseEvent | React.TouchEvent, _song: any) => {
+    // 보관함 선택모드는 라이브러리와 동일하게 ... 메뉴의 '선택'으로만 진입합니다.
     clearSelectionLongPressTimer();
-    selectionLongPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      if (isSelectionMode) {
-        cycleSelectionModeSelection(song.id);
-      } else {
-        selectionBeforeSelectAllRef.current = [];
-        setIsSelectionMode(true);
-        setLastSelectionAction('none');
-        setPendingSelectionAction(null);
-        setSelectedSongIds(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
-      }
-    }, 600);
   };
 
   const handleCardLongPressEnd = () => {
@@ -1023,18 +1061,213 @@ ${song.prompt}
     navigate('/');
   };
 
-  const filteredFavorites = favorites.filter(song => 
-    (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (song.englishTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    getSongStyleValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()))
-  ).sort((a, b) => {
+
+  const getVisibleFavoriteIds = () => filteredFavorites.slice(0, visibleCount).map(song => song.id);
+
+  const enterFavoriteSelectionMode = (song: any) => {
+    setIsSelectionMode(true);
+    setPendingSelectionAction(null);
+    setSelectedSongIds(prev => prev.includes(song.id) ? prev : [...prev, song.id]);
+    setActiveFavoriteMenuId(null);
+  };
+
+  const selectAllVisibleFavorites = () => {
+    const visibleIds = getVisibleFavoriteIds();
+    setSelectedSongIds(visibleIds);
+    setIsSelectionMode(true);
+    setPendingSelectionAction(null);
+  };
+
+  const handleFavoriteColorSelect = (song: any, color: string) => {
+    const targetIds = isSelectionMode && selectedSongIds.length > 0
+      ? selectedSongIds
+      : [song.id];
+
+    setFavoriteColorMap(prev => {
+      const next = { ...prev };
+      targetIds.forEach(id => { next[id] = color; });
+      return next;
+    });
+
+    setActiveFavoriteColorMenuId(null);
+    if (isSelectionMode) exitSelectionMode();
+  };
+
+  const shareFavoriteSong = async (song: any) => {
+    const title = getCombinedFavoriteTitle(song);
+    const text = `${title}
+
+${song.prompt || ''}`.trim();
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `SORIDRAW - ${title}`, text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setCopiedType(`share-${song.id}`);
+        setTimeout(() => setCopiedType(null), 1800);
+      }
+    } catch (error) {
+      console.warn('favorite share cancelled or failed', error);
+    }
+  };
+
+
+  const shareSelectedFavoriteSongs = async () => {
+    const targets = favorites.filter(song => selectedSongIds.includes(song.id));
+    if (targets.length === 0) return;
+
+    const text = targets.map((song, index) => `${index + 1}. ${getCombinedFavoriteTitle(song)}`).join('\n');
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `SORIDRAW 선택한 ${targets.length}곡`,
+          text: `SORIDRAW Music Note에서 선택한 ${targets.length}곡입니다.\n\n${text}`,
+        });
+      } else {
+        await navigator.clipboard.writeText(`SORIDRAW Music Note 선택곡 ${targets.length}곡\n\n${text}`);
+        setCopiedType('share-selected');
+        setTimeout(() => setCopiedType(null), 1800);
+      }
+    } catch (error) {
+      console.warn('selected favorites share cancelled or failed', error);
+    } finally {
+      setActiveFavoriteMenuId(null);
+    }
+  };
+
+  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'folder' | 'delete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'folderSelected' | 'deleteSelected', song: any) => {
+    setActiveFavoriteMenuId(null);
+
+    if (action === 'details') {
+      setSelectedSong(song);
+      return;
+    }
+
+    if (action === 'select') {
+      enterFavoriteSelectionMode(song);
+      return;
+    }
+
+    if (action === 'selectAll') {
+      selectAllVisibleFavorites();
+      return;
+    }
+
+    if (action === 'clearSelection') {
+      exitSelectionMode();
+      return;
+    }
+
+    if (action === 'lock') {
+      if (!song.isLocked) handleToggleLock(song);
+      return;
+    }
+
+    if (action === 'unlock') {
+      if (song.isLocked) handleToggleLock(song);
+      return;
+    }
+
+    if (action === 'lockSelected') {
+      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: true }));
+      exitSelectionMode();
+      return;
+    }
+
+    if (action === 'unlockSelected') {
+      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: false }));
+      exitSelectionMode();
+      return;
+    }
+
+    if (action === 'shareSelected') {
+      shareSelectedFavoriteSongs();
+      return;
+    }
+
+    if (action === 'folderSelected') {
+      onHover({ id: 'favorite-folder-selected-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
+      setActiveFavoriteMenuId(null);
+      return;
+    }
+
+    if (action === 'deleteSelected') {
+      favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
+      exitSelectionMode();
+      return;
+    }
+
+    if (action === 'apply') {
+      applyKeywordsToNext(song);
+      return;
+    }
+
+    if (action === 'share') {
+      shareFavoriteSong(song);
+      return;
+    }
+
+    if (action === 'folder') {
+      onHover({ id: 'favorite-folder-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
+      return;
+    }
+
+    if (action === 'delete') {
+      if (!song.isLocked) toggleFavorite(song);
+    }
+  };
+
+  const renderFavoriteKeywordChips = (song: any) => {
+    const entries = [
+      ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value, className: 'bg-white/[0.08] text-white/55' })),
+      ...getSongMoodValues(song).map((value: string) => ({ type: 'mood', value, className: 'bg-white/[0.08] text-white/55' })),
+      ...getSongThemeValues(song).map((value: string) => ({ type: 'theme', value, className: 'bg-emerald-500/10 text-emerald-400' })),
+      ...getSongStyleValues(song).map((value: string) => ({ type: 'style', value, className: 'bg-brand-orange/10 text-brand-orange' })),
+      ...getSongInstrumentSoundValues(song).map((value: string) => ({ type: 'sound', value, className: 'bg-sky-500/10 text-sky-400' })),
+    ];
+
+    if (song.appliedKeywords?.vocalType) {
+      entries.push({ type: 'vocal', value: song.appliedKeywords.vocalType, className: 'bg-white/[0.08] text-white/55' });
+    }
+
+    return entries.slice(0, 5).map((entry) => {
+      const meta = getKeywordMeta(entry.value);
+      return (
+        <span
+          key={`${entry.type}-${entry.value}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onHover({
+              id: `favorite-${entry.type}-${entry.value}`,
+              label: entry.value,
+              labelKo: meta?.labelKo,
+              description: meta?.descriptionKo || meta?.description || `${entry.value} 키워드입니다.`,
+              _ts: Date.now(),
+            });
+          }}
+          className={`text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer hover:opacity-80 ${entry.className}`}
+        >
+          #{meta?.labelKo || entry.value}
+        </span>
+      );
+    });
+  };
+
+  const filteredFavorites = favorites.filter(song => {
+    const matchesSearch = (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (song.englishTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      getSongStyleValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesColor = favoriteColorFilter === 'all' || (favoriteColorMap[song.id] || 'gray') === favoriteColorFilter;
+    return matchesSearch && matchesColor;
+  }).sort((a, b) => {
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
 
     switch (sortBy) {
@@ -1084,52 +1317,49 @@ ${song.prompt}
         }
       }}
     >
-      <div className="flex flex-col items-center text-center mb-12">
-        <motion.div
-          initial={{ opacity: 0, y: -40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 100, damping: 10 }}
-        >
-          <button 
-            onClick={() => navigate('/')}
-            onMouseEnter={() => onHover({ id: 'back-home', label: '홈으로', description: '메인 페이지로 돌아갑니다.' })}
-            onMouseLeave={() => {
-              onHover(null);
-              onLongPressEnd();
-            }}
-            onTouchStart={() => onLongPressStart({ id: 'back-home', label: '홈으로', description: '메인 페이지로 돌아갑니다.' })}
-            onTouchEnd={onLongPressEnd}
-            className="mb-6 p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 transition-all group"
-          >
-            <HeartIcon className="w-10 h-10 text-brand-orange fill-current group-hover:scale-110 transition-transform" />
-          </button>
-        </motion.div>
-        <div className="space-y-2">
-          <h1 
-            className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display"
-            style={{ fontFamily: 'Verdana' }}
-          >
-            Music <span className="text-brand-orange">Note</span>
-          </h1>
-          <p className="text-[var(--text-secondary)] text-lg">세상에 단 하나뿐인 노래의 완성!</p>
-          <p className="text-[var(--text-secondary)]/60 text-sm">저장한 곡을 편집하고, 수노에서 음악을 만들어 보세요.</p>
+      <style>{`
+        .favorite-keyword-strip::after {
+          content: '';
+          position: sticky;
+          right: 0;
+          width: 28px;
+          min-width: 28px;
+          pointer-events: none;
+          background: linear-gradient(90deg, rgba(26,26,26,0), rgba(26,26,26,0.95));
+        }
+        .favorite-keyword-strip::-webkit-scrollbar { display: none; }
+      `}</style>
+      <div className="mb-8 md:mb-10">
+        <div className="flex flex-col gap-6 mb-8">
+          <div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
+              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-brand-orange shrink-0" />
+              <span>Music <span className="text-brand-orange">Note</span></span>
+            </h1>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+          </div>
         </div>
-      </div>
 
-      {/* Search Bar */}
-      <div className="max-w-2xl mx-auto mb-6 space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 group overflow-hidden">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+          <button
+            onClick={() => navigate('/')}
+            className="hidden md:inline-flex h-[46px] w-[58px] shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all shadow-btn"
+            title="홈"
+            aria-label="홈"
+          >
+            <HomeIcon className="w-4 h-4" />
+          </button>
+          <div className="relative flex-1 min-w-[220px] group overflow-hidden">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
             </div>
-            <input 
+            <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-2xl py-3 pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all"
+              className="w-full h-[46px] bg-[var(--bg-secondary)] border border-white/10 rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all"
             />
             {!searchQuery && !isSearchFocused && (
               <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
@@ -1149,215 +1379,46 @@ ${song.prompt}
             )}
           </div>
 
-          {/* View All (모아보기) Button */}
-          <div className="relative" ref={sortPopupRef}>
+          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
             <button
-              onClick={toggleSortPopup}
-              onMouseEnter={() => onHover({ id: 'sort', label: '정렬 방식', description: '곡 목록의 정렬 순서를 변경합니다.' })}
-              onMouseLeave={() => onHover(null)}
-              className="px-4 py-3 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm font-bold hover:bg-[var(--hover-bg)] transition-all flex items-center gap-2 min-w-[120px] justify-center"
+              onClick={() => setFavoriteColorFilter('all')}
+              className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
             >
-              <Filter className="w-4 h-4 text-brand-orange" />
-              {sortBy === 'latest' ? '최신 순' : 
-               sortBy === 'oldest' ? '오래된 순' : 
-               sortBy.startsWith('genre') ? '장르 순' : 
-               sortBy.startsWith('title') ? '제목 순' : '잠금 순'}
+              전체
             </button>
+            <div className="mx-2 h-4 w-px bg-white/10" />
+            {FAVORITE_COLOR_OPTIONS.map((color) => (
+              <button
+                key={color.value}
+                onClick={() => setFavoriteColorFilter(color.value)}
+                className={`mx-1 h-4 w-4 rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[#2a2a2a]' : 'hover:scale-110'}`}
+                style={{ backgroundColor: color.color }}
+                title={color.label}
+              />
+            ))}
+          </div>
 
-            <AnimatePresence>
-              {showSortPopup && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full right-0 mt-2 w-40 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl shadow-[var(--shadow-md)] z-50 overflow-hidden"
-                >
-                  {[
-                    { id: 'latest', label: '최신 순' },
-                    { id: 'oldest', label: '오래된 순' },
-                    { id: 'genre', label: '장르 순' },
-                    { id: 'title', label: '제목 순' },
-                    { id: 'locked', label: '잠금 순' }
-                  ].map((option) => (
-            <button
-              key={option.id}
-              onClick={() => handleSortChange(option.id as any)}
-              className={cn(
-                "w-full px-4 py-3 text-left text-sm transition-colors hover:bg-[var(--hover-bg)]",
-                sortBy === option.id ? "text-brand-orange font-bold" : "text-[var(--text-secondary)]"
-              )}
-            >
-              {option.label}
-            </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
+            {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => handleSortChange(mode)}
+                className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
+                  (mode === 'latest' && sortBy === 'latest') ||
+                  (mode === 'oldest' && sortBy === 'oldest') ||
+                  (mode === 'genre' && sortBy.startsWith('genre')) ||
+                  (mode === 'title' && sortBy.startsWith('title')) ||
+                  (mode === 'locked' && sortBy.startsWith('locked'))
+                    ? 'bg-brand-orange text-white'
+                    : 'text-white/50 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                {mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}
+              </button>
+            ))}
           </div>
         </div>
       </div>
-
-      {/* Unified Sticky Action Popup */}
-      <AnimatePresence mode="wait">
-        {!selectedSong && (
-          isSelectionMode ? (
-            <motion.div
-              key="selection-popup"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ 
-                opacity: 1, 
-                y: 0,
-                x: isShaking ? [0, -2, 2, -2, 2, 0] : 0
-              }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ 
-                type: "spring", 
-                stiffness: 300, 
-                damping: 30,
-                x: { duration: 0.4 }
-              }}
-              className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
-            >
-              <div className="pointer-events-auto flex items-center gap-3 px-5 py-3 w-[300px] rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-md)] ring-1 ring-white/5">
-                  <button
-                    onClick={handleSelectedLock}
-                    onMouseEnter={() => onHover(getSelectionLockHover())}
-                    onMouseLeave={() => onHover(null)}
-                    onTouchStart={() => onLongPressStart(getSelectionLockHover())}
-                    onTouchEnd={onLongPressEnd}
-                    disabled={selectedSongIds.length === 0}
-                    className={cn(
-                      "relative h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
-                      selectedSongIds.length === 0
-                        ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed"
-                        : (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock')
-                          ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_15px_rgba(242,125,38,0.3)] animate-pulse"
-                          : selectedSongs.every(s => s.isLocked)
-                            ? lastSelectionAction === 'lock'
-                              ? "bg-brand-orange/40 text-brand-orange border-brand-orange/30"
-                              : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
-                            : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 hover:bg-brand-orange/20"
-                    )}
-                    aria-label={selectedSongs.every(s => s.isLocked) ? "선택 잠금 해제" : "선택 잠금"}
-                  >
-                  {selectedSongs.every(s => s.isLocked) ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
-                  {selectedLockedCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 rounded-full bg-brand-orange text-[10px] leading-4.5 font-bold text-white text-center">
-                      {selectedLockedCount}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={handleSelectionConfirm}
-                  onMouseEnter={() => onHover({ 
-                    id: 'selection-confirm', 
-                    label: pendingSelectionAction ? '실행 확인' : '  확인', 
-                    description: pendingSelectionAction ? '대기 중인 작업을 실행합니다.' : '현재 선택 상태를 확정합니다.' 
-                  })}
-                  onMouseLeave={() => onHover(null)}
-                  onTouchStart={() => onLongPressStart({ 
-                    id: 'selection-confirm', 
-                    label: pendingSelectionAction ? '실행 확인' : '  확인', 
-                    description: pendingSelectionAction ? '대기 중인 작업을 실행합니다.' : '현재 선택 상태를 확정합니다.' 
-                  })}
-                  onTouchEnd={onLongPressEnd}
-                  className={cn(
-                    "flex-1 h-12 px-2 rounded-xl transition-all flex items-center justify-center gap-2 border",
-                    pendingSelectionAction
-                      ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20"
-                      : "bg-[var(--text-secondary)] text-[var(--bg-primary)] border-[var(--border-color)] hover:opacity-80"
-                  )}
-                >
-                  <span className="text-[14px] font-bold">{selectedSongIds.length}곡</span>
-                  <span className="text-[16px] font-medium opacity-80">{pendingSelectionAction ? '실행' : '확인'}</span>
-                  <Check className={cn("w-5 h-5", pendingSelectionAction ? "text-white" : "text-brand-orange")} />
-                </button>
-
-                <button
-                  onClick={handleSelectedDelete}
-                  onMouseEnter={() => onHover({ id: 'selection-delete', label: '선택 삭제', description: '선택된 곡 중 잠기지 않은 곡만 삭제합니다.' })}
-                  onMouseLeave={() => onHover(null)}
-                  onTouchStart={() => onLongPressStart({ id: 'selection-delete', label: '선택 삭제', description: '선택된 곡 중 잠기지 않은 곡만 삭제합니다.' })}
-                  onTouchEnd={onLongPressEnd}
-                  disabled={selectedSongIds.length === 0}
-                  className={cn(
-                    "h-12 w-12 rounded-xl transition-all flex items-center justify-center border shrink-0",
-                    selectedSongIds.length === 0
-                      ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed"
-                      : pendingSelectionAction === 'delete'
-                        ? "bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse"
-                        : hasDeletableSongs
-                          ? "bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]"
-                          : "bg-red-500/5 text-red-500/40 border-red-500/10 hover:bg-red-500/20"
-                  )}
-                  aria-label="선택 삭제"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            </motion.div>
-          ) : (
-            favorites.length > 0 && (
-              <motion.div
-                key="bulk-popup"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="sticky top-24 z-[120] flex justify-center mb-8 pointer-events-none"
-              >
-                <div className="pointer-events-auto flex items-center gap-2 px-3 py-3 w-[300px] rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 backdrop-blur-xl shadow-[var(--shadow-md)] ring-1 ring-[var(--border-color)]">
-                  <button
-                    onClick={handleBulkLock}
-                    onMouseEnter={() => onHover(getBulkLockHover())}
-                    onMouseLeave={() => onHover(null)}
-                    className={cn(
-                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
-                      confirmLockAll === 1 
-                        ? "bg-[var(--text-primary)] text-[var(--bg-primary)] border-[var(--text-primary)] animate-pulse" 
-                        : "bg-[var(--hover-bg)] text-[var(--text-primary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]/20"
-                    )}
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    {confirmLockAll === 1 ? "확인" : "일괄잠금"}
-                  </button>
-
-                  <button
-                    onClick={handleBulkUnlock}
-                    onMouseEnter={() => onHover(getBulkUnlockHover())}
-                    onMouseLeave={() => onHover(null)}
-                    className={cn(
-                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
-                      confirmUnlockAll === 1 
-                        ? "bg-brand-orange text-[var(--bg-primary)] border-brand-orange animate-pulse" 
-                        : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
-                    )}
-                  >
-                    <Unlock className="w-3.5 h-3.5" />
-                    {confirmUnlockAll === 1 ? "확인" : "일괄해제"}
-                  </button>
-
-                  <button
-                    onClick={handleBulkDelete}
-                    onMouseEnter={() => onHover(getBulkDeleteHover())}
-                    onMouseLeave={() => onHover(null)}
-                    className={cn(
-                      "flex-1 h-12 rounded-xl transition-all flex items-center justify-center gap-1 font-bold text-xs border",
-                      confirmDeleteAll === 1 
-                        ? "bg-red-500 text-[var(--bg-primary)] border-red-500 animate-pulse" 
-                        : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
-                    )}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    {confirmDeleteAll === 1 ? "확인" : "전체삭제"}
-                  </button>
-                </div>
-              </motion.div>
-            )
-          )
-        )}
-      </AnimatePresence>
 
       {favorites.length === 0 ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">
@@ -1374,372 +1435,160 @@ ${song.prompt}
         </div>
       ) : (
         <div className="space-y-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="space-y-4">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
+              const colorHex = getFavoriteColorHex(song.id);
+              const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
 
               return (
-              <motion.div
-                key={song.id}
-                layout
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                onMouseDown={(e) => handleCardLongPressStart(e, song)}
-                onMouseUp={handleCardLongPressEnd}
-                onMouseLeave={handleCardLongPressEnd}
-                onTouchStart={(e) => handleCardLongPressStart(e, song)}
-                onTouchEnd={handleCardLongPressEnd}
-                onTouchCancel={handleCardLongPressEnd}
-                onClick={(e) => {
-                  if (longPressTriggeredRef.current) {
-                    longPressTriggeredRef.current = false;
-                    return;
-                  }
+                <motion.div
+                  key={song.id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onTouchCancel={handleCardLongPressEnd}
+                  onClick={(e) => {
+                    if (longPressTriggeredRef.current) {
+                      longPressTriggeredRef.current = false;
+                      return;
+                    }
 
-                  if (isSelectionMode) {
-                    e.stopPropagation();
-                    toggleSongSelection(song.id);
-                    setPendingSelectionAction(null);
-                  }
-                }}
-                className={cn(
-                  "rounded-3xl p-6 transition-all group flex flex-col h-full border select-none shadow-[var(--shadow-md)]",
-                  isSelectionMode
-                    ? isSelected
-                      ? "border-brand-orange/40 ring-1 ring-brand-orange/30 bg-[var(--card-bg)]"
-                      : "bg-[var(--card-bg)]/40 border-[var(--border-color)] hover:bg-[var(--hover-bg)]/40 cursor-pointer"
-                    : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]"
-                )}
-              >
-                <div className="flex justify-between items-start mb-4 gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-[14.4px] font-bold text-[var(--text-primary)] leading-tight text-center w-full flex flex-col items-center justify-center">
-                      {renderFavoriteListTitle(song)}
-                    </h3>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                      {isSelectionMode && isSelected && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="w-5 h-5 rounded-full bg-brand-orange flex items-center justify-center"
-                        >
-                          <Check className="w-3.5 h-3.5 text-[var(--bg-primary)] stroke-[3]" />
-                        </motion.div>
-                      )}
-                      <span className="text-[10px] text-[var(--text-secondary)] font-semibold opacity-100">
-                        {getRelativeTime(song.createdAtMs || song.createdAt)}
-                      </span>
-                    </div>
-                    {isSelectionMode ? (
-                      <div className="flex items-center gap-1.5">
-                        <div className={cn(
-                          "relative p-2 rounded-xl transition-all",
-                          song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-[var(--hover-bg)] text-[var(--text-secondary)]"
-                        )}>
-                          {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                          <span className="absolute inset-0 flex items-center justify-center text-[var(--text-primary)]/80 text-lg leading-none pointer-events-none">╱</span>
-                        </div>
-                        <div className={cn(
-                          "relative p-2 rounded-xl transition-all",
-                          song.isLocked 
-                            ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30" 
-                            : "bg-red-500/10 text-red-500"
-                        )}>
-                          <Trash2 className="w-4 h-4" />
-                          <span className="absolute inset-0 flex items-center justify-center text-[var(--text-primary)]/80 text-lg leading-none pointer-events-none">╱</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleLock(song);
-                          }}
-                          onMouseEnter={() => onHover({ id: `lock-${song.id}`, label: song.isLocked ? '잠금 해제' : '잠금', description: song.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                          onMouseLeave={() => onHover(null)}
-                          className={cn(
-                            "p-2 rounded-xl transition-all",
-                            song.isLocked ? "bg-brand-orange/20 text-brand-orange" : "bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20"
-                          )}
-                        >
-                          {song.isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (song.isLocked) return;
-
-                            if (deletingSongId === song.id) {
-                              toggleFavorite(song);
-                              setDeletingSongId(null);
-                              if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-                            } else {
-                              setDeletingSongId(song.id);
-                              if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-                              deleteTimerRef.current = setTimeout(() => setDeletingSongId(null), 5000);
-                            }
-                          }}
-                          disabled={song.isLocked}
-                          onMouseEnter={() => onHover({ 
-                            id: `delete-${song.id}`, 
-                            label: deletingSongId === song.id ? '삭제 확인' : '삭제', 
-                            description: song.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (deletingSongId === song.id ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.') 
-                          })}
-                          onMouseLeave={() => onHover(null)}
-                          className={cn(
-                            "p-2 rounded-xl transition-all",
-                            song.isLocked 
-                              ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 cursor-not-allowed" 
-                              : deletingSongId === song.id
-                                ? "bg-red-500 text-white shadow-lg shadow-red-500/30"
-                                : "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                          )}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col flex-grow space-y-4">
-                  <div className="flex flex-wrap gap-1.5 overflow-hidden">
-                    {getSongGenreValues(song).map((g: string) => {
-                      const item = getKeywordMeta(g);
-                      return (
-                        <span 
-                          key={g} 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onHover({ 
-                              id: `genre-${g}`, 
-                              label: g, 
-                              labelKo: item?.labelKo,
-                              description: item?.descriptionKo || item?.description || `${g} 장르입니다.`, 
-                              _ts: Date.now() 
-                            });
-                          }}
-                          className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
-                        >
-                          #{item?.labelKo || g}
-                        </span>
-                      );
-                    })}
-                    {getSongMoodValues(song).map((m: string) => {
-                      const item = getKeywordMeta(m);
-                      return (
-                        <span 
-                          key={m} 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onHover({ 
-                              id: `mood-${m}`, 
-                              label: m, 
-                              labelKo: item?.labelKo,
-                              description: item?.descriptionKo || item?.description || `${m} 감정 키워드입니다.`, 
-                              _ts: Date.now() 
-                            });
-                          }}
-                          className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
-                        >
-                          #{item?.labelKo || m}
-                        </span>
-                      );
-                    })}
-                    {getSongThemeValues(song).map((t: string) => {
-                      const item = getKeywordMeta(t);
-                      return (
-                        <span 
-                          key={`theme-${t}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onHover({ 
-                              id: `theme-${t}`, 
-                              label: t, 
-                              labelKo: item?.labelKo,
-                              description: item?.descriptionKo || item?.description || `${t} 곡 주제입니다.`, 
-                              _ts: Date.now() 
-                            });
-                          }}
-                          className="text-[8px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 whitespace-nowrap cursor-pointer hover:bg-emerald-500/20"
-                        >
-                          #{item?.labelKo || t}
-                        </span>
-                      );
-                    })}
-                    {getSongStyleValues(song).map((s: string) => {
-                      const item = getKeywordMeta(s);
-                      return (
-                        <span 
-                          key={`style-${s}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onHover({ 
-                              id: `style-${s}`, 
-                              label: s, 
-                              labelKo: item?.labelKo,
-                              description: item?.descriptionKo || item?.description || `${s} 스타일입니다.`, 
-                              _ts: Date.now() 
-                            });
-                          }}
-                          className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
-                        >
-                          #{item?.labelKo || s}
-                        </span>
-                      );
-                    })}
-                    {getSongInstrumentSoundValues(song).map((s: string) => {
-                      const item = getKeywordMeta(s);
-                      return (
-                        <span 
-                          key={`sound-${s}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onHover({ 
-                              id: `sound-${s}`, 
-                              label: s, 
-                              labelKo: item?.labelKo,
-                              description: item?.descriptionKo || item?.description || `${s} 악기/사운드 설정입니다.`, 
-                              _ts: Date.now() 
-                            });
-                          }}
-                          className="text-[8px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 whitespace-nowrap cursor-pointer hover:bg-sky-500/20"
-                        >
-                          #{item?.labelKo || s}
-                        </span>
-                      );
-                    })}
-                    {song.appliedKeywords.vocalType && (
-                      <span 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onHover({ id: `vocal-${song.id}`, label: '보컬', description: `${song.appliedKeywords.vocalType} 구성입니다.`, _ts: Date.now() });
-                        }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-[var(--hover-bg)] text-[var(--text-secondary)] whitespace-nowrap cursor-pointer hover:bg-[var(--hover-bg)]/80"
-                      >
-                        #{song.appliedKeywords.vocalType}
-                      </span>
-                    )}
-                    {song.appliedKeywords.vocal?.isToneSelected && song.appliedKeywords.vocalTone && (
-                      <span 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onHover({ id: `vocal-tone-${song.id}`, label: '보컬톤', description: `선택된 보컬톤: ${song.appliedKeywords.vocalTone}`, _ts: Date.now() });
-                        }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
-                      >
-                        #보컬톤: {song.appliedKeywords.vocalTone}
-                      </span>
-                    )}
-                    {song.appliedKeywords.isKoreanEnglishMix && (
-                      <span 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onHover({ id: `mix-${song.id}`, label: '한/영 혼합', description: '한국어와 영어가 혼합된 가사입니다.', _ts: Date.now() });
-                        }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
-                      >
-                        #한/영 혼합
-                      </span>
-                    )}
-                    {song.appliedKeywords.rapEnabled && (
-                      <span 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onHover({ id: `rap-${song.id}`, label: '랩 ON', description: '랩이 포함된 곡입니다.', _ts: Date.now() });
-                        }}
-                        className="text-[8px] px-2 py-0.5 rounded-md bg-brand-orange/10 text-brand-orange whitespace-nowrap cursor-pointer hover:bg-brand-orange/20"
-                      >
-                        #랩 ON
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 mt-auto">
-                    {isSelectionMode ? (
+                    if (isSelectionMode) {
+                      e.stopPropagation();
+                      toggleSongSelection(song.id);
+                      setPendingSelectionAction(null);
+                    }
+                  }}
+                  className={cn(
+                    "group relative overflow-visible rounded-2xl border bg-[var(--bg-secondary)] transition-all select-none",
+                    isSelectionMode
+                      ? isSelected
+                        ? "border-brand-orange/40 bg-brand-orange/5"
+                        : "border-white/10 hover:bg-white/[0.03] cursor-pointer"
+                      : "border-white/10 hover:bg-white/[0.03]"
+                  )}
+                >
+                  <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
+                    {isSelectionMode && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={(event) => {
+                          event.stopPropagation();
                           toggleSongSelection(song.id);
                         }}
-                        className={cn(
-                          "w-full py-3 rounded-xl font-bold text-sm transition-all border flex items-center justify-center gap-2",
-                          isSelected
-                            ? "bg-brand-orange/20 text-brand-orange border-brand-orange/40"
-                            : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-[var(--hover-bg)]/20"
-                        )}
+                        className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                          isSelected ? 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/20 text-white/30 hover:border-white/40'
+                        }`}
                       >
-                        {isSelected ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            확인
-                          </>
-                        ) : (
-                          "선택"
-                        )}
+                        {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}
                       </button>
-                    ) : (
-                      <>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSong(song);
-                          }}
-                          onMouseEnter={() => onHover({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: `view-${song.id}`, label: '상세보기', description: '곡의 가사와 상세 정보를 확인합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex-[4] py-3 rounded-xl bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold text-sm hover:bg-[var(--hover-bg)]/20 transition-all"
-                        >
-                          상세보기
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyAll(song);
-                          }}
-                          onMouseEnter={() => onHover({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: `copy-all-${song.id}`, label: '곡 정보 모두 복사', description: '제목, 가사, 프롬프트 등 모든 정보를 복사합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex-1 py-3 rounded-xl bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]/20 hover:text-[var(--text-primary)] transition-all flex items-center justify-center group/copy border border-brand-orange/20"
-                        >
-                          {copiedType === `all-${song.id}` ? (
-                            <Check className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <Copy className="w-4 h-4 group-hover/copy:scale-110 transition-transform" />
-                          )}
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            applyKeywordsToNext(song);
-                          }}
-                          onMouseEnter={() => onHover({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: `apply-next-${song.id}`, label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex-1 py-3 rounded-xl bg-[var(--card-bg)] text-brand-orange hover:bg-brand-orange/10 transition-all flex items-center justify-center group/apply border border-brand-orange/30 active:scale-95"
-                        >
-                          <RefreshCw className="w-4 h-4 group-hover/apply:rotate-180 transition-transform duration-500" />
-                        </button>
-                      </>
                     )}
+
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
+                        setActiveFavoriteMenuId(null);
+                      }}
+                      className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
+                      style={{ backgroundColor: colorHex }}
+                      title="색상 지정"
+                    />
+
+                    {activeFavoriteColorMenuId === song.id && (
+                      <div className="absolute left-14 md:left-20 top-[54px] z-40 flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        {FAVORITE_COLOR_OPTIONS.map((color) => (
+                          <button
+                            key={color.value}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleFavoriteColorSelect(song, color.value);
+                            }}
+                            className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                            style={{ backgroundColor: color.color }}
+                            title={color.label}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-brand-orange shrink-0">
+                      <Music className="w-5 h-5" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+                        <h3 className="text-sm md:text-base font-bold text-white truncate">
+                          {getCombinedFavoriteTitle(song)}
+                        </h3>
+                        <span className="text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
+                      </div>
+                      <div className="favorite-keyword-strip relative mt-2 flex max-w-full gap-1.5 overflow-x-auto overflow-y-hidden pr-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {renderFavoriteKeywordChips(song)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {song.isLocked && (
+                        <span className="inline-flex h-10 w-10 items-center justify-center text-brand-orange" title="잠김">
+                          <Lock className="w-4 h-4" />
+                        </span>
+                      )}
+
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedSong(song);
+                        }}
+                        className="hidden md:inline-flex h-10 px-5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold items-center justify-center transition-all"
+                      >
+                        상세보기
+                      </button>
+<div className="relative">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
+                            setActiveFavoriteColorMenuId(null);
+                          }}
+                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-brand-orange' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {activeFavoriteMenuId === song.id && (
+                          <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-brand-orange/30 bg-[#181818] py-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                            {isBulkMenu ? (
+                              <>
+                                <div className="px-4 py-2 text-xs font-bold text-brand-orange">선택한 {selectedSongIds.length}곡</div>
+                                <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
+                                <button onClick={() => executeFavoriteMenuAction('lockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
+                                <button onClick={() => executeFavoriteMenuAction('unlockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
+                                <button onClick={() => executeFavoriteMenuAction('shareSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button onClick={() => executeFavoriteMenuAction('folderSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
+                                <button onClick={() => executeFavoriteMenuAction('deleteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />선택 삭제</button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />상세정보</button>
+                                <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택</button>
+                                {!song.isLocked ? (
+                                  <button onClick={() => executeFavoriteMenuAction('lock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
+                                ) : (
+                                  <button onClick={() => executeFavoriteMenuAction('unlock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
+                                )}
+                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
+                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
+                                <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
+                </motion.div>
               );
             })}
           </div>

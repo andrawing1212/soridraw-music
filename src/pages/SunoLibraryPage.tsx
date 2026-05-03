@@ -251,38 +251,20 @@ export default function SunoLibraryPage() {
   const computeFloatingMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 280) => {
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
-    const topBelow = rect.bottom + 8;
-    const topAbove = rect.top - estimatedHeight - 8;
-    const top = topBelow + estimatedHeight > window.innerHeight
-      ? Math.max(margin, topAbove)
-      : Math.max(margin, topBelow);
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+
+    // 메뉴는 클릭한 순간의 문서 좌표에 고정한다.
+    // 스크롤 중 위치를 재계산하지 않아 화면을 따라오지 않게 한다.
+    const topBelowViewport = rect.bottom + 8;
+    const topAboveViewport = rect.top - estimatedHeight - 8;
+    const viewportTop = topBelowViewport + estimatedHeight > window.innerHeight
+      ? Math.max(margin, topAboveViewport)
+      : Math.max(margin, topBelowViewport);
+    const top = viewportTop + scrollTop;
     const right = Math.max(margin, window.innerWidth - rect.right);
+
     return { top, right };
   };
-
-  useEffect(() => {
-    const syncFloatingMenuPosition = () => {
-      setActiveMenuState((prev) => {
-        if (!prev?.anchorEl) return prev;
-        if (!document.body.contains(prev.anchorEl)) return null;
-        return { ...prev, position: computeFloatingMenuPosition(prev.anchorEl, 300) };
-      });
-
-      setBulkMenuState((prev) => {
-        if (!prev?.anchorEl) return prev;
-        if (!document.body.contains(prev.anchorEl)) return null;
-        return { ...prev, ...computeFloatingMenuPosition(prev.anchorEl, 300) };
-      });
-    };
-
-    document.addEventListener('scroll', syncFloatingMenuPosition, true);
-    window.addEventListener('resize', syncFloatingMenuPosition);
-
-    return () => {
-      document.removeEventListener('scroll', syncFloatingMenuPosition, true);
-      window.removeEventListener('resize', syncFloatingMenuPosition);
-    };
-  }, []);
 
   interface DeleteAction {
     groupId: string;
@@ -4560,7 +4542,7 @@ export default function SunoLibraryPage() {
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-brand-orange/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" className="absolute z-[9999] w-56 bg-[var(--bg-secondary)] border border-brand-orange/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -4746,7 +4728,7 @@ export default function SunoLibraryPage() {
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 right: activeMenuState.position.right,

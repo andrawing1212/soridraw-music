@@ -169,6 +169,7 @@ export default function SunoLibraryPage() {
       setActiveMenuState(null);
       setActivePlaylistItemMenu(null);
       setActiveColorMenu(null);
+      setBulkMenuState(null);
     };
     document.addEventListener('click', handleGlobalClick);
     return () => document.removeEventListener('click', handleGlobalClick);
@@ -195,6 +196,7 @@ export default function SunoLibraryPage() {
   interface MenuState {
     id: string;
     position: { top: number; right: number };
+    anchorEl?: HTMLElement | null;
     group: any;
     item: any;
     idx: number;
@@ -215,7 +217,7 @@ export default function SunoLibraryPage() {
   };
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedTrackMap, setSelectedTrackMap] = useState<Record<string, MultiSelectedTrack>>({});
-  const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number } | null>(null);
+  const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number; anchorEl?: HTMLElement | null } | null>(null);
   const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
   const selectedTrackCount = selectedTrackList.length;
 
@@ -228,23 +230,60 @@ export default function SunoLibraryPage() {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeFloatingMenus();
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeFloatingMenus();
+      if (multiSelectMode) {
+        setMultiSelectMode(false);
+        setSelectedTrackMap({});
+        setBulkShareModalOpen(false);
+        setBulkMoveModalOpen(false);
+      }
     };
 
-    document.addEventListener('scroll', closeFloatingMenus, true);
-    window.addEventListener('wheel', closeFloatingMenus, { passive: true });
-    window.addEventListener('touchmove', closeFloatingMenus, { passive: true });
-    window.addEventListener('resize', closeFloatingMenus);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.removeEventListener('scroll', closeFloatingMenus, true);
-      window.removeEventListener('wheel', closeFloatingMenus);
-      window.removeEventListener('touchmove', closeFloatingMenus);
-      window.removeEventListener('resize', closeFloatingMenus);
       window.removeEventListener('keydown', handleKeyDown);
     };
+  }, [multiSelectMode]);
+
+  const computeFloatingMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 280) => {
+    const rect = anchorEl.getBoundingClientRect();
+    const margin = 12;
+    const topBelow = rect.bottom + 8;
+    const topAbove = rect.top - estimatedHeight - 8;
+    const top = topBelow + estimatedHeight > window.innerHeight
+      ? Math.max(margin, topAbove)
+      : Math.max(margin, topBelow);
+    const right = Math.max(margin, window.innerWidth - rect.right);
+    return { top, right };
+  };
+
+  useEffect(() => {
+    const syncFloatingMenuPosition = () => {
+      setActiveMenuState((prev) => {
+        if (!prev?.anchorEl) return prev;
+        if (!document.body.contains(prev.anchorEl)) return null;
+        return { ...prev, position: computeFloatingMenuPosition(prev.anchorEl, 300) };
+      });
+
+      setBulkMenuState((prev) => {
+        if (!prev?.anchorEl) return prev;
+        if (!document.body.contains(prev.anchorEl)) return null;
+        return { ...prev, ...computeFloatingMenuPosition(prev.anchorEl, 300) };
+      });
+    };
+
+    document.addEventListener('scroll', syncFloatingMenuPosition, true);
+    window.addEventListener('resize', syncFloatingMenuPosition);
+
+    return () => {
+      document.removeEventListener('scroll', syncFloatingMenuPosition, true);
+      window.removeEventListener('resize', syncFloatingMenuPosition);
+    };
   }, []);
+
   interface DeleteAction {
     groupId: string;
     itemIndex: number;
@@ -270,6 +309,7 @@ export default function SunoLibraryPage() {
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
   const modalHistoryPushedRef = React.useRef(false);
+  const multiSelectHistoryPushedRef = React.useRef(false);
 
   const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
 
@@ -1693,13 +1733,116 @@ export default function SunoLibraryPage() {
     setBulkMoveModalOpen(false);
   };
 
+  const getVisiblePlaylistItemsForSelection = () => {
+    const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
+    let items = playlistItems.filter((item) => {
+      if (playlistColorFilter === 'all') return true;
+      if (playlistColorFilter === 'gray' && !item.colorTag) return true;
+      return item.colorTag === playlistColorFilter;
+    });
+
+    if (normalizedPlaylistSearch) {
+      items = items.filter((item) => {
+        const searchable = [
+          item.title,
+          getPlaylistItemCreatorName(item),
+          item.ownerNickname,
+          item.creatorNickname,
+          item.ownerEmail,
+          item.creatorEmail,
+          item.ownerUid,
+          item.sourceId,
+          ...(item.genreLabels || [])
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return searchable.includes(normalizedPlaylistSearch);
+      });
+    }
+
+    if (playlistSortMode === 'added') {
+      items = [...items].sort((a, b) => {
+        if (a.order !== b.order) return a.order - b.order;
+        const timeA = a.addedAt ? (typeof a.addedAt.toMillis === 'function' ? a.addedAt.toMillis() : 0) : 0;
+        const timeB = b.addedAt ? (typeof b.addedAt.toMillis === 'function' ? b.addedAt.toMillis() : 0) : 0;
+        return timeA - timeB;
+      });
+    } else if (playlistSortMode === 'genre') {
+      items = [...items].sort((a, b) => {
+        const genreA = (a.genreLabels && a.genreLabels[0]) || '';
+        const genreB = (b.genreLabels && b.genreLabels[0]) || '';
+        return genreA.localeCompare(genreB);
+      });
+    } else if (playlistSortMode === 'custom') {
+      items = [...items].sort((a, b) => a.order - b.order);
+    }
+
+    return items;
+  };
+
+  const getVisibleMultiSelections = () => {
+    if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
+      return getVisiblePlaylistItemsForSelection().map((item) => buildPlaylistSelection(item));
+    }
+
+    const selections: MultiSelectedTrack[] = [];
+    displayedWorkspaceTracks.forEach((group) => {
+      const dataItems = extractSunoData(group);
+      const items = (dataItems.length > 0 ? dataItems : [{}])
+        .map((item: any, idx: number) => ({ item, idx }))
+        .filter(({ item, idx }: { item: any; idx: number }) => isWorkspaceItemVisible(group, item, idx));
+
+      items.forEach(({ item, idx }: { item: any; idx: number }) => {
+        selections.push(buildWorkspaceSelection(group, item, idx));
+      });
+    });
+
+    return selections;
+  };
+
+  const selectAllVisibleTracks = () => {
+    const selections = getVisibleMultiSelections();
+    if (selections.length === 0) {
+      showToast('선택할 곡이 없습니다.');
+      return;
+    }
+
+    const nextMap: Record<string, MultiSelectedTrack> = {};
+    selections.forEach((selection) => {
+      nextMap[selection.key] = selection;
+    });
+
+    setMultiSelectMode(true);
+    setSelectedTrackMap(nextMap);
+    setBulkMenuState(null);
+  };
+
   const openBulkMenuFromButton = (button: HTMLButtonElement) => {
     if (!multiSelectMode) return;
-    const rect = button.getBoundingClientRect();
-    let top = rect.bottom + 8;
-    if (top + 260 > window.innerHeight) top = Math.max(12, rect.top - 260);
-    setBulkMenuState({ top, right: window.innerWidth - rect.right });
+    const position = computeFloatingMenuPosition(button, 300);
+    setBulkMenuState({ ...position, anchorEl: button });
   };
+
+  useEffect(() => {
+    if (!multiSelectMode) {
+      multiSelectHistoryPushedRef.current = false;
+      return;
+    }
+
+    if (!multiSelectHistoryPushedRef.current) {
+      window.history.pushState({ soridrawMultiSelect: true }, '', window.location.href);
+      multiSelectHistoryPushedRef.current = true;
+    }
+
+    const handlePopState = () => {
+      clearMultiSelect();
+      multiSelectHistoryPushedRef.current = false;
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [multiSelectMode]);
 
 
   const normalizeCreatorName = (value: any, ownerUid?: string | null) => {
@@ -2379,6 +2522,8 @@ export default function SunoLibraryPage() {
           await handleChangeColor(selection.item as PlaylistItem, color);
         }
       }
+      setActiveColorMenu(null);
+      clearMultiSelect();
       showToast(`${selectedTrackCount}곡 색상이 변경되었습니다.`);
     } catch (e) {
       console.error(e);
@@ -2435,15 +2580,103 @@ export default function SunoLibraryPage() {
     setBulkMenuState(null);
   };
 
-  const createBulkShareLinks = async () => {
-    const links: string[] = [];
-    for (const selection of selectedTrackList) {
-      links.push(await createShareRecordForSelection(selection));
-    }
-    return links;
+  const buildBulkShareItem = (selection: MultiSelectedTrack) => {
+    const { group, item, idx } = getBulkShareTarget(selection);
+    const source = item || {};
+    const parent = group || {};
+    return {
+      ...source,
+      id: source.id || source.sourceSubTrackId || source.trackId || source.sourceId || `${selection.key}`,
+      title: source.title || source.name || parent.title || selection.title || 'Untitled',
+      audioUrl: source.audioUrl || source.streamAudioUrl || source.audio_url || source.url || selection.audioUrl || '',
+      streamAudioUrl: source.streamAudioUrl || source.audioUrl || source.audio_url || source.url || selection.audioUrl || '',
+      audio_url: source.audio_url || source.audioUrl || source.streamAudioUrl || source.url || selection.audioUrl || '',
+      imageUrl: source.imageUrl || source.image_url || parent.imageUrl || parent.image_url || '',
+      image_url: source.image_url || source.imageUrl || parent.imageUrl || parent.image_url || '',
+      duration: source.duration || parent.duration || null,
+      lyrics: source.lyrics || source.lyricsText || parent.lyrics || parent.lyricsText || null,
+      lyricsText: source.lyricsText || source.lyrics || parent.lyricsText || parent.lyrics || null,
+      koreanLyrics: source.koreanLyrics || parent.koreanLyrics || null,
+      englishLyrics: source.englishLyrics || parent.englishLyrics || null,
+      prompt: source.prompt || parent.prompt || parent?.requestPayload?.prompt || parent?.appliedKeywords?.prompt || '',
+      style: source.style || parent.style || parent?.appliedKeywords?.style || '',
+      sourceSubTrackIndex: Number.isFinite(Number(source.sourceSubTrackIndex ?? idx)) ? Number(source.sourceSubTrackIndex ?? idx) : idx ?? 0,
+      sourceSubTrackId: source.sourceSubTrackId || `${parent.id || source.sourceId || source.trackId || 'track'}_${idx ?? 0}`,
+      creatorDisplayId: source.creatorDisplayId || parent.creatorDisplayId || getPlaylistItemCreatorName(source) || null,
+      ownerNickname: source.ownerNickname || parent.ownerNickname || null,
+      creatorNickname: source.creatorNickname || parent.creatorNickname || null,
+      ownerEmail: source.ownerEmail || parent.ownerEmail || null,
+      creatorEmail: source.creatorEmail || parent.creatorEmail || null,
+      appliedKeywords: source.appliedKeywords || parent.appliedKeywords || null,
+      requestPayload: source.requestPayload || parent.requestPayload || null,
+    };
   };
 
-  const canBulkManageSharePrivacy = () => selectedTrackList.some((selection) => (
+  const createBulkSharePage = async (options?: { makePublic?: boolean }) => {
+    if (!user) throw new Error('NO_USER');
+    if (selectedTrackCount === 0) throw new Error('NO_SELECTION');
+
+    const first = selectedTrackList[0];
+    const firstTarget = getBulkShareTarget(first);
+    const firstGroup = firstTarget.group || {};
+    const firstItem = firstTarget.item || {};
+    const creatorMeta = resolveCreatorSnapshot(firstGroup, firstItem, { fallbackToCurrentUser: true });
+    const shareId = `bulk_${user.uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const shareRef = doc(db, 'suno_shares', shareId);
+    const bulkSunoData = selectedTrackList.map(buildBulkShareItem).filter((entry) => entry.audioUrl || entry.streamAudioUrl || entry.audio_url);
+
+    if (options?.makePublic) {
+      for (const selection of selectedTrackList) {
+        if (selection.context !== 'workspace') continue;
+        const target = getBulkShareTarget(selection);
+        if (!target.group?.id) continue;
+        try {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', target.group.id);
+          await updateDoc(trackRef, {
+            isPublic: true,
+            hidden: false,
+            shareType: 'public',
+            publicSharedAt: serverTimestamp()
+          });
+        } catch (e) {
+          console.warn('bulk source public update skipped:', e);
+        }
+      }
+    }
+
+    await setDoc(shareRef, {
+      trackId: shareId,
+      shareId,
+      shareType: 'bulk',
+      isBulkShare: true,
+      bulkTrackCount: bulkSunoData.length,
+      title: `선택한 ${bulkSunoData.length}곡`,
+      status: 'completed',
+      sunoData: bulkSunoData,
+      prompt: firstGroup.prompt || firstItem.prompt || firstGroup?.requestPayload?.prompt || '',
+      style: firstGroup.style || firstItem.style || '',
+      lyrics: firstGroup.lyrics || firstItem.lyrics || null,
+      lyricsText: firstGroup.lyricsText || firstItem.lyricsText || null,
+      requestPayload: firstGroup.requestPayload || firstItem.requestPayload || null,
+      appliedKeywords: firstGroup.appliedKeywords || firstItem.appliedKeywords || {},
+      createdAt: serverTimestamp(),
+      ownerUid: user.uid,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      isPublic: true
+    });
+
+    return getSharePageUrl({ id: shareId }, undefined);
+  };
+
+  const createBulkShareLinks = async () => {
+    return [await createBulkSharePage()];
+  };
+
+  const canBulkManageSharePrivacy = () => !isSharedView && selectedTrackList.some((selection) => (
     selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track'
   ));
 
@@ -2455,10 +2688,10 @@ export default function SunoLibraryPage() {
     }
 
     try {
-      const links = await createBulkShareLinks();
+      await createBulkSharePage({ makePublic: true });
       setBulkShareModalOpen(false);
       setBulkMenuState(null);
-      showToast(`${links.length}곡을 공개 공유 상태로 설정했습니다.`);
+      showToast(`선택한 ${selectedTrackCount}곡을 All 공개 상태로 설정했습니다.`);
     } catch (e) {
       console.error(e);
       showToast('선택한 곡 공개 처리에 실패했습니다.');
@@ -2469,25 +2702,25 @@ export default function SunoLibraryPage() {
     if (selectedTrackCount === 0) return;
 
     try {
-      const links = await createBulkShareLinks();
-      const title = `SORIDRAW 선택한 ${links.length}곡`;
-      const text = links.join('\n');
+      const shareUrl = await createBulkSharePage();
+      const title = `SORIDRAW 선택한 ${selectedTrackCount}곡`;
+      const text = `SORIDRAW에서 선택한 ${selectedTrackCount}곡을 한 페이지로 공유합니다.`;
 
       if (navigator.share) {
         try {
           await navigator.share({
             title,
             text,
-            url: links[0],
+            url: shareUrl,
           });
         } catch (e: any) {
           if (e?.name === 'AbortError') return;
-          await navigator.clipboard.writeText(text);
-          showToast(`${links.length}개 공유 링크가 복사되었습니다.`);
+          await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+          showToast('공유 링크가 복사되었습니다.');
         }
       } else {
-        await navigator.clipboard.writeText(text);
-        showToast(`${links.length}개 공유 링크가 복사되었습니다.`);
+        await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+        showToast('공유 링크가 복사되었습니다.');
       }
 
       setBulkShareModalOpen(false);
@@ -2970,7 +3203,19 @@ export default function SunoLibraryPage() {
   }, [playlistItems, tracks, activePlaylistId, libraryViewMode, user, isSharedView]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]">
+    <div
+      className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
+      onClickCapture={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-floating-menu="true"]')) return;
+        if (activeMenuState || activePlaylistItemMenu || activeColorMenu || bulkMenuState) {
+          setActiveMenuState(null);
+          setActivePlaylistItemMenu(null);
+          setActiveColorMenu(null);
+          setBulkMenuState(null);
+        }
+      }}
+    >
       <style>{`
         .suno-playing-ring {
           background: conic-gradient(
@@ -3378,56 +3623,6 @@ export default function SunoLibraryPage() {
           </div>
         )}
 
-        {multiSelectMode && (
-          <div className="sticky top-20 z-40 mb-4 rounded-2xl border border-brand-orange/30 bg-[#1f1f1f]/95 px-3 py-3 shadow-2xl shadow-black/30">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold text-white">
-                <ListChecks className="h-4 w-4 text-brand-orange" />
-                <span>선택 모드</span>
-                <span className="rounded-full bg-brand-orange/15 px-2 py-0.5 text-xs text-brand-orange">{selectedTrackCount}곡 선택</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex h-10 items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-2">
-                  <button
-                    type="button"
-                    onClick={() => handleBulkChangeColor(null)}
-                    className="h-8 rounded-xl px-3 text-xs font-bold text-white/80 hover:bg-white/10"
-                  >
-                    전체
-                  </button>
-                  <div className="mx-1 h-3 w-px bg-white/10" />
-                  {COLOR_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => handleBulkChangeColor(opt.value)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full brightness-90 transition-all hover:scale-110 hover:brightness-110"
-                      title={`${opt.label}로 변경`}
-                    >
-                      <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: opt.color }} />
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={clearMultiSelect}
-                  className="h-10 rounded-xl border border-white/10 px-3 text-xs font-bold text-white/50 hover:bg-white/5 hover:text-white"
-                >
-                  선택해제
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => openBulkMenuFromButton(e.currentTarget)}
-                  className="flex h-10 w-10 items-center justify-center text-brand-orange transition-all hover:text-brand-orange/80"
-                  title="선택한 곡 메뉴"
-                >
-                  <MoreVertical className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {loading || sharedTrackLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
@@ -3567,20 +3762,25 @@ export default function SunoLibraryPage() {
                                 setActiveColorMenu(activeColorMenu === colorMenuId ? null : colorMenuId);
                                 setActiveMenuState(null);
                                 setActivePlaylistItemMenu(null);
+                                setBulkMenuState(null);
                               }}
                               className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
                               style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
                               title="색상 지정"
                             />
                             {activeColorMenu === `workspace-${group.id}-${idx}` && (
-                              <div className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                              <div data-floating-menu="true" className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
                                 {COLOR_OPTIONS.map(c => (
                                   <button
                                     key={c.value}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleChangeWorkspaceColor(group, idx, c.value);
-                                      setActiveColorMenu(null);
+                                      if (multiSelectMode && selectedTrackCount > 0) {
+                                        handleBulkChangeColor(c.value);
+                                      } else {
+                                        handleChangeWorkspaceColor(group, idx, c.value);
+                                        setActiveColorMenu(null);
+                                      }
                                     }}
                                     className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
                                     style={{ backgroundColor: c.color }}
@@ -3624,16 +3824,10 @@ export default function SunoLibraryPage() {
                                 if (activeMenuState?.id === id) {
                                   setActiveMenuState(null);
                                 } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  let top = rect.bottom + 8;
-                                  let right = window.innerWidth - rect.right;
-                                  // check overflow bottom
-                                  if (top + 280 > window.innerHeight) {
-                                    top = rect.top - 280; // roughly display above
-                                  }
                                   setActiveMenuState({
                                     id,
-                                    position: { top, right },
+                                    position: computeFloatingMenuPosition(e.currentTarget, 300),
+                                    anchorEl: e.currentTarget,
                                     group,
                                     item,
                                     idx,
@@ -3847,33 +4041,6 @@ export default function SunoLibraryPage() {
               </div>
             </div>
 
-            {multiSelectMode && (
-              <div className="sticky top-20 z-40 mt-3 rounded-2xl border border-brand-orange/30 bg-[#1f1f1f]/95 px-3 py-3 shadow-2xl shadow-black/30">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-2 text-sm font-bold text-white">
-                    <ListChecks className="h-4 w-4 text-brand-orange" />
-                    <span>선택 모드</span>
-                    <span className="rounded-full bg-brand-orange/15 px-2 py-0.5 text-xs text-brand-orange">{selectedTrackCount}곡 선택</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex h-10 items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-2">
-                      <button type="button" onClick={() => handleBulkChangeColor(null)} className="h-8 rounded-xl px-3 text-xs font-bold text-white/80 hover:bg-white/10">전체</button>
-                      <div className="mx-1 h-3 w-px bg-white/10" />
-                      {COLOR_OPTIONS.map((opt) => (
-                        <button key={opt.value} type="button" onClick={() => handleBulkChangeColor(opt.value)} className="flex h-7 w-7 items-center justify-center rounded-full brightness-90 transition-all hover:scale-110 hover:brightness-110" title={`${opt.label}로 변경`}>
-                          <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: opt.color }} />
-                        </button>
-                      ))}
-                    </div>
-                    <button type="button" onClick={clearMultiSelect} className="h-10 rounded-xl border border-white/10 px-3 text-xs font-bold text-white/50 hover:bg-white/5 hover:text-white">선택해제</button>
-                    <button type="button" onClick={(e) => openBulkMenuFromButton(e.currentTarget)} className="flex h-10 w-10 items-center justify-center text-brand-orange transition-all hover:text-brand-orange/80" title="선택한 곡 메뉴">
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
               <div className="flex justify-center p-8 mt-2 border-t border-white/5">
@@ -4053,12 +4220,12 @@ export default function SunoLibraryPage() {
                         <div className="flex items-center gap-2 relative">
                           {/* Color Point */}
                           <button 
-                            onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); }}
+                            onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); setBulkMenuState(null); }}
                             className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center hover:scale-110 transition-transform"
                             style={{ backgroundColor: item.colorTag === 'red' ? '#ef4444' : item.colorTag === 'orange' ? '#f97316' : item.colorTag === 'yellow' ? '#eab308' : item.colorTag === 'green' ? '#22c55e' : item.colorTag === 'blue' ? '#3b82f6' : item.colorTag === 'purple' ? '#a855f7' : '#6b7280' }}
                           />
                           {activeColorMenu === item.id && (
-                            <div className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10">
+                            <div data-floating-menu="true" className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10">
                               {[
                                 { value: 'gray', color: '#6b7280' },
                                 { value: 'red', color: '#ef4444' },
@@ -4070,7 +4237,15 @@ export default function SunoLibraryPage() {
                               ].map(c => (
                                 <button
                                   key={c.value}
-                                  onClick={(e) => { e.stopPropagation(); handleChangeColor(item, c.value); setActiveColorMenu(null); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (multiSelectMode && selectedTrackCount > 0) {
+                                      handleBulkChangeColor(c.value);
+                                    } else {
+                                      handleChangeColor(item, c.value);
+                                      setActiveColorMenu(null);
+                                    }
+                                  }}
                                   className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
                                   style={{ backgroundColor: c.color }}
                                 />
@@ -4154,7 +4329,7 @@ export default function SunoLibraryPage() {
                             <MoreVertical className="w-4 h-4" />
                           </button>
                           {activePlaylistItemMenu === item.id && (
-                            <div className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-white/5 text-sm py-1">
+                            <div data-floating-menu="true" className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-white/5 text-sm py-1">
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
@@ -4381,12 +4556,11 @@ export default function SunoLibraryPage() {
       <AnimatePresence>
         {bulkMenuState && multiSelectMode && (
           <>
-            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setBulkMenuState(null); }} />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-brand-orange/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-brand-orange/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -4394,7 +4568,23 @@ export default function SunoLibraryPage() {
                 선택한 {selectedTrackCount}곡
               </div>
 
-              {libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
+              <button
+                onClick={selectAllVisibleTracks}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+              >
+                <CheckSquare className="w-4 h-4" />
+                전체선택
+              </button>
+
+              <button
+                onClick={clearMultiSelect}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+              >
+                <X className="w-4 h-4" />
+                선택해제
+              </button>
+
+              {!isSharedView && libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
                 <button
                   onClick={handleBulkFavorite}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
@@ -4420,7 +4610,7 @@ export default function SunoLibraryPage() {
                 공유
               </button>
 
-              {libraryViewMode !== 'sharedPlaylist' && (
+              {(libraryViewMode !== 'sharedPlaylist' || isSharedView) && (
                 <button
                   onClick={handleBulkPlaylistSave}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
@@ -4440,13 +4630,15 @@ export default function SunoLibraryPage() {
                 </button>
               )}
 
-              <button
-                onClick={handleBulkDeleteSelected}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
-              >
-                <Trash2 className="w-4 h-4" />
-                {libraryViewMode === 'workspace' ? '삭제(휴지통)' : '리스트 삭제'}
-              </button>
+              {!isSharedView && (
+                <button
+                  onClick={handleBulkDeleteSelected}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {libraryViewMode === 'workspace' ? '삭제(휴지통)' : '리스트 삭제'}
+                </button>
+              )}
             </motion.div>
           </>
         )}
@@ -4468,7 +4660,7 @@ export default function SunoLibraryPage() {
               </div>
 
               <div className="space-y-3">
-                {libraryViewMode !== 'sharedPlaylist' && canBulkManageSharePrivacy() && (
+                {!isSharedView && libraryViewMode !== 'sharedPlaylist' && canBulkManageSharePrivacy() && (
                   <>
                     <button
                       onClick={handleBulkAllPublic}
@@ -4550,12 +4742,11 @@ export default function SunoLibraryPage() {
       <AnimatePresence>
         {activeMenuState && (
           <>
-            <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); setActiveMenuState(null); }} />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 right: activeMenuState.position.right,

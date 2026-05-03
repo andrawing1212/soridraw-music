@@ -18,6 +18,7 @@ import {
   MoreVertical,
   Info,
   Share2,
+  Star,
   FolderOutput,
   CheckSquare,
   Square,
@@ -1135,7 +1136,7 @@ ${song.prompt || ''}`.trim();
     }
   };
 
-  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'folder' | 'delete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'folderSelected' | 'deleteSelected', song: any) => {
+  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'favorite' | 'folder' | 'delete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected', song: any) => {
     setActiveFavoriteMenuId(null);
 
     if (action === 'details') {
@@ -1185,6 +1186,18 @@ ${song.prompt || ''}`.trim();
       return;
     }
 
+    if (action === 'favoriteSelected') {
+      onHover({ id: 'favorites-already-saved', label: '즐겨찾기', description: '선택한 곡은 이미 보관함에 저장되어 있습니다.', _ts: Date.now() });
+      setActiveFavoriteMenuId(null);
+      return;
+    }
+
+    if (action === 'unfavoriteSelected') {
+      favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
+      exitSelectionMode();
+      return;
+    }
+
     if (action === 'folderSelected') {
       onHover({ id: 'favorite-folder-selected-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
       setActiveFavoriteMenuId(null);
@@ -1204,6 +1217,11 @@ ${song.prompt || ''}`.trim();
 
     if (action === 'share') {
       shareFavoriteSong(song);
+      return;
+    }
+
+    if (action === 'favorite') {
+      toggleFavorite(song);
       return;
     }
 
@@ -1318,38 +1336,47 @@ ${song.prompt || ''}`.trim();
       }}
     >
       <style>{`
+        .favorite-keyword-strip {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .favorite-keyword-strip::-webkit-scrollbar { display: none; }
         .favorite-keyword-strip::after {
           content: '';
           position: sticky;
           right: 0;
+          align-self: stretch;
           width: 28px;
           min-width: 28px;
           pointer-events: none;
           background: linear-gradient(90deg, rgba(26,26,26,0), rgba(26,26,26,0.95));
         }
-        .favorite-keyword-strip::-webkit-scrollbar { display: none; }
       `}</style>
       <div className="mb-8 md:mb-10">
-        <div className="flex flex-col gap-6 mb-8">
-          <div>
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
-              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-brand-orange shrink-0" />
-              <span>Music <span className="text-brand-orange">Note</span></span>
-            </h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-8">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <HeartIcon className="w-9 h-9 text-brand-orange" />
+              <div>
+                <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display">
+                  Music <span className="text-brand-orange">Note</span>
+                </h1>
+                <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="hidden md:inline-flex h-[46px] w-[58px] shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all shadow-btn"
-            title="홈"
-            aria-label="홈"
-          >
-            <HomeIcon className="w-4 h-4" />
-          </button>
-          <div className="relative flex-1 min-w-[220px] group overflow-hidden">
+          <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+            <button
+              onClick={() => navigate('/')}
+              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all flex items-center justify-center"
+              title="홈"
+            >
+              <HomeIcon className="w-4 h-4" />
+            </button>
+            <div className="relative flex-1 min-w-0 group overflow-hidden">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
             </div>
@@ -1377,6 +1404,7 @@ ${song.prompt || ''}`.trim();
                 </AnimatePresence>
               </div>
             )}
+            </div>
           </div>
 
           <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
@@ -1447,7 +1475,6 @@ ${song.prompt || ''}`.trim();
                   layout
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  onTouchCancel={handleCardLongPressEnd}
                   onClick={(e) => {
                     if (longPressTriggeredRef.current) {
                       longPressTriggeredRef.current = false;
@@ -1523,7 +1550,7 @@ ${song.prompt || ''}`.trim();
                         </h3>
                         <span className="text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
-                      <div className="favorite-keyword-strip relative mt-2 flex max-w-full gap-1.5 overflow-x-auto overflow-y-hidden pr-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-8">
                         {renderFavoriteKeywordChips(song)}
                       </div>
                     </div>
@@ -1565,6 +1592,8 @@ ${song.prompt || ''}`.trim();
                                 <button onClick={() => executeFavoriteMenuAction('lockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
                                 <button onClick={() => executeFavoriteMenuAction('unlockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('shareSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button onClick={() => executeFavoriteMenuAction('favoriteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Star className="w-4 h-4" />즐겨찾기</button>
+                                <button onClick={() => executeFavoriteMenuAction('unfavoriteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />즐겨찾기 해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('folderSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('deleteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />선택 삭제</button>
                               </>
@@ -1579,6 +1608,7 @@ ${song.prompt || ''}`.trim();
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button onClick={() => executeFavoriteMenuAction('favorite', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />즐겨찾기 해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
                               </>

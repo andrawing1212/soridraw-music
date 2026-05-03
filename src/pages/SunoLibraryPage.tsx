@@ -3487,7 +3487,7 @@ export default function SunoLibraryPage() {
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight flex items-center gap-3 text-white font-display">
+              <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
                 <div className="flex gap-[5px] items-end justify-center w-8 h-8 text-brand-orange shrink-0">
                   <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] opacity-80" />
                   <div className="w-[6px] h-[26px] border-[2px] border-current rounded-[3px]" />
@@ -3516,11 +3516,9 @@ export default function SunoLibraryPage() {
         <div className="flex md:hidden items-center justify-between gap-3 -mt-2">
           <button
             onClick={() => navigate('/')}
-            className="h-12 w-12 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center justify-center"
-            title="홈"
-            aria-label="홈"
+            className="h-12 px-4 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center gap-2"
           >
-            <Home className="w-4 h-4" />
+            <Home className="w-4 h-4" />홈
           </button>
           {!isSharedView && (
             <button
@@ -3537,11 +3535,18 @@ export default function SunoLibraryPage() {
 
         {/* View Mode Tabs */}
         {!isSharedView && (
-          <div className="flex items-center gap-3 max-w-full overflow-x-auto custom-scrollbar whitespace-nowrap">
-            <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10 overflow-x-auto custom-scrollbar whitespace-nowrap max-w-full">
+          <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
+            <button
+              onClick={() => navigate('/')}
+              className="hidden md:flex h-12 w-12 shrink-0 items-center justify-center text-sm font-bold rounded-2xl border border-white/10 bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white shadow-btn transition-all"
+              title="홈"
+            >
+              <Home className="w-4 h-4" />
+            </button>
+            <div className="grid grid-cols-3 gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 w-full max-w-[520px] md:w-fit md:max-w-none">
             <button
               onClick={() => setLibraryViewMode('workspace')}
-              className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'workspace' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
             >
               워크스페이스
             </button>
@@ -3555,7 +3560,7 @@ export default function SunoLibraryPage() {
                   }
                 }
               }}
-              className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'playlist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
             >
               플레이리스트
             </button>
@@ -3569,7 +3574,7 @@ export default function SunoLibraryPage() {
                   }
                 }
               }}
-              className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'sharedPlaylist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
             >
               공유 플레이리스트
             </button>
@@ -3582,15 +3587,7 @@ export default function SunoLibraryPage() {
             {/* Search & Filter */}
         {!isSharedView && (
           <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-            <button
-              onClick={() => navigate('/')}
-              className="hidden md:inline-flex h-[46px] w-[58px] shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all shadow-btn"
-              title="홈"
-              aria-label="홈"
-            >
-              <Home className="w-4 h-4" />
-            </button>
-            <div className="relative flex-1 min-w-[220px]">
+            <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
               <input 
                 type="text" 

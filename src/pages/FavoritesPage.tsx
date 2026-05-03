@@ -851,6 +851,23 @@ export default function FavoritesPage({
     setConfirmToggleLock(false);
   };
 
+  const cancelModalEditing = () => {
+    if (!selectedSong) return;
+
+    setIsEditing(false);
+    setActiveEditSection(null);
+    setIsSyncEnabled(false);
+    setEditedTitle(selectedSong.title);
+    setEditedKoreanLyrics(selectedSong.lyrics.korean);
+    setEditedEnglishLyrics(selectedSong.lyrics.english);
+    setEditedPrompt(selectedSong.prompt || '');
+    setDrafts(prev => {
+      const next = { ...prev };
+      delete next[selectedSong.id];
+      return next;
+    });
+  };
+
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       // Clear any pending actions on back navigation
@@ -1735,6 +1752,14 @@ ${song.prompt || ''}`.trim();
                       music note
                     </span>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => copyToClipboard(getCombinedFavoriteCopyText(selectedSong), 'title-all')}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[12px] font-semibold text-white/72 transition-all hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                        title="통합 제목 복사"
+                      >
+                        {copiedType === 'title-all' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        <span className="hidden sm:inline">제목 복사</span>
+                      </button>
                       {!isEditing && (
                         <button
                           onClick={() => {
@@ -1742,9 +1767,29 @@ ${song.prompt || ''}`.trim();
                             setActiveEditSection('title');
                           }}
                           className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/70 transition-all hover:-translate-y-0.5 hover:border-brand-orange/25 hover:bg-brand-orange/10 hover:text-brand-orange"
+                          title="제목 수정"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
+                      )}
+                      {isEditing && activeEditSection === 'title' && (
+                        <>
+                          <button
+                            onClick={handleSave}
+                            disabled={isTranslating}
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
+                            title="저장"
+                          >
+                            {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
+                          </button>
+                          <button
+                            onClick={cancelModalEditing}
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                            title="취소"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1754,7 +1799,7 @@ ${song.prompt || ''}`.trim();
                       <input
                         value={editedTitle}
                         onChange={(e) => setEditedTitle(e.target.value)}
-                        className="mx-auto w-full max-w-[760px] rounded-2xl border border-white/12 bg-white/[0.04] px-5 py-4 text-center text-[22px] font-extrabold leading-tight text-white outline-none transition-all focus:border-brand-orange/35 focus:bg-white/[0.06] md:text-[32px]"
+                        className="mx-auto w-full max-w-[820px] rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[24px] font-extrabold leading-tight tracking-tight text-white outline-none transition-all focus:border-brand-orange/35 md:text-[34px]"
                       />
                     ) : (
                       <>
@@ -1781,98 +1826,58 @@ ${song.prompt || ''}`.trim();
                         </span>
                       )}
                     </div>
-
-                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
-                      <button
-                        onClick={() => copyToClipboard(getFavoriteKoreanTitle(selectedSong), 'title-ko')}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-[12px] font-semibold text-white/72 transition-all hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
-                      >
-                        {copiedType === 'title-ko' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                        KO
-                      </button>
-                      {getFavoriteEnglishTitle(selectedSong) !== getFavoriteKoreanTitle(selectedSong) && (
-                        <button
-                          onClick={() => copyToClipboard(getFavoriteEnglishTitle(selectedSong), 'title-en')}
-                          className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-[12px] font-semibold text-white/72 transition-all hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
-                        >
-                          {copiedType === 'title-en' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                          EN
-                        </button>
-                      )}
-                    </div>
                   </div>
 
                   <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                    {!isEditing ? (
-                      <>
-                        <button
-                          onClick={() => handlePopupToggleLock(selectedSong)}
-                          className={cn(
-                            'inline-flex h-11 w-11 items-center justify-center rounded-2xl border text-sm transition-all hover:-translate-y-0.5',
-                            selectedSong.isLocked
-                              ? confirmToggleLock
-                                ? 'border-brand-orange/60 bg-brand-orange/18 text-brand-orange shadow-[0_12px_30px_rgba(255,145,0,0.16)]'
-                                : 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange'
-                              : confirmToggleLock
-                                ? 'border-brand-orange/60 bg-brand-orange/18 text-brand-orange shadow-[0_12px_30px_rgba(255,145,0,0.16)]'
-                                : 'border-white/10 bg-white/[0.035] text-white/78 hover:border-white/18 hover:bg-white/[0.06]'
-                          )}
-                        >
-                          {selectedSong.isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                        </button>
-                        <button
-                          onClick={() => handlePopupDelete(selectedSong)}
-                          disabled={selectedSong.isLocked}
-                          className={cn(
-                            'inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all hover:-translate-y-0.5',
-                            selectedSong.isLocked
-                              ? 'cursor-not-allowed border-white/8 bg-white/[0.03] text-white/18'
-                              : confirmDeleteSong
-                                ? 'border-red-400/45 bg-red-500/14 text-red-400 shadow-[0_12px_28px_rgba(239,68,68,0.14)]'
-                                : 'border-white/10 bg-white/[0.035] text-white/78 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300'
-                          )}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                        <a
-                          href="https://suno.com/create"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/18 bg-transparent px-5 text-[12px] font-bold tracking-[0.12em] text-white transition-all hover:-translate-y-0.5 hover:border-white/28 hover:bg-white/[0.04]"
-                        >
-                          SUNO
-                        </a>
-                      </>
-                    ) : (
-                      <>
-                        {isModified && (
-                          <button
-                            onClick={handleRestoreOriginal}
-                            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/80 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
-                          >
-                            <ArrowLeft className="h-4 w-4" />
-                            원본 복원
-                          </button>
-                        )}
-                        <button
-                          onClick={handleSave}
-                          disabled={isTranslating}
-                          className={cn(
-                            'inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-brand-orange/30 bg-brand-orange/12 px-5 text-sm font-semibold text-brand-orange transition-all shadow-[0_14px_28px_rgba(255,145,0,0.12)]',
-                            isTranslating ? 'cursor-wait opacity-70' : 'hover:-translate-y-0.5 hover:bg-brand-orange/16'
-                          )}
-                        >
-                          {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
-                          저장
-                        </button>
-                        <button
-                          onClick={cancelModalEditing}
-                          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-white/75 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
-                        >
-                          <X className="h-4 w-4" />
-                          취소
-                        </button>
-                      </>
+                    <button
+                      onClick={() => handlePopupToggleLock(selectedSong)}
+                      disabled={isEditing}
+                      className={cn(
+                        'inline-flex h-11 w-11 items-center justify-center rounded-2xl border text-sm transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-35',
+                        selectedSong.isLocked
+                          ? confirmToggleLock
+                            ? 'border-brand-orange/60 bg-brand-orange/18 text-brand-orange shadow-[0_12px_30px_rgba(255,145,0,0.16)]'
+                            : 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange'
+                          : confirmToggleLock
+                            ? 'border-brand-orange/60 bg-brand-orange/18 text-brand-orange shadow-[0_12px_30px_rgba(255,145,0,0.16)]'
+                            : 'border-white/10 bg-white/[0.035] text-white/78 hover:border-white/18 hover:bg-white/[0.06]'
+                      )}
+                    >
+                      {selectedSong.isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                    </button>
+                    <button
+                      onClick={() => handlePopupDelete(selectedSong)}
+                      disabled={selectedSong.isLocked || isEditing}
+                      className={cn(
+                        'inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-35',
+                        selectedSong.isLocked
+                          ? 'border-white/8 bg-white/[0.03] text-white/18'
+                          : confirmDeleteSong
+                            ? 'border-red-400/45 bg-red-500/14 text-red-400 shadow-[0_12px_28px_rgba(239,68,68,0.14)]'
+                            : 'border-white/10 bg-white/[0.035] text-white/78 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300'
+                      )}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    <a
+                      href="https://suno.com/create"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(
+                        'inline-flex h-11 items-center justify-center rounded-2xl border border-white/18 bg-transparent px-5 text-[12px] font-bold tracking-[0.12em] text-white transition-all hover:-translate-y-0.5 hover:border-white/28 hover:bg-white/[0.04]',
+                        isEditing && 'pointer-events-none opacity-35'
+                      )}
+                    >
+                      SUNO
+                    </a>
+                    {isEditing && isModified && (
+                      <button
+                        onClick={handleRestoreOriginal}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/72 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        원본 복원
+                      </button>
                     )}
                   </div>
                 </section>
@@ -2023,15 +2028,34 @@ ${song.prompt || ''}`.trim();
                             )}
                           >
                             {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
-                            한/영 연동 {isSyncEnabled ? 'ON' : 'OFF'}
+                            한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
                           </button>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isEditing && (
+                        {isEditing && activeEditSection === 'lyrics-ko' ? (
+                          <>
+                            <button
+                              onClick={handleSave}
+                              disabled={isTranslating}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
+                              title="저장"
+                            >
+                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button
+                              onClick={cancelModalEditing}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                              title="취소"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : !isEditing && (
                           <button
                             onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-ko'); }}
                             className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-brand-orange/25 hover:bg-brand-orange/10 hover:text-brand-orange"
+                            title="한글 가사 수정"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
@@ -2039,6 +2063,7 @@ ${song.prompt || ''}`.trim();
                         <button
                           onClick={() => copyToClipboard(selectedSong.lyrics.korean, 'lyrics-korean')}
                           className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                          title="한글 가사 복사"
                         >
                           {copiedType === 'lyrics-korean' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                         </button>
@@ -2049,7 +2074,7 @@ ${song.prompt || ''}`.trim();
                       <textarea
                         value={editedKoreanLyrics}
                         onChange={(e) => setEditedKoreanLyrics(e.target.value)}
-                        className="custom-scrollbar h-[320px] w-full rounded-2xl border border-white/12 bg-white/[0.04] p-4 text-sm leading-7 text-white outline-none transition-all focus:border-brand-orange/35 focus:bg-white/[0.06]"
+                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-brand-orange/30"
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
@@ -2061,8 +2086,8 @@ ${song.prompt || ''}`.trim();
                   <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics en</div>
-                        <h4 className="mt-1 text-xl font-bold text-white">영문 가사</h4>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics foreign</div>
+                        <h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4>
                         {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <button
                             onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -2072,24 +2097,44 @@ ${song.prompt || ''}`.trim();
                             )}
                           >
                             {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
-                            한/영 연동 {isSyncEnabled ? 'ON' : 'OFF'}
+                            한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
                           </button>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isEditing && (
+                        {isEditing && activeEditSection === 'lyrics-en' ? (
+                          <>
+                            <button
+                              onClick={handleSave}
+                              disabled={isTranslating}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
+                              title="저장"
+                            >
+                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button
+                              onClick={cancelModalEditing}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                              title="취소"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : !isEditing && (
                           <button
                             onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-en'); }}
                             className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-brand-orange/25 hover:bg-brand-orange/10 hover:text-brand-orange"
+                            title="외국어 가사 수정"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-english')}
+                          onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-foreign')}
                           className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                          title="외국어 가사 복사"
                         >
-                          {copiedType === 'lyrics-english' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                          {copiedType === 'lyrics-foreign' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
@@ -2098,7 +2143,7 @@ ${song.prompt || ''}`.trim();
                       <textarea
                         value={editedEnglishLyrics}
                         onChange={(e) => setEditedEnglishLyrics(e.target.value)}
-                        className="custom-scrollbar h-[320px] w-full rounded-2xl border border-white/12 bg-white/[0.04] p-4 text-sm leading-7 text-white/78 italic outline-none transition-all focus:border-brand-orange/35 focus:bg-white/[0.06]"
+                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-brand-orange/30"
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
@@ -2115,10 +2160,29 @@ ${song.prompt || ''}`.trim();
                       <h4 className="mt-1 text-xl font-bold text-white">곡 프롬프트</h4>
                     </div>
                     <div className="flex items-center gap-2">
-                      {!isEditing && (
+                      {isEditing && activeEditSection === 'prompt' ? (
+                        <>
+                          <button
+                            onClick={handleSave}
+                            disabled={isTranslating}
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
+                            title="저장"
+                          >
+                            {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
+                          </button>
+                          <button
+                            onClick={cancelModalEditing}
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                            title="취소"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : !isEditing && (
                         <button
                           onClick={() => { setIsEditing(true); setActiveEditSection('prompt'); }}
                           className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-brand-orange/25 hover:bg-brand-orange/10 hover:text-brand-orange"
+                          title="프롬프트 수정"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -2126,6 +2190,7 @@ ${song.prompt || ''}`.trim();
                       <button
                         onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}
                         className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
+                        title="프롬프트 복사"
                       >
                         {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -2135,7 +2200,7 @@ ${song.prompt || ''}`.trim();
                     <textarea
                       value={editedPrompt}
                       onChange={(e) => setEditedPrompt(e.target.value)}
-                      className="custom-scrollbar h-[220px] w-full rounded-2xl border border-white/12 bg-white/[0.04] p-4 text-sm leading-7 text-white/72 outline-none transition-all focus:border-brand-orange/35 focus:bg-white/[0.06]"
+                      className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-brand-orange/30"
                     />
                   ) : (
                     <div className="rounded-2xl border border-white/8 bg-black/15 p-4 md:p-5">

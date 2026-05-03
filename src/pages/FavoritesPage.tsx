@@ -149,6 +149,20 @@ function getFavoriteStructureText(song: any): string {
   return '구조 정보 없음';
 }
 
+function inferForeignLyricTargetLanguage(text: string): string {
+  const value = String(text || '').trim();
+  if (!value) return 'English';
+
+  if (/[ぁ-ゟ゠-ヿ]/.test(value)) return 'Japanese';
+  if (/[一-鿿]/.test(value) && !/[ぁ-ゟ゠-ヿ]/.test(value)) return 'Chinese';
+  if (/[가-힣]/.test(value) && !/[A-Za-zぁ-ゟ゠-ヿ一-鿿]/.test(value)) return 'English';
+  if (/[А-Яа-яЁё]/.test(value)) return 'Russian';
+  if (/[ก-๙]/.test(value)) return 'Thai';
+  if (/[À-ÿ]/.test(value)) return 'the same foreign language as the existing foreign lyrics';
+  return 'English';
+}
+
+
 export default function FavoritesPage({ 
   favorites, 
   toggleFavorite, 
@@ -406,6 +420,10 @@ export default function FavoritesPage({
     editedEnglishLyrics !== originalLyricsEn ||
     editedPrompt !== originalPrompt
   );
+  const isTitleEditChanged = Boolean(selectedSong && editedTitle !== selectedSong.title);
+  const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== selectedSong.lyrics.korean);
+  const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== selectedSong.lyrics.english);
+  const isPromptEditChanged = Boolean(selectedSong && editedPrompt !== (selectedSong.prompt || ''));
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [confirmLockAll, setConfirmLockAll] = useState(0);
@@ -585,13 +603,15 @@ export default function FavoritesPage({
         const koreanChanged = editedKoreanLyrics !== selectedSong.lyrics.korean;
         const englishChanged = editedEnglishLyrics !== selectedSong.lyrics.english;
 
+        const foreignTargetLanguage = inferForeignLyricTargetLanguage(selectedSong.lyrics.english);
+
         if (koreanChanged && !englishChanged) {
-          finalEnglish = await translateLyrics(editedKoreanLyrics, 'english');
+          finalEnglish = await translateLyrics(editedKoreanLyrics, foreignTargetLanguage);
         } else if (englishChanged && !koreanChanged) {
-          finalKorean = await translateLyrics(editedEnglishLyrics, 'korean');
+          finalKorean = await translateLyrics(editedEnglishLyrics, 'Korean');
         } else if (koreanChanged && englishChanged) {
-          // Both changed, prioritize Korean for translation
-          finalEnglish = await translateLyrics(editedKoreanLyrics, 'english');
+          // Both changed, prioritize Korean for translation into the existing foreign lyric language.
+          finalEnglish = await translateLyrics(editedKoreanLyrics, foreignTargetLanguage);
         }
       } catch (error) {
         console.error("Translation failed:", error);
@@ -1749,7 +1769,7 @@ ${song.prompt || ''}`.trim();
                 <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-5 py-5 md:px-7 md:py-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="inline-flex items-center rounded-full border border-brand-orange/20 bg-brand-orange/8 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.34em] text-brand-orange/90">
-                      music note
+                      TITLE / 제목
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -1774,14 +1794,16 @@ ${song.prompt || ''}`.trim();
                       )}
                       {isEditing && activeEditSection === 'title' && (
                         <>
-                          <button
-                            onClick={handleSave}
-                            disabled={isTranslating}
-                            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
-                            title="저장"
-                          >
-                            {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
-                          </button>
+                          {isTitleEditChanged && (
+                            <button
+                              onClick={handleSave}
+                              disabled={isTranslating}
+                              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:-translate-y-0.5 hover:border-white/22 hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
+                              title="저장"
+                            >
+                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                          )}
                           <button
                             onClick={cancelModalEditing}
                             className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
@@ -2035,14 +2057,16 @@ ${song.prompt || ''}`.trim();
                       <div className="flex items-center gap-2">
                         {isEditing && activeEditSection === 'lyrics-ko' ? (
                           <>
-                            <button
-                              onClick={handleSave}
-                              disabled={isTranslating}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
-                              title="저장"
-                            >
-                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
-                            </button>
+                            {isKoreanLyricsEditChanged && (
+                              <button
+                                onClick={handleSave}
+                                disabled={isTranslating}
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:-translate-y-0.5 hover:border-white/22 hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
+                                title="저장"
+                              >
+                                {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
+                              </button>
+                            )}
                             <button
                               onClick={cancelModalEditing}
                               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
@@ -2104,14 +2128,16 @@ ${song.prompt || ''}`.trim();
                       <div className="flex items-center gap-2">
                         {isEditing && activeEditSection === 'lyrics-en' ? (
                           <>
-                            <button
-                              onClick={handleSave}
-                              disabled={isTranslating}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
-                              title="저장"
-                            >
-                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
-                            </button>
+                            {isForeignLyricsEditChanged && (
+                              <button
+                                onClick={handleSave}
+                                disabled={isTranslating}
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:-translate-y-0.5 hover:border-white/22 hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
+                                title="저장"
+                              >
+                                {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
+                              </button>
+                            )}
                             <button
                               onClick={cancelModalEditing}
                               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"
@@ -2162,14 +2188,16 @@ ${song.prompt || ''}`.trim();
                     <div className="flex items-center gap-2">
                       {isEditing && activeEditSection === 'prompt' ? (
                         <>
-                          <button
-                            onClick={handleSave}
-                            disabled={isTranslating}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-orange/30 bg-brand-orange/12 text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/16 disabled:opacity-60"
-                            title="저장"
-                          >
-                            {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-brand-orange/25 border-t-brand-orange animate-spin" /> : <Check className="h-4 w-4" />}
-                          </button>
+                          {isPromptEditChanged && (
+                            <button
+                              onClick={handleSave}
+                              disabled={isTranslating}
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:-translate-y-0.5 hover:border-white/22 hover:bg-white/[0.07] hover:text-white disabled:opacity-60"
+                              title="저장"
+                            >
+                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                          )}
                           <button
                             onClick={cancelModalEditing}
                             className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.06] hover:text-white"

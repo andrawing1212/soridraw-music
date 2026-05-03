@@ -3477,16 +3477,18 @@ export default function SunoLibraryPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col md:flex-row md:items-center justify-between gap-4"
         >
-          <div className="flex items-start gap-4">
-            <button
-              onClick={() => navigate('/')}
-              className="mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center gap-2"
-            >
-              <Home className="w-4 h-4" />홈
-            </button>
-            <div>
+          <div className="flex items-start gap-4 min-w-0">
+            {isSharedView && (
+              <button
+                onClick={() => navigate('/')}
+                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
+              >
+                <Home className="w-4 h-4" />홈
+              </button>
+            )}
+            <div className="min-w-0">
               <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                <div className="flex gap-[5px] items-end justify-center w-8 h-8 text-brand-orange">
+                <div className="flex gap-[5px] items-end justify-center w-8 h-8 text-brand-orange shrink-0">
                   <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] opacity-80" />
                   <div className="w-[6px] h-[26px] border-[2px] border-current rounded-[3px]" />
                   <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
@@ -3502,7 +3504,7 @@ export default function SunoLibraryPage() {
           {!isSharedView && (
             <button
               onClick={() => navigate('/suno-api-settings')}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
+              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
             >
               <Settings className="w-4 h-4" />
               API 설정
@@ -3511,11 +3513,36 @@ export default function SunoLibraryPage() {
           </div>
         </motion.div>
 
+        <div className="flex md:hidden items-center justify-between gap-3 -mt-2">
+          <button
+            onClick={() => navigate('/')}
+            className="h-12 px-4 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center gap-2"
+          >
+            <Home className="w-4 h-4" />홈
+          </button>
+          {!isSharedView && (
+            <button
+              onClick={() => navigate('/suno-api-settings')}
+              className="h-12 flex items-center gap-2 px-4 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
+            >
+              <Settings className="w-4 h-4" />
+              API 설정
+            </button>
+          )}
+        </div>
+
         {/* Main Music Player relocated to GlobalPlayer */}
 
         {/* View Mode Tabs */}
         {!isSharedView && (
-          <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10 overflow-x-auto custom-scrollbar whitespace-nowrap max-w-full">
+          <div className="flex items-center gap-3 max-w-full overflow-x-auto custom-scrollbar whitespace-nowrap">
+            <button
+              onClick={() => navigate('/')}
+              className="hidden md:flex shrink-0 items-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all"
+            >
+              <Home className="w-4 h-4" />홈
+            </button>
+            <div className="flex gap-2 p-1 bg-white/5 backdrop-blur-md rounded-2xl w-fit border border-white/10 overflow-x-auto custom-scrollbar whitespace-nowrap max-w-full">
             <button
               onClick={() => setLibraryViewMode('workspace')}
               className={`shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm ${libraryViewMode === 'workspace' ? 'bg-brand-orange text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
@@ -3550,6 +3577,7 @@ export default function SunoLibraryPage() {
             >
               공유 플레이리스트
             </button>
+            </div>
           </div>
         )}
 

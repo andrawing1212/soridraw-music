@@ -1800,8 +1800,8 @@ function App() {
   };
 
   const toggleSubSections = (section: 'mood' | 'theme') => {
-    const isPC = window.innerWidth >= 1024;
-    if (isPC) {
+    const shouldSyncSubSections = window.innerWidth >= 768;
+    if (shouldSyncSubSections) {
       const nextState = !isMoodExpanded;
       setIsMoodExpanded(nextState);
       setIsThemeExpanded(nextState);
@@ -4421,7 +4421,7 @@ ${result.prompt}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 768 && window.innerWidth < 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -4446,7 +4446,7 @@ ${result.prompt}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 768 && window.innerWidth < 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
             />

@@ -220,6 +220,29 @@ export default function GlobalPlayer() {
   }, [currentTrack?.url, currentTrack?.title]);
 
   useEffect(() => {
+    if (!isMobile || mode !== 'expanded' || !currentTrack) return;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
+    html.style.overscrollBehavior = 'none';
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+    };
+  }, [isMobile, mode, currentTrack?.url]);
+
+  useEffect(() => {
     setLocalFavoriteActive(Boolean((currentTrack as any)?.favorite || currentTrack?.parent?.favorite));
   }, [currentTrack?.url, currentTrack?.title, (currentTrack as any)?.favorite, currentTrack?.parent?.favorite]);
 
@@ -768,6 +791,18 @@ export default function GlobalPlayer() {
         }
       `}</style>
 
+      {isMobile && mode === 'expanded' && (
+        <motion.div
+          key="mobile-expanded-player-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[99] bg-transparent"
+          onClick={() => handleModeChange('normal')}
+          aria-hidden="true"
+        />
+      )}
+
       <motion.div
         layout
         transition={{ 
@@ -921,8 +956,8 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full md:w-[400px] max-h-[86vh] overflow-y-auto bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-6 pb-8 px-6 relative scrollbar-hide"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="w-full md:w-[400px] max-h-[86vh] overflow-y-auto overscroll-contain bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-6 pb-8 px-6 relative scrollbar-hide"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'contain' }}
             >
               <style>{`
                 .scrollbar-hide::-webkit-scrollbar {

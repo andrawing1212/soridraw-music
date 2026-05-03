@@ -3673,7 +3673,7 @@ export default function SunoLibraryPage() {
                           상태 확인
                         </button>
                       )}
-                      {!group.taskId && <span className="text-[10px] opacity-30">Task ID 없음</span>}
+                      {!isSharedView && !group.taskId && <span className="text-[10px] opacity-30">Task ID 없음</span>}
                     </div>
                   </div>
 

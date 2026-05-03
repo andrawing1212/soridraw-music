@@ -101,6 +101,54 @@ function getTimestampMs(value: any): number {
   return 0;
 }
 
+function getFavoriteDetailCreatedAt(song: any): string {
+  const timestamp = song?.createdAt ?? song?.timestamp ?? song?.updatedAt;
+  const ms = getTimestampMs(timestamp);
+  if (!ms) return '';
+
+  try {
+    return new Date(ms).toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
+function getFavoriteStructureText(song: any): string {
+  if (!song?.appliedKeywords) return '구조 정보 없음';
+
+  if (song.appliedKeywords.songStructure === 'custom') {
+    const custom = song.appliedKeywords.customStructure ?? [];
+    if (custom.length === 0) return '구조 정보 없음';
+    return custom.map((section: any) => {
+      if (section.section === 'Instrumental' && (section.tags ?? []).length > 0) {
+        return `${section.section}: ${(section.tags ?? [])[0]}`;
+      }
+      return `${section.section}${(section.tags ?? []).length > 0 ? ` (${(section.tags ?? []).join(', ')})` : ''}`;
+    }).join(' → ');
+  }
+
+  if (song.appliedKeywords.songStructure === '1') {
+    return 'Intro → Verse 1 → Chorus / Drop → Outro';
+  }
+
+  if (song.appliedKeywords.songStructure === '2') {
+    return 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro';
+  }
+
+  if (song.appliedKeywords.songStructure) {
+    return 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro';
+  }
+
+  return '구조 정보 없음';
+}
+
 export default function FavoritesPage({ 
   favorites, 
   toggleFavorite, 
@@ -1327,7 +1375,7 @@ ${song.prompt || ''}`.trim();
 
   return (
     <div 
-      className="max-w-6xl mx-auto px-6 pt-32 pb-12 font-sans relative"
+      className="max-w-6xl mx-auto px-6 pt-24 pb-12 font-sans relative"
       onClick={(e) => {
         // If clicking the background (not a card or popup), exit selection mode
         if (isSelectionMode && e.target === e.currentTarget) {
@@ -1353,17 +1401,13 @@ ${song.prompt || ''}`.trim();
         }
       `}</style>
       <div className="mb-8 md:mb-10">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-8">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <HeartIcon className="w-9 h-9 text-brand-orange" />
-              <div>
-                <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display">
-                  Music <span className="text-brand-orange">Note</span>
-                </h1>
-                <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
-              </div>
-            </div>
+        <div className="flex flex-col gap-6 mb-8">
+          <div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
+              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-brand-orange shrink-0" />
+              <span>Music <span className="text-brand-orange">Note</span></span>
+            </h1>
+            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1 md:ml-[52px]">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
           </div>
         </div>
 
@@ -1488,12 +1532,8 @@ ${song.prompt || ''}`.trim();
                     }
                   }}
                   className={cn(
-                    "group relative overflow-visible rounded-2xl border bg-[var(--bg-secondary)] transition-all select-none",
-                    isSelectionMode
-                      ? isSelected
-                        ? "border-brand-orange/40 bg-brand-orange/5"
-                        : "border-white/10 hover:bg-white/[0.03] cursor-pointer"
-                      : "border-white/10 hover:bg-white/[0.03]"
+                    "group relative overflow-visible rounded-2xl border border-white/10 bg-[var(--bg-secondary)] transition-all select-none hover:bg-white/[0.03]",
+                    isSelectionMode ? "cursor-pointer" : ""
                   )}
                 >
                   <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
@@ -1642,283 +1682,349 @@ ${song.prompt || ''}`.trim();
       {/* Lyrics Modal */}
       <AnimatePresence>
         {selectedSong && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 font-sans">
-            <motion.div 
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 font-sans">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => closeSelectedSong()}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/70 backdrop-blur-[6px]"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-[var(--shadow-md)] flex flex-col max-h-[90vh]"
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="relative flex w-full max-w-[1080px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#141414] shadow-[0_40px_120px_rgba(0,0,0,0.5)] max-h-[92vh]"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-8 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/30 relative flex flex-col items-center">
-                <button 
-                  onClick={() => closeSelectedSong()} 
-                  className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors z-10"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,145,0,0.12),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(255,145,0,0.08),transparent_26%)]" />
 
-                <div className="w-full max-w-lg space-y-6">
-                  {/* Title Section */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">SONG INFO-Title</h3>
+              <div className="relative flex items-start justify-between gap-4 border-b border-white/8 px-5 py-5 md:px-8 md:py-6">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-brand-orange/90">song detail</div>
+                  <h3 className="text-[28px] font-bold tracking-tight text-white md:text-[34px]">상세정보</h3>
+                  <p className="text-sm leading-relaxed text-white/48 md:text-[15px]">
+                    저장한 곡의 제목, 키워드, 가사와 프롬프트를 확인하고 편집할 수 있습니다.
+                  </p>
+                </div>
+                <button
+                  onClick={() => closeSelectedSong()}
+                  className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/60 transition-all hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="relative flex-1 overflow-y-auto overscroll-contain custom-scrollbar px-5 py-5 md:px-8 md:py-7 space-y-6" style={{ overscrollBehavior: 'contain' }}>
+                <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-5 py-5 md:px-7 md:py-6">
+                  <div className="flex flex-col gap-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-full border border-brand-orange/20 bg-brand-orange/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">
+                            music note
+                          </span>
+                          {!isEditing && (
+                            <button
+                              onClick={() => copyToClipboard(getCombinedFavoriteCopyText(selectedSong), 'title-all')}
+                              onMouseEnter={() => onHover({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                              onMouseLeave={() => {
+                                onHover(null);
+                                onLongPressEnd();
+                              }}
+                              onTouchStart={() => onLongPressStart({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
+                              onTouchEnd={onLongPressEnd}
+                              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange"
+                            >
+                              {copiedType === 'title-all' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                          )}
+                        </div>
+
+                        {isEditing ? (
+                          <input
+                            value={editedTitle}
+                            onChange={(e) => setEditedTitle(e.target.value)}
+                            className="w-full rounded-2xl border border-brand-orange/25 bg-white/[0.04] px-4 py-3 text-xl font-bold text-white outline-none transition-all focus:border-brand-orange/50 focus:bg-white/[0.06]"
+                          />
+                        ) : (
+                          <div className="min-w-0">
+                            <AnimatePresence initial={false} mode="wait">
+                              {isTitleExpanded && (
+                                <motion.div
+                                  key="expanded-title"
+                                  initial={{ opacity: 0, y: 8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -8 }}
+                                  className="space-y-4"
+                                >
+                                  <div className="text-center md:text-left">
+                                    <div className="text-[24px] font-extrabold leading-tight tracking-tight text-white md:text-[34px]">
+                                      {renderFavoriteDetailTitles(selectedSong)}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-white/50">
+                                    {getDisplaySubGenre(selectedSong) && (
+                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                        {getDisplaySubGenre(selectedSong)}
+                                      </span>
+                                    )}
+                                    {getFavoriteDetailCreatedAt(selectedSong) && (
+                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                        {getFavoriteDetailCreatedAt(selectedSong)}
+                                      </span>
+                                    )}
+                                    {selectedSong.isLocked && (
+                                      <span className="rounded-full border border-brand-orange/25 bg-brand-orange/10 px-3 py-1 text-brand-orange">
+                                        잠금 상태
+                                      </span>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
+                      </div>
+
                       {!isEditing && (
-                        <button 
-                          onClick={() => copyToClipboard(getCombinedFavoriteCopyText(selectedSong), 'title-all')}
-                          
-                          onMouseEnter={() => onHover({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: 'copy-title', label: '제목 복사', description: '곡 제목을 복사합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
+                        <button
+                          onClick={() => setIsTitleExpanded((prev) => !prev)}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 transition-all hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange"
                         >
-                          {copiedType === 'title-all' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
+                          {isTitleExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                         </button>
                       )}
                     </div>
 
-                    {isEditing ? (
-                      <input 
-                        value={editedTitle}
-                        onChange={(e) => setEditedTitle(e.target.value)}
-                        className="w-full bg-[var(--input-bg)] border border-brand-orange/30 rounded-xl px-4 py-3 text-[var(--text-primary)] font-bold text-xl focus:outline-none"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center">
-                        <AnimatePresence mode="wait">
-                          {isTitleExpanded && (
-                            <motion.h2 
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="text-[19px] font-bold text-[var(--text-primary)] leading-tight text-center w-full overflow-hidden"
-                            >
-                              {renderFavoriteDetailTitles(selectedSong)}
-                            </motion.h2>
+                    {!isEditing ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={() => handlePopupToggleLock(selectedSong)}
+                          onMouseEnter={() => onHover({
+                            id: 'popup-lock',
+                            label: confirmToggleLock ? (selectedSong.isLocked ? '해제 확인' : '잠금 확인') : (selectedSong.isLocked ? '잠금 해제' : '잠금'),
+                            description: confirmToggleLock ? '한번 더 누르면 실행됩니다.' : (selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.')
+                          })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({
+                            id: 'popup-lock',
+                            label: confirmToggleLock ? (selectedSong.isLocked ? '해제 확인' : '잠금 확인') : (selectedSong.isLocked ? '잠금 해제' : '잠금'),
+                            description: confirmToggleLock ? '한번 더 누르면 실행됩니다.' : (selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.')
+                          })}
+                          onTouchEnd={onLongPressEnd}
+                          className={cn(
+                            'flex h-12 w-12 items-center justify-center rounded-full border transition-all',
+                            selectedSong.isLocked
+                              ? confirmToggleLock
+                                ? 'border-brand-orange bg-brand-orange text-white shadow-[0_10px_24px_rgba(255,145,0,0.28)]'
+                                : 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange'
+                              : confirmToggleLock
+                                ? 'border-brand-orange bg-brand-orange text-white shadow-[0_10px_24px_rgba(255,145,0,0.28)]'
+                                : 'border-white/12 bg-white/[0.04] text-white/80 hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange'
                           )}
-                        </AnimatePresence>
+                        >
+                          {selectedSong.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+                        </button>
+
+                        <button
+                          onClick={() => handlePopupDelete(selectedSong)}
+                          disabled={selectedSong.isLocked}
+                          onMouseEnter={() => onHover({
+                            id: 'popup-delete',
+                            label: confirmDeleteSong ? '삭제 확인' : '삭제',
+                            description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.')
+                          })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({
+                            id: 'popup-delete',
+                            label: confirmDeleteSong ? '삭제 확인' : '삭제',
+                            description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.')
+                          })}
+                          onTouchEnd={onLongPressEnd}
+                          className={cn(
+                            'flex h-12 w-12 items-center justify-center rounded-full border transition-all',
+                            selectedSong.isLocked
+                              ? 'cursor-not-allowed border-white/8 bg-white/[0.03] text-white/20'
+                              : confirmDeleteSong
+                                ? 'border-red-500 bg-red-500 text-white shadow-[0_10px_24px_rgba(239,68,68,0.28)]'
+                                : 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white'
+                          )}
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setIsEditing(true);
+                            setIsSyncEnabled(false);
+                          }}
+                          onMouseEnter={() => onHover({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="inline-flex items-center gap-2 rounded-full border border-brand-orange/25 bg-brand-orange/12 px-5 py-3 text-sm font-bold text-brand-orange transition-all hover:bg-brand-orange/18"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          수정하기
+                        </button>
+
+                        {isModified && (
+                          <button
+                            onClick={handleRestoreOriginal}
+                            onMouseEnter={() => onHover({ id: 'popup-restore', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                            onMouseLeave={() => {
+                              onHover(null);
+                              onLongPressEnd();
+                            }}
+                            onTouchStart={() => onLongPressStart({ id: 'popup-restore', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                            onTouchEnd={onLongPressEnd}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white"
+                          >
+                            <ArrowLeft className="w-4 h-4" />
+                            원본 복원
+                          </button>
+                        )}
+
+                        <a
+                          href="https://suno.com/create"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onMouseEnter={() => onHover({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                          onMouseLeave={() => {
+                            onHover(null);
+                            onLongPressEnd();
+                          }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="inline-flex h-12 min-w-[86px] items-center justify-center rounded-full border border-white/70 bg-transparent px-5 text-[11px] font-black tracking-[0.06em] text-white transition-all hover:scale-[1.03] hover:border-white hover:bg-white/5"
+                        >
+                          SUNO
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-3">
+                        {isModified && (
+                          <button
+                            onClick={handleRestoreOriginal}
+                            onMouseEnter={() => onHover({ id: 'popup-restore-edit', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                            onMouseLeave={() => {
+                              onHover(null);
+                              onLongPressEnd();
+                            }}
+                            onTouchStart={() => onLongPressStart({ id: 'popup-restore-edit', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
+                            onTouchEnd={onLongPressEnd}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white"
+                          >
+                            <ArrowLeft className="w-4 h-4" />
+                            원본 복원
+                          </button>
+                        )}
+                        <button
+                          onClick={handleSave}
+                          disabled={isTranslating}
+                          className={cn(
+                            'inline-flex items-center gap-2 rounded-full bg-brand-orange px-6 py-3 text-sm font-bold text-white transition-all shadow-[0_14px_30px_rgba(255,145,0,0.25)]',
+                            isTranslating ? 'cursor-wait opacity-70' : 'hover:brightness-110'
+                          )}
+                        >
+                          {isTranslating ? (
+                            <>
+                              <div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                              번역 중...
+                            </>
+                          ) : '저장하기'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsEditing(false);
+                            setDrafts(prev => {
+                              const newDrafts = { ...prev };
+                              delete newDrafts[selectedSong.id];
+                              return newDrafts;
+                            });
+                            setEditedTitle(selectedSong.title);
+                            setEditedKoreanLyrics(selectedSong.lyrics.korean);
+                            setEditedEnglishLyrics(selectedSong.lyrics.english);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-6 py-3 text-sm font-bold text-white/80 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white"
+                        >
+                          취소
+                        </button>
                       </div>
                     )}
                   </div>
+                </section>
 
-                  {/* Action Buttons */}
-                  {!isEditing && (
-                    <div className="flex items-center justify-center gap-4">
-                      <button 
-                        onClick={() => handlePopupToggleLock(selectedSong)}
-                        onMouseEnter={() => onHover({ 
-                          id: 'popup-lock', 
-                          label: confirmToggleLock ? (selectedSong.isLocked ? '해제 확인' : '잠금 확인') : (selectedSong.isLocked ? '잠금 해제' : '잠금'), 
-                          description: confirmToggleLock ? '한번 더 누르면 실행됩니다.' : (selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.') 
-                        })}
-                        onMouseLeave={() => {
-                          onHover(null);
-                          onLongPressEnd();
-                        }}
-                        onTouchStart={() => onLongPressStart({ 
-                          id: 'popup-lock', 
-                          label: confirmToggleLock ? (selectedSong.isLocked ? '해제 확인' : '잠금 확인') : (selectedSong.isLocked ? '잠금 해제' : '잠금'), 
-                          description: confirmToggleLock ? '한번 더 누르면 실행됩니다.' : (selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.') 
-                        })}
-                        onTouchEnd={onLongPressEnd}
-                        className={cn(
-                          "w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all",
-                          selectedSong.isLocked 
-                            ? confirmToggleLock ? "bg-brand-orange text-white border-brand-orange" : "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
-                            : confirmToggleLock ? "bg-brand-orange text-white border-brand-orange" : "bg-transparent text-[var(--text-primary)] border-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-                        )}
-                      >
-                        {selectedSong.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-                      </button>
-
-                      <button 
-                        onClick={() => handlePopupDelete(selectedSong)}
-                        disabled={selectedSong.isLocked}
-                        onMouseEnter={() => onHover({ 
-                          id: 'popup-delete', 
-                          label: confirmDeleteSong ? '삭제 확인' : '삭제', 
-                          description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.') 
-                        })}
-                        onMouseLeave={() => {
-                          onHover(null);
-                          onLongPressEnd();
-                        }}
-                        onTouchStart={() => onLongPressStart({ 
-                          id: 'popup-delete', 
-                          label: confirmDeleteSong ? '삭제 확인' : '삭제', 
-                          description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 목록에서 삭제합니다.') 
-                        })}
-                        onTouchEnd={onLongPressEnd}
-                        className={cn(
-                          "w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all",
-                          selectedSong.isLocked 
-                            ? "bg-[var(--bg-secondary)] text-[var(--text-secondary)]/30 border-[var(--border-color)] cursor-not-allowed" 
-                            : confirmDeleteSong 
-                              ? "bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/30" 
-                              : "bg-red-500/10 text-red-500 border-red-500/30 hover:bg-red-500 hover:text-white"
-                        )}
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          setIsEditing(true);
-                          setIsSyncEnabled(false);
-                        }}
-                        onMouseEnter={() => onHover({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
-                        onMouseLeave={() => {
-                          onHover(null);
-                          onLongPressEnd();
-                        }}
-                        onTouchStart={() => onLongPressStart({ id: 'popup-edit', label: '수정하기', description: '곡 정보를 수정합니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="px-3.5 py-3 rounded-2xl bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all flex items-center gap-2 text-xs font-bold border border-brand-orange/20"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        수정하기
-                      </button>
-
-                      {isModified && (
-                        <button 
-                          onClick={handleRestoreOriginal}
-                          onMouseEnter={() => onHover({ id: 'popup-restore', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-restore', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="px-6 py-3 rounded-2xl bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-all flex items-center gap-2 text-sm font-bold border border-[var(--border-color)]"
-                        >
-                          <ArrowLeft className="w-4 h-4" />
-                          원본 복원
-                        </button>
+                <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">keywords</div>
+                        <h4 className="mt-1 text-xl font-bold text-white">곡 키워드 & 스타일</h4>
+                      </div>
+                      {!isEditing && (
+                        <div className="flex items-center gap-2 self-start md:self-auto">
+                          <button
+                            onClick={() => applyKeywordsToNext(selectedSong)}
+                            onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                            onMouseLeave={() => onHover(null)}
+                            className="inline-flex items-center gap-2 rounded-full border border-brand-orange/25 bg-brand-orange/12 px-4 py-2 text-[13px] font-bold text-brand-orange transition-all hover:bg-brand-orange/18"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            다음 곡에 적용
+                          </button>
+                          <button
+                            onClick={() => {
+                              const sections = resolveKeywordsForDisplay(selectedSong);
+                              const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
+                              copyToClipboard(text, 'keywords');
+                            }}
+                            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange"
+                          >
+                            {copiedType === 'keywords' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
                       )}
-
-                      <a 
-                        href="https://suno.com/create" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        onMouseEnter={() => onHover({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                        onMouseLeave={() => {
-                          onHover(null);
-                          onLongPressEnd();
-                        }}
-                        onTouchStart={() => onLongPressStart({ id: 'popup-suno', label: 'Suno Create', description: 'Suno에서 음악을 생성합니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="w-12 h-12 rounded-full border-2 border-[var(--text-primary)] flex items-center justify-center text-[var(--text-primary)] text-[10px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
-                      >
-                        SUNO
-                      </a>
                     </div>
-                  )}
 
-                  {isEditing && (
-                    <div className="flex items-center justify-center gap-3">
-                      {isModified && (
-                        <button 
-                          onClick={handleRestoreOriginal}
-                          onMouseEnter={() => onHover({ id: 'popup-restore-edit', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
-                          onMouseLeave={() => {
-                            onHover(null);
-                            onLongPressEnd();
-                          }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-restore-edit', label: '원본 복원', description: '최초 원본 가사 상태로 되돌립니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="px-6 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-all flex items-center gap-2 text-sm font-bold border border-[var(--border-color)]"
-                        >
-                          <ArrowLeft className="w-4 h-4" />
-                          원본 복원
-                        </button>
-                      )}
-                      <button 
-                        onClick={handleSave}
-                        disabled={isTranslating}
-                        className={cn(
-                          "px-8 py-3 rounded-xl bg-brand-orange text-white text-sm font-bold transition-all shadow-lg shadow-brand-orange/20 flex items-center gap-2",
-                          isTranslating ? "opacity-70 cursor-wait" : "hover:brightness-110"
-                        )}
-                      >
-                        {isTranslating ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            번역 중...
-                          </>
-                        ) : '저장하기'}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setIsEditing(false);
-                          setDrafts(prev => {
-                            const newDrafts = { ...prev };
-                            delete newDrafts[selectedSong.id];
-                            return newDrafts;
-                          });
-                          setEditedTitle(selectedSong.title);
-                          setEditedKoreanLyrics(selectedSong.lyrics.korean);
-                          setEditedEnglishLyrics(selectedSong.lyrics.english);
-                        }}
-                        className="px-8 py-3 rounded-xl bg-[var(--hover-bg)] text-[var(--text-secondary)] text-sm font-bold hover:bg-[var(--hover-bg)]/20 transition-all"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Expand Button at Bottom Center, overlapping border */}
-                {!isEditing && (
-                  <button
-                    onClick={() => setIsTitleExpanded(!isTitleExpanded)}
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-[var(--border-color)] flex items-center justify-center text-brand-orange hover:text-white hover:bg-brand-orange transition-all z-20 shadow-xl"
-                  >
-                    {isTitleExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </button>
-                )}
-              </div>
-
-              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
-                {/* Keywords & Tempo */}
-                <div className="bg-[var(--bg-secondary)]/30 rounded-2xl p-4 border border-[var(--border-color)] relative">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
-                    <div className="space-y-2 pr-12 sm:pr-0">
+                    <div className="space-y-4">
                       {resolveKeywordsForDisplay(selectedSong).map((section) => (
-                        <div key={section.key} className="space-y-1">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-secondary)]">{section.title}</p>
-                          <div className="flex flex-wrap gap-1">
+                        <div key={section.key} className="space-y-2.5">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/38">{section.title}</p>
+                          <div className="flex flex-wrap gap-2">
                             {section.items.map((item, idx) => (
                               <span
                                 key={`${section.key}-${idx}`}
                                 onMouseEnter={() => {
                                   if (item.description) {
-                                    onHover({ 
-                                      id: `kw-${section.key}-${idx}`, 
-                                      label: item.label, 
-                                      description: item.description 
+                                    onHover({
+                                      id: `kw-${section.key}-${idx}`,
+                                      label: item.label,
+                                      description: item.description
                                     });
                                   }
                                 }}
                                 onMouseLeave={() => onHover(null)}
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help border",
+                                  'rounded-full border px-3 py-1.5 text-[12px] font-medium transition-all cursor-help',
                                   section.accent === 'violet'
-                                    ? "bg-violet-500/10 text-violet-300 border-violet-400/20"
+                                    ? 'border-violet-400/20 bg-violet-500/10 text-violet-300'
                                     : section.accent === 'sky'
-                                      ? "bg-sky-500/10 text-sky-300 border-sky-400/20"
-                                      : item.isRandom 
-                                        ? "bg-brand-orange/20 text-brand-orange font-bold border-brand-orange/30" 
-                                        : "bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
+                                      ? 'border-sky-400/20 bg-sky-500/10 text-sky-300'
+                                      : item.isRandom
+                                        ? 'border-brand-orange/30 bg-brand-orange/16 text-brand-orange font-bold'
+                                        : 'border-white/10 bg-white/[0.04] text-white/72'
                                 )}
                               >
                                 {item.label}
@@ -1928,101 +2034,59 @@ ${song.prompt || ''}`.trim();
                         </div>
                       ))}
                     </div>
-                    {!isEditing && (
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <button
-                          onClick={() => applyKeywordsToNext(selectedSong)}
-                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onMouseLeave={() => onHover(null)}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[var(--card-bg)] text-brand-orange hover:bg-brand-orange/10 transition-all shadow-sm text-[12px] font-bold whitespace-nowrap border border-brand-orange/30 active:scale-95"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          다음 곡에 적용
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const sections = resolveKeywordsForDisplay(selectedSong);
-                            const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
-                            copyToClipboard(text, 'keywords');
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
-                        >
-                          {copiedType === 'keywords' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
+                  </section>
+
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                    <div className="mb-4">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">overview</div>
+                      <h4 className="mt-1 text-xl font-bold text-white">핵심 정보</h4>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">genre</p>
+                        <p className="mt-2 text-sm font-semibold text-white/88">{getDisplaySubGenre(selectedSong) || '정보 없음'}</p>
                       </div>
-                    )}
-                  </div>
-                  {selectedSong.appliedKeywords.vocalType && (
-                    <div className="space-y-0.5 mt-2">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">vocal</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span 
-                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
-                          onMouseEnter={() => onHover({ id: 'kw-vocal', label: 'Vocal', description: '곡의 보컬 구성을 나타냅니다.' })}
-                          onMouseLeave={() => onHover(null)}
-                        >
-                          {selectedSong.appliedKeywords.vocalType}
-                        </span>
-                        {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
-                          <span 
-                            className="px-1.5 py-0.5 rounded-md text-[11px] bg-brand-orange/10 text-brand-orange border border-brand-orange/20 cursor-help"
-                            onMouseEnter={() => onHover({ id: 'kw-vocal-tone', label: 'Vocal Tone', description: `선택된 보컬톤: ${selectedSong.appliedKeywords.vocalTone}` })}
-                            onMouseLeave={() => onHover(null)}
-                          >
-                            #보컬톤: {selectedSong.appliedKeywords.vocalTone}
+
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">vocal</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] text-white/75">
+                            {selectedSong.appliedKeywords.vocalType || '정보 없음'}
                           </span>
-                        )}
+                          {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
+                            <span
+                              className="rounded-full border border-brand-orange/25 bg-brand-orange/10 px-3 py-1 text-[12px] text-brand-orange"
+                              onMouseEnter={() => onHover({ id: 'kw-vocal-tone', label: 'Vocal Tone', description: `선택된 보컬톤: ${selectedSong.appliedKeywords.vocalTone}` })}
+                              onMouseLeave={() => onHover(null)}
+                            >
+                              보컬톤: {selectedSong.appliedKeywords.vocalTone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">tempo</p>
+                        <p className="mt-2 text-sm font-semibold text-white/88">{selectedSong.appliedKeywords.tempo || '정보 없음'}</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:col-span-2 xl:col-span-1">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">structure</p>
+                        <div className="mt-2 rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-[12px] leading-6 text-white/72" style={{ wordBreak: 'break-word' }}>
+                          {getFavoriteStructureText(selectedSong)}
+                        </div>
                       </div>
                     </div>
-                  )}
-                  {selectedSong.appliedKeywords.tempo && (
-                    <div className="space-y-0.5 mt-2">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">tempo</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span 
-                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
-                          onMouseEnter={() => onHover({ id: 'kw-tempo', label: 'Tempo', description: '곡의 빠르기를 나타내는 BPM 범위입니다.' })}
-                          onMouseLeave={() => onHover(null)}
-                        >
-                          {selectedSong.appliedKeywords.tempo}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {((selectedSong.appliedKeywords.songStructure && selectedSong.appliedKeywords.songStructure !== 'custom') || (selectedSong.appliedKeywords.customStructure && (selectedSong.appliedKeywords.customStructure ?? []).length > 0)) && (
-                    <div className="space-y-0.5 mt-2">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter">structure</p>
-                      <div className="flex flex-wrap gap-1">
-                        <span 
-                          className="px-1.5 py-0.5 rounded-md text-[11px] bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] cursor-help"
-                          onMouseEnter={() => onHover({ id: 'kw-structure', label: 'Structure', description: '곡의 전체 구성입니다.' })}
-                          onMouseLeave={() => onHover(null)}
-                        >
-                          {selectedSong.appliedKeywords.songStructure === 'custom' 
-                            ? (selectedSong.appliedKeywords.customStructure ?? []).map((s: any) => {
-                                if (s.section === 'Instrumental' && (s.tags ?? []).length > 0) {
-                                  return `${s.section}: ${(s.tags ?? [])[0]}`;
-                                }
-                                return `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`;
-                              }).join(' → ')
-                            : selectedSong.appliedKeywords.songStructure === '1'
-                              ? 'Intro → Verse 1 → Chorus / Drop → Outro'
-                              : selectedSong.appliedKeywords.songStructure === '2'
-                                ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
-                                : 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                  </section>
                 </div>
 
-                {/* Lyrics */}
-                <div className="space-y-8">
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">한글버전 Lyrics</h3>
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics ko</div>
+                        <h4 className="mt-1 text-xl font-bold text-white">한글 가사</h4>
                         {isEditing && (
                           <button
                             onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -2034,10 +2098,10 @@ ${song.prompt || ''}`.trim();
                             onTouchStart={() => onLongPressStart({ id: 'sync-info-ko', label: '한/영 연동', description: 'ON 상태에서 저장하면, 마지막으로 수정한 언어를 기준으로 반대 언어 가사를 자동 번역하여 함께 저장합니다.' })}
                             onTouchEnd={onLongPressEnd}
                             className={cn(
-                              "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all border",
-                              isSyncEnabled 
-                                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
-                                : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
+                              'mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
+                              isSyncEnabled
+                                ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange'
+                                : 'border-white/10 bg-white/[0.04] text-white/60'
                             )}
                           >
                             {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
@@ -2046,7 +2110,7 @@ ${song.prompt || ''}`.trim();
                         )}
                       </div>
                       {!isEditing && (
-                        <button 
+                        <button
                           onClick={() => copyToClipboard(selectedSong.lyrics.korean, 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 버전 가사를 복사합니다.' })}
                           onMouseLeave={() => {
@@ -2055,31 +2119,31 @@ ${song.prompt || ''}`.trim();
                           }}
                           onTouchStart={() => onLongPressStart({ id: 'copy-lyrics-ko', label: '한글 가사 복사', description: '한글 버전 가사를 복사합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange"
                         >
-                          {copiedType === 'lyrics-korean' ? <Check className="w-8 h-8 text-brand-orange" /> : <Copy className="w-8 h-8" />}
+                          {copiedType === 'lyrics-korean' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                         </button>
                       )}
                     </div>
+
                     {isEditing ? (
-                      <textarea 
+                      <textarea
                         value={editedKoreanLyrics}
                         onChange={(e) => setEditedKoreanLyrics(e.target.value)}
-                        className="w-full h-48 bg-[var(--input-bg)] border border-brand-orange/30 rounded-xl p-4 text-[var(--text-primary)] text-sm focus:outline-none custom-scrollbar"
+                        className="custom-scrollbar h-[320px] w-full rounded-2xl border border-brand-orange/25 bg-white/[0.04] p-4 text-sm leading-7 text-white outline-none transition-all focus:border-brand-orange/45 focus:bg-white/[0.06]"
                       />
                     ) : (
-                      <p 
-                        className="text-base text-[var(--text-primary)] leading-6 whitespace-pre-wrap font-normal"
-                        style={{ fontFamily: 'Arial, sans-serif' }}
-                      >
+                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
                         {selectedSong.lyrics.korean}
-                      </p>
+                      </div>
                     )}
-                  </div>
-                  <div className="pt-8 border-t border-[var(--border-color)]">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">영어버전 Lyrics</h3>
+                  </section>
+
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics en</div>
+                        <h4 className="mt-1 text-xl font-bold text-white">영문 가사</h4>
                         {isEditing && (
                           <button
                             onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -2091,10 +2155,10 @@ ${song.prompt || ''}`.trim();
                             onTouchStart={() => onLongPressStart({ id: 'sync-info-en', label: '한/영 연동', description: 'ON 상태에서 저장하면, 마지막으로 수정한 언어를 기준으로 반대 언어 가사를 자동 번역하여 함께 저장합니다.' })}
                             onTouchEnd={onLongPressEnd}
                             className={cn(
-                              "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all border",
-                              isSyncEnabled 
-                                ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30" 
-                                : "bg-[var(--hover-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
+                              'mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
+                              isSyncEnabled
+                                ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange'
+                                : 'border-white/10 bg-white/[0.04] text-white/60'
                             )}
                           >
                             {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
@@ -2103,7 +2167,7 @@ ${song.prompt || ''}`.trim();
                         )}
                       </div>
                       {!isEditing && (
-                        <button 
+                        <button
                           onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-english')}
                           onMouseEnter={() => onHover({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 버전 가사를 복사합니다.' })}
                           onMouseLeave={() => {
@@ -2112,35 +2176,35 @@ ${song.prompt || ''}`.trim();
                           }}
                           onTouchStart={() => onLongPressStart({ id: 'copy-lyrics-en', label: '영어 가사 복사', description: '영어 버전 가사를 복사합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange"
                         >
-                          {copiedType === 'lyrics-english' ? <Check className="w-8 h-8 text-brand-orange" /> : <Copy className="w-8 h-8" />}
+                          {copiedType === 'lyrics-english' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                         </button>
                       )}
                     </div>
+
                     {isEditing ? (
-                      <textarea 
+                      <textarea
                         value={editedEnglishLyrics}
                         onChange={(e) => setEditedEnglishLyrics(e.target.value)}
-                        className="w-full h-48 bg-[var(--input-bg)] border border-brand-orange/30 rounded-xl p-4 text-[var(--text-secondary)] text-sm focus:outline-none italic custom-scrollbar"
+                        className="custom-scrollbar h-[320px] w-full rounded-2xl border border-brand-orange/25 bg-white/[0.04] p-4 text-sm leading-7 text-white/78 italic outline-none transition-all focus:border-brand-orange/45 focus:bg-white/[0.06]"
                       />
                     ) : (
-                      <p 
-                        className="text-base text-[var(--text-secondary)] leading-6 whitespace-pre-wrap font-normal"
-                        style={{ fontFamily: 'Arial, sans-serif' }}
-                      >
+                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
                         {selectedSong.lyrics.english}
-                      </p>
+                      </div>
                     )}
-                  </div>
+                  </section>
                 </div>
 
-                {/* Prompt */}
-                <div className="pt-8 border-t border-[var(--border-color)]">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-brand-orange font-bold text-[18px] uppercase tracking-widest">곡 프롬프트 Prompt</h3>
+                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">prompt</div>
+                      <h4 className="mt-1 text-xl font-bold text-white">곡 프롬프트</h4>
+                    </div>
                     {!isEditing && (
-                      <button 
+                      <button
                         onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}
                         onMouseEnter={() => onHover({ id: 'copy-prompt', label: '프롬프트 복사', description: '곡 생성 프롬프트를 복사합니다.' })}
                         onMouseLeave={() => {
@@ -2149,18 +2213,16 @@ ${song.prompt || ''}`.trim();
                         }}
                         onTouchStart={() => onLongPressStart({ id: 'copy-prompt', label: '프롬프트 복사', description: '곡 생성 프롬프트를 복사합니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="p-1.5 rounded-lg hover:bg-[var(--hover-bg)] text-[var(--text-secondary)] transition-colors"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:border-brand-orange/30 hover:bg-brand-orange/10 hover:text-brand-orange"
                       >
-                        {copiedType === 'prompt' ? <Check className="w-8 h-8 text-brand-orange" /> : <Copy className="w-8 h-8" />}
+                        {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
                     )}
                   </div>
-                  <div className="bg-[var(--input-bg)] rounded-2xl p-4 border border-[var(--border-color)]">
-                    <p className="text-xs text-[var(--text-secondary)] font-sans leading-relaxed">
-                      {selectedSong.prompt}
-                    </p>
+                  <div className="rounded-2xl border border-white/8 bg-black/15 p-4 md:p-5">
+                    <p className="text-sm leading-7 text-white/68">{selectedSong.prompt || '프롬프트 정보가 없습니다.'}</p>
                   </div>
-                </div>
+                </section>
               </div>
             </motion.div>
           </div>

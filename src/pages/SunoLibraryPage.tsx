@@ -3487,15 +3487,15 @@ export default function SunoLibraryPage() {
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                <div className="flex gap-[5px] items-end justify-center w-8 h-8 text-brand-orange shrink-0">
-                  <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] opacity-80" />
-                  <div className="w-[6px] h-[26px] border-[2px] border-current rounded-[3px]" />
-                  <div className="w-[6px] h-[22px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
+                <div className="flex gap-[5px] items-end justify-center w-9 h-9 text-brand-orange shrink-0">
+                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
+                  <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
+                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
                 </div>
                 {isSharedView ? '공유된 음악' : <>Suno <span className="text-brand-orange">Library</span></>}
               </h1>
-              <p className="text-sm text-[var(--text-secondary)] mt-1">
+              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">
                 {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Suno API로 생성한 곡을 조회하고 재생합니다.'}
               </p>
             </div>
@@ -3723,7 +3723,7 @@ export default function SunoLibraryPage() {
                       return (
                         <div 
                           key={`${group.id}-${idx}`} 
-                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${isCurrent ? 'bg-brand-orange/5' : ''} ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {
@@ -3952,7 +3952,7 @@ export default function SunoLibraryPage() {
               const isFallback = (activePlaylist as any).isFallback;
               
               return (
-                <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border border-white/5 rounded-2xl mb-4 mt-6 shadow-sm">
+                <div className="mx-2 flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border border-white/5 rounded-2xl mb-4 mt-6 shadow-sm">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-white/40 mb-1">
                       {activePlaylistSection === 'normal' ? '선택된 플레이리스트' : '선택된 공유 플레이리스트'}
@@ -4125,9 +4125,7 @@ export default function SunoLibraryPage() {
                       onClick={() => {
                         if (multiSelectMode) toggleSelectedTrack(selection);
                       }}
-                      className={`group relative flex items-center p-2 rounded-2xl transition-all border ${
-                        isSelected ? 'border-brand-orange/50 bg-brand-orange/10' : isActive ? 'bg-brand-orange/10 border-brand-orange/30' : 'border-transparent hover:bg-white/5 hover:border-white/10'
-                      } ${isUnavailable ? 'opacity-50 grayscale' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
+                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${isUnavailable ? 'opacity-50 grayscale' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}
                       <AnimatedTrackPlayButton

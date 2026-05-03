@@ -1785,9 +1785,10 @@ function App() {
   }, []);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
-    const isPC = window.innerWidth >= 1024;
-    if (isPC) {
-      const nextState = !isGenreExpanded;
+    const shouldSyncMainSections = window.innerWidth >= 768;
+    if (shouldSyncMainSections) {
+      const currentSectionExpanded = section === 'genre' ? isGenreExpanded : section === 'style' ? isStyleExpanded : isSoundExpanded;
+      const nextState = !currentSectionExpanded;
       setIsGenreExpanded(nextState);
       setIsStyleExpanded(nextState);
       setIsSoundExpanded(nextState);
@@ -4346,7 +4347,7 @@ ${result.prompt}
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+                forcedHeight={window.innerWidth >= 768 ? row1MaxHeight : undefined}
                 onModalStateChange={setIsGenreHierarchyModalOpen}
               />
           <CycleSection 
@@ -4366,7 +4367,7 @@ ${result.prompt}
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
-            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+            forcedHeight={window.innerWidth >= 768 ? row1MaxHeight : undefined}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -4385,7 +4386,7 @@ ${result.prompt}
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
-            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+            forcedHeight={window.innerWidth >= 768 ? row1MaxHeight : undefined}
           />
         </div>
 

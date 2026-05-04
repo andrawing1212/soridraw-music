@@ -1725,21 +1725,28 @@ ${song.prompt}
 
                     <div className="flex items-center gap-2 shrink-0">
                       {song.isLocked && (
-                        <span className="absolute right-[72px] top-3 inline-flex h-7 w-7 items-center justify-center text-brand-orange md:static md:h-10 md:w-10" title="잠김">
+                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-brand-orange" title="잠김">
                           <Lock className="w-4 h-4" />
                         </span>
                       )}
 
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedSong(song);
-                        }}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xs font-black text-white/85 transition-all hover:bg-white/10 hover:text-white md:w-auto md:px-5 md:font-bold"
-                      >
-                        <span className="md:hidden">E</span>
-                        <span className="hidden md:inline">Edit</span>
-                      </button>
+                      <div className="relative shrink-0">
+                        {song.isLocked && (
+                          <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-20 inline-flex h-5 w-5 items-center justify-center text-brand-orange md:hidden" title="잠김">
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        )}
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedSong(song);
+                          }}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xs font-black text-white/85 transition-all hover:bg-white/10 hover:text-white md:w-auto md:px-5 md:font-bold"
+                        >
+                          <span className="md:hidden">E</span>
+                          <span className="hidden md:inline">Edit</span>
+                        </button>
+                      </div>
 <div className="relative">
                         <button
                           onClick={(event) => {

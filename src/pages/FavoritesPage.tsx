@@ -1496,7 +1496,7 @@ ${song.prompt}
               <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-brand-orange shrink-0" />
               <span>Music <span className="text-brand-orange">Note</span></span>
             </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1 md:ml-[52px]">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
           </div>
         </div>
 

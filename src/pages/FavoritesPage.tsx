@@ -205,6 +205,8 @@ export default function FavoritesPage({
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
+  const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
+  const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSyncEnabled, setIsSyncEnabled] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -489,6 +491,17 @@ export default function FavoritesPage({
     return FAVORITE_COLOR_OPTIONS.find(c => c.value === saved)?.color || '#6b7280';
   };
 
+  const showFavoriteToast = (message: string) => {
+    if (favoriteToastTimerRef.current) {
+      clearTimeout(favoriteToastTimerRef.current);
+    }
+    setFavoriteToastMessage(message);
+    favoriteToastTimerRef.current = setTimeout(() => {
+      setFavoriteToastMessage(null);
+      favoriteToastTimerRef.current = null;
+    }, 2200);
+  };
+
   const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
   const getFavoriteColorSyncCount = () => {
@@ -520,12 +533,12 @@ export default function FavoritesPage({
 
   const handleSyncFavoriteColors = async () => {
     if (!user) {
-      window.alert('로그인이 필요합니다.');
+      showFavoriteToast('로그인이 필요합니다.');
       return;
     }
     const count = getFavoriteColorSyncCount();
     if (count >= 5) {
-      window.alert('오늘 색상 동기화 횟수를 모두 사용했습니다. 내일 다시 동기화됩니다.');
+      showFavoriteToast('오늘 색상 동기화 횟수를 모두 사용했습니다. 내일 다시 동기화됩니다.');
       return;
     }
 
@@ -539,7 +552,7 @@ export default function FavoritesPage({
     const playlistEntries = Object.entries(playlistMap);
 
     if (favoriteEntries.length === 0 && workspaceEntries.length === 0 && playlistEntries.length === 0) {
-      window.alert('동기화할 색상 변경 내역이 없습니다.');
+      showFavoriteToast('동기화할 색상 변경 내역이 없습니다.');
       return;
     }
 
@@ -562,12 +575,20 @@ export default function FavoritesPage({
       }
 
       markFavoriteColorSynced();
-      window.alert(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${Math.max(0, 5 - getFavoriteColorSyncCount())}회`);
+      showFavoriteToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${Math.max(0, 5 - getFavoriteColorSyncCount())}회`);
     } catch (error) {
       console.error('unified color sync failed', error);
-      window.alert('색상 동기화에 실패했습니다.');
+      showFavoriteToast('색상 동기화에 실패했습니다.');
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (favoriteToastTimerRef.current) {
+        clearTimeout(favoriteToastTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -1719,12 +1740,6 @@ ${song.prompt}
         }
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
-        .favorite-hide-scrollbar {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-          -webkit-overflow-scrolling: touch;
-        }
-        .favorite-hide-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
       <div className="mb-8 md:mb-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1791,7 +1806,7 @@ ${song.prompt}
             </div>
           </div>
 
-          <div className="inline-flex w-fit max-w-full h-[46px] items-center gap-1.5 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto favorite-hide-scrollbar">
+          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
             <button
               onClick={() => setFavoriteColorFilter('all')}
               className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
@@ -1843,8 +1858,6 @@ ${song.prompt}
           </div>
         </div>
       </div>
-
-      <div className="my-6 h-px w-full bg-white/[0.06]" />
 
       {favorites.length === 0 ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">
@@ -2107,6 +2120,23 @@ ${song.prompt}
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {favoriteToastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 14, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 14, scale: 0.96 }}
+            transition={{ duration: 0.16 }}
+            className="fixed bottom-6 left-1/2 z-[160] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+          >
+            <span className="inline-flex items-center gap-2 whitespace-pre-line">
+              <Check className="h-4 w-4 text-brand-orange" />
+              {favoriteToastMessage}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Lyrics Modal */}
       <AnimatePresence>

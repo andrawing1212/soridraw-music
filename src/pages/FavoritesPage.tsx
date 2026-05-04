@@ -42,7 +42,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 
@@ -457,6 +457,8 @@ export default function FavoritesPage({
   const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
   const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
   const [, setFavoriteColorSyncTick] = useState(0);
+  const [isFavoriteAdminUser, setIsFavoriteAdminUser] = useState(false);
+  const lastFavoriteServerColorMapRef = useRef<Record<string, string>>({});
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -470,6 +472,25 @@ export default function FavoritesPage({
     "장르나 키워드로 검색해보세요...",
     "분위기로 검색해보세요..."
   ];
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAdminRole = async () => {
+      if (!user?.uid) {
+        if (!cancelled) setIsFavoriteAdminUser(false);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (!cancelled) setIsFavoriteAdminUser(snap.exists() && snap.data()?.role === 'admin');
+      } catch (error) {
+        console.warn('favorite admin role check failed', error);
+        if (!cancelled) setIsFavoriteAdminUser(false);
+      }
+    };
+    loadAdminRole();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
 
   const FAVORITE_COLOR_OPTIONS = [
@@ -514,11 +535,15 @@ export default function FavoritesPage({
     }
   };
   const markFavoriteColorSynced = () => {
+    if (isFavoriteAdminUser) {
+      setFavoriteColorSyncTick((v) => v + 1);
+      return;
+    }
     const next = Math.min(5, getFavoriteColorSyncCount() + 1);
     localStorage.setItem(COLOR_SYNC_USAGE_KEY, JSON.stringify({ date: getColorSyncDateKey(), count: next }));
     setFavoriteColorSyncTick((v) => v + 1);
   };
-  const favoriteColorSyncRemaining = Math.max(0, 5 - getFavoriteColorSyncCount());
+  const favoriteColorSyncRemaining = isFavoriteAdminUser ? 5 : Math.max(0, 5 - getFavoriteColorSyncCount());
   const readLocalColorMap = (key: string): Record<string, string> => {
     try {
       const raw = localStorage.getItem(key);
@@ -529,7 +554,7 @@ export default function FavoritesPage({
   };
   const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
 보관함과 라이브러리 색상이 함께 저장됩니다.
-오늘 남은 횟수: ${favoriteColorSyncRemaining}회`;
+오늘 남은 횟수: ${isFavoriteAdminUser ? '무제한' : `${favoriteColorSyncRemaining}회`}`;
 
   const handleSyncFavoriteColors = async () => {
     if (!user) {
@@ -537,7 +562,7 @@ export default function FavoritesPage({
       return;
     }
     const count = getFavoriteColorSyncCount();
-    if (count >= 5) {
+    if (!isFavoriteAdminUser && count >= 5) {
       showFavoriteToast('오늘 색상 동기화 횟수를 모두 사용했습니다. 내일 다시 동기화됩니다.');
       return;
     }
@@ -575,7 +600,7 @@ export default function FavoritesPage({
       }
 
       markFavoriteColorSynced();
-      showFavoriteToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${Math.max(0, 5 - getFavoriteColorSyncCount())}회`);
+      showFavoriteToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isFavoriteAdminUser ? '무제한' : `${Math.max(0, 5 - getFavoriteColorSyncCount())}회`}`);
     } catch (error) {
       console.error('unified color sync failed', error);
       showFavoriteToast('색상 동기화에 실패했습니다.');
@@ -611,6 +636,55 @@ export default function FavoritesPage({
       console.warn('favorite color map save failed', error);
     }
   }, [favoriteColorMap]);
+
+  useEffect(() => {
+    const serverMap: Record<string, string> = {};
+    for (const song of favorites || []) {
+      if (!song?.id) continue;
+      const rawColor = song.favoriteColorTag || song.colorTag || null;
+      if (rawColor && rawColor !== 'gray') serverMap[song.id] = rawColor;
+    }
+
+    const previous = lastFavoriteServerColorMapRef.current || {};
+    const allIds = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
+    if (allIds.size === 0) {
+      lastFavoriteServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    let changed = false;
+    setFavoriteColorMap((prev) => {
+      const next = { ...prev };
+      for (const id of allIds) {
+        const before = previous[id] || 'gray';
+        const current = serverMap[id] || 'gray';
+        if (before !== current) {
+          changed = true;
+          if (current === 'gray') delete next[id];
+          else next[id] = current;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    if (changed) {
+      try {
+        const merged = { ...readLocalColorMap('soridraw.favoriteColorTags') };
+        for (const id of allIds) {
+          const before = previous[id] || 'gray';
+          const current = serverMap[id] || 'gray';
+          if (before !== current) {
+            if (current === 'gray') delete merged[id];
+            else merged[id] = current;
+          }
+        }
+        localStorage.setItem('soridraw.favoriteColorTags', JSON.stringify(merged));
+      } catch (error) {
+        console.warn('favorite server color merge failed', error);
+      }
+    }
+    lastFavoriteServerColorMapRef.current = serverMap;
+  }, [favorites]);
 
   useEffect(() => {
     const closeMenus = () => {
@@ -1726,7 +1800,7 @@ ${song.prompt}
           scrollbar-width: none;
           -ms-overflow-style: none;
           -webkit-overflow-scrolling: touch;
-          touch-action: pan-x;
+          touch-action: pan-x pan-y;
           cursor: grab;
         }
         .favorite-keyword-strip:active { cursor: grabbing; }
@@ -1761,7 +1835,7 @@ ${song.prompt}
               title={getUnifiedColorSyncDescription()}
             >
               <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">동기화 : {favoriteColorSyncRemaining}/5</span>
+              <span className="hidden sm:inline">동기화 : {isFavoriteAdminUser ? '무제한' : `${favoriteColorSyncRemaining}/5`}</span>
             </button>
           </div>
         </div>
@@ -1806,7 +1880,7 @@ ${song.prompt}
             </div>
           </div>
 
-          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
+          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
             <button
               onClick={() => setFavoriteColorFilter('all')}
               className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
@@ -1990,7 +2064,6 @@ ${song.prompt}
                               document.addEventListener('mousemove', onMove);
                               document.addEventListener('mouseup', onUp);
                             }}
-                            onTouchStart={(event) => event.stopPropagation()}
                             onClick={(event) => event.stopPropagation()}
                           >
                             {mobileTitleText}

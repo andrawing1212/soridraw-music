@@ -218,6 +218,7 @@ export default function SunoLibraryPage() {
   const [selectedNormalPlaylistId, setSelectedNormalPlaylistId] = useState<string | null>(null);
   const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
   const [activePlaylistSection, setActivePlaylistSection] = useState<'normal' | 'shared'>('normal');
+  const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
@@ -227,12 +228,34 @@ export default function SunoLibraryPage() {
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
   const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
   const [, setLibraryColorSyncTick] = useState(0);
+  const [isLibraryAdminUser, setIsLibraryAdminUser] = useState(false);
+  const lastWorkspaceServerColorMapRef = React.useRef<Record<string, string>>({});
+  const lastPlaylistServerColorMapRef = React.useRef<Record<string, string>>({});
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
   const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
   const [shareCreatorNameMap, setShareCreatorNameMap] = useState<Record<string, string>>({});
   const [sharedPlayedMap, setSharedPlayedMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAdminRole = async () => {
+      if (!user?.uid) {
+        if (!cancelled) setIsLibraryAdminUser(false);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (!cancelled) setIsLibraryAdminUser(snap.exists() && snap.data()?.role === 'admin');
+      } catch (error) {
+        console.warn('library admin role check failed', error);
+        if (!cancelled) setIsLibraryAdminUser(false);
+      }
+    };
+    loadAdminRole();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   useEffect(() => {
     try {
@@ -272,6 +295,112 @@ export default function SunoLibraryPage() {
       console.warn('save playlist color map failed:', error);
     }
   }, [playlistLocalColorMap]);
+
+  useEffect(() => {
+    const serverMap: Record<string, string> = {};
+    for (const track of tracks || []) {
+      const trackId = track?.id || track?.trackId;
+      if (!trackId) continue;
+      for (const colorField of ['colorTags', 'favoriteColorTags']) {
+        const source = track?.[colorField] || {};
+        Object.entries(source).forEach(([idx, color]) => {
+          if (color && color !== 'gray') {
+            serverMap[`workspace:${colorField}:${trackId}:${idx}`] = String(color);
+          }
+        });
+      }
+    }
+
+    const previous = lastWorkspaceServerColorMapRef.current || {};
+    const allKeys = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
+    if (allKeys.size === 0) {
+      lastWorkspaceServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    let changed = false;
+    setWorkspaceLocalColorMap((prev) => {
+      const next = { ...prev };
+      for (const key of allKeys) {
+        const before = previous[key] || 'gray';
+        const current = serverMap[key] || 'gray';
+        if (before !== current) {
+          changed = true;
+          if (current === 'gray') delete next[key];
+          else next[key] = current;
+        }
+      }
+      return changed ? next : prev;
+    });
+    if (changed) {
+      try {
+        const merged = { ...readLocalColorMap('soridraw.library.workspaceColorTags') };
+        for (const key of allKeys) {
+          const before = previous[key] || 'gray';
+          const current = serverMap[key] || 'gray';
+          if (before !== current) {
+            if (current === 'gray') delete merged[key];
+            else merged[key] = current;
+          }
+        }
+        localStorage.setItem('soridraw.library.workspaceColorTags', JSON.stringify(merged));
+      } catch (error) {
+        console.warn('workspace server color merge failed:', error);
+      }
+    }
+    lastWorkspaceServerColorMapRef.current = serverMap;
+  }, [tracks]);
+
+  useEffect(() => {
+    const serverMap: Record<string, string> = {};
+    for (const item of playlistItems || []) {
+      const playlistId = (item as any)?.playlistId || activePlaylistId || 'unknown';
+      const itemId = (item as any)?.id || 'unknown';
+      const color = (item as any)?.colorTag;
+      if (playlistId !== 'unknown' && itemId !== 'unknown' && color && color !== 'gray') {
+        serverMap[`playlist:${playlistId}:${itemId}`] = String(color);
+      }
+    }
+
+    const previous = lastPlaylistServerColorMapRef.current || {};
+    const allKeys = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
+    if (allKeys.size === 0) {
+      lastPlaylistServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    let changed = false;
+    setPlaylistLocalColorMap((prev) => {
+      const next = { ...prev };
+      for (const key of allKeys) {
+        const before = previous[key] || 'gray';
+        const current = serverMap[key] || 'gray';
+        if (before !== current) {
+          changed = true;
+          if (current === 'gray') delete next[key];
+          else next[key] = current;
+        }
+      }
+      return changed ? next : prev;
+    });
+    if (changed) {
+      try {
+        const merged = { ...readLocalColorMap('soridraw.library.playlistColorTags') };
+        for (const key of allKeys) {
+          const before = previous[key] || 'gray';
+          const current = serverMap[key] || 'gray';
+          if (before !== current) {
+            if (current === 'gray') delete merged[key];
+            else merged[key] = current;
+          }
+        }
+        localStorage.setItem('soridraw.library.playlistColorTags', JSON.stringify(merged));
+      } catch (error) {
+        console.warn('playlist server color merge failed:', error);
+      }
+    }
+    lastPlaylistServerColorMapRef.current = serverMap;
+  }, [playlistItems, activePlaylistId]);
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
@@ -730,8 +859,6 @@ export default function SunoLibraryPage() {
     }
   };
 
-  const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
-
   useEffect(() => {
     if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || !activePlaylistId) {
       setPlaylistItems([]);
@@ -972,11 +1099,15 @@ export default function SunoLibraryPage() {
     }
   };
   const markLibraryColorSynced = () => {
+    if (isLibraryAdminUser) {
+      setLibraryColorSyncTick((v) => v + 1);
+      return;
+    }
     const next = Math.min(5, getLibraryColorSyncCount() + 1);
     localStorage.setItem(COLOR_SYNC_USAGE_KEY, JSON.stringify({ date: getColorSyncDateKey(), count: next }));
     setLibraryColorSyncTick((v) => v + 1);
   };
-  const libraryColorSyncRemaining = Math.max(0, 5 - getLibraryColorSyncCount());
+  const libraryColorSyncRemaining = isLibraryAdminUser ? 5 : Math.max(0, 5 - getLibraryColorSyncCount());
   const readLocalColorMap = (key: string): Record<string, string> => {
     try {
       const raw = localStorage.getItem(key);
@@ -987,7 +1118,7 @@ export default function SunoLibraryPage() {
   };
   const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
 보관함과 라이브러리 색상이 함께 저장됩니다.
-오늘 남은 횟수: ${libraryColorSyncRemaining}회`;
+오늘 남은 횟수: ${isLibraryAdminUser ? '무제한' : `${libraryColorSyncRemaining}회`}`;
 
   const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
     if (!activePlaylistId || !item.id) return;
@@ -1057,7 +1188,7 @@ export default function SunoLibraryPage() {
       return;
     }
     const count = getLibraryColorSyncCount();
-    if (count >= 5) {
+    if (!isLibraryAdminUser && count >= 5) {
       showToast('오늘 색상 동기화 횟수를 모두 사용했습니다.');
       return;
     }
@@ -1101,7 +1232,7 @@ export default function SunoLibraryPage() {
       }
 
       markLibraryColorSynced();
-      showToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${Math.max(0, 5 - getLibraryColorSyncCount())}회`);
+      showToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isLibraryAdminUser ? '무제한' : `${Math.max(0, 5 - getLibraryColorSyncCount())}회`}`);
     } catch (error) {
       console.error('unified color sync failed:', error);
       showToast('색상 동기화에 실패했습니다.');
@@ -3772,7 +3903,7 @@ export default function SunoLibraryPage() {
                 title={getUnifiedColorSyncDescription()}
               >
                 <RefreshCw className="w-4 h-4" />
-                동기화 : {libraryColorSyncRemaining}/5
+                동기화 : {isLibraryAdminUser ? '무제한' : `${libraryColorSyncRemaining}/5`}
               </button>
             </>
           )}

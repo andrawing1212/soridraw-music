@@ -3312,7 +3312,7 @@ export default function SunoLibraryPage() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
+      className="min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest('[data-floating-menu="true"]')) return;
@@ -3904,7 +3904,7 @@ export default function SunoLibraryPage() {
                             </button>
                           )}
                           
-                          <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
+                          <div className="flex-1 min-w-0 max-w-full overflow-hidden pr-2 flex items-center gap-3 relative">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3939,8 +3939,8 @@ export default function SunoLibraryPage() {
                                 ))}
                               </div>
                             )}
-                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              <span className="block md:hidden overflow-x-auto whitespace-nowrap max-w-full touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                                 {getTitle(item, group, idx)}
                               </span>
                               <span className="hidden md:block truncate">
@@ -4382,8 +4382,8 @@ export default function SunoLibraryPage() {
                       )}
 
                       {/* Main Info */}
-                      <div className="flex flex-col ml-3 flex-1 min-w-0">
-                        <div className="flex items-center gap-2 relative">
+                      <div className="flex flex-col ml-3 flex-1 min-w-0 max-w-full overflow-hidden">
+                        <div className="flex items-center gap-2 relative min-w-0 max-w-full overflow-hidden">
                           {/* Color Point */}
                           <button 
                             onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); setBulkMenuState(null); }}
@@ -4419,8 +4419,8 @@ export default function SunoLibraryPage() {
                             </div>
                           )}
                           
-                          <h3 className={`text-sm font-bold min-w-0 flex-1 ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            <span className="block md:hidden overflow-x-auto whitespace-nowrap max-w-full touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-brand-orange' : 'text-white'}`}>
+                            <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                               {formatSunoDisplayTitle(item.title)}
                             </span>
                             <span className="hidden md:block truncate">

@@ -205,6 +205,7 @@ export default function FavoritesPage({
   const popupOpenedRef = useRef(false);
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null>(null);
+  const [foreignTargetLanguage, setForeignTargetLanguage] = useState<string>('English');
   const [editedTitle, setEditedTitle] = useState('');
   const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
   const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
@@ -431,7 +432,7 @@ export default function FavoritesPage({
   const [confirmToggleLock, setConfirmToggleLock] = useState(false);
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
   const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean; activeEditSection: 'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null; foreignTargetLanguage?: string }>>({});
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -555,14 +556,17 @@ export default function FavoritesPage({
         setEditedEnglishLyrics(draft.english);
         setEditedPrompt(draft.prompt);
         setIsEditing(draft.isEditing);
+        setActiveEditSection(draft.activeEditSection ?? null);
+        setForeignTargetLanguage(draft.foreignTargetLanguage || inferForeignLyricTargetLanguage(draft.english || selectedSong.lyrics.english));
       } else {
         setEditedTitle(selectedSong.title);
         setEditedKoreanLyrics(selectedSong.lyrics.korean);
         setEditedEnglishLyrics(selectedSong.lyrics.english);
         setEditedPrompt(selectedSong.prompt || '');
         setIsEditing(false);
+        setActiveEditSection(null);
+        setForeignTargetLanguage(inferForeignLyricTargetLanguage(selectedSong.lyrics.english));
       }
-      setActiveEditSection(null);
       setIsSyncEnabled(false);
     } else {
       setOriginalLyricsKo('');
@@ -571,6 +575,7 @@ export default function FavoritesPage({
       setOriginalPrompt('');
       popupOpenedRef.current = false;
       setActiveEditSection(null);
+      setForeignTargetLanguage('English');
       setIsSyncEnabled(false);
     }
   }, [selectedSong]);
@@ -585,11 +590,13 @@ export default function FavoritesPage({
           korean: editedKoreanLyrics,
           english: editedEnglishLyrics,
           prompt: editedPrompt,
-          isEditing: isEditing
+          isEditing: isEditing,
+          activeEditSection,
+          foreignTargetLanguage
         }
       }));
     }
-  }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, editedPrompt, isEditing, selectedSong]);
+  }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, editedPrompt, isEditing, activeEditSection, foreignTargetLanguage, selectedSong]);
 
   const handleSave = async () => {
     if (!selectedSong) return;
@@ -603,15 +610,15 @@ export default function FavoritesPage({
         const koreanChanged = editedKoreanLyrics !== selectedSong.lyrics.korean;
         const englishChanged = editedEnglishLyrics !== selectedSong.lyrics.english;
 
-        const foreignTargetLanguage = inferForeignLyricTargetLanguage(selectedSong.lyrics.english);
+        const targetLanguage = foreignTargetLanguage || inferForeignLyricTargetLanguage(selectedSong.lyrics.english);
 
         if (koreanChanged && !englishChanged) {
-          finalEnglish = await translateLyrics(editedKoreanLyrics, foreignTargetLanguage);
+          finalEnglish = await translateLyrics(editedKoreanLyrics, targetLanguage);
         } else if (englishChanged && !koreanChanged) {
           finalKorean = await translateLyrics(editedEnglishLyrics, 'Korean');
         } else if (koreanChanged && englishChanged) {
-          // Both changed, prioritize Korean for translation into the existing foreign lyric language.
-          finalEnglish = await translateLyrics(editedKoreanLyrics, foreignTargetLanguage);
+          // Both changed, prioritize Korean for translation into the selected foreign lyric language.
+          finalEnglish = await translateLyrics(editedKoreanLyrics, targetLanguage);
         }
       } catch (error) {
         console.error("Translation failed:", error);
@@ -1194,11 +1201,25 @@ ${song.prompt}
     if (isSelectionMode) exitSelectionMode();
   };
 
+
+  const getFavoriteFullShareText = (song: any): string => {
+    const sections = resolveKeywordsForDisplay(song)
+      .map(section => `${section.title}: ${section.items.map(item => item.label).join(', ')}`)
+      .filter(Boolean)
+      .join('\n');
+
+    return [
+      `제목: ${getCombinedFavoriteTitle(song)}`,
+      sections ? `\n[키워드]\n${sections}` : '',
+      song?.lyrics?.korean ? `\n[한글 가사]\n${song.lyrics.korean}` : '',
+      song?.lyrics?.english ? `\n[외국어 가사]\n${song.lyrics.english}` : '',
+      song?.prompt ? `\n[프롬프트]\n${song.prompt}` : ''
+    ].filter(Boolean).join('\n');
+  };
+
   const shareFavoriteSong = async (song: any) => {
     const title = getCombinedFavoriteTitle(song);
-    const text = `${title}
-
-${song.prompt || ''}`.trim();
+    const text = getFavoriteFullShareText(song);
     try {
       if (navigator.share) {
         await navigator.share({ title: `SORIDRAW - ${title}`, text });
@@ -1217,7 +1238,7 @@ ${song.prompt || ''}`.trim();
     const targets = favorites.filter(song => selectedSongIds.includes(song.id));
     if (targets.length === 0) return;
 
-    const text = targets.map((song, index) => `${index + 1}. ${getCombinedFavoriteTitle(song)}`).join('\n');
+    const text = targets.map((song, index) => `--- ${index + 1}. ${getCombinedFavoriteTitle(song)} ---\n${getFavoriteFullShareText(song)}`).join('\n\n');
     try {
       if (navigator.share) {
         await navigator.share({
@@ -1684,8 +1705,6 @@ ${song.prompt || ''}`.trim();
                                 <button onClick={() => executeFavoriteMenuAction('lockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
                                 <button onClick={() => executeFavoriteMenuAction('unlockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('shareSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
-                                <button onClick={() => executeFavoriteMenuAction('favoriteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Star className="w-4 h-4" />즐겨찾기</button>
-                                <button onClick={() => executeFavoriteMenuAction('unfavoriteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />즐겨찾기 해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('folderSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('deleteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />선택 삭제</button>
                               </>
@@ -1700,7 +1719,6 @@ ${song.prompt || ''}`.trim();
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
-                                <button onClick={() => executeFavoriteMenuAction('favorite', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />즐겨찾기 해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
                               </>
@@ -1768,9 +1786,10 @@ ${song.prompt || ''}`.trim();
               <div className="relative flex-1 overflow-y-auto overscroll-contain custom-scrollbar px-4 py-4 md:px-8 md:py-7 space-y-5" style={{ overscrollBehavior: 'contain' }}>
                 <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-5 py-5 md:px-7 md:py-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="inline-flex items-center rounded-full border border-brand-orange/20 bg-brand-orange/8 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.34em] text-brand-orange/90">
-                      TITLE / 제목
-                    </span>
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-brand-orange/90">title</div>
+                      <h4 className="mt-1 text-2xl font-bold text-white">제목</h4>
+                    </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => copyToClipboard(getCombinedFavoriteCopyText(selectedSong), 'title-all')}
@@ -1908,8 +1927,8 @@ ${song.prompt || ''}`.trim();
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">info set</div>
-                      <h4 className="mt-1 text-[22px] font-bold text-white">곡 키워드 & 스타일 · 핵심정보</h4>
-                      <p className="mt-1 text-sm text-white/45">한 세트로 묶어 확인할 수 있도록 구성했습니다.</p>
+                      <h4 className="mt-1 text-[22px] font-bold text-white">키워드</h4>
+                      <p className="mt-1 text-sm text-white/45">곡의 키워드와 핵심 정보를 확인합니다.</p>
                     </div>
                     <button
                       onClick={() => setIsInfoExpanded((prev) => !prev)}
@@ -2042,16 +2061,34 @@ ${song.prompt || ''}`.trim();
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics ko</div>
                         <h4 className="mt-1 text-xl font-bold text-white">한글 가사</h4>
                         {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
-                          <button
-                            onClick={() => setIsSyncEnabled(!isSyncEnabled)}
-                            className={cn(
-                              'mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
-                              isSyncEnabled ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-white/[0.04] text-white/60'
+                          <div className="mt-3 space-y-2">
+                            <button
+                              onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                              className={cn(
+                                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
+                                isSyncEnabled ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-white/[0.04] text-white/60'
+                              )}
+                            >
+                              {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
+                              한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
+                            </button>
+                            {isSyncEnabled && (
+                              <select
+                                value={foreignTargetLanguage}
+                                onChange={(e) => setForeignTargetLanguage(e.target.value)}
+                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-brand-orange/30"
+                              >
+                                <option value="English">영어</option>
+                                <option value="Japanese">일본어</option>
+                                <option value="Chinese">중국어</option>
+                                <option value="Spanish">스페인어</option>
+                                <option value="French">프랑스어</option>
+                                <option value="German">독일어</option>
+                                <option value="Russian">러시아어</option>
+                                <option value="Thai">태국어</option>
+                              </select>
                             )}
-                          >
-                            {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
-                            한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
-                          </button>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -2113,16 +2150,34 @@ ${song.prompt || ''}`.trim();
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics foreign</div>
                         <h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4>
                         {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
-                          <button
-                            onClick={() => setIsSyncEnabled(!isSyncEnabled)}
-                            className={cn(
-                              'mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
-                              isSyncEnabled ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-white/[0.04] text-white/60'
+                          <div className="mt-3 space-y-2">
+                            <button
+                              onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                              className={cn(
+                                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
+                                isSyncEnabled ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-white/[0.04] text-white/60'
+                              )}
+                            >
+                              {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
+                              한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
+                            </button>
+                            {isSyncEnabled && (
+                              <select
+                                value={foreignTargetLanguage}
+                                onChange={(e) => setForeignTargetLanguage(e.target.value)}
+                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-brand-orange/30"
+                              >
+                                <option value="English">영어</option>
+                                <option value="Japanese">일본어</option>
+                                <option value="Chinese">중국어</option>
+                                <option value="Spanish">스페인어</option>
+                                <option value="French">프랑스어</option>
+                                <option value="German">독일어</option>
+                                <option value="Russian">러시아어</option>
+                                <option value="Thai">태국어</option>
+                              </select>
                             )}
-                          >
-                            {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
-                            한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
-                          </button>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-2">

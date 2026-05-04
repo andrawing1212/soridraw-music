@@ -1601,6 +1601,11 @@ ${song.prompt}
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id);
               const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
+              const mobileGenreLabel = getDisplaySubGenre(song);
+              const mobileTitles = getNormalizedTitles(song);
+              const mobileTitleText = mobileTitles.korean && mobileTitles.english
+                ? `${mobileTitles.korean} | ${mobileTitles.english}`
+                : mobileTitles.korean || mobileTitles.english || 'Untitled';
 
               return (
                 <motion.div
@@ -1668,16 +1673,24 @@ ${song.prompt}
                       </div>
                     )}
 
-                    <div className="-ml-1 flex h-12 w-7 shrink-0 items-center justify-center text-brand-orange md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
+                    <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-brand-orange md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
                       <Music className="w-5 h-5" />
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
-                        <h3 className="text-sm md:text-base font-bold text-white truncate">
+                    <div className="flex-1 min-w-0 pr-12 md:pr-0">
+                      <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2">
+                        <div className="md:hidden min-w-0 leading-tight">
+                          <div className="text-sm font-extrabold text-white truncate">
+                            {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
+                          </div>
+                          <div className="mt-0.5 text-sm font-bold text-white/92 truncate">
+                            {mobileTitleText}
+                          </div>
+                        </div>
+                        <h3 className="hidden md:block text-base font-bold text-white truncate">
                           {getCombinedFavoriteTitle(song)}
                         </h3>
-                        <span className="text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
+                        <span className="hidden md:inline text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
                       <div
                         className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
@@ -1707,10 +1720,14 @@ ${song.prompt}
 
                     <div className="flex items-center gap-2 shrink-0">
                       {song.isLocked && (
-                        <span className="absolute right-12 top-3 inline-flex h-8 w-8 items-center justify-center text-brand-orange md:static md:h-10 md:w-10" title="잠김">
+                        <span className="absolute right-4 top-3 inline-flex h-7 w-7 items-center justify-center text-brand-orange md:static md:h-10 md:w-10" title="잠김">
                           <Lock className="w-4 h-4" />
                         </span>
                       )}
+
+                      <span className="absolute right-12 bottom-4 text-[10px] font-semibold text-white/35 md:hidden">
+                        {getRelativeTime(song.createdAtMs || song.createdAt)}
+                      </span>
 
                       <button
                         onClick={(event) => {

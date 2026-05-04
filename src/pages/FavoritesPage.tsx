@@ -450,6 +450,7 @@ export default function FavoritesPage({
   const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
   const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
   const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
+  const [, setFavoriteColorSyncTick] = useState(0);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -475,9 +476,56 @@ export default function FavoritesPage({
     { value: 'purple', color: '#a855f7', label: '보라' },
   ];
 
-  const getFavoriteColorHex = (songId: string) => {
-    const saved = favoriteColorMap[songId] || 'gray';
+  const getFavoriteColorValue = (song: any): string => {
+    return favoriteColorMap[song?.id] || song?.favoriteColorTag || song?.colorTag || 'gray';
+  };
+
+  const getFavoriteColorHex = (songId: string, song?: any) => {
+    const saved = song ? getFavoriteColorValue(song) : (favoriteColorMap[songId] || 'gray');
     return FAVORITE_COLOR_OPTIONS.find(c => c.value === saved)?.color || '#6b7280';
+  };
+
+  const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
+  const getFavoriteColorSyncCount = () => {
+    try {
+      const raw = localStorage.getItem('soridraw.favoriteColorSyncUsage');
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed?.date === getColorSyncDateKey() ? Number(parsed?.count || 0) : 0;
+    } catch {
+      return 0;
+    }
+  };
+  const markFavoriteColorSynced = () => {
+    const next = Math.min(5, getFavoriteColorSyncCount() + 1);
+    localStorage.setItem('soridraw.favoriteColorSyncUsage', JSON.stringify({ date: getColorSyncDateKey(), count: next }));
+    setFavoriteColorSyncTick((v) => v + 1);
+  };
+  const favoriteColorSyncRemaining = 5 - getFavoriteColorSyncCount();
+
+  const handleSyncFavoriteColors = async () => {
+    if (!user) {
+      window.alert('로그인이 필요합니다.');
+      return;
+    }
+    const count = getFavoriteColorSyncCount();
+    if (count >= 5) {
+      window.alert('오늘 색상 동기화 횟수를 모두 사용했습니다. 내일 다시 동기화됩니다.');
+      return;
+    }
+    const existingIds = new Set(favorites.map(song => song.id));
+    const entries = Object.entries(favoriteColorMap).filter(([id]) => existingIds.has(id));
+    if (entries.length === 0) {
+      window.alert('동기화할 색상 변경 내역이 없습니다.');
+      return;
+    }
+    try {
+      await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
+      markFavoriteColorSynced();
+      window.alert(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${Math.max(0, 5 - getFavoriteColorSyncCount())}회`);
+    } catch (error) {
+      console.error('favorite color sync failed', error);
+      window.alert('색상 동기화에 실패했습니다.');
+    }
   };
 
   useEffect(() => {
@@ -1559,7 +1607,7 @@ ${song.prompt}
       getSongStyleValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
       getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesColor = favoriteColorFilter === 'all' || (favoriteColorMap[song.id] || 'gray') === favoriteColorFilter;
+    const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
     return matchesSearch && matchesColor;
   }).sort((a, b) => {
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
@@ -1701,6 +1749,14 @@ ${song.prompt}
             ))}
           </div>
 
+          <button
+            onClick={handleSyncFavoriteColors}
+            className="h-[46px] px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all shrink-0"
+            title={`색상 설정을 Firebase에 동기화합니다. 오늘 남은 횟수: ${favoriteColorSyncRemaining}회`}
+          >
+            색상 동기화 {favoriteColorSyncRemaining}/5
+          </button>
+
           <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
             {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
               <button
@@ -1741,7 +1797,7 @@ ${song.prompt}
           <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
-              const colorHex = getFavoriteColorHex(song.id);
+              const colorHex = getFavoriteColorHex(song.id, song);
               const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
               const mobileGenreLabel = getDisplaySubGenre(song);
               const mobileTitles = getNormalizedTitles(song);

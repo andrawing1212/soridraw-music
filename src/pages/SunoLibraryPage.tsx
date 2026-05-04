@@ -3674,6 +3674,17 @@ export default function SunoLibraryPage() {
           34%, 68% { opacity: 1; transform: scale(1); }
           78%, 100% { opacity: 0; transform: scale(0.82); }
         }
+
+        .suno-mobile-title-strip {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          -webkit-overflow-scrolling: touch;
+          touch-action: pan-x pan-y;
+          overscroll-behavior-x: contain;
+          cursor: grab;
+        }
+        .suno-mobile-title-strip:active { cursor: grabbing; }
+        .suno-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
       <AnimatePresence>
         {renameModalArgs && (
@@ -4231,7 +4242,7 @@ export default function SunoLibraryPage() {
                               </div>
                             )}
                             <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                              <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
                                 {getTitle(item, group, idx)}
                               </span>
                               <span className="hidden md:block truncate">
@@ -4720,7 +4731,7 @@ export default function SunoLibraryPage() {
                           )}
                           
                           <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                            <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
                               {formatSunoDisplayTitle(item.title)}
                             </span>
                             <span className="hidden md:block truncate">

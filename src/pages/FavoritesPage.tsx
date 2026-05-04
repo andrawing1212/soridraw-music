@@ -1809,7 +1809,7 @@ ${song.prompt}
           scrollbar-width: none;
           -ms-overflow-style: none;
           -webkit-overflow-scrolling: touch;
-          touch-action: pan-x;
+          touch-action: pan-x pan-y;
           cursor: grab;
         }
         .favorite-mobile-title-strip:active { cursor: grabbing; }

@@ -3322,7 +3322,7 @@ export default function SunoLibraryPage() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
+      className="min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest('[data-floating-menu="true"]')) return;
@@ -3961,8 +3961,13 @@ export default function SunoLibraryPage() {
                                 ))}
                               </div>
                             )}
-                            <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              {getTitle(item, group, idx)}
+                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                                {getTitle(item, group, idx)}
+                              </span>
+                              <span className="hidden md:block truncate">
+                                {getTitle(item, group, idx)}
+                              </span>
                             </h4>
                             {isFailed ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
@@ -4436,8 +4441,13 @@ export default function SunoLibraryPage() {
                             </div>
                           )}
                           
-                          <h3 className={`text-sm font-bold truncate ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            {formatSunoDisplayTitle(item.title)}
+                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-brand-orange' : 'text-white'}`}>
+                            <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
+                            <span className="hidden md:block truncate">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
                           </h3>
                         </div>
                         

@@ -3940,7 +3940,7 @@ export default function SunoLibraryPage() {
                               </div>
                             )}
                             <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              <span className="block md:hidden overflow-x-auto whitespace-nowrap hide-scrollbar max-w-full touch-pan-x overscroll-x-contain">
+                              <span className="block md:hidden overflow-x-auto whitespace-nowrap max-w-full touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                                 {getTitle(item, group, idx)}
                               </span>
                               <span className="hidden md:block truncate">
@@ -4420,7 +4420,7 @@ export default function SunoLibraryPage() {
                           )}
                           
                           <h3 className={`text-sm font-bold min-w-0 flex-1 ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            <span className="block md:hidden overflow-x-auto whitespace-nowrap hide-scrollbar max-w-full touch-pan-x overscroll-x-contain">
+                            <span className="block md:hidden overflow-x-auto whitespace-nowrap max-w-full touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                               {formatSunoDisplayTitle(item.title)}
                             </span>
                             <span className="hidden md:block truncate">

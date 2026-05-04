@@ -32,6 +32,27 @@ const fallbackSharedPlaylists: Playlist[] = [
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 const WORKSPACE_PAGE_SIZE = 10;
+const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
+
+const getSharedPlayedKeys = (item: any): string[] => {
+  const rawKeys = [
+    item?.id,
+    item?.sourceId,
+    item?.trackId,
+    item?.originalTrackId,
+    item?.parentTrackId,
+    item?.audioUrl,
+    item?.streamAudioUrl,
+    item?.audio_url,
+    item?.title ? `title:${item.title}` : ''
+  ];
+
+  return Array.from(new Set(
+    rawKeys
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value).trim())
+  ));
+};
 
 const COLOR_OPTIONS = [
   { value: 'gray', color: '#6b7280', label: '회색' },
@@ -158,6 +179,19 @@ export default function SunoLibraryPage() {
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
   const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
   const [shareCreatorNameMap, setShareCreatorNameMap] = useState<Record<string, string>>({});
+  const [sharedPlayedMap, setSharedPlayedMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SHARED_PLAYED_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') setSharedPlayedMap(parsed);
+      }
+    } catch (error) {
+      console.warn('load shared playlist played map failed:', error);
+    }
+  }, []);
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
@@ -1136,6 +1170,37 @@ export default function SunoLibraryPage() {
     target?.played === true
   );
 
+  const isSharedPlaylistItem = (item: any) => Boolean(
+    item?.sourceType === 'shared_track' ||
+    libraryViewMode === 'sharedPlaylist' ||
+    activePlaylistSection === 'shared'
+  );
+
+  const isSharedPlaylistItemPlayedLocal = (item: any) => {
+    const keys = getSharedPlayedKeys(item);
+    return keys.some((key) => Boolean(sharedPlayedMap[key]));
+  };
+
+  const markSharedPlaylistItemPlayedLocal = (item: any, playedAt: string) => {
+    const keys = getSharedPlayedKeys(item);
+    if (keys.length === 0) return;
+
+    setSharedPlayedMap((prev) => {
+      const next = { ...prev };
+      keys.forEach((key) => {
+        next[key] = playedAt;
+      });
+
+      try {
+        localStorage.setItem(SHARED_PLAYED_STORAGE_KEY, JSON.stringify(next));
+      } catch (error) {
+        console.warn('save shared playlist played map failed:', error);
+      }
+
+      return next;
+    });
+  };
+
   const isWorkspaceItemUnplayed = (group: any, item: any, idx: number) => {
     const audioUrl = getAudioUrl(item, group);
     const duration = getDuration(item, group);
@@ -1185,6 +1250,9 @@ export default function SunoLibraryPage() {
   const isPlaylistItemUnplayed = (item: any) => {
     if (!item?.audioUrl && !item?.streamAudioUrl && !item?.audio_url) return false;
     if (formatPlaylistDuration(item.duration) === '--:--') return false;
+
+    if (isSharedPlaylistItem(item) && isSharedPlaylistItemPlayedLocal(item)) return false;
+
     const sourceTrack = getPlaylistItemSourceTrack(item);
     const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
     const sourceItems = sourceTrack ? extractSunoData(sourceTrack) : [];
@@ -1196,6 +1264,10 @@ export default function SunoLibraryPage() {
     if (!user || !item) return;
     const playedAt = new Date().toISOString();
     const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
+
+    if (isSharedPlaylistItem(item)) {
+      markSharedPlaylistItemPlayedLocal(item, playedAt);
+    }
 
     setPlaylistItems((prev) => prev.map((playlistItem: any) => playlistItem.id === item.id ? { ...playlistItem, playedAt, hasPlayed: true } : playlistItem));
 

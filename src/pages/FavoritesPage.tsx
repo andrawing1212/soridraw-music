@@ -1719,6 +1719,12 @@ ${song.prompt}
         }
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
+        .favorite-hide-scrollbar {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          -webkit-overflow-scrolling: touch;
+        }
+        .favorite-hide-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
       <div className="mb-8 md:mb-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -1785,7 +1791,7 @@ ${song.prompt}
             </div>
           </div>
 
-          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
+          <div className="inline-flex w-fit max-w-full h-[46px] items-center gap-1.5 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto favorite-hide-scrollbar">
             <button
               onClick={() => setFavoriteColorFilter('all')}
               className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
@@ -1837,6 +1843,8 @@ ${song.prompt}
           </div>
         </div>
       </div>
+
+      <div className="my-6 h-px w-full bg-white/[0.06]" />
 
       {favorites.length === 0 ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">

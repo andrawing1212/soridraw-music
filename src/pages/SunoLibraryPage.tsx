@@ -3590,7 +3590,7 @@ export default function SunoLibraryPage() {
                   }}
                 />
               </div>
-              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/5">
+              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/[0.06]">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
                 <button className="px-4 py-2 font-bold bg-brand-orange text-white rounded-xl hover:bg-brand-orange/90 transition-colors" onClick={async () => {
                   if (!user || (renameModalArgs.playlist as any).isFallback) return;
@@ -3674,7 +3674,7 @@ export default function SunoLibraryPage() {
                   ));
                 })()}
               </div>
-              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/5 shrink-0">
+              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/[0.06] shrink-0">
                 <button className="px-4 py-2 font-bold bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors" onClick={() => setMoveModalArgs(null)}>닫기</button>
               </div>
             </motion.div>
@@ -3910,6 +3910,8 @@ export default function SunoLibraryPage() {
             </div>
           </div>
         )}
+
+        {!isSharedView && <div className="h-px w-full bg-white/[0.06]" />}
 
         {loading || sharedTrackLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -4375,11 +4377,11 @@ export default function SunoLibraryPage() {
 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
-              <div className="flex justify-center p-8 mt-2 border-t border-white/5">
+              <div className="flex justify-center p-8 mt-2 border-t border-white/[0.06]">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-orange" />
               </div>
             ) : playlistItems.length > 0 ? (
-              <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
+              <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/[0.06]">
                 {(() => {
                   const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
@@ -4753,7 +4755,7 @@ export default function SunoLibraryPage() {
                 })})()}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center border-t border-white/5 mt-4">
+              <div className="flex flex-col items-center justify-center py-16 text-center border-t border-white/[0.06] mt-4">
                 <Music className="w-12 h-12 text-brand-orange/40 mb-4" />
                 <h2 className="text-xl font-bold mb-2">
                   {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}
@@ -4815,7 +4817,7 @@ export default function SunoLibraryPage() {
                   </button>
                   
                   {canManageSharePrivacy(sharePopupInfo) && (
-                    <div className="pt-4 border-t border-white/5">
+                    <div className="pt-4 border-t border-white/[0.06]">
                       <div className="text-[10px] text-white/30 mb-3 font-bold uppercase tracking-widest text-center">공개 범위 설정</div>
                       <div className="flex gap-2">
                         {[

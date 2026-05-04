@@ -1488,6 +1488,15 @@ ${song.prompt}
         }
         .favorite-keyword-strip:active { cursor: grabbing; }
         .favorite-keyword-strip::-webkit-scrollbar { display: none; }
+        .favorite-mobile-title-strip {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          -webkit-overflow-scrolling: touch;
+          touch-action: pan-x;
+          cursor: grab;
+        }
+        .favorite-mobile-title-strip:active { cursor: grabbing; }
+        .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
       <div className="mb-8 md:mb-10">
         <div className="flex flex-col gap-6 mb-8">
@@ -1683,7 +1692,38 @@ ${song.prompt}
                           <div className="text-sm font-extrabold text-white truncate">
                             {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
                           </div>
-                          <div className="mt-0.5 text-[15px] font-bold text-white/92 truncate">
+                          <div
+                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-178px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[15px] font-bold text-white/92 md:max-w-none"
+                            onMouseDown={(event) => {
+                              event.stopPropagation();
+                              const target = event.currentTarget;
+                              const startX = event.pageX;
+                              const startScrollLeft = target.scrollLeft;
+                              let moved = false;
+
+                              const onMove = (moveEvent: MouseEvent) => {
+                                const deltaX = moveEvent.pageX - startX;
+                                if (Math.abs(deltaX) > 3) moved = true;
+                                target.scrollLeft = startScrollLeft - deltaX;
+                              };
+
+                              const onUp = () => {
+                                if (moved) {
+                                  longPressTriggeredRef.current = true;
+                                  window.setTimeout(() => {
+                                    longPressTriggeredRef.current = false;
+                                  }, 0);
+                                }
+                                document.removeEventListener('mousemove', onMove);
+                                document.removeEventListener('mouseup', onUp);
+                              };
+
+                              document.addEventListener('mousemove', onMove);
+                              document.addEventListener('mouseup', onUp);
+                            }}
+                            onTouchStart={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             {mobileTitleText}
                           </div>
                         </div>

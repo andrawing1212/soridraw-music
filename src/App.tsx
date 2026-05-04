@@ -4889,7 +4889,7 @@ ${result.prompt}
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
                         const primaryClass = hasAddedLyricsLanguage ? 'text-amber-500' : (isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]');
-                        const secondaryClass = hasAddedLyricsLanguage ? 'text-amber-400/95' : (isRecent ? 'text-yellow-400/95' : 'text-[var(--text-primary)]/70');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#ffb000]' : (isRecent ? 'text-[#ffb000]' : 'text-[#ffb000]/90');
 
                         if (lines.length >= 2) {
                           return (

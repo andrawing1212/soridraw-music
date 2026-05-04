@@ -101,6 +101,14 @@ const formatSunoDisplayTitle = (rawTitle: any): string => {
   return `${genre ? `[${genre}] ` : ''}'${cleanSunoTitlePart(body) || 'Untitled'}'`;
 };
 
+const splitSunoTitleForMobileHeader = (rawTitle: any): { genre: string; title: string } => {
+  const formatted = formatSunoDisplayTitle(rawTitle);
+  const genreMatch = formatted.match(/^\[([^\]]+)\]\s*/);
+  const genre = genreMatch?.[1]?.trim() || '';
+  const title = (genreMatch ? formatted.slice(genreMatch[0].length) : formatted).trim() || 'Untitled';
+  return { genre: genre ? `[${genre}]` : '', title };
+};
+
 
 function AnimatedTrackPlayButton({
   imageUrl,
@@ -3790,6 +3798,7 @@ export default function SunoLibraryPage() {
                 .map((item: any, idx: number) => ({ item, idx }))
                 .filter(({ item, idx }: { item: any; idx: number }) => isWorkspaceItemVisible(group, item, idx));
               const dateStr = formatCreatedAt(group.createdAt);
+              const groupTitleParts = splitSunoTitleForMobileHeader(group.title || 'Untitled Generation');
               
               return (
                 <motion.div
@@ -3804,8 +3813,14 @@ export default function SunoLibraryPage() {
                       <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-orange">
                         <Music className="w-5 h-5" />
                       </div>
-                      <div>
-                        <h3 className="font-bold leading-tight">{group.title || 'Untitled Generation'}</h3>
+                      <div className="min-w-0">
+                        <h3 className="hidden md:block font-bold leading-tight truncate">{group.title || 'Untitled Generation'}</h3>
+                        <div className="md:hidden min-w-0 leading-tight">
+                          {groupTitleParts.genre && (
+                            <div className="text-sm font-extrabold text-white truncate">{groupTitleParts.genre}</div>
+                          )}
+                          <div className="text-sm font-bold text-white/95 truncate">{groupTitleParts.title}</div>
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5 opacity-40 text-[10px]">
                           <span>{dateStr}</span>
                           <span>•</span>
@@ -3924,8 +3939,13 @@ export default function SunoLibraryPage() {
                                 ))}
                               </div>
                             )}
-                            <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              {getTitle(item, group, idx)}
+                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              <span className="block md:hidden overflow-x-auto whitespace-nowrap hide-scrollbar max-w-full touch-pan-x overscroll-x-contain">
+                                {getTitle(item, group, idx)}
+                              </span>
+                              <span className="hidden md:block truncate">
+                                {getTitle(item, group, idx)}
+                              </span>
                             </h4>
                             {isFailed ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
@@ -4399,8 +4419,13 @@ export default function SunoLibraryPage() {
                             </div>
                           )}
                           
-                          <h3 className={`text-sm font-bold truncate ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            {formatSunoDisplayTitle(item.title)}
+                          <h3 className={`text-sm font-bold min-w-0 flex-1 ${isActive ? 'text-brand-orange' : 'text-white'}`}>
+                            <span className="block md:hidden overflow-x-auto whitespace-nowrap hide-scrollbar max-w-full touch-pan-x overscroll-x-contain">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
+                            <span className="hidden md:block truncate">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
                           </h3>
                         </div>
                         

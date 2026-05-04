@@ -196,7 +196,7 @@ export default function FavoritesPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [showSortPopup, setShowSortPopup] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(9);
+  const [visibleCount, setVisibleCount] = useState(15);
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
@@ -1365,18 +1365,18 @@ ${song.prompt}
 
   const renderFavoriteKeywordChips = (song: any) => {
     const entries = [
-      ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value, className: 'bg-white/[0.08] text-white/55' })),
-      ...getSongMoodValues(song).map((value: string) => ({ type: 'mood', value, className: 'bg-white/[0.08] text-white/55' })),
-      ...getSongThemeValues(song).map((value: string) => ({ type: 'theme', value, className: 'bg-emerald-500/10 text-emerald-400' })),
-      ...getSongStyleValues(song).map((value: string) => ({ type: 'style', value, className: 'bg-brand-orange/10 text-brand-orange' })),
-      ...getSongInstrumentSoundValues(song).map((value: string) => ({ type: 'sound', value, className: 'bg-sky-500/10 text-sky-400' })),
+      ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value })),
+      ...getSongMoodValues(song).map((value: string) => ({ type: 'mood', value })),
+      ...getSongThemeValues(song).map((value: string) => ({ type: 'theme', value })),
+      ...getSongStyleValues(song).map((value: string) => ({ type: 'style', value })),
+      ...getSongInstrumentSoundValues(song).map((value: string) => ({ type: 'sound', value })),
     ];
 
     if (song.appliedKeywords?.vocalType) {
-      entries.push({ type: 'vocal', value: song.appliedKeywords.vocalType, className: 'bg-white/[0.08] text-white/55' });
+      entries.push({ type: 'vocal', value: song.appliedKeywords.vocalType });
     }
 
-    return entries.slice(0, 5).map((entry) => {
+    return entries.map((entry) => {
       const meta = getKeywordMeta(entry.value);
       return (
         <span
@@ -1391,7 +1391,7 @@ ${song.prompt}
               _ts: Date.now(),
             });
           }}
-          className={`text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer hover:opacity-80 ${entry.className}`}
+          className="text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer border border-white/8 bg-white/[0.075] text-white/58 transition-colors hover:text-white/78"
         >
           #{meta?.labelKo || entry.value}
         </span>
@@ -1467,18 +1467,12 @@ ${song.prompt}
         .favorite-keyword-strip {
           scrollbar-width: none;
           -ms-overflow-style: none;
+          -webkit-overflow-scrolling: touch;
+          touch-action: pan-x;
+          cursor: grab;
         }
+        .favorite-keyword-strip:active { cursor: grabbing; }
         .favorite-keyword-strip::-webkit-scrollbar { display: none; }
-        .favorite-keyword-strip::after {
-          content: '';
-          position: sticky;
-          right: 0;
-          align-self: stretch;
-          width: 28px;
-          min-width: 28px;
-          pointer-events: none;
-          background: linear-gradient(90deg, rgba(26,26,26,0), rgba(26,26,26,0.95));
-        }
       `}</style>
       <div className="mb-8 md:mb-10">
         <div className="flex flex-col gap-6 mb-8">
@@ -1670,7 +1664,28 @@ ${song.prompt}
                         </h3>
                         <span className="text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
-                      <div className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-8">
+                      <div
+                        className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
+                        onMouseDown={(event) => {
+                          event.stopPropagation();
+                          const target = event.currentTarget;
+                          const startX = event.pageX;
+                          const startScrollLeft = target.scrollLeft;
+
+                          const onMove = (moveEvent: MouseEvent) => {
+                            target.scrollLeft = startScrollLeft - (moveEvent.pageX - startX);
+                          };
+
+                          const onUp = () => {
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                          };
+
+                          document.addEventListener('mousemove', onMove);
+                          document.addEventListener('mouseup', onUp);
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         {renderFavoriteKeywordChips(song)}
                       </div>
                     </div>
@@ -1743,8 +1758,8 @@ ${song.prompt}
           {visibleCount < filteredFavorites.length && (
             <div className="flex justify-center pt-8">
               <button
-                onClick={() => setVisibleCount(prev => prev + 9)}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 9개 더 불러옵니다.' })}
+                onClick={() => setVisibleCount(prev => prev + 15)}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 15개 더 불러옵니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
               >

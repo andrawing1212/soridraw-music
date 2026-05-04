@@ -1668,7 +1668,7 @@ ${song.prompt}
                       </div>
                     )}
 
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-brand-orange shrink-0">
+                    <div className="-ml-1 flex h-12 w-7 shrink-0 items-center justify-center text-brand-orange md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
                       <Music className="w-5 h-5" />
                     </div>
 
@@ -1707,7 +1707,7 @@ ${song.prompt}
 
                     <div className="flex items-center gap-2 shrink-0">
                       {song.isLocked && (
-                        <span className="inline-flex h-10 w-10 items-center justify-center text-brand-orange" title="잠김">
+                        <span className="absolute right-12 top-3 inline-flex h-8 w-8 items-center justify-center text-brand-orange md:static md:h-10 md:w-10" title="잠김">
                           <Lock className="w-4 h-4" />
                         </span>
                       )}
@@ -1717,9 +1717,10 @@ ${song.prompt}
                           event.stopPropagation();
                           setSelectedSong(song);
                         }}
-                        className="hidden md:inline-flex h-10 px-5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold items-center justify-center transition-all"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xs font-black text-white/85 transition-all hover:bg-white/10 hover:text-white md:w-auto md:px-5 md:font-bold"
                       >
-                        Edit
+                        <span className="md:hidden">E</span>
+                        <span className="hidden md:inline">Edit</span>
                       </button>
 <div className="relative">
                         <button

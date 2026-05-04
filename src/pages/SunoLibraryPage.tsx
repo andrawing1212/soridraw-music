@@ -960,10 +960,11 @@ export default function SunoLibraryPage() {
   const getWorkspaceColorKey = (group: any, idx: number, colorField = getWorkspaceColorField()) => `workspace:${colorField}:${group?.id || group?.trackId || 'unknown'}:${idx}`;
   const getPlaylistColorKey = (playlistId: string | null, itemId?: string | null) => `playlist:${playlistId || 'unknown'}:${itemId || 'unknown'}`;
 
+  const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
   const getLibraryColorSyncCount = () => {
     try {
-      const raw = localStorage.getItem('soridraw.libraryColorSyncUsage');
+      const raw = localStorage.getItem(COLOR_SYNC_USAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed?.date === getColorSyncDateKey() ? Number(parsed?.count || 0) : 0;
     } catch {
@@ -972,10 +973,21 @@ export default function SunoLibraryPage() {
   };
   const markLibraryColorSynced = () => {
     const next = Math.min(5, getLibraryColorSyncCount() + 1);
-    localStorage.setItem('soridraw.libraryColorSyncUsage', JSON.stringify({ date: getColorSyncDateKey(), count: next }));
+    localStorage.setItem(COLOR_SYNC_USAGE_KEY, JSON.stringify({ date: getColorSyncDateKey(), count: next }));
     setLibraryColorSyncTick((v) => v + 1);
   };
-  const libraryColorSyncRemaining = 5 - getLibraryColorSyncCount();
+  const libraryColorSyncRemaining = Math.max(0, 5 - getLibraryColorSyncCount());
+  const readLocalColorMap = (key: string): Record<string, string> => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+  const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
+보관함과 라이브러리 색상이 함께 저장됩니다.
+오늘 남은 횟수: ${libraryColorSyncRemaining}회`;
 
   const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
     if (!activePlaylistId || !item.id) return;
@@ -1050,14 +1062,28 @@ export default function SunoLibraryPage() {
       return;
     }
 
-    const workspaceEntries = Object.entries(workspaceLocalColorMap);
-    const playlistEntries = Object.entries(playlistLocalColorMap);
-    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {
+    const favoriteMap = readLocalColorMap('soridraw.favoriteColorTags');
+    const workspaceMap = { ...readLocalColorMap('soridraw.library.workspaceColorTags'), ...workspaceLocalColorMap };
+    const playlistMap = { ...readLocalColorMap('soridraw.library.playlistColorTags'), ...playlistLocalColorMap };
+
+    const favoriteEntries = Object.entries(favoriteMap);
+    const workspaceEntries = Object.entries(workspaceMap);
+    const playlistEntries = Object.entries(playlistMap);
+
+    if (favoriteEntries.length === 0 && workspaceEntries.length === 0 && playlistEntries.length === 0) {
       showToast('동기화할 색상 변경 내역이 없습니다.');
       return;
     }
 
     try {
+      for (const [id, color] of favoriteEntries) {
+        if (!id) continue;
+        await updateDoc(doc(db, 'favorites', id), {
+          favoriteColorTag: color === 'gray' ? null : color,
+          updatedAt: serverTimestamp()
+        });
+      }
+
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
@@ -1077,7 +1103,7 @@ export default function SunoLibraryPage() {
       markLibraryColorSynced();
       showToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${Math.max(0, 5 - getLibraryColorSyncCount())}회`);
     } catch (error) {
-      console.error('library color sync failed:', error);
+      console.error('unified color sync failed:', error);
       showToast('색상 동기화에 실패했습니다.');
     }
   };
@@ -3731,13 +3757,24 @@ export default function SunoLibraryPage() {
           </div>
           <div className="flex gap-2 items-center self-end md:self-center">
           {!isSharedView && (
-            <button
-              onClick={() => navigate('/suno-api-settings')}
-              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
-            >
-              <Settings className="w-4 h-4" />
-              API 설정
-            </button>
+            <>
+              <button
+                onClick={() => navigate('/suno-api-settings')}
+                className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all"
+                title="Music API 설정"
+              >
+                <Settings className="w-4 h-4" />
+                API 설정
+              </button>
+              <button
+                onClick={handleSyncLibraryColors}
+                className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all"
+                title={getUnifiedColorSyncDescription()}
+              >
+                <RefreshCw className="w-4 h-4" />
+                동기화 : {libraryColorSyncRemaining}/5
+              </button>
+            </>
           )}
           </div>
         </motion.div>
@@ -3750,13 +3787,16 @@ export default function SunoLibraryPage() {
             <Home className="w-4 h-4" />홈
           </button>
           {!isSharedView && (
-            <button
-              onClick={() => navigate('/suno-api-settings')}
-              className="h-12 flex items-center gap-2 px-4 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
-            >
-              <Settings className="w-4 h-4" />
-              API 설정
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/suno-api-settings')}
+                className="h-12 flex items-center gap-2 px-4 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
+                title="Music API 설정"
+              >
+                <Settings className="w-4 h-4" />
+                API 설정
+              </button>
+            </div>
           )}
         </div>
 
@@ -3846,15 +3886,15 @@ export default function SunoLibraryPage() {
                   <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                 </button>
               ))}
+              <div className="md:hidden w-px h-3 bg-white/10 mx-1"></div>
+              <button
+                onClick={handleSyncLibraryColors}
+                className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-brand-orange transition-all"
+                title={getUnifiedColorSyncDescription()}
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={handleSyncLibraryColors}
-              className="h-[46px] px-4 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 text-xs font-bold text-white/60 hover:text-brand-orange transition-all shrink-0"
-              title={`지정된 색상을 동기화 합니다.\n오늘 남은 횟수: ${libraryColorSyncRemaining}회`}
-            >
-              색상 동기화 {libraryColorSyncRemaining}/5
-            </button>
-
             <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl shrink-0">
               {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
                 <button
@@ -4300,15 +4340,15 @@ export default function SunoLibraryPage() {
                       <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                     </button>
                   ))}
+                  <div className="md:hidden w-px h-3 bg-white/10 mx-1"></div>
+                  <button
+                    onClick={handleSyncLibraryColors}
+                    className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-brand-orange transition-all"
+                    title={getUnifiedColorSyncDescription()}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
                 </div>
-
-                <button
-                  onClick={handleSyncLibraryColors}
-                  className="h-[46px] px-4 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 text-xs font-bold text-white/60 hover:text-brand-orange transition-all shrink-0"
-                  title={`지정된 색상을 동기화 합니다.\n오늘 남은 횟수: ${libraryColorSyncRemaining}회`}
-                >
-                  색상 동기화 {libraryColorSyncRemaining}/5
-                </button>
 
                 {/* Sort Options */}
                 <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-white/5">

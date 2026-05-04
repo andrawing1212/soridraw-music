@@ -1689,7 +1689,7 @@ ${song.prompt}
                         }}
                         className="hidden md:inline-flex h-10 px-5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold items-center justify-center transition-all"
                       >
-                        상세보기
+                        Edit
                       </button>
 <div className="relative">
                         <button
@@ -1785,7 +1785,7 @@ ${song.prompt}
               <div className="relative flex items-center justify-between gap-4 border-b border-white/8 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
                   <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-brand-orange/90">music note detail</div>
-                  <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">상세정보</h3>
+                  <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">디테일 & Edit</h3>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
                   <a
@@ -1972,22 +1972,36 @@ ${song.prompt}
                 </section>
 
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">info set</div>
                       <h4 className="mt-1 text-[22px] font-bold text-white">키워드</h4>
                       <p className="mt-1 text-sm text-white/45">곡의 키워드와 핵심 정보를 확인합니다.</p>
                     </div>
-                    <button
-                      onClick={() => setIsInfoExpanded((prev) => !prev)}
-                      onMouseEnter={() => onHover({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
-                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                    >
-                      {isInfoExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                    </button>
+                    <div className="-mt-1 flex shrink-0 items-center gap-2">
+                      {!isEditing && (
+                        <button
+                          onClick={() => applyKeywordsToNext(selectedSong)}
+                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-orange/20 bg-white/[0.035] text-brand-orange transition-all hover:bg-brand-orange/10 hover:border-brand-orange/35"
+                        >
+                          <RefreshCw className="h-5 w-5 text-brand-orange" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setIsInfoExpanded((prev) => !prev)}
+                        onMouseEnter={() => onHover({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
+                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                        onTouchStart={() => onLongPressStart({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
+                      >
+                        {isInfoExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
 
                   {!isInfoExpanded && (
@@ -2020,25 +2034,20 @@ ${song.prompt}
                                 <h4 className="mt-1 text-xl font-bold text-white">곡 키워드 & 스타일</h4>
                               </div>
                               {!isEditing && (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => applyKeywordsToNext(selectedSong)}
-                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-brand-orange/24 bg-brand-orange/10 px-4 text-[13px] font-semibold text-brand-orange transition-all hover:-translate-y-0.5 hover:bg-brand-orange/14"
-                                  >
-                                    <RefreshCw className="h-3.5 w-3.5" />
-                                    다음 곡에 적용
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const sections = resolveKeywordsForDisplay(selectedSong);
-                                      const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
-                                      copyToClipboard(text, 'keywords');
-                                    }}
-                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                                  >
-                                    {copiedType === 'keywords' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                  </button>
-                                </div>
+                                <button
+                                  onClick={() => {
+                                    const sections = resolveKeywordsForDisplay(selectedSong);
+                                    const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
+                                    copyToClipboard(text, 'keywords');
+                                  }}
+                                  onMouseEnter={() => onHover({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
+                                  onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                                  onTouchStart={() => onLongPressStart({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
+                                  onTouchEnd={onLongPressEnd}
+                                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
+                                >
+                                  {copiedType === 'keywords' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                </button>
                               )}
                             </div>
                             <div className="space-y-4">

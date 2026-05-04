@@ -3850,7 +3850,7 @@ export default function SunoLibraryPage() {
             <button
               onClick={handleSyncLibraryColors}
               className="h-[46px] px-4 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 text-xs font-bold text-white/60 hover:text-brand-orange transition-all shrink-0"
-              title={`색상 설정을 Firebase에 동기화합니다. 오늘 남은 횟수: ${libraryColorSyncRemaining}회`}
+              title={`지정된 색상을 동기화 합니다.\n오늘 남은 횟수: ${libraryColorSyncRemaining}회`}
             >
               색상 동기화 {libraryColorSyncRemaining}/5
             </button>
@@ -4305,7 +4305,7 @@ export default function SunoLibraryPage() {
                 <button
                   onClick={handleSyncLibraryColors}
                   className="h-[46px] px-4 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 text-xs font-bold text-white/60 hover:text-brand-orange transition-all shrink-0"
-                  title={`색상 설정을 Firebase에 동기화합니다. 오늘 남은 횟수: ${libraryColorSyncRemaining}회`}
+                  title={`지정된 색상을 동기화 합니다.\n오늘 남은 횟수: ${libraryColorSyncRemaining}회`}
                 >
                   색상 동기화 {libraryColorSyncRemaining}/5
                 </button>

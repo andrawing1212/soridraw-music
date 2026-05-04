@@ -1677,13 +1677,13 @@ ${song.prompt}
                       <Music className="w-5 h-5" />
                     </div>
 
-                    <div className="flex-1 min-w-0 pr-12 md:pr-0">
+                    <div className="flex-1 min-w-0 pr-1 md:pr-0">
                       <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2">
                         <div className="md:hidden min-w-0 leading-tight">
                           <div className="text-sm font-extrabold text-white truncate">
                             {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
                           </div>
-                          <div className="mt-0.5 text-sm font-bold text-white/92 truncate">
+                          <div className="mt-0.5 text-[15px] font-bold text-white/92 truncate">
                             {mobileTitleText}
                           </div>
                         </div>
@@ -1692,42 +1692,43 @@ ${song.prompt}
                         </h3>
                         <span className="hidden md:inline text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
-                      <div
-                        className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
-                        onMouseDown={(event) => {
-                          event.stopPropagation();
-                          const target = event.currentTarget;
-                          const startX = event.pageX;
-                          const startScrollLeft = target.scrollLeft;
+                      <div className="mt-2 flex items-center gap-2 min-w-0">
+                        <div
+                          className="favorite-keyword-strip relative flex w-full max-w-[calc(100vw-232px)] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
+                          onMouseDown={(event) => {
+                            event.stopPropagation();
+                            const target = event.currentTarget;
+                            const startX = event.pageX;
+                            const startScrollLeft = target.scrollLeft;
 
-                          const onMove = (moveEvent: MouseEvent) => {
-                            target.scrollLeft = startScrollLeft - (moveEvent.pageX - startX);
-                          };
+                            const onMove = (moveEvent: MouseEvent) => {
+                              target.scrollLeft = startScrollLeft - (moveEvent.pageX - startX);
+                            };
 
-                          const onUp = () => {
-                            document.removeEventListener('mousemove', onMove);
-                            document.removeEventListener('mouseup', onUp);
-                          };
+                            const onUp = () => {
+                              document.removeEventListener('mousemove', onMove);
+                              document.removeEventListener('mouseup', onUp);
+                            };
 
-                          document.addEventListener('mousemove', onMove);
-                          document.addEventListener('mouseup', onUp);
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {renderFavoriteKeywordChips(song)}
+                            document.addEventListener('mousemove', onMove);
+                            document.addEventListener('mouseup', onUp);
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {renderFavoriteKeywordChips(song)}
+                        </div>
+                        <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">
+                          {getRelativeTime(song.createdAtMs || song.createdAt)}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
                       {song.isLocked && (
-                        <span className="absolute right-4 top-3 inline-flex h-7 w-7 items-center justify-center text-brand-orange md:static md:h-10 md:w-10" title="잠김">
+                        <span className="absolute right-[72px] top-3 inline-flex h-7 w-7 items-center justify-center text-brand-orange md:static md:h-10 md:w-10" title="잠김">
                           <Lock className="w-4 h-4" />
                         </span>
                       )}
-
-                      <span className="absolute right-12 bottom-4 text-[10px] font-semibold text-white/35 md:hidden">
-                        {getRelativeTime(song.createdAtMs || song.createdAt)}
-                      </span>
 
                       <button
                         onClick={(event) => {

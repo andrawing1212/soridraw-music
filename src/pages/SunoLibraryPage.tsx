@@ -101,12 +101,22 @@ const formatSunoDisplayTitle = (rawTitle: any): string => {
   return `${genre ? `[${genre}] ` : ''}'${cleanSunoTitlePart(body) || 'Untitled'}'`;
 };
 
-const splitSunoTitleForMobileHeader = (rawTitle: any): { genre: string; title: string } => {
+
+type SunoTitleParts = {
+  genre: string;
+  title: string;
+};
+
+const splitSunoDisplayTitleParts = (rawTitle: any): SunoTitleParts => {
   const formatted = formatSunoDisplayTitle(rawTitle);
   const genreMatch = formatted.match(/^\[([^\]]+)\]\s*/);
-  const genre = genreMatch?.[1]?.trim() || '';
-  const title = (genreMatch ? formatted.slice(genreMatch[0].length) : formatted).trim() || 'Untitled';
-  return { genre: genre ? `[${genre}]` : '', title };
+  const genre = genreMatch ? `[${genreMatch[1].trim()}]` : '';
+  const title = genreMatch ? formatted.slice(genreMatch[0].length).trim() : formatted.trim();
+
+  return {
+    genre,
+    title: title || 'Untitled',
+  };
 };
 
 
@@ -3312,7 +3322,7 @@ export default function SunoLibraryPage() {
 
   return (
     <div
-      className="min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
+      className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest('[data-floating-menu="true"]')) return;
@@ -3798,7 +3808,6 @@ export default function SunoLibraryPage() {
                 .map((item: any, idx: number) => ({ item, idx }))
                 .filter(({ item, idx }: { item: any; idx: number }) => isWorkspaceItemVisible(group, item, idx));
               const dateStr = formatCreatedAt(group.createdAt);
-              const groupTitleParts = splitSunoTitleForMobileHeader(group.title || 'Untitled Generation');
               
               return (
                 <motion.div
@@ -3808,39 +3817,52 @@ export default function SunoLibraryPage() {
                   className="bg-[var(--bg-secondary)] border border-white/10 rounded-2xl"
                 >
                   {/* Group Header */}
-                  <div className="px-4 md:px-6 py-4 border-b border-white/5 flex items-center justify-between gap-3 bg-white/[0.02] rounded-t-2xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-orange">
+                  <div className="px-4 md:px-6 py-4 border-b border-white/5 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-white/[0.02] rounded-t-2xl overflow-hidden">
+                    <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-orange shrink-0">
                         <Music className="w-5 h-5" />
                       </div>
-                      <div className="min-w-0">
-                        <h3 className="hidden md:block font-bold leading-tight truncate">{group.title || 'Untitled Generation'}</h3>
-                        <div className="md:hidden min-w-0 leading-tight">
-                          {groupTitleParts.genre && (
-                            <div className="text-sm font-extrabold text-white truncate">{groupTitleParts.genre}</div>
-                          )}
-                          <div className="text-sm font-bold text-white/95 truncate">{groupTitleParts.title}</div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 opacity-40 text-[10px]">
-                          <span>{dateStr}</span>
-                          <span>•</span>
-                          <span>{items.length}곡</span>
+                      <div className="min-w-0 flex-1 pr-1 md:pr-0">
+                        {(() => {
+                          const titleParts = splitSunoDisplayTitleParts(group.title || 'Untitled Generation');
+                          return (
+                            <>
+                              <h3 className="hidden md:block font-bold leading-tight truncate">
+                                {formatSunoDisplayTitle(group.title || 'Untitled Generation')}
+                              </h3>
+                              <div className="md:hidden min-w-0 leading-tight">
+                                {titleParts.genre && (
+                                  <div className="text-sm font-black text-[var(--text-primary)] truncate">
+                                    {titleParts.genre}
+                                  </div>
+                                )}
+                                <div className="mt-0.5 text-sm font-black text-[var(--text-primary)] truncate">
+                                  {titleParts.title}
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                        <div className="flex items-center gap-2 mt-1 opacity-40 text-[10px] min-w-0">
+                          <span className="truncate">{dateStr}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="shrink-0">{items.length}곡</span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2 md:gap-3 flex-nowrap">
+                    <div className="flex shrink-0 items-start md:items-center justify-end gap-1.5 md:gap-3 flex-nowrap max-w-[112px] md:max-w-none">
                       {getStatusBadge(group)}
                       {group.status !== 'completed' && group.status !== 'failed' && (
                         <button
                           onClick={() => checkStatus(group.id, group.taskId)}
                           disabled={statusChecking === group.id || !group.taskId}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
+                          className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
                         >
                           {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                          상태 확인
+                          <span className="hidden sm:inline">상태 확인</span>
                         </button>
                       )}
-                      {!isSharedView && !group.taskId && <span className="text-[10px] opacity-30">Task ID 없음</span>}
+                      {!isSharedView && !group.taskId && <span className="hidden md:inline text-[10px] opacity-30">Task ID 없음</span>}
                     </div>
                   </div>
 
@@ -3904,7 +3926,7 @@ export default function SunoLibraryPage() {
                             </button>
                           )}
                           
-                          <div className="flex-1 min-w-0 max-w-full overflow-hidden pr-2 flex items-center gap-3 relative">
+                          <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -3939,13 +3961,8 @@ export default function SunoLibraryPage() {
                                 ))}
                               </div>
                             )}
-                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                                {getTitle(item, group, idx)}
-                              </span>
-                              <span className="hidden md:block truncate">
-                                {getTitle(item, group, idx)}
-                              </span>
+                            <h4 className={`text-sm md:text-base font-bold truncate transition-colors ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              {getTitle(item, group, idx)}
                             </h4>
                             {isFailed ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
@@ -4382,8 +4399,8 @@ export default function SunoLibraryPage() {
                       )}
 
                       {/* Main Info */}
-                      <div className="flex flex-col ml-3 flex-1 min-w-0 max-w-full overflow-hidden">
-                        <div className="flex items-center gap-2 relative min-w-0 max-w-full overflow-hidden">
+                      <div className="flex flex-col ml-3 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 relative">
                           {/* Color Point */}
                           <button 
                             onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); setBulkMenuState(null); }}
@@ -4419,13 +4436,8 @@ export default function SunoLibraryPage() {
                             </div>
                           )}
                           
-                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            <span className="block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap touch-pan-x overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                              {formatSunoDisplayTitle(item.title)}
-                            </span>
-                            <span className="hidden md:block truncate">
-                              {formatSunoDisplayTitle(item.title)}
-                            </span>
+                          <h3 className={`text-sm font-bold truncate ${isActive ? 'text-brand-orange' : 'text-white'}`}>
+                            {formatSunoDisplayTitle(item.title)}
                           </h3>
                         </div>
                         

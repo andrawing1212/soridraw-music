@@ -3866,7 +3866,7 @@ export default function SunoLibraryPage() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-4 md:space-y-5">
         
         {/* Header Block */}
         <motion.div
@@ -4053,14 +4053,12 @@ export default function SunoLibraryPage() {
           </div>
         )}
 
-        {!isSharedView && <div className="mt-7 border-t border-white/[0.06]" />}
-
         {loading || sharedTrackLoading ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="!mt-2 border-t border-white/[0.06] pt-4 flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
           </div>
         ) : (!user && !isSharedView) ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="!mt-2 border-t border-white/[0.06] pt-4 flex flex-col items-center justify-center py-16 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
@@ -4068,7 +4066,7 @@ export default function SunoLibraryPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
+            className="!mt-2 border-t border-white/[0.06] pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -4081,7 +4079,7 @@ export default function SunoLibraryPage() {
             </p>
           </motion.div>
         ) : (
-          <div className="space-y-6">
+          <div className="!mt-2 border-t border-white/[0.06] pt-4 space-y-4 md:space-y-5">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
@@ -4335,7 +4333,7 @@ export default function SunoLibraryPage() {
         )}
 
         {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
-          <div className="space-y-6 mt-8">
+          <div className="space-y-5 mt-5">
             {/* Playlist Tabs Layout */}
             
             {libraryViewMode === 'playlist' && (
@@ -4519,11 +4517,11 @@ export default function SunoLibraryPage() {
 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
-              <div className="flex justify-center p-8 mt-2 border-t border-white/5">
+              <div className="flex justify-center p-6 mt-3 border-t border-white/5">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-orange" />
               </div>
             ) : playlistItems.length > 0 ? (
-              <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-white/5">
                 {(() => {
                   const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
@@ -4897,7 +4895,7 @@ export default function SunoLibraryPage() {
                 })})()}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center border-t border-white/5 mt-4">
+              <div className="flex flex-col items-center justify-center py-12 text-center border-t border-white/5 mt-3">
                 <Music className="w-12 h-12 text-brand-orange/40 mb-4" />
                 <h2 className="text-xl font-bold mb-2">
                   {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}

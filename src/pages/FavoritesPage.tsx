@@ -1815,7 +1815,7 @@ ${song.prompt}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      <div className="mb-8 md:mb-10">
+      <div className="mb-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
@@ -1932,6 +1932,8 @@ ${song.prompt}
           </div>
         </div>
       </div>
+
+      <div className="my-4 md:my-5 border-t border-white/[0.07]" />
 
       {favorites.length === 0 ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">

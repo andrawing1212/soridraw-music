@@ -868,6 +868,21 @@ export default function FavoritesPage({
     selectionHistoryPushedRef.current = false;
   };
 
+  useEffect(() => {
+    if (!isSelectionMode) return;
+
+    const handleDocumentPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-selection-keep="true"]')) return;
+
+      exitSelectionMode('history');
+    };
+
+    document.addEventListener('pointerdown', handleDocumentPointerDown, true);
+    return () => document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
+  }, [isSelectionMode]);
+
   const closeSelectedSong = (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
 
@@ -1456,11 +1471,11 @@ ${song.prompt}
   return (
     <div 
       className="max-w-6xl mx-auto px-6 pt-24 pb-12 font-sans relative"
-      onClick={(e) => {
-        // If clicking the background (not a card or popup), exit selection mode
-        if (isSelectionMode && e.target === e.currentTarget) {
-          exitSelectionMode();
-        }
+      onClickCapture={(e) => {
+        if (!isSelectionMode) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-selection-keep="true"]')) return;
+        exitSelectionMode('history');
       }}
     >
       <style>{`
@@ -1581,7 +1596,7 @@ ${song.prompt}
         </div>
       ) : (
         <div className="space-y-12">
-          <div className="space-y-4">
+          <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id);
@@ -1665,7 +1680,7 @@ ${song.prompt}
                         <span className="text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
                       <div
-                        className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
+                        className="favorite-keyword-strip relative mt-2 flex w-full max-w-[520px] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
                         onMouseDown={(event) => {
                           event.stopPropagation();
                           const target = event.currentTarget;

@@ -31,7 +31,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
-const WORKSPACE_PAGE_SIZE = 30;
+const WORKSPACE_PAGE_SIZE = 10;
 
 const COLOR_OPTIONS = [
   { value: 'gray', color: '#6b7280', label: '회색' },
@@ -179,6 +179,7 @@ export default function SunoLibraryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
+  const [showWorkspaceMoreTooltip, setShowWorkspaceMoreTooltip] = useState(false);
   useEffect(() => {
     if (libraryViewMode === 'workspace') {
       setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
@@ -3190,6 +3191,11 @@ export default function SunoLibraryPage() {
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest('[data-floating-menu="true"]')) return;
+
+        if (multiSelectMode && !target.closest('[data-selection-keep="true"]')) {
+          clearMultiSelect();
+        }
+
         if (activeMenuState || activePlaylistItemMenu || activeColorMenu || bulkMenuState) {
           setActiveMenuState(null);
           setActivePlaylistItemMenu(null);
@@ -3723,6 +3729,7 @@ export default function SunoLibraryPage() {
                       return (
                         <div 
                           key={`${group.id}-${idx}`} 
+                          data-selection-keep="true"
                           className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
@@ -3859,17 +3866,28 @@ export default function SunoLibraryPage() {
               );
             })}
             {hasMoreWorkspaceTracks && (
-              <div className="flex flex-col items-center gap-2 pt-2 pb-4">
+              <div className="flex flex-col items-center gap-2 pt-8 pb-4">
                 <button
                   type="button"
                   onClick={() => setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length))}
-                  className="px-6 py-3 rounded-2xl border border-brand-orange/40 bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange text-sm font-bold transition-all shadow-lg shadow-black/20"
+                  onMouseEnter={() => setShowWorkspaceMoreTooltip(true)}
+                  onMouseLeave={() => setShowWorkspaceMoreTooltip(false)}
+                  onFocus={() => setShowWorkspaceMoreTooltip(true)}
+                  onBlur={() => setShowWorkspaceMoreTooltip(false)}
+                  className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
                 >
-                  더보기 {Math.min(filteredTracks.length - workspaceVisibleCount, WORKSPACE_PAGE_SIZE)}곡
+                  <span className="text-brand-orange text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
+                  더보기 ({filteredTracks.length - workspaceVisibleCount}세트 남음)
                 </button>
                 <p className="text-[11px] text-white/35">
-                  {Math.min(workspaceVisibleCount, filteredTracks.length)} / {filteredTracks.length}개 묶음 표시 중
+                  {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 총 {filteredTracks.length}세트
                 </p>
+                {showWorkspaceMoreTooltip && (
+                  <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-brand-orange/30 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
+                    <p className="text-xs font-bold text-brand-orange">더보기</p>
+                    <p className="mt-1 text-[11px] text-white/60">곡을 10세트 더 불러옵니다.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -4125,6 +4143,7 @@ export default function SunoLibraryPage() {
                       onClick={() => {
                         if (multiSelectMode) toggleSelectedTrack(selection);
                       }}
+                      data-selection-keep="true"
                       className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${isUnavailable ? 'opacity-50 grayscale' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}

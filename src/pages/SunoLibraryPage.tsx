@@ -69,6 +69,38 @@ const getColorHex = (colorTag?: string | null) => {
   return found?.color || '#6b7280';
 };
 
+const cleanSunoTitlePart = (value: any): string => {
+  return String(value || '')
+    .replace(/^\[[^\]]+\]\s*/, '')
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .trim();
+};
+
+const formatSunoDisplayTitle = (rawTitle: any): string => {
+  const raw = String(rawTitle || '').trim();
+  if (!raw) return 'Untitled';
+
+  const genreMatch = raw.match(/^\[([^\]]+)\]\s*/);
+  const genre = genreMatch?.[1]?.trim() || '';
+  let body = genreMatch ? raw.slice(genreMatch[0].length).trim() : raw;
+
+  const quotedPair = body.match(/^['"]([^'"]+)['"]\s*[|│]\s*['"]([^'"]+)['"]$/);
+  if (quotedPair) {
+    const first = cleanSunoTitlePart(quotedPair[1]);
+    const second = cleanSunoTitlePart(quotedPair[2]);
+    return `${genre ? `[${genre}] ` : ''}'${first}' | '${second}'`;
+  }
+
+  const bodyWithoutOuterQuotes = body.replace(/^['"]+|['"]+$/g, '').trim();
+  const parts = bodyWithoutOuterQuotes.split(/[|│]/).map(cleanSunoTitlePart).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${genre ? `[${genre}] ` : ''}'${parts[0]}' | '${parts[1]}'`;
+  }
+
+  return `${genre ? `[${genre}] ` : ''}'${cleanSunoTitlePart(body) || 'Untitled'}'`;
+};
+
 
 function AnimatedTrackPlayButton({
   imageUrl,
@@ -324,6 +356,7 @@ export default function SunoLibraryPage() {
 
   const checkingIdsRef = React.useRef<Set<string>>(new Set());
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
+  const autoCheckLastRunAtRef = React.useRef<Map<string, number>>(new Map());
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
   const modalHistoryPushedRef = React.useRef(false);
   const multiSelectHistoryPushedRef = React.useRef(false);
@@ -1088,7 +1121,7 @@ export default function SunoLibraryPage() {
   };
 
   const getAudioUrl = (item: any, group: any) => {
-    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || group?.audioUrl || group?.streamAudioUrl || '';
+    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || item?.stream_audio_url || item?.sourceAudioUrl || item?.source_audio_url || item?.sourceStreamAudioUrl || item?.source_stream_audio_url || group?.audioUrl || group?.streamAudioUrl || group?.audio_url || group?.stream_audio_url || '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -1100,7 +1133,7 @@ export default function SunoLibraryPage() {
   };
 
   const getDuration = (item: any, group: any) => {
-    const rawVal = item?.duration ?? item?.durationSeconds ?? item?.metadata?.duration ?? item?.metadata?.durationSeconds ?? group?.duration;
+    const rawVal = item?.duration ?? item?.durationSeconds ?? item?.duration_seconds ?? item?.metadata?.duration ?? item?.metadata?.durationSeconds ?? item?.metadata?.duration_seconds ?? item?.metadata?.playDuration ?? item?.playDuration ?? group?.duration ?? group?.durationSeconds;
     if (rawVal === undefined || rawVal === null) return null;
     const num = Number(rawVal);
     if (Number.isFinite(num) && num > 0) return num;
@@ -1488,7 +1521,7 @@ export default function SunoLibraryPage() {
         if (group.status === 'failed') return false;
 
         const count = autoCheckCountsRef.current.get(group.id) || 0;
-        if (count >= 25) return false;
+        if (count >= 30) return false;
 
         const items = extractSunoData(group);
         const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
@@ -1506,8 +1539,18 @@ export default function SunoLibraryPage() {
           createdTime = new Date(group.createdAt).getTime();
         }
         
-        const now = Date.now();
-        if (now - createdTime < 10000) return false; // Initial wait 10 seconds (Changed from 30s)
+        const elapsedMs = now - createdTime;
+        if (elapsedMs < 8000) return false; // Initial wait before first status check
+        if (elapsedMs > 10 * 60 * 1000) return false; // Stop automatic polling after 10 minutes
+
+        const nextIntervalMs = elapsedMs < 3 * 60 * 1000
+          ? 15 * 1000
+          : elapsedMs < 6 * 60 * 1000
+            ? 30 * 1000
+            : 60 * 1000;
+
+        const lastRunAt = autoCheckLastRunAtRef.current.get(group.id) || 0;
+        if (lastRunAt && now - lastRunAt < nextIntervalMs) return false;
 
         if (checkingIdsRef.current.has(group.id)) return false;
 
@@ -1517,6 +1560,7 @@ export default function SunoLibraryPage() {
       eligibleGroups.forEach(async (group) => {
         const id = group.id;
         checkingIdsRef.current.add(id);
+        autoCheckLastRunAtRef.current.set(id, Date.now());
         const currentCount = autoCheckCountsRef.current.get(id) || 0;
         autoCheckCountsRef.current.set(id, currentCount + 1);
 
@@ -1540,7 +1584,7 @@ export default function SunoLibraryPage() {
           checkingIdsRef.current.delete(id);
         }
       });
-    }, 20000); // 20 seconds interval
+    }, 15000); // Base tick is 15s; network checks use progressive intervals: 15s -> 30s -> 60s, max 10min
 
     return () => clearInterval(intervalId);
   }, [tracks, user, isSharedView]);
@@ -1800,6 +1844,7 @@ export default function SunoLibraryPage() {
       items = items.filter((item) => {
         const searchable = [
           item.title,
+          formatSunoDisplayTitle(item.title),
           getPlaylistItemCreatorName(item),
           item.ownerNickname,
           item.creatorNickname,
@@ -2511,7 +2556,7 @@ export default function SunoLibraryPage() {
       creatorEmail: item.creatorEmail,
       isPlaylistItem: true,
       sourceType: item.sourceType,
-      title: item.title || selection.title,
+      title: formatSunoDisplayTitle(item.title || selection.title),
     };
     return { group: fakeItem, item: fakeItem, idx: undefined };
   };
@@ -3129,7 +3174,7 @@ export default function SunoLibraryPage() {
     const reqPayload = item.requestPayload || {};
 
     return {
-      title: item.title || 'Untitled',
+      title: formatSunoDisplayTitle(item.title || 'Untitled'),
       status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
       createdAt: item.addedAt,
       taskId: item.sourceId,
@@ -3791,8 +3836,8 @@ export default function SunoLibraryPage() {
                       const duration = getDuration(item, group);
                       const hasValidDuration = duration !== null;
                       const isFailed = group.status === 'failed';
-                      const isCompleted = group.status === 'completed' && hasValidDuration;
-                      const isPending = !isFailed && !isCompleted;
+                      const isCompleted = Boolean(audioUrl && (group.status === 'completed' || group.status === 'success' || hasValidDuration));
+                      const isPending = !isFailed && !audioUrl;
                       
                       const isCurrent = isCurrentWorkspaceItem(group, item, idx);
                       const selection = buildWorkspaceSelection(group, item, idx);
@@ -4161,6 +4206,7 @@ export default function SunoLibraryPage() {
                     items = items.filter(item => {
                       const searchable = [
                         item.title,
+                        formatSunoDisplayTitle(item.title),
                         getPlaylistItemCreatorName(item),
                         item.ownerNickname,
                         item.creatorNickname,
@@ -4280,7 +4326,7 @@ export default function SunoLibraryPage() {
                               markPlaylistItemPlayed(item);
                               playTrack({
                                 url: item.audioUrl,
-                                title: item.title,
+                                title: formatSunoDisplayTitle(item.title),
                                 imageUrl: item.imageUrl,
                                 parent: {
                                   ...item,
@@ -4354,7 +4400,7 @@ export default function SunoLibraryPage() {
                           )}
                           
                           <h3 className={`text-sm font-bold truncate ${isActive ? 'text-brand-orange' : 'text-white'}`}>
-                            {item.title}
+                            {formatSunoDisplayTitle(item.title)}
                           </h3>
                         </div>
                         
@@ -4455,7 +4501,7 @@ export default function SunoLibraryPage() {
                                   e.stopPropagation(); 
                                   if (!item.audioUrl) { showToast("다운로드할 오디오 URL이 없습니다."); return; }
                                   if (item.sourceType === 'shared_track' && !user) { showToast("로그인이 필요합니다."); return; }
-                                  handleDownload(item.audioUrl, item.title); 
+                                  handleDownload(item.audioUrl, formatSunoDisplayTitle(item.title)); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
                                 className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"

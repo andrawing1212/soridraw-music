@@ -49,6 +49,80 @@ const verifyAuth = async (req: any, res: any): Promise<string | null> => {
   }
 };
 
+const pickFirstString = (...values: any[]): string => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+};
+
+const pickFirstPositiveNumber = (...values: any[]): number | null => {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return null;
+};
+
+const normalizeSunoDataItem = (item: any): any => {
+  if (!item || typeof item !== "object") return item;
+
+  const metadata = item.metadata || {};
+  const audioUrl = pickFirstString(
+    item.audioUrl,
+    item.audio_url,
+    item.streamAudioUrl,
+    item.stream_audio_url,
+    item.sourceAudioUrl,
+    item.source_audio_url,
+    item.sourceStreamAudioUrl,
+    item.source_stream_audio_url,
+    item.musicUrl,
+    item.music_url,
+    item.url
+  );
+  const imageUrl = pickFirstString(
+    item.imageUrl,
+    item.image_url,
+    item.sourceImageUrl,
+    item.source_image_url,
+    item.coverUrl,
+    item.cover_url,
+    metadata.imageUrl,
+    metadata.image_url
+  );
+  const duration = pickFirstPositiveNumber(
+    item.duration,
+    item.durationSeconds,
+    item.duration_seconds,
+    item.playDuration,
+    item.play_duration,
+    metadata.duration,
+    metadata.durationSeconds,
+    metadata.duration_seconds,
+    metadata.playDuration,
+    metadata.play_duration
+  );
+
+  return {
+    ...item,
+    ...(audioUrl ? { audioUrl, streamAudioUrl: audioUrl } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+    ...(duration ? { duration } : {})
+  };
+};
+
+const isCompleteStatus = (value: any): boolean => {
+  const normalized = String(value || "").toLowerCase();
+  return ["success", "succeeded", "completed", "complete"].includes(normalized);
+};
+
+const isFailedStatus = (value: any): boolean => {
+  const normalized = String(value || "").toLowerCase();
+  return ["failed", "failure", "error"].includes(normalized);
+};
+
 export const saveSunoApiKey = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -436,41 +510,41 @@ export const getSunoTrackStatus = onRequest(
         responseObj?.sunoData ||
         responseObj?.data ||
         responseData?.sunoData ||
+        data?.sunoData ||
+        data?.data?.sunoData ||
         (Array.isArray(responseData) ? responseData : (responseData ? [responseData] : [data]));
-      const sunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
+      const rawSunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
+      const sunoData = rawSunoData.filter(Boolean).map(normalizeSunoDataItem);
 
-      const audioUrls: string[] = [];
+      const audioUrls: string[] = sunoData
+        .map((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url))
+        .filter(Boolean);
 
       // If it's just a missing taskId error from API, do not mark as failed.
       if (!isMissingTaskIdError) {
+        const hasAnyAudio = audioUrls.length > 0;
+        const hasAllAudio = sunoData.length > 0 && sunoData.every((item: any) => !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
+        const anyItemFailed = sunoData.some((item: any) => isFailedStatus(item?.status));
+        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status) || !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
+        const apiReportedComplete = isCompleteStatus(data?.status) || isCompleteStatus(responseData?.status) || isCompleteStatus(responseObj?.status);
+
         for (const item of sunoData) {
-          if (!item) continue;
-          
-          const itemAudioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || item.streamAudioUrl || item.stream_audio_url || "";
-          
-          if (itemAudioUrl) audioUrls.push(itemAudioUrl);
-
-          if (item.duration || item.durationSeconds || item.metadata?.duration) {
-            duration = item.duration || item.durationSeconds || item.metadata?.duration;
-          }
-
-          // Determine overall status
-          if (item.status === "SUCCESS" || item.status === "COMPLETED" || item.status === "completed" || item.status === "success") {
-            status = "completed";
-          } else if (item.status === "FAILED" || item.status === "failed") {
-            if (status !== "completed") status = "failed";
-          } else if (item.status && status !== "completed") {
-            status = item.status.toLowerCase();
-          } else if (itemAudioUrl && status !== "completed") {
-            status = "completed";
-          }
+          const itemDuration = pickFirstPositiveNumber(item?.duration, item?.durationSeconds, item?.duration_seconds, item?.metadata?.duration, item?.metadata?.durationSeconds, item?.metadata?.duration_seconds);
+          if (itemDuration) duration = itemDuration;
         }
 
-        if (isFailed) {
-          status = "failed";
-        }
-        if (data?.status === "SUCCESS" || data?.status === "COMPLETED" || data?.status === "completed" || data?.status === "success") {
+        if (isFailed || anyItemFailed) {
+          status = hasAnyAudio ? "processing" : "failed";
+        } else if (hasAllAudio && (apiReportedComplete || allItemsCompleted || hasAnyAudio)) {
           status = "completed";
+        } else if (hasAnyAudio) {
+          // One result may be ready before the second one. Keep polling instead of freezing as completed.
+          status = "processing";
+        } else if (apiReportedComplete) {
+          // API can report SUCCESS before audio URLs become available. Keep polling.
+          status = "processing";
+        } else {
+          status = String(data?.status || responseData?.status || status || "processing").toLowerCase();
         }
       } else {
          console.warn("External API reported missing taskId. Not changing track status to failed.", data);
@@ -490,32 +564,36 @@ export const getSunoTrackStatus = onRequest(
       let finalAudioUrl = "";
       let finalImageUrl = "";
 
-      if (status === "completed" || status === "success") {
-        const first = Array.isArray(sunoData) ? sunoData[0] : null;
+      const first = Array.isArray(sunoData) ? sunoData.find((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url)) || sunoData[0] : null;
 
-        finalAudioUrl =
-          first?.audioUrl ||
-          first?.audio_url ||
-          first?.sourceAudioUrl ||
-          first?.sourceStreamAudioUrl ||
-          responseObj?.audioUrl ||
-          responseObj?.audio_url ||
-          "";
+      finalAudioUrl =
+        pickFirstString(
+          first?.audioUrl,
+          first?.streamAudioUrl,
+          first?.audio_url,
+          first?.stream_audio_url,
+          first?.sourceAudioUrl,
+          first?.sourceStreamAudioUrl,
+          responseObj?.audioUrl,
+          responseObj?.audio_url
+        );
 
-        finalImageUrl =
-          first?.imageUrl ||
-          first?.image_url ||
-          first?.sourceImageUrl ||
-          responseObj?.imageUrl ||
-          responseObj?.image_url ||
-          "";
+      finalImageUrl =
+        pickFirstString(
+          first?.imageUrl,
+          first?.image_url,
+          first?.sourceImageUrl,
+          first?.source_image_url,
+          responseObj?.imageUrl,
+          responseObj?.image_url
+        );
 
-        if (finalAudioUrl) {
-          updates.audioUrl = finalAudioUrl;
-          updates.streamAudioUrl = finalAudioUrl;
-        }
-        if (finalImageUrl) updates.imageUrl = finalImageUrl;
+      if (finalAudioUrl) {
+        updates.audioUrl = finalAudioUrl;
+        updates.streamAudioUrl = finalAudioUrl;
       }
+      if (finalImageUrl) updates.imageUrl = finalImageUrl;
+      if (duration) updates.duration = duration;
 
       await trackRef.update(updates);
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
+import MusicApiGenerateModal, { LanguageCode } from '../components/MusicApiGenerateModal';
 import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
@@ -209,6 +210,16 @@ export default function FavoritesPage({
   const popupOpenedRef = useRef(false);
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null>(null);
+  const [showFavoriteMusicApiModal, setShowFavoriteMusicApiModal] = useState(false);
+  const [isFavoriteMusicApiGenerating, setIsFavoriteMusicApiGenerating] = useState(false);
+  const [favoriteMusicApiMessage, setFavoriteMusicApiMessage] = useState<string | null>(null);
+  const [hasFavoriteSunoApiKey, setHasFavoriteSunoApiKey] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [foreignTargetLanguage, setForeignTargetLanguage] = useState<string>('English');
   const [editedTitle, setEditedTitle] = useState('');
   const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
@@ -231,7 +242,7 @@ export default function FavoritesPage({
     const cleaned = rawTitle.replace(/^(\[[^\]]+\]\s*)+/g, '');
 
     const pipeParts = cleaned
-      .split('|')
+      .split(/[|│]/)
       .map((v: string) => v.trim().replace(/^['"]|['"]$/g, ''))
       .filter(Boolean);
 
@@ -249,7 +260,7 @@ export default function FavoritesPage({
         return { korean: second, english: first };
       }
 
-      return { korean: second, english: first };
+      return { korean: first, english: second };
     }
 
     const quotedParts = [...cleaned.matchAll(/'([^']+)'|\"([^\"]+)\"/g)]
@@ -270,7 +281,7 @@ export default function FavoritesPage({
         return { korean: second, english: first };
       }
 
-      return { korean: second, english: first };
+      return { korean: first, english: second };
     }
 
     const single = cleaned.replace(/^['"]|['"]$/g, '').trim();
@@ -290,32 +301,38 @@ export default function FavoritesPage({
     };
   };
 
+  const cleanTitlePart = (value: any): string => {
+    return String(value || '')
+      .replace(/^\[[^\]]+\]\s*/, '')
+      .trim()
+      .replace(/^['"]+|['"]+$/g, '')
+      .trim();
+  };
+
+  const quoteTitlePart = (value: any): string => `'${cleanTitlePart(value) || 'Untitled'}'`;
+
   const getCombinedFavoriteTitle = (song: any): string => {
     const genre = getDisplaySubGenre(song);
     const genreLabel = genre ? `[${genre}] ` : '';
     const { korean, english } = getNormalizedTitles(song);
+    const ko = cleanTitlePart(korean);
+    const foreign = cleanTitlePart(english);
 
-    if (korean && english) {
-      return `${genreLabel}${korean} | ${english}`;
+    if (ko && foreign && ko !== foreign) {
+      return `${genreLabel}${quoteTitlePart(ko)} | ${quoteTitlePart(foreign)}`;
     }
 
-    return `${genreLabel}${korean || english || 'Untitled'}`;
+    return `${genreLabel}${quoteTitlePart(ko || foreign || 'Untitled')}`;
   };
 
   const getFavoriteKoreanTitle = (song: any): string => {
-    const genre = getDisplaySubGenre(song);
-    const genreLabel = genre ? `[${genre}] ` : '';
     const { korean, english } = getNormalizedTitles(song);
-
-    return `${genreLabel}${korean || english || 'Untitled'}`;
+    return quoteTitlePart(korean || english || 'Untitled');
   };
 
   const getFavoriteEnglishTitle = (song: any): string => {
-    const genre = getDisplaySubGenre(song);
-    const genreLabel = genre ? `[${genre}] ` : '';
     const { korean, english } = getNormalizedTitles(song);
-
-    return `${genreLabel}${english || korean || 'Untitled'}`;
+    return quoteTitlePart(english || korean || 'Untitled');
   };
 
   // 1. 보관함 목록 카드 제목 렌더 (1줄 형식)
@@ -403,20 +420,7 @@ export default function FavoritesPage({
     );
   };
       const getCombinedFavoriteCopyText = (song: any): string => {
-        const genre = getDisplaySubGenre(song);
-        const genreLabel = genre ? `[${genre}] ` : '';
-
-        const { korean, english } = getNormalizedTitles(song);
-
-        if (korean && english) {
-          return `${genreLabel}${korean} | ${english}`;
-        }
-
-        if (korean || english) {
-          return `${genreLabel}${korean || english}`;
-        }
-
-        return `${genreLabel}Untitled`;
+        return getCombinedFavoriteTitle(song);
       };
       
   const isModified = selectedSong && (
@@ -1191,6 +1195,135 @@ ${song.prompt}
     navigate('/');
   };
 
+
+  const FAVORITE_MUSIC_API_LANGUAGE_ORDER: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+
+  const normalizeFavoriteMusicApiLanguage = (value: any): LanguageCode | null => {
+    const lang = String(value || '').toLowerCase();
+    if (lang === 'kr' || lang === 'kor' || lang === 'korean') return 'ko';
+    if (lang === 'jp' || lang === 'jpn' || lang === 'japanese') return 'ja';
+    if (lang === 'cn' || lang === 'chinese' || lang === 'zh-cn' || lang === 'zh-tw') return 'zh';
+    if (lang === 'english') return 'en';
+    if (lang === 'spanish') return 'es';
+    if (lang === 'french') return 'fr';
+    return FAVORITE_MUSIC_API_LANGUAGE_ORDER.includes(lang as LanguageCode) ? (lang as LanguageCode) : null;
+  };
+
+  const getFavoriteForeignLyricLanguage = (song: any): LanguageCode => {
+    const applied = song?.appliedKeywords || {};
+    const candidates = [
+      ...(((applied.lyricLanguages || []) as any[]).filter(Boolean)),
+      ...(((applied.titleLanguages || []) as any[]).filter(Boolean)),
+      applied.secondaryLanguage,
+      applied.foreignLanguage,
+      applied.lyricLanguage,
+    ];
+
+    const found = candidates
+      .map(normalizeFavoriteMusicApiLanguage)
+      .find((lang): lang is LanguageCode => Boolean(lang && lang !== 'ko'));
+
+    return found || 'en';
+  };
+
+  const getFavoriteMusicApiAvailableLyricLanguages = (song: any): LanguageCode[] => {
+    if (!song) return [];
+    const langs: LanguageCode[] = [];
+    if (editedKoreanLyrics.trim()) langs.push('ko');
+    if (editedEnglishLyrics.trim()) langs.push(getFavoriteForeignLyricLanguage(song));
+    return Array.from(new Set(langs));
+  };
+
+  const getFavoriteMusicApiLyricsByLanguage = (song: any, lang: LanguageCode): string => {
+    if (lang === 'ko') return editedKoreanLyrics.trim();
+    const foreignLang = getFavoriteForeignLyricLanguage(song);
+    if (lang === foreignLang) return editedEnglishLyrics.trim();
+    return '';
+  };
+
+  const getFavoriteMusicApiTitle = (song: any): string => {
+    const titleSource = {
+      ...song,
+      title: editedTitle || song?.title || '',
+      koreanTitle: '',
+      englishTitle: '',
+    };
+    return getCombinedFavoriteCopyText(titleSource);
+  };
+
+  const handleFavoriteMusicApiGenerate = async (
+    _titleLanguage: LanguageCode = 'ko',
+    includeLyrics: boolean = true,
+    lyricLanguages: LanguageCode[] = ['ko']
+  ) => {
+    if (!selectedSong || isFavoriteMusicApiGenerating) return;
+
+    try {
+      setIsFavoriteMusicApiGenerating(true);
+      setFavoriteMusicApiMessage(null);
+
+      if (!user) {
+        setFavoriteMusicApiMessage('로그인이 필요합니다.');
+        return;
+      }
+
+      const token = await user.getIdToken();
+      const selectedLanguage = includeLyrics
+        ? (lyricLanguages || [])[0] || getFavoriteMusicApiAvailableLyricLanguages(selectedSong)[0]
+        : null;
+      const resolvedLyrics = includeLyrics && selectedLanguage
+        ? getFavoriteMusicApiLyricsByLanguage(selectedSong, selectedLanguage)
+        : '';
+
+      if (includeLyrics && !resolvedLyrics.trim()) {
+        setFavoriteMusicApiMessage('선택한 언어의 가사가 없습니다. 다른 언어를 선택하거나 가사 미포함으로 생성해주세요.');
+        return;
+      }
+
+      const appliedKeywords = {
+        ...(selectedSong.appliedKeywords || {}),
+        source: 'music-note-edit',
+      };
+
+      const res = await fetch(
+        'https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: getFavoriteMusicApiTitle(selectedSong),
+            prompt: editedPrompt || '',
+            style: editedPrompt || '',
+            lyrics: resolvedLyrics,
+            appliedKeywords,
+            titleLanguage: selectedLanguage || null,
+            includeLyrics,
+            lyricLanguages: includeLyrics && selectedLanguage ? [selectedLanguage] : [],
+            lyricLanguage: selectedLanguage || null,
+            generationIndex: 1,
+            generationCount: 1,
+            sourceGenerationBatchId: (selectedSong.appliedKeywords as any)?.generationBatchId || null,
+          }),
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setFavoriteMusicApiMessage(`Music API 생성 요청에 실패했습니다. ${data.error || ''}`.trim());
+        return;
+      }
+
+      setFavoriteMusicApiMessage('Music API 생성 요청이 완료되었습니다. 라이브러리에서 자동으로 상태가 갱신됩니다.');
+    } catch (error) {
+      console.error('Music Note Music API generate failed:', error);
+      setFavoriteMusicApiMessage('Music API 생성 요청 중 오류가 발생했습니다.');
+    } finally {
+      setIsFavoriteMusicApiGenerating(false);
+    }
+  };
 
   const getVisibleFavoriteIds = () => filteredFavorites.slice(0, visibleCount).map(song => song.id);
 
@@ -1993,6 +2126,11 @@ ${song.prompt}
                       />
                     ) : (
                       <>
+                        {getDisplaySubGenre(selectedSong) && (
+                          <p className="mx-auto mb-2 max-w-[720px] text-[13px] font-bold leading-tight text-white/54 md:text-[16px]">
+                            [{getDisplaySubGenre(selectedSong)}]
+                          </p>
+                        )}
                         <h2 className="mx-auto max-w-[820px] text-[24px] font-extrabold leading-tight tracking-tight text-white md:text-[34px]">
                           {getFavoriteKoreanTitle(selectedSong)}
                         </h2>
@@ -2484,9 +2622,91 @@ ${song.prompt}
                     </div>
                   )}
                 </section>
+
+                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                  <div className="mb-4">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">music api</div>
+                    <h4 className="mt-1 text-xl font-bold text-white">Music API 생성</h4>
+                    <p className="mt-1 text-sm text-white/45">현재 Edit 화면의 제목, 가사, 프롬프트 기준으로 곡을 생성하고 Suno Library에 저장합니다.</p>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => navigate('/suno-api-settings')}
+                      onMouseEnter={() => onHover({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
+                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
+                      onTouchEnd={onLongPressEnd}
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
+                      title="Music API 설정"
+                    >
+                      <SlidersHorizontal className="w-5 h-5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        try {
+                          setHasFavoriteSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
+                        } catch {
+                          setHasFavoriteSunoApiKey(false);
+                        }
+                        setFavoriteMusicApiMessage(null);
+                        setShowFavoriteMusicApiModal(true);
+                      }}
+                      disabled={isFavoriteMusicApiGenerating}
+                      onMouseEnter={() => onHover({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
+                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
+                      onTouchEnd={onLongPressEnd}
+                      className={cn(
+                        'flex-1 h-12 rounded-2xl text-sm font-bold text-white transition-all whitespace-nowrap',
+                        isFavoriteMusicApiGenerating
+                          ? 'bg-purple-600/40 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/20'
+                      )}
+                    >
+                      {isFavoriteMusicApiGenerating ? 'Music API 요청 중...' : 'Music API로 생성'}
+                    </button>
+
+                    <button
+                      onClick={() => navigate('/suno-library')}
+                      onMouseEnter={() => onHover({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
+                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
+                      onTouchEnd={onLongPressEnd}
+                      className="flex h-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-bold text-white/70 transition-all hover:text-brand-orange"
+                      title="라이브러리로 이동"
+                    >
+                      Library
+                    </button>
+                  </div>
+
+                  {favoriteMusicApiMessage && (
+                    <p className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-center text-xs font-semibold text-white/62 whitespace-pre-line">
+                      {favoriteMusicApiMessage}
+                    </p>
+                  )}
+                </section>
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showFavoriteMusicApiModal && selectedSong && (
+          <MusicApiGenerateModal
+            variant="musicApi"
+            hasApiKey={hasFavoriteSunoApiKey}
+            isNoLyrics={!editedKoreanLyrics.trim() && !editedEnglishLyrics.trim()}
+            availableLyricLanguages={getFavoriteMusicApiAvailableLyricLanguages(selectedSong)}
+            maxLyricLanguages={1}
+            onClose={() => setShowFavoriteMusicApiModal(false)}
+            onConfirm={(titleLang, includeLyrics, lyricLanguages) => {
+              setShowFavoriteMusicApiModal(false);
+              handleFavoriteMusicApiGenerate(titleLang, includeLyrics, lyricLanguages);
+            }}
+          />
         )}
       </AnimatePresence>
     </div>

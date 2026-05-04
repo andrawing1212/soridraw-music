@@ -1299,20 +1299,8 @@ function App() {
         return getLyricsByLanguage(song, lang);
       };
 
-      const getMusicApiTitle = (song: SongResult, selectedLanguage: LanguageCode | null) => {
-        const resolvedGenre = getResolvedGenre(song);
-        const titleMap = getTitleLanguageMap(song);
-        const koTitle = (titleMap.ko || song.koreanTitle || '').trim();
-        const selectedTitle = selectedLanguage ? (titleMap[selectedLanguage] || '').trim() : '';
-        const fallbackForeign = Object.entries(titleMap).find(([lang, value]) => lang !== 'ko' && String(value).trim())?.[1]?.trim() || (song.englishTitle || '').trim();
-
-        if (selectedLanguage && selectedLanguage !== 'ko') {
-          if (selectedTitle && koTitle && selectedTitle !== koTitle) return `[${resolvedGenre}] '${selectedTitle} | ${koTitle}'`;
-          return `[${resolvedGenre}] '${selectedTitle || fallbackForeign || koTitle || 'Untitled'}'`;
-        }
-
-        if (koTitle && fallbackForeign && koTitle !== fallbackForeign) return `[${resolvedGenre}] '${koTitle} | ${fallbackForeign}'`;
-        return `[${resolvedGenre}] '${koTitle || fallbackForeign || '무제'}'`;
+      const getMusicApiTitle = (song: SongResult, _selectedLanguage: LanguageCode | null) => {
+        return formatUnifiedTitle(song);
       };
 
       for (let i = 0; i < targetSongs.length; i += 1) {
@@ -3789,7 +3777,7 @@ const saveRecentSong = async (newSong: any) => {
       result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
     ].filter(Boolean).join('\n');
 
-    const songTitleCopy = formatInlineTitle(result);
+    const songTitleCopy = formatUnifiedTitle(result);
 
     const text = `
 ${keywords}
@@ -3858,6 +3846,38 @@ ${result.prompt}
 
   const getTitleByLanguage = (song: SongResult | null, lang: LanguageCode): string => {
     return (getTitleLanguageMap(song)[lang] || '').trim();
+  };
+
+  const stripDisplayTitlePart = (value: string): string => {
+    return String(value || '')
+      .replace(/^\[[^\]]+\]\s*/, '')
+      .trim()
+      .replace(/^['"]+|['"]+$/g, '')
+      .trim();
+  };
+
+  const formatUnifiedTitle = (song: SongResult | null = result): string => {
+    if (!song) return "[Song] 'Untitled'";
+    const genre = getResolvedGenre(song) || getSubGenre(song) || 'Song';
+    const titleMap = getTitleLanguageMap(song);
+    const koTitle = stripDisplayTitlePart(titleMap.ko || song.koreanTitle || '');
+    const foreignTitle = stripDisplayTitlePart(
+      Object.entries(titleMap).find(([lang, value]) => lang !== 'ko' && String(value).trim())?.[1] ||
+      song.englishTitle ||
+      ''
+    );
+
+    if (koTitle && foreignTitle && koTitle !== foreignTitle) {
+      return `[${genre}] '${koTitle}' | '${foreignTitle}'`;
+    }
+
+    const fallback = stripDisplayTitlePart(koTitle || foreignTitle || song.title || 'Untitled');
+    if (fallback.includes('|') || fallback.includes('│')) {
+      const parts = fallback.split(/[|│]/).map(stripDisplayTitlePart).filter(Boolean);
+      if (parts.length >= 2) return `[${genre}] '${parts[0]}' | '${parts[1]}'`;
+      if (parts.length === 1) return `[${genre}] '${parts[0]}'`;
+    }
+    return `[${genre}] '${fallback || 'Untitled'}'`;
   };
 
   const getGeneratedLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
@@ -4796,7 +4816,7 @@ ${result.prompt}
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              const text = formatInlineTitle(result);
+                              const text = formatUnifiedTitle(result);
                               copyToClipboard(text, 'title');
                             }}
                             onMouseEnter={() =>
@@ -4814,18 +4834,36 @@ ${result.prompt}
                           </button>
                           
                           <div className="flex gap-2">
-                            <CopyBtn 
-                              text={formatKoreanTitle(result)} 
-                              type="title-ko" 
-                              label="KO" 
-                              description="한글 제목 한 줄을 복사합니다." 
-                            />
-                            <CopyBtn 
-                              text={formatEnglishTitle(result)} 
-                              type="title-en" 
-                              label="EN" 
-                              description="영어 제목 한 줄을 복사합니다." 
-                            />
+                            {(() => {
+                              const titleLanguages = getDisplayLyricLanguages(result);
+                              const normalizedTitleLanguages = titleLanguages.length > 0
+                                ? titleLanguages
+                                : [
+                                    result.koreanTitle ? 'ko' : null,
+                                    result.englishTitle ? (((result.appliedKeywords as any)?.secondaryLanguage || 'en') as LanguageCode) : null,
+                                  ].filter(Boolean) as LanguageCode[];
+
+                              const uniqueTitleLanguages = normalizedTitleLanguages
+                                .filter((lang, index, arr) => arr.indexOf(lang) === index)
+                                .slice(0, 2);
+
+                              return uniqueTitleLanguages.map((lang) => {
+                                const titleText = formatTitleLineByLanguage(result, lang);
+                                if (!titleText) return null;
+                                const langLabel = lang.toUpperCase();
+                                const langName = lyricLanguageLabels[lang]?.ko || langLabel;
+
+                                return (
+                                  <CopyBtn
+                                    key={lang}
+                                    text={titleText}
+                                    type={`title-${lang}`}
+                                    label={langLabel}
+                                    description={`${langName} 제목 한 줄을 복사합니다.`}
+                                  />
+                                );
+                              });
+                            })()}
                           </div>
                         </>
                       );
@@ -4851,7 +4889,7 @@ ${result.prompt}
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
                         const primaryClass = hasAddedLyricsLanguage ? 'text-amber-500' : (isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]');
-                        const secondaryClass = hasAddedLyricsLanguage ? 'text-amber-400/95' : (isRecent ? 'text-yellow-200/80' : 'text-[var(--text-primary)]/70');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-amber-400/95' : (isRecent ? 'text-yellow-400/95' : 'text-[var(--text-primary)]/70');
 
                         if (lines.length >= 2) {
                           return (

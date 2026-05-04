@@ -46,6 +46,45 @@ const verifyAuth = async (req, res) => {
         return null;
     }
 };
+const pickFirstString = (...values) => {
+    for (const value of values) {
+        if (typeof value === "string" && value.trim())
+            return value.trim();
+    }
+    return "";
+};
+const pickFirstPositiveNumber = (...values) => {
+    for (const value of values) {
+        if (value === undefined || value === null || value === "")
+            continue;
+        const num = Number(value);
+        if (Number.isFinite(num) && num > 0)
+            return num;
+    }
+    return null;
+};
+const normalizeSunoDataItem = (item) => {
+    if (!item || typeof item !== "object")
+        return item;
+    const metadata = item.metadata || {};
+    const audioUrl = pickFirstString(item.audioUrl, item.audio_url, item.streamAudioUrl, item.stream_audio_url, item.sourceAudioUrl, item.source_audio_url, item.sourceStreamAudioUrl, item.source_stream_audio_url, item.musicUrl, item.music_url, item.url);
+    const imageUrl = pickFirstString(item.imageUrl, item.image_url, item.sourceImageUrl, item.source_image_url, item.coverUrl, item.cover_url, metadata.imageUrl, metadata.image_url);
+    const duration = pickFirstPositiveNumber(item.duration, item.durationSeconds, item.duration_seconds, item.playDuration, item.play_duration, metadata.duration, metadata.durationSeconds, metadata.duration_seconds, metadata.playDuration, metadata.play_duration);
+    return {
+        ...item,
+        ...(audioUrl ? { audioUrl, streamAudioUrl: audioUrl } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(duration ? { duration } : {})
+    };
+};
+const isCompleteStatus = (value) => {
+    const normalized = String(value || "").toLowerCase();
+    return ["success", "succeeded", "completed", "complete"].includes(normalized);
+};
+const isFailedStatus = (value) => {
+    const normalized = String(value || "").toLowerCase();
+    return ["failed", "failure", "error"].includes(normalized);
+};
 exports.saveSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     var _a;
     if (handleCors(req, res))
@@ -178,7 +217,9 @@ exports.createSunoTrack = (0, https_1.onRequest)({ region: "us-central1" }, asyn
                 audioUrl: '',
                 imageUrl: '',
                 appliedKeywords: appliedKeywords,
-                requestPayload: Object.assign({}, sunoPayload),
+                requestPayload: {
+                    ...sunoPayload
+                },
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             };
@@ -237,7 +278,7 @@ exports.createSunoTrack = (0, https_1.onRequest)({ region: "us-central1" }, asyn
     }
 });
 exports.getSunoTrackStatus = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
     if (handleCors(req, res))
         return;
     if (req.method !== "POST") {
@@ -360,40 +401,42 @@ exports.getSunoTrackStatus = (0, https_1.onRequest)({ region: "us-central1" }, a
         const sunoDataRaw = (responseObj === null || responseObj === void 0 ? void 0 : responseObj.sunoData) ||
             (responseObj === null || responseObj === void 0 ? void 0 : responseObj.data) ||
             (responseData === null || responseData === void 0 ? void 0 : responseData.sunoData) ||
+            (data === null || data === void 0 ? void 0 : data.sunoData) ||
+            ((_l = data === null || data === void 0 ? void 0 : data.data) === null || _l === void 0 ? void 0 : _l.sunoData) ||
             (Array.isArray(responseData) ? responseData : (responseData ? [responseData] : [data]));
-        const sunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
-        const audioUrls = [];
+        const rawSunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
+        const sunoData = rawSunoData.filter(Boolean).map(normalizeSunoDataItem);
+        const audioUrls = sunoData
+            .map((item) => pickFirstString(item === null || item === void 0 ? void 0 : item.audioUrl, item === null || item === void 0 ? void 0 : item.streamAudioUrl, item === null || item === void 0 ? void 0 : item.audio_url, item === null || item === void 0 ? void 0 : item.stream_audio_url))
+            .filter(Boolean);
         // If it's just a missing taskId error from API, do not mark as failed.
         if (!isMissingTaskIdError) {
+            const hasAnyAudio = audioUrls.length > 0;
+            const hasAllAudio = sunoData.length > 0 && sunoData.every((item) => !!pickFirstString(item === null || item === void 0 ? void 0 : item.audioUrl, item === null || item === void 0 ? void 0 : item.streamAudioUrl, item === null || item === void 0 ? void 0 : item.audio_url, item === null || item === void 0 ? void 0 : item.stream_audio_url));
+            const anyItemFailed = sunoData.some((item) => isFailedStatus(item === null || item === void 0 ? void 0 : item.status));
+            const allItemsCompleted = sunoData.length > 0 && sunoData.every((item) => isCompleteStatus(item === null || item === void 0 ? void 0 : item.status) || !!pickFirstString(item === null || item === void 0 ? void 0 : item.audioUrl, item === null || item === void 0 ? void 0 : item.streamAudioUrl, item === null || item === void 0 ? void 0 : item.audio_url, item === null || item === void 0 ? void 0 : item.stream_audio_url));
+            const apiReportedComplete = isCompleteStatus(data === null || data === void 0 ? void 0 : data.status) || isCompleteStatus(responseData === null || responseData === void 0 ? void 0 : responseData.status) || isCompleteStatus(responseObj === null || responseObj === void 0 ? void 0 : responseObj.status);
             for (const item of sunoData) {
-                if (!item)
-                    continue;
-                const itemAudioUrl = item.audioUrl || item.audio_url || item.sourceAudioUrl || item.streamAudioUrl || item.stream_audio_url || "";
-                if (itemAudioUrl)
-                    audioUrls.push(itemAudioUrl);
-                if (item.duration || item.durationSeconds || ((_l = item.metadata) === null || _l === void 0 ? void 0 : _l.duration)) {
-                    duration = item.duration || item.durationSeconds || ((_m = item.metadata) === null || _m === void 0 ? void 0 : _m.duration);
-                }
-                // Determine overall status
-                if (item.status === "SUCCESS" || item.status === "COMPLETED" || item.status === "completed" || item.status === "success") {
-                    status = "completed";
-                }
-                else if (item.status === "FAILED" || item.status === "failed") {
-                    if (status !== "completed")
-                        status = "failed";
-                }
-                else if (item.status && status !== "completed") {
-                    status = item.status.toLowerCase();
-                }
-                else if (itemAudioUrl && status !== "completed") {
-                    status = "completed";
-                }
+                const itemDuration = pickFirstPositiveNumber(item === null || item === void 0 ? void 0 : item.duration, item === null || item === void 0 ? void 0 : item.durationSeconds, item === null || item === void 0 ? void 0 : item.duration_seconds, (_m = item === null || item === void 0 ? void 0 : item.metadata) === null || _m === void 0 ? void 0 : _m.duration, (_o = item === null || item === void 0 ? void 0 : item.metadata) === null || _o === void 0 ? void 0 : _o.durationSeconds, (_p = item === null || item === void 0 ? void 0 : item.metadata) === null || _p === void 0 ? void 0 : _p.duration_seconds);
+                if (itemDuration)
+                    duration = itemDuration;
             }
-            if (isFailed) {
-                status = "failed";
+            if (isFailed || anyItemFailed) {
+                status = hasAnyAudio ? "processing" : "failed";
             }
-            if ((data === null || data === void 0 ? void 0 : data.status) === "SUCCESS" || (data === null || data === void 0 ? void 0 : data.status) === "COMPLETED" || (data === null || data === void 0 ? void 0 : data.status) === "completed" || (data === null || data === void 0 ? void 0 : data.status) === "success") {
+            else if (hasAllAudio && (apiReportedComplete || allItemsCompleted || hasAnyAudio)) {
                 status = "completed";
+            }
+            else if (hasAnyAudio) {
+                // One result may be ready before the second one. Keep polling instead of freezing as completed.
+                status = "processing";
+            }
+            else if (apiReportedComplete) {
+                // API can report SUCCESS before audio URLs become available. Keep polling.
+                status = "processing";
+            }
+            else {
+                status = String((data === null || data === void 0 ? void 0 : data.status) || (responseData === null || responseData === void 0 ? void 0 : responseData.status) || status || "processing").toLowerCase();
             }
         }
         else {
@@ -410,30 +453,19 @@ exports.getSunoTrackStatus = (0, https_1.onRequest)({ region: "us-central1" }, a
         }
         let finalAudioUrl = "";
         let finalImageUrl = "";
-        if (status === "completed" || status === "success") {
-            const first = Array.isArray(sunoData) ? sunoData[0] : null;
-            finalAudioUrl =
-                (first === null || first === void 0 ? void 0 : first.audioUrl) ||
-                    (first === null || first === void 0 ? void 0 : first.audio_url) ||
-                    (first === null || first === void 0 ? void 0 : first.sourceAudioUrl) ||
-                    (first === null || first === void 0 ? void 0 : first.sourceStreamAudioUrl) ||
-                    (responseObj === null || responseObj === void 0 ? void 0 : responseObj.audioUrl) ||
-                    (responseObj === null || responseObj === void 0 ? void 0 : responseObj.audio_url) ||
-                    "";
-            finalImageUrl =
-                (first === null || first === void 0 ? void 0 : first.imageUrl) ||
-                    (first === null || first === void 0 ? void 0 : first.image_url) ||
-                    (first === null || first === void 0 ? void 0 : first.sourceImageUrl) ||
-                    (responseObj === null || responseObj === void 0 ? void 0 : responseObj.imageUrl) ||
-                    (responseObj === null || responseObj === void 0 ? void 0 : responseObj.image_url) ||
-                    "";
-            if (finalAudioUrl) {
-                updates.audioUrl = finalAudioUrl;
-                updates.streamAudioUrl = finalAudioUrl;
-            }
-            if (finalImageUrl)
-                updates.imageUrl = finalImageUrl;
+        const first = Array.isArray(sunoData) ? sunoData.find((item) => pickFirstString(item === null || item === void 0 ? void 0 : item.audioUrl, item === null || item === void 0 ? void 0 : item.streamAudioUrl, item === null || item === void 0 ? void 0 : item.audio_url, item === null || item === void 0 ? void 0 : item.stream_audio_url)) || sunoData[0] : null;
+        finalAudioUrl =
+            pickFirstString(first === null || first === void 0 ? void 0 : first.audioUrl, first === null || first === void 0 ? void 0 : first.streamAudioUrl, first === null || first === void 0 ? void 0 : first.audio_url, first === null || first === void 0 ? void 0 : first.stream_audio_url, first === null || first === void 0 ? void 0 : first.sourceAudioUrl, first === null || first === void 0 ? void 0 : first.sourceStreamAudioUrl, responseObj === null || responseObj === void 0 ? void 0 : responseObj.audioUrl, responseObj === null || responseObj === void 0 ? void 0 : responseObj.audio_url);
+        finalImageUrl =
+            pickFirstString(first === null || first === void 0 ? void 0 : first.imageUrl, first === null || first === void 0 ? void 0 : first.image_url, first === null || first === void 0 ? void 0 : first.sourceImageUrl, first === null || first === void 0 ? void 0 : first.source_image_url, responseObj === null || responseObj === void 0 ? void 0 : responseObj.imageUrl, responseObj === null || responseObj === void 0 ? void 0 : responseObj.image_url);
+        if (finalAudioUrl) {
+            updates.audioUrl = finalAudioUrl;
+            updates.streamAudioUrl = finalAudioUrl;
         }
+        if (finalImageUrl)
+            updates.imageUrl = finalImageUrl;
+        if (duration)
+            updates.duration = duration;
         await trackRef.update(updates);
         // Also update suno_shares snapshot if it exists
         const shareRef = db.collection('suno_shares').doc(trackId);
@@ -470,4 +502,3 @@ exports.getSunoTrackStatus = (0, https_1.onRequest)({ region: "us-central1" }, a
         res.status(500).json({ error: "Failed to fetch track status", details: error.message });
     }
 });
-//# sourceMappingURL=index.js.map

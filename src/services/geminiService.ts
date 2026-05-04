@@ -1688,7 +1688,7 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   const hasKoreanLanguage = requestedLyricLanguages.includes('ko');
   const hasSecondaryLanguage = requestedLyricLanguages.some((lang) => lang !== 'ko');
   const titleFormatInstruction = hasKoreanLanguage && hasSecondaryLanguage
-    ? `Return the title pair as: '${languageNameMap[secondaryLanguage]} Title' │ 'Korean Title'.`
+    ? `Return the title pair as: 'Korean Title' | '${languageNameMap[secondaryLanguage]} Title'.`
     : hasKoreanLanguage
       ? `Return the title as: 'Korean Title'. Do not create an English or other-language title.`
       : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
@@ -2179,21 +2179,21 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     // 1. Remove any existing [Genre] tag from the AI
     rawTitle = rawTitle.replace(/^\[[^\]]+\]\s*/, "");
     
-    // 2. Try to extract quoted pair: 'Eng' │ 'Kor' or "Eng" │ "Kor"
-    const quotePairRegex = /['"]([^'"]+)['"]\s*│\s*['"]([^'"]+)['"]/;
+    // 2. Try to extract quoted pair: 'Korean' │ 'Foreign' or "Korean" | "Foreign"
+    const quotePairRegex = /['"]([^'"]+)['"]\s*[│|]\s*['"]([^'"]+)['"]/;
     const match = rawTitle.match(quotePairRegex);
     
     if (match) {
       const firstTitle = match[1].trim();
       const secondTitle = match[2].trim();
-      result.englishTitle = hasSecondaryLanguage ? firstTitle : '';
-      result.koreanTitle = hasKoreanLanguage ? (hasSecondaryLanguage ? secondTitle : firstTitle) : '';
+      result.koreanTitle = hasKoreanLanguage ? firstTitle : '';
+      result.englishTitle = hasSecondaryLanguage ? (hasKoreanLanguage ? secondTitle : firstTitle) : '';
       const titleParts = [
-        hasSecondaryLanguage ? result.englishTitle : '',
         hasKoreanLanguage ? result.koreanTitle : '',
+        hasSecondaryLanguage ? result.englishTitle : '',
       ].filter(Boolean);
       result.title = titleParts.length > 1
-        ? `[${genreTag}] '${titleParts[0]}' │ '${titleParts[1]}'`
+        ? `[${genreTag}] '${titleParts[0]}' | '${titleParts[1]}'`
         : `[${genreTag}] '${titleParts[0] || firstTitle}'`;
     } else {
       // 3. Fallback: Aggressive cleaning
@@ -2218,19 +2218,19 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         }
       }
       
-      // 4. Ensure it has a │ and is quoted
-      if (title.includes("│")) {
-        const parts = title.split("│").map(p => p.trim().replace(/^['"]+|['"]+$/g, ""));
+      // 4. Ensure it has a separator and is quoted
+      if (title.includes("│") || title.includes("|")) {
+        const parts = title.split(/[│|]/).map(p => p.trim().replace(/^['"]+|['"]+$/g, ""));
         const first = parts[0] || "Untitled";
         const second = parts[1] || "무제";
-        result.englishTitle = hasSecondaryLanguage ? first : '';
-        result.koreanTitle = hasKoreanLanguage ? (hasSecondaryLanguage ? second : first) : '';
+        result.koreanTitle = hasKoreanLanguage ? first : '';
+        result.englishTitle = hasSecondaryLanguage ? (hasKoreanLanguage ? second : first) : '';
         const titleParts = [
-          hasSecondaryLanguage ? result.englishTitle : '',
           hasKoreanLanguage ? result.koreanTitle : '',
+          hasSecondaryLanguage ? result.englishTitle : '',
         ].filter(Boolean);
         result.title = titleParts.length > 1
-          ? `[${genreTag}] '${titleParts[0]}' │ '${titleParts[1]}'`
+          ? `[${genreTag}] '${titleParts[0]}' | '${titleParts[1]}'`
           : `[${genreTag}] '${titleParts[0] || first}'`;
       } else {
         const cleanTitle = title.replace(/^['"]+|['"]+$/g, "");
@@ -2242,9 +2242,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   } else {
     result.englishTitle = hasSecondaryLanguage ? 'Untitled' : '';
     result.koreanTitle = hasKoreanLanguage ? '무제' : '';
-    const fallbackParts = [result.englishTitle, result.koreanTitle].filter(Boolean);
+    const fallbackParts = [result.koreanTitle, result.englishTitle].filter(Boolean);
     result.title = fallbackParts.length > 1
-      ? `[${genreTag}] '${fallbackParts[0]}' │ '${fallbackParts[1]}'`
+      ? `[${genreTag}] '${fallbackParts[0]}' | '${fallbackParts[1]}'`
       : `[${genreTag}] '${fallbackParts[0] || 'Untitled'}'`;
   }
 

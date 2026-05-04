@@ -1785,10 +1785,9 @@ function App() {
   }, []);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
-    const shouldSyncMainSections = window.innerWidth >= 768;
-    if (shouldSyncMainSections) {
-      const currentSectionExpanded = section === 'genre' ? isGenreExpanded : section === 'style' ? isStyleExpanded : isSoundExpanded;
-      const nextState = !currentSectionExpanded;
+    const isPC = window.innerWidth >= 1024;
+    if (isPC) {
+      const nextState = !isGenreExpanded;
       setIsGenreExpanded(nextState);
       setIsStyleExpanded(nextState);
       setIsSoundExpanded(nextState);
@@ -1800,8 +1799,8 @@ function App() {
   };
 
   const toggleSubSections = (section: 'mood' | 'theme') => {
-    const shouldSyncSubSections = window.innerWidth >= 768;
-    if (shouldSyncSubSections) {
+    const isPC = window.innerWidth >= 1024;
+    if (isPC) {
       const nextState = !isMoodExpanded;
       setIsMoodExpanded(nextState);
       setIsThemeExpanded(nextState);
@@ -4347,7 +4346,7 @@ ${result.prompt}
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={window.innerWidth >= 768 ? row1MaxHeight : undefined}
+                forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
                 onModalStateChange={setIsGenreHierarchyModalOpen}
               />
           <CycleSection 
@@ -4367,7 +4366,7 @@ ${result.prompt}
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
-            forcedHeight={window.innerWidth >= 768 ? row1MaxHeight : undefined}
+            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -4386,7 +4385,7 @@ ${result.prompt}
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
-            forcedHeight={window.innerWidth >= 768 ? row1MaxHeight : undefined}
+            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
           />
         </div>
 
@@ -4421,7 +4420,7 @@ ${result.prompt}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 768 && window.innerWidth < 1024 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -4446,7 +4445,7 @@ ${result.prompt}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 768 && window.innerWidth < 1024 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
             />
@@ -5512,7 +5511,6 @@ ${result.prompt}
         applyTemplate={applyTemplate} 
       />
 
-      <SecondaryScrollControl />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {

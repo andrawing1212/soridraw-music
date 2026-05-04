@@ -492,6 +492,10 @@ export default function FavoritesPage({
     return () => { cancelled = true; };
   }, [user?.uid]);
 
+  useEffect(() => {
+    lastFavoriteServerColorMapRef.current = {};
+  }, [user?.uid]);
+
 
   const FAVORITE_COLOR_OPTIONS = [
     { value: 'gray', color: '#6b7280', label: '회색' },
@@ -523,7 +527,11 @@ export default function FavoritesPage({
     }, 2200);
   };
 
-  const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
+  const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'guest'}`;
+  const FAVORITE_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.favoriteColorTags');
+  const LIBRARY_WORKSPACE_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.library.workspaceColorTags');
+  const LIBRARY_PLAYLIST_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.library.playlistColorTags');
+  const COLOR_SYNC_USAGE_KEY = getScopedColorStorageKey('soridraw.colorSyncUsage.v1');
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
   const getFavoriteColorSyncCount = () => {
     try {
@@ -568,9 +576,9 @@ export default function FavoritesPage({
     }
 
     const existingIds = new Set(favorites.map(song => song.id));
-    const favoriteMap = { ...readLocalColorMap('soridraw.favoriteColorTags'), ...favoriteColorMap };
-    const workspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
-    const playlistMap = readLocalColorMap('soridraw.library.playlistColorTags');
+    const favoriteMap = { ...readLocalColorMap(FAVORITE_COLOR_STORAGE_KEY), ...favoriteColorMap };
+    const workspaceMap = readLocalColorMap(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY);
+    const playlistMap = readLocalColorMap(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY);
 
     const favoriteEntries = Object.entries(favoriteMap).filter(([id]) => existingIds.has(id));
     const workspaceEntries = Object.entries(workspaceMap);
@@ -622,16 +630,17 @@ export default function FavoritesPage({
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('soridraw.favoriteColorTags');
-      if (raw) setFavoriteColorMap(JSON.parse(raw));
+      const raw = localStorage.getItem(FAVORITE_COLOR_STORAGE_KEY);
+      setFavoriteColorMap(raw ? JSON.parse(raw) : {});
     } catch (error) {
       console.warn('favorite color map load failed', error);
+      setFavoriteColorMap({});
     }
-  }, []);
+  }, [FAVORITE_COLOR_STORAGE_KEY]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('soridraw.favoriteColorTags', JSON.stringify(favoriteColorMap));
+      localStorage.setItem(FAVORITE_COLOR_STORAGE_KEY, JSON.stringify(favoriteColorMap));
     } catch (error) {
       console.warn('favorite color map save failed', error);
     }
@@ -669,7 +678,7 @@ export default function FavoritesPage({
 
     if (changed) {
       try {
-        const merged = { ...readLocalColorMap('soridraw.favoriteColorTags') };
+        const merged = { ...readLocalColorMap(FAVORITE_COLOR_STORAGE_KEY) };
         for (const id of allIds) {
           const before = previous[id] || 'gray';
           const current = serverMap[id] || 'gray';
@@ -678,7 +687,7 @@ export default function FavoritesPage({
             else merged[id] = current;
           }
         }
-        localStorage.setItem('soridraw.favoriteColorTags', JSON.stringify(merged));
+        localStorage.setItem(FAVORITE_COLOR_STORAGE_KEY, JSON.stringify(merged));
       } catch (error) {
         console.warn('favorite server color merge failed', error);
       }

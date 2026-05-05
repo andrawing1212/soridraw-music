@@ -231,11 +231,6 @@ export default function SunoLibraryPage() {
   const [isLibraryAdminUser, setIsLibraryAdminUser] = useState(false);
   const lastWorkspaceServerColorMapRef = React.useRef<Record<string, string>>({});
   const lastPlaylistServerColorMapRef = React.useRef<Record<string, string>>({});
-  const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'guest'}`;
-  const FAVORITE_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.favoriteColorTags');
-  const LIBRARY_WORKSPACE_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.library.workspaceColorTags');
-  const LIBRARY_PLAYLIST_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.library.playlistColorTags');
-  const COLOR_SYNC_USAGE_KEY = getScopedColorStorageKey('soridraw.colorSyncUsage.v1');
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
@@ -263,11 +258,6 @@ export default function SunoLibraryPage() {
   }, [user?.uid]);
 
   useEffect(() => {
-    lastWorkspaceServerColorMapRef.current = {};
-    lastPlaylistServerColorMapRef.current = {};
-  }, [user?.uid]);
-
-  useEffect(() => {
     try {
       const raw = localStorage.getItem(SHARED_PLAYED_STORAGE_KEY);
       if (raw) {
@@ -281,32 +271,20 @@ export default function SunoLibraryPage() {
 
   useEffect(() => {
     try {
-      const rawWorkspace = localStorage.getItem(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY);
-      setWorkspaceLocalColorMap(rawWorkspace ? JSON.parse(rawWorkspace) : {});
-      const rawPlaylist = localStorage.getItem(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY);
-      setPlaylistLocalColorMap(rawPlaylist ? JSON.parse(rawPlaylist) : {});
+      setWorkspaceLocalColorMap(readLocalColorMap('soridraw.library.workspaceColorTags'));
+      setPlaylistLocalColorMap(readLocalColorMap('soridraw.library.playlistColorTags'));
     } catch (error) {
       console.warn('load library color map failed:', error);
-      setWorkspaceLocalColorMap({});
-      setPlaylistLocalColorMap({});
     }
-  }, [LIBRARY_WORKSPACE_COLOR_STORAGE_KEY, LIBRARY_PLAYLIST_COLOR_STORAGE_KEY]);
+  }, [user?.uid]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY, JSON.stringify(workspaceLocalColorMap));
-    } catch (error) {
-      console.warn('save workspace color map failed:', error);
-    }
-  }, [workspaceLocalColorMap]);
+    writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
+  }, [workspaceLocalColorMap, user?.uid]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY, JSON.stringify(playlistLocalColorMap));
-    } catch (error) {
-      console.warn('save playlist color map failed:', error);
-    }
-  }, [playlistLocalColorMap]);
+    writeLocalColorMap('soridraw.library.playlistColorTags', playlistLocalColorMap);
+  }, [playlistLocalColorMap, user?.uid]);
 
   useEffect(() => {
     const serverMap: Record<string, string> = {};
@@ -346,7 +324,7 @@ export default function SunoLibraryPage() {
     });
     if (changed) {
       try {
-        const merged = { ...readLocalColorMap(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY) };
+        const merged = { ...readLocalColorMap('soridraw.library.workspaceColorTags') };
         for (const key of allKeys) {
           const before = previous[key] || 'gray';
           const current = serverMap[key] || 'gray';
@@ -355,7 +333,7 @@ export default function SunoLibraryPage() {
             else merged[key] = current;
           }
         }
-        localStorage.setItem(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY, JSON.stringify(merged));
+        writeLocalColorMap('soridraw.library.workspaceColorTags', merged);
       } catch (error) {
         console.warn('workspace server color merge failed:', error);
       }
@@ -397,7 +375,7 @@ export default function SunoLibraryPage() {
     });
     if (changed) {
       try {
-        const merged = { ...readLocalColorMap(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY) };
+        const merged = { ...readLocalColorMap('soridraw.library.playlistColorTags') };
         for (const key of allKeys) {
           const before = previous[key] || 'gray';
           const current = serverMap[key] || 'gray';
@@ -406,7 +384,7 @@ export default function SunoLibraryPage() {
             else merged[key] = current;
           }
         }
-        localStorage.setItem(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY, JSON.stringify(merged));
+        writeLocalColorMap('soridraw.library.playlistColorTags', merged);
       } catch (error) {
         console.warn('playlist server color merge failed:', error);
       }
@@ -1099,10 +1077,13 @@ export default function SunoLibraryPage() {
   const getWorkspaceColorKey = (group: any, idx: number, colorField = getWorkspaceColorField()) => `workspace:${colorField}:${group?.id || group?.trackId || 'unknown'}:${idx}`;
   const getPlaylistColorKey = (playlistId: string | null, itemId?: string | null) => `playlist:${playlistId || 'unknown'}:${itemId || 'unknown'}`;
 
+  const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
+  const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'anonymous'}`;
+  const getColorSyncUsageStorageKey = () => getScopedColorStorageKey(COLOR_SYNC_USAGE_KEY);
   const getLibraryColorSyncCount = () => {
     try {
-      const raw = localStorage.getItem(COLOR_SYNC_USAGE_KEY);
+      const raw = localStorage.getItem(getColorSyncUsageStorageKey());
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed?.date === getColorSyncDateKey() ? Number(parsed?.count || 0) : 0;
     } catch {
@@ -1115,16 +1096,25 @@ export default function SunoLibraryPage() {
       return;
     }
     const next = Math.min(5, getLibraryColorSyncCount() + 1);
-    localStorage.setItem(COLOR_SYNC_USAGE_KEY, JSON.stringify({ date: getColorSyncDateKey(), count: next }));
+    localStorage.setItem(getColorSyncUsageStorageKey(), JSON.stringify({ date: getColorSyncDateKey(), count: next }));
     setLibraryColorSyncTick((v) => v + 1);
   };
   const libraryColorSyncRemaining = isLibraryAdminUser ? 5 : Math.max(0, 5 - getLibraryColorSyncCount());
   const readLocalColorMap = (key: string): Record<string, string> => {
     try {
-      const raw = localStorage.getItem(key);
+      const scopedRaw = localStorage.getItem(getScopedColorStorageKey(key));
+      const legacyRaw = localStorage.getItem(key);
+      const raw = scopedRaw || legacyRaw;
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
+    }
+  };
+  const writeLocalColorMap = (key: string, value: Record<string, string>) => {
+    try {
+      localStorage.setItem(getScopedColorStorageKey(key), JSON.stringify(value));
+    } catch (error) {
+      console.warn('library color map save failed:', error);
     }
   };
   const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
@@ -1135,7 +1125,11 @@ export default function SunoLibraryPage() {
     if (!activePlaylistId || !item.id) return;
     const key = getPlaylistColorKey(activePlaylistId, item.id);
     const nextColor = color || 'gray';
-    setPlaylistLocalColorMap(prev => ({ ...prev, [key]: nextColor }));
+    setPlaylistLocalColorMap(prev => {
+      const next = { ...prev, [key]: nextColor };
+      writeLocalColorMap('soridraw.library.playlistColorTags', next);
+      return next;
+    });
     setPlaylistItems(prev => prev.map(row => row.id === item.id ? { ...row, colorTag: nextColor === 'gray' ? null : nextColor } : row));
   };
 
@@ -1175,7 +1169,11 @@ export default function SunoLibraryPage() {
     const colorField = getWorkspaceColorField();
     const nextColor = color || 'gray';
     const key = getWorkspaceColorKey(group, idx, colorField);
-    setWorkspaceLocalColorMap(prev => ({ ...prev, [key]: nextColor }));
+    setWorkspaceLocalColorMap(prev => {
+      const next = { ...prev, [key]: nextColor };
+      writeLocalColorMap('soridraw.library.workspaceColorTags', next);
+      return next;
+    });
     setTracks((prev) => prev.map((track) => {
       if (track.id !== group.id) return track;
       return {
@@ -1204,9 +1202,9 @@ export default function SunoLibraryPage() {
       return;
     }
 
-    const favoriteMap = readLocalColorMap(FAVORITE_COLOR_STORAGE_KEY);
-    const workspaceMap = { ...readLocalColorMap(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY), ...workspaceLocalColorMap };
-    const playlistMap = { ...readLocalColorMap(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY), ...playlistLocalColorMap };
+    const favoriteMap = readLocalColorMap('soridraw.favoriteColorTags');
+    const workspaceMap = { ...readLocalColorMap('soridraw.library.workspaceColorTags'), ...workspaceLocalColorMap };
+    const playlistMap = { ...readLocalColorMap('soridraw.library.playlistColorTags'), ...playlistLocalColorMap };
 
     const favoriteEntries = Object.entries(favoriteMap);
     const workspaceEntries = Object.entries(workspaceMap);

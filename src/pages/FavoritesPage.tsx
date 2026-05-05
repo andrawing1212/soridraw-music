@@ -492,10 +492,6 @@ export default function FavoritesPage({
     return () => { cancelled = true; };
   }, [user?.uid]);
 
-  useEffect(() => {
-    lastFavoriteServerColorMapRef.current = {};
-  }, [user?.uid]);
-
 
   const FAVORITE_COLOR_OPTIONS = [
     { value: 'gray', color: '#6b7280', label: '회색' },
@@ -527,15 +523,13 @@ export default function FavoritesPage({
     }, 2200);
   };
 
-  const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'guest'}`;
-  const FAVORITE_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.favoriteColorTags');
-  const LIBRARY_WORKSPACE_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.library.workspaceColorTags');
-  const LIBRARY_PLAYLIST_COLOR_STORAGE_KEY = getScopedColorStorageKey('soridraw.library.playlistColorTags');
-  const COLOR_SYNC_USAGE_KEY = getScopedColorStorageKey('soridraw.colorSyncUsage.v1');
+  const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
+  const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'anonymous'}`;
+  const getColorSyncUsageStorageKey = () => getScopedColorStorageKey(COLOR_SYNC_USAGE_KEY);
   const getFavoriteColorSyncCount = () => {
     try {
-      const raw = localStorage.getItem(COLOR_SYNC_USAGE_KEY);
+      const raw = localStorage.getItem(getColorSyncUsageStorageKey());
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed?.date === getColorSyncDateKey() ? Number(parsed?.count || 0) : 0;
     } catch {
@@ -548,16 +542,25 @@ export default function FavoritesPage({
       return;
     }
     const next = Math.min(5, getFavoriteColorSyncCount() + 1);
-    localStorage.setItem(COLOR_SYNC_USAGE_KEY, JSON.stringify({ date: getColorSyncDateKey(), count: next }));
+    localStorage.setItem(getColorSyncUsageStorageKey(), JSON.stringify({ date: getColorSyncDateKey(), count: next }));
     setFavoriteColorSyncTick((v) => v + 1);
   };
   const favoriteColorSyncRemaining = isFavoriteAdminUser ? 5 : Math.max(0, 5 - getFavoriteColorSyncCount());
   const readLocalColorMap = (key: string): Record<string, string> => {
     try {
-      const raw = localStorage.getItem(key);
+      const scopedRaw = localStorage.getItem(getScopedColorStorageKey(key));
+      const legacyRaw = localStorage.getItem(key);
+      const raw = scopedRaw || legacyRaw;
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
+    }
+  };
+  const writeLocalColorMap = (key: string, value: Record<string, string>) => {
+    try {
+      localStorage.setItem(getScopedColorStorageKey(key), JSON.stringify(value));
+    } catch (error) {
+      console.warn('color map save failed', error);
     }
   };
   const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
@@ -576,9 +579,9 @@ export default function FavoritesPage({
     }
 
     const existingIds = new Set(favorites.map(song => song.id));
-    const favoriteMap = { ...readLocalColorMap(FAVORITE_COLOR_STORAGE_KEY), ...favoriteColorMap };
-    const workspaceMap = readLocalColorMap(LIBRARY_WORKSPACE_COLOR_STORAGE_KEY);
-    const playlistMap = readLocalColorMap(LIBRARY_PLAYLIST_COLOR_STORAGE_KEY);
+    const favoriteMap = { ...readLocalColorMap('soridraw.favoriteColorTags'), ...favoriteColorMap };
+    const workspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
+    const playlistMap = readLocalColorMap('soridraw.library.playlistColorTags');
 
     const favoriteEntries = Object.entries(favoriteMap).filter(([id]) => existingIds.has(id));
     const workspaceEntries = Object.entries(workspaceMap);
@@ -630,21 +633,15 @@ export default function FavoritesPage({
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(FAVORITE_COLOR_STORAGE_KEY);
-      setFavoriteColorMap(raw ? JSON.parse(raw) : {});
+      setFavoriteColorMap(readLocalColorMap('soridraw.favoriteColorTags'));
     } catch (error) {
       console.warn('favorite color map load failed', error);
-      setFavoriteColorMap({});
     }
-  }, [FAVORITE_COLOR_STORAGE_KEY]);
+  }, [user?.uid]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(FAVORITE_COLOR_STORAGE_KEY, JSON.stringify(favoriteColorMap));
-    } catch (error) {
-      console.warn('favorite color map save failed', error);
-    }
-  }, [favoriteColorMap]);
+    writeLocalColorMap('soridraw.favoriteColorTags', favoriteColorMap);
+  }, [favoriteColorMap, user?.uid]);
 
   useEffect(() => {
     const serverMap: Record<string, string> = {};
@@ -678,7 +675,7 @@ export default function FavoritesPage({
 
     if (changed) {
       try {
-        const merged = { ...readLocalColorMap(FAVORITE_COLOR_STORAGE_KEY) };
+        const merged = { ...readLocalColorMap('soridraw.favoriteColorTags') };
         for (const id of allIds) {
           const before = previous[id] || 'gray';
           const current = serverMap[id] || 'gray';
@@ -687,7 +684,7 @@ export default function FavoritesPage({
             else merged[id] = current;
           }
         }
-        localStorage.setItem(FAVORITE_COLOR_STORAGE_KEY, JSON.stringify(merged));
+        writeLocalColorMap('soridraw.favoriteColorTags', merged);
       } catch (error) {
         console.warn('favorite server color merge failed', error);
       }
@@ -1542,6 +1539,7 @@ ${song.prompt}
     setFavoriteColorMap(prev => {
       const next = { ...prev };
       targetIds.forEach(id => { next[id] = color; });
+      writeLocalColorMap('soridraw.favoriteColorTags', next);
       return next;
     });
 

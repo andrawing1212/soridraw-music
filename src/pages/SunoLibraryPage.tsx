@@ -2243,6 +2243,18 @@ export default function SunoLibraryPage() {
     return isPublicValue === false ? 'private' : 'public';
   };
 
+  const isUnavailableSharedSelection = (selection: MultiSelectedTrack) => {
+    const item = selection.item as any;
+    if (selection.context !== 'sharedPlaylist' && item?.sourceType !== 'shared_track') return false;
+    const sourceId = String(item?.sourceId || '').trim();
+    if (!sourceId) return false;
+    return sharedStatusCache[sourceId]?.isPublic === false;
+  };
+
+  const hasUnavailableSharedSelection = selectedTrackList.some(isUnavailableSharedSelection);
+  const blockedBulkActionClass = "w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left transition-all text-white/25 cursor-not-allowed";
+  const normalBulkActionClass = "w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all";
+
   const matchesPlaylistVisibilityFilter = (item: any) => {
     if (playlistVisibilityFilter === 'all') return true;
     return getPlaylistItemVisibilityState(item) === playlistVisibilityFilter;
@@ -3084,6 +3096,10 @@ export default function SunoLibraryPage() {
   };
 
   const handleBulkDownload = async () => {
+    if (selectedTrackList.some(isUnavailableSharedSelection)) {
+      showToast('비공개로 전환된 공유곡은 다운로드할 수 없습니다.');
+      return;
+    }
     const targets = selectedTrackList.filter((selection) => selection.audioUrl);
     if (targets.length === 0) {
       showToast('다운로드할 오디오 URL이 없습니다.');
@@ -3098,6 +3114,10 @@ export default function SunoLibraryPage() {
 
   const handleBulkPlaylistSave = async () => {
     if (selectedTrackCount === 0) return;
+    if (selectedTrackList.some(isUnavailableSharedSelection)) {
+      showToast('비공개로 전환된 공유곡은 플레이리스트에 저장할 수 없습니다.');
+      return;
+    }
     for (const selection of selectedTrackList) {
       if (selection.context === 'workspace') {
         await handleSavePlaylist(selection.group, selection.item, selection.audioUrl, selection.idx);
@@ -3144,6 +3164,7 @@ export default function SunoLibraryPage() {
   const createBulkSharePage = async (options?: { makePublic?: boolean }) => {
     if (!user) throw new Error('NO_USER');
     if (selectedTrackCount === 0) throw new Error('NO_SELECTION');
+    if (selectedTrackList.some(isUnavailableSharedSelection)) throw new Error('PRIVATE_SHARED_TRACK_SELECTED');
 
     const first = selectedTrackList[0];
     const firstTarget = getBulkShareTarget(first);
@@ -3302,6 +3323,10 @@ export default function SunoLibraryPage() {
 
   const handleBulkMoveToPlaylist = async (targetPlaylistId: string) => {
     if (!user || !activePlaylistId || !targetPlaylistId) return;
+    if (selectedTrackList.some(isUnavailableSharedSelection)) {
+      showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.');
+      return;
+    }
     const targets = selectedTrackList.filter((selection) => selection.context !== 'workspace' && (selection.item as any)?.id);
     if (targets.length === 0) {
       showToast('이동할 플레이리스트 곡이 없습니다.');
@@ -5263,16 +5288,21 @@ export default function SunoLibraryPage() {
               </button>
 
               <button
+                disabled={hasUnavailableSharedSelection}
                 onClick={handleBulkDownload}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
               >
                 <Download className="w-4 h-4" />
                 다운로드
               </button>
 
               <button
-                onClick={() => { setBulkMenuState(null); setBulkShareModalOpen(true); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                disabled={hasUnavailableSharedSelection}
+                onClick={() => {
+                  if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 공유할 수 없습니다.'); return; }
+                  setBulkMenuState(null); setBulkShareModalOpen(true);
+                }}
+                className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
               >
                 <Share2 className="w-4 h-4" />
                 공유
@@ -5290,8 +5320,9 @@ export default function SunoLibraryPage() {
 
               {(libraryViewMode !== 'sharedPlaylist' || isSharedView) && (
                 <button
+                  disabled={hasUnavailableSharedSelection}
                   onClick={handleBulkPlaylistSave}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
                 >
                   <FolderOutput className="w-4 h-4" />
                   플레이리스트 저장
@@ -5300,8 +5331,12 @@ export default function SunoLibraryPage() {
 
               {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
                 <button
-                  onClick={() => { setBulkMenuState(null); setBulkMoveModalOpen(true); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  disabled={hasUnavailableSharedSelection}
+                  onClick={() => {
+                    if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.'); return; }
+                    setBulkMenuState(null); setBulkMoveModalOpen(true);
+                  }}
+                  className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
                 >
                   <FolderOutput className="w-4 h-4" />
                   폴더 이동

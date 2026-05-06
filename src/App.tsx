@@ -1394,6 +1394,63 @@ function App() {
   const [latestGenerationBatchId, setLatestGenerationBatchId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
 
+  const RECENT_SONGS_CACHE_TTL_MS = 10 * 60 * 1000;
+  const getRecentSongsCacheKey = (uid: string) => `soridraw_recent_songs_cache_${uid}`;
+
+  const loadRecentSongsCache = (uid: string) => {
+    try {
+      const raw = localStorage.getItem(getRecentSongsCacheKey(uid));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.history)) return null;
+      return parsed as {
+        history: SongResult[];
+        historyIndex: number;
+        latestGenerationBatchId: string | null;
+        cachedAt: number;
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const saveRecentSongsCache = (uid: string, payload: {
+    history: SongResult[];
+    historyIndex: number;
+    latestGenerationBatchId: string | null;
+  }) => {
+    try {
+      localStorage.setItem(
+        getRecentSongsCacheKey(uid),
+        JSON.stringify({
+          ...payload,
+          cachedAt: Date.now(),
+        })
+      );
+    } catch {}
+  };
+
+  const applyRecentSongsState = (songs: SongResult[], options?: { preferredIndex?: number | null; latestBatchId?: string | null }) => {
+    setHistory(songs);
+
+    const newestBatchId = options?.latestBatchId ?? ((songs[0]?.appliedKeywords as any)?.generationBatchId || null);
+    if (newestBatchId) {
+      setLatestGenerationBatchId((prev) => prev || newestBatchId);
+    }
+
+    if (songs.length > 0) {
+      const preferredIndex = options?.preferredIndex ?? null;
+      const nextIndex = preferredIndex !== null && preferredIndex >= 0 && preferredIndex < songs.length ? preferredIndex : 0;
+      setHistoryIndex(nextIndex);
+      historyIndexRef.current = nextIndex;
+      setResult(songs[nextIndex]);
+    } else {
+      setHistoryIndex(-1);
+      historyIndexRef.current = -1;
+      setResult(null);
+    }
+  };
+
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [showMainGenerationModal, setShowMainGenerationModal] = useState(false);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
@@ -2722,7 +2779,7 @@ const cycleFamilySelection = (
     setIsGenreRandomized(true);
   };
 
-  // History state is now persisted per logged-in user in Firestore.
+  // History state is cached locally first and fetched from Firestore only when cache is missing or stale.
   useEffect(() => {
     if (!user) {
       setHistory([]);
@@ -2732,56 +2789,72 @@ const cycleFamilySelection = (
       return;
     }
 
-    const ref = doc(db, "user_recent_songs", user.uid);
+    let isCancelled = false;
+    const cached = loadRecentSongsCache(user.uid);
+    const hasFreshCache = !!cached && Date.now() - (cached.cachedAt || 0) < RECENT_SONGS_CACHE_TTL_MS;
 
-    const unsubscribe = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        const songs = snap.data().songs || [];
-        
-        // Sort songs: newest first (descending order)
-        const sortedSongs = [...songs].sort((a, b) => {
-          const timeA = a.createdAt || 0;
-          const timeB = b.createdAt || 0;
-          return timeB - timeA;
-        });
-        
-        // If no createdAt, keep original order
-        const finalSongs = sortedSongs;
+    if (cached) {
+      applyRecentSongsState(cached.history || [], {
+        preferredIndex: cached.historyIndex,
+        latestBatchId: cached.latestGenerationBatchId || null,
+      });
+    } else {
+      setHistory([]);
+      setResult(null);
+      setHistoryIndex(-1);
+      setLatestGenerationBatchId(null);
+    }
 
-        setHistory(finalSongs);
-        const newestBatchId = (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null;
-        if (newestBatchId) {
-          setLatestGenerationBatchId((prev) => prev || newestBatchId);
-        }
+    if (hasFreshCache) {
+      return;
+    }
 
-        if (finalSongs.length > 0) {
-          const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
-          if (preservedIndex !== null && finalSongs[preservedIndex]) {
-            preserveHistoryIndexOnNextSnapshotRef.current = null;
-            setHistoryIndex(preservedIndex);
-            historyIndexRef.current = preservedIndex;
-            setResult(finalSongs[preservedIndex]);
-          } else {
-            // Set to the first song (newest) on initial load/reconnect
-            const firstIndex = 0;
-            setHistoryIndex(firstIndex);
-            historyIndexRef.current = firstIndex;
-            setResult(finalSongs[firstIndex]);
-          }
+    const loadRecentSongsFromFirestore = async () => {
+      try {
+        const ref = doc(db, "user_recent_songs", user.uid);
+        const snap = await getDoc(ref);
+        if (isCancelled) return;
+
+        if (snap.exists()) {
+          const songs = snap.data().songs || [];
+          const finalSongs = [...songs].sort((a, b) => {
+            const timeA = a.createdAt || 0;
+            const timeB = b.createdAt || 0;
+            return timeB - timeA;
+          });
+
+          const preferredIndex = preserveHistoryIndexOnNextSnapshotRef.current ?? cached?.historyIndex ?? 0;
+          preserveHistoryIndexOnNextSnapshotRef.current = null;
+          applyRecentSongsState(finalSongs, {
+            preferredIndex,
+            latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+          });
         } else {
           preserveHistoryIndexOnNextSnapshotRef.current = null;
-          setHistoryIndex(-1);
-          setResult(null);
+          applyRecentSongsState([], { preferredIndex: -1, latestBatchId: null });
         }
-      } else {
-        setHistory([]);
-        setResult(null);
-        setHistoryIndex(-1);
+      } catch (error) {
+        if (!cached) {
+          console.error('Failed to load recent songs:', error);
+        }
       }
-    });
+    };
 
-    return () => unsubscribe();
+    void loadRecentSongsFromFirestore();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    saveRecentSongsCache(user.uid, {
+      history,
+      historyIndex,
+      latestGenerationBatchId,
+    });
+  }, [user, history, historyIndex, latestGenerationBatchId]);
 
 
   const toggleSelection = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {

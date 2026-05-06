@@ -222,6 +222,7 @@ export default function SunoLibraryPage() {
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
+  const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
   const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
@@ -656,10 +657,12 @@ export default function SunoLibraryPage() {
           } else {
             setTracks([]);
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error("shared track query failed", e);
           setTracks([]);
-          setSharedError(true);
+          // Private shares are intentionally unreadable by Firestore rules.
+          // Treat permission-denied as an unavailable/private track, not as a system error.
+          setSharedError(e?.code && e.code !== 'permission-denied');
         } finally {
           setSharedTrackLoading(false);
           setLoading(false);
@@ -1024,12 +1027,15 @@ export default function SunoLibraryPage() {
       }
 
       // 2. Shared Status Cache
+      // Shared playlists must reflect private/public changes immediately.
+      // Do not rely on the long local cache here, otherwise a track can look public for hours after the owner made it private.
+      const forceSharedStatusRefresh = libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared';
       const sharedSourceIdsToFetch = playlistItems
         .filter(p => p.sourceType === 'shared_track')
         .map(p => p.sourceId!)
         .filter(sid => {
            const cached = currentSharedCache[sid];
-           return !cached || (now - cached.checkedAt > CACHE_EXPIRY_MS);
+           return forceSharedStatusRefresh || !cached || (now - cached.checkedAt > CACHE_EXPIRY_MS);
         });
 
       if (sharedSourceIdsToFetch.length > 0) {
@@ -1054,7 +1060,7 @@ export default function SunoLibraryPage() {
 
     checkCaches();
 
-  }, [playlistItems, libraryViewMode, user]);
+  }, [playlistItems, libraryViewMode, activePlaylistSection, user]);
 
   const handleRemoveFromPlaylist = async (item: PlaylistItem) => {
     if (!user || !activePlaylistId) return;
@@ -1998,6 +2004,17 @@ export default function SunoLibraryPage() {
   };
 
   const handleDownload = async (url: string, title?: string) => {
+    if (isSharedView) {
+      const shareTrackId = new URL(window.location.href).searchParams.get('track');
+      if (shareTrackId) {
+        const isPublic = await ensureSharedItemIsPublic(shareTrackId, false);
+        if (!isPublic) {
+          showToast('원곡자가 비공개로 전환하여 다운로드할 수 없습니다.');
+          return;
+        }
+      }
+    }
+
     if (isSharedView && !user) {
       console.log("Login required for shared download");
 
@@ -2058,6 +2075,88 @@ export default function SunoLibraryPage() {
     }
 
     return !group.ownerUid || group.ownerUid === user.uid;
+  };
+
+  const getShareIdsForTarget = (group: any, item?: any, idx?: number) => {
+    const ids = new Set<string>();
+    const addId = (value: any) => {
+      const id = String(value || '').trim();
+      if (id) ids.add(id);
+    };
+
+    const baseIds = [
+      group?.shareId,
+      item?.shareId,
+      group?.id,
+      group?.trackId,
+      group?.sourceId,
+      item?.sourceId,
+      item?.trackId,
+    ].map((value) => String(value || '').trim()).filter(Boolean);
+
+    baseIds.forEach(addId);
+
+    const rawSubIndex = idx ?? item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? group?.sourceSubTrackIndex ?? group?.subTrackIndex;
+    const subIndex = Number(rawSubIndex);
+    if (Number.isFinite(subIndex)) {
+      baseIds.forEach((baseId) => addId(`${baseId}_${subIndex}`));
+    }
+
+    const items = group && !group.isPlaylistItem ? extractSunoData(group) : [];
+    if (items.length > 0) {
+      baseIds.forEach((baseId) => {
+        items.forEach((_: any, itemIndex: number) => addId(`${baseId}_${itemIndex}`));
+      });
+    }
+
+    return Array.from(ids);
+  };
+
+  const closeShareDocumentsForTarget = async (group: any, item?: any, idx?: number) => {
+    const shareIds = getShareIdsForTarget(group, item, idx);
+    let closedCount = 0;
+
+    await Promise.all(shareIds.map(async (shareId) => {
+      try {
+        const shareRef = doc(db, 'suno_shares', shareId);
+        const shareSnap = await getDoc(shareRef);
+        if (!shareSnap.exists()) return;
+        const shareData = shareSnap.data();
+        if (shareData.ownerUid && user && shareData.ownerUid !== user.uid) return;
+
+        await updateDoc(shareRef, {
+          isPublic: false,
+          shareType: 'private',
+          privateUpdatedAt: serverTimestamp()
+        });
+        closedCount += 1;
+      } catch (error) {
+        console.warn('share document private update skipped:', shareId, error);
+      }
+    }));
+
+    return closedCount;
+  };
+
+  const ensureSharedItemIsPublic = async (sourceId?: string | null, showMessage = true) => {
+    const safeSourceId = String(sourceId || '').trim();
+    if (!safeSourceId) return false;
+
+    try {
+      const shareSnap = await getDoc(doc(db, 'suno_shares', safeSourceId));
+      const isPublic = shareSnap.exists() && shareSnap.data().isPublic === true;
+      setSharedStatusCache(prev => ({ ...prev, [safeSourceId]: { isPublic, checkedAt: Date.now() } }));
+
+      if (!isPublic && showMessage) {
+        showToast('원곡자가 비공개로 전환하여 사용할 수 없습니다.');
+      }
+
+      return isPublic;
+    } catch (error) {
+      console.error('shared track status check failed:', error);
+      if (showMessage) showToast('공유곡 상태를 확인할 수 없습니다.');
+      return false;
+    }
   };
 
   const showToast = (msg: string) => {
@@ -2132,9 +2231,27 @@ export default function SunoLibraryPage() {
     setBulkMoveModalOpen(false);
   };
 
+  const getPlaylistItemVisibilityState = (item: any): 'public' | 'private' => {
+    if (item?.sourceType === 'shared_track') {
+      const sourceId = String(item?.sourceId || '').trim();
+      const cached = sourceId ? sharedStatusCache[sourceId] : null;
+      return cached?.isPublic === false ? 'private' : 'public';
+    }
+
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    const isPublicValue = ((sourceTrack as any)?.isPublic ?? item?.isPublic);
+    return isPublicValue === false ? 'private' : 'public';
+  };
+
+  const matchesPlaylistVisibilityFilter = (item: any) => {
+    if (playlistVisibilityFilter === 'all') return true;
+    return getPlaylistItemVisibilityState(item) === playlistVisibilityFilter;
+  };
+
   const getVisiblePlaylistItemsForSelection = () => {
     const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
     let items = playlistItems.filter((item) => {
+      if (!matchesPlaylistVisibilityFilter(item)) return false;
       if (playlistColorFilter === 'all') return true;
       const itemColor = getPlaylistItemColor(item);
       if (playlistColorFilter === 'gray') return itemColor === 'gray';
@@ -2539,7 +2656,7 @@ export default function SunoLibraryPage() {
       showToast('공개 범위 설정은 원제작자만 변경할 수 있습니다.');
       return;
     }
-    const { group } = sharePopupInfo;
+    const { group, item, idx } = sharePopupInfo;
     try {
       if (user) {
         if (!group.isPlaylistItem) {
@@ -2550,6 +2667,9 @@ export default function SunoLibraryPage() {
             privateUpdatedAt: serverTimestamp()
           });
         }
+
+        await closeShareDocumentsForTarget(group, item, idx);
+
         setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: false } } : null);
         showToast('비공개 상태로 전환되었습니다');
       }
@@ -2754,6 +2874,14 @@ export default function SunoLibraryPage() {
     const sourceId = isShared
       ? String(safeShareId)
       : String(group?.id || group?.trackId || item?.sourceId || item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
+
+    if (isShared) {
+      const isPublic = await ensureSharedItemIsPublic(sourceId, false);
+      if (!isPublic) {
+        showToast('원곡자가 비공개로 전환하여 플레이리스트에 저장할 수 없습니다.');
+        return;
+      }
+    }
 
     const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !isShared });
 
@@ -3148,6 +3276,7 @@ export default function SunoLibraryPage() {
             shareType: 'private',
             privateUpdatedAt: serverTimestamp()
           });
+          await closeShareDocumentsForTarget(selection.group, selection.item, selection.idx);
           changed += 1;
         } else if ((selection.item as any)?.sourceType !== 'shared_track') {
           const sourceId = String((selection.item as any)?.sourceId || (selection.item as any)?.trackId || '').trim();
@@ -3158,6 +3287,7 @@ export default function SunoLibraryPage() {
               shareType: 'private',
               privateUpdatedAt: serverTimestamp()
             });
+            await closeShareDocumentsForTarget(selection.group || selection.item, selection.item, selection.idx);
             changed += 1;
           }
         }
@@ -4110,7 +4240,7 @@ export default function SunoLibraryPage() {
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
             </div>
             <h2 className="text-xl font-bold mb-2">
-              {isSharedView ? (sharedError ? '공유곡 조회 중 오류가 발생했습니다.' : '공유된 음악을 찾을 수 없습니다') : '검색 결과가 없습니다'}
+              {isSharedView ? (sharedError ? '공유곡 조회 중 오류가 발생했습니다.' : '공유된 음악을 이용할 수 없습니다') : '검색 결과가 없습니다'}
             </h2>
             <p className="text-[var(--text-secondary)] mb-8">
               {isSharedView ? (sharedError ? '잠시 후 다시 시도해주세요.' : '비공개로 전환되었거나 삭제된 음악일 수 있습니다.') : '다른 검색어를 사용하거나 필터를 변경해보세요.'}
@@ -4549,6 +4679,24 @@ export default function SunoLibraryPage() {
                       {opt.label}
                     </button>
                   ))}
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  {[
+                    { value: 'all', label: '전체' },
+                    { value: 'public', label: '공개' },
+                    { value: 'private', label: '비공개' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
+                      className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                        playlistVisibilityFilter === opt.value
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -4563,6 +4711,7 @@ export default function SunoLibraryPage() {
                 {(() => {
                   const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
+                    if (!matchesPlaylistVisibilityFilter(item)) return false;
                     if (playlistColorFilter === 'all') return true;
                     const itemColor = getPlaylistItemColor(item);
                     if (playlistColorFilter === 'gray') return itemColor === 'gray';
@@ -4616,6 +4765,8 @@ export default function SunoLibraryPage() {
                   const playlistFavoriteActive = Boolean(!isShared && (((sourceTrackForPlaylist as any)?.favorite) ?? ((item as any).favorite)));
                   const cachedSharedStatus = sharedStatusCache[item.sourceId];
                   const isUnavailable = isShared && cachedSharedStatus && cachedSharedStatus.isPublic === false;
+                  const blockedPlaylistActionClass = "w-full text-left px-4 py-2 flex items-center justify-between group text-white/25 cursor-not-allowed";
+                  const normalPlaylistActionClass = "w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white";
                   
                   const globalId = getTrackGlobalId(item);
                   const likeData = likesCache[globalId] || { likeCount: 0, likedByMe: false };
@@ -4629,7 +4780,7 @@ export default function SunoLibraryPage() {
                         if (multiSelectMode) toggleSelectedTrack(selection);
                       }}
                       data-selection-keep="true"
-                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${isUnavailable ? 'opacity-50 grayscale' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
+                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}
                       <AnimatedTrackPlayButton
@@ -4648,46 +4799,41 @@ export default function SunoLibraryPage() {
                           if (isUnavailable) return;
                           
                           if (item.sourceType === 'shared_track') {
-                            const { getDoc } = await import('firebase/firestore');
-                            const { doc } = await import('firebase/firestore');
-                            try {
-                              const shareRef = doc(db, 'suno_shares', item.sourceId);
-                              const shareSnap = await getDoc(shareRef);
-                              
-                              if (!shareSnap.exists() || shareSnap.data().isPublic !== true) {
-                                showToast("원곡자가 비공개로 전환하여 재생할 수 없습니다.");
-                                setSharedStatusCache(prev => ({ ...prev, [item.sourceId]: { isPublic: false, checkedAt: Date.now() } }));
-                                return;
-                              } else {
-                                setSharedStatusCache(prev => ({ ...prev, [item.sourceId]: { isPublic: true, checkedAt: Date.now() } }));
-                              }
-                            } catch (e) {
-                              console.error(e);
+                            const isPublic = await ensureSharedItemIsPublic(item.sourceId, false);
+                            if (!isPublic) {
+                              showToast("원곡자가 비공개로 전환하여 재생할 수 없습니다.");
+                              return;
                             }
                           }
                           
                           if (isActive) {
                             togglePlayPause();
                           } else {
-                            const newQueue = playlistItems.map(p => ({
-                              url: p.audioUrl!,
-                              title: p.title,
-                              imageUrl: p.imageUrl,
-                              parent: {
-                                ...p,
+                            const newQueue = playlistItems
+                              .filter(p => {
+                                if (p.sourceType !== 'shared_track') return true;
+                                const cached = p.sourceId ? sharedStatusCache[p.sourceId] : null;
+                                return cached?.isPublic !== false;
+                              })
+                              .map(p => ({
+                                url: p.audioUrl!,
+                                title: p.title,
+                                imageUrl: p.imageUrl,
+                                parent: {
+                                  ...p,
+                                  creatorDisplayId: getPlaylistItemCreatorName(p),
+                                  ownerNickname: getPlaylistItemCreatorName(p) || p.ownerNickname,
+                                  creatorNickname: getPlaylistItemCreatorName(p) || p.creatorNickname,
+                                  __playlistContext: true,
+                                  __activePlaylistId: activePlaylistId,
+                                  __libraryViewMode: libraryViewMode,
+                                  favorite: p.sourceType === 'shared_track' ? false : Boolean((getPlaylistItemSourceTrack(p) as any)?.favorite ?? (p as any).favorite)
+                                },
+                                index: 0,
+                                trackId: p.id,
                                 creatorDisplayId: getPlaylistItemCreatorName(p),
-                                ownerNickname: getPlaylistItemCreatorName(p) || p.ownerNickname,
-                                creatorNickname: getPlaylistItemCreatorName(p) || p.creatorNickname,
-                                __playlistContext: true,
-                                __activePlaylistId: activePlaylistId,
-                                __libraryViewMode: libraryViewMode,
-                                favorite: p.sourceType === 'shared_track' ? false : Boolean((getPlaylistItemSourceTrack(p) as any)?.favorite ?? (p as any).favorite)
-                              },
-                              index: 0,
-                              trackId: p.id,
-                              creatorDisplayId: getPlaylistItemCreatorName(p),
-                              lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null
-                            })).filter(q => q.url);
+                                lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null
+                              })).filter(q => q.url);
 
                             if (item.audioUrl) {
                               markPlaylistItemPlayed(item);
@@ -4729,7 +4875,7 @@ export default function SunoLibraryPage() {
                       )}
 
                       {/* Main Info */}
-                      <div className="flex flex-col ml-3 flex-1 min-w-0">
+                      <div className={`flex flex-col ml-3 flex-1 min-w-0 ${isUnavailable ? 'opacity-50 grayscale' : ''}`}>
                         <div className="flex items-center gap-2 relative">
                           {/* Color Point */}
                           <button 
@@ -4818,9 +4964,10 @@ export default function SunoLibraryPage() {
                         )}
                         
                         <button 
-                          onClick={() => handleToggleLike(item)}
+                          onClick={() => { if (!isUnavailable) handleToggleLike(item); }}
+                          disabled={isUnavailable}
                           className={`flex items-center gap-1 text-xs font-medium mr-3 p-1.5 rounded-lg transition-colors ${
-                            likeData.likedByMe ? 'text-red-500 hover:bg-red-500/10' : 'text-white/40 hover:text-white hover:bg-white/5'
+                            isUnavailable ? 'text-white/20 cursor-not-allowed' : likeData.likedByMe ? 'text-red-500 hover:bg-red-500/10' : 'text-white/40 hover:text-white hover:bg-white/5'
                           }`}
                         >
                           {likeData.likedByMe ? (
@@ -4849,12 +4996,14 @@ export default function SunoLibraryPage() {
                           {activePlaylistItemMenu === item.id && (
                             <div data-floating-menu="true" className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-white/5 text-sm py-1">
                               <button 
+                                disabled={isUnavailable}
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
+                                  if (isUnavailable) return;
                                   handleShowPlaylistItemDetails(item); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
                               >
                                 <span className="flex items-center gap-2"><Info className="w-4 h-4 opacity-70" />상세정보</span>
                               </button>
@@ -4869,38 +5018,48 @@ export default function SunoLibraryPage() {
                                 <span className="flex items-center gap-2"><CheckSquare className="w-4 h-4 opacity-70" />선택</span>
                               </button>
                               <button 
-                                onClick={(e) => { 
+                                disabled={isUnavailable}
+                                onClick={async (e) => { 
                                   e.stopPropagation(); 
+                                  if (isUnavailable) return;
                                   if (!item.audioUrl) { showToast("다운로드할 오디오 URL이 없습니다."); return; }
                                   if (item.sourceType === 'shared_track' && !user) { showToast("로그인이 필요합니다."); return; }
+                                  if (item.sourceType === 'shared_track') {
+                                    const isPublic = await ensureSharedItemIsPublic(item.sourceId, false);
+                                    if (!isPublic) { showToast("원곡자가 비공개로 전환하여 다운로드할 수 없습니다."); return; }
+                                  }
                                   handleDownload(item.audioUrl, formatSunoDisplayTitle(item.title)); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
                               >
                                 <span className="flex items-center gap-2"><Download className="w-4 h-4 opacity-70" />다운로드</span>
                               </button>
                               <button 
+                                disabled={isUnavailable}
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
+                                  if (isUnavailable) return;
                                   if (!item.appliedKeywords || Object.keys(item.appliedKeywords).length === 0) {
                                     showToast("적용할 곡 설정 정보가 없습니다."); return;
                                   }
                                   handleApplyNext(item, item); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
                               >
                                 <span className="flex items-center gap-2"><Music className="w-4 h-4 opacity-70" />다음곡에 적용</span>
                               </button>
                               <button 
+                                disabled={isUnavailable}
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
+                                  if (isUnavailable) return;
                                   const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, ownerNickname: item.ownerNickname, creatorNickname: item.creatorNickname, creatorDisplayId: getPlaylistItemCreatorName(item), ownerEmail: item.ownerEmail, creatorEmail: item.creatorEmail, isPlaylistItem: true };
                                   setSharePopupInfo({ group: fakeItem, item: fakeItem, idx: undefined, mode: 'default' });
                                   setActivePlaylistItemMenu(null); 
                                 }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
                               >
                                 <span className="flex items-center gap-2"><Share2 className="w-4 h-4 opacity-70" />공유</span>
                               </button>
@@ -4913,8 +5072,9 @@ export default function SunoLibraryPage() {
                                 </button>
                               )}
                               <button 
-                                onClick={(e) => { e.stopPropagation(); handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
-                                className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                disabled={isUnavailable}
+                                onClick={(e) => { e.stopPropagation(); if (isUnavailable) return; handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
                               >
                                 <span className="flex items-center gap-2"><FolderOutput className="w-4 h-4 opacity-70" />폴더 이동</span>
                               </button>

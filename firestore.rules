@@ -108,6 +108,14 @@ service cloud.firestore {
                (!('requestPayload' in data) || data.requestPayload is map);
       }
 
+      function isValidPrivateShareUpdate(data) {
+        return data.ownerUid is string &&
+               data.ownerUid.size() <= 128 &&
+               data.trackId is string &&
+               data.title is string &&
+               data.isPublic == false;
+      }
+
       allow read: if resource.data.isPublic == true ||
                    isOwner(resource.data.ownerUid) ||
                    isAdmin();
@@ -118,7 +126,7 @@ service cloud.firestore {
 
       allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
                     request.resource.data.ownerUid == resource.data.ownerUid &&
-                    isValidShare(request.resource.data);
+                    (isValidShare(request.resource.data) || isValidPrivateShareUpdate(request.resource.data));
 
       allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
     }

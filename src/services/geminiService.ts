@@ -1123,6 +1123,92 @@ function cleanupPromptTail(value: string): string {
     .trim();
 }
 
+
+function translateKoreanPromptFragments(value: string): string {
+  let text = String(value || "");
+  const replacements: Array<[RegExp, string]> = [
+    [/저승사자/g, "Grim Reaper"],
+    [/처녀귀신/g, "Maiden Ghost"],
+    [/귀신/g, "Ghost"],
+    [/유령/g, "Ghost"],
+    [/상사|부장님|부장|팀장/g, "Boss"],
+    [/MZ사원|MZ 직원|직원|사원/g, "MZ Employee"],
+    [/엄마|어머니/g, "Mom"],
+    [/아빠|아버지/g, "Dad"],
+    [/아들/g, "Son"],
+    [/딸/g, "Daughter"],
+    [/연인/g, "Lover"],
+    [/전남친/g, "Ex-boyfriend"],
+    [/전여친/g, "Ex-girlfriend"],
+    [/세종대왕|세종/g, "King Sejong"],
+    [/퇴계이황|이황|퇴계/g, "Yi Hwang"],
+    [/조선시대/g, "Joseon-era"],
+    [/회사생활|직장 생활|회사/g, "office life"],
+    [/상하관계/g, "workplace hierarchy"],
+    [/세대차이/g, "generational clash"],
+    [/한쪽 독백 중심/g, "one-sided monologue focus"],
+    [/짧은 대화형/g, "short dialogue sections"],
+    [/콜앤리스폰스형|콜앤리스폰스/g, "call-response"],
+    [/감정 누적형/g, "gradual emotional build"],
+    [/끝까지 티격태격/g, "constant bickering"],
+    [/후반 살짝 이해/g, "late slight understanding"],
+    [/몰아붙이고 받아치기/g, "push-and-reply tension"],
+    [/서로 다른 말만 반복/g, "talking-past-each-other loop"],
+    [/마지막 반전/g, "late twist"],
+    [/곡의 전체 정서/g, "the song's emotional core"],
+    [/달콤쌉쌀/g, "bittersweet"],
+    [/고독한/g, "lonely"],
+    [/몽환적/g, "dreamy"],
+    [/감성적/g, "emotional"],
+    [/밝은/g, "bright"],
+    [/펑키한/g, "funky"],
+    [/차분한/g, "calm"],
+    [/편안한/g, "comfortable"],
+    [/평화로운/g, "peaceful"],
+    [/사랑/g, "love"],
+    [/운명/g, "fate"],
+    [/짝사랑/g, "crush"],
+    [/그리움/g, "longing"],
+    [/여행/g, "travel"],
+    [/비/g, "rain"],
+    [/추억/g, "memory"],
+  ];
+  replacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+  return cleanupPromptTail(text.replace(/\s+/g, " "));
+}
+
+function stripRemainingKoreanForProductionPrompt(value: string): string {
+  // Final music prompt should be English-only. Unknown Korean fragments are
+  // removed rather than copied raw, so user notes influence lyrics/internal
+  // interpretation but do not leak as mixed-language prompt text.
+  return cleanupPromptTail(
+    translateKoreanPromptFragments(value)
+      .replace(/[가-힣]+/g, "")
+      .replace(/\s+([,.;:])/g, "$1")
+      .replace(/[,;:]\s*([,;:])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+  );
+}
+
+function englishRoleLabel(role: string, fallback = "Role"): string {
+  const translated = translateKoreanPromptFragments(role);
+  const withoutKorean = translated.replace(/[가-힣]+/g, "").trim();
+  return limitText(withoutKorean || fallback, 24);
+}
+
+function enforceEnglishProductionPrompt(prompt: string): string {
+  return prompt
+    .split("\n")
+    .map((line) => {
+      if (/^\[Audio quality improved to masterpiece\]$/.test(line.trim())) return line.trim();
+      return stripRemainingKoreanForProductionPrompt(line);
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 function limitText(value: string, max = 74): string {
   const cleaned = cleanupPromptTail(value);
   if (cleaned.length <= max) return cleaned;
@@ -1435,7 +1521,7 @@ function compactVocalToneForPrompt(value: string): string {
 }
 
 function compactRoleForPrompt(role: string): string {
-  return limitText(String(role || "Role").trim(), 10);
+  return englishRoleLabel(role, "Role");
 }
 
 function compactPersonaForPrompt(value: string): string {
@@ -2194,7 +2280,7 @@ function getAtmosphereForPrompt(params: GenerateSongParams, detailLayer: string)
     .map((mood) => resolveMoodItem(mood)?.label || sentenceCase(mood))
     .filter(Boolean);
   if (moodLabels.length) {
-    return buildMoodSituationSentence(moodLabels.slice(0, 3), "곡의 전체 정서", "");
+    return buildMoodSituationSentence(moodLabels.slice(0, 3), "the song's emotional core", "");
   }
   return "AI-shaped atmosphere";
 }
@@ -2989,10 +3075,10 @@ function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStr
     `[Production] ${cleanupPromptTail(production)}`,
   ]);
 
-  return [
+  return enforceEnglishProductionPrompt([
     ...bodyLines,
     `[Audio quality improved to masterpiece]`,
-  ].join("\n");
+  ].join("\n"));
 }
 
 
@@ -3206,6 +3292,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Do NOT turn technical instructions into the title or lyrical topic.
 - Keep the final production prompt body up to 500 characters, excluding the fixed audio-quality line. Do not cut off genre identity, story scene, production movement, or vocal roles.
 - Good [Vocals] style: Natural duet with bright female vocals and sarcastic delivery (Employee) vs dry male vocals with a nagging tone (Boss). If the genre is K-pop/Trot/Gugak, Natural Korean duet is appropriate. Bad style: Female, pop, sad.
+- Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format for Situation-led songs should feel like a short natural pitch, not a technical form. Prefer this hybrid structure:
   A {mood + genre + style} track with {core feel}, set around {story scene and nuance}.
   [Vocals] {sentence-style character vocal direction}

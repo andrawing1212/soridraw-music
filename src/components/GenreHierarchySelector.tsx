@@ -384,6 +384,8 @@ export default function GenreHierarchySelector({
     }
   };
 
+  const hasSelectionInCurrentModalStep = modalStep === 'sub' ? !!pendingSubId : !!pendingMainId;
+
   useEffect(() => {
     if (!activeGroup) return;
 
@@ -622,10 +624,15 @@ export default function GenreHierarchySelector({
 
                 <button
                   onClick={() => closeModal()}
-                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
-                  title="닫기"
+                  className={cn(
+                    "w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90",
+                    hasSelectionInCurrentModalStep
+                      ? "bg-brand-orange text-white border-brand-orange hover:bg-brand-orange/90"
+                      : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-brand-orange hover:border-brand-orange/50"
+                  )}
+                  title={hasSelectionInCurrentModalStep ? '선택 완료' : '닫기'}
                 >
-                  <X className="w-5 h-5" />
+                  {hasSelectionInCurrentModalStep ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
                 </button>
               </div>
 
@@ -679,10 +686,10 @@ export default function GenreHierarchySelector({
                             )}
                           >
                             {/* Left Spacer to maintain center alignment of text within the card */}
-                            <div className="w-16 flex-shrink-0" aria-hidden="true" />
+                            <div className="w-20 flex-shrink-0" aria-hidden="true" />
 
                             {/* Text Area */}
-                            <div className="flex-1 min-w-0 text-center pr-4">
+                            <div className="flex-1 min-w-0 text-center pr-5">
                               <div className="font-bold text-lg tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
@@ -695,7 +702,7 @@ export default function GenreHierarchySelector({
                             </div>
                             
                             {/* Right Button Area */}
-                            <div className="w-16 flex-shrink-0 flex items-center justify-center gap-2">
+                            <div className="w-20 flex-shrink-0 flex items-center justify-center gap-2.5">
                               {isActiveVisual && <Check className="w-5 h-5" />}
                               {main.children.length > 0 && (
                                 <div 
@@ -704,14 +711,14 @@ export default function GenreHierarchySelector({
                                     handleOpenSub(main);
                                   }}
                                   className={cn(
-                                    "p-2 rounded-xl border transition-all hover:scale-110 active:scale-90",
+                                    "w-12 h-12 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center",
                                     isActiveVisual 
                                       ? "bg-white/30 border-white/40 text-white" 
                                       : "bg-btn-bg border-btn-border text-brand-orange shadow-btn hover:border-brand-orange/50"
                                   )}
                                   title="세부장르 더보기"
                                 >
-                                  <ChevronRight className="w-4 h-4" />
+                                  <ChevronRight className="w-6 h-6" />
                                 </div>
                               )}
                             </div>

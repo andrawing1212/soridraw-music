@@ -74,6 +74,7 @@ export interface VocalTone {
   isDefault: boolean;
   sortOrder: number;
   promptCore?: string;
+  promptShort?: string;
   createdAt?: number;
   updatedAt?: number;
 }
@@ -89,6 +90,62 @@ export interface VocalConfig {
   // Future expansion fields
   members?: VocalMember[];
   isGroup?: boolean;
+}
+
+
+export type SituationVersion =
+  | 'comic'
+  | 'satire'
+  | 'black-comedy'
+  | 'absurd-comedy'
+  | 'bittersweet'
+  | 'tearful-comedy'
+  | 'sharp-conflict'
+  | 'generation-gap'
+  | 'miscommunication'
+  | 'role-reversal'
+  | 'reconciliation'
+  | 'parallel-ending'
+  | 'one-sided-crush'
+  | 'nostalgic-memory'
+  | 'social-satire'
+  | 'daily-life-slice'
+  | 'dramatic-twist'
+  | 'custom';
+
+export interface SituationSpeakerConfig {
+  id?: string;
+  role: string;
+  gender?: 'male' | 'female' | 'any';
+  ageRange?: string;
+  characterTone?: string;
+  speechStyle?: string;
+  attitude?: string;
+  vocalDirection?: string;
+}
+
+export interface SituationConfig {
+  enabled?: boolean;
+  targetA?: string;
+  targetB?: string;
+  relationship?: string;
+  description?: string;
+  development?: string;
+  developmentPreset?: string;
+  developmentCustom?: string;
+  version?: SituationVersion | string;
+  versionLabel?: string;
+  speakerAStyle?: string;
+  speakerAAttitude?: string;
+  speakerBStyle?: string;
+  speakerBAttitude?: string;
+  attitudeA?: string;
+  attitudeB?: string;
+  detailPresets?: string[];
+  detailCustom?: string;
+  details?: string;
+  speakers?: SituationSpeakerConfig[];
+  summary?: string;
 }
 
 export interface TempoConfig {
@@ -153,6 +210,8 @@ export interface AppliedKeywords {
   subGenreIds?: string[];
   mood: string[];
   theme: string[];
+  situation?: SituationConfig;
+  situationSummary?: string;
   style?: string[];
   instrumentSound?: string[];
   tempo?: string;
@@ -184,6 +243,7 @@ export interface GenerateSongParams {
   subGenre: string[];
   moods: string[];
   themes: string[];
+  situation?: SituationConfig;
   styles: string[];
   instrumentSounds: string[];
   tempo: string;
@@ -210,6 +270,7 @@ export interface SongResult {
   };
   prompt: string;
   appliedKeywords: AppliedKeywords;
+  situationSummary?: string;
   randomKeywords?: string[];
 }
 

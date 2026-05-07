@@ -19,6 +19,7 @@ import {
   SongResult,
   VocalConfig,
   CustomSectionItem,
+  SituationConfig,
 } from "../types";
 
 let aiInstance: GoogleGenAI | null = null;
@@ -51,6 +52,7 @@ interface GenerateSongParams {
   isKoreanEnglishMix?: boolean;
   moods: string[];
   themes?: string[];
+  situation?: SituationConfig;
   styles?: string[];
   instrumentSounds?: string[];
   userInput: string;
@@ -189,11 +191,28 @@ function resolveVocalToneValue(toneIdOrLabel: string): string {
   const tone = VOCAL_TONES.find(
     (item) =>
       item.id.toLowerCase() === normalized ||
-      item.label.toLowerCase() === normalized
+      item.label.toLowerCase() === normalized ||
+      (item.labelKo || "").toLowerCase() === normalized
   );
 
   if (!tone) return toneIdOrLabel;
   return tone.promptCore ?? tone.label;
+}
+
+function resolveVocalToneShortValue(toneIdOrLabel: string): string {
+  const normalized = toneIdOrLabel.trim().toLowerCase();
+
+  const tone = VOCAL_TONES.find(
+    (item) =>
+      item.id.toLowerCase() === normalized ||
+      item.label.toLowerCase() === normalized ||
+      (item.labelKo || "").toLowerCase() === normalized
+  );
+
+  if (!tone) return compactVocalToneForPrompt(toneIdOrLabel);
+  // Keep promptCore as the free-language source, but use promptShort only as
+  // the compressed voice color for short final prompt lines.
+  return tone.promptShort || compactVocalToneForPrompt(tone.promptCore || tone.labelKo || tone.label);
 }
 
 /**
@@ -520,6 +539,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       subGenre: first.subGenre ?? [],
       moods: first.moods ?? [],
       themes: first.themes ?? [],
+      situation: first.situation,
       styles: first.styles ?? [],
       instrumentSounds: first.instrumentSounds ?? [],
       userInput: first.userInput ?? "",
@@ -580,6 +600,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     subGenre: genres?.slice(1) ?? [],
     moods: moods ?? [],
     themes: themes ?? [],
+    situation: undefined,
     styles: [],
     instrumentSounds: [],
     userInput: userInput ?? "",
@@ -691,6 +712,8 @@ function buildAppliedKeywordPayload(
     subGenre: params.subGenre ?? [],
     mood: params.moods ?? [],
     theme: themes,
+    situation: params.situation,
+    situationSummary: buildSituationSummary(params.situation),
     style: styles,
     instrumentSound: instrumentSounds,
     tempo: params.tempo ?? "",
@@ -1083,6 +1106,1257 @@ function buildTheme(params: GenerateSongParams): string {
   if (themes.length === 0) return `THEME: ${DEFAULT_NO_THEME_DIRECTION}`;
   const themeSentence = buildThemeSentence(themes);
   return `THEME: ${themeSentence}`;
+}
+
+function cleanPromptValue(value: string | null | undefined): string {
+  return String(value ?? "")
+    .replace(/^[A-Z /]+:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanupPromptTail(value: string): string {
+  return cleanPromptValue(value)
+    .replace(/(?:,|\s)+(?:with|and|feat\.?|featuring|plus|or|vs|&|그리고|및)$/i, "")
+    .replace(/\b(?:with|and|feat\.?|featuring|plus|or|vs|&)$/i, "")
+    .replace(/[,\s]+$/g, "")
+    .trim();
+}
+
+function limitText(value: string, max = 74): string {
+  const cleaned = cleanupPromptTail(value);
+  if (cleaned.length <= max) return cleaned;
+  const sliced = cleaned.slice(0, max + 1);
+  const cut = Math.max(sliced.lastIndexOf(","), sliced.lastIndexOf(" "));
+  return cleanupPromptTail(cut > 24 ? sliced.slice(0, cut) : cleaned.slice(0, max));
+}
+
+function takeCommaItems(value: string, maxItems = 3, maxChars = 74): string {
+  const items = cleanPromptValue(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const picked = items.slice(0, maxItems).join(", ");
+  return cleanupPromptTail(limitText(picked || cleanPromptValue(value), maxChars));
+}
+
+function hasSituation(situation?: SituationConfig): boolean {
+  if (!situation) return false;
+  return Boolean(
+    situation.enabled ||
+    situation.targetA ||
+    situation.targetB ||
+    situation.relationship ||
+    situation.description ||
+    situation.development ||
+    situation.developmentPreset ||
+    situation.developmentCustom ||
+    situation.versionLabel ||
+    situation.speakerAStyle ||
+    situation.speakerAAttitude ||
+    situation.speakerBStyle ||
+    situation.speakerBAttitude ||
+    situation.details ||
+    situation.detailCustom ||
+    (situation.detailPresets && situation.detailPresets.length > 0) ||
+    situation.summary ||
+    (situation.speakers && situation.speakers.length > 0)
+  );
+}
+
+function buildSituationSummary(situation?: SituationConfig): string {
+  if (!hasSituation(situation)) return "";
+  const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(" vs ");
+  const version = situation?.versionLabel || situation?.version;
+  const development = situation?.developmentCustom || situation?.developmentPreset || situation?.development;
+  const parts = [relation, situation?.relationship, version, development]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(" / ") : limitText(situation?.description || situation?.summary || "Situation", 60);
+}
+
+function joinNaturalKorean(items: string[]): string {
+  const cleaned = items
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  if (cleaned.length <= 1) return cleaned[0] || "";
+  if (cleaned.length === 2) return `${cleaned[0]}고 ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, 그리고 ${cleaned[cleaned.length - 1]}`;
+}
+
+function moodLabelToAtmosphereWord(value: string): string {
+  const raw = String(value || "").trim().toLowerCase();
+  const map: Record<string, string> = {
+    "달콤쌉쌀": "bittersweet",
+    "고독한": "lonely",
+    "몽환적": "dreamy",
+    "외로운": "lonely",
+    "아련한": "wistful",
+    "쓸쓸한": "lonely",
+    "따뜻한": "warm",
+    "차분한": "calm",
+    "어두운": "dark",
+    "밝은": "bright",
+    "희망찬": "hopeful",
+    "긴장된": "tense",
+    "평화로운": "peaceful",
+    "bittersweet": "bittersweet",
+    "loneliness": "lonely",
+    "lonely": "lonely",
+    "dreamy": "dreamy",
+    "wistful": "wistful",
+    "warm": "warm",
+    "calm": "calm",
+    "dark": "dark",
+    "bright": "bright",
+    "hopeful": "hopeful",
+    "tense": "tense",
+    "peaceful": "peaceful",
+  };
+  return map[raw] || cleanupPromptTail(value).toLowerCase();
+}
+
+function uniquePromptWords(values: string[], max = 3): string[] {
+  return values
+    .map((value) => cleanupPromptTail(cleanPromptValue(String(value || ""))).toLowerCase())
+    .filter(Boolean)
+    .filter((item, index, arr) => arr.indexOf(item) === index)
+    .slice(0, max);
+}
+
+function buildMoodAtmosphereClause(moodWords: string[]): string {
+  const words = uniquePromptWords(moodWords, 3);
+  if (!words.length) return "A situation-shaped mood surrounds";
+
+  const hasLonely = words.includes("lonely");
+  const hasDreamy = words.includes("dreamy");
+  const hasBittersweet = words.includes("bittersweet");
+
+  if (hasLonely && hasDreamy && hasBittersweet) {
+    return "A bittersweet sense of lonely dreaminess surrounds";
+  }
+  if (hasLonely && hasDreamy) {
+    return "A lonely dreamlike mood surrounds";
+  }
+  if (hasBittersweet && hasLonely) {
+    return "A bittersweet lonely mood surrounds";
+  }
+  if (hasBittersweet && hasDreamy) {
+    return "A bittersweet dreamlike mood surrounds";
+  }
+
+  const phrase = joinPromptPhrase(words, "and");
+  return `A ${phrase} mood surrounds`;
+}
+
+function roleToPromptPersona(role: string): string {
+  const value = String(role || "").toLowerCase();
+  if (/저승사자|사자|reaper|grim/.test(value)) return "tired reaper";
+  if (/귀신|유령|ghost|spirit/.test(value)) return "regretful ghost";
+  if (/상사|부장|boss|manager|팀장/.test(value)) return "boss";
+  if (/직원|mz|사원|employee|worker|staff/.test(value)) return "employee";
+  if (/엄마|어머니|mother|mom/.test(value)) return "mother";
+  if (/아들|son/.test(value)) return "son";
+  return compactRoleForPrompt(role);
+}
+
+function compactVersionTone(value: string): string {
+  const raw = String(value || "").toLowerCase();
+  if (/코믹|comic/.test(raw)) return "comic";
+  if (/블랙|black/.test(raw)) return "black comedy";
+  if (/풍자|satire/.test(raw)) return "satirical";
+  if (/짠한|웃픈|bittersweet/.test(raw)) return "bittersweet";
+  if (/세대|generation/.test(raw)) return "generational";
+  if (/화해|reconcile/.test(raw)) return "soft reconciliation";
+  if (/평행선|parallel/.test(raw)) return "unresolved parallel-line";
+  if (/갈등|conflict/.test(raw)) return "sharp conflict";
+  return cleanupPromptTail(value);
+}
+
+function compactSituationScene(params: GenerateSongParams): string {
+  const situation = params.situation;
+  const targetA = String(situation?.targetA || "").trim();
+  const targetB = String(situation?.targetB || "").trim();
+  const relation = String(situation?.relationship || "").trim();
+  const description = String(situation?.description || situation?.summary || "").trim();
+  const development = String(situation?.developmentCustom || situation?.developmentPreset || situation?.development || "").trim();
+  const detailText = [
+    ...(situation?.detailPresets || []),
+    situation?.detailCustom || situation?.details || "",
+  ].filter(Boolean).join(", ");
+  const all = `${targetA} ${targetB} ${relation} ${description} ${development} ${detailText}`.toLowerCase();
+
+  const roleScene = targetA && targetB
+    ? `${roleToPromptPersona(targetA)} and ${roleToPromptPersona(targetB)}`
+    : targetA || targetB
+      ? roleToPromptPersona(targetA || targetB)
+      : "the characters";
+
+  if (/저승|귀신|유령|reaper|ghost|afterlife|미련/.test(all)) return `${roleScene} on a midnight afterlife road`;
+  if (/회사|직장|상사|mz|사원|회의|퇴근|회식|office/.test(all)) return `${roleScene} inside office hierarchy`;
+  if (/엄마|어머니|아들|딸|가족|방문|방|mom|mother|son|daughter/.test(all)) return `${roleScene} in a late-night family room`;
+  if (/이별|끝난 사랑|연인|ex|breakup|봄/.test(all)) return `${roleScene} facing a lingering breakup memory`;
+  return roleScene;
+}
+
+function roleDirectionDefaults(role: string): string {
+  const value = String(role || "").toLowerCase();
+  if (/저승사자|사자|reaper|grim/.test(value)) return "tired authority and reluctant sympathy";
+  if (/귀신|유령|ghost|spirit/.test(value)) return "pleading regret and fragile restraint";
+  if (/상사|부장|boss|manager|팀장/.test(value)) return "dry authority and nagging pressure";
+  if (/직원|mz|사원|employee/.test(value)) return "sarcastic but slightly hurt delivery";
+  if (/엄마|어머니|mother|mom/.test(value)) return "worried warmth that sounds like nagging";
+  if (/아들|son/.test(value)) return "blunt defensive replies";
+  return "character-driven delivery";
+}
+
+function mergeRoleDirection(role: string, rawStyleSource: string): string {
+  const base = roleDirectionDefaults(role);
+  const roleText = String(role || "").toLowerCase();
+  const raw = String(rawStyleSource || "").toLowerCase();
+
+  // Strong role archetypes should not become long keyword tails.
+  // Keep them producer-like and readable in the final [Vocals] line.
+  if (/저승사자|사자|reaper|grim/.test(roleText)) return base;
+  if (/귀신|유령|ghost|spirit/.test(roleText)) return base;
+
+  const extras: string[] = [];
+  const add = (value: string, guard: RegExp) => {
+    if (!guard.test(base.toLowerCase()) && !extras.includes(value)) extras.push(value);
+  };
+
+  if (/비꼬|sarcastic/.test(raw)) add("sarcastic edge", /sarcastic/);
+  if (/서운|hurt/.test(raw)) add("hurt undertone", /hurt|regret|pleading/);
+  if (/잔소리|nag/.test(raw)) add("nagging edge", /nagging/);
+  if (/직설|blunt/.test(raw)) add("blunt phrasing", /blunt/);
+  if (/통제|명령|몰아붙|press|command/.test(raw)) add("pressing delivery", /pressure|authority|pressing/);
+
+  return extras.length ? `${base} with ${extras.slice(0, 1).join(" and ")}` : base;
+}
+
+function buildMoodSituationSentence(moodLabels: string[], scene: string, version: string): string {
+  const moodWords = moodLabels
+    .map(moodLabelToAtmosphereWord)
+    .filter(Boolean);
+  const sceneText = cleanupPromptTail(scene || "the scene");
+  const versionText = cleanupPromptTail(version || "");
+  const moodClause = buildMoodAtmosphereClause(moodWords);
+  const versionClause = versionText ? ` with ${versionText} tension` : "";
+  return cleanupPromptTail(`${moodClause} ${sceneText}${versionClause}`);
+}
+
+function buildSituationAtmosphere(params: GenerateSongParams): string {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return "";
+  const version = compactVersionTone(String(situation?.versionLabel || situation?.version || "").trim());
+  const moodWords = (params.moods ?? [])
+    .map((mood) => resolveMoodItem(mood)?.label || sentenceCase(mood))
+    .map(moodLabelToAtmosphereWord)
+    .filter(Boolean);
+
+  const moodClause = buildMoodAtmosphereClause(moodWords);
+  const scene = compactSituationScene(params);
+  const versionClause = version ? ` with ${version} tension` : "";
+
+  // Atmosphere must read as a sentence, not a raw comma list such as "lonely, dreamy".
+  const sentence = `${moodClause} ${scene}${versionClause}`;
+  return cleanupPromptTail(limitText(sentence, 145));
+}
+
+function inferSituationVocalTone(role: string, index: number): string {
+  const r = role.toLowerCase();
+  if (/세종|왕|전하|임금|king|ruler/.test(role) || /king|ruler/.test(r)) return "low commanding rap";
+  if (/퇴계|이황|신하|선비|학자|scholar|official/.test(role) || /scholar|official/.test(r)) return "tired witty reply";
+  if (/상사|부장|boss|manager|팀장/.test(role) || /boss|manager/.test(r)) return "dry nagging rap";
+  if (/직원|mz|사원|employee|worker|staff/.test(role) || /employee|worker|staff|gen z/.test(r)) return "bright sarcastic reply";
+  if (/저승사자|사자|reaper|grim/.test(role) || /reaper|grim/.test(r)) return "dry tired rap-singing";
+  if (/귀신|유령|ghost|spirit/.test(role) || /ghost|spirit/.test(r)) return "fragile pleading vocal";
+  if (/엄마|어머니|mother|mom/.test(role) || /mother|mom/.test(r)) return "warm nagging vocal";
+  if (/아들|딸|자녀|son|daughter|child/.test(role) || /son|daughter|child/.test(r)) return "young defensive reply";
+  if (/연인|전남친|전여친|lover|ex/.test(role) || /lover|ex/.test(r)) return index === 0 ? "aching lead vocal" : "distant reply";
+  return index === 0 ? "character-led vocal" : "contrasting reply";
+}
+
+function getVocalModeInfo(vocal?: VocalConfig) {
+  const v = vocal ?? { male: 0, female: 0, rap: false };
+  const male = v.male ?? 0;
+  const female = v.female ?? 0;
+  const total = male + female;
+  const formation = getVocalFormation(v);
+  const mode = v.mode || (total === 1 ? "solo" : total === 2 ? "duo" : total > 2 ? "group" : undefined);
+  const isSolo = mode === "solo" || total === 1;
+  const isMulti = mode === "duo" || mode === "group" || total >= 2;
+  const gender = male > 0 && female > 0 ? "mixed" : male > 0 ? "male" : female > 0 ? "female" : "character";
+  return { v, male, female, total, formation, mode, isSolo, isMulti, gender };
+}
+
+function getMemberGenderLabel(params: GenerateSongParams, index: number): string {
+  const members = params.vocal?.members ?? [];
+  const memberGender = members[index]?.gender;
+  if (memberGender === "male") return "male";
+  if (memberGender === "female") return "female";
+  const info = getVocalModeInfo(params.vocal);
+  if (info.gender === "male") return "male";
+  if (info.gender === "female") return "female";
+  return index === 0 ? "male" : "female";
+}
+
+function compactVocalToneForPrompt(value: string): string {
+  const raw = cleanPromptValue(value).toLowerCase();
+  if (!raw) return "character";
+  const hasMale = raw.includes("male") || raw.includes("남성");
+  const hasFemale = raw.includes("female") || raw.includes("여성");
+  const gender = hasMale ? "male" : hasFemale ? "female" : "";
+
+  const tones: string[] = [];
+  const addTone = (tone: string) => {
+    if (tones.length < 3 && !tones.includes(tone)) tones.push(tone);
+  };
+
+  // Keep the selected member voice color visible in the final [Vocals] line,
+  // but compress it to short Suno-friendly English tags.
+  if (/warm|따뜻/.test(raw)) addTone("warm");
+  if (/smooth|silky|매끄|부드럽고|감미/.test(raw)) addTone("smooth");
+  if (/r&b|rnb|알앤비|리듬.?앤.?블루스/.test(raw)) addTone("R&B");
+  if (/spoken|talk|conversational|말하듯|말하|대화/.test(raw)) addTone("spoken");
+  if (/soft|gentle|부드/.test(raw)) addTone("soft");
+  if (/plain|담백/.test(raw)) addTone("plain");
+  if (/folk|포크/.test(raw)) addTone("folk");
+  if (/dry|건조/.test(raw)) addTone("dry");
+  if (/gritty|husky|rough|허스키|거친/.test(raw)) addTone("gritty");
+  if (/command|authoritative|저음|낮/.test(raw)) addTone("commanding");
+  if (/low|deep/.test(raw)) addTone("low");
+  if (/bright|clear|청아|밝/.test(raw)) addTone("bright");
+  if (/rap|래/.test(raw)) addTone("rap");
+
+  if (tones.length === 0 && /main|lead|sub|vocal|보컬|voice|tone/.test(raw)) addTone("natural");
+  if (tones.length === 0) addTone("character");
+  return [...tones, gender].filter(Boolean).join(" ").trim();
+}
+
+function compactRoleForPrompt(role: string): string {
+  return limitText(String(role || "Role").trim(), 10);
+}
+
+function compactPersonaForPrompt(value: string): string {
+  const raw = String(value || "").toLowerCase();
+  const tags: string[] = [];
+  const add = (tag: string) => {
+    if (tags.length < 3 && !tags.includes(tag)) tags.push(tag);
+  };
+  if (/걱정|잔소리|nag/.test(raw)) add("worried");
+  if (/방어|반박|defensive|blunt|귀찮|짜증/.test(raw)) add("defensive");
+  if (/통제|명령|몰아붙|press|command/.test(raw)) add("pressing");
+  if (/비꼬|sarcastic|풍자/.test(raw)) add("sarcastic");
+  if (/짠|서운|상처|hurt|soft/.test(raw)) add("soft");
+  if (/직설|짧|단답|direct/.test(raw)) add("blunt");
+  if (/생활|밥|방|잠|학교|성적|청소/.test(raw)) add("daily-life");
+  if (/자유|프라이버시|공간|space|independent/.test(raw)) add("independent");
+  if (/존댓|공손|formal/.test(raw)) add("formal");
+  if (/반말|casual/.test(raw)) add("casual");
+  return tags.join(" ");
+}
+
+function personaDirectionSentence(value: string): string {
+  const raw = String(value || "").toLowerCase();
+  const traits: string[] = [];
+  const add = (trait: string) => {
+    if (traits.length < 2 && !traits.includes(trait)) traits.push(trait);
+  };
+
+  if (/걱정|잔소리|nag/.test(raw)) add("a worried, nagging tone");
+  if (/비꼬|sarcastic|풍자/.test(raw)) add("sarcastic delivery");
+  if (/방어|반박|defensive|귀찮|짜증/.test(raw)) add("defensive phrasing");
+  if (/통제|명령|몰아붙|press|command/.test(raw)) add("a pressing attitude");
+  if (/직설|짧|단답|direct|blunt/.test(raw)) add("blunt short replies");
+  if (/짠|서운|상처|hurt/.test(raw)) add("slightly hurt emotion");
+  if (/생활|밥|방|잠|학교|성적|청소/.test(raw)) add("daily-life realism");
+  if (/자유|프라이버시|공간|space|independent/.test(raw)) add("independent boundary-setting");
+  if (/존댓|공손|formal/.test(raw)) add("formal restraint");
+  if (/반말|casual/.test(raw)) add("casual speech");
+
+  return traits.length ? traits.join(" and ") : "natural character emotion";
+}
+
+function getSituationSpeakerStyle(situation: SituationConfig | undefined, roleIndex: number): string {
+  if (!situation) return "";
+  const speaker = situation.speakers?.[roleIndex];
+  const base = [
+    speaker?.speechStyle,
+    speaker?.attitude,
+    roleIndex === 0 ? situation.speakerAStyle : situation.speakerBStyle,
+    roleIndex === 0 ? situation.speakerAAttitude || situation.attitudeA : situation.speakerBAttitude || situation.attitudeB,
+  ].filter(Boolean).join(", ");
+  return compactPersonaForPrompt(base);
+}
+
+type InferredRoleGender = "male" | "female" | "any";
+
+function inferRoleGenderFromText(role: string): InferredRoleGender {
+  const value = String(role || "").toLowerCase();
+  if (
+    /엄마|어머니|시어머니|장모|할머니|아내|부인|여자|여성|여친|전여친|딸|며느리|누나|언니|여동생|왕비|공주|mother|mom|wife|woman|female|daughter|girlfriend|sister|grandmother|queen|princess/.test(value)
+  ) {
+    return "female";
+  }
+  if (
+    /아빠|아버지|시아버지|장인|할아버지|남편|남자|남성|남친|전남친|아들|사위|형|오빠|남동생|왕|임금|전하|세종|퇴계|이황|신하|선비|부장|상사|boss|father|dad|husband|man|male|son|boyfriend|brother|grandfather|king|ruler|scholar|official|manager/.test(value)
+  ) {
+    return "male";
+  }
+  return "any";
+}
+
+type SituationRoleEntry = {
+  role: string;
+  genderHint?: InferredRoleGender;
+};
+
+function getMatchedMemberIndexes(params: GenerateSongParams, roles: SituationRoleEntry[]): number[] {
+  const members = params.vocal?.members ?? [];
+  const used = new Set<number>();
+
+  return roles.map((entry, roleIndex) => {
+    const genderHint = entry.genderHint && entry.genderHint !== "any"
+      ? entry.genderHint
+      : inferRoleGenderFromText(entry.role);
+
+    if (genderHint !== "any") {
+      const matched = members.findIndex((member, memberIndex) =>
+        !used.has(memberIndex) && member.gender === genderHint
+      );
+      if (matched >= 0) {
+        used.add(matched);
+        return matched;
+      }
+    }
+
+    const fallback = members.findIndex((_, memberIndex) => !used.has(memberIndex));
+    if (fallback >= 0) {
+      used.add(fallback);
+      return fallback;
+    }
+
+    return roleIndex;
+  });
+}
+
+function getMemberToneForPrompt(params: GenerateSongParams, index: number): string {
+  const member = params.vocal?.members?.[index];
+  if (!member?.toneId) return "";
+  return resolveVocalToneShortValue(member.toneId);
+}
+
+function getMemberRoleForPrompt(params: GenerateSongParams, index: number): string {
+  const member = params.vocal?.members?.[index];
+  const role = member?.roles?.[0];
+  if (!role) return index === 0 ? "main" : "lead";
+  const normalized = role.toLowerCase();
+  if (normalized.includes("main")) return "main";
+  if (normalized.includes("lead")) return "lead";
+  if (normalized.includes("rapper")) return "rap";
+  if (normalized.includes("sub")) return "sub";
+  return limitText(role, 8).toLowerCase();
+}
+
+function firstPromptWord(value: string): string {
+  const cleaned = cleanPromptValue(value)
+    .replace(/natural|korean|male|female|vocal|voice|tone|delivery|singing|style|main|lead|sub|rap/gi, " ")
+    .replace(/[^a-zA-Z가-힣&]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.split(" ").filter(Boolean)[0] || "natural";
+}
+
+function oneWordVocalTone(value: string): string {
+  const compact = compactVocalToneForPrompt(value);
+  const first = firstPromptWord(compact);
+  return first === "character" ? "natural" : first;
+}
+
+function oneWordPersona(value: string): string {
+  const compact = compactPersonaForPrompt(value);
+  return firstPromptWord(compact);
+}
+
+function buildSituationRoleVocalItem(params: GenerateSongParams, role: string, roleIndex: number, memberIndex = roleIndex): string {
+  const gender = getMemberGenderLabel(params, memberIndex);
+  const memberTone = getMemberToneForPrompt(params, memberIndex);
+  const fallbackTone = compactVocalToneForPrompt(inferSituationVocalTone(role, roleIndex));
+  const voiceTone = oneWordVocalTone(memberTone || fallbackTone || gender);
+  const rawStyleSource = [
+    params.situation?.speakers?.[roleIndex]?.speechStyle,
+    params.situation?.speakers?.[roleIndex]?.attitude,
+    roleIndex === 0 ? params.situation?.speakerAStyle : params.situation?.speakerBStyle,
+    roleIndex === 0 ? params.situation?.speakerAAttitude || params.situation?.attitudeA : params.situation?.speakerBAttitude || params.situation?.attitudeB,
+  ].filter(Boolean).join(", ");
+  const direction = mergeRoleDirection(role, rawStyleSource);
+
+  const cleanTone = voiceTone === "character" ? "natural" : voiceTone;
+  const roleName = compactRoleForPrompt(role);
+  // Producer-style sentence fragment. It should read like directing a real singer.
+  return `${cleanTone} ${gender} vocals carrying ${direction} (${roleName})`;
+}
+
+function joinPromptPhrase(items: string[], connector = "and"): string {
+  const cleaned = items
+    .map((item) => cleanupPromptTail(cleanPromptValue(String(item || ""))))
+    .filter(Boolean)
+    .filter((item, index, arr) => arr.findIndex((v) => v.toLowerCase() === item.toLowerCase()) === index);
+  if (cleaned.length <= 1) return cleaned[0] || "";
+  if (cleaned.length === 2) return `${cleaned[0]} ${connector} ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, ${connector} ${cleaned[cleaned.length - 1]}`;
+}
+
+
+type CreativeVariationSeed = {
+  id: string;
+  genreLens: string;
+  atmosphereLens: string;
+  vocalLens: string;
+  arrangementLens: string;
+  lyricArchitecture: string;
+  avoidPattern: string;
+};
+
+const SITUATION_VARIATION_SEEDS: CreativeVariationSeed[] = [
+  {
+    id: "interruption-cut-in",
+    genreLens: "with an interruption-driven edge",
+    atmosphereLens: "where one voice keeps cutting into the other",
+    vocalLens: "keep one singer interrupting the other instead of balancing every line",
+    arrangementLens: "interruption-led section ownership",
+    lyricArchitecture: "start one section as a solo complaint, then let the other role cut in after 1-2 lines",
+    avoidPattern: "balanced A/B/A/B call-response in every section",
+  },
+  {
+    id: "one-sided-pursuit",
+    genreLens: "with a chase-like narrative pulse",
+    atmosphereLens: "where one character keeps chasing and the other keeps delaying",
+    vocalLens: "let one singer sound persistent while the other dodges or delays",
+    arrangementLens: "one-sided pursuit with delayed replies",
+    lyricArchitecture: "let one role own the verse, while the other appears as short interruptions or echoes",
+    avoidPattern: "Verse A then Verse B with equal length",
+  },
+  {
+    id: "negotiation-trade",
+    genreLens: "with a playful negotiation groove",
+    atmosphereLens: "where the conflict feels like a small deal being negotiated",
+    vocalLens: "shape the singers as two people trading conditions, refusals, and small concessions",
+    arrangementLens: "trade-and-refusal progression",
+    lyricArchitecture: "build the song around offers, refusals, counteroffers, and a hook phrase from the bargain",
+    avoidPattern: "simple complaint-answer-empathy structure",
+  },
+  {
+    id: "parallel-monologue",
+    genreLens: "with a parallel inner-monologue feel",
+    atmosphereLens: "where both characters are close but emotionally out of sync",
+    vocalLens: "let the singers feel like they are talking past each other, not directly answering every line",
+    arrangementLens: "parallel monologues that collide in the hook",
+    lyricArchitecture: "give each role a short private monologue before they clash in Hook or Chorus",
+    avoidPattern: "direct reply after every line",
+  },
+  {
+    id: "late-reveal",
+    genreLens: "with a late-reveal emotional turn",
+    atmosphereLens: "where the real reason is hidden until later",
+    vocalLens: "keep one singer guarded until a late reveal shifts the delivery",
+    arrangementLens: "late reveal instead of early reconciliation",
+    lyricArchitecture: "hold back the true motive until Bridge, Breakdown, or Final Chorus",
+    avoidPattern: "Bridge always becoming sympathy or easy reconciliation",
+  },
+  {
+    id: "unresolved-comedy",
+    genreLens: "with an unresolved comic bite",
+    atmosphereLens: "where the tension stays funny but never fully solved",
+    vocalLens: "keep both singers in character until the end without forcing harmony",
+    arrangementLens: "unresolved ending with short hook fragments",
+    lyricArchitecture: "let the final section stay awkward, funny, bitter, or one-sided instead of resolving the conflict",
+    avoidPattern: "Final Chorus always resolving the conflict",
+  },
+  {
+    id: "chorus-takeover",
+    genreLens: "with a hook takeover structure",
+    atmosphereLens: "where one character dominates the hook and the other only undercuts it",
+    vocalLens: "let one singer own the hook while the other adds short undercutting replies",
+    arrangementLens: "chorus takeover with undercut replies",
+    lyricArchitecture: "make the chorus mostly one role's catchphrase, with the other role interrupting in short bursts",
+    avoidPattern: "equal chorus lines for both speakers",
+  },
+  {
+    id: "echo-undercut",
+    genreLens: "with an echo-and-undercut hook style",
+    atmosphereLens: "where repeated phrases are echoed, corrected, or mocked by the other role",
+    vocalLens: "use echo, correction, and undercutting as vocal behavior",
+    arrangementLens: "echo-response hook with asymmetric roles",
+    lyricArchitecture: "one role sings full lines while the other echoes, corrects, or mocks fragments",
+    avoidPattern: "straight alternating dialogue blocks only",
+  },
+  {
+    id: "speaker-flaw-focus",
+    genreLens: "with a character-flaw driven color",
+    atmosphereLens: "where one speaker's weakness quietly drives the whole conflict",
+    vocalLens: "let the main singer reveal a flaw through delivery, not explanation",
+    arrangementLens: "flaw-led verse ownership with an uneven hook response",
+    lyricArchitecture: "choose one role's flaw as the engine, let the other role react only at key moments",
+    avoidPattern: "both speakers getting equal emotional explanations",
+  },
+  {
+    id: "detail-hook-focus",
+    genreLens: "with a tiny everyday detail turned into the hook",
+    atmosphereLens: "where a small object, errand, message, room, or street detail becomes emotionally oversized",
+    vocalLens: "let the singer treat one ordinary detail like the whole reason they cannot move on",
+    arrangementLens: "detail-led hook with sparse character interruptions",
+    lyricArchitecture: "pick one concrete detail from the Situation and make it the hook engine instead of summarizing the whole conflict",
+    avoidPattern: "generic regret or generic conflict without a memorable object/detail",
+  },
+  {
+    id: "role-reversal-focus",
+    genreLens: "with a subtle role-reversal twist",
+    atmosphereLens: "where the expected strong role becomes unsettled and the weaker role gains control",
+    vocalLens: "let the expected authority voice crack slightly while the other voice becomes clearer",
+    arrangementLens: "role reversal after the first hook",
+    lyricArchitecture: "start with expected power dynamics, then shift section ownership to the other role after Hook or Verse 2",
+    avoidPattern: "the same role staying dominant from start to finish",
+  },
+  {
+    id: "silent-gap-focus",
+    genreLens: "with a quiet pause-driven tension",
+    atmosphereLens: "where what is not said creates more tension than direct argument",
+    vocalLens: "use restraint, pauses, and short replies instead of constant debate",
+    arrangementLens: "space-led sections with short spoken gaps",
+    lyricArchitecture: "use missing answers, pauses, or unanswered lines as the dramatic engine",
+    avoidPattern: "constant verbal back-and-forth without silence or withheld emotion",
+  },
+  {
+    id: "chorus-solo-A",
+    genreLens: "with a solo-hook focus for the first role",
+    atmosphereLens: "where the first role owns the emotional hook while the other role stays peripheral",
+    vocalLens: "let the first singer carry the chorus while the second only adds small ad-libs or corrections",
+    arrangementLens: "first-role solo chorus with brief undercuts",
+    lyricArchitecture: "make Chorus mostly speaker A's hook; speaker B appears only as ad-lib, echo, or one-line interruption",
+    avoidPattern: "equal A/B/A/B chorus lines",
+  },
+  {
+    id: "chorus-solo-B",
+    genreLens: "with a second-role hook takeover",
+    atmosphereLens: "where the second role unexpectedly owns the hook",
+    vocalLens: "let the second singer take the chorus while the first role comments from the side",
+    arrangementLens: "second-role solo chorus with side comments",
+    lyricArchitecture: "make Chorus mostly speaker B's catchphrase; speaker A appears as one short interruption or spoken tag",
+    avoidPattern: "the first role always leading the hook",
+  },
+  {
+    id: "together-hook-focus",
+    genreLens: "with a shared-hook center",
+    atmosphereLens: "where both roles briefly sound trapped in the same phrase despite conflict",
+    vocalLens: "use a short shared hook, then separate the voices again immediately",
+    arrangementLens: "brief together hook with separated verses",
+    lyricArchitecture: "let Together own only the main hook phrase while verses remain asymmetrical",
+    avoidPattern: "Together taking whole choruses or solving the conflict",
+  },
+  {
+    id: "genre-led-structure",
+    genreLens: "with genre-shaped part ownership",
+    atmosphereLens: "where the scene follows the selected genre's natural vocal architecture",
+    vocalLens: "match vocal part ownership to the genre rather than forcing dialogue everywhere",
+    arrangementLens: "genre-led part architecture",
+    lyricArchitecture: "if ballad/R&B use one lead hook, if funk/city pop use stylish ad-libs, if rap use relay or battle, if EDM use hook fragments",
+    avoidPattern: "one universal dialogue pattern for every genre",
+  },
+  {
+    id: "object-perspective-focus",
+    genreLens: "with a cinematic object-perspective edge",
+    atmosphereLens: "where the scene is anchored by one visible object or place",
+    vocalLens: "let both singers circle around the same object without explaining it directly",
+    arrangementLens: "object-led verses and a reframed hook",
+    lyricArchitecture: "choose one object/place from the Situation as the recurring anchor and change who interprets it by section",
+    avoidPattern: "abstract relationship talk without visible scenery",
+  },
+  {
+    id: "misread-intent-focus",
+    genreLens: "with a misread-intention tension",
+    atmosphereLens: "where both roles misunderstand why the other keeps speaking",
+    vocalLens: "make each singer answer the wrong emotional question",
+    arrangementLens: "misread replies with delayed clarification",
+    lyricArchitecture: "write sections where each role responds to what they think the other means, not what was actually said",
+    avoidPattern: "cleanly logical dialogue that resolves too easily",
+  },
+  {
+    id: "comic-loop-focus",
+    genreLens: "with a looping comic hook device",
+    atmosphereLens: "where the conflict loops back to the same small problem in a new way",
+    vocalLens: "let a repeated phrase become funnier or sadder with each return",
+    arrangementLens: "looping hook with changed ownership each time",
+    lyricArchitecture: "repeat one hook phrase but change who owns it and what it means in Chorus 2 or Final Chorus",
+    avoidPattern: "repeating the chorus with no change in meaning",
+  },
+  {
+    id: "emotional-fakeout-focus",
+    genreLens: "with an emotional fakeout turn",
+    atmosphereLens: "where the song hints at sincerity then swerves into comedy or denial",
+    vocalLens: "let one singer almost open up, then dodge it with a joke or practical detail",
+    arrangementLens: "fakeout bridge and redirected final hook",
+    lyricArchitecture: "make Bridge look like confession, then redirect it into humor, avoidance, or a practical problem",
+    avoidPattern: "Bridge always becoming direct confession or reconciliation",
+  },
+  {
+    id: "status-game-focus",
+    genreLens: "with a status-game performance",
+    atmosphereLens: "where both roles compete for control of the room",
+    vocalLens: "make vocal delivery feel like status play: one pushes, one reframes",
+    arrangementLens: "status battle with shifting section ownership",
+    lyricArchitecture: "let each section change who has status: command, refusal, mockery, silence, or small win",
+    avoidPattern: "static power dynamic from start to end",
+  },
+  {
+    id: "memory-cut-focus",
+    genreLens: "with jump-cut memory flashes",
+    atmosphereLens: "where the scene jumps through short memories instead of linear explanation",
+    vocalLens: "let singers sound like they are catching fragments, not delivering speeches",
+    arrangementLens: "memory jump-cuts with a focused hook",
+    lyricArchitecture: "use short scene fragments and let the hook connect them, rather than telling the situation in order",
+    avoidPattern: "linear exposition from start to finish",
+  },
+  {
+    id: "adlib-character-focus",
+    genreLens: "with character ad-libs shaping the groove",
+    atmosphereLens: "where tiny ad-libs expose the real relationship more than full lines",
+    vocalLens: "let ad-libs and side comments reveal attitude while the main melody stays simple",
+    arrangementLens: "ad-lib driven hook with sparse dialogue",
+    lyricArchitecture: "use short ad-libs, sighs, corrections, or side comments to reveal character, not constant full dialogue",
+    avoidPattern: "every reaction written as full explanatory lines",
+  },
+  {
+    id: "asymmetric-duet-focus",
+    genreLens: "with an asymmetric duet design",
+    atmosphereLens: "where one voice carries melody and the other works as rhythm, echo, or spoken pressure",
+    vocalLens: "do not give both singers the same job; split melody, rhythm, ad-lib, or spoken roles",
+    arrangementLens: "asymmetric duet part design",
+    lyricArchitecture: "assign different musical jobs to each role: one melodic lead, one spoken/rap echo, or one ad-lib counterline",
+    avoidPattern: "both speakers singing the same type of lines in the same length",
+  },
+
+];
+
+const SOLO_VARIATION_SEEDS: CreativeVariationSeed[] = [
+  {
+    id: "scene-first",
+    genreLens: "with a scene-first emotional focus",
+    atmosphereLens: "where a small object or place carries the feeling",
+    vocalLens: "keep the singer natural and scene-bound rather than overly dramatic",
+    arrangementLens: "scene-led verse and clean hook lift",
+    lyricArchitecture: "start from a concrete place, object, or time before naming the emotion",
+    avoidPattern: "abstract emotion-first lyrics",
+  },
+  {
+    id: "confession-delay",
+    genreLens: "with a delayed-confession arc",
+    atmosphereLens: "where the real confession is held back until later",
+    vocalLens: "keep the vocal restrained until the confession opens",
+    arrangementLens: "delayed confession with gradual lift",
+    lyricArchitecture: "hide the real sentence until Bridge or Final Chorus",
+    avoidPattern: "opening the song with the full emotional explanation",
+  },
+  {
+    id: "memory-fragment",
+    genreLens: "with a fragmented memory feel",
+    atmosphereLens: "where small memory fragments replace direct explanation",
+    vocalLens: "make the singer sound like they are remembering in pieces",
+    arrangementLens: "fragmented verse with a focused hook",
+    lyricArchitecture: "use short memory fragments and incomplete thoughts before the hook clarifies the feeling",
+    avoidPattern: "linear diary-style storytelling",
+  },
+  {
+    id: "quiet-contradiction",
+    genreLens: "with a quiet contradiction inside the hook",
+    atmosphereLens: "where the singer says one thing but clearly feels another",
+    vocalLens: "use controlled delivery that hides a crack underneath",
+    arrangementLens: "controlled verse and contradictory hook",
+    lyricArchitecture: "build the hook around a contradiction, not a simple emotional statement",
+    avoidPattern: "straight sad/happy declarations",
+  },
+  {
+    id: "vocal-breath-focus",
+    genreLens: "with a breath-led vocal intimacy",
+    atmosphereLens: "where the emotion is carried by breath and hesitation more than explanation",
+    vocalLens: "let the singer sound natural, close, and slightly withheld",
+    arrangementLens: "breath-led verse with a restrained hook",
+    lyricArchitecture: "make small breaths, pauses, and short sentences carry the emotion",
+    avoidPattern: "long prose-like emotional explanation",
+  },
+  {
+    id: "hook-object-focus",
+    genreLens: "with a concrete hook-object focus",
+    atmosphereLens: "where one visible object becomes the emotional center",
+    vocalLens: "let the singer repeat one object or phrase as if it means more each time",
+    arrangementLens: "object-led hook variation",
+    lyricArchitecture: "turn a small object, message, street, room, photo, or season detail into the hook engine",
+    avoidPattern: "generic emotional hook without a concrete image",
+  },
+  {
+    id: "denial-focus",
+    genreLens: "with a denial-under-the-surface arc",
+    atmosphereLens: "where the singer insists they are fine while the details say otherwise",
+    vocalLens: "keep the vocal controlled, but let small cracks appear in the hook",
+    arrangementLens: "controlled verse and cracked final hook",
+    lyricArchitecture: "write a singer who denies the feeling while objects and habits reveal it",
+    avoidPattern: "directly stating the emotion too early",
+  },
+  {
+    id: "late-image-focus",
+    genreLens: "with a late-image payoff",
+    atmosphereLens: "where the key image only becomes clear near the end",
+    vocalLens: "keep the delivery restrained until the final image opens",
+    arrangementLens: "delayed image reveal",
+    lyricArchitecture: "hold back the central image until Bridge or Final Chorus, then make it reframe earlier lines",
+    avoidPattern: "explaining the full concept in Verse 1",
+  },
+  {
+    id: "rhythm-phrase-focus",
+    genreLens: "with a phrase-rhythm driven feel",
+    atmosphereLens: "where short rhythmic phrases shape the emotional groove",
+    vocalLens: "let the singer use short, singable phrases instead of diary sentences",
+    arrangementLens: "phrase-led hook and clipped verses",
+    lyricArchitecture: "use short phrases, internal rhythm, and a compact refrain rather than long sentences",
+    avoidPattern: "prose lines that are hard to sing",
+  },
+  {
+    id: "contradictory-hook-focus",
+    genreLens: "with a contradiction-driven hook",
+    atmosphereLens: "where the hook says two emotions at once",
+    vocalLens: "make the singer sound calm while the words reveal the opposite",
+    arrangementLens: "contradictory hook with calm delivery",
+    lyricArchitecture: "build the hook from a contradiction like staying/leaving, fine/not fine, love/resentment",
+    avoidPattern: "single-note emotional statement",
+  },
+  {
+    id: "scene-loop-focus",
+    genreLens: "with a looping scene motif",
+    atmosphereLens: "where the same place returns with a slightly different meaning",
+    vocalLens: "let repeated scene words feel more intimate each time",
+    arrangementLens: "scene-loop verse and changed final hook",
+    lyricArchitecture: "return to the same location or object in each section but change what it means",
+    avoidPattern: "new unrelated images in every section",
+  },
+  {
+    id: "micro-conflict-focus",
+    genreLens: "with a micro-conflict emotional lens",
+    atmosphereLens: "where a tiny everyday conflict carries the whole relationship",
+    vocalLens: "let the singer make a small problem feel personal without overdrama",
+    arrangementLens: "micro-conflict hook with subtle lift",
+    lyricArchitecture: "choose one tiny action or phrase as the conflict instead of a broad life summary",
+    avoidPattern: "large abstract themes without one small dramatic trigger",
+  },
+
+];
+
+function pickCreativeVariationSeed(params: GenerateSongParams): CreativeVariationSeed {
+  const info = getVocalModeInfo(params.vocal);
+  const pool = hasSituation(params.situation) && info.isMulti
+    ? SITUATION_VARIATION_SEEDS
+    : SOLO_VARIATION_SEEDS;
+  return pool[Math.floor(Math.random() * pool.length)] || pool[0];
+}
+
+function appendPromptLens(base: string, addition: string, max = 160): string {
+  const cleanedBase = cleanupPromptTail(base);
+  const cleanedAddition = cleanupPromptTail(addition);
+  if (!cleanedAddition) return cleanedBase;
+  if (cleanedBase.toLowerCase().includes(cleanedAddition.toLowerCase())) return cleanedBase;
+  return cleanupPromptTail(limitText(`${cleanedBase} ${cleanedAddition}`, max));
+}
+
+
+function getSituationDetailFocus(params: GenerateSongParams): string {
+  const situation = params.situation;
+  const candidates = [
+    ...(situation?.detailPresets || []),
+    situation?.detailCustom || "",
+    situation?.details || "",
+    situation?.developmentCustom || "",
+    situation?.description || "",
+  ]
+    .flatMap((value) => String(value || "").split(/[,/·]|\s{2,}/g))
+    .map((value) => cleanupPromptTail(value))
+    .filter((value) => value.length >= 2 && value.length <= 28)
+    .filter((value, index, arr) => arr.findIndex((v) => v.toLowerCase() === value.toLowerCase()) === index);
+  if (!candidates.length) return "one small unfinished detail";
+  return candidates[Math.floor(Math.random() * candidates.length)] || candidates[0];
+}
+
+function variationAtmosphereMeaning(variation: CreativeVariationSeed, params: GenerateSongParams): string {
+  const detail = getSituationDetailFocus(params);
+  const map: Record<string, string> = {
+    "interruption-cut-in": "through interruptions that keep breaking the emotional flow",
+    "one-sided-pursuit": "as one voice keeps chasing while the other keeps resisting",
+    "negotiation-trade": "as a small negotiation where every request has a cost",
+    "parallel-monologue": "through two private monologues that barely meet",
+    "late-reveal": "with the real reason hidden until the later sections",
+    "unresolved-comedy": "with comic tension that refuses to fully resolve",
+    "chorus-takeover": "with one character taking over the emotional hook",
+    "echo-undercut": "through dry echoes, corrections, and undercut replies",
+    "speaker-flaw-focus": "through one exposed character flaw rather than a balanced argument",
+    "detail-hook-focus": `through ${detail} becoming the emotional hook`,
+    "role-reversal-focus": "as the expected power balance quietly shifts",
+    "silent-gap-focus": "through pauses, short replies, and unsaid feelings",
+    "chorus-solo-A": "with the first role owning the chorus while the other stays at the edge",
+    "chorus-solo-B": "with the second role unexpectedly owning the chorus",
+    "together-hook-focus": "through a brief shared hook that does not solve the conflict",
+    "genre-led-structure": "through a part structure shaped by the selected genre",
+    "object-perspective-focus": `through ${detail} as the visible anchor of the scene`,
+    "misread-intent-focus": "as both characters keep answering the wrong emotional question",
+    "comic-loop-focus": "through a recurring small problem that changes meaning each time",
+    "emotional-fakeout-focus": "with sincerity repeatedly dodged by jokes or practical details",
+    "status-game-focus": "as both roles compete for control of the moment",
+    "memory-cut-focus": "through fragmented memories rather than a straight explanation",
+    "adlib-character-focus": "through small ad-libs that reveal personality",
+    "asymmetric-duet-focus": "with uneven vocal ownership instead of equal back-and-forth",
+  };
+  return map[variation.id] || "through a fresh angle inside the same situation";
+}
+
+function buildVariedSituationAtmosphere(params: GenerateSongParams, variation: CreativeVariationSeed): string {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return "";
+
+  const moodWords = (params.moods ?? [])
+    .map((mood) => resolveMoodItem(mood)?.label || sentenceCase(mood))
+    .map(moodLabelToAtmosphereWord)
+    .filter(Boolean);
+  const moodClause = buildMoodAtmosphereClause(moodWords)
+    .replace(/ surrounds$/i, " frames")
+    .replace(/ mood frames$/i, " mood frames")
+    .trim();
+  const scene = compactSituationScene(params);
+  const angle = variationAtmosphereMeaning(variation, params);
+
+  // The user's Situation text can be long or vague, so do not copy it directly.
+  // Reinterpret it into one fresh dramatic angle each generation.
+  return cleanupPromptTail(limitText(`${moodClause} ${scene} ${angle}`, 210));
+}
+
+function variationArrangementMeaning(variation: CreativeVariationSeed): string {
+  const map: Record<string, string> = {
+    "interruption-cut-in": "interruption-led sections with uneven vocal ownership",
+    "one-sided-pursuit": "one voice leads while the other resists in short replies",
+    "negotiation-trade": "negotiation-led verses with a changing hook owner",
+    "parallel-monologue": "parallel monologues that meet only briefly in the hook",
+    "late-reveal": "delayed reveal with the emotional turn saved for later",
+    "unresolved-comedy": "comic loop ending without full resolution",
+    "chorus-takeover": "one-speaker chorus takeover with short side interruptions",
+    "echo-undercut": "echo-and-undercut hook with asymmetric roles",
+    "speaker-flaw-focus": "flaw-driven section ownership with uneven responses",
+    "detail-hook-focus": "detail-led hook with sparse character interruptions",
+    "role-reversal-focus": "role reversal after the first hook",
+    "silent-gap-focus": "space-led sections with short spoken gaps",
+    "chorus-solo-A": "first-role solo chorus with brief undercuts",
+    "chorus-solo-B": "second-role solo chorus with side comments",
+    "together-hook-focus": "brief shared hook with separated verses",
+    "genre-led-structure": "genre-led part architecture instead of fixed dialogue",
+    "object-perspective-focus": "object-led verses and a reframed hook",
+    "misread-intent-focus": "misread replies with delayed clarification",
+    "comic-loop-focus": "looping hook with changed ownership each time",
+    "emotional-fakeout-focus": "fakeout bridge with redirected final hook",
+    "status-game-focus": "status battle with shifting section ownership",
+  };
+  return map[variation.id] || cleanupPromptTail(variation.arrangementLens);
+}
+
+function sanitizeVocalDirection(value: string): string {
+  let cleaned = cleanupPromptTail(value)
+    .replace(/\s+(?:let|use|shape|make)\s+the\s+[^\n]+$/i, "")
+    .replace(/\s+(?:let|use|shape|make)\s+[^\n]*(?:through|as|while|where)$/i, "")
+    .replace(/\s+(?:through|as|while|where|with)$/i, "");
+  cleaned = cleanupPromptTail(cleaned);
+  return cleaned;
+}
+
+function moodToMusicAdjective(moodValue: string): string {
+  const item = resolveMoodItem(moodValue);
+  const label = (item?.label || moodValue || "").toLowerCase().trim();
+  const map: Record<string, string> = {
+    "달콤쌉쌀": "bittersweet",
+    "고독한": "lonely",
+    "몽환적": "dreamy",
+    "아련한": "wistful",
+    "따뜻한": "warm",
+    "차분한": "calm",
+    "어두운": "dark",
+    "밝은": "bright",
+    "희망찬": "hopeful",
+    "긴장된": "tense",
+    bittersweet: "bittersweet",
+    loneliness: "lonely",
+    lonely: "lonely",
+    dreamy: "dreamy",
+    sad: "sad",
+    warm: "warm",
+    calm: "calm",
+    dark: "dark",
+    bright: "bright",
+    hopeful: "hopeful",
+    nostalgic: "nostalgic",
+    tense: "tense",
+    peaceful: "peaceful",
+    emotional: "emotional",
+    groovy: "groovy",
+    funky: "funky",
+    upbeat: "upbeat",
+  };
+  return map[label] || cleanPromptValue(item?.label || sentenceCase(moodValue)).toLowerCase();
+}
+
+function getMoodWordsForMusicDirection(params: GenerateSongParams): string[] {
+  return (params.moods ?? [])
+    .map(moodToMusicAdjective)
+    .filter(Boolean)
+    .filter((item, index, arr) => arr.indexOf(item) === index)
+    .slice(0, 2);
+}
+
+function inferVocalCultureLabel(params: GenerateSongParams): string {
+  const values = [
+    params.genre,
+    ...(params.subGenre ?? []),
+    ...(params.styles ?? []),
+    ...(params.themes ?? []),
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase())
+    .join(" ");
+
+  // Do not force a country label by default. Add it only when the selected genre
+  // itself carries a clear national/cultural vocal identity.
+  if (
+    params.isKpopSelected ||
+    /(k[\s-]?pop|k[\s-]?ballad|korean|gugak|국악|트로트|trot|k[\s-]?r&b|k[\s-]?hip[\s-]?hop)/i.test(values)
+  ) {
+    return "Korean";
+  }
+  if (/(j[\s-]?pop|japanese|enka|anime)/i.test(values)) return "Japanese";
+  if (/(c[\s-]?pop|mandopop|cantopop|chinese)/i.test(values)) return "Chinese";
+  if (/(latin|reggaeton|bossa|samba|afrobeat|afropop)/i.test(values)) return "Latin";
+  return "";
+}
+
+function naturalVocalPrefix(params: GenerateSongParams, subject: string): string {
+  const culture = inferVocalCultureLabel(params);
+  return culture ? `natural ${culture} ${subject}` : `natural ${subject}`;
+}
+
+function naturalVocalPrefixTitle(params: GenerateSongParams, subject: string): string {
+  const value = naturalVocalPrefix(params, subject);
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getGenreLabelForPrompt(params: GenerateSongParams): string {
+  const genreMeta = getGenreMeta(params.genre || "");
+  const subLabels = getSubGenreLabels(params.subGenre ?? []).filter(Boolean).slice(0, 2);
+  const styleLabels = getStyleLabels(params.styles ?? []).filter(Boolean).slice(0, 2);
+  const moodWords = getMoodWordsForMusicDirection(params);
+
+  const rawGenre = String(params.genre || "").trim();
+  const baseCandidates = [
+    genreMeta?.label,
+    ...subLabels,
+    params.isKpopSelected ? "K-Pop" : "",
+    rawGenre && rawGenre !== "null" && rawGenre !== "undefined" ? sentenceCase(rawGenre) : "",
+  ].filter(Boolean) as string[];
+
+  let genreCore = joinPromptPhrase(baseCandidates.slice(0, 3), "and");
+  if (!genreCore || /^thin|^isolated|^cold|^floating|^lonely|^dreamy|^bittersweet/i.test(genreCore)) {
+    genreCore = params.isKpopSelected ? "K-Pop" : (styleLabels.length ? "Korean pop" : "Pop");
+  }
+
+  const stylePhrase = joinPromptPhrase(styleLabels.slice(0, 2), "and");
+  const moodPhrase = joinPromptPhrase(moodWords, "and");
+
+  const cleanGenreCore = genreCore.replace(/\s+and\s+/gi, "-").replace(/\s*,\s*/g, " ").trim();
+  const cleanStyle = stylePhrase
+    .replace(/\s+and\s+/gi, " and ")
+    .replace(/Style$/i, "style")
+    .trim();
+
+  let sentence = moodPhrase
+    ? `A ${moodPhrase} ${cleanGenreCore} track`
+    : `A ${cleanGenreCore} track`;
+  if (cleanStyle) sentence = `${sentence} with ${cleanStyle}`;
+
+  return cleanupPromptTail(sentence) || "A pop track";
+}
+
+function getAtmosphereForPrompt(params: GenerateSongParams, detailLayer: string): string {
+  if (hasSituation(params.situation)) return buildSituationAtmosphere(params);
+  if (isFreeTextPrimaryMode(params)) return buildFreeTextDirectorProfile(detailLayer).mood;
+
+  const moodLabels = (params.moods ?? [])
+    .map((mood) => resolveMoodItem(mood)?.label || sentenceCase(mood))
+    .filter(Boolean);
+  if (moodLabels.length) {
+    return buildMoodSituationSentence(moodLabels.slice(0, 3), "곡의 전체 정서", "");
+  }
+  return "AI-shaped atmosphere";
+}
+
+function buildNaturalVocals(params: GenerateSongParams, detailLayer: string): string {
+  if (isFreeTextPrimaryMode(params)) {
+    const profileVocal = buildFreeTextDirectorProfile(detailLayer).vocal;
+    const tone = oneWordVocalTone(profileVocal);
+    return `${naturalVocalPrefix(params, "vocal")} with ${tone} tone and human breath`;
+  }
+
+  const info = getVocalModeInfo(params.vocal);
+  const members = params.vocal?.members ?? [];
+  if (info.isMulti && members.length >= 2) {
+    const items = members.slice(0, 2).map((member, index) => {
+      const gender = member.gender === "female" ? "female" : "male";
+      const tone = oneWordVocalTone(member.toneId ? getMemberToneForPrompt(params, index) : gender);
+      return `${tone} ${gender}`;
+    });
+    return `${naturalVocalPrefix(params, `${info.mode || "duo"} vocals`)} with ${items.join(" vs ")} contrast`;
+  }
+
+  const gender = info.gender === "female" ? "female" : info.gender === "male" ? "male" : "vocal";
+  const globalTone = params.vocal?.globalToneId ? resolveVocalToneShortValue(params.vocal.globalToneId) : "natural";
+  const tone = oneWordVocalTone(globalTone);
+  return `${naturalVocalPrefix(params, `${gender} vocal`)} with ${tone} tone and human breath`;
+}
+
+
+function buildSituationVocals(params: GenerateSongParams): string {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return "";
+
+  const info = getVocalModeInfo(params.vocal);
+  const formation = info.isMulti
+    ? naturalVocalPrefixTitle(params, info.mode || "duo")
+    : info.gender === "female"
+      ? naturalVocalPrefixTitle(params, "female vocal")
+      : info.gender === "male"
+        ? naturalVocalPrefixTitle(params, "male vocal")
+        : naturalVocalPrefixTitle(params, "vocal");
+  const targetA = String(situation?.targetA || "").trim();
+  const targetB = String(situation?.targetB || "").trim();
+  const speakers = situation?.speakers ?? [];
+
+  const roleEntries: SituationRoleEntry[] = speakers.length > 0
+    ? speakers.slice(0, 2)
+        .map((speaker, index) => ({
+          role: String(speaker.role || speaker.id || (index === 0 ? targetA : targetB) || `Role ${index + 1}`).trim(),
+          genderHint: speaker.gender && speaker.gender !== "any" ? speaker.gender : undefined,
+        }))
+        .filter((entry) => Boolean(entry.role))
+    : [targetA, targetB]
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((role) => ({ role, genderHint: inferRoleGenderFromText(role) }));
+
+  // Situation characters are story roles. Actual singer count follows the Vocal menu.
+  if (info.isSolo) {
+    const perspective = targetA && targetB
+      ? `as ${compactRoleForPrompt(targetA)}, addressing ${compactRoleForPrompt(targetB)}`
+      : targetA
+        ? `as ${compactRoleForPrompt(targetA)}`
+        : "with section emotion tags";
+    return `${formation} with human breath and restrained emotion, singing ${perspective}`;
+  }
+
+  if (roleEntries.length >= 2) {
+    const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
+    const first = buildSituationRoleVocalItem(params, roleEntries[0].role, 0, matchedIndexes[0]);
+    const second = buildSituationRoleVocalItem(params, roleEntries[1].role, 1, matchedIndexes[1]);
+    return `${formation} with ${first} vs ${second}`;
+  }
+
+  if (roleEntries.length === 1) {
+    const [matchedIndex] = getMatchedMemberIndexes(params, roleEntries);
+    return `${formation} with ${buildSituationRoleVocalItem(params, roleEntries[0].role, 0, matchedIndex)}`;
+  }
+
+  return `${formation} with human breath and character-led delivery`;
+}
+
+function arrangementDevelopmentToEnglish(value: string): string {
+  const raw = String(value || "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return "";
+  if (/한쪽\s*독백|독백|monologue/.test(lower)) return "one-sided monologue focus";
+  if (/콜앤|call|response|리스폰스/.test(lower)) return "call-response dialogue";
+  if (/짧은\s*대화|대화형|dialogue/.test(lower)) return "short dialogue sections";
+  if (/티격태격|끝까지|bicker/.test(lower)) return "constant bickering dialogue";
+  if (/반전|twist/.test(lower)) return "late twist progression";
+  if (/화해|이해|reconcile|understand/.test(lower)) return "soft reconciliation arc";
+  if (/감정\s*누적|쌓|build/.test(lower)) return "gradual emotional build";
+  if (/몰아붙|받아치|push/.test(lower)) return "push-and-reply tension";
+  if (/서로\s*다른\s*말|동문서답/.test(lower)) return "talking-past-each-other flow";
+  return cleanupPromptTail(limitText(raw, 32));
+}
+
+function buildSituationArrangement(params: GenerateSongParams): string {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return "";
+  const info = getVocalModeInfo(params.vocal);
+  const hasTwoStoryRoles = Boolean(situation?.targetA && situation?.targetB) || (situation?.speakers?.length ?? 0) > 1;
+  const isDialogue = hasTwoStoryRoles && info.isMulti;
+  const development = String(situation?.developmentCustom || situation?.developmentPreset || situation?.development || "").trim();
+  const dev = arrangementDevelopmentToEnglish(development);
+  const base = isDialogue
+    ? `${dev || "separated dialogue sections"} with a call-response hook`
+    : `${dev || "solo narrative flow"} with section emotion tags and line ad-libs`;
+  return cleanupPromptTail(limitText(base, 86));
+}
+
+function compactPromptBody(lines: string[]): string[] {
+  let current = [...lines];
+  const getLineValue = (label: string) => {
+    const found = current.find((line) => line.startsWith(`[${label}]`));
+    return found?.replace(/^\[[^\]]+\]\s*/, "") ?? "";
+  };
+  const countBody = () => current.join("\n").length;
+
+  const vocalValue = getLineValue("Vocals");
+  const allowExtendedVocalPrompt = vocalValue.length > 86 || /\b(duo|group|trio|quartet|vs)\b/i.test(vocalValue);
+  const targetLimit = 500;
+
+  if (countBody() <= targetLimit) return current;
+
+  // Keep the music identity readable. The prompt body now allows up to 500 chars,
+  // while [Audio quality improved to masterpiece] remains outside this limit.
+  // Compress only when the body exceeds 500, and preserve [Vocals] as much as possible.
+  const firstPassLimits: Record<string, number> = {
+    Genre: 125,
+    Instruments: 90,
+    Atmosphere: 150,
+    Vocals: allowExtendedVocalPrompt ? 235 : 170,
+    Arrangement: 80,
+  };
+
+  current = current.map((line) => {
+    const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (!match) return limitText(line, 52);
+    const [, label, value] = match;
+    return `[${label}] ${cleanupPromptTail(limitText(value, firstPassLimits[label] ?? 48))}`;
+  });
+  if (countBody() <= targetLimit) return current;
+
+  const secondPassLimits: Record<string, number> = {
+    Genre: 100,
+    Instruments: 70,
+    Atmosphere: 120,
+    Vocals: allowExtendedVocalPrompt ? 210 : 150,
+    Arrangement: 60,
+  };
+
+  current = current.map((line) => {
+    const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (!match) return line;
+    const [, label, value] = match;
+    if (label === "Vocals") return `[${label}] ${cleanupPromptTail(limitText(value, secondPassLimits[label]))}`;
+    if (label === "Atmosphere") return `[${label}] ${limitText(value, secondPassLimits[label] ?? 34)}`;
+    return `[${label}] ${takeCommaItems(value, 2, secondPassLimits[label] ?? 34)}`;
+  });
+  return current;
 }
 
 function hasFreeTextDirectorNote(params: GenerateSongParams): boolean {
@@ -1592,35 +2866,133 @@ function buildFreeTextPrimarySections(detailLayer: string) {
   const profile = buildFreeTextDirectorProfile(detailLayer);
 
   return [
-    { label: "GENRE", content: profile.genre },
-    { label: "SOUND", content: profile.sound },
-    { label: "MOOD", content: profile.mood },
-    { label: "VOCAL", content: profile.vocal },
-    { label: "ARRANGEMENT", content: profile.arrangement },
-    { label: "THEME", content: profile.theme },
+    { label: "Genre", content: profile.genre },
+    { label: "Instruments", content: profile.sound },
+    { label: "Atmosphere", content: profile.mood },
+    { label: "Vocals", content: profile.vocal },
+    { label: "Arrangement", content: profile.arrangement },
   ];
 }
 
-function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string): string {
-  const themeContent = buildTheme(params);
-  const sections = isFreeTextPrimaryMode(params)
-    ? buildFreeTextPrimarySections(detailLayer)
-    : [
-        { label: "GENRE", content: buildStyle(params) },
-        { label: "SOUND", content: buildSound(params) },
-        { label: "MOOD", content: buildMoodTexture(params) },
-        { label: "VOCAL", content: buildVocal(params) },
-        { label: "ARRANGEMENT", content: buildArrangement(params, resolvedStructure) },
-        ...(themeContent ? [{ label: "THEME", content: themeContent }] : []),
-        ...(detailLayer ? [{ label: "DETAIL LAYER", content: detailLayer }] : []),
-      ];
 
-  return sections
-    .map(s => {
-      const value = s.content.replace(new RegExp(`^${s.label}:\\s*`, "i"), "").trim();
-      return `·${s.label}: ${value}`;
-    })
-    .join("\n\n");
+function lowerFirstForPrompt(value: string): string {
+  const text = cleanupPromptTail(String(value || "").trim());
+  if (!text) return "";
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function buildStorySettingClause(params: GenerateSongParams, variation: CreativeVariationSeed, fallbackAtmosphere: string): string {
+  if (!hasSituation(params.situation)) {
+    const clean = cleanupPromptTail(fallbackAtmosphere || "");
+    return clean ? `with ${lowerFirstForPrompt(clean)}` : "with a clear emotional direction";
+  }
+
+  const scene = compactSituationScene(params);
+  const angle = variationAtmosphereMeaning(variation, params)
+    .replace(/^through\s+/i, "through ")
+    .replace(/^as\s+/i, "as ")
+    .replace(/^with\s+/i, "with ")
+    .trim();
+
+  // Use the user's Situation as story material, but never paste it directly.
+  // The first prompt sentence should feel like a short song pitch: genre + mood + scene + story nuance.
+  const clause = `set around ${scene} ${angle}`;
+  return cleanupPromptTail(limitText(clause, 175));
+}
+
+function buildHybridTrackLine(params: GenerateSongParams, genre: string, atmosphere: string, variation: CreativeVariationSeed): string {
+  const base = cleanupPromptTail(genre || "A pop track").replace(/\.$/, "");
+  const setting = buildStorySettingClause(params, variation, atmosphere).replace(/\.$/, "");
+  return cleanupPromptTail(limitText(`${base}, ${setting}.`, 240));
+}
+
+function buildHybridProductionLine(instruments: string, arrangement: string): string {
+  const cleanInstruments = cleanupPromptTail(takeCommaItems(instruments, 4, 105).replace(/\.+(?=,|$)/g, ""));
+  const cleanArrangement = cleanupPromptTail(arrangement || "clear section movement");
+  const parts = [cleanInstruments, cleanArrangement].filter(Boolean);
+  return cleanupPromptTail(limitText(parts.join(", "), 165));
+}
+
+function compactHybridPromptBody(lines: string[]): string[] {
+  let current = [...lines];
+  const countBody = () => current.join("\n").length;
+  const targetLimit = 500;
+  if (countBody() <= targetLimit) return current;
+
+  const firstPassLimits: Record<string, number> = {
+    Track: 220,
+    Vocals: 210,
+    Production: 145,
+  };
+  current = current.map((line, index) => {
+    const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (match) {
+      const [, label, value] = match;
+      return `[${label}] ${cleanupPromptTail(limitText(value, firstPassLimits[label] ?? 120))}`;
+    }
+    // First sentence has no label by design.
+    return cleanupPromptTail(limitText(line, index === 0 ? firstPassLimits.Track : 120));
+  });
+  if (countBody() <= targetLimit) return current;
+
+  const secondPassLimits: Record<string, number> = {
+    Track: 190,
+    Vocals: 185,
+    Production: 120,
+  };
+  current = current.map((line, index) => {
+    const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (match) {
+      const [, label, value] = match;
+      return `[${label}] ${cleanupPromptTail(limitText(value, secondPassLimits[label] ?? 100))}`;
+    }
+    return cleanupPromptTail(limitText(line, index === 0 ? secondPassLimits.Track : 100));
+  });
+  return current;
+}
+
+function buildFinalPrompt(params: GenerateSongParams, resolvedStructure: SongStructure, detailLayer: string, variation: CreativeVariationSeed): string {
+  const situationActive = hasSituation(params.situation);
+  const baseGenre = isFreeTextPrimaryMode(params)
+    ? buildFreeTextDirectorProfile(detailLayer).genre
+    : getGenreLabelForPrompt(params);
+  const genre = appendPromptLens(baseGenre, variation.genreLens, 165);
+  const instruments = isFreeTextPrimaryMode(params)
+    ? buildFreeTextDirectorProfile(detailLayer).sound
+    : cleanPromptValue(buildSound(params));
+  const baseAtmosphere = getAtmosphereForPrompt(params, detailLayer);
+  const atmosphere = situationActive
+    ? buildVariedSituationAtmosphere(params, variation)
+    : appendPromptLens(baseAtmosphere, variation.atmosphereLens, 170);
+  const baseVocals = situationActive
+    ? buildSituationVocals(params)
+    : buildNaturalVocals(params, detailLayer);
+  // Keep variation out of [Vocals]. Variation belongs to the track sentence and [Production]
+  // so the vocal line never ends with cut fragments like "through" or "as".
+  const vocals = sanitizeVocalDirection(baseVocals);
+  const arrangementBase = situationActive
+    ? buildSituationArrangement(params)
+    : isFreeTextPrimaryMode(params)
+      ? buildFreeTextDirectorProfile(detailLayer).arrangement
+      : cleanPromptValue(buildArrangement(params, resolvedStructure));
+  const variedArrangementBase = appendPromptLens(arrangementBase, variationArrangementMeaning(variation), 145);
+  const arrangement = params.tempo
+    ? `${variedArrangementBase}, ${params.tempo.replace(/^Between\s+/i, "").replace(/^Exactly\s+/i, "").replace(/\s+and\s+/i, "–")}`
+    : variedArrangementBase;
+
+  const trackLine = buildHybridTrackLine(params, genre, atmosphere, variation);
+  const production = buildHybridProductionLine(instruments, arrangement);
+
+  const bodyLines = compactHybridPromptBody([
+    trackLine,
+    `[Vocals] ${cleanupPromptTail(vocals)}`,
+    `[Production] ${cleanupPromptTail(production)}`,
+  ]);
+
+  return [
+    ...bodyLines,
+    `[Audio quality improved to masterpiece]`,
+  ].join("\n");
 }
 
 
@@ -1663,8 +3035,9 @@ export async function generateSong(...args: GenerateSongInput): Promise<SongResu
   
   // Build Detail Layer (Summarized English Prompt)
   const detailLayer = await buildDetailLayer(params.userInput || "");
+  const creativeVariation = pickCreativeVariationSeed(params);
   
-  const finalPrompt = buildFinalPrompt(params, resolvedStructure, detailLayer);
+  const finalPrompt = buildFinalPrompt(params, resolvedStructure, detailLayer, creativeVariation);
   console.log("🔥 generateSong called");
   console.log("🔥 FINAL PROMPT:", finalPrompt);
   const exactStructureText = buildStructureText(
@@ -1767,7 +3140,10 @@ ${exactStructureText}
   - Build-up: A section focused on rising tension and energy leading to a main theme or climax.
   - Main Theme: The core melodic or rhythmic identity of the song.
   - Climax: The highest point of energy and emotional intensity.
-- Do not collapse this into a generic pop structure.`
+- Do not collapse this into a generic pop structure.
+- If Situation is active, every lyrical custom section must still follow the Situation roles and relationship.
+- Chorus, Hook, Rap Verse, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro must not become generic lyrics; keep the scenario and role conflict active.
+- Instrumental, Solo, Drop, and Break can be mainly musical, but if they include lyrics or ad-libs, they must stay connected to the same Situation.`
       : `SONG STRUCTURE (MANDATORY):
 - Selected mode: ${resolvedStructure}.
 - Use this exact structure:
@@ -1787,8 +3163,29 @@ ROLE OF USER INPUT:
 - When the user writes 로파이/lo-fi/lofi, the core genre MUST be Lo-fi Chill or Lo-fi Hip-Hop, never generic Contemporary Pop.
 - When the user writes 공부/독서실/도서관/study/library, preserve that as a quiet focus/study-room scene and background-friendly listening context.
 - If explicit UI selections exist, combine them with the note. When they conflict, prefer the user's clearly written natural-language direction unless a custom song structure is explicitly selected.
+- Explicit Genre, Style, Sound, Mood, and Situation selections are locked source materials. Do not drop them from the final concept; compress them instead.
+- Same selected keywords must NOT create the same song every time. Treat the selections as a reusable palette, not a fixed template.
 - If the user mentions a song length, slow/fast tempo, short/long lyrics, verse/chorus/bridge, rap/no rap, or vocal formation, reflect that in the final song direction.
 - If custom song structure mode is selected, keep the custom section order fixed, but still apply the note to mood, sound, theme, vocal expression, and section energy.
+
+CREATIVE VARIATION SEED (MANDATORY, DO NOT OUTPUT AS A SECTION):
+- Attempt ID: ${creativeVariation.id}
+- This generation must use this angle: ${creativeVariation.lyricArchitecture}.
+- Avoid this repeated pattern: ${creativeVariation.avoidPattern}.
+- Apply the variation to prompt interpretation, song section ownership, chorus function, lyric architecture, and the final track sentence/[Production] wording.
+- Same keywords on a later run may choose another angle; do not treat current keywords as a fixed template.
+- "Same keywords" includes button selections AND the user's Situation text fields: target A/B, relationship, description, development, speaker style, attitude, and details.
+- Even if the exact same Situation sentence is reused, create a sibling version, not a clone: shift the focus, hook owner, flaw, detail, scene angle, or section ownership.
+- Keep the same world and genre identity, but change the interpretation angle enough that the prompt describes a similar-but-different song.
+- Reflect the chosen variation inside the opening track sentence and [Production], not only in hidden instructions.
+- Do NOT append variation wording to [Vocals]. [Vocals] must contain only natural singer direction and role persona.
+- When Situation text is long, vague, or repeated, compress it into a fresh dramatic angle rather than copying the user's wording. Same Situation can become ghost regret focus, reaper fatigue focus, negotiation focus, object/detail focus, role reversal, or unresolved comedy depending on this generation.
+
+SITUATION NUANCE VARIATION RULE (MANDATORY):
+- Before writing lyrics, reinterpret the Situation through the current Attempt ID.
+- Choose whose desire leads the song, whose flaw is exposed first, which concrete detail becomes the hook, and who owns the chorus.
+- Do not let identical Situation text always produce the same track sentence, [Vocals], [Production], or chorus ownership.
+- Examples of valid sibling versions: ghost-regret focus, reaper-fatigue focus, negotiation focus, parallel-conflict focus, late-reveal focus, chorus-takeover focus, unresolved-comedy focus, memory-detail focus.
 
 GENRE COHERENCE RULE (MANDATORY):
 - The final song must still be coherent as one concept, not a loose list of tags.
@@ -1797,12 +3194,24 @@ GENRE COHERENCE RULE (MANDATORY):
 - Do NOT turn mood into a different genre unless the free-text note clearly asks for that genre.
 - Do NOT ignore explicit free-text words such as city pop, Korean traditional fusion, slow tempo, autumn, night, love, couple, historical battle, refreshing feel, rap, no rap, short song, long song, or female/male vocal.
 
-THEME SEPARATION RULE (MANDATORY):
-- Theme means the lyrical story, situation, message, relationship, event, or narrative.
+SITUATION / THEME SEPARATION RULE (MANDATORY):
+- Situation is the primary scenario key when provided: relationship, conflict, place, attitude, development, and ending tone.
+- Theme is only a fallback story helper when Situation is not provided.
+- Final [Vocals] must prioritize a natural vocal/duet feel first and be written as a short singer-directing sentence, not a comma tag list. Do not force Korean by default; add Korean/Japanese/Latin or another cultural vocal identity only when the selected genre or lyric language clearly calls for it. Keep the selected tone compact, then describe attitude/delivery naturally.
+- Do not copy user-provided speaker style, attitude, development, or detail words directly into [Vocals] as raw keywords. Rewrite them into a producer-style sentence that sounds like directing a real singer.
+- [Vocals] must read as a human character direction: attitude + vocal feel + persona role. Example: bright female vocals with sarcastic but slightly hurt delivery (MZ Employee).
+- Do not over-specify genre-default vocals or mood-default phrases; let the model interpret genre and mood naturally unless the user selected Style/Sound or Situation details.
+- Style and Sound selections must be reflected in the opening track sentence and [Production]. Mood selections must color the opening sentence as part of the music/story pitch. Do not output raw comma lists for Mood.
 - Mood, genre, vocal technique, sound, tempo, hook, and arrangement instructions are NOT story themes.
-- If no explicit theme is selected or written, create a simple original everyday emotional scene.
-- Do NOT turn technical instructions such as offbeat vocal phrasing, addictive chorus, restrained high notes, slow tempo, synth, guitar, or genre names into the title or lyrical topic.
-- If a theme exists, keep mood as emotional color around that story, not as a replacement story.
+- Do NOT turn technical instructions into the title or lyrical topic.
+- Keep the final production prompt body up to 500 characters, excluding the fixed audio-quality line. Do not cut off genre identity, story scene, production movement, or vocal roles.
+- Good [Vocals] style: Natural duet with bright female vocals and sarcastic delivery (Employee) vs dry male vocals with a nagging tone (Boss). If the genre is K-pop/Trot/Gugak, Natural Korean duet is appropriate. Bad style: Female, pop, sad.
+- Final production prompt format for Situation-led songs should feel like a short natural pitch, not a technical form. Prefer this hybrid structure:
+  A {mood + genre + style} track with {core feel}, set around {story scene and nuance}.
+  [Vocals] {sentence-style character vocal direction}
+  [Production] {main sound palette}, {story-shaped part ownership / hook movement}
+  [Audio quality improved to masterpiece]
+- Do not output separate [Atmosphere] or [Arrangement] lines in the final production prompt; fold them into the opening sentence and [Production].
 
 ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 
@@ -1822,7 +3231,20 @@ ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- $
 MOOD LAYER (EMOTIONAL COLOR ONLY):
 ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
 
-${(params.themes ?? []).length > 0 ? `THEME / STORY CONCEPT (SITUATION, MESSAGE, OR NARRATIVE):
+${hasSituation(params.situation) ? `SITUATION SCENARIO (PRIMARY):
+Summary: ${buildSituationSummary(params.situation)}
+Description: ${params.situation?.description || ""}
+Version: ${params.situation?.versionLabel || params.situation?.version || ""}
+Development preset: ${params.situation?.developmentPreset || ""}
+Development custom: ${params.situation?.developmentCustom || params.situation?.development || ""}
+Target A style: ${params.situation?.speakerAStyle || ""}
+Target A attitude: ${params.situation?.speakerAAttitude || params.situation?.attitudeA || ""}
+Target B style: ${params.situation?.speakerBStyle || ""}
+Target B attitude: ${params.situation?.speakerBAttitude || params.situation?.attitudeB || ""}
+Detail presets: ${(params.situation?.detailPresets || []).join(", ")}
+Detail custom: ${params.situation?.detailCustom || params.situation?.details || ""}` : ""}
+
+${(params.themes ?? []).length > 0 ? `THEME / STORY CONCEPT (FALLBACK WHEN NO SITUATION):
 ${themePrompt}
 Expanded story direction: ${themeSentence}` : ""}
 
@@ -1999,6 +3421,124 @@ Natural:
 ${params.isNoLyrics ? "LYRICS RULE (MANDATORY):\n- DO NOT generate any lyrics. The user requested an instrumental-only track or a track without lyrics.\n- Omit the 'lyrics' field from the JSON output." : `Lyrics rules:
 ${lyricGuidancePrompt}
 
+[ANTI-TEMPLATE RULE]
+- Same keywords must still produce a different attempt angle each generation. Never treat selected buttons as a fixed lyric/prompt template.
+- Do not use a fixed duet template. The singer who owns Verse 1, Pre-Chorus, Chorus, Bridge, Final Chorus, and Outro must change according to genre and situation.
+- If the previous section was A→B, the next lyrical section should not automatically repeat A→B. Change ownership, interruption timing, solo focus, or hook function.
+- The goal is a different dramatic song design, not only different words.
+- The same keywords may keep the same characters and mood, but the vocal part distribution must vary: who opens, who owns the hook, who interrupts, who disappears, who returns, and whether the chorus is solo/together/echo/call-response should not be fixed.
+
+[LYRIC TAGGING RULES]
+- Keep all tags short. Tags guide singing; they are not prose.
+- MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
+- If there are two actual vocalists, every sung line block must be preceded by a bracket speaker tag: [Role: gender, short style].
+- Do not use (Role) at the start of lyric lines; convert it to [Role: gender, short style].
+- Solo songs: do NOT repeat [Female Vocal] or [Male Vocal] every section when the prompt already defines the vocal identity.
+- Solo section tags must include short performance/emotion tags, e.g. [Verse 1: low, intimate], [Chorus: clear hook, aching].
+- Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
+- Use parentheses for short ad-libs, breath, inner thoughts, or rhythm points. Keep ad-libs sparse, 0-2 per section.
+- Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
+- Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
+- Duo/group vocal + two targets: use separated role vocal tags under the section tag. Include gender and the selected speaker style/attitude in EVERY speaker tag, e.g. [40대 엄마: female, worried nagging, spoken], [10대 아들: male, blunt defensive, spoken].
+- If Target A/B speech style or attitude is provided, it is mandatory: reflect it in both the [Vocals] line concept and the lyric speaker tags.
+- User-provided style/attitude text is source material, not final wording. Interpret it into natural character behavior and short singable tags.
+- Final prompt sentences should sound like a producer directing a real singer; lyric tags should stay compact and musical.
+- NEVER write speaker names in parentheses such as (40대 엄마), (10대 아들), (상사), (직원). Parentheses are ONLY for ad-libs, breath, SFX, inner thoughts, or short reactions.
+- NEVER merge speaker identity into a section tag such as [Verse 1: 40대 엄마, male main spoken]. Keep section tags and speaker tags separate.
+- Correct multi-speaker format:
+  [Verse 1: short dialogue]
+  [40대 엄마: female, worried, spoken]
+  ...
+  [10대 아들: male, blunt, spoken]
+  ...
+- Chorus ownership is flexible. A chorus can be solo-led, duet-led, echo-led, together-led, or call-response depending on the chosen section ownership map. Examples:
+  [Chorus: ghost-led hook]
+  [귀신: female, pleading]
+  ...
+  [저승사자: male, dry interruption]
+  ...
+
+  [Chorus: boss-led hook]
+  [직장상사: male, pressing]
+  ...
+  [MZ사원: female, short ad-lib]
+  (...)
+
+  [Chorus: together hook]
+  [Together: short hook]
+  ...
+- For actual duo/group conflict songs, do NOT collapse both characters into one generic narrator. However, do NOT force every section to alternate A/B line by line. Use speaker tags only where that speaker actually owns or interrupts that part.
+- Do NOT default every chorus to A/B/A/B dialogue. [Chorus: Together], [Chorus: A-led hook], [Chorus: B-led hook], [Chorus: echo hook], or [Chorus: call-response hook] are all allowed when they fit the genre and ownership map.
+- When a section is call-response, keep each role block short, usually 2-4 lines. When a section is solo-led, one speaker may own the full section with only short interruptions or ad-libs from the other.
+- Avoid blended vocals when Arrangement says separated dialogue or call-response.
+- In custom structures, do not drop speaker tags in Chorus, Hook, Rap Verse, Breakdown, Bridge, or Outro when they contain lyrics.
+- One line must not contain two speaker tags. Split them into separate lines/blocks.
+- Use the A→B pattern ONLY for sections explicitly chosen as call-response. Other sections may be A-only, B-only, Together-only, echo-style, interruption-style, or one speaker with the other appearing only as an ad-lib.
+- Avoid long tag explanations; keep tags short and musical.
+- Keep English around 10% or less, mostly as short ad-libs or rhythm points.
+
+
+[PART OWNERSHIP / SONG ARCHITECTURE RULES]
+- CRITICAL: Multi-speaker does NOT mean every section must be a back-and-forth dialogue. First decide the part ownership of the song, then place speaker tags only where needed.
+- This is NOT just dialogue alternation. Decide who owns each musical part differently for each song.
+- Before writing lyrics, silently choose ONE section ownership map based on Genre + Situation version + development feeling. Do NOT show the map.
+- Never reuse the same ownership formula across all genres. A ballad, city pop, funk, rap, trot, EDM, and gugak fusion song must distribute vocal parts differently.
+- The selected genre must affect part ownership:
+  - Ballad/R&B: one voice may own emotional verses; the other appears as memory, answer, or late confession.
+  - City pop/Funk: hook and chorus may be stylish call-response, but they can also be one-speaker hooks with short echo/ad-lib replies; verses can be solo monologue, interruption, or trade.
+  - Rap/Hip-hop: Rap Verse can be a battle, relay, or one-sided rant; do not force polite A/B alternation.
+  - Trot/Gugak/Fusion: one role can narrate or command while the other answers with traditional/formal phrasing.
+  - EDM/Drop: Drop can be ad-lib/hook-driven, but if lyrics appear, keep role identity in short bursts.
+- Possible section ownership maps:
+  1) A-led pursuit: A owns Verse 1; B cuts in at Hook; Chorus becomes a chase.
+  2) B-led complaint: B owns Verse 1; A answers later; Bridge exposes A's weakness.
+  3) Interruption map: one role begins each section, the other interrupts after 1-2 lines.
+  4) Trade/negotiation map: A and B exchange short offers/refusals; one section becomes a solo complaint.
+  5) Parallel monologue map: A and B get separate short monologues, then clash in Hook or Chorus.
+  6) Reversal map: the confident role loses control in Bridge, Breakdown, or Final Chorus.
+  7) Unresolved map: no reconciliation; keep emotional distance through the Outro.
+  8) Chorus-takeover map: the chorus is owned mostly by one role, while the other only interrupts with short lines/ad-libs.
+  9) Echo map: one role sings full lines while the other echoes, corrects, or undercuts them.
+- Do NOT always use: Verse A→B, Pre-Chorus softening, Chorus A/B/A/B, Bridge reconciliation, Final Chorus resolution.
+- Do NOT make every lyrical section contain both speakers. Some sections may be A-only, B-only, echo-only, or Together-only if it fits the map.
+- Bridge must not always be empathy or reconciliation. It can be interruption, reveal, refusal, reversal, silence, parallel monologue, or comic failure.
+- Final Chorus must not always resolve the conflict. It can stay comic, bitter, awkward, one-sided, or unresolved if the Situation version supports it.
+- Custom structures: preserve the user's section order, but assign a different owner/function to each section. Do not repeat the same A/B block order in Verse, Pre-Chorus, Chorus, Bridge, and Final Chorus.
+- Chorus/Hook must not always be balanced call-response. It can be A-dominant, B-dominant, echo style, one-line interruptions, full Together hook, solo emotional hook, or short punchline hook depending on the chosen map.
+- Across generations with the same keywords, vary chorus ownership: female-only, male-only, together, A-led with B ad-libs, B-led with A interruptions, echo/correction, call-response, rap relay, or refrain-only are all valid.
+- Never assume the chorus should be one sentence from A then one sentence from B repeatedly.
+
+[STRICT PART DIVERSITY RULES]
+- CRITICAL: Do not design the song as a dialogue template. Design it as a song with changing part ownership.
+- A multi-speaker song can have many valid part architectures. Use only ONE or TWO dialogue-heavy sections unless the user explicitly asked for full musical-theater dialogue.
+- At least two lyrical sections should be owned mostly by one speaker, by Together, or by echo/ad-lib structure instead of balanced A/B exchange.
+- The chorus must choose ONE function, not the same A/B line-trading every time:
+  1) A solo hook, B only ad-libs
+  2) B solo hook, A only interrupts once
+  3) Together hook only
+  4) A hook + B echo/correction
+  5) B hook + A spoken undercut
+  6) Rap relay hook
+  7) Refrain-only hook with no speaker split
+  8) True call-response hook
+- Do not use true call-response in more than one major hook section unless the selected development feeling specifically asks for it.
+- Vary section ownership across the whole song. Examples of valid distributions:
+  A) Verse 1=A solo, Pre-Chorus=Together, Chorus=B solo hook, Verse 2=B solo, Bridge=A interruption, Final Chorus=Together.
+  B) Verse 1=B solo, Hook=A short cut-in, Chorus=Together, Verse 2=A solo, Bridge=parallel monologue, Final Chorus=B solo.
+  C) Verse 1=A interrupted by B, Pre-Chorus=A solo, Chorus=A-led with B ad-libs, Verse 2=B rant, Bridge=unresolved silence, Outro=A punchline.
+  D) Verse 1=parallel monologues, Chorus=refrain-only, Verse 2=rap relay, Bridge=late reveal, Final Chorus=echo/correction.
+- Do not make Verse 1, Verse 2, Pre-Chorus, Chorus, Bridge, and Final Chorus all contain both speakers.
+- Do not make both characters appear in the same order in every section.
+- If the song has a genre with strong vocal conventions, follow that genre's part logic before dialogue symmetry: ballad can be solo emotional hook, funk can be ad-lib undercut, rap can be relay/battle, trot can be one main singer with spoken replies, EDM can use refrain/drop fragments.
+- The goal is dozens of possible structures, not a stable template. Same selected keywords should create a different part architecture each generation.
+
+[PRONUNCIATION DESIGN]
+- Write lyrics as singable spoken language, not prose.
+- Chorus and high-emotion lines should prefer open vowels and fewer heavy final consonants.
+- Rap/groove sections should use short rhythmic phrases and crisp consonant energy.
+- Do not intentionally misspell Korean to force pronunciation.
+- Use short English ad-libs as breath or punchline points only.
+
 [LYRIC STYLE SYSTEM]
 
 Write lyrics that feel like they were written by a real person, not an AI.
@@ -2051,7 +3591,15 @@ Write like:
 - Themes define the situation, message, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.
-- If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role.
+- If custom structure mode is selected, keep the exact custom section order, but apply the Situation to every lyrical section.
+- For custom Chorus, Hook, Rap Verse, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro sections, keep the characters, relationship, speech style, and conflict active.
+- Do not let custom Chorus/Hook/Rap sections become generic slogan lyrics. They must still sound like the selected Situation.
+- For duo/group Situation songs, custom Chorus/Hook/Rap Verse sections must keep role identity, but they must NOT always use call-response. They can be solo-led, echo-led, together-led, interruption-led, relay, or call-response depending on the chosen ownership map.
+- Instrumental, Solo, Drop, and Break sections may be mostly musical. If lyrics/ad-libs appear there, keep them short and tied to the same Situation.
+- If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role without replacing the story.
+- For multi-speaker songs, do not give Verse 1, Verse 2, Bridge, and Final Chorus the same speaker order. Rotate section ownership naturally.
+- A chorus can be led by one speaker with the other interrupting, not always equal A/B alternation.
+- A verse can be mostly one speaker if the other interrupts briefly; this is different from a full duet block.
 - Respect the selected lyricsLength strictly.
 - Respect the selected song structure strictly.
 - Do not drift longer than the requested lyric size.
@@ -2268,12 +3816,15 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   result.prompt = finalPrompt;
+  result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
     genre: params.genre ? [params.genre] : [],
     subGenre: params.subGenre ?? [],
     mood: params.moods ?? [],
     theme: params.themes ?? [],
+    situation: params.situation,
+    situationSummary: buildSituationSummary(params.situation),
     style: params.styles ?? [],
     instrumentSound: params.instrumentSounds ?? [],
     tempo: params.tempo,

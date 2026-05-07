@@ -86,6 +86,24 @@ export const getKeywordMeta = (idOrLabel: string) => {
   return allItems.find(i => i.id === idOrLabel || i.label === idOrLabel);
 };
 
+
+const resolveSituationDisplayItem = (ak: any): DisplayKeywordItem[] => {
+  const summary = ak?.situationSummary || ak?.situation?.summary;
+  const situation = ak?.situation;
+  if (!summary && !situation) return [];
+
+  const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(' vs ');
+  const version = situation?.versionLabel || situation?.version;
+  const label = String(summary || [relation, situation?.relationship, version].filter(Boolean).join(' / ') || situation?.description || 'Situation').trim();
+  const description = [
+    situation?.description,
+    situation?.development,
+    situation?.details,
+  ].filter(Boolean).join(' / ');
+
+  return label ? [{ id: 'situation', label, description }] : [];
+};
+
 /**
  * Resolves all keywords for display, following the Home screen logic.
  */
@@ -108,6 +126,12 @@ export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): Disp
           isRandom: rk.includes(meta?.label) || rk.includes(kw)
         };
       })
+    },
+    {
+      key: 'situation',
+      title: 'situation',
+      accent: 'sky',
+      items: resolveSituationDisplayItem(ak)
     },
     {
       key: 'theme',

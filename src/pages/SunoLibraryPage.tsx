@@ -2939,6 +2939,7 @@ export default function SunoLibraryPage() {
       if (itemData.appliedKeywords.genre) labels.push(...itemData.appliedKeywords.genre);
       if (itemData.appliedKeywords.subGenre) labels.push(...itemData.appliedKeywords.subGenre);
       if (itemData.appliedKeywords.style) labels.push(...itemData.appliedKeywords.style);
+      if (itemData.appliedKeywords.situationSummary) labels.push(itemData.appliedKeywords.situationSummary);
       itemData.genreLabels = labels;
     }
 
@@ -3576,6 +3577,9 @@ export default function SunoLibraryPage() {
       push(applied?.selectedMoods);
       push(applied?.theme);
       push(applied?.selectedThemes);
+      push(applied?.situationSummary);
+      push(applied?.situation?.summary);
+      push(applied?.situation?.description);
       push(applied?.tempo);
       push(applied?.bpm);
       
@@ -3585,6 +3589,9 @@ export default function SunoLibraryPage() {
       push(requestPayload?.sound);
       push(requestPayload?.mood);
       push(requestPayload?.theme);
+      push(requestPayload?.situationSummary);
+      push(requestPayload?.situation?.summary);
+      push(requestPayload?.situation?.description);
       push(requestPayload?.tempo);
     }
 
@@ -3635,6 +3642,7 @@ export default function SunoLibraryPage() {
       createdAt: item.addedAt,
       taskId: item.sourceId,
       style: extractKeywordStyleTextForDetails(item, applied, reqPayload),
+      situation: applied?.situationSummary || reqPayload?.situationSummary || applied?.situation?.summary || reqPayload?.situation?.summary || '',
       prompt: normalizeDetailText(item.prompt || applied?.prompt || applied?.detailLayer || reqPayload?.prompt) || '',
       lyrics: extractActualLyricsForDetails(item, applied, reqPayload),
       audioUrl: item.audioUrl || '',

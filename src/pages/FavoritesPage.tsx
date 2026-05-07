@@ -62,6 +62,10 @@ function getSongThemeValues(song: any): string[] {
   return song?.appliedKeywords?.theme ?? [];
 }
 
+function getSongSituationSummary(song: any): string {
+  return song?.appliedKeywords?.situationSummary || song?.appliedKeywords?.situation?.summary || '';
+}
+
 function getSongStyleValues(song: any): string[] {
   return song?.appliedKeywords?.style ?? [];
 }
@@ -1286,6 +1290,7 @@ export default function FavoritesPage({
     const keywords = [
       `[Genres] ${getSongGenreValues(song).join(', ')}`,
       `[Moods] ${getSongMoodValues(song).join(', ')}`,
+      getSongSituationSummary(song) ? `[Situation] ${getSongSituationSummary(song)}` : '',
       `[Themes] ${getSongThemeValues(song).join(', ')}`,
       `[Styles] ${getSongStyleValues(song).join(', ')}`,
       `[Instruments / Sound] ${getSongInstrumentSoundValues(song).join(', ')}`,
@@ -1363,6 +1368,8 @@ ${song.prompt}
       subGenre: getSongSubGenreValues(song),
       mood: getSongMoodValues(song),
       theme: getSongThemeValues(song),
+      situation: song.appliedKeywords?.situation,
+      situationSummary: getSongSituationSummary(song),
       style: getSongStyleValues(song),
       instrumentSound: getSongInstrumentSoundValues(song),
       tempo: song.appliedKeywords.tempo ?? null,
@@ -1707,6 +1714,7 @@ ${song.prompt}
       ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value })),
       ...getSongMoodValues(song).map((value: string) => ({ type: 'mood', value })),
       ...getSongThemeValues(song).map((value: string) => ({ type: 'theme', value })),
+      ...(getSongSituationSummary(song) ? [{ type: 'situation', value: getSongSituationSummary(song) }] : []),
       ...getSongStyleValues(song).map((value: string) => ({ type: 'style', value })),
       ...getSongInstrumentSoundValues(song).map((value: string) => ({ type: 'sound', value })),
     ];

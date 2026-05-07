@@ -98,7 +98,7 @@ import {
   INSTRUMENT_TAG_DESCRIPTIONS
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
@@ -270,6 +270,242 @@ class ErrorBoundary extends Component<any, any> {
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+
+const createEmptySituation = (): SituationConfig => ({ enabled: false });
+
+const SITUATION_VERSION_OPTIONS = [
+  { value: '', label: '버전 선택' },
+  { value: 'comic', label: '코믹형' },
+  { value: 'satire', label: '풍자형' },
+  { value: 'black-comedy', label: '블랙코미디형' },
+  { value: 'absurd-comedy', label: '황당개그형' },
+  { value: 'bittersweet', label: '짠한형' },
+  { value: 'tearful-comedy', label: '웃픈형' },
+  { value: 'sharp-conflict', label: '날카로운 갈등형' },
+  { value: 'generation-gap', label: '세대차이형' },
+  { value: 'miscommunication', label: '동문서답형' },
+  { value: 'role-reversal', label: '역할반전형' },
+  { value: 'reconciliation', label: '후반 화해형' },
+  { value: 'parallel-ending', label: '끝까지 평행선형' },
+  { value: 'one-sided-crush', label: '짝사랑형' },
+  { value: 'nostalgic-memory', label: '회상형' },
+  { value: 'social-satire', label: '사회풍자형' },
+  { value: 'daily-life-slice', label: '생활밀착형' },
+  { value: 'dramatic-twist', label: '반전형' },
+] as const;
+
+const SITUATION_DEVELOPMENT_OPTIONS = [
+  { value: 'short-dialogue', label: '짧은 대화형' },
+  { value: 'call-response', label: '콜앤리스폰스형' },
+  { value: 'rising-emotion', label: '감정 누적형' },
+  { value: 'comic-to-touching', label: '초반 코믹 후반 짠함' },
+  { value: 'constant-bickering', label: '끝까지 티격태격' },
+  { value: 'soft-understanding', label: '후반 살짝 이해' },
+  { value: 'push-and-reply', label: '몰아붙이고 받아치기' },
+  { value: 'parallel-talk', label: '서로 다른 말만 반복' },
+  { value: 'one-sided-monologue', label: '한쪽 독백 중심' },
+  { value: 'twist-ending', label: '마지막 반전' },
+] as const;
+
+const SITUATION_DETAIL_OPTIONS = [
+  '문 닫힌 방',
+  '밥 먹었냐는 잔소리',
+  '스마트폰/게임',
+  '늦은 밤',
+  '시험/성적',
+  '방 청소',
+  '읽씹/단톡',
+  '서로 말 끊기',
+  '짧은 영어 반박',
+  '생활 소음',
+  '퇴근 눈치',
+  '회의/보고서',
+  '회식/복지',
+  '세대차이 농담',
+] as const;
+
+
+const SITUATION_SPEECH_STYLE_OPTIONS = [
+  '걱정 섞인 잔소리',
+  '짧고 방어적',
+  '돌려 말함',
+  '직설적 반박',
+  '차분한 설득',
+  '비꼬는 말투',
+  '말을 끊음',
+  '느리게 눌러 말함',
+  '빠르고 리드미컬함',
+  '존댓말 속 압박',
+  '반말/반존대',
+  '말끝 흐림',
+] as const;
+
+const SITUATION_ATTITUDE_OPTIONS = [
+  '답답함',
+  '걱정이 깔림',
+  '서운함',
+  '방어적',
+  '숨 막힘',
+  '자기 공간 강조',
+  '통제하려 함',
+  '사랑하지만 표현 서툼',
+  '끝까지 우김',
+  '조금씩 누그러짐',
+  '겉으론 무심함',
+  '속으론 흔들림',
+] as const;
+
+type SituationPresetPickerProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  options: readonly string[] | readonly { value: string; label: string }[];
+  summaryLabel?: string;
+};
+
+const SituationPresetPicker = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  options,
+  summaryLabel = '선택 펼치기',
+}: SituationPresetPickerProps) => {
+  const labels = options.map((item) => typeof item === 'string' ? item : item.label);
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-[11px] font-bold text-[var(--text-secondary)]">{label}</label>
+      <input
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+      />
+      <details className="rounded-xl bg-btn-bg border border-btn-border overflow-hidden">
+        <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-colors">
+          {summaryLabel}
+        </summary>
+        <div className="px-3 pb-3 flex flex-wrap gap-2">
+          {labels.map((labelText) => {
+            const active = value === labelText;
+            return (
+              <button
+                key={labelText}
+                type="button"
+                onClick={() => onChange(active ? '' : labelText)}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all",
+                  active
+                    ? "bg-brand-orange text-white border-brand-orange"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                )}
+              >
+                {labelText}
+              </button>
+            );
+          })}
+        </div>
+      </details>
+    </div>
+  );
+};
+
+type SituationMultiPresetPickerProps = {
+  label: string;
+  customValue: string;
+  selected: string[];
+  onCustomChange: (value: string) => void;
+  onToggle: (value: string) => void;
+  placeholder: string;
+  options: readonly string[];
+  summaryLabel?: string;
+};
+
+const SituationMultiPresetPicker = ({
+  label,
+  customValue,
+  selected,
+  onCustomChange,
+  onToggle,
+  placeholder,
+  options,
+  summaryLabel = '선택 펼치기',
+}: SituationMultiPresetPickerProps) => {
+  return (
+    <div className="space-y-2">
+      <label className="block text-[11px] font-bold text-[var(--text-secondary)]">{label}</label>
+      <input
+        value={customValue || ''}
+        onChange={(e) => onCustomChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+      />
+      <details className="rounded-xl bg-btn-bg border border-btn-border overflow-hidden">
+        <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-colors">
+          {summaryLabel}
+        </summary>
+        <div className="px-3 pb-3 flex flex-wrap gap-2">
+          {options.map((labelText) => {
+            const active = selected.includes(labelText);
+            return (
+              <button
+                key={labelText}
+                type="button"
+                onClick={() => onToggle(labelText)}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all",
+                  active
+                    ? "bg-brand-orange text-white border-brand-orange"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                )}
+              >
+                {labelText}
+              </button>
+            );
+          })}
+        </div>
+      </details>
+    </div>
+  );
+};
+
+const hasActiveSituation = (situation?: SituationConfig | null) => {
+  if (!situation) return false;
+  return Boolean(
+    situation.enabled ||
+    situation.targetA ||
+    situation.targetB ||
+    situation.relationship ||
+    situation.description ||
+    situation.development ||
+    situation.developmentPreset ||
+    situation.developmentCustom ||
+    situation.versionLabel ||
+    situation.speakerAStyle ||
+    situation.speakerAAttitude ||
+    situation.speakerBStyle ||
+    situation.speakerBAttitude ||
+    situation.details ||
+    situation.detailCustom ||
+    (situation.detailPresets && situation.detailPresets.length > 0) ||
+    situation.summary ||
+    (situation.speakers && situation.speakers.length > 0)
+  );
+};
+
+const buildSituationSummary = (situation?: SituationConfig | null) => {
+  if (!hasActiveSituation(situation)) return '';
+  const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(' vs ');
+  const version = situation?.versionLabel || situation?.version;
+  const development = situation?.developmentCustom || situation?.developmentPreset || situation?.development;
+  const parts = [relation, situation?.relationship, version, development]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(' / ') : String(situation?.summary || situation?.description || 'Situation').slice(0, 60);
+};
 
 const ReorderableSectionItem = ({ 
   item, 
@@ -1686,6 +1922,7 @@ function App() {
   const [subGenre, setSubGenre] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [situation, setSituation] = useState<SituationConfig>(createEmptySituation);
 
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
@@ -1799,6 +2036,7 @@ function App() {
   const [isVocalExpanded, setIsVocalExpanded] = useState(true);
   const [isSongStructureExpanded, setIsSongStructureExpanded] = useState(true);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
+  const [isSituationExpanded, setIsSituationExpanded] = useState(false);
   const [sectionTags, setSectionTags] = useState<SectionTag[]>([]);
 
   // Load section tags from Firestore
@@ -1915,7 +2153,7 @@ function App() {
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(false);
-  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length;
+  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleLongPressStart = (item: CategoryItem) => {
@@ -2459,7 +2697,7 @@ const cycleFamilySelection = (
 
         showToast('곡이 삭제 되었습니다.');
       } else {
-          await addDoc(collection(db, 'favorites'), {
+          await addDoc(collection(db, 'favorites'), sanitizeForFirestore({
             uid: user.uid,
             title: song.title,
             koreanTitle: song.koreanTitle ?? '',
@@ -2468,9 +2706,11 @@ const cycleFamilySelection = (
             lyrics: song.lyrics,
             prompt: song.prompt,
             appliedKeywords: song.appliedKeywords,
+            situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
             isLocked: false,
+            createdAtMs: Date.now(),
             createdAt: serverTimestamp()
-          });
+          }));
 
         // Increment favoriteCount in users document
         await updateDoc(doc(db, 'users', user.uid), {
@@ -2617,6 +2857,11 @@ const cycleFamilySelection = (
 
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
+    if ((appliedKeywords as any).situation) {
+      setSituation((appliedKeywords as any).situation as SituationConfig);
+    } else {
+      setSituation(createEmptySituation());
+    }
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
     const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (genreIds.includes('kpop') ? 1 : 0);
@@ -3027,6 +3272,31 @@ const cycleFamilySelection = (
     }
   };
 
+  const updateSituationField = (field: keyof SituationConfig, value: string | boolean | string[]) => {
+    setSituation(prev => {
+      const next = { ...prev, [field]: value } as SituationConfig;
+      const active = hasActiveSituation({ ...next, enabled: false });
+      return { ...next, enabled: active };
+    });
+  };
+
+  const toggleSituationDetailPreset = (label: string) => {
+    setSituation(prev => {
+      const current = prev.detailPresets || [];
+      const detailPresets = current.includes(label)
+        ? current.filter(item => item !== label)
+        : [...current, label];
+      const next = { ...prev, detailPresets } as SituationConfig;
+      const active = hasActiveSituation({ ...next, enabled: false });
+      return { ...next, enabled: active };
+    });
+  };
+
+  const clearSituation = () => {
+    setSituation(createEmptySituation());
+    setIsSituationExpanded(false);
+  };
+
   const clearAll = useCallback(async (options: ClearAllOptions = {}) => {
     const { preserveHistory = false, preservePinned = false } = options;
 
@@ -3043,6 +3313,7 @@ const cycleFamilySelection = (
     setSelectedThemes(preservePinned ? pinnedThemesRef.current : []);
     setSelectedStyles(preservePinned ? pinnedStylesRef.current : []);
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSoundsRef.current : []);
+    setSituation(createEmptySituation());
 
     setKpopMode(0);
     setIsKoreanEnglishMix(false);
@@ -3059,6 +3330,7 @@ const cycleFamilySelection = (
     setIsSoundExpanded(false);
     setIsMoodExpanded(false);
     setIsThemeExpanded(false);
+    setIsSituationExpanded(false);
 
     // 기본 열림 상태 유지 (앱 초기값 기준)
     setIsVocalExpanded(true);
@@ -3442,10 +3714,10 @@ const saveRecentSong = async (newSong: any) => {
         (currentMinBPM !== 40 || currentMaxBPM !== 160);
 
       // Tempo priority rule:
-      // - If the command box has text, random tempo must NOT be sent to Gemini.
-      // - Only manually specified BPM/range is sent with free-text generation.
-      // - If there is no command text, keep the existing random-tempo behavior.
-      const shouldUseRandomTempo = tempoEnabled && !hasFreeTextDirectorNote;
+      // - Default tempo is free-form.
+      // - BPM is sent only when the user directly switches to manual tempo mode.
+      // - Automatic BPM can update the UI range, but it must not be injected into the final prompt.
+      const shouldUseRandomTempo = false;
       const shouldUseManualTempo = isManualTempoMode && isValidTempoRange;
 
       if (shouldUseRandomTempo) {
@@ -3698,6 +3970,7 @@ const saveRecentSong = async (newSong: any) => {
         isKpopSelected: (selectedGenres ?? []).includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         themes: themeLabels,
+        ...(hasActiveSituation(situation) ? { situation } : {}),
         styles: finalStyles,
         instrumentSounds: finalInstrumentSounds,
         userInput,
@@ -3757,6 +4030,8 @@ const saveRecentSong = async (newSong: any) => {
             ...song.appliedKeywords,
             genre: selectedGenres,
             subGenre: subGenre,
+            ...(hasActiveSituation(situation) ? { situation } : {}),
+            situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
             vocalType: formation || 'Default',
             vocalTone: selectedVocalToneId 
@@ -3843,6 +4118,7 @@ const saveRecentSong = async (newSong: any) => {
     const keywords = [
       `[Genres] ${result.appliedKeywords.genre.join(', ')}`,
       `[Moods] ${result.appliedKeywords.mood.join(', ')}`,
+      (result.appliedKeywords as any).situationSummary ? `[Situation] ${(result.appliedKeywords as any).situationSummary}` : '',
       result.appliedKeywords.theme?.length ? `[Themes] ${result.appliedKeywords.theme.join(', ')}` : '',
       result.appliedKeywords.style?.length ? `[Styles] ${result.appliedKeywords.style.join(', ')}` : '',
       result.appliedKeywords.instrumentSound?.length ? `[Sound / Texture] ${result.appliedKeywords.instrumentSound.map(getSoundVariantLabelById).join(', ')}` : '',
@@ -4542,6 +4818,193 @@ ${result.prompt}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
             />
+            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-hidden">
+              <div className="p-4 md:p-5 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSituationExpanded(prev => !prev)}
+                  className="flex-1 min-w-0 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-brand-orange shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm md:text-base font-black text-[var(--text-primary)]">Situation</h3>
+                        <span className="text-xs font-bold text-[var(--text-secondary)]">상황</span>
+                      </div>
+                      <p className="text-[11px] md:text-xs text-[var(--text-secondary)] truncate">
+                        {hasActiveSituation(situation)
+                          ? buildSituationSummary(situation)
+                          : '관계, 갈등, 장소, 전개 느낌을 입력합니다.'}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasActiveSituation(situation) && (
+                    <button
+                      type="button"
+                      onClick={clearSituation}
+                      className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                    >
+                      초기화
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsSituationExpanded(prev => !prev)}
+                    className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                    aria-label="Situation 펼치기"
+                  >
+                    {isSituationExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {isSituationExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden border-t border-[var(--border-color)]"
+                  >
+                    <div className="p-4 md:p-5 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-2xl bg-btn-bg/60 border border-btn-border p-3 space-y-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">대상 A</label>
+                            <input
+                              value={situation.targetA || ''}
+                              onChange={(e) => updateSituationField('targetA', e.target.value)}
+                              placeholder="예: 40대 엄마, 상사, 이별한 여자"
+                              className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                            />
+                          </div>
+                          <SituationPresetPicker
+                            label="대상 A 말투"
+                            value={situation.speakerAStyle || ''}
+                            onChange={(value) => updateSituationField('speakerAStyle', value)}
+                            placeholder="직접 입력: 예: 걱정이 잔소리처럼 들림"
+                            options={SITUATION_SPEECH_STYLE_OPTIONS}
+                            summaryLabel="말투 선택"
+                          />
+                          <SituationPresetPicker
+                            label="대상 A 감정/태도"
+                            value={situation.speakerAAttitude || situation.attitudeA || ''}
+                            onChange={(value) => updateSituationField('speakerAAttitude', value)}
+                            placeholder="직접 입력: 예: 답답하지만 사랑이 깔려 있음"
+                            options={SITUATION_ATTITUDE_OPTIONS}
+                            summaryLabel="감정/태도 선택"
+                          />
+                        </div>
+
+                        <div className="rounded-2xl bg-btn-bg/60 border border-btn-border p-3 space-y-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">대상 B</label>
+                            <input
+                              value={situation.targetB || ''}
+                              onChange={(e) => updateSituationField('targetB', e.target.value)}
+                              placeholder="예: 10대 아들, 직원, 끝난 사랑"
+                              className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                            />
+                          </div>
+                          <SituationPresetPicker
+                            label="대상 B 말투"
+                            value={situation.speakerBStyle || ''}
+                            onChange={(value) => updateSituationField('speakerBStyle', value)}
+                            placeholder="직접 입력: 예: 짧고 방어적, 자기 공간 강조"
+                            options={SITUATION_SPEECH_STYLE_OPTIONS}
+                            summaryLabel="말투 선택"
+                          />
+                          <SituationPresetPicker
+                            label="대상 B 감정/태도"
+                            value={situation.speakerBAttitude || situation.attitudeB || ''}
+                            onChange={(value) => updateSituationField('speakerBAttitude', value)}
+                            placeholder="직접 입력: 예: 숨 막히지만 싫어하는 건 아님"
+                            options={SITUATION_ATTITUDE_OPTIONS}
+                            summaryLabel="감정/태도 선택"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">관계</label>
+                          <input
+                            value={situation.relationship || ''}
+                            onChange={(e) => updateSituationField('relationship', e.target.value)}
+                            placeholder="예: 모자, 회사생활, 끝난 연인"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">전개 버전</label>
+                          <select
+                            value={String(situation.version || '')}
+                            onChange={(e) => {
+                              const option = SITUATION_VERSION_OPTIONS.find(item => item.value === e.target.value);
+                              updateSituationField('version', e.target.value);
+                              updateSituationField('versionLabel', option?.label || '');
+                            }}
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                            style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', colorScheme: 'dark' }}
+                          >
+                            {SITUATION_VERSION_OPTIONS.map(option => (
+                              <option
+                                key={option.value}
+                                value={option.value}
+                                className="bg-[var(--input-bg)] text-[var(--text-primary)]"
+                                style={{ backgroundColor: '#2f2f2f', color: '#ffffff' }}
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">상황 설명</label>
+                        <textarea
+                          value={situation.description || ''}
+                          onChange={(e) => updateSituationField('description', e.target.value)}
+                          placeholder="예: 걱정 많은 엄마와 제멋대로인 아들의 대화, 세대차이"
+                          rows={3}
+                          className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
+                        />
+                      </div>
+
+                      <SituationPresetPicker
+                        label="전개 느낌"
+                        value={situation.developmentCustom || situation.developmentPreset || situation.development || ''}
+                        onChange={(value) => {
+                          updateSituationField('developmentCustom', value);
+                          updateSituationField('developmentPreset', SITUATION_DEVELOPMENT_OPTIONS.some(option => option.label === value) ? value : '');
+                        }}
+                        placeholder="직접 입력: 예: 서로 혼잣말하듯이 전개, 나중에 서로 대화"
+                        options={SITUATION_DEVELOPMENT_OPTIONS}
+                        summaryLabel="전개 느낌 선택"
+                      />
+
+                      <SituationMultiPresetPicker
+                        label="추가 디테일"
+                        customValue={situation.detailCustom || situation.details || ''}
+                        selected={situation.detailPresets || []}
+                        onCustomChange={(value) => updateSituationField('detailCustom', value)}
+                        onToggle={toggleSituationDetailPreset}
+                        placeholder="직접 입력: 예: 영어는 짧은 애드립만, 방문 문제로 계속 부딪힘"
+                        options={SITUATION_DETAIL_OPTIONS}
+                        summaryLabel="추가 디테일 선택"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             <VocalControl 
               maleCount={maleCount}
               femaleCount={femaleCount}

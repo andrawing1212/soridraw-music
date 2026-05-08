@@ -296,84 +296,155 @@ const SITUATION_VERSION_OPTIONS = [
 ] as const;
 
 const SITUATION_DEVELOPMENT_OPTIONS = [
-  { value: 'short-dialogue', label: '짧은 대화형' },
-  { value: 'call-response', label: '콜앤리스폰스형' },
+  { value: 'solo-monologue', label: '독백형' },
+  { value: 'memory-fragment', label: '회상형' },
+  { value: 'confession-delay', label: '늦은 고백형' },
   { value: 'rising-emotion', label: '감정 누적형' },
-  { value: 'comic-to-touching', label: '초반 코믹 후반 짠함' },
-  { value: 'constant-bickering', label: '끝까지 티격태격' },
-  { value: 'soft-understanding', label: '후반 살짝 이해' },
-  { value: 'push-and-reply', label: '몰아붙이고 받아치기' },
-  { value: 'parallel-talk', label: '서로 다른 말만 반복' },
-  { value: 'one-sided-monologue', label: '한쪽 독백 중심' },
-  { value: 'twist-ending', label: '마지막 반전' },
+  { value: 'last-burst', label: '마지막 폭발형' },
+  { value: 'quiet-afterglow', label: '잔잔한 여운형' },
+  { value: 'unresolved-ending', label: '미해결형' },
+  { value: 'scene-loop', label: '장면 반복형' },
+  { value: 'object-led', label: '물건 중심형' },
+  { value: 'small-detail-hook', label: '사소한 디테일 훅' },
+  { value: 'chorus-takeover', label: '후렴 장악형' },
+  { value: 'one-sided-hook', label: '한쪽 후렴형' },
+  { value: 'together-hook', label: '같이 부르는 후렴형' },
+  { value: 'adlib-response', label: '애드립 응답형' },
+  { value: 'echo-hook', label: '에코 훅형' },
+  { value: 'interruption', label: '끼어들기형' },
+  { value: 'negotiation', label: '협상형' },
+  { value: 'push-and-pull', label: '밀당형' },
+  { value: 'role-reversal', label: '역전형' },
+  { value: 'late-reveal', label: '후반 공개형' },
+  { value: 'parallel-monologue', label: '평행 독백형' },
+  { value: 'misunderstanding', label: '오해형' },
+  { value: 'comic-loop', label: '코믹 루프형' },
+  { value: 'satire-build', label: '풍자 누적형' },
+  { value: 'quiet-contradiction', label: '조용한 모순형' },
+  { value: 'genre-led', label: '장르 주도형' },
+  { value: 'drop-hook', label: '드롭 훅형' },
+  { value: 'rap-relay', label: '랩 릴레이형' },
 ] as const;
 
-const SITUATION_DETAIL_OPTIONS = [
-  '문 닫힌 방',
-  '밥 먹었냐는 잔소리',
-  '스마트폰/게임',
-  '늦은 밤',
-  '시험/성적',
-  '방 청소',
-  '읽씹/단톡',
-  '서로 말 끊기',
-  '짧은 영어 반박',
-  '생활 소음',
-  '퇴근 눈치',
-  '회의/보고서',
-  '회식/복지',
-  '세대차이 농담',
+const SITUATION_DETAIL_EXAMPLES = [
+  '예: 처녀귀신은 적금 만기, 새 원피스, 편의점 신상처럼 사소한 미련이 많음',
+  '예: 저승사자는 명부와 퇴근 시간 때문에 계속 재촉하지만 은근히 마음이 약함',
+  '예: 후렴에는 특정 물건이나 장소 하나를 반복해서 훅처럼 사용',
+  '예: 영어는 짧은 애드립만 사용하고, 본문은 한국어 중심으로 유지',
+  '예: 마지막은 해결하지 않고 어색한 농담으로 끝남',
 ] as const;
-
 
 const SITUATION_SPEECH_STYLE_OPTIONS = [
-  '걱정 섞인 잔소리',
-  '짧고 방어적',
-  '돌려 말함',
-  '직설적 반박',
-  '차분한 설득',
-  '비꼬는 말투',
-  '말을 끊음',
-  '느리게 눌러 말함',
-  '빠르고 리드미컬함',
-  '존댓말 속 압박',
+  '담담한',
+  '혼잣말',
+  '고백하듯',
+  '속삭이는',
+  '투덜대는',
+  '비꼬는',
+  '직설적인',
+  '차분한',
+  '조용한',
+  '애써 밝은',
+  '체념한',
+  '불안한',
+  '서툰',
+  '건조한',
+  '능청스러운',
+  '장난스러운',
+  '간절한',
+  '망설이는',
+  '날카로운',
+  '다정한',
+  '무심한',
+  '쓸쓸한',
+  '흔들리는',
+  '눌러 말하는',
+  '빠르게 받아치는',
+  '리드미컬한',
+  '존댓말 압박',
   '반말/반존대',
-  '말끝 흐림',
 ] as const;
 
 const SITUATION_ATTITUDE_OPTIONS = [
-  '답답함',
-  '걱정이 깔림',
+  '미련',
+  '후회',
+  '그리움',
+  '외로움',
+  '불안',
+  '체념',
+  '망설임',
+  '서러움',
+  '공허함',
+  '집착',
+  '자책',
+  '해방감',
+  '설렘',
+  '기대감',
+  '안도감',
+  '편안함',
+  '따뜻함',
+  '질투',
   '서운함',
-  '방어적',
-  '숨 막힘',
-  '자기 공간 강조',
-  '통제하려 함',
-  '사랑하지만 표현 서툼',
-  '끝까지 우김',
-  '조금씩 누그러짐',
-  '겉으론 무심함',
-  '속으론 흔들림',
+  '억울함',
+  '답답함',
+  '고집',
+  '체면',
+  '허세',
+  '두려움',
+  '혼란',
+  '반항심',
+  '연민',
+  '다정함',
+  '어색함',
+  '무기력',
+  '미묘한 호감',
+  '끝까지 못 놓음',
 ] as const;
 
-type SituationPresetPickerProps = {
+type SituationChoicePickerProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   options: readonly string[] | readonly { value: string; label: string }[];
   summaryLabel?: string;
+  maxSelected?: number;
 };
 
-const SituationPresetPicker = ({
+const splitSituationChoices = (value: string, labels: string[]) => {
+  const parts = String(value || '')
+    .split(/[,/]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return parts.filter((item) => labels.includes(item));
+};
+
+const SituationChoicePicker = ({
   label,
   value,
   onChange,
   placeholder,
   options,
-  summaryLabel = '선택 펼치기',
-}: SituationPresetPickerProps) => {
-  const labels = options.map((item) => typeof item === 'string' ? item : item.label);
+  summaryLabel = '선택하기',
+  maxSelected = 2,
+}: SituationChoicePickerProps) => {
+  const [open, setOpen] = useState(false);
+  const labels = useMemo(() => options.map((item) => typeof item === 'string' ? item : item.label), [options]);
+  const selected = useMemo(() => splitSituationChoices(value || '', labels), [value, labels]);
+
+  const toggleChoice = (labelText: string) => {
+    const exists = selected.includes(labelText);
+    const next = exists
+      ? selected.filter((item) => item !== labelText)
+      : selected.length >= maxSelected
+        ? selected
+        : [...selected, labelText];
+    onChange(next.join(', '));
+  };
+
+  const buttonLabel = selected.length
+    ? `${selected.join(' · ')} (${selected.length}/${maxSelected})`
+    : summaryLabel;
 
   return (
     <div className="space-y-2">
@@ -384,90 +455,117 @@ const SituationPresetPicker = ({
         placeholder={placeholder}
         className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
       />
-      <details className="rounded-xl bg-btn-bg border border-btn-border overflow-hidden">
-        <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-colors">
-          {summaryLabel}
-        </summary>
-        <div className="px-3 pb-3 flex flex-wrap gap-2">
-          {labels.map((labelText) => {
-            const active = value === labelText;
-            return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-left text-xs font-bold text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange transition-all"
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <ChevronDown className="w-4 h-4 shrink-0" />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[160] flex items-end md:items-center justify-center bg-black/60 px-3 py-4" onClick={() => setOpen(false)}>
+          <div
+            className="w-full max-w-md max-h-[72vh] rounded-3xl bg-[var(--bg-secondary)] border border-btn-border shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-color)]">
+              <div>
+                <p className="text-sm font-black text-[var(--text-primary)]">{label}</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">최대 {maxSelected}개 선택</p>
+              </div>
               <button
-                key={labelText}
                 type="button"
-                onClick={() => onChange(active ? '' : labelText)}
-                className={cn(
-                  "px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all",
-                  active
-                    ? "bg-brand-orange text-white border-brand-orange"
-                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                )}
+                onClick={() => setOpen(false)}
+                className="w-9 h-9 rounded-xl bg-btn-bg border border-btn-border flex items-center justify-center text-[var(--text-secondary)] hover:text-brand-orange"
+                aria-label="닫기"
               >
-                {labelText}
+                <X className="w-4 h-4" />
               </button>
-            );
-          })}
+            </div>
+            <div className="p-3 max-h-[52vh] overflow-y-auto space-y-2 scrollbar-hide">
+              {labels.map((labelText) => {
+                const active = selected.includes(labelText);
+                const disabled = !active && selected.length >= maxSelected;
+                return (
+                  <button
+                    key={labelText}
+                    type="button"
+                    onClick={() => toggleChoice(labelText)}
+                    disabled={disabled}
+                    className={cn(
+                      "w-full flex items-center justify-between gap-3 px-3 py-3 rounded-2xl text-sm font-bold border transition-all text-left",
+                      active
+                        ? "bg-brand-orange text-white border-brand-orange"
+                        : disabled
+                          ? "bg-btn-bg/50 border-btn-border text-[var(--text-tertiary)] opacity-50 cursor-not-allowed"
+                          : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-[var(--text-primary)]"
+                    )}
+                  >
+                    <span>{labelText}</span>
+                    {active && <Check className="w-4 h-4 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 p-3 border-t border-[var(--border-color)]">
+              <button
+                type="button"
+                onClick={() => onChange('')}
+                className="flex-1 px-3 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-xs font-bold text-[var(--text-secondary)] hover:bg-btn-hover"
+              >
+                선택 해제
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex-1 px-3 py-2.5 rounded-xl bg-brand-orange text-white text-xs font-black"
+              >
+                적용
+              </button>
+            </div>
+          </div>
         </div>
-      </details>
+      )}
     </div>
   );
 };
 
-type SituationMultiPresetPickerProps = {
-  label: string;
-  customValue: string;
-  selected: string[];
-  onCustomChange: (value: string) => void;
-  onToggle: (value: string) => void;
-  placeholder: string;
-  options: readonly string[];
-  summaryLabel?: string;
-};
+const SituationDetailInput = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const [showExamples, setShowExamples] = useState(false);
 
-const SituationMultiPresetPicker = ({
-  label,
-  customValue,
-  selected,
-  onCustomChange,
-  onToggle,
-  placeholder,
-  options,
-  summaryLabel = '선택 펼치기',
-}: SituationMultiPresetPickerProps) => {
   return (
     <div className="space-y-2">
-      <label className="block text-[11px] font-bold text-[var(--text-secondary)]">{label}</label>
-      <input
-        value={customValue || ''}
-        onChange={(e) => onCustomChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+      <label className="block text-[11px] font-bold text-[var(--text-secondary)]">추가 디테일</label>
+      <textarea
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="직접 입력: 인물의 사소한 습관, 장소, 물건, 말버릇, 엔딩 느낌 등을 자유롭게 적어주세요."
+        rows={3}
+        className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
       />
-      <details className="rounded-xl bg-btn-bg border border-btn-border overflow-hidden">
-        <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-colors">
-          {summaryLabel}
-        </summary>
-        <div className="px-3 pb-3 flex flex-wrap gap-2">
-          {options.map((labelText) => {
-            const active = selected.includes(labelText);
-            return (
-              <button
-                key={labelText}
-                type="button"
-                onClick={() => onToggle(labelText)}
-                className={cn(
-                  "px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all",
-                  active
-                    ? "bg-brand-orange text-white border-brand-orange"
-                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                )}
-              >
-                {labelText}
-              </button>
-            );
-          })}
+      <button
+        type="button"
+        onClick={() => setShowExamples(prev => !prev)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-left text-xs font-bold text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange transition-all"
+      >
+        <span>작성 예시 보기</span>
+        {showExamples ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+      {showExamples && (
+        <div className="rounded-2xl bg-btn-bg/70 border border-btn-border p-3 space-y-2">
+          {SITUATION_DETAIL_EXAMPLES.map((example) => (
+            <p key={example} className="text-[11px] leading-relaxed text-[var(--text-secondary)]">{example}</p>
+          ))}
         </div>
-      </details>
+      )}
     </div>
   );
 };
@@ -1670,10 +1768,9 @@ function App() {
     setHistory(songs);
 
     const newestBatchId = options?.latestBatchId ?? ((songs[0]?.appliedKeywords as any)?.generationBatchId || null);
-    // Always follow the newest synced Firestore result.
-    // Previously this kept the first non-null batch id forever, so songs generated elsewhere
-    // could sync into history but still fail to appear as the current/latest generated song.
-    setLatestGenerationBatchId(newestBatchId || null);
+    if (newestBatchId) {
+      setLatestGenerationBatchId((prev) => prev || newestBatchId);
+    }
 
     if (songs.length > 0) {
       const preferredIndex = options?.preferredIndex ?? null;
@@ -3025,7 +3122,7 @@ const cycleFamilySelection = (
     setIsGenreRandomized(true);
   };
 
-  // History state is cached locally for instant display, then kept in sync with Firestore in real time.
+  // History state is cached locally first and fetched from Firestore only when cache is missing or stale.
   useEffect(() => {
     if (!user) {
       setHistory([]);
@@ -3035,7 +3132,9 @@ const cycleFamilySelection = (
       return;
     }
 
+    let isCancelled = false;
     const cached = loadRecentSongsCache(user.uid);
+    const hasFreshCache = !!cached && Date.now() - (cached.cachedAt || 0) < RECENT_SONGS_CACHE_TTL_MS;
 
     if (cached) {
       applyRecentSongsState(cached.history || [], {
@@ -3049,39 +3148,45 @@ const cycleFamilySelection = (
       setLatestGenerationBatchId(null);
     }
 
-    const ref = doc(db, "user_recent_songs", user.uid);
+    if (hasFreshCache) {
+      return;
+    }
 
-    const unsubscribeRecentSongs = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        const songs = Array.isArray(snap.data().songs) ? snap.data().songs : [];
-        const finalSongs = [...songs].sort((a, b) => {
-          const timeA = getTimestampMs(a.createdAtMs ?? a.createdAt) || 0;
-          const timeB = getTimestampMs(b.createdAtMs ?? b.createdAt) || 0;
-          return timeB - timeA;
-        });
+    const loadRecentSongsFromFirestore = async () => {
+      try {
+        const ref = doc(db, "user_recent_songs", user.uid);
+        const snap = await getDoc(ref);
+        if (isCancelled) return;
 
-        const preferredIndex = preserveHistoryIndexOnNextSnapshotRef.current ?? 0;
-        preserveHistoryIndexOnNextSnapshotRef.current = null;
-        applyRecentSongsState(finalSongs, {
-          preferredIndex,
-          latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
-        });
-      } else {
-        preserveHistoryIndexOnNextSnapshotRef.current = null;
-        applyRecentSongsState([], { preferredIndex: -1, latestBatchId: null });
+        if (snap.exists()) {
+          const songs = snap.data().songs || [];
+          const finalSongs = [...songs].sort((a, b) => {
+            const timeA = a.createdAt || 0;
+            const timeB = b.createdAt || 0;
+            return timeB - timeA;
+          });
+
+          const preferredIndex = preserveHistoryIndexOnNextSnapshotRef.current ?? cached?.historyIndex ?? 0;
+          preserveHistoryIndexOnNextSnapshotRef.current = null;
+          applyRecentSongsState(finalSongs, {
+            preferredIndex,
+            latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+          });
+        } else {
+          preserveHistoryIndexOnNextSnapshotRef.current = null;
+          applyRecentSongsState([], { preferredIndex: -1, latestBatchId: null });
+        }
+      } catch (error) {
+        if (!cached) {
+          console.error('Failed to load recent songs:', error);
+        }
       }
-    }, (error) => {
-      console.error('Failed to sync recent songs:', error);
-      if (!cached) {
-        setHistory([]);
-        setResult(null);
-        setHistoryIndex(-1);
-        setLatestGenerationBatchId(null);
-      }
-    });
+    };
+
+    void loadRecentSongsFromFirestore();
 
     return () => {
-      unsubscribeRecentSongs();
+      isCancelled = true;
     };
   }, [user]);
 
@@ -3573,15 +3678,7 @@ const saveRecentSong = async (newSong: any) => {
       existingSongs = snap.data().songs || [];
     }
 
-    const now = Date.now();
-    const existingTime = getTimestampMs(newSong?.createdAtMs ?? newSong?.createdAt);
-    const normalizedSong = {
-      ...newSong,
-      createdAt: existingTime || now,
-      createdAtMs: existingTime || now,
-    };
-
-    const updatedSongs = [normalizedSong, ...existingSongs].slice(0, 10);
+    const updatedSongs = [newSong, ...existingSongs].slice(0, 10);
 
     await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
 
@@ -4060,10 +4157,6 @@ const saveRecentSong = async (newSong: any) => {
           randomKeywords
         };
 
-        const generatedAt = Date.now() + i;
-        (newResult as any).createdAt = generatedAt;
-        (newResult as any).createdAtMs = generatedAt;
-
         generatedResults.push(newResult);
       }
 
@@ -4361,28 +4454,11 @@ ${result.prompt}
     }
   };
 
-  const getRecentSongIdentityKey = (song: SongResult | null | undefined) => {
-    if (!song) return '';
-    const applied = (song.appliedKeywords || {}) as any;
-    const batchId = applied.generationBatchId || '';
-    const generationIndex = applied.generationIndex || '';
-    if (batchId) return `batch:${batchId}:${generationIndex}`;
-
-    const time = getTimestampMs((song as any).createdAtMs ?? (song as any).createdAt) || '';
-    const title = song.title || song.koreanTitle || song.englishTitle || '';
-    const prompt = song.prompt || '';
-    return `single:${time}:${title}:${prompt.slice(0, 80)}`;
-  };
-
   const isInLatestGenerationBatch = (song: SongResult | null = result) => {
-    if (!song || history.length === 0) return false;
-
-    const batchId = ((song.appliedKeywords || {}) as any)?.generationBatchId;
+    if (!song) return false;
+    const batchId = (song.appliedKeywords as any)?.generationBatchId;
     if (batchId && latestGenerationBatchId) return batchId === latestGenerationBatchId;
-
-    // Studio/external generated songs may not have generationBatchId.
-    // In that case, treat the newest sorted Firestore song as the latest generated song everywhere.
-    return getRecentSongIdentityKey(song) === getRecentSongIdentityKey(history[0]);
+    return historyIndex === 0;
   };
 
   const formatTitleLineByLanguage = (song: SongResult, lang: LanguageCode): string => {
@@ -4905,7 +4981,7 @@ ${result.prompt}
                               className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
                             />
                           </div>
-                          <SituationPresetPicker
+                          <SituationChoicePicker
                             label="대상 A 말투"
                             value={situation.speakerAStyle || ''}
                             onChange={(value) => updateSituationField('speakerAStyle', value)}
@@ -4913,7 +4989,7 @@ ${result.prompt}
                             options={SITUATION_SPEECH_STYLE_OPTIONS}
                             summaryLabel="말투 선택"
                           />
-                          <SituationPresetPicker
+                          <SituationChoicePicker
                             label="대상 A 감정/태도"
                             value={situation.speakerAAttitude || situation.attitudeA || ''}
                             onChange={(value) => updateSituationField('speakerAAttitude', value)}
@@ -4933,7 +5009,7 @@ ${result.prompt}
                               className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
                             />
                           </div>
-                          <SituationPresetPicker
+                          <SituationChoicePicker
                             label="대상 B 말투"
                             value={situation.speakerBStyle || ''}
                             onChange={(value) => updateSituationField('speakerBStyle', value)}
@@ -4941,7 +5017,7 @@ ${result.prompt}
                             options={SITUATION_SPEECH_STYLE_OPTIONS}
                             summaryLabel="말투 선택"
                           />
-                          <SituationPresetPicker
+                          <SituationChoicePicker
                             label="대상 B 감정/태도"
                             value={situation.speakerBAttitude || situation.attitudeB || ''}
                             onChange={(value) => updateSituationField('speakerBAttitude', value)}
@@ -4954,11 +5030,11 @@ ${result.prompt}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">관계</label>
+                          <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">{situation.targetB?.trim() ? '관계' : '스토리 축'}</label>
                           <input
                             value={situation.relationship || ''}
                             onChange={(e) => updateSituationField('relationship', e.target.value)}
-                            placeholder="예: 모자, 회사생활, 끝난 연인"
+                            placeholder={situation.targetB?.trim() ? '예: 모자, 회사생활, 끝난 연인' : '예: 이승에 미련, 늦은 고백, 혼자 버티는 밤'}
                             className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
                           />
                         </div>
@@ -4999,7 +5075,7 @@ ${result.prompt}
                         />
                       </div>
 
-                      <SituationPresetPicker
+                      <SituationChoicePicker
                         label="전개 느낌"
                         value={situation.developmentCustom || situation.developmentPreset || situation.development || ''}
                         onChange={(value) => {
@@ -5011,15 +5087,12 @@ ${result.prompt}
                         summaryLabel="전개 느낌 선택"
                       />
 
-                      <SituationMultiPresetPicker
-                        label="추가 디테일"
-                        customValue={situation.detailCustom || situation.details || ''}
-                        selected={situation.detailPresets || []}
-                        onCustomChange={(value) => updateSituationField('detailCustom', value)}
-                        onToggle={toggleSituationDetailPreset}
-                        placeholder="직접 입력: 예: 영어는 짧은 애드립만, 방문 문제로 계속 부딪힘"
-                        options={SITUATION_DETAIL_OPTIONS}
-                        summaryLabel="추가 디테일 선택"
+                      <SituationDetailInput
+                        value={situation.detailCustom || situation.details || ''}
+                        onChange={(value) => {
+                          updateSituationField('detailCustom', value);
+                          updateSituationField('detailPresets', []);
+                        }}
                       />
                     </div>
                   </motion.div>

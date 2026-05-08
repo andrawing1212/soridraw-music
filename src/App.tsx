@@ -271,6 +271,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const getVocalToneDisplayLabel = (toneId: string | undefined, vocalTones: VocalTone[]) => {
+  if (!toneId) return '';
+  const matched = vocalTones.find((tone) => tone.id === toneId);
+  return matched?.labelKo || matched?.label || toneId;
+};
+
+const getVocalTonePromptValue = (toneId: string | undefined, vocalTones: VocalTone[]) => {
+  if (!toneId) return undefined;
+  const matched = vocalTones.find((tone) => tone.id === toneId);
+  return matched?.promptCore || matched?.label || toneId;
+};
+
 
 const createEmptySituation = (): SituationConfig => ({ enabled: false });
 
@@ -2738,6 +2750,19 @@ const cycleFamilySelection = (
   });
 };
 
+const toggleCycleVariantSelection = (
+  variantId: string,
+  selected: string[],
+  setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+  maxCount = Number.POSITIVE_INFINITY
+) => {
+  setSelected((prev) => {
+    if (prev.includes(variantId)) return prev.filter((item) => item !== variantId);
+    if (prev.length >= maxCount) return prev;
+    return [...prev, variantId];
+  });
+};
+
   useEffect(() => {
     if (appliedKeywordsRef.current) {
       setAppliedKeywordsHeight(appliedKeywordsRef.current.scrollHeight);
@@ -3399,7 +3424,7 @@ const cycleFamilySelection = (
   const randomizeCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     const limits = {
       genre: 1,
-      style: 3,
+      style: Number.POSITIVE_INFINITY,
       sound: 3,
       mood: 5,
       theme: 4
@@ -4378,7 +4403,7 @@ const saveRecentSong = async (newSong: any) => {
         };
         const auxiliaryVocal = pickOneGenreVocal(genreVocalParts);
 
-        const selectedTone = selectedVocalToneId ? vocalTones.find(t => t.id === selectedVocalToneId)?.label : null;
+        const selectedTone = selectedVocalToneId ? getVocalToneDisplayLabel(selectedVocalToneId, vocalTones) : null;
         const recTone = recommendedTone?.label;
         const primaryTone = selectedTone || recTone;
 
@@ -4448,8 +4473,8 @@ const saveRecentSong = async (newSong: any) => {
           mode: vocalMode,
           globalToneId: selectedVocalToneId || recommendedTone?.id,
           isToneSelected: !!selectedVocalToneId,
-          tonePrompt: selectedVocalToneId 
-            ? vocalTones.find(t => t.id === selectedVocalToneId)?.promptCore
+          tonePrompt: selectedVocalToneId
+            ? getVocalTonePromptValue(selectedVocalToneId, vocalTones)
             : recommendedTone?.promptCore,
           members: vocalMembers,
         },
@@ -4497,8 +4522,8 @@ const saveRecentSong = async (newSong: any) => {
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
             vocalType: formation || 'Default',
-            vocalTone: selectedVocalToneId 
-              ? vocalTones.find(t => t.id === selectedVocalToneId)?.label 
+            vocalTone: selectedVocalToneId
+              ? getVocalToneDisplayLabel(selectedVocalToneId, vocalTones)
               : null,
             rapEnabled: rapEnabled,
             isNoLyrics: !requestedIncludeLyrics,
@@ -5188,7 +5213,10 @@ ${result.prompt}
             descriptionKo="하이브리드 장르를 위해 선택하세요. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 굳이 선택 안하고 기본 장르만으로도 좋은 곡을 만들수 있습니다 "
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
-            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES, 3)}
+            onCycleToggle={(cycleId, variantId) => {
+              if (variantId) toggleCycleVariantSelection(variantId, selectedStyles, setSelectedStyles);
+              else cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES);
+            }}
             onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
             onRandom={() => randomizeCategory('style')}
             onHover={setHoveredItem}
@@ -5207,7 +5235,10 @@ ${result.prompt}
             descriptionKo="악기 톤과 배경 질감을 설정합니다. 기본 장르에 적용된 악기 사운드의 질감을 바꿔서 원하는 느낌으로 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
             cycles={SOUND_TEXTURE_CYCLES}
             selected={selectedInstrumentSounds}
-            onCycleToggle={(cycleId) => cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES)}
+            onCycleToggle={(cycleId, variantId) => {
+              if (variantId) toggleCycleVariantSelection(variantId, selectedInstrumentSounds, setSelectedInstrumentSounds);
+              else cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
+            }}
             onClear={() => { setSelectedInstrumentSounds([]); setIsSoundTextureRandomized(false); }}
             onRandom={() => randomizeCategory('sound')}
             onHover={setHoveredItem}
@@ -5699,7 +5730,7 @@ ${result.prompt}
                 ...(selectedVocalToneId ? [{ 
                   id: 'vocal-tone', 
                   type: 'vocal-tone' as const, 
-                  label: `#보컬톤: ${vocalTones.find(t => t.id === selectedVocalToneId)?.label || '선택됨'}` 
+                  label: `#보컬톤: ${getVocalToneDisplayLabel(selectedVocalToneId, vocalTones) || '선택됨'}` 
                 }] : []),
               ].map((item) => {
                   const chipClassName = item.type === 'style'
@@ -6955,7 +6986,7 @@ interface CycleSectionProps {
     }[] 
   }[];
   selected: string[];
-  onCycleToggle: (cycleId: string) => void;
+  onCycleToggle: (cycleId: string, variantId?: string) => void;
   onClear: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
@@ -7003,7 +7034,12 @@ function CycleSection({
     }
   }, [cycles, onHeightChange]);
 
+  const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
+  const selectedKeywordCount = selected.length;
   const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
+  const maxSelectableCount = Number.POSITIVE_INFINITY;
+  const countLabel = title === 'Style' ? `${selectedKeywordCount}` : `${selectedFamilyCount}/${cycles.length}`;
+  const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
@@ -7018,7 +7054,7 @@ function CycleSection({
               >
                 <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
                 <span className="truncate">{titleKo || title}</span>
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({selectedFamilyCount}/{cycles.length})</span>
+                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -7066,9 +7102,8 @@ function CycleSection({
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {cycles.map((cycle) => {
-              const activeIndex = cycle.variants.findIndex((variant) => selected.includes(variant.id));
-              const activeVariant = activeIndex >= 0 ? cycle.variants[activeIndex] : null;
-              
+              const selectedVariants = cycle.variants.filter((variant) => selected.includes(variant.id));
+              const activeVariant = selectedVariants[0] ?? null;
               const selectedIndex = activeVariant ? selected.indexOf(activeVariant.id) : -1;
               const showOrderBadge = title === "Style" && selected.length >= 2 && selectedIndex >= 0;
               const orderNumber = selectedIndex + 1;
@@ -7087,38 +7122,20 @@ function CycleSection({
                     labelKo: cycle.titleKo,
                     description: baseVariant.descriptionKo ?? baseVariant.description,
                   };
+              const buttonLabel = selectedVariants.length > 0
+                ? selectedVariants.map((variant) => variant.labelKo ?? variant.label).join(', ')
+                : (cycle.titleKo ?? cycle.title);
               return (
                 <button
                   key={cycle.id}
-                  onClick={() => {
-                    const nextIndex = activeIndex === -1 ? 0 : activeIndex < cycle.variants.length - 1 ? activeIndex + 1 : -1;
-                    onCycleToggle(cycle.id);
-                    if (nextIndex === -1) {
-                      onHover({ 
-                        id: cycle.id, 
-                        label: cycle.title, 
-                        labelKo: cycle.titleKo,
-                        description: baseVariant.descriptionKo ?? baseVariant.description, 
-                        _ts: Date.now() 
-                      } as CategoryItem);
-                    } else {
-                      const nextVariant = cycle.variants[nextIndex];
-                      onHover({ 
-                        id: cycle.id, 
-                        label: nextVariant.label, 
-                        labelKo: nextVariant.labelKo,
-                        description: nextVariant.descriptionKo ?? nextVariant.description, 
-                        _ts: Date.now() 
-                      } as CategoryItem);
-                    }
-                  }}
+                  onClick={() => setKeywordPopupCycleId(cycle.id)}
                   onMouseEnter={() => onHover(hoverItem)}
                   onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                   onTouchStart={() => onLongPressStart(hoverItem)}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn",
-                    activeVariant ? CYCLE_VARIANT_COLORS[Math.min(activeIndex, CYCLE_VARIANT_COLORS.length - 1)] : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                    selectedVariants.length > 0 ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.25)]" : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
                   {showOrderBadge && (
@@ -7127,7 +7144,7 @@ function CycleSection({
                     </div>
                   )}
                   <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
-                    {activeVariant ? (activeVariant.labelKo ?? activeVariant.label) : (cycle.titleKo ?? cycle.title)}
+                    {buttonLabel}
                   </span>
                 </button>
               );
@@ -7141,11 +7158,10 @@ function CycleSection({
       >
         {selected.length > 0 ? (
           <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            {cycles.filter(c => c.variants.some(v => selected.includes(v.id)))
-              .map(c => {
-                const v = c.variants.find(v => selected.includes(v.id));
-                return v?.labelKo || v?.label;
-              })
+            {selected
+              .map((id) => cycles.flatMap(c => c.variants).find(v => v.id === id))
+              .filter(Boolean)
+              .map((v) => v?.labelKo || v?.label)
               .join(', ')}
           </p>
         ) : (
@@ -7154,6 +7170,21 @@ function CycleSection({
           </p>
         )}
       </div>
+
+
+      <AnimatePresence>
+        {activePopupCycle && (
+          <CycleKeywordPopup
+            title={titleKo || title}
+            cycle={activePopupCycle}
+            selected={selected}
+            maxSelectableCount={maxSelectableCount}
+            onClose={() => setKeywordPopupCycleId(null)}
+            onToggleVariant={(variantId) => onCycleToggle(activePopupCycle.id, variantId)}
+            onHover={onHover}
+          />
+        )}
+      </AnimatePresence>
 
       {onToggleExpand && (
         <button
@@ -7169,6 +7200,193 @@ function CycleSection({
         </button>
       )}
     </div>
+  );
+}
+
+
+function CycleKeywordPopup({
+  title,
+  cycle,
+  selected,
+  maxSelectableCount,
+  onClose,
+  onToggleVariant,
+  onHover,
+}: {
+  title: string;
+  cycle: {
+    id: string;
+    title: string;
+    titleKo?: string;
+    variants: readonly {
+      id: string;
+      label: string;
+      labelKo?: string;
+      description: string;
+      descriptionKo?: string;
+    }[];
+  };
+  selected: string[];
+  maxSelectableCount: number;
+  onClose: () => void;
+  onToggleVariant: (variantId: string) => void;
+  onHover: (item: CategoryItem | null) => void;
+}) {
+  const closeFromHistoryRef = useRef(false);
+  const cycleVariantIds = useMemo(() => cycle.variants.map((variant) => variant.id), [cycle.variants]);
+  const initialSelectedRef = useRef<string[]>(selected.filter((id) => cycleVariantIds.includes(id)));
+  const [localSelected, setLocalSelected] = useState<string[]>(initialSelectedRef.current);
+
+  const normalizeIds = useCallback((ids: string[]) => [...ids].sort().join('|'), []);
+  const hasChanges = normalizeIds(localSelected) !== normalizeIds(initialSelectedRef.current);
+
+  const closePopup = useCallback(() => {
+    if (window.history.state?.cycleKeywordPopup && !closeFromHistoryRef.current) {
+      closeFromHistoryRef.current = true;
+      window.history.back();
+      return;
+    }
+    onClose();
+  }, [onClose]);
+
+  const applyChangesAndClose = useCallback(() => {
+    const before = new Set(initialSelectedRef.current);
+    const after = new Set(localSelected);
+
+    cycleVariantIds.forEach((variantId) => {
+      if (before.has(variantId) !== after.has(variantId)) {
+        onToggleVariant(variantId);
+      }
+    });
+
+    closePopup();
+  }, [closePopup, cycleVariantIds, localSelected, onToggleVariant]);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    try {
+      window.history.pushState({ ...(window.history.state || {}), cycleKeywordPopup: true }, '');
+    } catch {
+      // ignore history errors in embedded preview environments
+    }
+
+    const handlePopState = () => {
+      onClose();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closePopup();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closePopup, onClose]);
+
+  const selectedOutsideCycleCount = selected.filter((id) => !cycleVariantIds.includes(id)).length;
+  const localTotalSelectedCount = selectedOutsideCycleCount + localSelected.length;
+  const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
+
+  return (
+    <Portal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[300] bg-black/20 backdrop-blur-[1px] flex items-center justify-center p-4"
+        onClick={closePopup}
+      >
+        <motion.div
+          initial={{ scale: 0.96, opacity: 0, y: 18 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.96, opacity: 0, y: 18 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+          className="w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black tracking-[0.16em] text-brand-orange uppercase mb-1">{title} Keyword</p>
+              <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
+                {localSelected.length > 0 ? ` · 이 카드에서 ${localSelected.length}개 선택됨` : ''}
+              </p>
+            </div>
+            <button
+              onClick={hasChanges ? applyChangesAndClose : closePopup}
+              className={cn(
+                "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
+                hasChanges
+                  ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
+                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
+              )}
+              title={hasChanges ? '변경 적용' : '닫기'}
+            >
+              {hasChanges ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+            </button>
+          </div>
+
+          <div
+            className="p-5 overflow-y-auto custom-scrollbar max-h-[calc(82vh-104px)] space-y-3"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            {cycle.variants.map((variant) => {
+              const isSelected = localSelected.includes(variant.id);
+              const disabled = !isSelected && isAtLimit;
+              const hoverItem: CategoryItem = {
+                id: variant.id,
+                label: variant.label,
+                labelKo: variant.labelKo,
+                description: variant.descriptionKo ?? variant.description,
+              };
+              return (
+                <button
+                  key={variant.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    if (disabled) return;
+                    setLocalSelected((prev) =>
+                      prev.includes(variant.id)
+                        ? prev.filter((id) => id !== variant.id)
+                        : [...prev, variant.id]
+                    );
+                    onHover({ ...hoverItem, _ts: Date.now() } as CategoryItem);
+                  }}
+                  onMouseEnter={() => onHover(hoverItem)}
+                  onMouseLeave={() => onHover(null)}
+                  className={cn(
+                    "w-full rounded-2xl border px-4 py-3 text-left transition-all",
+                    isSelected
+                      ? "bg-brand-orange/12 text-[var(--text-primary)] border-brand-orange/70 shadow-[0_0_0_1px_rgba(255,132,0,0.18)]"
+                      : disabled
+                        ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
+                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover hover:border-brand-orange/40"
+                  )}
+                >
+                  <div className="min-w-0">
+                    <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
+                    <p className="text-xs mt-1 leading-snug line-clamp-2 text-[var(--text-secondary)]">{variant.descriptionKo || variant.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      </motion.div>
+    </Portal>
   );
 }
 
@@ -8675,6 +8893,8 @@ function VocalControl({
     // Height is now handled by overflow-visible
   }, [maleCount, femaleCount, vocalMode, vocalMembers, selectedToneId, rapEnabled, isKoreanEnglishMix]);
   const [showToneSelector, setShowToneSelector] = useState(false);
+  const [isGlobalToneDirectInput, setIsGlobalToneDirectInput] = useState(false);
+  const [globalToneDraft, setGlobalToneDraft] = useState('');
   const [activeVocalTonePopup, setActiveVocalTonePopup] = useState<string | null>(null);
   const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0 });
 
@@ -8824,6 +9044,21 @@ function VocalControl({
   });
 
   const selectedTone = vocalTones.find(t => t.id === selectedToneId);
+  const selectedToneLabel = getVocalToneDisplayLabel(selectedToneId, vocalTones);
+
+  const applyGlobalToneDirectInput = () => {
+    const next = globalToneDraft.trim();
+    if (!next) return;
+    onToneChange(next);
+    setIsGlobalToneDirectInput(false);
+    setShowToneSelector(false);
+  };
+
+  const startGlobalToneDirectInput = () => {
+    setGlobalToneDraft(selectedToneLabel || '');
+    setShowToneSelector(false);
+    setIsGlobalToneDirectInput(true);
+  };
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl pt-3 px-5 pb-10 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
@@ -9007,6 +9242,126 @@ function VocalControl({
             </div>
           )}
 
+
+          {/* Global Vocal Tone */}
+          <div className="relative space-y-1.5">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">전체 보컬톤</p>
+              {selectedToneId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToneChange(undefined);
+                    setGlobalToneDraft('');
+                    setIsGlobalToneDirectInput(false);
+                    setShowToneSelector(false);
+                  }}
+                  className="text-[9px] font-bold text-[var(--text-secondary)] hover:text-red-400 transition-all"
+                >
+                  지우기
+                </button>
+              )}
+            </div>
+
+            {isGlobalToneDirectInput ? (
+              <div className="flex items-center gap-2 rounded-xl border border-brand-orange bg-[var(--input-bg)] px-3 py-2">
+                <input
+                  value={globalToneDraft}
+                  onChange={(e) => setGlobalToneDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') applyGlobalToneDirectInput();
+                    if (e.key === 'Escape') {
+                      setIsGlobalToneDirectInput(false);
+                      setGlobalToneDraft(selectedToneLabel || '');
+                    }
+                  }}
+                  placeholder="직접 입력: 예: 숨 섞인 허스키톤, 차갑고 건조한 톤"
+                  className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGlobalToneDirectInput(false);
+                    setGlobalToneDraft(selectedToneLabel || '');
+                  }}
+                  className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-400 hover:bg-btn-hover transition-all"
+                  aria-label="보컬톤 직접 입력 취소"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={applyGlobalToneDirectInput}
+                  className="p-1.5 rounded-lg text-brand-orange hover:bg-brand-orange/10 transition-all"
+                  aria-label="보컬톤 직접 입력 적용"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowToneSelector(prev => !prev)}
+                className={cn(
+                  "w-full py-2.5 px-3 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between shadow-btn",
+                  selectedToneId
+                    ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                )}
+              >
+                <span className="truncate">{selectedToneId ? selectedToneLabel : '톤 선택 또는 직접 입력'}</span>
+                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showToneSelector && "rotate-180")} />
+              </button>
+            )}
+
+            <AnimatePresence>
+              {showToneSelector && !isGlobalToneDirectInput && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.14 }}
+                  className="absolute left-0 right-0 top-full z-[500] mt-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+                >
+                  <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={startGlobalToneDirectInput}
+                      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                    >
+                      <span>직접 입력</span>
+                      <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
+                        !selectedToneId ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                      )}
+                    >
+                      기본 추천 사용
+                    </button>
+                    {filteredTones.map((tone) => (
+                      <button
+                        key={tone.id}
+                        type="button"
+                        onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
+                        className={cn(
+                          "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
+                          selectedToneId === tone.id ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                        )}
+                      >
+                        {tone.labelKo || tone.label}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {/* Member Roles */}
           {vocalMembers.length > 0 && (
             <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-color)]">
@@ -9087,7 +9442,7 @@ function VocalControl({
                         >
                           <div className="flex items-center gap-1.5">
                             <Settings className="w-2.5 h-2.5" />
-                            <span>{member.toneId ? (vocalTones.find(t => t.id === member.toneId)?.labelKo || vocalTones.find(t => t.id === member.toneId)?.label) : "톤 선택 (기본)"}</span>
+                            <span>{member.toneId ? getVocalToneDisplayLabel(member.toneId, vocalTones) : "톤 선택 (기본)"}</span>
                           </div>
                           <ChevronDown className={cn("w-2.5 h-2.5 transition-transform", activeVocalTonePopup === member.id && "rotate-180")} />
                         </button>
@@ -9117,6 +9472,18 @@ function VocalControl({
                                   )}
                                 >
                                   기본 (Default)
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const nextTone = window.prompt('직접 입력할 보컬톤을 적어주세요. 예: 숨 섞인 허스키톤, 차갑고 건조한 톤', getVocalToneDisplayLabel(member.toneId, vocalTones));
+                                    if (nextTone && nextTone.trim()) {
+                                      handleUpdateMember(idx, { toneId: nextTone.trim() });
+                                    }
+                                    setActiveVocalTonePopup(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5 text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                                >
+                                  직접 입력
                                 </button>
                                 {vocalTones
                                   .filter(t => t.genderTarget === 'any' || t.genderTarget === 'unisex' || t.genderTarget === member.gender || (vocalMode === 'group' && t.genderTarget === 'group'))

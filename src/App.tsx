@@ -1670,9 +1670,10 @@ function App() {
     setHistory(songs);
 
     const newestBatchId = options?.latestBatchId ?? ((songs[0]?.appliedKeywords as any)?.generationBatchId || null);
-    if (newestBatchId) {
-      setLatestGenerationBatchId((prev) => prev || newestBatchId);
-    }
+    // Always follow the newest synced Firestore result.
+    // Previously this kept the first non-null batch id forever, so songs generated elsewhere
+    // could sync into history but still fail to appear as the current/latest generated song.
+    setLatestGenerationBatchId(newestBatchId || null);
 
     if (songs.length > 0) {
       const preferredIndex = options?.preferredIndex ?? null;
@@ -4360,11 +4361,28 @@ ${result.prompt}
     }
   };
 
+  const getRecentSongIdentityKey = (song: SongResult | null | undefined) => {
+    if (!song) return '';
+    const applied = (song.appliedKeywords || {}) as any;
+    const batchId = applied.generationBatchId || '';
+    const generationIndex = applied.generationIndex || '';
+    if (batchId) return `batch:${batchId}:${generationIndex}`;
+
+    const time = getTimestampMs((song as any).createdAtMs ?? (song as any).createdAt) || '';
+    const title = song.title || song.koreanTitle || song.englishTitle || '';
+    const prompt = song.prompt || '';
+    return `single:${time}:${title}:${prompt.slice(0, 80)}`;
+  };
+
   const isInLatestGenerationBatch = (song: SongResult | null = result) => {
-    if (!song) return false;
-    const batchId = (song.appliedKeywords as any)?.generationBatchId;
+    if (!song || history.length === 0) return false;
+
+    const batchId = ((song.appliedKeywords || {}) as any)?.generationBatchId;
     if (batchId && latestGenerationBatchId) return batchId === latestGenerationBatchId;
-    return historyIndex === 0;
+
+    // Studio/external generated songs may not have generationBatchId.
+    // In that case, treat the newest sorted Firestore song as the latest generated song everywhere.
+    return getRecentSongIdentityKey(song) === getRecentSongIdentityKey(history[0]);
   };
 
   const formatTitleLineByLanguage = (song: SongResult, lang: LanguageCode): string => {

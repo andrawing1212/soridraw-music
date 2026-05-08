@@ -1287,6 +1287,8 @@ function translateKoreanPromptFragments(value: string): string {
   const replacements: Array<[RegExp, string]> = [
     [/저승사자/g, "Grim Reaper"],
     [/처녀귀신/g, "Maiden Ghost"],
+    [/이순신|충무공/g, "Yi Sun-sin"],
+    [/도요토미\s*히데요시|토요토미\s*히데요시|히데요시/g, "Hideyoshi"],
     [/귀신/g, "Ghost"],
     [/유령/g, "Ghost"],
     [/상사|부장님|부장|팀장/g, "Boss"],
@@ -1348,7 +1350,7 @@ function stripRemainingKoreanForProductionPrompt(value: string): string {
   return cleanupPromptTail(
     translateKoreanPromptFragments(value)
       .replace(/[가-힣]+/g, "")
-      .replace(/(?:ui|eun|neun|ga|i|eul|reul)/gi, "")
+      .replace(/\b(?:ui|eun|neun|ga|i|eul|reul)\b/gi, "")
       .replace(/\s+([,.;:])/g, "$1")
       .replace(/[,;:]\s*([,;:])/g, "$1")
       .replace(/\s{2,}/g, " "),
@@ -1367,7 +1369,7 @@ function enforceEnglishProductionPrompt(prompt: string): string {
     .map((line) => {
       if (/^\[Audio quality improved to masterpiece\]$/.test(line.trim()))
         return line.trim();
-      return stripRemainingKoreanForProductionPrompt(line);
+      return cleanProductionPhrase(stripRemainingKoreanForProductionPrompt(line));
     })
     .filter(Boolean)
     .join("\n");
@@ -1519,6 +1521,8 @@ function buildMoodAtmosphereClause(moodWords: string[]): string {
 
 function roleToPromptPersona(role: string): string {
   const value = String(role || "").toLowerCase();
+  if (/이순신|충무공|yi sun-sin|yi sun sin/.test(value)) return "Yi Sun-sin";
+  if (/히데요시|도요토미|토요토미|hideyoshi/.test(value)) return "Hideyoshi";
   if (/저승사자|사자|reaper|grim/.test(value)) return "tired reaper";
   if (/귀신|유령|ghost|spirit/.test(value)) return "regretful ghost";
   if (/상사|부장|boss|manager|팀장/.test(value)) return "boss";
@@ -1582,8 +1586,74 @@ function compactSituationScene(params: GenerateSongParams): string {
   return roleScene;
 }
 
+
+function interpretEmotionBlendForPrompt(rawValue: string): string {
+  const raw = String(rawValue || "").toLowerCase();
+  const has = (pattern: RegExp) => pattern.test(raw);
+
+  // When two selected feelings look contradictory, reinterpret them as one playable emotional state.
+  if (has(/기분.*좋|웃음|들뜬|설레|기대|될 것/) && has(/아무것도.*싫|귀찮|힘.?빠|무미건조|별일 아닌 척/)) {
+    return "a lazily pleased state, happy because nothing has to be done";
+  }
+  if (has(/좋은데|사랑|보고 싶은|기대|설레/) && has(/서운|쓸쓸|멀어진|흔들|신경/)) {
+    return "mixed affection and quiet disappointment";
+  }
+  if (has(/웃는데|웃음|밝|장난/) && has(/쓸쓸|그리움|후회|외로|눈물/)) {
+    return "smiling through a lonely aftertaste";
+  }
+  if (has(/화났|억울|날카|반항|말대꾸/) && has(/보고 싶은|신경|기대|좋은데/)) {
+    return "irritated but still emotionally attached";
+  }
+  if (has(/자유|떠나고|도망/) && has(/불안|공황|숨이 턱|쫓기는/)) {
+    return "restless longing for escape under anxious pressure";
+  }
+  if (has(/복받쳐|터질|무너/) && has(/참|아무렇지|담담|체념/)) {
+    return "holding back a rising emotional burst";
+  }
+  if (has(/위로|기대고/) && has(/혼자|버티|척/)) {
+    return "wanting comfort while pretending to stand alone";
+  }
+
+  const traits: string[] = [];
+  const add = (value: string) => {
+    if (traits.length < 2 && !traits.includes(value)) traits.push(value);
+  };
+  if (has(/기분.*좋|웃음|들뜬|설레|기대|오늘은 될/)) add("lightly hopeful");
+  if (has(/위로|기대고|사랑받/)) add("seeking comfort");
+  if (has(/자유|떠나고|도망/)) add("longing for freedom");
+  if (has(/미련|놓지 못|그리움|돌아가|후회/)) add("lingering regret");
+  if (has(/복받쳐|터질|무너/)) add("emotion close to breaking");
+  if (has(/불안|공황|숨이 턱|쫓기는|실수할까/)) add("anxious tension");
+  if (has(/억울|반항|날카|말대꾸|비꼬/)) add("prickly resistance");
+  if (has(/아무것도.*싫|귀찮|힘.?빠|무미건조|감정이 식|체념|툭 놓/)) add("flat, drained restraint");
+  if (has(/아무렇지|척|모르는 척|별일 아닌 척/)) add("pretending to be fine");
+  if (has(/좋은데 서운|웃는데 쓸쓸|편한데 멀어진|괜찮은데 흔들|싫은데 신경|끝난 줄/)) add("subtle mixed emotion");
+  return traits.join(" and ");
+}
+
+function interpretSpeechStyleForPrompt(rawValue: string): string {
+  const raw = String(rawValue || "").toLowerCase();
+  const traits: string[] = [];
+  const add = (value: string) => {
+    if (traits.length < 2 && !traits.includes(value)) traits.push(value);
+  };
+  if (/담담|차분|낮게|누르/.test(raw)) add("calmly restrained");
+  if (/아무렇지|무심|건조|툭/.test(raw)) add("tossed-off and dry");
+  if (/리드미컬|빠르게|받아치/.test(raw)) add("rhythmically responsive");
+  if (/비꼬|능청|웃으며|장난/.test(raw)) add("playfully sarcastic");
+  if (/혼잣말|속삭|숨을 삼키/.test(raw)) add("intimate and inward");
+  if (/고백|간절|망설|서툴/.test(raw)) add("vulnerably hesitant");
+  if (/직설|날카|존댓말|압박/.test(raw)) add("direct and pointed");
+  if (/다정|달래/.test(raw)) add("gently reassuring");
+  return traits.join(" and ");
+}
+
 function roleDirectionDefaults(role: string): string {
   const value = String(role || "").toLowerCase();
+  if (/이순신|충무공|yi sun-sin|yi sun sin/.test(value))
+    return "disciplined authority and dry heroic restraint";
+  if (/히데요시|도요토미|토요토미|hideyoshi/.test(value))
+    return "insecure bravado and tired need for comfort";
   if (/저승사자|사자|reaper|grim/.test(value))
     return "tired authority and reluctant sympathy";
   if (/귀신|유령|ghost|spirit/.test(value))
@@ -1603,10 +1673,14 @@ function mergeRoleDirection(role: string, rawStyleSource: string): string {
   const roleText = String(role || "").toLowerCase();
   const raw = String(rawStyleSource || "").toLowerCase();
 
-  // Strong role archetypes should not become long keyword tails.
-  // Keep them producer-like and readable in the final [Vocals] line.
-  if (/저승사자|사자|reaper|grim/.test(roleText)) return base;
-  if (/귀신|유령|ghost|spirit/.test(roleText)) return base;
+  const blendedEmotion = interpretEmotionBlendForPrompt(raw);
+  const speechStyle = interpretSpeechStyleForPrompt(raw);
+  const combined = [speechStyle, blendedEmotion].filter(Boolean).join(" with ");
+
+  // Strong role archetypes should remain concise, but still allow the user's selected mood/speech nuance to color them.
+  if (/저승사자|사자|reaper|grim/.test(roleText) || /귀신|유령|ghost|spirit/.test(roleText)) {
+    return combined ? `${base} with ${combined}` : base;
+  }
 
   const extras: string[] = [];
   const add = (value: string, guard: RegExp) => {
@@ -1614,6 +1688,7 @@ function mergeRoleDirection(role: string, rawStyleSource: string): string {
       extras.push(value);
   };
 
+  if (combined) extras.push(combined);
   if (/비꼬|sarcastic/.test(raw)) add("sarcastic edge", /sarcastic/);
   if (/서운|hurt/.test(raw)) add("hurt undertone", /hurt|regret|pleading/);
   if (/잔소리|nag/.test(raw)) add("nagging edge", /nagging/);
@@ -1622,7 +1697,7 @@ function mergeRoleDirection(role: string, rawStyleSource: string): string {
     add("pressing delivery", /pressure|authority|pressing/);
 
   return extras.length
-    ? `${base} with ${extras.slice(0, 1).join(" and ")}`
+    ? `${base} with ${extras.slice(0, 2).join(" and ")}`
     : base;
 }
 
@@ -1844,7 +1919,7 @@ function inferRoleGenderFromText(role: string): InferredRoleGender {
     return "female";
   }
   if (
-    /아빠|아버지|시아버지|장인|할아버지|남편|남자|남성|남친|전남친|아들|사위|형|오빠|남동생|왕|임금|전하|세종|퇴계|이황|신하|선비|부장|상사|boss|father|dad|husband|man|male|son|boyfriend|brother|grandfather|king|ruler|scholar|official|manager/.test(
+    /아빠|아버지|시아버지|장인|할아버지|남편|남자|남성|남친|전남친|아들|사위|형|오빠|남동생|왕|임금|전하|세종|퇴계|이황|이순신|충무공|히데요시|도요토미|토요토미|신하|선비|부장|상사|boss|father|dad|husband|man|male|son|boyfriend|brother|grandfather|king|ruler|scholar|official|manager/.test(
       value,
     )
   ) {
@@ -1965,12 +2040,21 @@ function buildSituationRoleVocalItem(
   ]
     .filter(Boolean)
     .join(", ");
-  const direction = mergeRoleDirection(role, rawStyleSource);
 
-  const cleanTone = voiceTone === "character" ? "natural" : voiceTone;
   const roleName = compactRoleForPrompt(role);
-  // Producer-style sentence fragment. It should read like directing a real singer.
-  return `${cleanTone} ${gender} vocals carrying ${direction} (${roleName})`;
+  const cleanTone = voiceTone === "character" ? "natural" : voiceTone;
+
+  // Keep each role compact so the final [Vocals] line never cuts off before
+  // the second character name. The detailed nuance still comes from the
+  // selected speech/emotion values, but it is compressed into one singer note.
+  const direction = limitText(
+    mergeRoleDirection(role, rawStyleSource)
+      .replace(/\s+with\s+with\s+/gi, " with ")
+      .replace(/\s+and\s+and\s+/gi, " and "),
+    34,
+  );
+
+  return `${cleanTone} ${gender} vocal with ${direction} (${roleName})`;
 }
 
 function joinPromptPhrase(items: string[], connector = "and"): string {
@@ -2525,6 +2609,67 @@ function buildVariedSituationAtmosphere(
   return cleanupPromptTail(limitText(`${moodClause} ${scene} ${angle}`, 210));
 }
 
+
+function normalizeStoryAngleForTrackLine(value: string): string {
+  let angle = stripRemainingKoreanForProductionPrompt(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!angle) return "";
+
+  angle = angle
+    .replace(/^through\s+(.+?)\s+becoming\s+the\s+emotional\s+hook\.?$/i, "where $1 becomes the emotional hook")
+    .replace(/^through\s+(.+?)\s+as\s+the\s+visible\s+anchor\s+of\s+the\s+scene\.?$/i, "where $1 anchors the scene")
+    .replace(/^through\s+a\s+recurring\s+(.+?)\s+that\s+changes\s+meaning\s+each\s+time\.?$/i, "where a recurring $1 changes meaning each time");
+
+  if (/^through\s+/i.test(angle)) {
+    angle = angle.replace(/^through\s+/i, "where the story moves through ");
+  } else if (/^with\s+/i.test(angle)) {
+    angle = angle.replace(/^with\s+/i, "with ");
+  } else if (/^as\s+/i.test(angle)) {
+    angle = angle.replace(/^as\s+/i, "as ");
+  } else if (!/^(where|with|as)\b/i.test(angle)) {
+    angle = `where ${angle}`;
+  }
+
+  return cleanupPromptTail(angle)
+    .replace(/\bwhere\s+where\b/gi, "where")
+    .replace(/\bwith\s+with\b/gi, "with")
+    .trim();
+}
+
+function joinSceneAndStoryAngle(scene: string, angle: string): string {
+  const cleanScene = cleanupPromptTail(scene || "a clear story scene");
+  const cleanAngle = normalizeStoryAngleForTrackLine(angle);
+  if (!cleanAngle) return `set around ${cleanScene}`;
+  if (/^(where|as)\b/i.test(cleanAngle)) return `set around ${cleanScene}, ${cleanAngle}`;
+  if (/^with\b/i.test(cleanAngle)) return `set around ${cleanScene} ${cleanAngle}`;
+  return `set around ${cleanScene}, ${cleanAngle}`;
+}
+
+function cleanProductionPhrase(value: string): string {
+  let text = String(value || "")
+    .replace(/\bwith\s+and\s+with\s+/gi, "with ")
+    .replace(/\bwith\s+with\s+/gi, "with ")
+    .replace(/\bwith\s+and\s+/gi, "with ")
+    .replace(/\band\s+with\s+/gi, "and ")
+    .replace(/\bwith\s+(?:a|an)\s+with\s+/gi, "with ")
+    .replace(/,\s*with\s+/gi, " with ")
+    .replace(/\s+,\s+/g, ", ")
+    .replace(/\s{2,}/g, " ");
+
+  // Run repeatedly because append/limit steps can create chained connectors.
+  for (let i = 0; i < 3; i += 1) {
+    text = text
+      .replace(/\bwith\s+and\s+with\s+/gi, "with ")
+      .replace(/\bwith\s+with\s+/gi, "with ")
+      .replace(/\bwith\s+and\s+/gi, "with ")
+      .replace(/\band\s+with\s+/gi, "and ")
+      .replace(/\s{2,}/g, " ");
+  }
+
+  return cleanupPromptTail(text);
+}
+
 function variationArrangementMeaning(variation: CreativeVariationSeed): string {
   const map: Record<string, string> = {
     "interruption-cut-in":
@@ -2636,15 +2781,15 @@ function inferVocalCultureLabel(params: GenerateSongParams): string {
   // itself carries a clear national/cultural vocal identity.
   if (
     params.isKpopSelected ||
-    /(k[\s-]?pop|k[\s-]?ballad|korean|gugak|국악|트로트|trot|k[\s-]?r&b|k[\s-]?hip[\s-]?hop)/i.test(
+    /\b(k[\s-]?pop|k[\s-]?ballad|korean|gugak|국악|트로트|trot|k[\s-]?r&b|k[\s-]?hip[\s-]?hop)\b/i.test(
       values,
     )
   ) {
     return "Korean";
   }
-  if (/(j[\s-]?pop|japanese|enka|anime)/i.test(values)) return "Japanese";
-  if (/(c[\s-]?pop|mandopop|cantopop|chinese)/i.test(values)) return "Chinese";
-  if (/(latin|reggaeton|bossa|samba|afrobeat|afropop)/i.test(values))
+  if (/\b(j[\s-]?pop|japanese|enka|anime)\b/i.test(values)) return "Japanese";
+  if (/\b(c[\s-]?pop|mandopop|cantopop|chinese)\b/i.test(values)) return "Chinese";
+  if (/\b(latin|reggaeton|bossa|samba|afrobeat|afropop)\b/i.test(values))
     return "Latin";
   return "";
 }
@@ -2922,27 +3067,45 @@ function buildSituationVocals(params: GenerateSongParams): string {
   const targetB = String(situation?.targetB || "").trim();
   const speakers = situation?.speakers ?? [];
 
-  const roleEntries: SituationRoleEntry[] =
-    speakers.length > 0
-      ? speakers
-          .slice(0, 2)
-          .map((speaker, index) => ({
-            role: String(
-              speaker.role ||
-                speaker.id ||
-                (index === 0 ? targetA : targetB) ||
-                `Role ${index + 1}`,
-            ).trim(),
-            genderHint:
-              speaker.gender && speaker.gender !== "any"
-                ? speaker.gender
-                : undefined,
-          }))
-          .filter((entry) => Boolean(entry.role))
-      : [targetA, targetB]
-          .filter(Boolean)
-          .slice(0, 2)
-          .map((role) => ({ role, genderHint: inferRoleGenderFromText(role) }));
+  // Situation role names must come from targetA/targetB first.
+  // Older saved data can contain a partial speakers array, so do not let it replace
+  // the visible target names with generic Role labels.
+  const targetRoles = [targetA, targetB]
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((role, index) => {
+      const speaker = speakers[index];
+      return {
+        role,
+        genderHint:
+          speaker?.gender && speaker.gender !== "any"
+            ? speaker.gender
+            : inferRoleGenderFromText(role),
+      } as SituationRoleEntry;
+    });
+
+  const speakerRoles = speakers
+    .slice(0, 2)
+    .map((speaker, index) => {
+      const role = String(
+        speaker.role ||
+          (index === 0 ? targetA : targetB) ||
+          speaker.id ||
+          `Character ${index + 1}`,
+      ).trim();
+      return {
+        role,
+        genderHint:
+          speaker.gender && speaker.gender !== "any"
+            ? speaker.gender
+            : inferRoleGenderFromText(role),
+      } as SituationRoleEntry;
+    })
+    .filter((entry) => Boolean(entry.role));
+
+  const roleEntries: SituationRoleEntry[] = targetRoles.length
+    ? targetRoles
+    : speakerRoles;
 
   // Situation characters are story roles. Actual singer count follows the Vocal menu.
   if (info.isSolo) {
@@ -4280,17 +4443,11 @@ function buildStorySettingClause(
   const scene = stripRemainingKoreanForProductionPrompt(
     compactSituationScene(params),
   );
-  const angle = stripRemainingKoreanForProductionPrompt(
-    variationAtmosphereMeaning(variation, params),
-  )
-    .replace(/^through\s+/i, "through ")
-    .replace(/^as\s+/i, "as ")
-    .replace(/^with\s+/i, "with ")
-    .trim();
+  const angle = variationAtmosphereMeaning(variation, params);
 
   // Use the user's Situation as story material, but never paste it directly.
   // The first prompt sentence should feel like a short song pitch: genre + mood + scene + story nuance.
-  const clause = `set around ${scene || "a clear story scene"}${angle ? ` ${angle}` : ""}`;
+  const clause = joinSceneAndStoryAngle(scene || "a clear story scene", angle);
   return cleanupPromptTail(limitText(clause, 180));
 }
 
@@ -4379,6 +4536,7 @@ function buildHybridProductionLine(
       cleanupPromptTail(item)
         .replace(/\.+$/g, "")
         .replace(/^dynamic progression with clear sectional contrast$/i, "clear sectional contrast")
+        .replace(/^(?:(?:and|with)\s+)+/i, "")
         .trim(),
     )
     .filter(Boolean);
@@ -4394,7 +4552,7 @@ function buildHybridProductionLine(
       : soundPhrase
     : performancePhrase || "a focused instrumental palette with clear movement";
 
-  return cleanupPromptTail(limitText(production, 165));
+  return cleanupPromptTail(limitText(cleanProductionPhrase(production), 165));
 }
 
 function compactHybridPromptBody(lines: string[]): string[] {
@@ -4490,7 +4648,11 @@ function buildFinalPrompt(
   ]);
 
   const finalBodyLines = bodyLines.map((line) =>
-    line.replace(/Fretless/gi, "fretless"),
+    cleanupPromptTail(
+      cleanProductionPhrase(line)
+        .replace(/Fretless/gi, "fretless")
+        .replace(/\bthrough\s+becoming\b/gi, "where it becomes"),
+    ),
   );
 
   return enforceEnglishProductionPrompt(

@@ -275,7 +275,7 @@ function cn(...inputs: ClassValue[]) {
 const createEmptySituation = (): SituationConfig => ({ enabled: false });
 
 const SITUATION_VERSION_OPTIONS = [
-  { value: '', label: '버전 선택' },
+  { value: '', label: '연출 톤 선택' },
   { value: 'comic', label: '코믹형' },
   { value: 'satire', label: '풍자형' },
   { value: 'black-comedy', label: '블랙코미디형' },
@@ -286,31 +286,32 @@ const SITUATION_VERSION_OPTIONS = [
   { value: 'generation-gap', label: '세대차이형' },
   { value: 'miscommunication', label: '동문서답형' },
   { value: 'role-reversal', label: '역할반전형' },
-  { value: 'reconciliation', label: '후반 화해형' },
-  { value: 'parallel-ending', label: '끝까지 평행선형' },
-  { value: 'one-sided-crush', label: '짝사랑형' },
-  { value: 'nostalgic-memory', label: '회상형' },
-  { value: 'social-satire', label: '사회풍자형' },
+  { value: 'warm-ending', label: '따뜻한형' },
+  { value: 'parallel-ending', label: '평행선형' },
+  { value: 'romantic', label: '로맨틱형' },
+  { value: 'nostalgic', label: '회상형' },
+  { value: 'dreamlike', label: '몽환형' },
   { value: 'daily-life-slice', label: '생활밀착형' },
-  { value: 'dramatic-twist', label: '반전형' },
+  { value: 'social-satire', label: '사회풍자형' },
+  { value: 'dry-humor', label: '건조한 유머형' },
+  { value: 'healing', label: '힐링형' },
+  { value: 'youthful', label: '청춘형' },
+  { value: 'noir', label: '누아르형' },
+  { value: 'fantasy', label: '판타지형' },
 ] as const;
 
 const SITUATION_DEVELOPMENT_OPTIONS = [
   { value: 'solo-monologue', label: '독백형' },
-  { value: 'memory-fragment', label: '회상형' },
+  { value: 'memory-fragment', label: '기억 조각형' },
   { value: 'confession-delay', label: '늦은 고백형' },
-  { value: 'rising-emotion', label: '감정 누적형' },
-  { value: 'last-burst', label: '마지막 폭발형' },
-  { value: 'quiet-afterglow', label: '잔잔한 여운형' },
-  { value: 'unresolved-ending', label: '미해결형' },
   { value: 'scene-loop', label: '장면 반복형' },
   { value: 'object-led', label: '물건 중심형' },
-  { value: 'small-detail-hook', label: '사소한 디테일 훅' },
+  { value: 'detail-hook', label: '사소한 디테일 훅' },
   { value: 'chorus-takeover', label: '후렴 장악형' },
   { value: 'one-sided-hook', label: '한쪽 후렴형' },
-  { value: 'together-hook', label: '같이 부르는 후렴형' },
-  { value: 'adlib-response', label: '애드립 응답형' },
+  { value: 'together-hook', label: '함께 부르는 후렴형' },
   { value: 'echo-hook', label: '에코 훅형' },
+  { value: 'adlib-response', label: '애드립 응답형' },
   { value: 'interruption', label: '끼어들기형' },
   { value: 'negotiation', label: '협상형' },
   { value: 'push-and-pull', label: '밀당형' },
@@ -318,12 +319,18 @@ const SITUATION_DEVELOPMENT_OPTIONS = [
   { value: 'late-reveal', label: '후반 공개형' },
   { value: 'parallel-monologue', label: '평행 독백형' },
   { value: 'misunderstanding', label: '오해형' },
+  { value: 'unresolved-ending', label: '끝까지 미해결형' },
   { value: 'comic-loop', label: '코믹 루프형' },
-  { value: 'satire-build', label: '풍자 누적형' },
   { value: 'quiet-contradiction', label: '조용한 모순형' },
   { value: 'genre-led', label: '장르 주도형' },
   { value: 'drop-hook', label: '드롭 훅형' },
   { value: 'rap-relay', label: '랩 릴레이형' },
+  { value: 'solo-hook', label: '솔로 훅 중심' },
+  { value: 'dialogue-break', label: '대화 끊김형' },
+  { value: 'inner-voice', label: '속마음 공개형' },
+  { value: 'final-twist', label: '마지막 반전형' },
+  { value: 'open-ending', label: '열린 결말형' },
+  { value: 'chorus-contrast', label: '후렴 대비형' },
 ] as const;
 
 const SITUATION_DETAIL_EXAMPLES = [
@@ -335,70 +342,97 @@ const SITUATION_DETAIL_EXAMPLES = [
 ] as const;
 
 const SITUATION_SPEECH_STYLE_OPTIONS = [
-  '담담한',
-  '혼잣말',
+  '담담하게',
+  '아무렇지 않은 척',
+  '툭 던지듯',
+  '혼잣말처럼',
   '고백하듯',
-  '속삭이는',
-  '투덜대는',
-  '비꼬는',
-  '직설적인',
-  '차분한',
-  '조용한',
-  '애써 밝은',
-  '체념한',
-  '불안한',
-  '서툰',
-  '건조한',
-  '능청스러운',
-  '장난스러운',
-  '간절한',
-  '망설이는',
-  '날카로운',
-  '다정한',
-  '무심한',
-  '쓸쓸한',
-  '흔들리는',
-  '눌러 말하는',
-  '빠르게 받아치는',
-  '리드미컬한',
-  '존댓말 압박',
-  '반말/반존대',
+  '속삭이듯',
+  '투덜대듯',
+  '비꼬듯',
+  '직설적으로',
+  '차분하게',
+  '무심하게',
+  '애써 밝게',
+  '체념한 듯',
+  '불안하게',
+  '서툴게',
+  '건조하게',
+  '능청스럽게',
+  '장난스럽게',
+  '간절하게',
+  '망설이듯',
+  '날카롭게',
+  '다정하게',
+  '쓸쓸하게',
+  '흔들리듯',
+  '빠르게',
+  '리드미컬하게',
+  '존댓말로',
+  '반말처럼',
+  '돌려 말하듯',
+  '투정하듯',
+  '웃으며',
+  '숨을 삼키듯',
+  '낮게 누르듯',
+  '가볍게 받아치듯',
 ] as const;
 
 const SITUATION_ATTITUDE_OPTIONS = [
-  '미련',
-  '후회',
-  '그리움',
-  '외로움',
-  '불안',
-  '체념',
-  '망설임',
-  '서러움',
-  '공허함',
-  '집착',
-  '자책',
-  '해방감',
-  '설렘',
-  '기대감',
-  '안도감',
-  '편안함',
-  '따뜻함',
-  '질투',
-  '서운함',
-  '억울함',
-  '답답함',
-  '고집',
-  '체면',
-  '허세',
-  '두려움',
-  '혼란',
-  '반항심',
-  '연민',
-  '다정함',
-  '어색함',
-  '무기력',
-  '미묘한 호감',
-  '끝까지 못 놓음',
+  '괜히 기분이 좋은',
+  '가슴이 콩닥대는',
+  '자꾸 웃음이 나는',
+  '기대하고 싶은',
+  '오늘은 될 것 같은',
+  '장난스럽게 들뜬',
+  '가볍게 설레는',
+  '사랑받고 싶은',
+  '위로받고 싶은',
+  '자유를 찾고 싶은',
+  '어디론가 떠나고 싶은',
+  '돌아가고 싶은',
+  '끝내 놓지 못하는',
+  '그리움이 남은',
+  '말하고 싶은데 못하는',
+  '복받쳐 오르는',
+  '혼자 버티는',
+  '참다 터질 것 같은',
+  '괜히 날카로운',
+  '억울해서 못 참는',
+  '반항하고 싶은',
+  '비꼬고 싶은',
+  '말대꾸하고 싶은',
+  '불안에 잠긴',
+  '숨이 턱 막히는',
+  '도망가고 싶은',
+  '공황 올 것 같은',
+  '자꾸 확인하게 되는',
+  '실수할까 겁나는',
+  '쫓기는 듯한',
+  '아무것도 하기 싫은',
+  '아무렇지 않은 척하는',
+  '툭 놓고 싶은',
+  '감정이 식은',
+  '체념한 듯한',
+  '귀찮은 듯한',
+  '힘이 빠진',
+  '좋은데 서운한',
+  '웃는데 쓸쓸한',
+  '화났는데 보고 싶은',
+  '편한데 멀어진',
+  '괜찮은데 흔들리는',
+  '싫은데 신경 쓰이는',
+  '끝난 줄 알았는데 아닌',
+  '모르는 척하고 싶은',
+  '조금만 기대고 싶은',
+  '기쁜데 눈물 나는',
+  '무미건조하게 흘러가는',
+  '별일 아닌 척하는',
+  '가볍게 웃어넘기고 싶은',
+  '조용히 무너지는',
+  '이유 없이 들뜬',
+  '쓸데없이 신경 쓰이는',
+  '아무것도 안 해서 편한',
 ] as const;
 
 type SituationChoicePickerProps = {
@@ -429,8 +463,55 @@ const SituationChoicePicker = ({
   maxSelected = 2,
 }: SituationChoicePickerProps) => {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [customDraft, setCustomDraft] = useState(value || '');
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const labels = useMemo(() => options.map((item) => typeof item === 'string' ? item : item.label), [options]);
   const selected = useMemo(() => splitSituationChoices(value || '', labels), [value, labels]);
+  const hasValue = Boolean(String(value || '').trim());
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!editing) setCustomDraft(value || '');
+  }, [value, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing]);
+
+  const startDirectInput = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    setCustomDraft(value || '');
+    setOpen(false);
+    setEditing(true);
+  };
+
+  const cancelDirectInput = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    setCustomDraft(value || '');
+    setEditing(false);
+  };
+
+  const applyDirectInput = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    const next = customDraft.trim();
+    onChange(next);
+    setEditing(false);
+    setOpen(false);
+  };
 
   const toggleChoice = (labelText: string) => {
     const exists = selected.includes(labelText);
@@ -440,51 +521,137 @@ const SituationChoicePicker = ({
         ? selected
         : [...selected, labelText];
     onChange(next.join(', '));
+    setOpen(false);
+    setEditing(false);
   };
 
-  const buttonLabel = selected.length
-    ? `${selected.join(' · ')} (${selected.length}/${maxSelected})`
-    : summaryLabel;
+  const clearChoices = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    onChange('');
+    setCustomDraft('');
+    setOpen(false);
+    setEditing(false);
+  };
+
+  const buttonLabel = hasValue ? String(value).trim() : summaryLabel;
 
   return (
-    <div className="space-y-2">
+    <div ref={wrapRef} className="relative space-y-1.5 overflow-visible">
       <label className="block text-[11px] font-bold text-[var(--text-secondary)]">{label}</label>
-      <input
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
-      />
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-left text-xs font-bold text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange transition-all"
-      >
-        <span className="truncate">{buttonLabel}</span>
-        <ChevronDown className="w-4 h-4 shrink-0" />
-      </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[160] flex items-end md:items-center justify-center bg-black/60 px-3 py-4" onClick={() => setOpen(false)}>
-          <div
-            className="w-full max-w-md max-h-[72vh] rounded-3xl bg-[var(--bg-secondary)] border border-btn-border shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+      {editing ? (
+        <div className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-[var(--input-bg)] border-brand-orange text-sm transition-all">
+          <input
+            ref={inputRef}
+            value={customDraft}
+            onChange={(e) => setCustomDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyDirectInput();
+              if (e.key === 'Escape') cancelDirectInput();
+            }}
+            placeholder={placeholder}
+            className="min-w-0 flex-1 bg-transparent text-xs md:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+          />
+          <button
+            type="button"
+            onClick={cancelDirectInput}
+            className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-400 hover:bg-btn-hover transition-all"
+            aria-label={`${label} 직접 입력 취소`}
           >
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-color)]">
-              <div>
-                <p className="text-sm font-black text-[var(--text-primary)]">{label}</p>
-                <p className="text-[11px] text-[var(--text-secondary)]">최대 {maxSelected}개 선택</p>
-              </div>
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={applyDirectInput}
+            className="p-1.5 rounded-lg text-brand-orange hover:bg-brand-orange/10 transition-all"
+            aria-label={`${label} 직접 입력 적용`}
+          >
+            <Check className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className={cn(
+            "w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left text-xs font-bold transition-all",
+            open
+              ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
+              : hasValue
+                ? "bg-[var(--input-bg)] border-brand-orange/55 text-[var(--text-primary)] hover:bg-btn-hover"
+                : "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-brand-orange"
+          )}
+        >
+          <span className={cn("truncate", !hasValue && "text-[var(--text-tertiary)]")}>{buttonLabel}</span>
+          <span className="flex items-center gap-1 shrink-0">
+            {hasValue && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={startDirectInput}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    startDirectInput(event as any);
+                  }
+                }}
+                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                aria-label={`${label} 수정`}
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </span>
+            )}
+            {hasValue && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={clearChoices}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') clearChoices(event as any);
+                }}
+                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                aria-label={`${label} 지우기`}
+              >
+                <X className="w-3.5 h-3.5" />
+              </span>
+            )}
+            <ChevronDown className={cn("w-4 h-4 shrink-0 transition-transform", open && "rotate-180")} />
+          </span>
+        </button>
+      )}
+
+      <AnimatePresence>
+        {open && !editing && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.14 }}
+            className="absolute left-0 right-0 top-full z-[500] mt-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/90">
+              <span className="text-[11px] font-bold text-[var(--text-tertiary)]">최대 {maxSelected}개 선택</span>
+              {!!hasValue && (
+                <button
+                  type="button"
+                  onClick={clearChoices}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-btn-bg border border-btn-border text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-all"
+                >
+                  <X className="w-3 h-3" />
+                  지우기
+                </button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2 space-y-1.5">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                className="w-9 h-9 rounded-xl bg-btn-bg border border-btn-border flex items-center justify-center text-[var(--text-secondary)] hover:text-brand-orange"
-                aria-label="닫기"
+                onClick={startDirectInput}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
               >
-                <X className="w-4 h-4" />
+                <span>직접 입력</span>
+                <Edit2 className="w-3.5 h-3.5 shrink-0" />
               </button>
-            </div>
-            <div className="p-3 max-h-[52vh] overflow-y-auto space-y-2 scrollbar-hide">
+
               {labels.map((labelText) => {
                 const active = selected.includes(labelText);
                 const disabled = !active && selected.length >= maxSelected;
@@ -495,7 +662,7 @@ const SituationChoicePicker = ({
                     onClick={() => toggleChoice(labelText)}
                     disabled={disabled}
                     className={cn(
-                      "w-full flex items-center justify-between gap-3 px-3 py-3 rounded-2xl text-sm font-bold border transition-all text-left",
+                      "w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left",
                       active
                         ? "bg-brand-orange text-white border-brand-orange"
                         : disabled
@@ -504,30 +671,228 @@ const SituationChoicePicker = ({
                     )}
                   >
                     <span>{labelText}</span>
-                    {active && <Check className="w-4 h-4 shrink-0" />}
+                    {active && <Check className="w-3.5 h-3.5 shrink-0" />}
                   </button>
                 );
               })}
             </div>
-            <div className="flex gap-2 p-3 border-t border-[var(--border-color)]">
-              <button
-                type="button"
-                onClick={() => onChange('')}
-                className="flex-1 px-3 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-xs font-bold text-[var(--text-secondary)] hover:bg-btn-hover"
-              >
-                선택 해제
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex-1 px-3 py-2.5 rounded-xl bg-brand-orange text-white text-xs font-black"
-              >
-                적용
-              </button>
-            </div>
-          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+type SituationVersionPickerProps = {
+  value: string;
+  onChange: (value: string, label: string) => void;
+};
+
+const SituationVersionPicker = ({ value, onChange }: SituationVersionPickerProps) => {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [customDraft, setCustomDraft] = useState('');
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const selectedOption = SITUATION_VERSION_OPTIONS.find((item) => item.value === value);
+  const hasValue = !!value;
+  const displayLabel = selectedOption?.label || value || '연출 톤 선택';
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!editing) setCustomDraft(selectedOption?.label || value || '');
+  }, [editing, selectedOption?.label, value]);
+
+  useEffect(() => {
+    if (editing) {
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing]);
+
+  const startDirectInput = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    setCustomDraft(selectedOption?.label || value || '');
+    setOpen(false);
+    setEditing(true);
+  };
+
+  const cancelDirectInput = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    setCustomDraft(selectedOption?.label || value || '');
+    setEditing(false);
+  };
+
+  const applyDirectInput = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    const next = customDraft.trim();
+    if (!next) return;
+    onChange(next, next);
+    setOpen(false);
+    setEditing(false);
+  };
+
+  const clearValue = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    onChange('', '');
+    setCustomDraft('');
+    setOpen(false);
+    setEditing(false);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative overflow-visible">
+      <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">연출 톤</label>
+
+      {editing ? (
+        <div className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-[var(--input-bg)] border-brand-orange text-sm transition-all">
+          <input
+            ref={inputRef}
+            value={customDraft}
+            onChange={(e) => setCustomDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyDirectInput();
+              if (e.key === 'Escape') cancelDirectInput();
+            }}
+            placeholder="직접 입력: 예: 조용한 블랙코미디형, 풋풋한 성장형"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+          />
+          <button
+            type="button"
+            onClick={cancelDirectInput}
+            className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-400 hover:bg-btn-hover transition-all"
+            aria-label="연출 톤 직접 입력 취소"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={applyDirectInput}
+            className="p-1.5 rounded-lg text-brand-orange hover:bg-brand-orange/10 transition-all"
+            aria-label="연출 톤 직접 입력 적용"
+          >
+            <Check className="w-3.5 h-3.5" />
+          </button>
         </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className={cn(
+            "w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left text-sm font-bold transition-all",
+            open
+              ? "bg-brand-orange/10 border-brand-orange text-brand-orange"
+              : hasValue
+                ? "bg-[var(--input-bg)] border-brand-orange/60 text-[var(--text-primary)]"
+                : "bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-brand-orange"
+          )}
+        >
+          <span className={cn("truncate", !hasValue && "text-[var(--text-tertiary)]")}>{displayLabel}</span>
+          <span className="flex items-center gap-1 shrink-0">
+            {hasValue && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={startDirectInput}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    startDirectInput(e as any);
+                  }
+                }}
+                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                aria-label="연출 톤 수정"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </span>
+            )}
+            {hasValue && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={clearValue}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') clearValue(e as any);
+                }}
+                className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                aria-label="연출 톤 지우기"
+              >
+                <X className="w-3.5 h-3.5" />
+              </span>
+            )}
+            <ChevronDown className={cn("w-4 h-4 transition-transform", open && "rotate-180")} />
+          </span>
+        </button>
       )}
+
+      <AnimatePresence>
+        {open && !editing && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.14 }}
+            className="absolute left-0 right-0 top-full z-[500] mt-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/90">
+              <span className="text-[11px] font-bold text-[var(--text-tertiary)]">연출 톤 선택</span>
+              {hasValue && (
+                <button
+                  type="button"
+                  onClick={clearValue}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-btn-bg border border-btn-border text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-all"
+                >
+                  <X className="w-3 h-3" />
+                  지우기
+                </button>
+              )}
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2 space-y-1.5">
+              <button
+                type="button"
+                onClick={startDirectInput}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+              >
+                <span>직접 입력</span>
+                <Edit2 className="w-3.5 h-3.5 shrink-0" />
+              </button>
+
+              {SITUATION_VERSION_OPTIONS.filter((option) => option.value !== '').map((option) => {
+                const active = option.value === value || option.label === value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value, option.label);
+                      setOpen(false);
+                      setEditing(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left",
+                      active
+                        ? "bg-brand-orange text-white border-brand-orange"
+                        : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-[var(--text-primary)]"
+                    )}
+                  >
+                    <span>{option.label}</span>
+                    {active && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -4916,7 +5281,7 @@ ${result.prompt}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
             />
-            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-hidden">
+            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-visible relative z-[20]">
               <div className="p-4 md:p-5 flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -4933,7 +5298,7 @@ ${result.prompt}
                       <p className="text-[11px] md:text-xs text-[var(--text-secondary)] truncate">
                         {hasActiveSituation(situation)
                           ? buildSituationSummary(situation)
-                          : '관계, 갈등, 장소, 전개 느낌을 입력합니다.'}
+                          : '관계, 갈등, 장소, 전개 방식을 입력합니다.'}
                       </p>
                     </div>
                   </div>
@@ -4967,7 +5332,7 @@ ${result.prompt}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="overflow-hidden border-t border-[var(--border-color)]"
+                    className="overflow-visible border-t border-[var(--border-color)]"
                   >
                     <div className="p-4 md:p-5 space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -4985,17 +5350,17 @@ ${result.prompt}
                             label="대상 A 말투"
                             value={situation.speakerAStyle || ''}
                             onChange={(value) => updateSituationField('speakerAStyle', value)}
-                            placeholder="직접 입력: 예: 걱정이 잔소리처럼 들림"
+                            placeholder="직접 입력: 예: 담담하게, 아무렇지 않은 척"
                             options={SITUATION_SPEECH_STYLE_OPTIONS}
                             summaryLabel="말투 선택"
                           />
                           <SituationChoicePicker
-                            label="대상 A 감정/태도"
+                            label="대상 A 감정선"
                             value={situation.speakerAAttitude || situation.attitudeA || ''}
                             onChange={(value) => updateSituationField('speakerAAttitude', value)}
-                            placeholder="직접 입력: 예: 답답하지만 사랑이 깔려 있음"
+                            placeholder="직접 입력: 예: 괜히 기분이 좋은, 아무것도 하기 싫은"
                             options={SITUATION_ATTITUDE_OPTIONS}
-                            summaryLabel="감정/태도 선택"
+                            summaryLabel="감정선 선택"
                           />
                         </div>
 
@@ -5013,17 +5378,17 @@ ${result.prompt}
                             label="대상 B 말투"
                             value={situation.speakerBStyle || ''}
                             onChange={(value) => updateSituationField('speakerBStyle', value)}
-                            placeholder="직접 입력: 예: 짧고 방어적, 자기 공간 강조"
+                            placeholder="직접 입력: 예: 리드미컬하게, 비꼬듯"
                             options={SITUATION_SPEECH_STYLE_OPTIONS}
                             summaryLabel="말투 선택"
                           />
                           <SituationChoicePicker
-                            label="대상 B 감정/태도"
+                            label="대상 B 감정선"
                             value={situation.speakerBAttitude || situation.attitudeB || ''}
                             onChange={(value) => updateSituationField('speakerBAttitude', value)}
-                            placeholder="직접 입력: 예: 숨 막히지만 싫어하는 건 아님"
+                            placeholder="직접 입력: 예: 좋은데 서운한, 쓸데없이 신경 쓰이는"
                             options={SITUATION_ATTITUDE_OPTIONS}
-                            summaryLabel="감정/태도 선택"
+                            summaryLabel="감정선 선택"
                           />
                         </div>
                       </div>
@@ -5038,30 +5403,13 @@ ${result.prompt}
                             className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
                           />
                         </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">전개 버전</label>
-                          <select
-                            value={String(situation.version || '')}
-                            onChange={(e) => {
-                              const option = SITUATION_VERSION_OPTIONS.find(item => item.value === e.target.value);
-                              updateSituationField('version', e.target.value);
-                              updateSituationField('versionLabel', option?.label || '');
-                            }}
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
-                            style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)', colorScheme: 'dark' }}
-                          >
-                            {SITUATION_VERSION_OPTIONS.map(option => (
-                              <option
-                                key={option.value}
-                                value={option.value}
-                                className="bg-[var(--input-bg)] text-[var(--text-primary)]"
-                                style={{ backgroundColor: '#2f2f2f', color: '#ffffff' }}
-                              >
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <SituationVersionPicker
+                          value={String(situation.version || '')}
+                          onChange={(value, label) => {
+                            updateSituationField('version', value);
+                            updateSituationField('versionLabel', label);
+                          }}
+                        />
                       </div>
 
                       <div>
@@ -5076,15 +5424,15 @@ ${result.prompt}
                       </div>
 
                       <SituationChoicePicker
-                        label="전개 느낌"
+                        label="전개 방식"
                         value={situation.developmentCustom || situation.developmentPreset || situation.development || ''}
                         onChange={(value) => {
                           updateSituationField('developmentCustom', value);
                           updateSituationField('developmentPreset', SITUATION_DEVELOPMENT_OPTIONS.some(option => option.label === value) ? value : '');
                         }}
-                        placeholder="직접 입력: 예: 서로 혼잣말하듯이 전개, 나중에 서로 대화"
+                        placeholder="직접 입력: 예: 후렴은 한쪽이 장악하고 상대는 애드립만 개입"
                         options={SITUATION_DEVELOPMENT_OPTIONS}
-                        summaryLabel="전개 느낌 선택"
+                        summaryLabel="전개 방식 선택"
                       />
 
                       <SituationDetailInput

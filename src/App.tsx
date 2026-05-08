@@ -3024,7 +3024,7 @@ const cycleFamilySelection = (
     setIsGenreRandomized(true);
   };
 
-  // History state is cached locally first and fetched from Firestore only when cache is missing or stale.
+  // History state is cached locally for instant display, then kept in sync with Firestore in real time.
   useEffect(() => {
     if (!user) {
       setHistory([]);
@@ -3034,9 +3034,7 @@ const cycleFamilySelection = (
       return;
     }
 
-    let isCancelled = false;
     const cached = loadRecentSongsCache(user.uid);
-    const hasFreshCache = !!cached && Date.now() - (cached.cachedAt || 0) < RECENT_SONGS_CACHE_TTL_MS;
 
     if (cached) {
       applyRecentSongsState(cached.history || [], {
@@ -3050,45 +3048,39 @@ const cycleFamilySelection = (
       setLatestGenerationBatchId(null);
     }
 
-    if (hasFreshCache) {
-      return;
-    }
+    const ref = doc(db, "user_recent_songs", user.uid);
 
-    const loadRecentSongsFromFirestore = async () => {
-      try {
-        const ref = doc(db, "user_recent_songs", user.uid);
-        const snap = await getDoc(ref);
-        if (isCancelled) return;
+    const unsubscribeRecentSongs = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        const songs = Array.isArray(snap.data().songs) ? snap.data().songs : [];
+        const finalSongs = [...songs].sort((a, b) => {
+          const timeA = getTimestampMs(a.createdAtMs ?? a.createdAt) || 0;
+          const timeB = getTimestampMs(b.createdAtMs ?? b.createdAt) || 0;
+          return timeB - timeA;
+        });
 
-        if (snap.exists()) {
-          const songs = snap.data().songs || [];
-          const finalSongs = [...songs].sort((a, b) => {
-            const timeA = a.createdAt || 0;
-            const timeB = b.createdAt || 0;
-            return timeB - timeA;
-          });
-
-          const preferredIndex = preserveHistoryIndexOnNextSnapshotRef.current ?? cached?.historyIndex ?? 0;
-          preserveHistoryIndexOnNextSnapshotRef.current = null;
-          applyRecentSongsState(finalSongs, {
-            preferredIndex,
-            latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
-          });
-        } else {
-          preserveHistoryIndexOnNextSnapshotRef.current = null;
-          applyRecentSongsState([], { preferredIndex: -1, latestBatchId: null });
-        }
-      } catch (error) {
-        if (!cached) {
-          console.error('Failed to load recent songs:', error);
-        }
+        const preferredIndex = preserveHistoryIndexOnNextSnapshotRef.current ?? 0;
+        preserveHistoryIndexOnNextSnapshotRef.current = null;
+        applyRecentSongsState(finalSongs, {
+          preferredIndex,
+          latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+        });
+      } else {
+        preserveHistoryIndexOnNextSnapshotRef.current = null;
+        applyRecentSongsState([], { preferredIndex: -1, latestBatchId: null });
       }
-    };
-
-    void loadRecentSongsFromFirestore();
+    }, (error) => {
+      console.error('Failed to sync recent songs:', error);
+      if (!cached) {
+        setHistory([]);
+        setResult(null);
+        setHistoryIndex(-1);
+        setLatestGenerationBatchId(null);
+      }
+    });
 
     return () => {
-      isCancelled = true;
+      unsubscribeRecentSongs();
     };
   }, [user]);
 
@@ -3580,7 +3572,15 @@ const saveRecentSong = async (newSong: any) => {
       existingSongs = snap.data().songs || [];
     }
 
-    const updatedSongs = [newSong, ...existingSongs].slice(0, 10);
+    const now = Date.now();
+    const existingTime = getTimestampMs(newSong?.createdAtMs ?? newSong?.createdAt);
+    const normalizedSong = {
+      ...newSong,
+      createdAt: existingTime || now,
+      createdAtMs: existingTime || now,
+    };
+
+    const updatedSongs = [normalizedSong, ...existingSongs].slice(0, 10);
 
     await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
 
@@ -4058,6 +4058,10 @@ const saveRecentSong = async (newSong: any) => {
           },
           randomKeywords
         };
+
+        const generatedAt = Date.now() + i;
+        (newResult as any).createdAt = generatedAt;
+        (newResult as any).createdAtMs = generatedAt;
 
         generatedResults.push(newResult);
       }

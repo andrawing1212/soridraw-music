@@ -2564,7 +2564,13 @@ function sanitizeVocalDirection(value: string): string {
       /\s+(?:let|use|shape|make)\s+[^\n]*(?:through|as|while|where)$/i,
       "",
     )
-    .replace(/\s+(?:through|as|while|where|with)$/i, "");
+    .replace(/\s+(?:through|as|while|where|with)$/i, "")
+    .replace(/\bvocal\s+vocal\b/gi, "vocal")
+    .replace(/\bvocals\s+vocals\b/gi, "vocals")
+    .replace(/\bwith\s+natural\s+tone\s+and\s+human\s+breath\b/gi, "with human breath")
+    .replace(/\bnatural\s+natural\b/gi, "natural")
+    .replace(/\s+/g, " ")
+    .trim();
   cleaned = cleanupPromptTail(cleaned);
   return cleaned;
 }
@@ -2659,6 +2665,19 @@ function naturalVocalPrefixTitle(
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function withOptionalToneAndBreath(base: string, tone: string): string {
+  const cleanBase = cleanupPromptTail(base)
+    .replace(/\bvocal\s+vocal\b/gi, "vocal")
+    .replace(/\bvocals\s+vocals\b/gi, "vocals")
+    .replace(/\s+/g, " ")
+    .trim();
+  const cleanTone = oneWordVocalTone(tone || "").toLowerCase();
+  if (!cleanTone || cleanTone === "natural") {
+    return `${cleanBase} with human breath`;
+  }
+  return `${cleanBase} with ${cleanTone} tone and human breath`;
+}
+
 function getGenreLabelForPrompt(params: GenerateSongParams): string {
   const genreMeta = getGenreMeta(params.genre || "");
   const subLabels = getSubGenreLabels(params.subGenre ?? [])
@@ -2722,6 +2741,67 @@ function getEnglishMoodPhrase(params: GenerateSongParams): string {
   return joinPromptPhrase(moodWords, "and").toLowerCase();
 }
 
+
+type MoodStoryProfile = {
+  exactWords: string[];
+  storyPhrase: string;
+};
+
+function buildMoodStoryProfile(params: GenerateSongParams): MoodStoryProfile {
+  const moodWords = getMoodWordsForMusicDirection(params)
+    .map((word) => stripRemainingKoreanForProductionPrompt(word).toLowerCase())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const has = (...items: string[]) =>
+    moodWords.some((word) => items.some((item) => word.includes(item)));
+
+  let storyPhrase = "the emotional details reveal more than the singer says out loud";
+
+  if (has("calm", "chill", "peaceful", "comfortable")) {
+    storyPhrase =
+      "quiet warmth and unhurried hesitation carry the hidden feeling beneath the scene";
+  } else if (has("sad", "atmospheric", "dark")) {
+    storyPhrase =
+      "hushed regret and fragile silence make the scene feel heavier than the words admit";
+  } else if (has("bright", "funky", "upbeat", "groovy")) {
+    storyPhrase =
+      "playful tension and bouncy movement keep the emotional conflict light but noticeable";
+  } else if (has("bittersweet", "dreamy", "lonely", "nostalgic", "wistful")) {
+    storyPhrase =
+      "warm regret, blurred memory, and soft contradiction shape the emotional pull";
+  } else if (has("tense", "hopeful")) {
+    storyPhrase =
+      "restrained pressure and a small hope keep the story moving forward";
+  } else if (has("warm")) {
+    storyPhrase =
+      "familiar warmth softens the hesitation inside the story";
+  }
+
+  return { exactWords: moodWords, storyPhrase };
+}
+
+function removeRepeatedMoodWordsFromStory(
+  sentence: string,
+  usedMoodWords: string[],
+): string {
+  let cleaned = cleanupPromptTail(sentence);
+  usedMoodWords.forEach((word) => {
+    if (!word || word.length < 3) return;
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    cleaned = cleaned.replace(new RegExp(`\\b${escaped}\\b`, "gi"), "");
+  });
+  return cleanupPromptTail(
+    cleaned
+      .replace(/\bin\s+a\s+mood\b/gi, "")
+      .replace(/\bin\s+an\s+mood\b/gi, "")
+      .replace(/\bin\s+a\s+[,\s]+mood\b/gi, "")
+      .replace(/\bin\s+an\s+[,\s]+mood\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/,\s*,/g, ","),
+  );
+}
+
 function getEnglishThemePhrase(params: GenerateSongParams): string {
   const rawThemes = (params.themes ?? [])
     .map((theme) => stripRemainingKoreanForProductionPrompt(theme || ""))
@@ -2737,31 +2817,35 @@ function buildNonSituationStoryClause(
   variation: CreativeVariationSeed,
   fallbackAtmosphere: string,
 ): string {
-  const moodPhrase = getEnglishMoodPhrase(params);
   const themePhrase = getEnglishThemePhrase(params);
-  const lens = stripRemainingKoreanForProductionPrompt(
-    variation.atmosphereLens || "",
-  )
-    .replace(/^where\s+/i, "")
-    .trim();
-  const fallback = stripRemainingKoreanForProductionPrompt(
-    fallbackAtmosphere || "",
+  const { exactWords, storyPhrase } = buildMoodStoryProfile(params);
+  const lens = removeRepeatedMoodWordsFromStory(
+    stripRemainingKoreanForProductionPrompt(variation.atmosphereLens || "")
+      .replace(/^where\s+/i, "")
+      .trim(),
+    exactWords,
+  );
+  const fallback = removeRepeatedMoodWordsFromStory(
+    stripRemainingKoreanForProductionPrompt(fallbackAtmosphere || ""),
+    exactWords,
   );
 
-  // No raw Korean labels such as "곡의 전체 정서" should leak here.
-  // This line should read like a compact story/mood pitch, not a literal UI summary.
+  // The opening track sentence already uses the direct mood words before the genre.
+  // Do not repeat phrases like "in a calm and chill mood" here. Turn the same mood
+  // into a story function instead: what the feeling does inside the scene.
+  const storyFunction = lens || storyPhrase;
   if (themePhrase && themePhrase !== "a clear emotional scene") {
     return cleanupPromptTail(
-      `built around ${themePhrase} in a ${moodPhrase} mood${lens ? `, where ${lens}` : ""}`,
+      `built around ${themePhrase}, where ${storyFunction}`,
     );
   }
   if (fallback && !/[가-힣]/.test(fallback)) {
     return cleanupPromptTail(
-      `shaped by ${fallback.toLowerCase()}${lens ? `, where ${lens}` : ""}`,
+      `shaped by ${fallback.toLowerCase()}, where ${storyFunction}`,
     );
   }
   return cleanupPromptTail(
-    `built around a ${moodPhrase} emotional scene${lens ? `, where ${lens}` : ""}`,
+    `built around an emotional scene where ${storyFunction}`,
   );
 }
 
@@ -2792,7 +2876,7 @@ function buildNaturalVocals(
   if (isFreeTextPrimaryMode(params)) {
     const profileVocal = buildFreeTextDirectorProfile(detailLayer).vocal;
     const tone = oneWordVocalTone(profileVocal);
-    return `${naturalVocalPrefix(params, "vocal")} with ${tone} tone and human breath`;
+    return withOptionalToneAndBreath(naturalVocalPrefix(params, "vocal"), tone);
   }
 
   const info = getVocalModeInfo(params.vocal);
@@ -2818,7 +2902,8 @@ function buildNaturalVocals(
     ? resolveVocalToneShortValue(params.vocal.globalToneId)
     : "natural";
   const tone = oneWordVocalTone(globalTone);
-  return `${naturalVocalPrefix(params, `${gender} vocal`)} with ${tone} tone and human breath`;
+  const subject = gender === "vocal" ? "vocal" : `${gender} vocal`;
+  return withOptionalToneAndBreath(naturalVocalPrefix(params, subject), tone);
 }
 
 function buildSituationVocals(params: GenerateSongParams): string {
@@ -4221,7 +4306,10 @@ function buildHybridTrackLine(
   let setting = stripRemainingKoreanForProductionPrompt(
     buildStorySettingClause(params, variation, atmosphere).replace(/\.$/, ""),
   );
-  setting = setting
+  const usedMoodWords = getMoodWordsForMusicDirection(params).map((word) =>
+    stripRemainingKoreanForProductionPrompt(word).toLowerCase(),
+  );
+  setting = removeRepeatedMoodWordsFromStory(setting, usedMoodWords)
     .replace(/^with\s+/i, "built around ")
     .replace(/^where\s+/i, "built around a scene where ")
     .replace(/^,\s*/, "")
@@ -4236,18 +4324,77 @@ function buildHybridTrackLine(
   return cleanupPromptTail(limitText(`${base}${separator}${setting}.`, 255));
 }
 
+function phraseListForPrompt(items: string[]): string {
+  const cleaned = items
+    .map((item) => cleanupPromptTail(item).replace(/\.+$/g, "").trim())
+    .filter(Boolean);
+
+  const unique = cleaned.filter(
+    (item, index, arr) =>
+      arr.findIndex((other) => other.toLowerCase() === item.toLowerCase()) ===
+      index,
+  );
+
+  if (!unique.length) return "";
+  if (unique.length === 1) return unique[0];
+  if (unique.length === 2) return `${unique[0]} and ${unique[1]}`;
+  return `${unique.slice(0, -1).join(", ")}, and ${unique[unique.length - 1]}`;
+}
+
 function buildHybridProductionLine(
   instruments: string,
   arrangement: string,
 ): string {
-  const cleanInstruments = cleanupPromptTail(
-    takeCommaItems(instruments, 4, 105).replace(/\.+(?=,|$)/g, ""),
+  const rawSoundItems = cleanPromptValue(instruments)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const feelWords = new Set([
+    "melodic",
+    "smooth",
+    "effortless",
+    "polished",
+    "balanced",
+    "minimal movement",
+    "subtle shifts",
+  ]);
+
+  const soundItems: string[] = [];
+  const feelItems: string[] = [];
+
+  rawSoundItems.forEach((item) => {
+    const cleaned = cleanupPromptTail(item).replace(/\.+$/g, "").trim();
+    if (!cleaned) return;
+    if (feelWords.has(cleaned.toLowerCase())) {
+      feelItems.push(cleaned.toLowerCase());
+    } else {
+      soundItems.push(cleaned);
+    }
+  });
+
+  const arrangementItems = cleanPromptValue(arrangement || "clear section movement")
+    .split(",")
+    .map((item) =>
+      cleanupPromptTail(item)
+        .replace(/\.+$/g, "")
+        .replace(/^dynamic progression with clear sectional contrast$/i, "clear sectional contrast")
+        .trim(),
+    )
+    .filter(Boolean);
+
+  const soundPhrase = phraseListForPrompt(soundItems.slice(0, 4));
+  const performancePhrase = phraseListForPrompt(
+    [...feelItems, ...arrangementItems].slice(0, 5),
   );
-  const cleanArrangement = cleanupPromptTail(
-    arrangement || "clear section movement",
-  );
-  const parts = [cleanInstruments, cleanArrangement].filter(Boolean);
-  return cleanupPromptTail(limitText(parts.join(", "), 165));
+
+  const production = soundPhrase
+    ? performancePhrase
+      ? `${soundPhrase} with ${performancePhrase}`
+      : soundPhrase
+    : performancePhrase || "a focused instrumental palette with clear movement";
+
+  return cleanupPromptTail(limitText(production, 165));
 }
 
 function compactHybridPromptBody(lines: string[]): string[] {
@@ -4338,7 +4485,7 @@ function buildFinalPrompt(
 
   const bodyLines = compactHybridPromptBody([
     trackLine,
-    `[Vocals] ${cleanupPromptTail(vocals)}`,
+    `[Vocals] ${cleanupPromptTail(vocals).replace(/^natural\b/i, "Natural")}`,
     `[Production] ${cleanupPromptTail(production)}`,
   ]);
 
@@ -4589,6 +4736,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - [Vocals] must read as a human character direction: attitude + vocal feel + persona role. Example: bright female vocals with sarcastic but slightly hurt delivery (MZ Employee).
 - Do not over-specify genre-default vocals or mood-default phrases; let the model interpret genre and mood naturally unless the user selected Style/Sound or Situation details.
 - Style and Sound selections must be reflected in the opening track sentence and [Production]. Mood selections must color the opening sentence as part of the music/story pitch. Do not output raw comma lists for Mood.
+- [Production] must communicate the playing/production feel, not just dump tags. Rewrite sound and arrangement items into a compact performance sentence such as "walking bass and soft synth stabs with subtle shifts and smooth sectional contrast."
 - Mood, genre, vocal technique, sound, tempo, hook, and arrangement instructions are NOT story themes.
 - Do NOT turn technical instructions into the title or lyrical topic.
 - Keep the final production prompt body up to 500 characters, excluding the fixed audio-quality line. Do not cut off genre identity, story scene, production movement, or vocal roles.
@@ -4597,7 +4745,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Final production prompt format for Situation-led songs should feel like a short natural pitch, not a technical form. Prefer this hybrid structure:
   A {mood + genre + style} track with {core feel}, set around {story scene and nuance}.
   [Vocals] {sentence-style character vocal direction}
-  [Production] {main sound palette}, {story-shaped part ownership / hook movement}
+  [Production] {main sound palette with playing feel / story-shaped part ownership / hook movement}
   [Audio quality improved to masterpiece]
 - Do not output separate [Atmosphere] or [Arrangement] lines in the final production prompt; fold them into the opening sentence and [Production].
 

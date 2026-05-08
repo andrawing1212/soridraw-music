@@ -1726,6 +1726,164 @@ export default function SunoLibraryPage() {
     }];
   };
 
+
+
+  const collectStatusCandidates = (source: any): string[] => {
+    const candidates: string[] = [];
+    const pushValue = (value: any) => {
+      if (value === undefined || value === null) return;
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        candidates.push(String(value).trim().toLowerCase());
+      }
+    };
+
+    const visit = (obj: any, depth = 0) => {
+      if (!obj || depth > 5 || typeof obj !== 'object') return;
+      if (Array.isArray(obj)) {
+        obj.slice(0, 12).forEach((item) => visit(item, depth + 1));
+        return;
+      }
+
+      Object.entries(obj).forEach(([key, value]) => {
+        const normalizedKey = String(key).toLowerCase();
+        if (
+          normalizedKey === 'status' ||
+          normalizedKey === 'state' ||
+          normalizedKey === 'taskstatus' ||
+          normalizedKey === 'task_status' ||
+          normalizedKey === 'generationstatus' ||
+          normalizedKey === 'generation_status' ||
+          normalizedKey === 'code'
+        ) {
+          pushValue(value);
+        }
+        if (value && typeof value === 'object') visit(value, depth + 1);
+      });
+    };
+
+    visit(source);
+    return candidates;
+  };
+
+  const resolveSunoStatusFromResponse = (data: any) => {
+    const candidates = collectStatusCandidates(data);
+    const raw = candidates.join(' | ');
+    const failed = candidates.some((value) =>
+      /fail|failed|failure|error|errored|reject|rejected|cancel|cancelled|canceled|timeout|timed_out|expired|실패|취소|오류/.test(value)
+    );
+    if (failed) return { status: 'failed', raw };
+
+    const completed = candidates.some((value) =>
+      /complete|completed|success|succeeded|done|finished|finish|ready|generated|완료|성공/.test(value)
+    );
+    if (completed) return { status: 'completed', raw };
+
+    const processing = candidates.some((value) =>
+      /processing|pending|queued|queue|running|submitted|in_progress|generating|생성|진행|대기/.test(value)
+    );
+    if (processing) return { status: 'processing', raw };
+
+    return { status: null, raw };
+  };
+
+  const extractStatusSunoData = (data: any) => {
+    const candidates = [
+      data?.sunoData,
+      data?.data?.sunoData,
+      data?.response?.sunoData,
+      data?.data?.response?.sunoData,
+      data?.result?.sunoData,
+      data?.data?.result?.sunoData,
+      data?.tracks,
+      data?.data?.tracks,
+      data?.response?.tracks,
+      data?.data?.response?.tracks,
+      data?.audios,
+      data?.data?.audios,
+    ];
+    return candidates.find((value) => Array.isArray(value) && value.length > 0) || null;
+  };
+
+  const isMeaningfulSunoFailureText = (value: any) => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    // Cloud Function wrappers often return msg/message: "success" even when the provider task itself failed.
+    // Do not show that wrapper text as the failure reason in the app.
+    if (/^(success|ok|complete|completed|done|true)$/i.test(text)) return false;
+    return true;
+  };
+
+  const getSunoFailureReason = (data: any, rawStatus?: string | null) => {
+    const candidates = [
+      data?.failureReason,
+      data?.reason,
+      data?.error,
+      data?.data?.failureReason,
+      data?.data?.reason,
+      data?.data?.error,
+      data?.response?.failureReason,
+      data?.response?.reason,
+      data?.response?.error,
+      data?.data?.response?.failureReason,
+      data?.data?.response?.reason,
+      data?.data?.response?.error,
+      rawStatus,
+    ];
+
+    const found = candidates.find(isMeaningfulSunoFailureText);
+    return found ? String(found).trim() : '사이트 확인요망';
+  };
+
+  const getSunoFailureDisplayMessage = (group: any) => {
+    const reason = getSunoFailureReason(
+      group?.apiStatusResponse || group?.apiResponse || null,
+      group?.failureReason || group?.lastStatusRaw || null
+    );
+
+    // Keep the UI clear: provider-side failed/cancelled/error states should tell the user to check the site,
+    // not show wrapper text like "success".
+    if (!isMeaningfulSunoFailureText(reason) || /fail|failed|failure|error|reject|cancel|timeout|expired|실패|취소|오류/i.test(reason)) {
+      return '사이트 확인요망';
+    }
+    return reason;
+  };
+
+  const syncStatusResponseToFirestore = async (trackId: string, taskId: string, data: any) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !trackId) return { status: null as string | null, raw: '' };
+
+    const resolved = resolveSunoStatusFromResponse(data);
+    const updatePayload: any = {
+      apiStatusResponse: data || null,
+      lastStatusCheckedAt: serverTimestamp(),
+      lastStatusRaw: resolved.raw || null,
+    };
+
+    if (taskId) updatePayload.taskId = taskId;
+
+    if (resolved.status === 'failed') {
+      updatePayload.status = 'failed';
+      updatePayload.failedAt = serverTimestamp();
+      updatePayload.failureReason = getSunoFailureReason(data, resolved.raw);
+    } else if (resolved.status === 'completed') {
+      updatePayload.status = 'completed';
+      updatePayload.completedAt = serverTimestamp();
+      const nextSunoData = extractStatusSunoData(data);
+      if (nextSunoData) updatePayload.sunoData = nextSunoData;
+    } else if (resolved.status === 'processing') {
+      updatePayload.status = 'processing';
+    }
+
+    if (resolved.status) {
+      await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), updatePayload);
+    } else {
+      await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), updatePayload);
+    }
+
+    return resolved;
+  };
+
+
   const filteredTracks = useMemo(() => {
     return tracks.filter(t => {
       if (filter === 'trash') {
@@ -1881,8 +2039,19 @@ export default function SunoLibraryPage() {
             body: JSON.stringify({ trackId: id, taskId: group.taskId })
           });
           
+          let data: any = null;
+          try {
+            data = await res.json();
+          } catch {
+            data = null;
+          }
+
           if (!res.ok) {
-            console.warn(`Auto check failed for ${id}`);
+            console.warn(`Auto check failed for ${id}`, data);
+          }
+
+          if (data) {
+            await syncStatusResponseToFirestore(id, group.taskId, data);
           }
         } catch (e) {
           console.warn(`Auto check error for ${id}:`, e);
@@ -1926,17 +2095,21 @@ export default function SunoLibraryPage() {
 
       const data = await res.json();
 
+      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
+
       if (!res.ok) {
-        alert(`상태 확인 실패: ${data.error || 'unknown error'}`);
+        alert(`상태 확인 실패: ${data?.error || data?.message || 'unknown error'}`);
         return;
       }
 
-      if (data.status === 'completed') {
+      if (resolved.status === 'completed') {
         alert('생성 완료되었습니다.');
-      } else if (data.status === 'failed') {
+      } else if (resolved.status === 'failed') {
         alert('생성에 실패했습니다.');
-      } else {
+      } else if (resolved.status === 'processing') {
         alert('아직 생성 중입니다.');
+      } else {
+        alert('상태 응답을 받았지만 완료/실패 상태를 확정하지 못했습니다.');
       }
     } catch (error) {
       console.error(error);
@@ -1962,6 +2135,8 @@ export default function SunoLibraryPage() {
     }
     switch (group.status) {
       case 'failed':
+      case 'cancelled':
+      case 'canceled':
         badges.push(<span key="failed" className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>);
         break;
       case 'processing':
@@ -4331,14 +4506,14 @@ export default function SunoLibraryPage() {
                     </div>
                     <div className="flex shrink-0 items-start md:items-center justify-end gap-1.5 md:gap-3 flex-nowrap max-w-[112px] md:max-w-none">
                       {getStatusBadge(group)}
-                      {group.status !== 'completed' && group.status !== 'failed' && (
+                      {group.status !== 'completed' && (
                         <button
                           onClick={() => checkStatus(group.id, group.taskId)}
                           disabled={statusChecking === group.id || !group.taskId}
                           className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
                         >
                           {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                          <span className="hidden sm:inline">상태 확인</span>
+                          <span className="hidden sm:inline">{group.status === 'failed' || group.status === 'cancelled' || group.status === 'canceled' ? '재확인' : '상태 확인'}</span>
                         </button>
                       )}
                       {!isSharedView && !group.taskId && <span className="hidden md:inline text-[10px] opacity-30">Task ID 없음</span>}
@@ -4451,7 +4626,7 @@ export default function SunoLibraryPage() {
                             {isFailed ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
                                 <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                                생성 실패: {group.apiStatusResponse?.msg || group.apiResponse?.msg || '알 수 없는 오류'}
+                                생성 실패: {getSunoFailureDisplayMessage(group)}
                               </span>
                             ) : isPending ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5 text-blue-400">

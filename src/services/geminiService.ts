@@ -1287,8 +1287,8 @@ function translateKoreanPromptFragments(value: string): string {
   const replacements: Array<[RegExp, string]> = [
     [/저승사자/g, "Grim Reaper"],
     [/처녀귀신/g, "Maiden Ghost"],
-    [/이순신|충무공/g, "Yi Sun-sin"],
-    [/도요토미\s*히데요시|토요토미\s*히데요시|히데요시/g, "Hideyoshi"],
+    [/이순신|충무공/g, "Korean Admiral"],
+    [/도요토미\s*히데요시|토요토미\s*히데요시|히데요시/g, "foreign warlord"],
     [/귀신/g, "Ghost"],
     [/유령/g, "Ghost"],
     [/상사|부장님|부장|팀장/g, "Boss"],
@@ -1300,8 +1300,8 @@ function translateKoreanPromptFragments(value: string): string {
     [/연인/g, "Lover"],
     [/전남친/g, "Ex-boyfriend"],
     [/전여친/g, "Ex-girlfriend"],
-    [/세종대왕|세종/g, "King Sejong"],
-    [/퇴계이황|이황|퇴계/g, "Yi Hwang"],
+    [/세종대왕|세종/g, "Joseon king"],
+    [/퇴계이황|이황|퇴계/g, "Joseon scholar"],
     [/조선시대/g, "Joseon-era"],
     [/회사생활|직장 생활|회사/g, "office life"],
     [/상하관계/g, "workplace hierarchy"],
@@ -1363,13 +1363,25 @@ function englishRoleLabel(role: string, fallback = "Role"): string {
   return limitText(withoutKorean || fallback, 24);
 }
 
+function sanitizeArtistLikeNamesForSunoPrompt(value: string): string {
+  // Suno can reject proper names in the style/tags prompt as artist references.
+  // Keep specific names for lyrics if needed, but make the final music prompt role-safe.
+  return String(value || "")
+    .replace(/\bYi[\s-]?Sun[\s-]?sin\b/gi, "Korean Admiral")
+    .replace(/\bHideyoshi\b/gi, "foreign warlord")
+    .replace(/\bToyotomi\b/gi, "foreign warlord")
+    .replace(/\bKing\s+Sejong\b/gi, "Joseon king")
+    .replace(/\bYi\s+Hwang\b/gi, "Joseon scholar")
+    .replace(/\bLee\s+Sun[\s-]?sin\b/gi, "Korean Admiral");
+}
+
 function enforceEnglishProductionPrompt(prompt: string): string {
   return prompt
     .split("\n")
     .map((line) => {
       if (/^\[Audio quality improved to masterpiece\]$/.test(line.trim()))
         return line.trim();
-      return cleanProductionPhrase(stripRemainingKoreanForProductionPrompt(line));
+      return cleanProductionPhrase(sanitizeArtistLikeNamesForSunoPrompt(stripRemainingKoreanForProductionPrompt(line)));
     })
     .filter(Boolean)
     .join("\n");
@@ -1521,8 +1533,8 @@ function buildMoodAtmosphereClause(moodWords: string[]): string {
 
 function roleToPromptPersona(role: string): string {
   const value = String(role || "").toLowerCase();
-  if (/이순신|충무공|yi sun-sin|yi sun sin/.test(value)) return "Yi Sun-sin";
-  if (/히데요시|도요토미|토요토미|hideyoshi/.test(value)) return "Hideyoshi";
+  if (/이순신|충무공|yi sun-sin|yi sun sin/.test(value)) return "Korean Admiral";
+  if (/히데요시|도요토미|토요토미|hideyoshi|toyotomi/.test(value)) return "foreign warlord";
   if (/저승사자|사자|reaper|grim/.test(value)) return "tired reaper";
   if (/귀신|유령|ghost|spirit/.test(value)) return "regretful ghost";
   if (/상사|부장|boss|manager|팀장/.test(value)) return "boss";
@@ -1651,9 +1663,9 @@ function interpretSpeechStyleForPrompt(rawValue: string): string {
 function roleDirectionDefaults(role: string): string {
   const value = String(role || "").toLowerCase();
   if (/이순신|충무공|yi sun-sin|yi sun sin/.test(value))
-    return "disciplined authority and dry heroic restraint";
+    return "dry heroic restraint";
   if (/히데요시|도요토미|토요토미|hideyoshi/.test(value))
-    return "insecure bravado and tired need for comfort";
+    return "insecure, tired need for comfort";
   if (/저승사자|사자|reaper|grim/.test(value))
     return "tired authority and reluctant sympathy";
   if (/귀신|유령|ghost|spirit/.test(value))
@@ -1661,11 +1673,11 @@ function roleDirectionDefaults(role: string): string {
   if (/상사|부장|boss|manager|팀장/.test(value))
     return "dry authority and nagging pressure";
   if (/직원|mz|사원|employee/.test(value))
-    return "sarcastic but slightly hurt delivery";
+    return "sarcastic, slightly hurt edge";
   if (/엄마|어머니|mother|mom/.test(value))
     return "worried warmth that sounds like nagging";
   if (/아들|son/.test(value)) return "blunt defensive replies";
-  return "character-driven delivery";
+  return "character-led phrasing";
 }
 
 function mergeRoleDirection(role: string, rawStyleSource: string): string {
@@ -1694,7 +1706,7 @@ function mergeRoleDirection(role: string, rawStyleSource: string): string {
   if (/잔소리|nag/.test(raw)) add("nagging edge", /nagging/);
   if (/직설|blunt/.test(raw)) add("blunt phrasing", /blunt/);
   if (/통제|명령|몰아붙|press|command/.test(raw))
-    add("pressing delivery", /pressure|authority|pressing/);
+    add("pressing phrasing", /pressure|authority|pressing/);
 
   return extras.length
     ? `${base} with ${extras.slice(0, 2).join(" and ")}`
@@ -2051,10 +2063,21 @@ function buildSituationRoleVocalItem(
     mergeRoleDirection(role, rawStyleSource)
       .replace(/\s+with\s+with\s+/gi, " with ")
       .replace(/\s+and\s+and\s+/gi, " and "),
-    34,
+    58,
   );
 
-  return `${cleanTone} ${gender} vocal with ${direction} (${roleName})`;
+  const tonePrefix = cleanTone && cleanTone !== "natural" ? `${cleanTone} ` : "";
+  const vocalColor = cleanupPromptTail(`${tonePrefix}${gender} vocal`).replace(/^natural\s+/i, "");
+
+  // Keep a few historically-inspired role archetypes short and Suno-safe.
+  if (/Korean Admiral/i.test(roleName)) {
+    return `disciplined ${gender} vocal with dry heroic restraint (${roleName})`;
+  }
+  if (/foreign warlord/i.test(roleName)) {
+    return `${gender} vocal with insecure, tired need for comfort (${roleName})`;
+  }
+
+  return `${vocalColor} with ${direction} (${roleName})`;
 }
 
 function joinPromptPhrase(items: string[], connector = "and"): string {
@@ -2576,7 +2599,7 @@ function variationAtmosphereMeaning(
       "through a recurring small problem that changes meaning each time",
     "emotional-fakeout-focus":
       "with sincerity repeatedly dodged by jokes or practical details",
-    "status-game-focus": "as both roles compete for control of the moment",
+    "status-game-focus": "where both figures compete for control of the moment",
     "memory-cut-focus":
       "through fragmented memories rather than a straight explanation",
     "adlib-character-focus": "through small ad-libs that reveal personality",
@@ -2667,7 +2690,36 @@ function cleanProductionPhrase(value: string): string {
       .replace(/\s{2,}/g, " ");
   }
 
-  return cleanupPromptTail(text);
+  text = text
+    .replace(/\bcall-response hook\s+status battle\b/gi, "call-response hook, status-battle tension")
+    .replace(/\bcall-response hook\s+detail-led hook\b/gi, "call-response hook, detail-led emotional turn")
+    .replace(/\bcall-response hook\s+space-led sections\b/gi, "call-response hook and space-led sections")
+    .replace(/\bcall-response hook\s+delayed reveal\b/gi, "call-response hook with a delayed reveal")
+    .replace(/\bcall-response hook\s+misread replies\b/gi, "call-response hook with misread replies")
+    .replace(/\bcall-response hook\s+parallel monologues that meet only briefly in the hook\b/gi, "parallel monologues, brief hook meetings, and call-response accents")
+    .replace(/\bwith a call-response hook\s+parallel monologues that meet only briefly in the hook\b/gi, "with parallel monologues, brief hook meetings, and call-response accents")
+    .replace(/\bcall-response hook\s+echo-and-undercut hook\b/gi, "call-response hook with echo-and-undercut tension")
+    .replace(/\bwith a call-response hook\s+echo-and-undercut hook\b/gi, "with a call-response hook and echo-and-undercut tension")
+    .replace(/\bcall-response hook\s+looping hook\b/gi, "call-response hook with looping ownership shifts")
+    .replace(/\bcall-response hook\s+one-speaker chorus\b/gi, "call-response hook and one-speaker chorus takeover")
+    .replace(/\bwith\s+a\s+call-response hook\s+status-battle tension\s+with\s+/gi, "with a call-response hook, status-battle tension, and ")
+    .replace(/\bwith\s+a\s+call-response hook,\s*status-battle tension\s+with\s+/gi, "with a call-response hook, status-battle tension, and ")
+    .replace(/\bstatus battle with shifting section ownership\b/gi, "status-battle tension and shifting section ownership")
+    .replace(/\bdetail-led hook with sparse character interruptions\b/gi, "detail-led emotional hook and sparse character interruptions")
+    .replace(/\bspace-led sections\b/gi, "space-led sections")
+    .replace(/\s+,\s+/g, ", ")
+    .replace(/,\s*and\s+and\s+/gi, ", and ")
+    .replace(/\s{2,}/g, " ");
+
+  return cleanupPromptTail(
+    text
+      .replace(/\bwith\s+and\s+with\b/gi, "with")
+      .replace(/\bwith\s+with\b/gi, "with")
+      .replace(/\bcall-response hook\s+echo-and-undercut hook\b/gi, "call-response hook with echo-and-undercut tension")
+      .replace(/\bcall-response hook\s+parallel monologues that meet only briefly in the hook\b/gi, "parallel monologues, brief hook meetings, and call-response accents")
+      .replace(/\bwith a call-response hook\s+parallel monologues that meet only briefly in the hook\b/gi, "with parallel monologues, brief hook meetings, and call-response accents")
+      .replace(/\bcall-response hook\s+([a-z-]+\s+hook)\b/gi, "call-response hook with $1"),
+  );
 }
 
 function variationArrangementMeaning(variation: CreativeVariationSeed): string {
@@ -3057,7 +3109,7 @@ function buildSituationVocals(params: GenerateSongParams): string {
 
   const info = getVocalModeInfo(params.vocal);
   const formation = info.isMulti
-    ? naturalVocalPrefixTitle(params, info.mode || "duo")
+    ? naturalVocalPrefixTitle(params, info.mode === "group" ? "group" : "duo")
     : info.gender === "female"
       ? naturalVocalPrefixTitle(params, "female vocal")
       : info.gender === "male"
@@ -3107,6 +3159,18 @@ function buildSituationVocals(params: GenerateSongParams): string {
     ? targetRoles
     : speakerRoles;
 
+  const roleGenderFormation = (() => {
+    if (!info.isMulti || roleEntries.length < 2) return formation;
+    const inferred = roleEntries.slice(0, 2).map((entry, index) =>
+      entry.genderHint || inferRoleGenderFromText(entry.role) || (index === 0 ? "male" : "female"),
+    );
+    if (inferred.every((gender) => gender === "male"))
+      return naturalVocalPrefixTitle(params, info.mode === "group" ? "male group" : "male duo");
+    if (inferred.every((gender) => gender === "female"))
+      return naturalVocalPrefixTitle(params, info.mode === "group" ? "female group" : "female duo");
+    return naturalVocalPrefixTitle(params, info.mode === "group" ? "mixed group" : "duet");
+  })();
+
   // Situation characters are story roles. Actual singer count follows the Vocal menu.
   if (info.isSolo) {
     const perspective =
@@ -3132,7 +3196,7 @@ function buildSituationVocals(params: GenerateSongParams): string {
       1,
       matchedIndexes[1],
     );
-    return `${formation} with ${first} vs ${second}`;
+    return `${roleGenderFormation}: ${first} vs ${second}`;
   }
 
   if (roleEntries.length === 1) {
@@ -4552,7 +4616,15 @@ function buildHybridProductionLine(
       : soundPhrase
     : performancePhrase || "a focused instrumental palette with clear movement";
 
-  return cleanupPromptTail(limitText(cleanProductionPhrase(production), 165));
+  return cleanupPromptTail(
+    limitText(
+      cleanProductionPhrase(production)
+        .replace(/\bwith a call-response hook echo-and-undercut hook\b/gi, "with a call-response hook and echo-and-undercut tension")
+        .replace(/\bcall-response hook echo-and-undercut hook\b/gi, "call-response hook and echo-and-undercut tension")
+        .replace(/\s{2,}/g, " "),
+      165,
+    ),
+  );
 }
 
 function compactHybridPromptBody(lines: string[]): string[] {

@@ -7104,9 +7104,7 @@ function CycleSection({
             {cycles.map((cycle) => {
               const selectedVariants = cycle.variants.filter((variant) => selected.includes(variant.id));
               const activeVariant = selectedVariants[0] ?? null;
-              const selectedIndex = activeVariant ? selected.indexOf(activeVariant.id) : -1;
-              const showOrderBadge = title === "Style" && selected.length >= 2 && selectedIndex >= 0;
-              const orderNumber = selectedIndex + 1;
+              const selectedCountInCycle = selectedVariants.length;
 
               const baseVariant = cycle.variants[0];
               const hoverItem: CategoryItem = activeVariant
@@ -7122,9 +7120,10 @@ function CycleSection({
                     labelKo: cycle.titleKo,
                     description: baseVariant.descriptionKo ?? baseVariant.description,
                   };
-              const buttonLabel = selectedVariants.length > 0
-                ? selectedVariants.map((variant) => variant.labelKo ?? variant.label).join(', ')
-                : (cycle.titleKo ?? cycle.title);
+              const folderLabel = cycle.titleKo ?? cycle.title;
+              const buttonLabel = selectedCountInCycle > 0
+                ? `${folderLabel} · ${selectedCountInCycle}개`
+                : folderLabel;
               return (
                 <button
                   key={cycle.id}
@@ -7135,14 +7134,9 @@ function CycleSection({
                   onTouchEnd={onLongPressEnd}
                   className={cn(
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn",
-                    selectedVariants.length > 0 ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.25)]" : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                    selectedVariants.length > 0 ? "bg-brand-orange/10 text-brand-orange border-brand-orange/40 shadow-[0_0_14px_rgba(255,132,0,0.12)]" : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
-                  {showOrderBadge && (
-                    <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 z-10">
-                      <span className="text-[10px] font-black text-white leading-none">{orderNumber}</span>
-                    </div>
-                  )}
                   <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
                     {buttonLabel}
                   </span>
@@ -7323,18 +7317,30 @@ function CycleKeywordPopup({
                 {localSelected.length > 0 ? ` · 이 카드에서 ${localSelected.length}개 선택됨` : ''}
               </p>
             </div>
-            <button
-              onClick={hasChanges ? applyChangesAndClose : closePopup}
-              className={cn(
-                "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
-                hasChanges
-                  ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
-                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
+            <div className="flex items-center gap-2 shrink-0">
+              {localSelected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setLocalSelected([])}
+                  className="h-11 px-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all text-[11px] font-black whitespace-nowrap"
+                  title="이 폴더 선택 전체 해제"
+                >
+                  전체 해제
+                </button>
               )}
-              title={hasChanges ? '변경 적용' : '닫기'}
-            >
-              {hasChanges ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
-            </button>
+              <button
+                onClick={hasChanges ? applyChangesAndClose : closePopup}
+                className={cn(
+                  "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
+                  hasChanges
+                    ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
+                )}
+                title={hasChanges ? '변경 적용' : '닫기'}
+              >
+                {hasChanges ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
 
           <div
@@ -8895,6 +8901,18 @@ function VocalControl({
   const [showToneSelector, setShowToneSelector] = useState(false);
   const [isGlobalToneDirectInput, setIsGlobalToneDirectInput] = useState(false);
   const [globalToneDraft, setGlobalToneDraft] = useState('');
+  const globalToneButtonRef = useRef<HTMLButtonElement>(null);
+  const [globalTonePopupPos, setGlobalTonePopupPos] = useState({ top: 0, left: 0, width: 0 });
+  const updateGlobalTonePopupPos = useCallback(() => {
+    const rect = globalToneButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setGlobalTonePopupPos({
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: rect.width,
+    });
+  }, []);
+
   const [activeVocalTonePopup, setActiveVocalTonePopup] = useState<string | null>(null);
   const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0 });
 
@@ -8909,6 +8927,23 @@ function VocalControl({
     });
     setActiveVocalTonePopup(activeVocalTonePopup === id ? null : id);
   };
+
+  useEffect(() => {
+    if (!showToneSelector) return;
+    updateGlobalTonePopupPos();
+    const handleWindowChange = () => updateGlobalTonePopupPos();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowToneSelector(false);
+    };
+    window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('scroll', handleWindowChange, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('scroll', handleWindowChange, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showToneSelector, updateGlobalTonePopupPos]);
 
   const getModeLabel = (mode: VocalMode) => {
     if (mode === 'solo') return "솔로";
@@ -9301,8 +9336,12 @@ function VocalControl({
               </div>
             ) : (
               <button
+                ref={globalToneButtonRef}
                 type="button"
-                onClick={() => setShowToneSelector(prev => !prev)}
+                onClick={() => {
+                  updateGlobalTonePopupPos();
+                  setShowToneSelector(prev => !prev);
+                }}
                 className={cn(
                   "w-full py-2.5 px-3 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between shadow-btn",
                   selectedToneId
@@ -9317,47 +9356,64 @@ function VocalControl({
 
             <AnimatePresence>
               {showToneSelector && !isGlobalToneDirectInput && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                  transition={{ duration: 0.14 }}
-                  className="absolute left-0 right-0 top-full z-[500] mt-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
-                >
-                  <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1.5">
-                    <button
-                      type="button"
-                      onClick={startGlobalToneDirectInput}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                <Portal>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[950]"
+                    onClick={() => setShowToneSelector(false)}
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.14 }}
+                      style={{
+                        position: 'fixed',
+                        top: globalTonePopupPos.top,
+                        left: globalTonePopupPos.left,
+                        width: globalTonePopupPos.width || undefined,
+                      }}
+                      className="rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <span>직접 입력</span>
-                      <Edit2 className="w-3.5 h-3.5 shrink-0" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
-                      className={cn(
-                        "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
-                        !selectedToneId ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                      )}
-                    >
-                      기본 추천 사용
-                    </button>
-                    {filteredTones.map((tone) => (
-                      <button
-                        key={tone.id}
-                        type="button"
-                        onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
-                        className={cn(
-                          "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
-                          selectedToneId === tone.id ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                        )}
-                      >
-                        {tone.labelKo || tone.label}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
+                      <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={startGlobalToneDirectInput}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                        >
+                          <span>직접 입력</span>
+                          <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
+                          className={cn(
+                            "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
+                            !selectedToneId ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                          )}
+                        >
+                          기본 추천 사용
+                        </button>
+                        {filteredTones.map((tone) => (
+                          <button
+                            key={tone.id}
+                            type="button"
+                            onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
+                            className={cn(
+                              "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
+                              selectedToneId === tone.id ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                            )}
+                          >
+                            {tone.labelKo || tone.label}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                </Portal>
               )}
             </AnimatePresence>
           </div>

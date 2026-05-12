@@ -2704,6 +2704,9 @@ function App() {
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(false);
+  const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
   const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -2846,25 +2849,52 @@ const toggleCycleVariantSelection = (
   }, [isAppliedKeywordsExpanded, result]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      let isFloating = false;
-      if (actionButtonsAnchorRef.current) {
-        const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
-        // Floating when the original action buttons are below the visible bottom area.
-        // In the original position they stay fixed in the normal layout.
-        isFloating = rect.top > window.innerHeight - 120;
-        setIsActionsFloating(isFloating);
-      }
+    let rafId: number | null = null;
 
-      // Keep the collapsed floating state until the user manually expands it.
+    const updateFloatingState = () => {
+      if (!actionButtonsAnchorRef.current) return;
+
+      const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+
+      // Hysteresis prevents the inline/floating bars from rapidly toggling at the boundary,
+      // which caused a short flicker right after docking/undocking.
+      const floatStartLine = viewportHeight - 92;
+      const floatEndLine = viewportHeight - 168;
+
+      setIsActionsFloating((prev) => {
+        const next = prev
+          ? rect.top > floatEndLine
+          : rect.top > floatStartLine;
+        return prev === next ? prev : next;
+      });
     };
+
+    const handleScroll = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        updateFloatingState();
+      });
+    };
+
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleScroll);
     handleScroll();
     return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
     };
+  }, []);
+
+  useEffect(() => {
+    const updateActionDragMode = () => {
+      setIsActionDragMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', updateActionDragMode);
+    updateActionDragMode();
+    return () => window.removeEventListener('resize', updateActionDragMode);
   }, []);
 
   useEffect(() => {
@@ -5022,6 +5052,15 @@ ${result.prompt}
         label: GENRES.find(item => item.id === id)?.labelKo || GENRES.find(item => item.id === id)?.label || id 
       }));
 
+
+  const floatingActionBarVariants = {
+    initial: { opacity: 0, y: 18, scale: 0.98, filter: 'blur(6px)' },
+    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+    exit: (mode: 'collapse' | 'dock') => mode === 'collapse'
+      ? { opacity: 0, x: -260, scaleX: 0.08, filter: 'blur(12px)' }
+      : { opacity: 0, y: 0, scale: 0.98, filter: 'blur(6px)' }
+  };
+
   const actionButtonsContent = (
     <>
       <div className="relative flex-shrink-0">
@@ -5815,16 +5854,25 @@ ${result.prompt}
 
           {/* Action Buttons Anchor */}
           <div ref={actionButtonsAnchorRef} className="relative">
-            <div className={cn(
-              "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-all duration-300",
-              ((isActionsFloating || isActionButtonsCollapsed) || isAnyModalOpen) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
-            )}>
-              {actionButtonsContent}
-            </div>
+            <AnimatePresence mode="popLayout" initial={false}>
+              {!isActionsFloating && !isActionButtonsCollapsed && !isAnyModalOpen && (
+                <motion.div
+                  key="action-buttons-inline-bar"
+                  layoutId="action-buttons-floating-bar"
+                  initial={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                  transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
+                  className="flex flex-row items-stretch gap-2 md:gap-4 w-full"
+                >
+                  {actionButtonsContent}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Floating / Collapsible Action Buttons */}
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {((isActionsFloating && !isActionButtonsCollapsed) || isActionButtonsCollapsed) && !isAnyModalOpen && (
               <Portal>
                 {isActionButtonsCollapsed ? (
@@ -5836,6 +5884,15 @@ ${result.prompt}
                     animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
                     exit={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
                     transition={{ type: "spring", stiffness: 360, damping: 32, mass: 0.8 }}
+                    drag={isActionDragMobile ? "x" : false}
+                    dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
+                    dragElastic={0.12}
+                    onDragEnd={(_, info) => {
+                      if (!isActionDragMobile) return;
+                      if (info.offset.x > 34 || info.velocity.x > 360) {
+                        setIsActionButtonsCollapsed(false);
+                      }
+                    }}
                     onClick={() => setIsActionButtonsCollapsed(false)}
                     onMouseEnter={() => setHoveredItem({
                       id: 'action-collapse-toggle',
@@ -5844,24 +5901,36 @@ ${result.prompt}
                     })}
                     onMouseLeave={() => setHoveredItem(null)}
                     aria-label="생성 버튼 펼치기"
-                    className="fixed left-7 md:left-[68px] 2xl:left-[calc((100vw-1152px)/2-82px)] bottom-7 md:bottom-8 z-[120] h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_6px_14px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,255,255,0.035)] flex items-center justify-center opacity-100"
+                    className="fixed left-[-30px] md:left-[68px] 2xl:left-[calc((100vw-1152px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-14 md:h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_3px_8px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.025)] flex items-center justify-end pr-2 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing"
                   >
                     <ArrowRight className="w-5 h-5" />
                   </motion.button>
                 ) : (
                   <motion.div
                     key="action-buttons-expanded-bar"
-                    initial={{ opacity: 0, y: 18, filter: 'blur(6px)' }}
+                    initial={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
-                    transition={{ type: "spring", stiffness: 340, damping: 32 }}
+                    exit={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                    transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
                     className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8"
                   >
                     <div className="relative w-full max-w-4xl pointer-events-auto">
                       <motion.div
-                        initial={{ opacity: 0, x: 18, filter: 'blur(6px)' }}
-                        animate={{ opacity: 1, x: 0, scaleX: 1, filter: 'blur(0px)' }}
-                        exit={{ opacity: 0, x: -260, scaleX: 0.08, filter: 'blur(12px)' }}
+                        layoutId="action-buttons-floating-bar"
+                        drag={isActionDragMobile ? "x" : false}
+                        dragConstraints={isActionDragMobile ? { left: 0, right: 0 } : undefined}
+                        dragElastic={0.16}
+                        onDragEnd={(_, info) => {
+                          if (!isActionDragMobile) return;
+                          if (info.offset.x < -70 || info.velocity.x < -520) {
+                            setIsActionButtonsCollapsed(true);
+                          }
+                        }}
+                        custom={isActionButtonsCollapsed ? 'collapse' : 'dock'}
+                        variants={floatingActionBarVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
                         style={{ transformOrigin: 'left center' }}
                         transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.9 }}
                         className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100"
@@ -5876,7 +5945,7 @@ ${result.prompt}
                             description: '생성 버튼 영역을 왼쪽 접기 버튼으로 접습니다.'
                           })}
                           onMouseLeave={() => setHoveredItem(null)}
-                          className="h-20 self-center w-14 shrink-0 rounded-2xl bg-[var(--card-bg)] border border-btn-border text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange transition-all shadow-[0_6px_14px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,255,255,0.035)] flex items-center justify-center opacity-100"
+                          className="hidden md:flex h-20 self-center w-14 shrink-0 rounded-2xl bg-[var(--card-bg)] border border-btn-border text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange transition-all shadow-[0_6px_14px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,255,255,0.035)] items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />

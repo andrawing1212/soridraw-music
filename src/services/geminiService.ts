@@ -1363,7 +1363,7 @@ function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
     .map((line) => {
       const trimmed = line.trim();
       if (!trimmed) return line;
-      // Keep Suno-style section tags such as [Verse 1] or [Chorus].
+      // Keep Suno-style section tags such as [Verse] or [Chorus]. For default/free and custom structures, prefer [Verse] instead of numbered [Verse]/[Verse].
       if (/^\[[^\]]+\]$/.test(trimmed)) return line;
       // Remove standalone English ad-libs such as (Stay with me) or (I don't want you here).
       if (/^\([A-Za-z0-9\s'",.!?&-]+\)$/.test(trimmed)) return "";
@@ -1471,7 +1471,7 @@ function buildStructureText(
   const structureMap: Record<Exclude<SongStructure, "custom">, string> = {
     "1": "Default free structure: arrange sections freely around the story arc and emotional climax",
     "2": BASIC_STRUCTURE,
-    "3": "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
+    "3": "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
   };
 
   const selected =
@@ -3114,7 +3114,7 @@ const SITUATION_VARIATION_SEEDS: CreativeVariationSeed[] = [
       "let the expected authority voice crack slightly while the other voice becomes clearer",
     arrangementLens: "role reversal after the first hook",
     lyricArchitecture:
-      "start with expected power dynamics, then shift section ownership to the other role after Hook or Verse 2",
+      "start with expected power dynamics, then shift section ownership to the other role after Hook, Verse, or Rap Section",
     avoidPattern: "the same role staying dominant from start to finish",
   },
   {
@@ -3357,7 +3357,7 @@ const SOLO_VARIATION_SEEDS: CreativeVariationSeed[] = [
     arrangementLens: "delayed image reveal",
     lyricArchitecture:
       "hold back the central image until Bridge or Final Chorus, then make it reframe earlier lines",
-    avoidPattern: "explaining the full concept in Verse 1",
+    avoidPattern: "explaining the full concept in the first Verse",
   },
   {
     id: "rhythm-phrase-focus",
@@ -6287,7 +6287,7 @@ function sanitizeCompositeSectionVocalTag(line: string): string {
   let cleaned = String(line || "");
 
   // Suno generally follows composite sung-section tags better than split tags:
-  // [Verse 1: Airy Female Vocal, pleading]. Do NOT break these apart.
+  // [Verse: Airy Female Vocal, pleading]. Do NOT break these apart.
   // Only normalize legacy section names while preserving the composite tag body.
   cleaned = cleaned.replace(/^\s*\[Rap\s+Verse([^\]]*)\]/i, (_, rest) => `[Rap Section${rest}]`);
 
@@ -6417,10 +6417,10 @@ function getSituationAcousticTagLabels(params: GenerateSongParams): string[] {
 function buildSituationDuoAcousticLabel(params: GenerateSongParams): string {
   const labels = getSituationAcousticTagLabels(params);
   const joined = labels.join(" ").toLowerCase();
-  if (/male/.test(joined) && /female/.test(joined)) return "Mixed Vocal Duo";
-  if (labels.length >= 2 && labels.every((label) => /male/i.test(label))) return "Male Vocal Duo";
-  if (labels.length >= 2 && labels.every((label) => /female/i.test(label))) return "Female Vocal Duo";
-  return "Vocal Duo";
+  if (/male/.test(joined) && /female/.test(joined)) return "All Vocals";
+  if (labels.length >= 2 && labels.every((label) => /male/i.test(label))) return "All Male Vocals";
+  if (labels.length >= 2 && labels.every((label) => /female/i.test(label))) return "All Female Vocals";
+  return "All Vocals";
 }
 
 function getSituationEnglishRoleLabels(params: GenerateSongParams): string[] {
@@ -6461,6 +6461,125 @@ function cleanCharacterCue(cue: string): string {
     .filter(Boolean)
     .slice(0, 2)
     .join(", ");
+}
+
+
+function translateKoreanLyricTagCue(value: string): string {
+  let text = String(value || "");
+  const replacements: Array<[RegExp, string]> = [
+    [/저승\s*사자|저승사자|사신/g, "Tired Male Rap"],
+    [/귀신|유령/g, "Airy Female Vocal"],
+    [/엄마|어머니/g, "Warm Female Vocal"],
+    [/아빠|아버지/g, "Dry Male Spoken Vocal"],
+    [/아들/g, "Young Male Vocal"],
+    [/딸/g, "Young Female Vocal"],
+    [/상사|부장/g, "Firm Male Spoken Vocal"],
+    [/직원/g, "Bright Female Vocal"],
+    [/남성\s*보컬|남자\s*보컬|남성/g, "Male Vocal"],
+    [/여성\s*보컬|여자\s*보컬|여성/g, "Female Vocal"],
+    [/랩|래핑|래퍼/g, "Rap"],
+    [/속삭(?:이는|이듯|임)?|숨\s*섞인/g, "breathy"],
+    [/애원(?:하는|하듯)?|부탁(?:하는|하듯)?|간절(?:한|하게)?/g, "pleading"],
+    [/후회(?:하는|하듯)?/g, "regretful"],
+    [/미련(?:이\s*남은|있는)?/g, "lingering"],
+    [/불안(?:한|하게)?|조마조마(?:한|하게)?/g, "anxious"],
+    [/분노|화난|화내는/g, "angry"],
+    [/차갑(?:게|고|한)?|냉정(?:한|하게)?/g, "cold"],
+    [/무심(?:한|하게)?|담담(?:한|하게)?/g, "detached"],
+    [/냉소(?:적인|적으로)?|비꼬(?:는|듯)?/g, "cynical"],
+    [/지친|피곤(?:한|하게)?/g, "tired"],
+    [/잔소리|재촉(?:하는|하듯)?/g, "nagging"],
+    [/설득(?:하는|하듯)?/g, "persuading"],
+    [/반박(?:하는|하듯)?/g, "rebuttal"],
+    [/직설(?:적인|적으로)?|단호(?:한|하게)?/g, "direct"],
+    [/부드럽(?:게|고|러운)?|여린/g, "soft"],
+    [/위태(?:로운|롭게)?|떨리는|여린/g, "fragile"],
+    [/장난(?:스러운|스럽게)?|가볍(?:게|고)?/g, "playful"],
+    [/누그러(?:진|지는|지며)?|풀리는/g, "softening"],
+    [/후렴|훅/g, "hook"],
+    [/대사|말하듯/g, "spoken"],
+  ];
+  replacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+  return text;
+}
+
+function cleanEnglishOnlyLyricTagPart(value: string): string {
+  return cleanupPromptTail(
+    stripRemainingKoreanForProductionPrompt(translateKoreanLyricTagCue(value))
+      .replace(/[()]/g, " ")
+      .replace(/\b(?:ui|eun|neun|ga|i|eul|reul)\b/gi, "")
+      .replace(/\s*[;|/]\s*/g, ", ")
+      .replace(/\s+([,.:])/g, "$1")
+      .replace(/[,.:]\s*([,.:])/g, "$1")
+      .replace(/^\s*[,.:\-]+\s*|\s*[,.:\-]+\s*$/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim(),
+  );
+}
+
+
+function translateKoreanStageCueParentheses(line: string): string {
+  const trimmed = String(line || "").trim();
+  const match = trimmed.match(/^\(([^()]*[가-힣][^()]*)\)$/);
+  if (!match) return line;
+  const raw = match[1].trim();
+  const normalized = raw.replace(/\s+/g, " ");
+  const map: Array<[RegExp, string]> = [
+    [/희미한\s*도시.*소음|도시.*소음/g, "faint city ambience"],
+    [/규칙적인\s*발걸음|발걸음\s*소리/g, "steady footsteps"],
+    [/멀어지는\s*발걸음/g, "footsteps fading away"],
+    [/시계\s*소리|시계/g, "clock ticking"],
+    [/정적/g, "silence"],
+    [/비\s*소리|빗소리/g, "rain ambience"],
+    [/바람\s*소리/g, "wind ambience"],
+    [/문\s*닫히는\s*소리/g, "door closing sound"],
+    [/숨\s*소리/g, "breath sound"],
+    [/한숨\s*소리|한숨/g, "sigh"],
+    [/웃음\s*소리/g, "soft laugh"],
+    [/흐느낌/g, "quiet sob"],
+    [/비트\s*드롭|드롭/g, "beat drop"],
+    [/악기\s*간주|간주/g, "instrumental break"],
+  ];
+  for (const [pattern, replacement] of map) {
+    if (pattern.test(normalized)) return `(${replacement})`;
+  }
+  // Keep Korean parenthetical lyric/ad-lib lines when they are not obvious stage cues.
+  return line;
+}
+
+function sanitizeLyricBracketTagToEnglish(line: string, params: GenerateSongParams): string {
+  return String(line || "").replace(/\[([^\]\n]{1,180})\]/g, (full, inside) => {
+    const rawInside = String(inside || "").trim();
+    if (!rawInside) return "";
+
+    const composite = rawInside.match(/^((?:Intro|Verse(?:\s*[A-Z]|\s*\d+)?|Pre[-\s]?Chorus|Chorus(?:\s*\/\s*Drop)?|Hook|Final\s*Hook|Rap\s*Verse|Rap\s*Section|Bridge|Breakdown|Drop|Final\s*Chorus(?:\s*\/\s*Drop)?|Outro|Solo|Instrumental|Build[-\s]?up|Climax|Main\s*Theme|Theme\s*[AB])(?:\s*\/\s*Drop)?)\s*:\s*(.+)$/i);
+    if (composite) {
+      const sectionName = normalizeLyricSectionNameForGeneration(composite[1].trim());
+      const body = String(composite[2] || "").trim();
+      const parts = body
+        .split(/[,，]/)
+        .map((part) => cleanEnglishOnlyLyricTagPart(part))
+        .filter(Boolean)
+        .slice(0, 3);
+      if (!parts.length) return `[${sectionName}]`;
+      return `[${sectionName}: ${parts.join(", ")}]`;
+    }
+
+    const acousticLabel = hasSituation(params.situation)
+      ? findSituationAcousticLabelFromTag(rawInside, params)
+      : "";
+    if (acousticLabel) {
+      const cueMatch = rawInside.match(/[:：,，]\s*(.*)$/);
+      const cue = cueMatch ? cleanEnglishOnlyLyricTagPart(cueMatch[1]) : "";
+      return `[${acousticLabel}${cue ? `: ${cue}` : ""}]`;
+    }
+
+    const cleaned = cleanEnglishOnlyLyricTagPart(rawInside);
+    if (!cleaned) return "";
+    return `[${cleaned}]`;
+  });
 }
 
 function findSituationEnglishLabelFromTag(rawTag: string, params: GenerateSongParams): string {
@@ -6545,7 +6664,7 @@ function normalizeSituationCharacterLyricTag(line: string, params: GenerateSongP
   const rawInside = match[1].trim();
   const rest = String(match[2] || "");
 
-  // Composite section tag: [Verse 1: Ghost, pleading] -> [Verse 1: Airy Female Vocal, pleading]
+  // Composite section tag: [Verse: Ghost, pleading] -> [Verse: Airy Female Vocal, pleading]
   const sectionComposite = rawInside.match(/^((?:Intro|Verse\s*\d*|Pre[-\s]?Chorus|Chorus(?:\s*\([^\]]+\))?|Hook|Rap\s*Verse|Rap\s*Section|Bridge|Breakdown|Drop|Final\s*Chorus|Outro|Solo|Instrumental)(?:\s*\/\s*Drop)?)\s*:\s*(.+)$/i);
   if (sectionComposite) {
     const sectionName = sectionComposite[1].replace(/^Rap\s+Verse$/i, "Rap Section").trim();
@@ -6699,6 +6818,212 @@ function ensureLeadingSectionBeforeFirstVocal(lines: string[]): string[] {
   return lines;
 }
 
+
+function normalizeLyricSectionDisplayName(section: string): string {
+  return normalizeLyricSectionNameForGeneration(String(section || "").trim())
+    .replace(/^Verse\s*\d+$/i, "Verse")
+    .replace(/^Rap\s+Verse$/i, "Rap Section")
+    .replace(/^Build\s*up$/i, "Build-up")
+    .trim();
+}
+
+function parseBracketOnlyLine(line: string): { inside: string; rest: string } | null {
+  const match = String(line || "").trim().match(/^\[([^\]]{1,180})\](.*)$/);
+  if (!match) return null;
+  return { inside: match[1].trim(), rest: String(match[2] || "") };
+}
+
+function parseCompositeLyricTagInside(inside: string): { section: string; body: string } | null {
+  const match = String(inside || "").trim().match(/^((?:Intro|Verse(?:\s*[A-Z]|\s*\d+)?|Pre[-\s]?Chorus|Chorus(?:\s*\/\s*Drop)?|Hook|Final\s*Hook|Rap\s*Verse|Rap\s*Section|Bridge(?:\s*[A-Z])?|Breakdown|Drop|Final\s*Chorus(?:\s*\/\s*Drop)?|Outro|Solo|Instrumental|Build[-\s]?up|Climax|Main\s*Theme|Theme\s*[AB])(?:\s*\/\s*Drop)?)\s*:\s*(.+)$/i);
+  if (!match) return null;
+  return { section: normalizeLyricSectionDisplayName(match[1]), body: match[2].trim() };
+}
+
+function isSectionOnlyLyricTagInside(inside: string): boolean {
+  return /^(?:Intro|Verse(?:\s*[A-Z]|\s*\d+)?|Pre[-\s]?Chorus|Chorus(?:\s*\/\s*Drop)?|Hook|Final\s*Hook|Rap\s*Verse|Rap\s*Section|Bridge(?:\s*[A-Z])?|Breakdown|Drop|Final\s*Chorus(?:\s*\/\s*Drop)?|Outro|Solo|Instrumental|Build[-\s]?up|Climax|Main\s*Theme|Theme\s*[AB])(?:\s*\/\s*Drop)?$/i.test(String(inside || "").trim());
+}
+
+function isAcousticVoiceLabel(label: string): boolean {
+  return /\b(?:Vocal|Vocals|Rap|Spoken\s+Vocal)\b/i.test(String(label || "").trim());
+}
+
+function isFinalSharedLyricSection(section: string): boolean {
+  return /^(?:Final\s+Chorus|Final\s+Hook)$/i.test(String(section || "").trim());
+}
+
+function isInstrumentalLikeSection(section: string): boolean {
+  return /^(?:Intro|Drop|Breakdown|Instrumental|Solo|Build-up|Climax|Main Theme|Theme A|Theme B)$/i.test(String(section || "").trim());
+}
+
+function isSharedVocalLabel(label: string): boolean {
+  return /^(?:All\s+Vocals|All\s+Female\s+Vocals|All\s+Male\s+Vocals|Mixed\s+Vocal\s+Duo|Together|Both|Duet)$/i.test(String(label || "").trim());
+}
+
+function fallbackSingleAcousticVoice(params: GenerateSongParams, preferredIndex = 0): string {
+  const labels = getSituationAcousticTagLabels(params).filter(Boolean);
+  if (labels[preferredIndex]) return labels[preferredIndex];
+  if (labels[0]) return labels[0];
+  return "Lead Vocal";
+}
+
+function splitLyricTagBody(body: string): { label: string; cues: string[] } {
+  const parts = String(body || "")
+    .split(/[,，]/)
+    .map((part) => cleanEnglishOnlyLyricTagPart(part))
+    .filter(Boolean);
+  const label = parts.shift() || cleanEnglishOnlyLyricTagPart(body);
+  return { label, cues: parts };
+}
+
+function dedupeCueAgainstAcousticLabel(cues: string[], acousticLabel: string): string[] {
+  const labelWords = new Set(
+    String(acousticLabel || "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word && !/^(?:male|female|vocal|vocals|voice|spoken)$/.test(word)),
+  );
+
+  const out: string[] = [];
+  cues.forEach((cue) => {
+    const clean = cleanEnglishOnlyLyricTagPart(cue)
+      .replace(/\b(?:male|female|vocal|vocals|voice|tone|delivery|emotion|attitude)\b/gi, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!clean) return;
+    const cueWords = clean.toLowerCase().split(/\s+/).filter(Boolean);
+    const isOnlyRepeatingLabel = cueWords.length > 0 && cueWords.every((word) => labelWords.has(word));
+    if (isOnlyRepeatingLabel) return;
+    if (!out.some((item) => item.toLowerCase() === clean.toLowerCase())) out.push(clean);
+  });
+  return out.slice(0, 2);
+}
+
+function formatCompositeLyricTag(section: string, acousticLabel: string, cues: string[]): string {
+  const cleanSection = normalizeLyricSectionDisplayName(section || "Verse");
+  const cleanLabel = cleanEnglishOnlyLyricTagPart(acousticLabel || "Lead Vocal") || "Lead Vocal";
+  const cleanCues = dedupeCueAgainstAcousticLabel(cues, cleanLabel);
+  return `[${cleanSection}: ${cleanLabel}${cleanCues.length ? `, ${cleanCues.join(", ")}` : ""}]`;
+}
+
+function chooseSectionForBareAcousticTag(currentSection: string): string {
+  const current = normalizeLyricSectionDisplayName(currentSection || "");
+  if (current && !isInstrumentalLikeSection(current)) return current;
+  return "Verse";
+}
+
+function baseLyricSectionName(section: string): string {
+  return normalizeLyricSectionDisplayName(String(section || "").replace(/\s+[A-Z]$/i, "").trim());
+}
+
+function applySequentialSectionSuffixes(lines: string[]): string[] {
+  const tagInfos: Array<{ index: number; section: string; base: string }> = [];
+  lines.forEach((line, index) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return;
+    const composite = parseCompositeLyricTagInside(parsed.inside);
+    if (!composite) return;
+    const base = baseLyricSectionName(composite.section);
+    if (!/^(?:Verse|Bridge)$/i.test(base)) return;
+    tagInfos.push({ index, section: composite.section, base });
+  });
+
+  const copy = [...lines];
+  for (let i = 0; i < tagInfos.length; i += 1) {
+    const run = [tagInfos[i]];
+    let j = i + 1;
+    while (j < tagInfos.length && tagInfos[j].base.toLowerCase() === tagInfos[i].base.toLowerCase()) {
+      run.push(tagInfos[j]);
+      j += 1;
+    }
+    if (run.length > 1) {
+      run.forEach((item, runIndex) => {
+        const suffix = String.fromCharCode(65 + runIndex);
+        copy[item.index] = copy[item.index].replace(
+          new RegExp(`^\\[${item.section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`),
+          `[${item.base} ${suffix}:`,
+        );
+      });
+    }
+    i = j - 1;
+  }
+  return copy;
+}
+
+function normalizeCompositeLyricTagsFinal(lyrics: string, params: GenerateSongParams): string {
+  const sourceLines = String(lyrics || "").split("\n");
+  const normalized: string[] = [];
+  let currentSection = "";
+  let lastConcreteVoice = fallbackSingleAcousticVoice(params, 0);
+
+  sourceLines.forEach((line) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) {
+      normalized.push(line);
+      return;
+    }
+
+    const composite = parseCompositeLyricTagInside(parsed.inside);
+    if (composite) {
+      currentSection = composite.section;
+      const { label: rawLabel, cues } = splitLyricTagBody(composite.body);
+      let acousticLabel = hasSituation(params.situation)
+        ? findSituationAcousticLabelFromTag(rawLabel, params) || cleanEnglishOnlyLyricTagPart(rawLabel)
+        : cleanEnglishOnlyLyricTagPart(rawLabel);
+
+      if (isSharedVocalLabel(acousticLabel) && !isFinalSharedLyricSection(currentSection)) {
+        acousticLabel = lastConcreteVoice || fallbackSingleAcousticVoice(params, 0);
+      } else if (isSharedVocalLabel(acousticLabel) && isFinalSharedLyricSection(currentSection)) {
+        acousticLabel = buildSituationDuoAcousticLabel(params);
+      }
+
+      if (acousticLabel && !isSharedVocalLabel(acousticLabel)) lastConcreteVoice = acousticLabel;
+      normalized.push(`${formatCompositeLyricTag(currentSection, acousticLabel, cues)}${parsed.rest}`);
+      return;
+    }
+
+    if (isSectionOnlyLyricTagInside(parsed.inside)) {
+      currentSection = normalizeLyricSectionDisplayName(parsed.inside);
+      normalized.push(`[${currentSection}]${parsed.rest}`);
+      return;
+    }
+
+    const rawLabel = parsed.inside.split(/[:：]/)[0] || parsed.inside;
+    const bareLabelCandidate = hasSituation(params.situation)
+      ? findSituationAcousticLabelFromTag(rawLabel, params) || cleanEnglishOnlyLyricTagPart(rawLabel)
+      : cleanEnglishOnlyLyricTagPart(rawLabel);
+
+    if (isAcousticVoiceLabel(bareLabelCandidate) || isSharedVocalLabel(bareLabelCandidate)) {
+      const cueMatch = parsed.inside.match(/[:：]\s*(.*)$/);
+      const cueSource = cueMatch ? cueMatch[1] : "";
+      let acousticLabel = bareLabelCandidate;
+      if (isSharedVocalLabel(acousticLabel)) acousticLabel = lastConcreteVoice || fallbackSingleAcousticVoice(params, 0);
+      if (acousticLabel && !isSharedVocalLabel(acousticLabel)) lastConcreteVoice = acousticLabel;
+      const section = chooseSectionForBareAcousticTag(currentSection);
+      currentSection = section;
+      normalized.push(`${formatCompositeLyricTag(section, acousticLabel, cueSource ? cueSource.split(/[,，]/) : [])}${parsed.rest}`);
+      return;
+    }
+
+    normalized.push(line);
+  });
+
+  return applySequentialSectionSuffixes(normalized).join("\n");
+}
+
+function removeUiModeWordsFromLyrics(lyrics: string): string {
+  return String(lyrics || "")
+    .replace(/사회\s*풍자(?:형|라니)?/g, "")
+    .replace(/평행\s*독백(?:형)?/g, "")
+    .replace(/한쪽\s*독백(?:\s*중심)?/g, "")
+    .replace(/콜\s*앤\s*리스폰스(?:형)?/g, "")
+    .replace(/대화(?:형)?/g, "")
+    .replace(/연출\s*톤/g, "")
+    .replace(/보컬\s*감정(?:\s*방향)?/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n /g, "\n")
+    .replace(/ \n/g, "\n");
+}
+
 function sanitizeGeneratedLyricTagsAndFragments(
   lyrics: string,
   params: GenerateSongParams,
@@ -6708,10 +7033,16 @@ function sanitizeGeneratedLyricTagsAndFragments(
   const rawLines = normalizeGeneratedLyricTagSpacing(lyrics)
     .split("\n")
     .map((line) =>
-      normalizeSituationCharacterLyricTag(
-        compactLyricVocalTagLine(sanitizeLyricTagGenderNoise(sanitizeCompositeSectionVocalTag(line), params)),
+      sanitizeLyricBracketTagToEnglish(
+        normalizeSituationCharacterLyricTag(
+          compactLyricVocalTagLine(sanitizeLyricTagGenderNoise(sanitizeCompositeSectionVocalTag(line), params)),
+          params,
+        ),
         params,
       )
+        .split("\n")
+        .map(translateKoreanStageCueParentheses)
+        .join("\n")
         .replace(/\(\s*:\s*\)/g, "")
         .replace(/\(\s*,\s*\)/g, "")
         .replace(/\(\s*\)/g, "")
@@ -6769,11 +7100,17 @@ function sanitizeGeneratedLyricTagsAndFragments(
     normalizeGenericTagsInSituationLyrics(limitRepeatedTogetherTags(out, params), params),
   );
 
-  return stabilizedLines
+  const stabilizedText = stabilizedLines
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/\[([^\]\n:]+ Vocal[^\]\n:]*):\s*,\s*/gi, "[$1: ")
     .replace(/\[([^\]\n:]+ Vocal[^\]\n:]*):\s*\]/gi, "[$1]")
+    .trim();
+
+  return removeUiModeWordsFromLyrics(
+    normalizeCompositeLyricTagsFinal(stabilizedText, params),
+  )
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 export async function generateSong(
@@ -6884,7 +7221,8 @@ export async function generateSong(
 - If a non-Korean language is selected, put that language's lyrics in JSON field lyrics.english, even when the selected language is not English.
 - If a language is not selected, do not create a title or lyrics for that language.
 - Do not generate unselected lyric languages.
-- In Korean-only mode, lyrics.korean must be Korean-only unless MIXED LANGUAGE MODE is explicitly active.`;
+- In Korean-only mode, lyrics.korean must be Korean-only unless MIXED LANGUAGE MODE is explicitly active.
+- Section-level sound/stage cues directly after tags must be English acoustic instructions, e.g. (faint city ambience), (steady footsteps), (beat drop). Korean parenthetical lines are allowed only when they are actual sung inner thoughts or spoken ad-libs, not production cues.`;
 
   const lyricsResponseSchema = params.isNoLyrics
     ? {}
@@ -6974,13 +7312,19 @@ ${exactStructureText}
 - Chorus, Hook, Rap Section, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro must not become generic lyrics; keep the scenario and role conflict active.
 - Instrumental, Solo, Drop, and Break can be mainly musical, but if they include lyrics or ad-libs, they must stay connected to the same Situation.`
       : (params.songStructure ?? "1") === "1"
-        ? `SONG STRUCTURE (DEFAULT / FREE):
-- Do not force a fixed Verse-Chorus template.
-- Build the most dramatic structure freely around the story arc, emotional turns, and hook payoff.
-- You may use sections such as Intro, Verse, Pre-Chorus, Hook, Chorus, Rap Section, Drop, Bridge, Breakdown, Final Chorus, Outro, or Instrumental only where they serve the story.
-- Sudden Beat Drops, irregular Rap Section entries, shortened verses, repeated hooks, or delayed choruses are allowed when they fit the emotional development.
-- For Suno stability, do not repeat identical bracket section tags back-to-back. If the same section continues with only a vocal/acoustic-role change, keep one composite section tag and use parentheses for short ad-libs or echoes.
-- Use composite lyric tags for sung sections, e.g. [Verse 1: Airy Female Vocal, pleading] or [Rap Section: Low Male Rap, tired]. Instrumental-only sections may use section-only tags.`
+        ? `SONG STRUCTURE (DEFAULT / ADAPTIVE EXPERIMENTAL):
+- Do not force a fixed Verse-Chorus template. Build a coherent but experimental song architecture around the story arc, hook timing, and emotional reveal.
+- Use about 9-12 major sections so the song does not feel too short. A compact song is allowed only when the user explicitly asks for a very short lyric.
+- Prefer an asymmetric spine rather than a plain Verse→Pre-Chorus→Chorus loop. Use at least TWO non-standard or transition sections when appropriate: [Hook], [Drop], [Breakdown], [Instrumental], [Solo], [Build-up], [Climax], [Main Theme], or [Final Hook].
+- Repetition is allowed when it has a musical purpose: Verse may return, Hook/Chorus may return, and Breakdown/Drop may appear more than once if the energy changes.
+- For the default/free structure, use [Verse] as the normal verse tag. If two Verse sections appear back-to-back for different voices or viewpoints, label them [Verse A: ...] and [Verse B: ...] so the order stays clear. Otherwise, do not use numbered [Verse 1]/[Verse 2].
+- Chorus/Hook should have ONE main owner per occurrence unless call-response is explicitly selected. The owner may change between Chorus and Final Hook/Final Chorus to create a story turn.
+- Do not always place Chorus once in the middle and Final Chorus right before Outro. Rotate ending patterns: Breakdown→Outro, Hook reprise→sudden stop, Drop→Outro, Instrumental→spoken Outro, Final Hook→fade, Bridge→unresolved ending, or Rap Section→cold ending are allowed.
+- Final Chorus/Final Hook does not always need to resolve the conflict. It may be unresolved, bitter, comic, reversed, quieter, or bigger depending on the Situation.
+- Avoid consecutive identical bracket section tags except [Verse A] → [Verse B]. If a hook returns late, use [Final Hook], [Hook], [Breakdown], or [Drop] according to the musical function rather than duplicating the same tag twice in a row.
+- Use composite lyric tags for every sung section, e.g. [Verse A: Airy Female Vocal, pleading] or [Rap Section: Low Male Rap, tired]. Instrumental-only sections may use section-only tags.
+- Never output a bare acoustic tag like [Tired Male Rap: dry] or [Airy Female Vocal: pleading]. It must always include the section first: [Verse A: Tired Male Rap, dry] or [Chorus: Airy Female Vocal, pleading].
+- For Situation songs, character story roles still drive the lyric content, but section labels must stay musical, varied, and intentional.`
         : `SONG STRUCTURE (MANDATORY):
 - Selected mode: ${resolvedStructure === "2" ? "1" : "2"}.
 - Use this exact structure:
@@ -7049,15 +7393,16 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Keep lyric tags compact: [Role: one voice cue, one emotion cue]. Use at most 2 short cues after the colon. Do not put full sentences, long descriptions, or all vocal settings inside lyric tags.
 - LYRIC CONTENT SOURCE LOCK (MANDATORY): Lyrics must be created only from USER FREE-TEXT DIRECTOR NOTE, selected Theme, and active Situation if provided. Vocal emotion direction, vocal expression, vocal tone, Sound, Style, tempo, BPM, instrument names, and production texture are NOT lyric topics.
 - Vocal emotion direction and vocal expression are singer-performance directions only. They may appear in [Vocals] and compact lyric tags, but must NOT create lyric story, imagery, subject matter, repeated keywords, or narrative content. Do not write lyric lines that explain the selected emotion/expression. If no Theme/Situation/user note exists, keep lyrics broad and character-driven rather than explaining vocal settings.
-- In Situation/character lyrics, lyric tags must use acoustic voice labels from the production prompt, such as [Tired Male Rap] and [Airy Female Vocal]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], and never switch back to generic vocal labels after acoustic labels have been established.
+- In Situation/character lyrics, lyric tags must use composite acoustic tags: [Section: Acoustic Voice Label, short cue], e.g. [Verse A: Tired Male Rap, dry authority] or [Chorus: Airy Female Vocal, pleading hook]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], never output bare acoustic tags like [Tired Male Rap: dry], and never switch back to generic vocal labels after acoustic labels have been established.
+- Every sung tag must include a section name before the colon. Bad: [Airy Female Vocal: empty]. Good: [Outro: Airy Female Vocal, empty].
 - KIM EANA-STYLE LYRIC FOUNDATION (MANDATORY): Write lyrics as character speech, not emotion exposition. Start from character, situation, desire, speech style, and lived detail. Prefer concrete everyday details, persona flaws, small behavior, and a believable scene over abstract emotion words. Chorus should express the character's real desire or repeating phrase, not summarize the selected vocal emotion.
 - Do not make tags empty. Every vocalist tag must be followed by at least 1-2 complete lyric or ad-lib lines. Never output broken placeholders like "( : )", "[ : ]", empty parentheses, or empty vocal tags.
 - Use composite lyric tags for sung sections: [Section: Vocal/Acoustic Role, short emotion or delivery]. Good: [Hook: Whisper Rap Vocal, breathy tension], [Rap Section: Low Male Rap, husky off-beat].
-- If the selected structure says Rap Verse, write it as [Rap Section] in generated lyrics. Composite form is allowed and preferred: [Rap Section: Low Male Rap, husky off-beat].
+- If the selected structure says Rap Section, write it as [Rap Section] in generated lyrics. Composite form is allowed and preferred: [Rap Section: Low Male Rap, husky off-beat].
 - In group songs, [Together] is not the default singer. Use [Together] only for one short shared hook or the final hook unless the user explicitly asks for full-group singing.
 - For repeated Hook/Chorus sections, distribute ownership across roles: Main Vocal or Airy Vocal can lead early hooks, Rap/Whisper Rap can interrupt or answer, and Together should be saved for the final or most important hook.
 - Do not let [Together] own every repeated hook. Keep group unity, but preserve the selected vocal split.
-- Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse 1: Tired Male Rap, dry], [Rap Section: Low Male Rap, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
+- Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse: Tired Male Rap, dry], [Rap Section: Low Male Rap, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format for Situation-led songs should feel like a short natural pitch, not a technical form. Prefer this hybrid structure:
   A {mood + genre + style} track with {core feel}, set around {story scene and nuance}.
@@ -7295,7 +7640,7 @@ ${lyricGuidancePrompt}
 
 [ANTI-TEMPLATE RULE]
 - Same keywords must still produce a different attempt angle each generation. Never treat selected buttons as a fixed lyric/prompt template.
-- Do not use a fixed duet template. The singer who owns Verse 1, Pre-Chorus, Chorus, Bridge, Final Chorus, and Outro must change according to genre and situation.
+- Do not use a fixed duet template. The singer who owns Verse, Pre-Chorus, Chorus, Bridge, Final Chorus, and Outro must change according to genre and situation.
 - If the previous section was A→B, the next lyrical section should not automatically repeat A→B. Change ownership, interruption timing, solo focus, or hook function.
 - The goal is a different dramatic song design, not only different words.
 - The same keywords may keep the same characters and mood, but the vocal part distribution must vary: who opens, who owns the hook, who interrupts, who disappears, who returns, and whether the chorus is solo/together/echo/call-response should not be fixed.
@@ -7304,25 +7649,27 @@ ${lyricGuidancePrompt}
 - Keep all tags short. Tags guide singing; they are not prose.
 - MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
 - If there are two actual vocalists, every sung section should use one composite bracket tag: [Section: acoustic voice tag, short style].
-- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag such as [Verse 1: Low Male Rap, dry].
+- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag such as [Verse: Low Male Rap, dry].
 - Solo songs: do NOT repeat [Female Vocal] or [Male Vocal] every section when the prompt already defines the vocal identity.
-- Solo section tags must include short performance/emotion tags, e.g. [Verse 1: low, intimate], [Chorus: clear hook, aching].
+- Solo section tags must include short performance/emotion tags, e.g. [Verse: low, intimate], [Chorus: clear hook, aching].
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
 - Use parentheses for short ad-libs, breath, inner thoughts, or rhythm points. Keep ad-libs sparse, 0-2 per section.
 - Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
 - Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
-- Duo/group vocal + two targets: use composite Suno tags for sung sections: [Section: acoustic voice tag, short cue]. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use physical sound labels such as [Verse 1: Tired Male Rap, dry nagging] or [Chorus: Airy Female Vocal, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.
+- Duo/group vocal + two targets: use composite Suno tags for sung sections: [Section: acoustic voice tag, short cue]. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use physical sound labels such as [Verse: Tired Male Rap, dry nagging] or [Chorus: Airy Female Vocal, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.
 - If Target A/B speech style or attitude is provided, it is mandatory: reflect it in both the [Vocals] line concept and the lyric speaker tags.
 - User-provided style/attitude text is source material, not final wording. Interpret it into natural character behavior and short singable tags.
 - Final prompt sentences should sound like a producer directing a real singer; lyric tags should stay compact and musical, with no more than 2 short cues after the colon.
 - NEVER write speaker names in parentheses such as (40대 엄마), (10대 아들), (상사), (직원). Parentheses are ONLY for ad-libs, breath, SFX, inner thoughts, or short reactions.
 - For sung sections, prefer composite tags because Suno follows them better: [Section: acoustic voice tag, short cue]. Do not split section and singer into separate tags unless the section is instrumental or purely SFX.
 - Correct multi-speaker format:
-  [Verse 1: Warm Female Vocal, worried spoken]
+  [Verse: Warm Female Vocal, worried spoken]
   ...
-  [Verse 1: Young Male Vocal, blunt reply]
+  [Verse: Young Male Vocal, blunt reply]
   ...
-- Chorus ownership is flexible, but arrangement wording controls it. If the arrangement is parallel monologue / 평행 독백형 / one-sided monologue, the chorus should be owned by one acoustic voice, not A/B line-by-line dialogue. The other voice may appear only as one short parenthetical aside/ad-lib if needed. Use call-response choruses only when call-response is explicitly selected. Examples:
+- Chorus ownership is flexible, but arrangement wording controls it. If the arrangement is parallel monologue / 평행 독백형 / one-sided monologue, the chorus should be owned by one acoustic voice, not A/B line-by-line dialogue. The other voice may appear only as one short parenthetical aside/ad-lib if needed. Use call-response choruses only when call-response is explicitly selected.
+- Do NOT use "Mixed Vocal Duo". Shared singing labels are allowed only in final shared sections or explicit group moments: [Final Chorus: All Vocals, ...], [Final Hook: All Vocals, ...], [Final Chorus: All Female Vocals, ...], or [Final Chorus: All Male Vocals, ...]. Do not use All Vocals in Verse, Pre-Chorus, Bridge, or Breakdown; keep those owned by one acoustic voice label.
+Examples:
   [Chorus: Airy Female Vocal, pleading hook]
   ...
   (dry aside)
@@ -7331,18 +7678,19 @@ ${lyricGuidancePrompt}
   ...
   (short aside)
 
-  [Final Chorus: Mixed Vocal Duo, short shared hook]
+  [Final Chorus: All Vocals, short shared hook]
   ...
 - For actual duo/group conflict songs, do NOT collapse both characters into one generic narrator. However, do NOT force every section to alternate A/B line by line. Use acoustic composite tags only where that voice actually owns or interrupts that part.
 - Do NOT default every chorus to A/B/A/B dialogue. In parallel monologue, use [Chorus: A-led hook] or [Chorus: B-led hook] as the default. [Chorus: call-response hook] is allowed only when the arrangement explicitly says call-response.
 - When a section is call-response, keep each role block short, usually 2-4 lines. When a section is solo-led, one speaker may own the full section with only short interruptions or ad-libs from the other.
 - Avoid blended vocals when Arrangement says separated dialogue or call-response.
-- In custom structures, do not drop section labels in Chorus, Hook, Rap Verse, Breakdown, Bridge, or Outro when they contain lyrics.
+- In custom structures, do not drop section labels in Chorus, Hook, Rap Section, Breakdown, Bridge, or Outro when they contain lyrics.
 - In custom structures, do not drop the vocal/acoustic role inside Chorus, Hook, Rap Section, Breakdown, Bridge, or Outro composite tags when they contain lyrics.
 - One line must not contain two speaker tags. Split them into separate lines/blocks.
 - Use the A→B pattern ONLY for sections explicitly chosen as call-response. Other sections may be A-only, B-only, Together-only, echo-style, interruption-style, or one speaker with the other appearing only as an ad-lib.
 - Avoid long tag explanations; keep tags short and musical.
 - Keep English around 10% or less, mostly as short ad-libs or rhythm points.
+- UI mode words such as 사회풍자형, 평행 독백형, 대화형, 콜앤리스폰스형, 보컬감정, or 연출 톤 are internal controls. Never write those words directly in the lyric body; express them through character behavior and concrete details.
 
 
 [PART OWNERSHIP / SONG ARCHITECTURE RULES]
@@ -7353,12 +7701,12 @@ ${lyricGuidancePrompt}
 - The selected genre must affect part ownership:
   - Ballad/R&B: one voice may own emotional verses; the other appears as memory, answer, or late confession.
   - City pop/Funk: hook and chorus may be stylish call-response, but they can also be one-speaker hooks with short echo/ad-lib replies; verses can be solo monologue, interruption, or trade.
-  - Rap/Hip-hop: Rap Verse can be a battle, relay, or one-sided rant; do not force polite A/B alternation.
+  - Rap/Hip-hop: Rap Section can be a battle, relay, or one-sided rant; do not force polite A/B alternation.
   - Trot/Gugak/Fusion: one role can narrate or command while the other answers with traditional/formal phrasing.
   - EDM/Drop: Drop can be ad-lib/hook-driven, but if lyrics appear, keep role identity in short bursts.
 - Possible section ownership maps:
-  1) A-led pursuit: A owns Verse 1; B cuts in at Hook; Chorus becomes a chase.
-  2) B-led complaint: B owns Verse 1; A answers later; Bridge exposes A's weakness.
+  1) A-led pursuit: A owns Verse; B cuts in at Hook; Chorus becomes a chase.
+  2) B-led complaint: B owns Verse; A answers later; Bridge exposes A's weakness.
   3) Interruption map: one role begins each section, the other interrupts after 1-2 lines.
   4) Trade/negotiation map: A and B exchange short offers/refusals; one section becomes a solo complaint.
   5) Parallel monologue map: A and B get separate short monologues, then clash in Hook or Chorus.
@@ -7390,14 +7738,14 @@ ${lyricGuidancePrompt}
   8) True call-response hook
 - Do not use true call-response in more than one major hook section unless the selected development feeling specifically asks for it.
 - Vary section ownership across the whole song. Examples of valid distributions:
-  A) Verse 1=A solo, Pre-Chorus=Together, Chorus=B solo hook, Verse 2=B solo, Bridge=A interruption, Final Chorus=Together.
-  B) Verse 1=B solo, Hook=A short cut-in, Chorus=Together, Verse 2=A solo, Bridge=parallel monologue, Final Chorus=B solo.
-  C) Verse 1=A interrupted by B, Pre-Chorus=A solo, Chorus=A-led with B ad-libs, Verse 2=B rant, Bridge=unresolved silence, Outro=A punchline.
-  D) Verse 1=parallel monologues, Chorus=refrain-only, Verse 2=rap relay, Bridge=late reveal, Final Chorus=echo/correction.
-- Do not make Verse 1, Verse 2, Pre-Chorus, Chorus, Bridge, and Final Chorus all contain both speakers.
+  A) Verse=A solo, Pre-Chorus=Together, Chorus=B solo hook, Verse=B solo, Bridge=A interruption, Final Chorus=Together.
+  B) Verse=B solo, Hook=A short cut-in, Chorus=Together, Verse=A solo, Bridge=parallel monologue, Final Chorus=B solo.
+  C) Verse=A interrupted by B, Pre-Chorus=A solo, Chorus=A-led with B ad-libs, Verse=B rant, Bridge=unresolved silence, Outro=A punchline.
+  D) Verse=parallel monologues, Chorus=refrain-only, Verse=rap relay, Bridge=late reveal, Final Chorus=echo/correction.
+- Do not make Verse sections, Pre-Chorus, Chorus, Bridge, and Final Chorus all contain both speakers.
 - Do not make both characters appear in the same order in every section.
 - If the song has a genre with strong vocal conventions, follow that genre's part logic before dialogue symmetry: ballad can be solo emotional hook, funk can be ad-lib undercut, rap can be relay/battle, trot can be one main singer with spoken replies, EDM can use refrain/drop fragments.
-- The goal is dozens of possible structures, not a stable template. Same selected keywords should create a different part architecture each generation.
+- The goal is varied but song-like structures, not random section collage. Same selected keywords can create different part ownership each generation, but the section order must still feel musically intentional.
 
 [PRONUNCIATION DESIGN]
 - Write lyrics as singable spoken language, not prose.
@@ -7459,16 +7807,17 @@ Write like:
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.
 - If custom structure mode is selected, keep the exact custom section order, but apply the Situation to every lyrical section.
-- For custom Chorus, Hook, Rap Verse, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro sections, keep the characters, relationship, speech style, and conflict active.
+- For custom Chorus, Hook, Rap Section, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro sections, keep the characters, relationship, speech style, and conflict active.
 - Do not let custom Chorus/Hook/Rap sections become generic slogan lyrics. They must still sound like the selected Situation.
-- For duo/group Situation songs, custom Chorus/Hook/Rap Verse sections must keep role identity, but they must NOT always use call-response. They can be solo-led, echo-led, together-led, interruption-led, relay, or call-response depending on the chosen ownership map.
+- For duo/group Situation songs, custom Chorus/Hook/Rap Section sections must keep role identity, but they must NOT always use call-response. They can be solo-led, echo-led, together-led, interruption-led, relay, or call-response depending on the chosen ownership map.
 - Instrumental, Solo, Drop, and Break sections may be mostly musical. If lyrics/ad-libs appear there, keep them short and tied to the same Situation.
 - If a section has tags such as Rap, Group, Minimal, Build-up, Instrumental, Soft, Big, or Adlib, the writing should support that musical role without replacing the story.
-- For multi-speaker songs, do not give Verse 1, Verse 2, Bridge, and Final Chorus the same speaker order. Rotate section ownership naturally.
+- For multi-speaker songs, do not give Verse sections, Bridge, and Final Chorus the same speaker order. Rotate section ownership naturally.
 - A chorus can be led by one speaker with the other interrupting, not always equal A/B alternation.
 - A verse can be mostly one speaker if the other interrupts briefly; this is different from a full duet block.
 - Respect the selected lyricsLength strictly.
 - Respect the selected song structure strictly.
+- In DEFAULT/ADAPTIVE mode, respect the adaptive blueprint you choose at the start and keep the section order coherent.
 - Do not drift longer than the requested lyric size.
 - Do not invent a new structure that conflicts with the locked blueprint.`
 }

@@ -150,6 +150,13 @@ import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionIte
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
+const normalizeSectionName = (section: string): string => {
+  const normalized = String(section || '').trim();
+  if (/^Verse\s*\d+$/i.test(normalized)) return 'Verse';
+  if (/^Rap\s*Verse$/i.test(normalized)) return 'Rap Section';
+  return normalized;
+};
+
 const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   if (!input || !Array.isArray(input)) return [];
   
@@ -159,7 +166,7 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
       if (typeof item === 'object' && item !== null && 'section' in item) {
         return {
           id: item.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          section: item.section || 'Unknown',
+          section: normalizeSectionName(item.section || 'Unknown'),
           tags: Array.isArray(item.tags) ? item.tags : []
         };
       }
@@ -167,7 +174,7 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
       if (typeof item === 'string') {
         return {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          section: item,
+          section: normalizeSectionName(item),
           tags: []
         };
       }
@@ -2703,7 +2710,7 @@ function App() {
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
-  const [isActionsFloating, setIsActionsFloating] = useState(false);
+  const [isActionsFloating, setIsActionsFloating] = useState(true);
   const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
@@ -2953,6 +2960,20 @@ const toggleCycleVariantSelection = (
   }, [location.pathname]);
 
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const commandPlaceholderExamples = useMemo(() => [
+    '어떤 분위기와 장면의 노래를 만들까요? (예: 새벽 버스 창가에서 떠오른 이별 노래)',
+    '주제와 상황을 한 문장으로 적어주세요. (예: 오래된 친구에게 못했던 말을 전하는 팝 발라드)',
+    '스타일, 사운드, 보컬 느낌까지 적어도 좋아요. (예: 몽환적인 신스팝, 낮게 속삭이는 여성 보컬)',
+    '가사에 넣고 싶은 장면이나 물건을 적어주세요. (예: 꺼진 휴대폰, 식은 커피, 비 오는 정류장)',
+  ], []);
+  const [commandPlaceholderIndex, setCommandPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCommandPlaceholderIndex((prev) => (prev + 1) % commandPlaceholderExamples.length);
+    }, 3600);
+    return () => window.clearInterval(timer);
+  }, [commandPlaceholderExamples.length]);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
   const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [englishMixRatio, setEnglishMixRatio] = useState(10);
@@ -3911,6 +3932,7 @@ const toggleCycleVariantSelection = (
     setSelectedThemes(preservePinned ? pinnedThemesRef.current : []);
     setSelectedStyles(preservePinned ? pinnedStylesRef.current : []);
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSoundsRef.current : []);
+    setSelectedVocalToneId(undefined);
     setSituation(createEmptySituation());
 
     setKpopMode(0);
@@ -4542,7 +4564,7 @@ const saveRecentSong = async (newSong: any) => {
                 }
                 return `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`;
               }).join(' → ')}`
-            : `Base structure: ${songStructure === '1' ? '기본 자유 전개' : songStructure === '2' ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
+            : `Base structure: ${songStructure === '1' ? '기본 자유 전개' : songStructure === '2' ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
@@ -5023,6 +5045,7 @@ ${result.prompt}
     maxBPM !== 110 ||
     kpopMode !== 0 ||
     isKoreanEnglishMix ||
+    selectedVocalToneId !== undefined ||
     citypopMode !== 0 ||
     isGenreRandomized ||
     isMoodRandomized ||
@@ -5738,7 +5761,7 @@ ${result.prompt}
         </div>
 
         {/* Search & Actions */}
-        <div className="space-y-6">
+        <div className="space-y-1 md:space-y-1">
           <div className="relative group">
             <div className="absolute top-6 left-4 pointer-events-none z-10">
               <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
@@ -5755,36 +5778,42 @@ ${result.prompt}
                   setIsInputFocused(true);
                 }}
                 onBlur={() => setIsInputFocused(false)}
-                className="w-full bg-[rgba(255,255,255,0.16)] border border-white/20 rounded-2xl py-5 pl-12 pr-6 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/60 focus:border-brand-orange/60 transition-all duration-300 text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative shadow-[var(--shadow-lg)] placeholder:text-white/60 scroll-smooth shadow-inner hover:border-white/30"
+                className="w-full bg-[rgba(255,255,255,0.16)] border border-white/20 rounded-2xl py-5 pl-12 pr-40 md:pr-48 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/60 focus:border-brand-orange/60 transition-all duration-300 text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative shadow-[var(--shadow-lg)] placeholder:text-white/60 scroll-smooth shadow-inner hover:border-white/30"
                 rows={1}
-                placeholder="분위기, 스타일, 주제 등을 입력해서 곡을 만들수 있어요...(예: 밤에 듣는 잔잔한 사랑 노래)"
+                placeholder=""
               />
-                {/* Direct Lyrics Toggle Button */}
-            <AnimatePresence>
-              {(userInput.length > 0 || isInputFocused) && (
+            <AnimatePresence mode="wait">
+              {!userInput && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute right-4 bottom-4 z-20"
+                  key={commandPlaceholderIndex}
+                  initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+                  animate={{ opacity: isInputFocused ? 0.78 : 0.92, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className="pointer-events-none absolute left-12 right-40 md:right-48 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
                 >
-                  <button
-                    onClick={() => setIsLyricMode(!isLyricMode)}
-                    onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
-                    onMouseLeave={() => setHoveredItem(null)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold transition-all border shadow-sm",
-                      isLyricMode 
-                        ? "bg-brand-orange text-white border-brand-orange" 
-                        : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
-                    )}
-                  >
-                    <Languages className="w-3.5 h-3.5" />
-                    직접 작사
-                  </button>
+                  {commandPlaceholderExamples[commandPlaceholderIndex]}
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Direct Lyrics Toggle Button */}
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
+              <button
+                onClick={() => setIsLyricMode(!isLyricMode)}
+                onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
+                onMouseLeave={() => setHoveredItem(null)}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
+                  isLyricMode 
+                    ? "bg-brand-orange text-white border-brand-orange shadow-brand-orange/20" 
+                    : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-brand-orange/70"
+                )}
+              >
+                <Languages className="w-4 h-4" />
+                직접 작사
+              </button>
+            </div>
           </div>
 
           {/* Direct Lyrics Input Area */}
@@ -5863,27 +5892,11 @@ ${result.prompt}
           </AnimatePresence>
 
           {/* Action Buttons Anchor */}
-          <div ref={actionButtonsAnchorRef} className="relative">
-            <AnimatePresence mode="popLayout" initial={false}>
-              {!isActionsFloating && !isActionButtonsCollapsed && !isAnyModalOpen && (
-                <motion.div
-                  key="action-buttons-inline-bar"
-                  layoutId="action-buttons-floating-bar"
-                  initial={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                  exit={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                  transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
-                  className="flex flex-row items-stretch gap-2 md:gap-4 w-full"
-                >
-                  {actionButtonsContent}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <div ref={actionButtonsAnchorRef} className="relative h-0" aria-hidden="true" />
 
           {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence initial={false}>
-            {((isActionsFloating && !isActionButtonsCollapsed) || isActionButtonsCollapsed) && !isAnyModalOpen && (
+            {!isAnyModalOpen && (
               <Portal>
                 {isActionButtonsCollapsed ? (
                   <motion.button
@@ -5962,8 +5975,8 @@ ${result.prompt}
           </AnimatePresence>
 
           {/* Applied Keywords Display */}
-          <div className="relative">
-            <div className="flex flex-wrap gap-2 justify-center min-h-[84px] content-start">
+          <div className="relative mt-2 md:mt-3">
+            <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
               {[
                 ...displayGenreKeywords,
                 ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
@@ -6019,7 +6032,7 @@ ${result.prompt}
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-10 pt-20 border-t-2 border-[var(--border-color)]/20"
+              className="space-y-6 pt-4 md:pt-5 border-t-2 border-brand-orange/35 shadow-[0_-1px_0_rgba(242,125,38,0.18)]"
             >
 
 
@@ -6360,9 +6373,9 @@ ${result.prompt}
                               : result.appliedKeywords.songStructure === '1'
                                 ? '기본 자유 전개'
                                 : result.appliedKeywords.songStructure === '2'
-                                  ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
+                                  ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
                                   : result.appliedKeywords.songStructure === '3'
-                                    ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'
+                                    ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'
                                     : ''
                             }
                           </span>
@@ -6642,8 +6655,8 @@ ${result.prompt}
             className={cn(
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/' 
-                ? ((isActionsFloating || isActionButtonsCollapsed) && !isAnyModalOpen
-                    ? "bottom-29 md:bottom-35 max-w-[200px] md:max-w-[400px]" 
+                ? (!isActionButtonsCollapsed && !isAnyModalOpen
+                    ? "bottom-10 md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
                 : "bottom-10 max-w-[250px] md:max-w-[400px]"
             )}
@@ -8417,9 +8430,9 @@ function SongStructureIntegratedControl({
                     {songStructure === 'custom' ? '현재 커스텀 구조' : songStructure === '1' ? '기본 구조 상세 가이드' : `구조 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "감정선과 스토리에 맞춰 자유롭게 구성합니다. 고정된 1절-후렴-2절 구조를 강제하지 않고, 필요한 곳에 Hook, Rap Section, Drop, Bridge 등을 배치합니다."}
-                    {songStructure === '2' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
-                    {songStructure === '3' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
+                    {songStructure === '1' && "감정선과 스토리에 맞춰 자유롭게 구성합니다. 고정된 번호형 벌스 구조를 강제하지 않고, 필요한 곳에 Hook, Rap Section, Drop, Bridge 등을 배치합니다."}
+                    {songStructure === '2' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
+                    {songStructure === '3' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (
                       (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '직접 구조를 지정하는 모드입니다.'
                     )}
@@ -8830,7 +8843,11 @@ function TagEditModal({
     // 2. Get fallback tags from constants that are NOT in Firestore yet
     const fallbackSource = isInstrumental
       ? [...INSTRUMENTAL_SOLO_TAGS]
-      : [...((ALLOWED_TAGS_BY_SECTION[section as keyof typeof ALLOWED_TAGS_BY_SECTION] || []) as string[])];
+      : [
+          ...((ALLOWED_TAGS_BY_SECTION[section as keyof typeof ALLOWED_TAGS_BY_SECTION] ||
+            SECTION_TAG_FALLBACKS[section] ||
+            []) as string[]),
+        ];
     
     const missingFromFs = fallbackSource.filter(label => !fsLabels.has(label));
 
@@ -8857,7 +8874,7 @@ function TagEditModal({
     if (isInstrumental) {
       return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || '';
     }
-    return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || '';
+    return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || SECTION_TAG_DESCRIPTIONS_LOCAL[tag] || '';
   };
 
   const maxSelectable = isInstrumental ? 1 : 2;
@@ -9054,17 +9071,16 @@ const readSavedStructurePresets = (data: any): SavedStructurePreset[] => {
 
 export const CUSTOM_STRUCTURE_SECTIONS = [
   'Intro',
-  'Verse 1',
+  'Verse',
   'Pre-Chorus',
   'Chorus',
   'Hook',
-  'Verse 2',
   'Bridge',
   'Final Chorus',
   'Outro',
-  'Breakdown',  
+  'Breakdown',
   'Drop',
-  'Rap Verse',
+  'Rap Section',
   'Solo',
   'Instrumental',
   'Theme A',
@@ -9093,6 +9109,36 @@ const TAG_DESCRIPTIONS_LOCAL: Record<string, string> = {
   'Rap': '멜로디보다 리듬감 있는 랩이 강조됩니다.',
   'Harmony': '여러 화성이 겹쳐 더 풍부하게 들립니다.',
   'Adlib': '자유로운 애드리브가 추가되어 표현이 더 살아납니다.',
+};
+
+const SECTION_TAG_FALLBACKS: Record<string, string[]> = {
+  Verse: [
+    'Low Energy',
+    'Story Focused',
+    'Rhythmic Flow',
+    'Sparse Arrangement',
+    'Groove Driven',
+    'Laid-back',
+    'Steady Pace',
+    'Subtle Build',
+  ],
+  'Rap Section': [
+    'Story Focused',
+    'Rhythmic Flow',
+    'Sparse Arrangement',
+    'Groove Driven',
+    'Off-beat Flow',
+    'Punchy Reply',
+    'Dry Spoken Rap',
+    'Character Switch',
+  ],
+};
+
+const SECTION_TAG_DESCRIPTIONS_LOCAL: Record<string, string> = {
+  'Off-beat Flow': '박자를 살짝 비껴 타며 말맛과 긴장감을 만듭니다.',
+  'Punchy Reply': '짧고 강한 반응으로 대화형 전개에 힘을 줍니다.',
+  'Dry Spoken Rap': '말하듯 건조하게 랩을 처리해 캐릭터성을 살립니다.',
+  'Character Switch': '화자가 바뀌는 느낌을 분명하게 만들어 줍니다.',
 };
 
 interface VocalControlProps {

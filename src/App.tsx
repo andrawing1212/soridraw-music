@@ -5061,17 +5061,27 @@ ${result.prompt}
       : { opacity: 0, y: 0, scale: 0.98, filter: 'blur(6px)' }
   };
 
+  const setActionButtonHint = (item: CategoryItem) => {
+    if (isActionsFloating || isActionButtonsCollapsed) return;
+    setHoveredItem(item);
+  };
+
+  const clearActionButtonHint = () => {
+    if (isActionsFloating || isActionButtonsCollapsed) return;
+    setHoveredItem(null);
+  };
+
   const actionButtonsContent = (
     <>
       <div className="relative flex-shrink-0">
         <button
           onClick={() => {
             applyRandom();
-            setHoveredItem({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' });
+            setActionButtonHint({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' });
           }}
-          onMouseEnter={() => setHoveredItem({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
+          onMouseEnter={() => setActionButtonHint({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onMouseLeave={() => {
-            setHoveredItem(null);
+            clearActionButtonHint();
             handleLongPressEnd();
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
@@ -5090,11 +5100,11 @@ ${result.prompt}
           } else {
             setShowMainGenerationModal(true);
           }
-          setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
+          setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
         }}
-        onMouseEnter={() => setHoveredItem({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+        onMouseEnter={() => setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
         onMouseLeave={() => {
-          setHoveredItem(null);
+          clearActionButtonHint();
           handleLongPressEnd();
         }}
         onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
@@ -5122,8 +5132,8 @@ ${result.prompt}
       <div className="relative flex-shrink-0">
         <button
           onClick={() => clearAll({ preserveHistory: true })}
-          onMouseEnter={() => setHoveredItem({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
-          onMouseLeave={() => setHoveredItem(null)}
+          onMouseEnter={() => setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
+          onMouseLeave={() => clearActionButtonHint()}
           className={cn(
             "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-btn",
             isGlobalClearable
@@ -5894,12 +5904,8 @@ ${result.prompt}
                       }
                     }}
                     onClick={() => setIsActionButtonsCollapsed(false)}
-                    onMouseEnter={() => setHoveredItem({
-                      id: 'action-collapse-toggle',
-                      label: '펼치기',
-                      description: '생성 버튼 영역을 다시 펼칩니다.'
-                    })}
-                    onMouseLeave={() => setHoveredItem(null)}
+                    onMouseEnter={() => {}}
+                    onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
                     className="fixed left-[-30px] md:left-[68px] 2xl:left-[calc((100vw-1152px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-14 md:h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_3px_8px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.025)] flex items-center justify-end pr-2 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing"
                   >
@@ -5933,19 +5939,15 @@ ${result.prompt}
                         exit="exit"
                         style={{ transformOrigin: 'left center' }}
                         transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.9 }}
-                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100"
+                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100 overflow-hidden"
                       >
                         <motion.button
                           layoutId="action-collapse-ghost-button"
                           type="button"
                           onClick={() => setIsActionButtonsCollapsed(true)}
-                          onMouseEnter={() => setHoveredItem({
-                            id: 'action-collapse-toggle',
-                            label: '접기',
-                            description: '생성 버튼 영역을 왼쪽 접기 버튼으로 접습니다.'
-                          })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                          className="hidden md:flex h-20 self-center w-14 shrink-0 rounded-2xl bg-[var(--card-bg)] border border-btn-border text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange transition-all shadow-[0_6px_14px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,255,255,0.035)] items-center justify-center opacity-100"
+                          onMouseEnter={() => {}}
+                          onMouseLeave={() => {}}
+                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-brand-orange hover:bg-white/[0.045] hover:text-brand-orange transition-all shadow-none items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />

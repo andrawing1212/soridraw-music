@@ -445,512 +445,319 @@ export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   }))
 );
 
-export const SOUND_TEXTURE_CYCLES: InstrumentSoundCycle[] = [
+export const SOUND_TEXTURE_CYCLES = [
   {
-    id: 'band-family',
-    title: 'Band',
-    titleKo: '밴드',
+    id: 'recommended-sound-combos',
+    title: 'Recommended Combos',
+    titleKo: '추천 조합',
     variants: [
-      { 
-        id: 'band', 
-        label: 'Band', 
-        labelKo: '밴드', 
-        description: '드럼, 베이스, 기타, 건반이 함께 어우러지는 기본 밴드 구성입니다. 가장 균형 잡힌 라이브 합주 감각을 만들며, 장르에 따라 안정적인 중심 사운드를 형성합니다.', 
-        promptCore: 'Live band, drums, bass, guitar, keys.' 
+      {
+        id: 'rec-heavy-808-bass',
+        label: 'Heavy 808 Bass',
+        labelKo: '묵직한 808 베이스',
+        description: '808과 트랩 리듬을 한 번에 잡는 저역 중심 조합입니다. 어두운 힙합, K-Trap, 강한 아이돌곡에 잘 어울립니다.',
+        descriptionKo: '808과 트랩 리듬을 한 번에 잡는 저역 중심 조합입니다. 어두운 힙합, K-Trap, 강한 아이돌곡에 잘 어울립니다.',
+        promptCore: '',
+        applyPools: [
+          ['heavy-808', 'trap-hi-hats', 'hard-snare', 'dark-synth', 'glitch-fx'],
+          ['808-bass', 'drill-hi-hats', 'punchy-kick', 'cyber-synth', 'static-noise'],
+          ['sub-bass', 'fast-hi-hats', 'industrial-percussion', 'metallic-synth', 'impact-hit'],
+        ],
       },
-      { 
-        id: 'pop-band', 
-        label: 'Pop Band', 
-        labelKo: '팝 밴드', 
-        description: '깔끔하고 대중적인 팝 밴드 구성입니다. 부담 없이 듣기 좋은 균형 잡힌 악기 배치와 세련된 리듬감으로 현대적인 팝 사운드에 잘 어울립니다.', 
-        promptCore: 'Clean pop ensemble.' 
+      {
+        id: 'rec-cyber-synth-texture',
+        label: 'Cyber Synth Texture',
+        labelKo: '사이버 신스 질감',
+        description: '차갑고 디지털한 신스와 글리치 효과를 묶은 조합입니다. 사이버, 미래적, 긴장감 있는 곡에 어울립니다.',
+        descriptionKo: '차갑고 디지털한 신스와 글리치 효과를 묶은 조합입니다. 사이버, 미래적, 긴장감 있는 곡에 어울립니다.',
+        promptCore: '',
+        applyPools: [
+          ['cyber-synth', 'dark-pad', 'metallic-percussion', 'glitch-fx', 'sub-bass'],
+          ['cold-lead-synth', 'wide-pad', 'static-noise', 'mechanical-noise', 'punchy-kick'],
+          ['fm-synth', 'digital-noise', 'dark-synth', 'impact-hit', 'deep-sub-bass'],
+        ],
       },
-      { 
-        id: 'funk-band', 
-        label: 'Funk Band', 
-        labelKo: '펑크 밴드', 
-        description: '리듬감과 그루브가 살아 있는 밴드 구성입니다. 베이스와 기타의 타이트한 리듬이 중심이 되며, 몸을 타는 듯한 탄력 있는 사운드를 만듭니다.', 
-        promptCore: 'Tight funk rhythm, groove.' 
+      {
+        id: 'rec-warm-live-band',
+        label: 'Warm Live Band',
+        labelKo: '따뜻한 라이브 밴드',
+        description: '기타, 베이스, 드럼, 건반이 자연스럽게 섞이는 밴드 조합입니다. 팝, 포크, 시티팝, R&B에 잘 어울립니다.',
+        descriptionKo: '기타, 베이스, 드럼, 건반이 자연스럽게 섞이는 밴드 조합입니다. 팝, 포크, 시티팝, R&B에 잘 어울립니다.',
+        promptCore: '',
+        applyPools: [
+          ['clean-electric-guitar', 'electric-bass', 'live-drums', 'rhodes-keys', 'warm-pad'],
+          ['acoustic-guitar', 'fretless-bass', 'brush-drums', 'upright-piano', 'room-reverb'],
+          ['funk-guitar', 'smooth-bass', 'soft-drums', 'electric-piano', 'analog-warmth'],
+        ],
       },
-      { 
-        id: 'rock-band', 
-        label: 'Rock Band', 
-        labelKo: '록 밴드', 
-        description: '일렉 기타와 드럼의 존재감이 강한 밴드 사운드입니다. 에너지와 추진력이 뚜렷하며, 강한 전개와 라이브한 질감을 원하는 곡에 적합합니다.', 
-        promptCore: 'Energetic rock, electric guitar.' 
+      {
+        id: 'rec-korean-instrument-color',
+        label: 'Korean Instrument Color',
+        labelKo: '전통악기 질감',
+        description: '한국 전통악기의 선율과 리듬을 중심으로 한 조합입니다. 국악 팝, 사극풍, 퓨전 계열에 어울립니다.',
+        descriptionKo: '한국 전통악기의 선율과 리듬을 중심으로 한 조합입니다. 국악 팝, 사극풍, 퓨전 계열에 어울립니다.',
+        promptCore: '',
+        applyPools: [
+          ['gayageum', 'haegeum', 'janggu', 'room-reverb', 'warm-pad'],
+          ['daegeum', 'haegeum', 'buk', 'strings', 'cathedral-reverb'],
+          ['geomungo', 'gayageum', 'janggu', 'deep-sub-bass', 'dark-pad'],
+        ],
       },
-      { 
-        id: 'jazz-band', 
-        label: 'Jazz Band', 
-        labelKo: '재즈 밴드', 
-        description: '악기 간의 유기적인 호흡과 여유로운 연주감이 중심인 재즈 밴드 구성입니다. 섬세한 인터플레이와 부드러운 그루브를 강조할 때 적합합니다.', 
-        promptCore: 'Jazz ensemble, interaction.' 
+      {
+        id: 'rec-magic-texture-fx',
+        label: 'Magic Texture FX',
+        labelKo: '마법 질감 효과',
+        description: '반짝이는 효과음, 벨, 패드가 섞인 환상적인 조합입니다. 몽환, 판타지, 귀여운 곡에 잘 어울립니다.',
+        descriptionKo: '반짝이는 효과음, 벨, 패드가 섞인 환상적인 조합입니다. 몽환, 판타지, 귀여운 곡에 잘 어울립니다.',
+        promptCore: '',
+        applyPools: [
+          ['bell-synth', 'celesta', 'magic-sparkle-fx', 'wide-pad', 'dream-reverb'],
+          ['music-box', 'shimmer-fx', 'vocal-pad', 'soft-pluck-synth', 'room-reverb'],
+          ['choir-pad', 'reverse-fx', 'magic-sparkle-fx', 'warm-pad', 'deep-sub-bass'],
+        ],
+      },
+      {
+        id: 'rec-cinematic-strings',
+        label: 'Cinematic Strings',
+        labelKo: '시네마틱 현악',
+        description: '현악과 타격감을 중심으로 감정선과 스케일을 키우는 조합입니다. 웅장함, 긴장감, 서사적인 곡에 어울립니다.',
+        descriptionKo: '현악과 타격감을 중심으로 감정선과 스케일을 키우는 조합입니다. 웅장함, 긴장감, 서사적인 곡에 어울립니다.',
+        promptCore: '',
+        applyPools: [
+          ['cinematic-strings', 'cello', 'timpani', 'cinematic-hit', 'choir-pad'],
+          ['staccato-strings', 'french-horn', 'orchestral-percussion', 'impact-hit', 'cathedral-reverb'],
+          ['solo-violin', 'deep-cello', 'trailer-rise', 'timpani', 'wide-reverb'],
+        ],
       },
     ],
   },
   {
-    id: 'bass-family',
+    id: 'rhythm-instruments',
+    title: 'Rhythm',
+    titleKo: '리듬 악기',
+    variants: [
+      { id: 'trap-drums', label: 'Trap Drums', labelKo: '트랩 드럼', description: '트랩 특유의 킥, 스네어, 하이햇이 중심인 리듬입니다.', descriptionKo: '트랩 특유의 킥, 스네어, 하이햇이 중심인 리듬입니다.', promptCore: 'trap drum groove' },
+      { id: 'punchy-kick', label: 'Punchy Kick', labelKo: '단단한 킥', description: '앞으로 치고 나오는 단단한 킥입니다. 곡의 추진력을 강하게 만듭니다.', descriptionKo: '앞으로 치고 나오는 단단한 킥입니다. 곡의 추진력을 강하게 만듭니다.', promptCore: 'punchy kick drive' },
+      { id: 'hard-snare', label: 'Hard Snare', labelKo: '타이트한 스네어', description: '짧고 강하게 박히는 스네어입니다. 트랩, 록, 강한 팝에 잘 어울립니다.', descriptionKo: '짧고 강하게 박히는 스네어입니다. 트랩, 록, 강한 팝에 잘 어울립니다.', promptCore: 'hard snare snap' },
+      { id: 'trap-hi-hats', label: 'Trap Hi-Hats', labelKo: '트랩 하이햇', description: '촘촘하게 쪼개지는 트랩 하이햇입니다.', descriptionKo: '촘촘하게 쪼개지는 트랩 하이햇입니다.', promptCore: 'trap hi-hat motion' },
+      { id: 'fast-hi-hats', label: 'Fast Hi-Hats', labelKo: '빠른 하이햇', description: '속도감과 긴장감을 만드는 빠른 하이햇입니다.', descriptionKo: '속도감과 긴장감을 만드는 빠른 하이햇입니다.', promptCore: 'fast hi-hat rolls' },
+      { id: 'drill-hi-hats', label: 'Drill Hi-Hats', labelKo: '드릴 하이햇', description: '드릴/트랩 계열의 차갑고 촘촘한 하이햇입니다.', descriptionKo: '드릴/트랩 계열의 차갑고 촘촘한 하이햇입니다.', promptCore: 'drill hi-hat rolls' },
+      { id: 'live-drums', label: 'Live Drums', labelKo: '라이브 드럼', description: '실제 연주처럼 자연스러운 드럼입니다.', descriptionKo: '실제 연주처럼 자연스러운 드럼입니다.', promptCore: 'live drum feel' },
+      { id: 'brush-drums', label: 'Brush Drums', labelKo: '브러시 드럼', description: '부드럽게 쓸리는 드럼 질감입니다. 재즈, 포크, 잔잔한 곡에 좋습니다.', descriptionKo: '부드럽게 쓸리는 드럼 질감입니다. 재즈, 포크, 잔잔한 곡에 좋습니다.', promptCore: 'soft brush drums' },
+      { id: 'breakbeat', label: 'Breakbeat', labelKo: '브레이크비트', description: '끊어치는 드럼 루프 질감입니다.', descriptionKo: '끊어치는 드럼 루프 질감입니다.', promptCore: 'breakbeat drum cuts' },
+      { id: 'industrial-percussion', label: 'Industrial Percussion', labelKo: '인더스트리얼 타격', description: '금속성 있고 거친 타격음입니다. 어둡고 기계적인 곡에 어울립니다.', descriptionKo: '금속성 있고 거친 타격음입니다. 어둡고 기계적인 곡에 어울립니다.', promptCore: 'industrial percussion hits' },
+      { id: 'metallic-percussion', label: 'Metallic Percussion', labelKo: '금속 타격음', description: '쇠붙이처럼 차갑고 날카로운 타격음입니다.', descriptionKo: '쇠붙이처럼 차갑고 날카로운 타격음입니다.', promptCore: 'metallic percussion hits' },
+      { id: 'soft-drums', label: 'Soft Drums', labelKo: '소프트 드럼', description: '과하지 않고 부드럽게 받쳐주는 드럼입니다.', descriptionKo: '과하지 않고 부드럽게 받쳐주는 드럼입니다.', promptCore: 'soft drum groove' },
+    ],
+  },
+  {
+    id: 'bass-instruments',
     title: 'Bass',
     titleKo: '베이스',
     variants: [
-      { 
-        id: 'bass', 
-        label: 'Bass', 
-        labelKo: '베이스', 
-        description: '곡의 저음을 받쳐주는 기본 베이스입니다. 전체 사운드의 중심과 안정감을 만들어주며, 리듬과 화성을 자연스럽게 연결합니다.', 
-        promptCore: 'Bass foundation, pulse.' 
-      },
-      { 
-        id: '808-bass', 
-        label: '808 Bass', 
-        labelKo: '808 베이스', 
-        description: '강한 저음 압력과 묵직한 존재감이 특징인 베이스입니다. 힙합, 트랩, 강한 전자음악에서 바닥을 울리는 듯한 저역 에너지를 만들 때 적합합니다.', 
-        promptCore: '808 sub, low-end pressure.' 
-      },
-      { 
-        id: 'smooth-bass', 
-        label: 'Smooth Bass', 
-        labelKo: '스무스 베이스', 
-        description: '부드럽고 둥근 톤의 베이스입니다. 지나치게 튀지 않으면서도 곡의 흐름을 매끄럽게 이어주며, 감성적이거나 안정적인 사운드에 잘 어울립니다.', 
-        promptCore: 'Smooth bass, rounded tone.' 
-      },
-      { 
-        id: 'funky-bassline', 
-        label: 'Funky Bassline', 
-        labelKo: '펑키 베이스라인', 
-        description: '리듬감이 강하고 움직임이 느껴지는 베이스라인입니다. 그루브 중심의 곡에서 탄력 있고 리드미컬한 에너지를 만들어냅니다.', 
-        promptCore: 'Funky bass, rhythmic groove.' 
-      },
-      { 
-        id: 'sharp-synth-bass', 
-        label: 'Sharp Synth Bass', 
-        labelKo: '샤프 신스 베이스', 
-        description: '어택감이 분명하고 선명하게 치고 나오는 신스 베이스입니다. 팝, 댄스, 전자 계열에서 날카롭고 현대적인 저역 캐릭터를 줄 때 적합합니다.', 
-        promptCore: 'Sharp synth bass, sharp attack.' 
-      },
+      { id: '808-bass', label: '808 Bass', labelKo: '808 베이스', description: '트랩과 힙합에서 자주 쓰는 낮고 긴 808 베이스입니다.', descriptionKo: '트랩과 힙합에서 자주 쓰는 낮고 긴 808 베이스입니다.', promptCore: '808 bass pressure' },
+      { id: 'heavy-808', label: 'Heavy 808', labelKo: '묵직한 808', description: '깊고 강한 저음 압력을 주는 808입니다.', descriptionKo: '깊고 강한 저음 압력을 주는 808입니다.', promptCore: 'heavy 808 pressure' },
+      { id: 'sub-bass', label: 'Sub Bass', labelKo: '서브 베이스', description: '곡 아래를 넓게 받쳐주는 낮은 저음입니다.', descriptionKo: '곡 아래를 넓게 받쳐주는 낮은 저음입니다.', promptCore: 'deep sub bass' },
+      { id: 'deep-sub-bass', label: 'Deep Sub Bass', labelKo: '딥 서브 베이스', description: '더 깊게 깔리는 저역 베이스입니다.', descriptionKo: '더 깊게 깔리는 저역 베이스입니다.', promptCore: 'deep sub pressure' },
+      { id: 'synth-bass', label: 'Synth Bass', labelKo: '신스 베이스', description: '전자적으로 만든 선명한 베이스입니다.', descriptionKo: '전자적으로 만든 선명한 베이스입니다.', promptCore: 'synth bass groove' },
+      { id: 'fretless-bass', label: 'Fretless Bass', labelKo: '프렛리스 베이스', description: '미끄러지는 듯한 부드러운 베이스입니다. 시티팝, 재즈팝에 좋습니다.', descriptionKo: '미끄러지는 듯한 부드러운 베이스입니다. 시티팝, 재즈팝에 좋습니다.', promptCore: 'smooth fretless bass' },
+      { id: 'electric-bass', label: 'Electric Bass', labelKo: '일렉 베이스', description: '밴드 사운드의 중심을 잡는 기본 베이스입니다.', descriptionKo: '밴드 사운드의 중심을 잡는 기본 베이스입니다.', promptCore: 'electric bass groove' },
+      { id: 'smooth-bass', label: 'Smooth Bass', labelKo: '스무스 베이스', description: '둥글고 부드러운 베이스입니다.', descriptionKo: '둥글고 부드러운 베이스입니다.', promptCore: 'smooth bass line' },
+      { id: 'funk-bass', label: 'Funk Bass', labelKo: '펑키 베이스', description: '탄력 있고 리듬감 있는 베이스입니다.', descriptionKo: '탄력 있고 리듬감 있는 베이스입니다.', promptCore: 'funk bass groove' },
+      { id: 'wobble-bass', label: 'Wobble Bass', labelKo: '워블 베이스', description: '흔들리는 전자 베이스입니다. 덥스텝, 강한 드롭에 좋습니다.', descriptionKo: '흔들리는 전자 베이스입니다. 덥스텝, 강한 드롭에 좋습니다.', promptCore: 'wobble bass motion' },
+      { id: 'growl-bass', label: 'Growl Bass', labelKo: '그라울 베이스', description: '거칠게 울부짖는 듯한 베이스입니다.', descriptionKo: '거칠게 울부짖는 듯한 베이스입니다.', promptCore: 'growl bass texture' },
+      { id: 'reese-bass', label: 'Reese Bass', labelKo: '리스 베이스', description: '넓고 어두운 전자 베이스입니다. DnB, 덥스텝, 어두운 전자음악에 좋습니다.', descriptionKo: '넓고 어두운 전자 베이스입니다. DnB, 덥스텝, 어두운 전자음악에 좋습니다.', promptCore: 'reese bass width' },
     ],
   },
   {
-    id: 'drums-family',
-    title: 'Drums',
-    titleKo: '드럼',
-    variants: [
-      { 
-        id: 'drums', 
-        label: 'Drums', 
-        labelKo: '드럼', 
-        description: '곡의 기본 박자와 에너지를 만드는 중심 리듬 악기입니다. 전체 템포감과 추진력을 안정적으로 잡아주는 가장 기본적인 드럼 선택입니다.', 
-        promptCore: 'Steady drum, groove.' 
-      },
-      { 
-        id: 'brushed-drums', 
-        label: 'Brushed drums', 
-        labelKo: '브러시 드럼', 
-        description: '브러시로 부드럽게 긁어내듯 연주되는 드럼입니다. 재즈, 발라드, 잔잔한 곡에서 섬세하고 따뜻한 리듬감을 만들 때 잘 어울립니다.', 
-        promptCore: 'Brushed drums, soft feel.' 
-      },
-      { 
-        id: 'double-time', 
-        label: 'Double-time', 
-        labelKo: '더블 타임', 
-        description: '체감 속도를 빠르게 느끼게 하는 리듬 패턴입니다. 곡에 긴장감과 몰아치는 에너지를 더하고 싶을 때 효과적입니다.', 
-        promptCore: 'Fast double-time, momentum.' 
-      },
-      { 
-        id: 'half-time', 
-        label: 'Half-time', 
-        labelKo: '하프 타임', 
-        description: '체감 속도를 절반처럼 느끼게 하는 느리고 묵직한 리듬입니다. 무게감, 공간감, 여유 있는 그루브를 강조할 때 적합합니다.', 
-        promptCore: 'Heavy half-time, deep space.' 
-      },
-      { 
-        id: 'driving-rhythm', 
-        label: 'Driving rhythm', 
-        labelKo: '드라이빙 리듬', 
-        description: '앞으로 밀고 나가는 추진력이 강한 드럼 패턴입니다. 에너지와 속도감을 살리고 싶을 때 매우 효과적인 선택입니다.', 
-        promptCore: 'Driving rhythm, energetic pulse.' 
-      },
-    ],
-  },
-  {
-    id: 'pad-family',
-    title: 'Pad',
-    titleKo: '패드',
-    variants: [
-      { 
-        id: 'pad', 
-        label: 'Pad', 
-        labelKo: '패드', 
-        description: '곡의 배경을 부드럽게 채워주는 기본 패드입니다. 전면에 튀기보다 뒤에서 공간감과 안정감을 형성하는 역할을 합니다.', 
-        promptCore: 'Supportive pad, atmosphere.' 
-      },
-      { 
-        id: 'glassy-pad', 
-        label: 'Glassy Pad', 
-        labelKo: '글래시 패드', 
-        description: '맑고 반짝이는 질감의 패드입니다. 공기감 있고 투명한 분위기를 만들며, 선명하고 깨끗한 감성에 잘 어울립니다.', 
-        promptCore: 'Glassy pad, airy shimmer.' 
-      },
-      { 
-        id: 'warm-pad', 
-        label: 'Warm Pad', 
-        labelKo: '웜 패드', 
-        description: '포근하고 따뜻한 배경을 만들어주는 패드입니다. 차갑지 않은 감성적 분위기, 부드럽고 안정적인 곡 전개에 적합합니다.', 
-        promptCore: 'Warm pad, soft body.' 
-      },
-      { 
-        id: 'ethereal-pad', 
-        label: 'Ethereal Pad', 
-        labelKo: '에테리얼 패드', 
-        description: '몽환적이고 떠다니는 듯한 분위기를 만드는 패드입니다. 현실감이 흐려지는 듯한 부유감과 신비로운 감성을 강조합니다.', 
-        promptCore: 'Ethereal bloom, dreamlike.' 
-      },
-      { 
-        id: 'deep-pad', 
-        label: 'Deep Pad', 
-        labelKo: '딥 패드', 
-        description: '깊고 어두운 배경층을 형성하는 패드입니다. 무게감 있고 차분한 분위기, 어두운 감정선이나 영화적인 공간감에 잘 어울립니다.', 
-        promptCore: 'Deep pad, dark ambience.' 
-      },
-    ],
-  },
-  {
-    id: 'synths-family',
-    title: 'Synths',
-    titleKo: '신스',
-    variants: [
-      { 
-        id: 'synths', 
-        label: 'Synths', 
-        labelKo: '신스', 
-        description: '현대적인 음악의 핵심이 되는 기본 신스입니다. 멜로디, 배경, 훅 등 다양한 역할을 담당하며 전자적인 색채를 자연스럽게 더합니다.', 
-        promptCore: 'Modern synth, melodic.' 
-      },
-      { 
-        id: 'bright-synth', 
-        label: 'Bright Synth', 
-        labelKo: '브라이트 신스', 
-        description: '밝고 선명하며 캐치한 존재감을 가진 신스입니다. 팝, 댄스, 경쾌한 곡에서 귀에 잘 꽂히는 멜로디와 화사한 분위기를 만듭니다.', 
-        promptCore: 'Bright synth, catchy.' 
-      },
-      { 
-        id: 'dreamy-synth', 
-        label: 'Dreamy Synth', 
-        labelKo: '드리미 신스', 
-        description: '부드럽고 몽글몽글한 감정을 만드는 신스입니다. 몽환적이고 감성적인 곡, 밤이나 추억 같은 이미지에 잘 어울립니다.', 
-        promptCore: 'Dreamy synth, floating.' 
-      },
-      { 
-        id: 'dark-synth', 
-        label: 'Dark Synth', 
-        labelKo: '다크 신스', 
-        description: '어둡고 무디한 분위기를 만드는 신스입니다. 긴장감, 차가움, 깊은 감정선이 필요한 곡에서 효과적으로 사용됩니다.', 
-        promptCore: 'Dark synth, moody.' 
-      },
-      { 
-        id: 'deep-synth', 
-        label: 'Deep Synth', 
-        labelKo: '딥 신스', 
-        description: '무게감 있고 깊게 가라앉는 질감의 신스입니다. 풍성한 저중역대와 깊은 공간감을 통해 곡의 밀도를 높여줍니다.', 
-        promptCore: 'Deep synth, rich weight.' 
-      },
-    ],
-  },
-  {
-    id: 'snare-family',
-    title: 'Snare',
-    titleKo: '스네어',
-    variants: [
-      { 
-        id: 'snare', 
-        label: 'Snare', 
-        labelKo: '스네어', 
-        description: '비트의 중심을 잡아주는 기본 스네어입니다. 곡의 리듬감을 또렷하게 만들어주며, 박자감을 선명하게 전달합니다.', 
-        promptCore: 'Clear snare, backbeat.' 
-      },
-      { 
-        id: 'sharp-snare', 
-        label: 'Sharp snare', 
-        labelKo: '샤프 스네어', 
-        description: '날카롭고 선명하게 튀는 타격감을 가진 스네어입니다. 비트의 어택을 강조하고 리듬의 윤곽을 또렷하게 만들고 싶을 때 적합합니다.', 
-        promptCore: 'Sharp snare, precise crack.' 
-      },
-      { 
-        id: 'warm-snare', 
-        label: 'Warm snare', 
-        labelKo: '웜 스네어', 
-        description: '부드럽고 둥근 질감을 가진 스네어입니다. 너무 공격적이지 않으면서도 자연스럽게 리듬을 받쳐주는 따뜻한 느낌을 줍니다.', 
-        promptCore: 'Warm snare, rounded.' 
-      },
-      { 
-        id: 'hard-hitting-snare', 
-        label: 'Hard-hitting snare', 
-        labelKo: '하드 히팅 스네어', 
-        description: '강하게 꽂히는 파워풀한 스네어입니다. 에너지, 존재감, 박력 있는 비트를 강조하고 싶을 때 적합합니다.', 
-        promptCore: 'Punchy snare, bold attack.' 
-      },
-      { 
-        id: 'big-reverb-snare', 
-        label: 'Big reverb snare', 
-        labelKo: '빅 리버브 스네어', 
-        description: '넓은 공간에서 울리는 듯한 리버브가 강조된 스네어입니다. 시원하고 웅장한 공간감, 드라마틱한 타격감을 만들 때 효과적입니다.', 
-        promptCore: 'Reverb snare, wide tail.' 
-      },
-    ],
-  },
-  {
-    id: 'hihats-family',
-    title: 'Hi-hats',
-    titleKo: '하이햇',
-    variants: [
-      { 
-        id: 'hi-hats', 
-        label: 'Hi-hats', 
-        labelKo: '하이햇', 
-        description: '곡의 세밀한 리듬과 흐름을 조절하는 기본 하이햇입니다. 전체 박자의 질감을 정리하고 리듬의 움직임을 자연스럽게 만들어줍니다.', 
-        promptCore: 'Steady hi-hat, rhythm.' 
-      },
-      { 
-        id: 'crisp-hi-hats', 
-        label: 'Crisp hi-hats', 
-        labelKo: '크리스프 하이햇', 
-        description: '선명하고 또렷한 질감의 하이햇입니다. 리듬의 디테일을 명확하게 드러내고 전체 사운드를 더 깨끗하게 느끼게 합니다.', 
-        promptCore: 'Crisp hi-hats, sparkle.' 
-      },
-      { 
-        id: 'soft-hi-hats', 
-        label: 'Soft hi-hats', 
-        labelKo: '소프트 하이햇', 
-        description: '부드럽고 가벼운 질감의 하이햇입니다. 리듬을 과하게 밀지 않고 자연스럽고 편안한 흐름을 만들 때 적합합니다.', 
-        promptCore: 'Soft hi-hats, light.' 
-      },
-      { 
-        id: 'fast-triplet-hi-hats', 
-        label: 'Fast triplet hi-hats', 
-        labelKo: '패스트 하이햇', 
-        description: '빠르고 촘촘한 움직임으로 긴장감과 속도감을 주는 하이햇입니다. 트랩, 힙합, 강한 전자음악에서 에너지를 끌어올릴 때 효과적입니다.', 
-        promptCore: 'Triplet hi-hats, tension.' 
-      },
-      { 
-        id: 'distanced-hi-hats', 
-        label: 'Distanced hi-hats', 
-        labelKo: '디스턴스 하이햇', 
-        description: '멀리서 들리는 듯한 공간감이 있는 하이햇입니다. 직접적인 타격감보다 분위기와 거리감을 강조할 때 잘 어울립니다.', 
-        promptCore: 'Distanced hi-hats, atmospheric.' 
-      },
-    ],
-  },
-  {
-    id: 'guitar-family',
+    id: 'guitar-instruments',
     title: 'Guitar',
     titleKo: '기타',
     variants: [
-      { 
-        id: 'guitar', 
-        label: 'Guitar', 
-        labelKo: '기타', 
-        description: '곡의 리듬과 분위기를 동시에 잡아주는 기본 기타입니다. 장르에 따라 담백한 반주부터 존재감 있는 리프까지 폭넓게 활용됩니다.', 
-        promptCore: 'Guitar, rhythmic texture.' 
-      },
-      { 
-        id: 'acoustic', 
-        label: 'Acoustic', 
-        labelKo: '어쿠스틱', 
-        description: '자연스럽고 따뜻한 울림을 가진 기타입니다. 감성적이고 친밀한 분위기, 포크나 발라드 같은 곡에 잘 어울립니다.', 
-        promptCore: 'Acoustic guitar, natural.' 
-      },
-      { 
-        id: 'electric', 
-        label: 'Electric', 
-        labelKo: '일렉트릭', 
-        description: '선명한 존재감과 리듬감을 더해주는 기타입니다. 팝, 록, 시티팝 등에서 에너지와 캐릭터를 만들어주는 핵심 악기입니다.', 
-        promptCore: 'Electric guitar, rhythmic.' 
-      },
-      { 
-        id: 'overdriven', 
-        label: 'Overdriven', 
-        labelKo: '오버드라이브', 
-        description: '적당히 거칠고 밀도 있는 드라이브 톤의 기타입니다. 록적인 에너지, 감정의 강도, 거친 질감을 추가하고 싶을 때 적합합니다.', 
-        promptCore: 'Gritty guitar, grit.' 
-      },
-      { 
-        id: 'ambient-electric', 
-        label: 'Ambient Electric', 
-        labelKo: '앰비언트 기타', 
-        description: '공간감과 여운이 강조된 전기 기타입니다. 직접적인 리프보다는 넓은 배경과 감성적인 잔향을 만드는 데 적합합니다.', 
-        promptCore: 'Ambient guitar, spacious.' 
-      },
+      { id: 'clean-electric-guitar', label: 'Clean Electric Guitar', labelKo: '클린 일렉 기타', description: '깨끗하고 선명한 전기 기타 리듬입니다.', descriptionKo: '깨끗하고 선명한 전기 기타 리듬입니다.', promptCore: 'clean guitar rhythm' },
+      { id: 'distorted-guitar', label: 'Distorted Guitar', labelKo: '디스토션 기타', description: '거칠고 강한 록 기타 질감입니다.', descriptionKo: '거칠고 강한 록 기타 질감입니다.', promptCore: 'distorted guitar edge' },
+      { id: 'acoustic-guitar', label: 'Acoustic Guitar', labelKo: '어쿠스틱 기타', description: '자연스럽고 따뜻한 통기타입니다.', descriptionKo: '자연스럽고 따뜻한 통기타입니다.', promptCore: 'warm acoustic guitar' },
+      { id: 'nylon-guitar', label: 'Nylon Guitar', labelKo: '나일론 기타', description: '부드럽고 따뜻한 나일론 현 기타입니다.', descriptionKo: '부드럽고 따뜻한 나일론 현 기타입니다.', promptCore: 'soft nylon guitar' },
+      { id: 'funk-guitar', label: 'Funk Guitar', labelKo: '펑키 기타', description: '짧고 탄력 있는 리듬 기타입니다.', descriptionKo: '짧고 탄력 있는 리듬 기타입니다.', promptCore: 'funk guitar chops' },
+      { id: 'palm-muted-guitar', label: 'Palm-muted Guitar', labelKo: '뮤트 기타', description: '짧게 눌러 치는 기타 리듬입니다. 긴장감과 추진력을 줍니다.', descriptionKo: '짧게 눌러 치는 기타 리듬입니다. 긴장감과 추진력을 줍니다.', promptCore: 'palm-muted guitar pulse' },
+      { id: 'ambient-guitar', label: 'Ambient Guitar', labelKo: '앰비언트 기타', description: '잔향이 넓게 퍼지는 공간감 있는 기타입니다.', descriptionKo: '잔향이 넓게 퍼지는 공간감 있는 기타입니다.', promptCore: 'ambient guitar wash' },
+      { id: 'shoegaze-guitar', label: 'Shoegaze Guitar', labelKo: '슈게이즈 기타', description: '두껍게 쌓이는 몽환적인 기타 벽입니다.', descriptionKo: '두껍게 쌓이는 몽환적인 기타 벽입니다.', promptCore: 'shoegaze guitar wall' },
     ],
   },
   {
-    id: 'trumpet-family',
-    title: 'Trumpet',
-    titleKo: '트럼펫',
+    id: 'keyboard-instruments',
+    title: 'Keys',
+    titleKo: '건반',
     variants: [
-      { 
-        id: 'trumpet', 
-        label: 'Trumpet', 
-        labelKo: '트럼펫', 
-        description: '밝고 강한 존재감을 가진 기본 트럼펫입니다. 멜로디를 돋보이게 하거나 브라스 특유의 화려한 인상을 줄 때 효과적입니다.', 
-        promptCore: 'Trumpet, brass accent.' 
-      },
-      { 
-        id: 'bright-trumpet', 
-        label: 'Bright Trumpet', 
-        labelKo: '브라이트 트럼펫', 
-        description: '더 밝고 화사한 톤의 트럼펫입니다. 힘차고 시원한 인상을 만들며, 곡에 생동감과 활력을 더해줍니다.', 
-        promptCore: 'Bright trumpet, vivid.' 
-      },
-      { 
-        id: 'muted-trumpet', 
-        label: 'Muted Trumpet', 
-        labelKo: '뮤트 트럼펫', 
-        description: '부드럽고 절제된 톤의 트럼펫입니다. 날카로운 존재감보다 섬세하고 재즈적인 감성, 조용한 분위기를 만들 때 적합합니다.', 
-        promptCore: 'Muted trumpet, intimate.' 
-      },
-      { 
-        id: 'soft-trumpet-solo', 
-        label: 'Soft Trumpet solo', 
-        labelKo: '트럼펫 솔로', 
-        description: '부드럽고 우아하게 선율을 이끄는 트럼펫 솔로입니다. 과하지 않으면서도 감정선을 섬세하게 끌어올릴 때 좋습니다.', 
-        promptCore: 'Soft trumpet, elegance.' 
-      },
-      { 
-        id: 'funky-trumpet-hits', 
-        label: 'Funky Trumpet hits', 
-        labelKo: '펑키 트럼펫', 
-        description: '짧고 경쾌하게 치고 들어오는 브라스 히트입니다. 펑크, 디스코, 그루브 중심 곡에서 리듬감을 강조할 때 효과적입니다.', 
-        promptCore: 'Funk trumpet, brass hits.' 
-      },
+      { id: 'grand-piano', label: 'Grand Piano', labelKo: '그랜드 피아노', description: '선명하고 넓은 울림의 기본 피아노입니다.', descriptionKo: '선명하고 넓은 울림의 기본 피아노입니다.', promptCore: 'grand piano tone' },
+      { id: 'upright-piano', label: 'Upright Piano', labelKo: '업라이트 피아노', description: '조금 더 친밀하고 방 안에서 울리는 듯한 피아노입니다.', descriptionKo: '조금 더 친밀하고 방 안에서 울리는 듯한 피아노입니다.', promptCore: 'upright piano warmth' },
+      { id: 'felt-piano', label: 'Felt Piano', labelKo: '펠트 피아노', description: '망치 소리가 부드럽게 눌린 조용한 피아노입니다.', descriptionKo: '망치 소리가 부드럽게 눌린 조용한 피아노입니다.', promptCore: 'soft felt piano' },
+      { id: 'electric-piano', label: 'Electric Piano', labelKo: '일렉 피아노', description: '부드러운 전자 건반입니다. R&B, 시티팝, 재즈팝에 좋습니다.', descriptionKo: '부드러운 전자 건반입니다. R&B, 시티팝, 재즈팝에 좋습니다.', promptCore: 'warm electric piano' },
+      { id: 'rhodes-keys', label: 'Rhodes', labelKo: '로즈 건반', description: '따뜻하고 둥근 빈티지 일렉 피아노입니다.', descriptionKo: '따뜻하고 둥근 빈티지 일렉 피아노입니다.', promptCore: 'warm rhodes keys' },
+      { id: 'wurlitzer', label: 'Wurlitzer', labelKo: '월리처', description: '살짝 거친 빈티지 전자 피아노입니다.', descriptionKo: '살짝 거친 빈티지 전자 피아노입니다.', promptCore: 'wurlitzer keys' },
+      { id: 'organ', label: 'Organ', labelKo: '오르간', description: '두껍고 빈티지한 오르간 질감입니다.', descriptionKo: '두껍고 빈티지한 오르간 질감입니다.', promptCore: 'warm organ layer' },
+      { id: 'celesta', label: 'Celesta', labelKo: '첼레스타', description: '작고 반짝이는 종소리 같은 건반입니다. 판타지, 동화적인 분위기에 좋습니다.', descriptionKo: '작고 반짝이는 종소리 같은 건반입니다. 판타지, 동화적인 분위기에 좋습니다.', promptCore: 'celesta sparkle' },
+      { id: 'bell-synth', label: 'Bell Synth', labelKo: '벨 신스', description: '종소리처럼 맑게 울리는 신스 건반입니다.', descriptionKo: '종소리처럼 맑게 울리는 신스 건반입니다.', promptCore: 'bell synth sparkle' },
+      { id: 'music-box', label: 'Music Box', labelKo: '오르골', description: '작고 맑은 오르골 질감입니다.', descriptionKo: '작고 맑은 오르골 질감입니다.', promptCore: 'music box plucks' },
     ],
   },
   {
-    id: 'heritage-plucks-family',
-    title: 'Gayageum',
-    titleKo: '가야금',
+    id: 'synth-instruments',
+    title: 'Synth',
+    titleKo: '신스',
     variants: [
-      { 
-        id: 'gayageum', 
-        label: 'Gayageum', 
-        labelKo: '가야금', 
-        description: '맑고 섬세하게 튕기는 울림이 특징인 한국 전통 현악기입니다. 동양적인 정서와 우아한 결을 곡에 더할 수 있습니다.', 
-        promptCore: 'Gayageum, Korean pluck.' 
-      },
-      { 
-        id: 'haegeum', 
-        label: 'Haegeum', 
-        labelKo: '해금', 
-        description: '감정선이 짙고 사람 목소리처럼 울리는 한국 전통 찰현악기입니다. 애절하고 서정적인 분위기를 강조할 때 잘 어울립니다.', 
-        promptCore: 'Haegeum, Korean bowed.' 
-      },
-      { 
-        id: 'kalimba-pluck', 
-        label: 'Kalimba pluck', 
-        labelKo: '칼림바', 
-        description: '맑고 귀여운 울림이 특징인 플럭 악기입니다. 아기자기하고 순수한 분위기, 반짝이는 감성을 만들 때 적합합니다.', 
-        promptCore: 'Kalimba, clean pluck.' 
-      },
+      { id: 'warm-analog-synth', label: 'Warm Analog Synth', labelKo: '따뜻한 아날로그 신스', description: '부드럽고 빈티지한 아날로그 신스입니다.', descriptionKo: '부드럽고 빈티지한 아날로그 신스입니다.', promptCore: 'warm analog synth' },
+      { id: 'dark-synth', label: 'Dark Synth', labelKo: '어두운 신스', description: '어둡고 차갑게 깔리는 신스입니다.', descriptionKo: '어둡고 차갑게 깔리는 신스입니다.', promptCore: 'dark synth layer' },
+      { id: 'dark-pad', label: 'Dark Pad', labelKo: '어두운 패드', description: '공간을 어둡게 채우는 신스 패드입니다.', descriptionKo: '공간을 어둡게 채우는 신스 패드입니다.', promptCore: 'dark pad layer' },
+      { id: 'wide-pad', label: 'Wide Pad', labelKo: '넓은 패드', description: '공간을 넓게 채우는 패드입니다.', descriptionKo: '공간을 넓게 채우는 패드입니다.', promptCore: 'wide pad space' },
+      { id: 'warm-pad', label: 'Warm Pad', labelKo: '따뜻한 패드', description: '부드럽고 따뜻하게 배경을 채우는 패드입니다.', descriptionKo: '부드럽고 따뜻하게 배경을 채우는 패드입니다.', promptCore: 'warm pad bed' },
+      { id: 'cyber-synth', label: 'Cyber Synth', labelKo: '사이버 신스', description: '차갑고 디지털한 미래적 신스입니다.', descriptionKo: '차갑고 디지털한 미래적 신스입니다.', promptCore: 'cold cyber synth' },
+      { id: 'cold-lead-synth', label: 'Cold Lead Synth', labelKo: '차가운 리드 신스', description: '선명하고 차가운 리드 신스입니다.', descriptionKo: '선명하고 차가운 리드 신스입니다.', promptCore: 'cold lead synth' },
+      { id: 'metallic-synth', label: 'Metallic Synth', labelKo: '금속성 신스', description: '쇠붙이처럼 날카로운 신스 질감입니다.', descriptionKo: '쇠붙이처럼 날카로운 신스 질감입니다.', promptCore: 'metallic synth tone' },
+      { id: 'fm-synth', label: 'FM Synth', labelKo: 'FM 신스', description: '맑고 유리 같은 디지털 신스입니다.', descriptionKo: '맑고 유리 같은 디지털 신스입니다.', promptCore: 'glassy FM synth' },
+      { id: 'pluck-synth', label: 'Pluck Synth', labelKo: '플럭 신스', description: '짧고 맑게 튀는 신스입니다.', descriptionKo: '짧고 맑게 튀는 신스입니다.', promptCore: 'bright pluck synth' },
+      { id: 'soft-pluck-synth', label: 'Soft Pluck Synth', labelKo: '부드러운 플럭', description: '짧게 튀지만 부드러운 신스 플럭입니다.', descriptionKo: '짧게 튀지만 부드러운 신스 플럭입니다.', promptCore: 'soft pluck synth' },
+      { id: 'retro-synth', label: 'Retro Synth', labelKo: '레트로 신스', description: '80년대 느낌의 복고풍 신스입니다.', descriptionKo: '80년대 느낌의 복고풍 신스입니다.', promptCore: 'retro synth color' },
     ],
   },
   {
-    id: 'strings-family',
+    id: 'string-instruments',
     title: 'Strings',
-    titleKo: '스트링',
+    titleKo: '현악',
     variants: [
-      { 
-        id: 'strings', 
-        label: 'Strings', 
-        labelKo: '스트링', 
-        description: '곡의 감정선과 서사를 풍성하게 채워주는 기본 스트링입니다. 부드럽고 넓은 울림으로 몰입감과 깊이를 더해줍니다.', 
-        promptCore: 'Warm strings, contour.' 
-      },
-      { 
-        id: 'full-orchestral-strings', 
-        label: 'Full Orchestral Strings', 
-        labelKo: '오케스트라', 
-        description: '웅장하고 영화적인 스케일을 가진 오케스트라 스트링입니다. 클라이맥스, 감정 폭발, 서사적인 장면 연출에 매우 효과적입니다.', 
-        promptCore: 'Orchestral strings, breadth.' 
-      },
-      { 
-        id: 'soft-legato-strings', 
-        label: 'Soft legato strings', 
-        labelKo: '레가토 스트링', 
-        description: '부드럽게 이어지는 선율 중심의 스트링입니다. 자연스럽고 감성적인 흐름을 만들며 발라드나 서정적인 곡에 잘 어울립니다.', 
-        promptCore: 'Legato strings, warmth.' 
-      },
-      { 
-        id: 'pizzicato-strings', 
-        label: 'Pizzicato strings', 
-        labelKo: '피치카토', 
-        description: '현을 퉁기듯 연주하는 경쾌한 스트링입니다. 귀엽고 리듬감 있는 분위기, 가벼운 긴장감이나 장난스러운 느낌을 줄 때 적합합니다.', 
-        promptCore: 'Pizzicato strings, plucked.' 
-      },
-      { 
-        id: 'staccato-strings', 
-        label: 'Staccato strings', 
-        labelKo: '스타카토', 
-        description: '짧고 또렷하게 끊어지는 스트링입니다. 리듬감, 긴장감, 명확한 악센트를 주고 싶을 때 효과적입니다.', 
-        promptCore: 'Staccato strings, precision.' 
-      },
+      { id: 'strings', label: 'Strings', labelKo: '스트링', description: '곡의 감정선을 넓게 채우는 기본 현악입니다.', descriptionKo: '곡의 감정선을 넓게 채우는 기본 현악입니다.', promptCore: 'warm string layer' },
+      { id: 'cinematic-strings', label: 'Cinematic Strings', labelKo: '시네마틱 스트링', description: '영화음악처럼 넓고 웅장한 현악입니다.', descriptionKo: '영화음악처럼 넓고 웅장한 현악입니다.', promptCore: 'cinematic strings' },
+      { id: 'staccato-strings', label: 'Staccato Strings', labelKo: '스타카토 스트링', description: '짧고 긴장감 있게 끊어지는 현악입니다.', descriptionKo: '짧고 긴장감 있게 끊어지는 현악입니다.', promptCore: 'staccato strings' },
+      { id: 'pizzicato-strings', label: 'Pizzicato Strings', labelKo: '피치카토 스트링', description: '톡톡 튀는 현악 플럭입니다.', descriptionKo: '톡톡 튀는 현악 플럭입니다.', promptCore: 'pizzicato strings' },
+      { id: 'solo-violin', label: 'Solo Violin', labelKo: '바이올린 솔로', description: '선율을 이끄는 바이올린입니다.', descriptionKo: '선율을 이끄는 바이올린입니다.', promptCore: 'solo violin line' },
+      { id: 'cello', label: 'Cello', labelKo: '첼로', description: '낮고 감정적인 현악기입니다.', descriptionKo: '낮고 감정적인 현악기입니다.', promptCore: 'warm cello line' },
+      { id: 'deep-cello', label: 'Deep Cello', labelKo: '딥 첼로', description: '더 어둡고 깊은 첼로 질감입니다.', descriptionKo: '더 어둡고 깊은 첼로 질감입니다.', promptCore: 'deep cello weight' },
     ],
   },
   {
-    id: 'texture-family',
-    title: 'Minimalist texture',
-    titleKo: '미니멀 텍스쳐',
+    id: 'wind-instruments',
+    title: 'Winds',
+    titleKo: '관악',
     variants: [
-      { 
-        id: 'minimalist-texture', 
-        label: 'Minimalist texture', 
-        labelKo: '미니멀 텍스쳐', 
-        description: '불필요한 요소를 줄이고 여백을 살리는 질감입니다. 단순하지만 집중도 높은 사운드를 만들고 싶을 때 적합합니다.', 
-        promptCore: 'Minimal texture, space.' 
-      },
-      { 
-        id: 'rich-texture', 
-        label: 'Rich texture', 
-        labelKo: '리치 텍스쳐', 
-        description: '레이어가 풍성하게 쌓인 밀도 높은 질감입니다. 공간을 가득 채우는 풍부한 사운드와 존재감을 만들고 싶을 때 좋습니다.', 
-        promptCore: 'Rich texture, layered.' 
-      },
-      { 
-        id: 'evolving-texture', 
-        label: 'Evolving texture', 
-        labelKo: '이볼빙 텍스쳐', 
-        description: '시간이 흐르면서 미세하게 변화하는 질감입니다. 정적인 곡에도 움직임과 생명감을 부여할 수 있습니다.', 
-        promptCore: 'Evolving texture, shifts.' 
-      },
-      { 
-        id: 'granular-texture', 
-        label: 'Granular texture', 
-        labelKo: '그래뉼러 텍스쳐', 
-        description: '잘게 부서진 입자감과 디테일이 느껴지는 질감입니다. 실험적이거나 섬세한 소리 결을 강조하고 싶을 때 적합합니다.', 
-        promptCore: 'Granular texture, detail.' 
-      },
+      { id: 'brass', label: 'Brass', labelKo: '브라스', description: '강하고 화려한 금관 악기 질감입니다.', descriptionKo: '강하고 화려한 금관 악기 질감입니다.', promptCore: 'brass accents' },
+      { id: 'trumpet', label: 'Trumpet', labelKo: '트럼펫', description: '밝고 선명한 금관 악기입니다.', descriptionKo: '밝고 선명한 금관 악기입니다.', promptCore: 'bright trumpet line' },
+      { id: 'muted-trumpet', label: 'Muted Trumpet', labelKo: '뮤트 트럼펫', description: '부드럽고 재즈적인 트럼펫입니다.', descriptionKo: '부드럽고 재즈적인 트럼펫입니다.', promptCore: 'muted trumpet color' },
+      { id: 'trombone', label: 'Trombone', labelKo: '트롬본', description: '두껍고 낮은 브라스입니다.', descriptionKo: '두껍고 낮은 브라스입니다.', promptCore: 'trombone brass weight' },
+      { id: 'french-horn', label: 'French Horn', labelKo: '프렌치 호른', description: '웅장하고 둥근 금관 사운드입니다.', descriptionKo: '웅장하고 둥근 금관 사운드입니다.', promptCore: 'french horn swell' },
+      { id: 'flute', label: 'Flute', labelKo: '플루트', description: '맑고 가벼운 목관 악기입니다.', descriptionKo: '맑고 가벼운 목관 악기입니다.', promptCore: 'airy flute line' },
+      { id: 'saxophone', label: 'Saxophone', labelKo: '색소폰', description: '재즈와 시티팝에 잘 어울리는 관악기입니다.', descriptionKo: '재즈와 시티팝에 잘 어울리는 관악기입니다.', promptCore: 'smooth saxophone line' },
     ],
   },
   {
-    id: 'Magic-family',
-    title: 'Magic textures',
-    titleKo: '마법 사운드',
+    id: 'percussion-instruments',
+    title: 'Percussion',
+    titleKo: '타악',
     variants: [
-      { 
-        id: 'star_candy_sound', 
-        label: 'Star Candy Sound', 
-        labelKo: '별사탕 사운드', 
-        description: '반짝이는 플럭과 부드러운 패드가 어우러진 판타지 계열 사운드입니다. 동화적이고 꿈같은 분위기, 귀엽고 마법 같은 감성을 표현할 때 적합합니다.', 
-        promptCore: 'shimmering synth pluck melodies reminiscent of star candy, soft pads, gentle synthesizer, minimal instrumentation' 
-      },
+      { id: 'timpani', label: 'Timpani', labelKo: '팀파니', description: '웅장한 오케스트라 타악기입니다.', descriptionKo: '웅장한 오케스트라 타악기입니다.', promptCore: 'timpani impact' },
+      { id: 'orchestral-percussion', label: 'Orchestral Percussion', labelKo: '오케스트라 타악', description: '영화음악식 타격감을 만드는 타악기입니다.', descriptionKo: '영화음악식 타격감을 만드는 타악기입니다.', promptCore: 'orchestral percussion' },
+      { id: 'taiko', label: 'Taiko', labelKo: '타이코', description: '일본 대북의 웅장한 타격감입니다.', descriptionKo: '일본 대북의 웅장한 타격감입니다.', promptCore: 'Japanese taiko hits' },
+      { id: 'cajon', label: 'Cajon', labelKo: '카혼', description: '나무 상자처럼 따뜻한 어쿠스틱 타악기입니다.', descriptionKo: '나무 상자처럼 따뜻한 어쿠스틱 타악기입니다.', promptCore: 'cajon rhythm' },
+      { id: 'djembe', label: 'Djembe', labelKo: '젬베', description: '아프리카 손타악기 특유의 생동감입니다.', descriptionKo: '아프리카 손타악기 특유의 생동감입니다.', promptCore: 'African djembe rhythm' },
+      { id: 'latin-percussion', label: 'Latin Percussion', labelKo: '라틴 퍼커션', description: '라틴 음악 특유의 리듬 타악기입니다.', descriptionKo: '라틴 음악 특유의 리듬 타악기입니다.', promptCore: 'Latin percussion groove' },
+      { id: 'cinematic-hit', label: 'Cinematic Hit', labelKo: '시네마틱 히트', description: '장면 전환에 쓰이는 큰 타격음입니다.', descriptionKo: '장면 전환에 쓰이는 큰 타격음입니다.', promptCore: 'cinematic impact hit' },
+      { id: 'trailer-rise', label: 'Trailer Rise', labelKo: '트레일러 라이즈', description: '영화 예고편처럼 긴장감을 끌어올리는 상승 효과입니다.', descriptionKo: '영화 예고편처럼 긴장감을 끌어올리는 상승 효과입니다.', promptCore: 'trailer rise tension' },
+    ],
+  },
+  {
+    id: 'korean-traditional-instruments',
+    title: 'Traditional',
+    titleKo: '전통악기',
+    variants: [
+      { id: 'gayageum', label: 'Gayageum', labelKo: '가야금', description: '맑고 섬세하게 튕기는 한국 전통 현악기입니다.', descriptionKo: '맑고 섬세하게 튕기는 한국 전통 현악기입니다.', promptCore: 'Korean gayageum plucks' },
+      { id: 'geomungo', label: 'Geomungo', labelKo: '거문고', description: '낮고 묵직하게 튕기는 한국 전통 현악기입니다.', descriptionKo: '낮고 묵직하게 튕기는 한국 전통 현악기입니다.', promptCore: 'Korean geomungo plucks' },
+      { id: 'haegeum', label: 'Haegeum', labelKo: '해금', description: '가늘고 애절한 선율의 한국 전통 찰현악기입니다.', descriptionKo: '가늘고 애절한 선율의 한국 전통 찰현악기입니다.', promptCore: 'Korean haegeum line' },
+      { id: 'daegeum', label: 'Daegeum', labelKo: '대금', description: '바람결이 느껴지는 한국 전통 관악기입니다.', descriptionKo: '바람결이 느껴지는 한국 전통 관악기입니다.', promptCore: 'Korean daegeum breath' },
+      { id: 'piri', label: 'Piri', labelKo: '피리', description: '선명하고 직선적인 한국 전통 관악기입니다.', descriptionKo: '선명하고 직선적인 한국 전통 관악기입니다.', promptCore: 'Korean piri tone' },
+      { id: 'taepyeongso', label: 'Taepyeongso', labelKo: '태평소', description: '강하고 날카로운 한국 전통 관악기입니다.', descriptionKo: '강하고 날카로운 한국 전통 관악기입니다.', promptCore: 'Korean taepyeongso call' },
+      { id: 'janggu', label: 'Janggu', labelKo: '장구', description: '한국 전통 장단을 만드는 양면 타악기입니다.', descriptionKo: '한국 전통 장단을 만드는 양면 타악기입니다.', promptCore: 'Korean janggu rhythm' },
+      { id: 'buk', label: 'Buk', labelKo: '북', description: '낮고 둥근 한국 전통 북소리입니다.', descriptionKo: '낮고 둥근 한국 전통 북소리입니다.', promptCore: 'Korean buk hits' },
+      { id: 'kkwaenggwari', label: 'Kkwaenggwari', labelKo: '꽹과리', description: '날카롭게 치고 들어오는 한국 전통 금속 타악기입니다.', descriptionKo: '날카롭게 치고 들어오는 한국 전통 금속 타악기입니다.', promptCore: 'Korean kkwaenggwari hits' },
+    ],
+  },
+  {
+    id: 'world-instruments',
+    title: 'World',
+    titleKo: '월드악기',
+    variants: [
+      { id: 'sitar', label: 'Sitar', labelKo: '시타르', description: '인도 전통 현악기의 드론과 튕김 질감입니다.', descriptionKo: '인도 전통 현악기의 드론과 튕김 질감입니다.', promptCore: 'Indian sitar plucks' },
+      { id: 'tabla', label: 'Tabla', labelKo: '타블라', description: '인도 전통 타악기의 복잡한 손리듬입니다.', descriptionKo: '인도 전통 타악기의 복잡한 손리듬입니다.', promptCore: 'Indian tabla rhythm' },
+      { id: 'bansuri', label: 'Bansuri', labelKo: '반수리', description: '인도 대나무 피리의 공기감입니다.', descriptionKo: '인도 대나무 피리의 공기감입니다.', promptCore: 'Indian bansuri breath' },
+      { id: 'shakuhachi', label: 'Shakuhachi', labelKo: '샤쿠하치', description: '일본 대나무 피리의 거친 숨결입니다.', descriptionKo: '일본 대나무 피리의 거친 숨결입니다.', promptCore: 'Japanese shakuhachi breath' },
+      { id: 'koto', label: 'Koto', labelKo: '고토', description: '일본 전통 현악기의 맑은 플럭입니다.', descriptionKo: '일본 전통 현악기의 맑은 플럭입니다.', promptCore: 'Japanese koto plucks' },
+      { id: 'erhu', label: 'Erhu', labelKo: '얼후', description: '중국 전통 찰현악기의 감정적인 선율입니다.', descriptionKo: '중국 전통 찰현악기의 감정적인 선율입니다.', promptCore: 'Chinese erhu line' },
+      { id: 'dizi', label: 'Dizi', labelKo: '디즈', description: '중국 피리의 밝고 바람 같은 질감입니다.', descriptionKo: '중국 피리의 밝고 바람 같은 질감입니다.', promptCore: 'Chinese dizi flute' },
+      { id: 'oud', label: 'Oud', labelKo: '우드', description: '중동 현악기의 따뜻하고 깊은 플럭입니다.', descriptionKo: '중동 현악기의 따뜻하고 깊은 플럭입니다.', promptCore: 'Middle Eastern oud plucks' },
+      { id: 'duduk', label: 'Duduk', labelKo: '두둑', description: '아르메니아 관악기의 애절한 숨결입니다.', descriptionKo: '아르메니아 관악기의 애절한 숨결입니다.', promptCore: 'Armenian duduk breath' },
+      { id: 'kalimba', label: 'Kalimba', labelKo: '칼림바', description: '맑고 작게 튕기는 아프리카 플럭 악기입니다.', descriptionKo: '맑고 작게 튕기는 아프리카 플럭 악기입니다.', promptCore: 'kalimba clean plucks' },
+      { id: 'steel-drum', label: 'Steel Drum', labelKo: '스틸 드럼', description: '카리브해 느낌의 맑은 금속 타악기입니다.', descriptionKo: '카리브해 느낌의 맑은 금속 타악기입니다.', promptCore: 'Caribbean steel drum' },
+    ],
+  },
+  {
+    id: 'vocal-effects',
+    title: 'Vocal FX',
+    titleKo: '보컬효과',
+    variants: [
+      { id: 'vocal-chop', label: 'Vocal Chop', labelKo: '보컬 찹', description: '보컬을 잘게 잘라 리듬/멜로디처럼 쓰는 효과입니다.', descriptionKo: '보컬을 잘게 잘라 리듬/멜로디처럼 쓰는 효과입니다.', promptCore: 'vocal chop accents' },
+      { id: 'vocal-pad', label: 'Vocal Pad', labelKo: '보컬 패드', description: '목소리처럼 부드럽게 깔리는 패드입니다.', descriptionKo: '목소리처럼 부드럽게 깔리는 패드입니다.', promptCore: 'vocal pad layer' },
+      { id: 'choir-pad', label: 'Choir Pad', labelKo: '콰이어 패드', description: '합창처럼 넓게 깔리는 패드입니다.', descriptionKo: '합창처럼 넓게 깔리는 패드입니다.', promptCore: 'choir pad swell' },
+      { id: 'gospel-choir', label: 'Gospel Choir', labelKo: '가스펠 콰이어', description: '풍성한 가스펠 합창 질감입니다.', descriptionKo: '풍성한 가스펠 합창 질감입니다.', promptCore: 'gospel choir lift' },
+      { id: 'crowd-chant', label: 'Crowd Chant', labelKo: '관객 챈트', description: '여러 사람이 함께 외치는 듯한 효과입니다.', descriptionKo: '여러 사람이 함께 외치는 듯한 효과입니다.', promptCore: 'crowd chant energy' },
+      { id: 'hummed-texture', label: 'Hummed Texture', labelKo: '허밍 질감', description: '허밍처럼 부드럽게 깔리는 목소리 질감입니다.', descriptionKo: '허밍처럼 부드럽게 깔리는 목소리 질감입니다.', promptCore: 'hummed vocal texture' },
+    ],
+  },
+  {
+    id: 'space-effects',
+    title: 'Space FX',
+    titleKo: '공간효과',
+    variants: [
+      { id: 'room-reverb', label: 'Room Reverb', labelKo: '작은 방 울림', description: '작은 방에서 울리는 친밀한 리버브입니다.', descriptionKo: '작은 방에서 울리는 친밀한 리버브입니다.', promptCore: 'room reverb space' },
+      { id: 'cathedral-reverb', label: 'Cathedral Reverb', labelKo: '성당 리버브', description: '성당처럼 넓고 긴 울림입니다.', descriptionKo: '성당처럼 넓고 긴 울림입니다.', promptCore: 'cathedral reverb space' },
+      { id: 'wide-reverb', label: 'Wide Reverb', labelKo: '넓은 리버브', description: '공간을 크게 넓히는 리버브입니다.', descriptionKo: '공간을 크게 넓히는 리버브입니다.', promptCore: 'wide reverb space' },
+      { id: 'dream-reverb', label: 'Dream Reverb', labelKo: '꿈속 리버브', description: '몽환적으로 번지는 리버브입니다.', descriptionKo: '몽환적으로 번지는 리버브입니다.', promptCore: 'dreamy reverb haze' },
+      { id: 'tunnel-echo', label: 'Tunnel Echo', labelKo: '터널 에코', description: '터널처럼 멀리 튕기는 반향입니다.', descriptionKo: '터널처럼 멀리 튕기는 반향입니다.', promptCore: 'tunnel echo space' },
+      { id: 'rain-ambience', label: 'Rain Ambience', labelKo: '비 오는 공간감', description: '비 오는 배경의 촉촉한 공간감입니다.', descriptionKo: '비 오는 배경의 촉촉한 공간감입니다.', promptCore: 'rain ambience' },
+      { id: 'city-ambience', label: 'City Ambience', labelKo: '도시 소음 질감', description: '도시의 소음과 공기가 섞인 배경감입니다.', descriptionKo: '도시의 소음과 공기가 섞인 배경감입니다.', promptCore: 'urban ambience' },
+      { id: 'ocean-ambience', label: 'Ocean Ambience', labelKo: '바다 배경 질감', description: '파도와 바다 공기가 느껴지는 배경감입니다.', descriptionKo: '파도와 바다 공기가 느껴지는 배경감입니다.', promptCore: 'ocean ambience' },
+    ],
+  },
+  {
+    id: 'texture-effects',
+    title: 'Texture FX',
+    titleKo: '질감효과',
+    variants: [
+      { id: 'glitch-fx', label: 'Glitch FX', labelKo: '글리치 효과', description: '끊기고 깨지는 전자 효과음입니다.', descriptionKo: '끊기고 깨지는 전자 효과음입니다.', promptCore: 'glitch FX cuts' },
+      { id: 'static-noise', label: 'Static Noise', labelKo: '정전기 노이즈', description: '라디오 잡음처럼 차갑게 깔리는 노이즈입니다.', descriptionKo: '라디오 잡음처럼 차갑게 깔리는 노이즈입니다.', promptCore: 'static noise texture' },
+      { id: 'digital-noise', label: 'Digital Noise', labelKo: '디지털 노이즈', description: '압축되고 깨지는 디지털 질감입니다.', descriptionKo: '압축되고 깨지는 디지털 질감입니다.', promptCore: 'digital noise grit' },
+      { id: 'mechanical-noise', label: 'Mechanical Noise', labelKo: '기계음 노이즈', description: '금속성 있고 차가운 기계 소리입니다.', descriptionKo: '금속성 있고 차가운 기계 소리입니다.', promptCore: 'mechanical noise texture' },
+      { id: 'tape-hiss', label: 'Tape Hiss', labelKo: '테이프 노이즈', description: '오래된 카세트처럼 부드럽게 깔리는 히스입니다.', descriptionKo: '오래된 카세트처럼 부드럽게 깔리는 히스입니다.', promptCore: 'tape hiss warmth' },
+      { id: 'vinyl-noise', label: 'Vinyl Noise', labelKo: '바이닐 노이즈', description: '레코드판의 따뜻한 잡음입니다.', descriptionKo: '레코드판의 따뜻한 잡음입니다.', promptCore: 'vinyl crackle texture' },
+      { id: 'magic-sparkle-fx', label: 'Magic Sparkle FX', labelKo: '마법 반짝임', description: '반짝이고 환상적인 효과음입니다. 판타지, 몽환, 마법 같은 분위기에 어울립니다.', descriptionKo: '반짝이고 환상적인 효과음입니다. 판타지, 몽환, 마법 같은 분위기에 어울립니다.', promptCore: 'magic sparkle FX' },
+      { id: 'shimmer-fx', label: 'Shimmer FX', labelKo: '반짝임 효과', description: '빛이 번지는 듯한 반짝이는 효과입니다.', descriptionKo: '빛이 번지는 듯한 반짝이는 효과입니다.', promptCore: 'shimmer FX' },
+      { id: 'reverse-fx', label: 'Reverse FX', labelKo: '리버스 효과', description: '거꾸로 빨려 들어가는 듯한 전환 효과입니다.', descriptionKo: '거꾸로 빨려 들어가는 듯한 전환 효과입니다.', promptCore: 'reverse FX swell' },
+      { id: 'impact-hit', label: 'Impact Hit', labelKo: '임팩트 히트', description: '구간 전환에 강하게 찍히는 효과음입니다.', descriptionKo: '구간 전환에 강하게 찍히는 효과음입니다.', promptCore: 'impact hit accent' },
+      { id: 'analog-warmth', label: 'Analog Warmth', labelKo: '아날로그 온기', description: '빈티지 장비처럼 따뜻하게 묻어나는 질감입니다.', descriptionKo: '빈티지 장비처럼 따뜻하게 묻어나는 질감입니다.', promptCore: 'analog warmth' },
     ],
   },
 ] as const;
 
-export const INSTRUMENT_SOUNDS: InstrumentSoundItem[] = SOUND_TEXTURE_CYCLES.flatMap((cycle) =>
+
+export const INSTRUMENT_SOUNDS = SOUND_TEXTURE_CYCLES.flatMap((cycle) =>
   cycle.variants.map((variant) => ({
     id: variant.id,
     label: variant.label,
+    labelKo: variant.labelKo,
     description: variant.description,
+    descriptionKo: variant.descriptionKo,
     promptCore: variant.promptCore,
+    categoryId: cycle.id,
+    categoryKo: cycle.titleKo,
+    categoryLabel: cycle.title,
+    applyPools: (variant as any).applyPools,
   }))
 );
 

@@ -72,6 +72,54 @@ function Portal({ children }: { children: React.ReactNode }) {
   if (typeof document === 'undefined') return null;
   return createPortal(children, document.body);
 }
+
+
+type VocalEmotionLine = {
+  id: string;
+  labelKo: string;
+  label: string;
+  descriptionKo: string;
+  promptCore: string;
+  promptShort: string;
+  group: string;
+};
+
+const VOCAL_EMOTION_LINES: VocalEmotionLine[] = [
+  { id: 'emotion_smiling_hidden_pain', group: '숨기는 아픔', labelKo: '아무렇지 않은 척하지만 속으로 우는', label: 'Smiling through pain', descriptionKo: '겉으로는 웃거나 평온해 보이지만, 내면은 슬픔과 상처로 곪아 있어 위태로운 감정 상태입니다.', promptCore: 'smiling through pain, crying inside, emotionally wounded underneath', promptShort: 'smiling through hidden pain' },
+  { id: 'emotion_resentful_lingering', group: '미련과 원망', labelKo: '원망스럽지만 여전히 미련이 남은', label: 'Resentful but still clinging', descriptionKo: '상대가 밉고 화가 나면서도 끝내 다 놓지 못해 미련과 그리움이 질척이게 남아있는 상태입니다.', promptCore: 'resentful but still clinging to lingering feelings, angry yet unable to let go', promptShort: 'resentful but still longing' },
+  { id: 'emotion_resigned_empty', group: '체념과 공허', labelKo: '모든 것을 체념하고 텅 빈', label: 'Numb and empty', descriptionKo: '슬픔이나 분노마저 다 지나가 버려 어떤 기대나 희망도 없이 마음이 무감각하고 공허해진 상태입니다.', promptCore: 'completely resigned, numb and empty inside, no hope left', promptShort: 'numb and resigned' },
+  { id: 'emotion_too_exhausted_to_anger', group: '체념과 공허', labelKo: '화낼 기력조차 없이 지쳐버린', label: 'Too exhausted to be angry', descriptionKo: '화가 나고 억울하지만 감정을 너무 많이 소모해서 더 이상 따질 힘조차 남아있지 않은 상태입니다.', promptCore: 'too exhausted to be angry, emotionally drained, no strength left to fight', promptShort: 'exhausted beyond anger' },
+  { id: 'emotion_pushing_away_fear', group: '불안과 방어', labelKo: '상처받을까 두려워 먼저 차갑게 밀어내는', label: 'Pushing away out of fear', descriptionKo: '사실은 다가가고 싶지만 또 상처받는 것이 두려워 자기방어적으로 선을 긋고 냉정하게 구는 상태입니다.', promptCore: 'pushing away out of fear of getting hurt, guarded longing, defensive coldness', promptShort: 'pushing away out of fear' },
+  { id: 'emotion_cold_suppressed_anger', group: '분노와 억제', labelKo: '터질 듯한 분노를 차갑게 억누르는', label: 'Coldly suppressed anger', descriptionKo: '당장이라도 폭발할 것 같은 거대한 분노를 품고 있지만, 이성을 붙잡고 싸늘하게 다스리는 상태입니다.', promptCore: 'coldly suppressing explosive anger, controlled rage, icy restraint', promptShort: 'coldly suppressed anger' },
+  { id: 'emotion_abandonment_anxiety', group: '불안과 방어', labelKo: '버림받을까 봐 조마조마하고 불안한', label: 'Terrified of losing', descriptionKo: '겉으로는 태연해 보이려 하지만 상대방의 마음이 떠날까 봐 속으로 극도로 초조하고 불안한 상태입니다.', promptCore: 'anxious and terrified of losing, insecure attachment, fear of being left behind', promptShort: 'anxious fear of losing' },
+  { id: 'emotion_awkward_sincere_approach', group: '진심과 다가감', labelKo: '어색하지만 진심을 다해 조심스럽게 다가가는', label: 'Awkward but sincere', descriptionKo: '표현이 서툴고 쑥스럽지만, 용기를 내어 진심을 조심스럽게 전하려는 상태입니다.', promptCore: 'awkward but sincerely and carefully approaching, clumsy honesty, careful affection', promptShort: 'awkward but sincere' },
+  { id: 'emotion_bitter_regret_self_blame', group: '후회와 자책', labelKo: '지난날을 뼈저리게 후회하며 자책하는', label: 'Bitter regret and self-blame', descriptionKo: '되돌릴 수 없는 과거의 잘못이나 선택을 깊이 후회하며 스스로를 깎아내리고 원망하는 상태입니다.', promptCore: 'bitterly regretting and blaming oneself, painful remorse, self-directed guilt', promptShort: 'bitter regret and self-blame' },
+  { id: 'emotion_secret_yearning', group: '숨기는 아픔', labelKo: '들킬까 봐 숨죽이며 애태우는', label: 'Secretly yearning', descriptionKo: '진짜 마음이 들통날까 봐 전전긍긍하며 혼자 속앓이를 하는 상태입니다.', promptCore: 'secretly yearning, painfully hiding true feelings, breath-held longing', promptShort: 'secret yearning held back' },
+  { id: 'emotion_choked_gratitude', group: '벅찬 감정', labelKo: '벅찬 감동에 가슴이 메이는', label: 'Overwhelmed and choked up', descriptionKo: '큰 기쁨, 사랑, 위로를 받아 감정이 북받쳐 오르고 말을 잇지 못할 만큼 벅찬 상태입니다.', promptCore: 'overwhelmed with emotion, choked up with gratitude, heart-swelling tenderness', promptShort: 'overwhelmed and choked up' },
+  { id: 'emotion_burden_released', group: '해방과 정리', labelKo: '오랜 짐을 벗어던지고 온전히 후련한', label: 'Free from a heavy burden', descriptionKo: '오랫동안 짓누르던 억압, 상처, 인연 등에서 벗어나 진정한 해방감과 자유를 느끼는 상태입니다.', promptCore: 'completely free, letting go of a heavy burden, cathartic release', promptShort: 'free from a heavy burden' },
+];
+
+const getVocalEmotionLine = (emotionIdOrLabel: string | undefined) => {
+  if (!emotionIdOrLabel) return undefined;
+  const normalized = emotionIdOrLabel.trim().toLowerCase();
+  return VOCAL_EMOTION_LINES.find((item) =>
+    item.id.toLowerCase() === normalized ||
+    item.label.toLowerCase() === normalized ||
+    item.labelKo.toLowerCase() === normalized
+  );
+};
+
+const getVocalEmotionDisplayLabel = (emotionIdOrLabel: string | undefined) => {
+  if (!emotionIdOrLabel) return '';
+  const matched = getVocalEmotionLine(emotionIdOrLabel);
+  return matched?.labelKo || emotionIdOrLabel;
+};
+
+const getVocalEmotionPromptValue = (emotionIdOrLabel: string | undefined) => {
+  if (!emotionIdOrLabel) return undefined;
+  const matched = getVocalEmotionLine(emotionIdOrLabel);
+  return matched?.promptCore || emotionIdOrLabel;
+};
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
@@ -658,7 +706,7 @@ const SituationChoicePicker = ({
               <button
                 type="button"
                 onClick={startDirectInput}
-                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
               >
                 <span>직접 입력</span>
                 <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -872,7 +920,7 @@ const SituationVersionPicker = ({ value, onChange }: SituationVersionPickerProps
               <button
                 type="button"
                 onClick={startDirectInput}
-                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
               >
                 <span>직접 입력</span>
                 <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -2403,7 +2451,7 @@ function App() {
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
-  const [songStructure, setSongStructure] = useState<SongStructure>('2');
+  const [songStructure, setSongStructure] = useState<SongStructure>('1');
   const [vocalMode, setVocalMode] = useState<VocalMode>('solo');
   const [vocalTones, setVocalTones] = useState<VocalTone[]>(VOCAL_TONES);
   const [selectedVocalToneId, setSelectedVocalToneId] = useState<string | undefined>(undefined);
@@ -2498,6 +2546,13 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_themes', JSON.stringify(pinnedThemes));
   }, [pinnedThemes]);
+
+  useEffect(() => {
+    if (pinnedThemes.length > 0) {
+      setPinnedThemes([]);
+      sessionStorage.removeItem('soridraw_pinned_themes');
+    }
+  }, []);
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_styles', JSON.stringify(pinnedStyles));
   }, [pinnedStyles]);
@@ -2556,6 +2611,28 @@ function App() {
     }
   };
 
+  const wasDesktopLayoutRef = useRef(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
+
+  useEffect(() => {
+    const syncMainSectionExpansionOnResize = () => {
+      const isPC = window.innerWidth >= 1024;
+      const wasPC = wasDesktopLayoutRef.current;
+
+      if (isPC && !wasPC) {
+        const shouldExpandAll = isGenreExpanded || isStyleExpanded || isSoundExpanded;
+        setIsGenreExpanded(shouldExpandAll);
+        setIsStyleExpanded(shouldExpandAll);
+        setIsSoundExpanded(shouldExpandAll);
+      }
+
+      wasDesktopLayoutRef.current = isPC;
+    };
+
+    syncMainSectionExpansionOnResize();
+    window.addEventListener('resize', syncMainSectionExpansionOnResize);
+    return () => window.removeEventListener('resize', syncMainSectionExpansionOnResize);
+  }, [isGenreExpanded, isStyleExpanded, isSoundExpanded]);
+
   const toggleSubSections = (section: 'mood' | 'theme') => {
     const isPC = window.innerWidth >= 1024;
     if (isPC) {
@@ -2579,8 +2656,7 @@ function App() {
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
-  const [isActionButtonsTemporarilyHidden, setIsActionButtonsTemporarilyHidden] = useState(false);
-  const scrollStopTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(false);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
@@ -2774,38 +2850,20 @@ const toggleCycleVariantSelection = (
       let isFloating = false;
       if (actionButtonsAnchorRef.current) {
         const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
-        // Floating when anchor is below the bottom floating line
-        // 120px accounts for button height + bottom margin
+        // Floating when the original action buttons are below the visible bottom area.
+        // In the original position they stay fixed in the normal layout.
         isFloating = rect.top > window.innerHeight - 120;
         setIsActionsFloating(isFloating);
       }
 
-      // Hide buttons temporarily while scrolling ONLY when floating
-      if (isFloating) {
-        setIsActionButtonsTemporarilyHidden(true);
-        
-        if (scrollStopTimerRef.current) {
-          clearTimeout(scrollStopTimerRef.current);
-        }
-        
-        scrollStopTimerRef.current = setTimeout(() => {
-          setIsActionButtonsTemporarilyHidden(false);
-        }, 2000);
-      } else {
-        // Always show when in original position
-        setIsActionButtonsTemporarilyHidden(false);
-        if (scrollStopTimerRef.current) {
-          clearTimeout(scrollStopTimerRef.current);
-        }
-      }
+      // Keep the collapsed floating state until the user manually expands it.
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      if (scrollStopTimerRef.current) {
-        clearTimeout(scrollStopTimerRef.current);
-      }
+      window.removeEventListener('resize', handleScroll);
     };
   }, []);
 
@@ -3432,8 +3490,11 @@ const toggleCycleVariantSelection = (
       theme: 4
     };
     
-    const all = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : (category === 'theme' ? THEMES : (category === 'style' ? SOUND_STYLES : INSTRUMENT_SOUNDS)));
-    const pinned = category === 'genre' ? pinnedGenres : (category === 'theme' ? pinnedThemes : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds));
+    const allRaw = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : (category === 'theme' ? THEMES : (category === 'style' ? SOUND_STYLES : INSTRUMENT_SOUNDS)));
+    const all = category === 'sound'
+      ? (allRaw as any[]).filter((item) => String(item.promptCore || '').trim().length > 0)
+      : allRaw;
+    const pinned = category === 'genre' ? pinnedGenres : (category === 'theme' ? [] : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds));
     const isGenre = category === 'genre';
     
     // Calculate current count of other categories to respect total 15 limit
@@ -3485,6 +3546,23 @@ const toggleCycleVariantSelection = (
       setIsSoundTextureRandomized(true);
     }
   };
+
+  const applyRecommendedSoundCombo = useCallback((variantId: string) => {
+    const recommendation = SOUND_TEXTURE_CYCLES
+      .flatMap((cycle) => cycle.variants as readonly any[])
+      .find((variant) => variant.id === variantId && Array.isArray((variant as any).applyPools));
+
+    if (!recommendation) return false;
+
+    const pools = (recommendation as any).applyPools as string[][];
+    if (!pools.length) return false;
+
+    const pickedPool = pools[Math.floor(Math.random() * pools.length)] ?? [];
+    const nextSounds = [variantId, ...pickedPool].filter(Boolean);
+    setSelectedInstrumentSounds(Array.from(new Set(nextSounds)));
+    setIsSoundTextureRandomized(false);
+    return true;
+  }, []);
 
 
   const handleGenreSelect = (genreId: string) => {
@@ -3596,7 +3674,7 @@ const toggleCycleVariantSelection = (
     const setters = {
       genre: { state: selectedGenres, set: setSelectedGenres, pinned: pinnedGenres },
       mood: { state: selectedMoods, set: setSelectedMoods, pinned: [] },
-      theme: { state: selectedThemes, set: setSelectedThemes, pinned: pinnedThemes },
+      theme: { state: selectedThemes, set: setSelectedThemes, pinned: [] },
       style: { state: selectedStyles, set: setSelectedStyles, pinned: pinnedStyles },
       sound: { state: selectedInstrumentSounds, set: setSelectedInstrumentSounds, pinned: pinnedInstrumentSounds }
     };
@@ -3711,7 +3789,7 @@ const toggleCycleVariantSelection = (
   };
 
   const togglePin = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
-    if (category === 'mood') return;
+    if (category === 'mood' || category === 'theme') return;
     const setters = {
       genre: { pinned: pinnedGenres, setPinned: setPinnedGenres, selected: selectedGenres, setSelected: setSelectedGenres },
       theme: { pinned: pinnedThemes, setPinned: setPinnedThemes, selected: selectedThemes, setSelected: setSelectedThemes },
@@ -3749,7 +3827,7 @@ const toggleCycleVariantSelection = (
       setIsMoodRandomized(false);
     }
     if (category === 'theme') {
-      setSelectedThemes(pinnedThemes);
+      setSelectedThemes([]);
       setIsThemeRandomized(false);
     }
     if (category === 'style') {
@@ -3835,7 +3913,7 @@ const toggleCycleVariantSelection = (
     setIsLyricMode(false);
     setLyricMode('assist');
     setLyricsLength('normal');
-    setSongStructure('2');
+    setSongStructure('1');
     setMaleCount(0);
     setFemaleCount(0);
     setRapEnabled(false);
@@ -4026,7 +4104,7 @@ const toggleCycleVariantSelection = (
     let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, 3);
     let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, 3);
     let m = getRandomForCategory(MOODS, [], 5);
-    let t = getRandomForCategory(THEMES, pinnedThemes, 4);
+    let t = getRandomForCategory(THEMES, [], 4);
 
     // 3. Total Limit 15 Check and Priority Trimming
     // Priority: Genre > Style > Sound > Mood > Theme (Theme is first to be cut)
@@ -4205,10 +4283,10 @@ const saveRecentSong = async (newSong: any) => {
         (currentMinBPM !== 40 || currentMaxBPM !== 160);
 
       // Tempo priority rule:
-      // - Default tempo is free-form.
-      // - BPM is sent only when the user directly switches to manual tempo mode.
-      // - Automatic BPM can update the UI range, but it must not be injected into the final prompt.
-      const shouldUseRandomTempo = false;
+      // - Random tempo mode sends the current genre/mood-based BPM range to the prompt.
+      // - Manual tempo mode sends the exact/range value selected by the user.
+      // - If the range is invalid, tempo is not injected to avoid noisy prompts.
+      const shouldUseRandomTempo = tempoEnabled && isValidTempoRange;
       const shouldUseManualTempo = isManualTempoMode && isValidTempoRange;
 
       if (shouldUseRandomTempo) {
@@ -4406,9 +4484,9 @@ const saveRecentSong = async (newSong: any) => {
         };
         const auxiliaryVocal = pickOneGenreVocal(genreVocalParts);
 
-        const selectedTone = selectedVocalToneId ? getVocalToneDisplayLabel(selectedVocalToneId, vocalTones) : null;
+        const selectedVocalEmotion = selectedVocalToneId ? getVocalEmotionDisplayLabel(selectedVocalToneId) : null;
         const recTone = recommendedTone?.label;
-        const primaryTone = selectedTone || recTone;
+        const primaryTone = selectedVocalEmotion || recTone;
 
         const vocalDesignParts = [];
         if (formation) vocalDesignParts.push(formation);
@@ -4434,7 +4512,7 @@ const saveRecentSong = async (newSong: any) => {
                 }
                 return `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`;
               }).join(' → ')}`
-            : `Base structure: ${songStructure === '1' ? 'Intro → Verse 1 → Chorus / Drop → Outro' : songStructure === '2' ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
+            : `Base structure: ${songStructure === '1' ? '기본 자유 전개' : songStructure === '2' ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
@@ -4474,11 +4552,11 @@ const saveRecentSong = async (newSong: any) => {
           female: femaleCount,
           rap: rapEnabled,
           mode: vocalMode,
-          globalToneId: selectedVocalToneId || recommendedTone?.id,
+          globalToneId: selectedVocalToneId,
           isToneSelected: !!selectedVocalToneId,
           tonePrompt: selectedVocalToneId
-            ? getVocalTonePromptValue(selectedVocalToneId, vocalTones)
-            : recommendedTone?.promptCore,
+            ? getVocalEmotionPromptValue(selectedVocalToneId)
+            : undefined,
           members: vocalMembers,
         },
         tempo: tempoInfo,
@@ -4526,8 +4604,8 @@ const saveRecentSong = async (newSong: any) => {
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
             vocalType: formation || 'Default',
-            vocalTone: selectedVocalToneId
-              ? getVocalToneDisplayLabel(selectedVocalToneId, vocalTones)
+            vocalEmotion: selectedVocalToneId
+              ? getVocalEmotionDisplayLabel(selectedVocalToneId)
               : null,
             rapEnabled: rapEnabled,
             isNoLyrics: !requestedIncludeLyrics,
@@ -4906,7 +4984,7 @@ ${result.prompt}
     selectedInstrumentSounds.length > 0 ||
     userInput !== '' ||
     lyricsLength !== 'normal' ||
-    songStructure !== '2' ||
+    songStructure !== '1' ||
     maleCount > 0 ||
     femaleCount > 0 ||
     rapEnabled ||
@@ -5021,6 +5099,45 @@ ${result.prompt}
       </div>
     </>
   );
+
+  const filteredSoundTextureCycles = useMemo(() => {
+    const queryText = [
+      ...selectedGenres,
+      ...subGenre,
+      ...selectedMoods,
+      ...selectedStyles,
+      userInput,
+    ].join(' ').toLowerCase();
+
+    const recommendationCycle = SOUND_TEXTURE_CYCLES.find((cycle) => cycle.id === 'recommended-sound-combos');
+    if (!recommendationCycle) return SOUND_TEXTURE_CYCLES;
+
+    const scoreRecommendation = (variant: any) => {
+      const text = [variant.id, variant.label, variant.labelKo, variant.descriptionKo, variant.description].join(' ').toLowerCase();
+      let score = 0;
+      if (/gugak|korean|traditional|국악|전통|사극|판소리|가야금|해금|장구/.test(queryText)) score += /korean|전통|국악/.test(text) ? 6 : 0;
+      if (/trap|hiphop|k-trap|808|dark|powerful|강력|어두|트랩|힙합|랩/.test(queryText)) score += /808|bass|베이스/.test(text) ? 4 : 0;
+      if (/cyber|glitch|electronic|사이버|글리치|전자|미래/.test(queryText)) score += /cyber|glitch|사이버/.test(text) ? 4 : 0;
+      if (/city|rnb|folk|band|warm|peaceful|시티|포크|밴드|따뜻|평화/.test(queryText)) score += /band|live|밴드/.test(text) ? 4 : 0;
+      if (/magic|dream|fantasy|cute|몽환|마법|판타지|꿈|귀여/.test(queryText)) score += /magic|마법/.test(text) ? 4 : 0;
+      if (/cinematic|epic|string|orchestra|웅장|시네마틱|영화|현악/.test(queryText)) score += /cinematic|strings|현악/.test(text) ? 4 : 0;
+      return score;
+    };
+
+    const recommendedVariants = [...(recommendationCycle.variants as readonly any[])]
+      .map((variant) => ({ variant, score: scoreRecommendation(variant) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map((item) => item.variant);
+
+    const filteredRecommendationCycle = {
+      ...recommendationCycle,
+      variants: recommendedVariants.length > 0 ? recommendedVariants : recommendationCycle.variants,
+    };
+
+    return [filteredRecommendationCycle, ...SOUND_TEXTURE_CYCLES.filter((cycle) => cycle.id !== 'recommended-sound-combos')];
+  }, [selectedGenres, subGenre, selectedMoods, selectedStyles, userInput]);
+
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
@@ -5238,10 +5355,13 @@ ${result.prompt}
             titleKo="사운드"
             description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
             descriptionKo="악기 톤과 배경 질감을 설정합니다. 기본 장르에 적용된 악기 사운드의 질감을 바꿔서 원하는 느낌으로 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
-            cycles={SOUND_TEXTURE_CYCLES}
+            cycles={filteredSoundTextureCycles}
             selected={selectedInstrumentSounds}
             onCycleToggle={(cycleId, variantId) => {
-              if (variantId) toggleCycleVariantSelection(variantId, selectedInstrumentSounds, setSelectedInstrumentSounds);
+              if (variantId) {
+                if (applyRecommendedSoundCombo(variantId)) return;
+                toggleCycleVariantSelection(variantId, selectedInstrumentSounds, setSelectedInstrumentSounds);
+              }
               else cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
             }}
             onClear={() => { setSelectedInstrumentSounds([]); setIsSoundTextureRandomized(false); }}
@@ -5300,11 +5420,8 @@ ${result.prompt}
               descriptionKo="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
               items={THEMES} 
               selected={selectedThemes} 
-              pinned={pinnedThemes}
               onToggle={(id) => toggleSelection(id, 'theme')}
-              onTogglePin={(id) => togglePin(id, 'theme')}
               onClear={() => clearCategory('theme')}
-              onUnpinAll={() => unpinAll('theme')}
               onRandom={() => randomizeCategory('theme')}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -5316,6 +5433,7 @@ ${result.prompt}
               forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
+              hidePin={true}
             />
             <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-visible relative z-[20]">
               <div className="p-4 md:p-5 flex items-center justify-between gap-3">
@@ -5537,7 +5655,7 @@ ${result.prompt}
               onModalStateChange={setIsStructureModalOpen}
               onClear={() => {
                 setLyricsLength('normal');
-                setSongStructure('2');
+                setSongStructure('1');
                 setCustomStructure([]);
               }}
               onHover={setHoveredItem}
@@ -5699,27 +5817,75 @@ ${result.prompt}
           <div ref={actionButtonsAnchorRef} className="relative">
             <div className={cn(
               "flex flex-row items-stretch gap-2 md:gap-4 w-full transition-all duration-300",
-              (isActionsFloating || isAnyModalOpen) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
+              ((isActionsFloating || isActionButtonsCollapsed) || isAnyModalOpen) ? "opacity-0 pointer-events-none translate-y-4" : "opacity-100 translate-y-0"
             )}>
               {actionButtonsContent}
             </div>
           </div>
 
-          {/* Floating Action Buttons */}
+          {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence>
-            {isActionsFloating && !isAnyModalOpen && !isActionButtonsTemporarilyHidden && (
+            {((isActionsFloating && !isActionButtonsCollapsed) || isActionButtonsCollapsed) && !isAnyModalOpen && (
               <Portal>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="fixed bottom-10 left-0 w-full z-[120] flex justify-center pointer-events-none px-6"
-                >
-                  <div className="pointer-events-auto flex flex-row items-stretch gap-2 md:gap-4 w-full max-w-6xl">
-                    {actionButtonsContent}
-                  </div>
-                </motion.div>
+                {isActionButtonsCollapsed ? (
+                  <motion.button
+                    key="action-buttons-collapsed-toggle"
+                    type="button"
+                    layoutId="action-collapse-ghost-button"
+                    initial={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
+                    animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
+                    transition={{ type: "spring", stiffness: 360, damping: 32, mass: 0.8 }}
+                    onClick={() => setIsActionButtonsCollapsed(false)}
+                    onMouseEnter={() => setHoveredItem({
+                      id: 'action-collapse-toggle',
+                      label: '펼치기',
+                      description: '생성 버튼 영역을 다시 펼칩니다.'
+                    })}
+                    onMouseLeave={() => setHoveredItem(null)}
+                    aria-label="생성 버튼 펼치기"
+                    className="fixed left-7 md:left-[68px] 2xl:left-[calc((100vw-1152px)/2-82px)] bottom-7 md:bottom-8 z-[120] h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_6px_14px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,255,255,0.035)] flex items-center justify-center opacity-100"
+                  >
+                    <ArrowRight className="w-5 h-5" />
+                  </motion.button>
+                ) : (
+                  <motion.div
+                    key="action-buttons-expanded-bar"
+                    initial={{ opacity: 0, y: 18, filter: 'blur(6px)' }}
+                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
+                    transition={{ type: "spring", stiffness: 340, damping: 32 }}
+                    className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8"
+                  >
+                    <div className="relative w-full max-w-4xl pointer-events-auto">
+                      <motion.div
+                        initial={{ opacity: 0, x: 18, filter: 'blur(6px)' }}
+                        animate={{ opacity: 1, x: 0, scaleX: 1, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, x: -260, scaleX: 0.08, filter: 'blur(12px)' }}
+                        style={{ transformOrigin: 'left center' }}
+                        transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.9 }}
+                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100"
+                      >
+                        <motion.button
+                          layoutId="action-collapse-ghost-button"
+                          type="button"
+                          onClick={() => setIsActionButtonsCollapsed(true)}
+                          onMouseEnter={() => setHoveredItem({
+                            id: 'action-collapse-toggle',
+                            label: '접기',
+                            description: '생성 버튼 영역을 왼쪽 접기 버튼으로 접습니다.'
+                          })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                          className="h-20 self-center w-14 shrink-0 rounded-2xl bg-[var(--card-bg)] border border-btn-border text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange transition-all shadow-[0_6px_14px_rgba(0,0,0,0.24),0_0_0_1px_rgba(255,255,255,0.035)] flex items-center justify-center opacity-100"
+                          aria-label="생성 버튼 접기"
+                        >
+                          <ArrowLeft className="w-5 h-5" />
+                        </motion.button>
+                        {actionButtonsContent}
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                )}
               </Portal>
             )}
           </AnimatePresence>
@@ -5738,7 +5904,7 @@ ${result.prompt}
                 ...(selectedVocalToneId ? [{ 
                   id: 'vocal-tone', 
                   type: 'vocal-tone' as const, 
-                  label: `#보컬톤: ${getVocalToneDisplayLabel(selectedVocalToneId, vocalTones) || '선택됨'}` 
+                  label: `#보컬감정: ${getVocalEmotionDisplayLabel(selectedVocalToneId) || '선택됨'}` 
                 }] : []),
               ].map((item) => {
                   const chipClassName = item.type === 'style'
@@ -6121,7 +6287,7 @@ ${result.prompt}
                                   return `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`;
                                 }).join(' → ')
                               : result.appliedKeywords.songStructure === '1'
-                                ? 'Intro → Verse 1 → Chorus / Drop → Outro"'
+                                ? '기본 자유 전개'
                                 : result.appliedKeywords.songStructure === '2'
                                   ? 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
                                   : result.appliedKeywords.songStructure === '3'
@@ -6405,7 +6571,7 @@ ${result.prompt}
             className={cn(
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/' 
-                ? (isActionsFloating && !isAnyModalOpen && !isActionButtonsTemporarilyHidden
+                ? ((isActionsFloating || isActionButtonsCollapsed) && !isAnyModalOpen
                     ? "bottom-29 md:bottom-35 max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
                 : "bottom-10 max-w-[250px] md:max-w-[400px]"
@@ -6991,6 +7157,8 @@ interface CycleSectionProps {
       labelKo?: string;
       description: string;
       descriptionKo?: string;
+      promptCore?: string;
+      applyPools?: string[][];
     }[] 
   }[];
   selected: string[];
@@ -7044,9 +7212,9 @@ function CycleSection({
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
   const selectedKeywordCount = selected.length;
-  const selectedFamilyCount = cycles.filter((cycle) => cycle.variants.some((variant) => selected.includes(variant.id))).length;
+  const totalKeywordCount = cycles.reduce((sum, cycle) => sum + cycle.variants.length, 0);
   const maxSelectableCount = Number.POSITIVE_INFINITY;
-  const countLabel = title === 'Style' ? `${selectedKeywordCount}` : `${selectedFamilyCount}/${cycles.length}`;
+  const countLabel = `${selectedKeywordCount}/${totalKeywordCount}`;
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
 
   return (
@@ -7062,7 +7230,9 @@ function CycleSection({
               >
                 <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
                 <span className="truncate">{titleKo || title}</span>
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
+                {countLabel && (
+                  <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
+                )}
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -7129,9 +7299,6 @@ function CycleSection({
                     description: baseVariant.descriptionKo ?? baseVariant.description,
                   };
               const folderLabel = cycle.titleKo ?? cycle.title;
-              const buttonLabel = selectedCountInCycle > 0
-                ? `${folderLabel} · ${selectedCountInCycle}개`
-                : folderLabel;
               return (
                 <button
                   key={cycle.id}
@@ -7141,13 +7308,20 @@ function CycleSection({
                   onTouchStart={() => onLongPressStart(hoverItem)}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
-                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn",
-                    selectedVariants.length > 0 ? "bg-brand-orange/10 text-brand-orange border-brand-orange/40 shadow-[0_0_14px_rgba(255,132,0,0.12)]" : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
+                    selectedVariants.length > 0
+                      ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.24)]"
+                      : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
-                  <span className="text-[13px] md:text-[13.5px] font-bold leading-tight truncate w-full">
-                    {buttonLabel}
+                  <span className="text-[13px] md:text-[13.5px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
+                    {folderLabel}
                   </span>
+                  {selectedCountInCycle > 0 && (
+                    <span className="absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-white text-brand-orange border border-brand-orange/50 shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none">
+                      {selectedCountInCycle}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -7226,6 +7400,8 @@ function CycleKeywordPopup({
       labelKo?: string;
       description: string;
       descriptionKo?: string;
+      promptCore?: string;
+      applyPools?: string[][];
     }[];
   };
   selected: string[];
@@ -7306,7 +7482,7 @@ function CycleKeywordPopup({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[300] bg-black/20 backdrop-blur-[1px] flex items-center justify-center p-4"
-        onClick={closePopup}
+        onClick={hasChanges ? applyChangesAndClose : closePopup}
       >
         <motion.div
           initial={{ scale: 0.96, opacity: 0, y: 18 }}
@@ -7384,7 +7560,7 @@ function CycleKeywordPopup({
                   className={cn(
                     "w-full rounded-2xl border px-4 py-3 text-left transition-all",
                     isSelected
-                      ? "bg-brand-orange/12 text-[var(--text-primary)] border-brand-orange/70 shadow-[0_0_0_1px_rgba(255,132,0,0.18)]"
+                      ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
                       : disabled
                         ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover hover:border-brand-orange/40"
@@ -7392,7 +7568,7 @@ function CycleKeywordPopup({
                 >
                   <div className="min-w-0">
                     <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
-                    <p className="text-xs mt-1 leading-snug line-clamp-2 text-[var(--text-secondary)]">{variant.descriptionKo || variant.description}</p>
+                    <p className={cn("text-xs mt-1 leading-snug line-clamp-2", isSelected ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                   </div>
                 </button>
               );
@@ -7460,7 +7636,6 @@ function CategorySection({
   forcedHeight
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
-
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
 
@@ -7620,22 +7795,27 @@ function CategorySection({
             return (
               <div key={item.id} className="relative group/btn">
                 <button
-                  onMouseEnter={() => onHover({ 
-                    ...item, 
-                    label: item.label,
-                    labelKo: item.labelKo,
-                    description: displayDescription 
-                  })}
+                  onMouseEnter={(event) => {
+                    const tooltipItem = { 
+                      ...item, 
+                      label: item.label,
+                      labelKo: item.labelKo,
+                      description: displayDescription 
+                    };
+                    onHover(tooltipItem);
+                  }}
                   onMouseLeave={() => {
                     onHover(null);
                     onLongPressEnd();
                   }}
-                  onTouchStart={() => onLongPressStart({ 
-                    ...item, 
-                    label: item.label,
-                    labelKo: item.labelKo,
-                    description: displayDescription 
-                  })}
+                  onTouchStart={() => {
+                    onLongPressStart({ 
+                      ...item, 
+                      label: item.label,
+                      labelKo: item.labelKo,
+                      description: displayDescription 
+                    });
+                  }}
                   onTouchEnd={onLongPressEnd}
                   onClick={() => {
                     onToggle(item.id);
@@ -7678,20 +7858,7 @@ function CategorySection({
                   {displayLabel}
                 </button>
                 
-                {/* Floating Description Tooltip - Only show when expanded */}
-                <AnimatePresence>
-                  {isExpanded && hoveredItem?.id === item.id && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-2xl w-40 pointer-events-none"
-                    >
-                      <p className="text-[10px] text-[var(--text-secondary)] text-center leading-tight">{hoveredItem.description}</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                
+
                 {/* Pin Toggle Button - Top Right Corner Only */}
                 {!hidePin && onTogglePin && (
                   <button
@@ -7817,9 +7984,9 @@ function SongStructureIntegratedControl({
   ];
 
   const structureOptions = [
-    { id: '1', label: '1', description: '간결한 구조.추천 1~2분' },
-    { id: '2', label: '2', description: '일반적인 기본 구조. 추천 2~4분' },
-    { id: '3', label: '3', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
+    { id: '1', label: '기본', description: '감정선과 스토리에 맞춰 곡 구조를 자유롭게 구성합니다.' },
+    { id: '2', label: '1', description: '일반적인 기본 구조. 추천 2~4분' },
+    { id: '3', label: '2', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
     { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
   ] as const;
 
@@ -8075,7 +8242,7 @@ function SongStructureIntegratedControl({
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2 rounded-lg transition-all border shadow-btn",
-                (lyricsLength !== 'normal' || songStructure !== '2' || (customStructure ?? []).length > 0)
+                (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                   : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
@@ -8176,10 +8343,10 @@ function SongStructureIntegratedControl({
                 {/* Structure Guide - Always Visible */}
                 <div className="mt-2 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3 bg-brand-orange/5">
                   <p className="text-[10px] font-bold text-brand-orange mb-1 uppercase tracking-tight">
-                    {songStructure === 'custom' ? '현재 커스텀 구조' : `구조 ${songStructure} 상세 가이드`}
+                    {songStructure === 'custom' ? '현재 커스텀 구조' : songStructure === '1' ? '기본 구조 상세 가이드' : `구조 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "Intro → Verse 1 → Chorus / Drop → Outro"}
+                    {songStructure === '1' && "감정선과 스토리에 맞춰 자유롭게 구성합니다. 고정된 1절-후렴-2절 구조를 강제하지 않고, 필요한 곳에 Hook, Rap Section, Drop, Bridge 등을 배치합니다."}
                     {songStructure === '2' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
                     {songStructure === '3' && "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (
@@ -8926,19 +9093,66 @@ function VocalControl({
   }, []);
 
   const [activeVocalTonePopup, setActiveVocalTonePopup] = useState<string | null>(null);
-  const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0 });
+  const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0, width: 560, maxHeight: 320 });
+
+  const updateMemberTonePopupPos = useCallback((trigger?: HTMLElement | null) => {
+    const target = trigger || document.querySelector(`[data-tone-trigger="${activeVocalTonePopup || ''}"]`) as HTMLElement | null;
+    const rect = target?.getBoundingClientRect();
+    if (!rect) return;
+
+    // Portal로 body에 렌더링하되 fixed가 아니라 absolute 좌표를 사용한다.
+    // 이렇게 해야 페이지 스크롤 시 드롭다운이 화면에 고정되어 따라오지 않고,
+    // 원래 버튼 위치에 붙어 있는 일반 펼침창처럼 자연스럽게 움직인다.
+    const viewportPadding = 12;
+    const width = Math.max(260, Math.min(rect.width, window.innerWidth - viewportPadding * 2));
+    const viewportLeft = Math.min(Math.max(rect.left, viewportPadding), window.innerWidth - width - viewportPadding);
+    const left = viewportLeft + window.scrollX;
+    const top = rect.bottom + window.scrollY + 6;
+    const maxHeight = Math.max(160, Math.min(300, window.innerHeight - rect.bottom - viewportPadding));
+
+    setVocalTonePopupPos({ top, left, width, maxHeight });
+  }, [activeVocalTonePopup]);
 
   const handleVocalToneClick = (e: React.MouseEvent, id: string) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const scrollY = window.scrollY || window.pageYOffset;
-    const scrollX = window.scrollX || window.pageXOffset;
-    
-    setVocalTonePopupPos({
-      top: rect.bottom + scrollY + 4,
-      left: rect.left + scrollX
-    });
-    setActiveVocalTonePopup(activeVocalTonePopup === id ? null : id);
+    const trigger = e.currentTarget as HTMLElement;
+    if (activeVocalTonePopup === id) {
+      setActiveVocalTonePopup(null);
+      return;
+    }
+    updateMemberTonePopupPos(trigger);
+    setActiveVocalTonePopup(id);
   };
+
+  useEffect(() => {
+    if (!activeVocalTonePopup) return;
+
+    updateMemberTonePopupPos();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveVocalTonePopup(null);
+    };
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-member-tone-panel]') || target.closest('[data-tone-trigger]')) return;
+      setActiveVocalTonePopup(null);
+    };
+
+    const handleWindowChange = () => updateMemberTonePopupPos();
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleWindowChange);
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleWindowChange);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [activeVocalTonePopup, updateMemberTonePopupPos]);
 
   useEffect(() => {
     if (!showToneSelector) return;
@@ -9012,25 +9226,48 @@ function VocalControl({
 
   const handleGenderToggle = (gender: 'male' | 'female') => {
     if (vocalMode === 'solo') {
-      if (gender === 'male') { onMaleChange(1); onFemaleChange(0); }
-      else { onMaleChange(0); onFemaleChange(1); }
-    } else if (vocalMode === 'duo') {
+      // Solo mode: selected gender button toggles off to random solo.
+      // male only = solo male, female only = solo female, none = random solo.
       if (gender === 'male') {
-        if (maleCount === 2) { onMaleChange(1); onFemaleChange(1); }
-        else if (maleCount === 1 && femaleCount === 1) { onMaleChange(2); onFemaleChange(0); }
-        else { onMaleChange(2); onFemaleChange(0); }
+        if (maleCount > 0 && femaleCount === 0) {
+          onMaleChange(0);
+          onFemaleChange(0);
+        } else {
+          onMaleChange(1);
+          onFemaleChange(0);
+        }
       } else {
-        if (femaleCount === 2) { onMaleChange(1); onFemaleChange(1); }
-        else if (maleCount === 1 && femaleCount === 1) { onMaleChange(0); onFemaleChange(2); }
-        else { onMaleChange(0); onFemaleChange(2); }
+        if (femaleCount > 0 && maleCount === 0) {
+          onMaleChange(0);
+          onFemaleChange(0);
+        } else {
+          onMaleChange(0);
+          onFemaleChange(1);
+        }
+      }
+    } else if (vocalMode === 'duo') {
+      // Duo mode uses gender flags, then converts them to valid duo counts:
+      // male only = 2 male, female only = 2 female, both = 1 male + 1 female, none = random duo.
+      const nextMaleActive = gender === 'male' ? maleCount === 0 : maleCount > 0;
+      const nextFemaleActive = gender === 'female' ? femaleCount === 0 : femaleCount > 0;
+
+      if (nextMaleActive && nextFemaleActive) {
+        onMaleChange(1);
+        onFemaleChange(1);
+      } else if (nextMaleActive) {
+        onMaleChange(2);
+        onFemaleChange(0);
+      } else if (nextFemaleActive) {
+        onMaleChange(0);
+        onFemaleChange(2);
+      } else {
+        onMaleChange(0);
+        onFemaleChange(0);
       }
     } else if (vocalMode === 'group') {
-      // In group mode, toggle gender buttons can act as "Add" or "Switch"
-      // But let's make it add a member if total < 7
-      if (maleCount + femaleCount < 7) {
-        if (gender === 'male') onMaleChange(maleCount + 1);
-        else onFemaleChange(femaleCount + 1);
-      }
+      // Group mode has explicit add/remove member controls.
+      // Gender buttons are not used here.
+      return;
     }
     onHover({ 
       id: gender, 
@@ -9057,14 +9294,16 @@ function VocalControl({
   };
 
   const handleRemoveMember = (idx: number) => {
-    if (maleCount + femaleCount <= 1) return; // Minimum 1 member
-    
+    // Group mode allows removing the last member too.
+    // When all members are removed, generation treats it as a random group vocal.
     const member = vocalMembers[idx];
+    if (!member) return;
+
     const newMembers = vocalMembers.filter((_, i) => i !== idx);
     onMembersChange(newMembers);
-    
-    if (member.gender === 'male') onMaleChange(maleCount - 1);
-    else onFemaleChange(femaleCount - 1);
+
+    if (member.gender === 'male') onMaleChange(Math.max(0, maleCount - 1));
+    else onFemaleChange(Math.max(0, femaleCount - 1));
   };
 
   const handleUpdateMember = (idx: number, updates: Partial<VocalMember>) => {
@@ -9090,8 +9329,8 @@ function VocalControl({
     return true;
   });
 
-  const selectedTone = vocalTones.find(t => t.id === selectedToneId);
-  const selectedToneLabel = getVocalToneDisplayLabel(selectedToneId, vocalTones);
+  const selectedEmotion = getVocalEmotionLine(selectedToneId);
+  const selectedToneLabel = getVocalEmotionDisplayLabel(selectedToneId);
 
   const applyGlobalToneDirectInput = () => {
     const next = globalToneDraft.trim();
@@ -9318,7 +9557,7 @@ function VocalControl({
           {/* Global Vocal Tone */}
           <div className="relative space-y-1.5">
             <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">전체 보컬톤</p>
+              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">보컬 감정 방향</p>
               {selectedToneId && (
                 <button
                   type="button"
@@ -9347,7 +9586,7 @@ function VocalControl({
                       setGlobalToneDraft(selectedToneLabel || '');
                     }
                   }}
-                  placeholder="직접 입력: 예: 숨 섞인 허스키톤, 차갑고 건조한 톤"
+                  placeholder="직접 입력: 예: 속으로 우는, 밀어내듯 차가운, 후련한"
                   className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
                   autoFocus
                 />
@@ -9358,7 +9597,7 @@ function VocalControl({
                     setGlobalToneDraft(selectedToneLabel || '');
                   }}
                   className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-400 hover:bg-btn-hover transition-all"
-                  aria-label="보컬톤 직접 입력 취소"
+                  aria-label="보컬 감정 방향 직접 입력 취소"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -9366,7 +9605,7 @@ function VocalControl({
                   type="button"
                   onClick={applyGlobalToneDirectInput}
                   className="p-1.5 rounded-lg text-brand-orange hover:bg-brand-orange/10 transition-all"
-                  aria-label="보컬톤 직접 입력 적용"
+                  aria-label="보컬 감정 방향 직접 입력 적용"
                 >
                   <Check className="w-3.5 h-3.5" />
                 </button>
@@ -9386,7 +9625,7 @@ function VocalControl({
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                 )}
               >
-                <span className="truncate">{selectedToneId ? selectedToneLabel : '톤 선택 또는 직접 입력'}</span>
+                <span className="truncate">{selectedToneId ? selectedToneLabel : '감정 방향 선택 또는 직접 입력'}</span>
                 <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showToneSelector && "rotate-180")} />
               </button>
             )}
@@ -9412,14 +9651,14 @@ function VocalControl({
                         left: globalTonePopupPos.left,
                         width: globalTonePopupPos.width || undefined,
                       }}
-                      className="rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+                      className="rounded-2xl bg-[#050505] border border-[var(--border-color)] shadow-2xl shadow-black/60 overflow-hidden"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1.5">
+                      <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1.5 bg-[#050505]">
                         <button
                           type="button"
                           onClick={startGlobalToneDirectInput}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
                         >
                           <span>직접 입력</span>
                           <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -9429,19 +9668,19 @@ function VocalControl({
                           onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
                           className={cn(
                             "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
-                            !selectedToneId ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                            !selectedToneId ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
                           )}
                         >
                           기본 추천 사용
                         </button>
-                        {filteredTones.map((tone) => (
+                        {VOCAL_EMOTION_LINES.map((tone) => (
                           <button
                             key={tone.id}
                             type="button"
                             onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
                             className={cn(
                               "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
-                              selectedToneId === tone.id ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                              selectedToneId === tone.id ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
                             )}
                           >
                             {tone.labelKo || tone.label}
@@ -9476,9 +9715,11 @@ function VocalControl({
                         </span>
                       </div>
                       
-                      {vocalMode === 'group' && vocalMembers.length > 1 && (
+                      {vocalMode === 'group' && (
                         <button
                           onClick={() => handleRemoveMember(idx)}
+                          onMouseEnter={() => onHover({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
+                          onMouseLeave={() => onHover(null)}
                           className="p-1 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover/member:opacity-100"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -9544,29 +9785,38 @@ function VocalControl({
                         {activeVocalTonePopup === member.id && (
                           <Portal>
                             <motion.div
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              style={{ 
-                                position: 'absolute',
+                              data-member-tone-panel
+                              initial={{ opacity: 0, y: -6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -6 }}
+                              transition={{ duration: 0.14, ease: 'easeOut' }}
+                              className="absolute z-[9999] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[#050505] shadow-2xl shadow-black/60"
+                              style={{
                                 top: vocalTonePopupPos.top,
                                 left: vocalTonePopupPos.left,
-                                zIndex: 10000,
-                                pointerEvents: 'auto'
+                                width: vocalTonePopupPos.width,
+                                maxHeight: vocalTonePopupPos.maxHeight,
                               }}
-                              className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl overflow-hidden w-48"
                             >
-                              <div className="p-1 max-h-40 overflow-y-auto custom-scrollbar">
+                              <div className="overflow-y-auto custom-scrollbar p-1.5 space-y-1 bg-[#050505]" style={{ maxHeight: vocalTonePopupPos.maxHeight }}>
                                 <button
+                                  type="button"
                                   onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveVocalTonePopup(null); }}
                                   className={cn(
-                                    "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
-                                    !member.toneId ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-btn-hover"
+                                    "w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border",
+                                    !member.toneId
+                                      ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20"
+                                      : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
                                   )}
                                 >
-                                  기본 (Default)
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span>기본 추천 사용</span>
+                                    {!member.toneId && <Check className="w-3.5 h-3.5 shrink-0" />}
+                                  </div>
                                 </button>
+
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     const nextTone = window.prompt('직접 입력할 보컬톤을 적어주세요. 예: 숨 섞인 허스키톤, 차갑고 건조한 톤', getVocalToneDisplayLabel(member.toneId, vocalTones));
                                     if (nextTone && nextTone.trim()) {
@@ -9574,29 +9824,35 @@ function VocalControl({
                                     }
                                     setActiveVocalTonePopup(null);
                                   }}
-                                  className="w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5 text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                                  className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
                                 >
-                                  직접 입력
+                                  <span>직접 입력</span>
+                                  <Edit2 className="w-3.5 h-3.5 shrink-0" />
                                 </button>
+
                                 {vocalTones
                                   .filter(t => t.genderTarget === 'any' || t.genderTarget === 'unisex' || t.genderTarget === member.gender || (vocalMode === 'group' && t.genderTarget === 'group'))
-                                  .map(tone => (
-                                  <button
-                                    key={tone.id}
-                                    onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveVocalTonePopup(null); }}
-                                    className={cn(
-                                      "w-full text-left px-2 py-1.5 rounded-md text-[9px] font-bold transition-all mb-0.5",
-                                      member.toneId === tone.id ? "bg-brand-orange text-white" : "text-[var(--text-secondary)] hover:bg-btn-hover"
-                                    )}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span>{tone.labelKo || tone.label}</span>
-                                    </div>
-                                  </button>
-                                ))}
+                                  .map(tone => {
+                                    const isToneActive = member.toneId === tone.id;
+                                    return (
+                                      <button
+                                        key={tone.id}
+                                        type="button"
+                                        onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveVocalTonePopup(null); }}
+                                        className={cn(
+                                          "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border text-left",
+                                          isToneActive
+                                            ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20"
+                                            : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
+                                        )}
+                                      >
+                                        <span className="leading-snug">{tone.labelKo || tone.label}</span>
+                                        {isToneActive && <Check className="w-3.5 h-3.5 shrink-0" />}
+                                      </button>
+                                    );
+                                  })}
                               </div>
                             </motion.div>
-                            <div className="fixed inset-0 z-[9999]" onClick={() => setActiveVocalTonePopup(null)} />
                           </Portal>
                         )}
                       </AnimatePresence>

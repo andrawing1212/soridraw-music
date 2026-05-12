@@ -50,6 +50,7 @@ interface GenerateSongParams {
   subGenre?: string[];
   isKpopSelected?: boolean;
   isKoreanEnglishMix?: boolean;
+  englishMixRatio?: number;
   moods: string[];
   themes?: string[];
   situation?: SituationConfig;
@@ -65,6 +66,8 @@ interface GenerateSongParams {
   useAutoDuration?: boolean;
   vocal?: VocalConfig;
   tempo?: string;
+  isRandomTempo?: boolean;
+  tempoSource?: "random" | "manual";
   specialPrompt?: string;
   kpopMode?: 0 | 1 | 2;
   customStructure?: CustomSectionItem[];
@@ -103,6 +106,35 @@ function sentenceCase(value: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatTempoForPrompt(tempo?: string | null): string {
+  const raw = String(tempo || "").trim();
+  if (!raw) return "";
+
+  const formatted = raw
+    .replace(/^Between\s+/i, "")
+    .replace(/^Exactly\s+/i, "")
+    .replace(/\s+and\s+/i, "–")
+    .replace(/\s*BPM\s*/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!formatted) return "";
+  return /BPM$/i.test(formatted) ? formatted : `${formatted} BPM`;
+}
+
+function buildTempoPromptPhrase(
+  params: Pick<GenerateSongParams, "tempo" | "isRandomTempo" | "tempoSource">,
+): string {
+  const tempo = formatTempoForPrompt(params.tempo);
+  if (!tempo) return "";
+
+  if (params.tempoSource === "random" || params.isRandomTempo) {
+    return `tempo optimized around ${tempo}`;
+  }
+
+  return `tempo set to ${tempo}`;
+}
+
 function resolveStyleItem(value: string) {
   const normalized = value.trim().toLowerCase();
   return SOUND_STYLES.find(
@@ -119,6 +151,303 @@ function resolveInstrumentSoundItem(value: string) {
       item.id.toLowerCase() === normalized ||
       item.label.toLowerCase() === normalized,
   );
+}
+
+
+
+type VocalEmotionLine = {
+  id: string;
+  labelKo: string;
+  label: string;
+  descriptionKo?: string;
+  promptCore: string;
+  promptShort: string;
+  tag: string;
+  roleBias: "main" | "lead" | "rap" | "whisper" | "harmony" | "any";
+};
+
+const VOCAL_EMOTION_LINES: VocalEmotionLine[] = [
+  { id: "emotion_smiling_hidden_pain", labelKo: "아무렇지 않은 척하지만 속으로 우는", label: "Smiling through pain", descriptionKo: "겉으로는 웃거나 평온해 보이지만, 내면은 슬픔과 상처로 곪아 있어 위태로운 감정 상태.", promptCore: "smiling through pain, crying inside, emotionally wounded underneath", promptShort: "smiling through hidden pain", tag: "hidden pain", roleBias: "main" },
+  { id: "emotion_resentful_lingering", labelKo: "원망스럽지만 여전히 미련이 남은", label: "Resentful but still clinging", descriptionKo: "상대가 밉고 화가 나면서도 끝내 다 놓지 못해 마음 한구석에 미련과 그리움이 남아있는 상태.", promptCore: "resentful but still clinging to lingering feelings, angry yet unable to let go", promptShort: "resentful but still longing", tag: "resentful longing", roleBias: "rap" },
+  { id: "emotion_resigned_empty", labelKo: "모든 것을 체념하고 텅 빈", label: "Numb and empty", descriptionKo: "슬픔이나 분노마저 다 지나가 버려 어떤 기대나 희망도 없이 무감각하고 공허해진 상태.", promptCore: "completely resigned, numb and empty inside, no hope left", promptShort: "numb and resigned", tag: "numb", roleBias: "lead" },
+  { id: "emotion_too_exhausted_to_anger", labelKo: "화낼 기력조차 없이 지쳐버린", label: "Too exhausted to be angry", descriptionKo: "화가 나고 억울하지만 감정을 너무 많이 소모해서 더 이상 따질 힘조차 남아있지 않은 상태.", promptCore: "too exhausted to be angry, emotionally drained, no strength left to fight", promptShort: "exhausted beyond anger", tag: "drained", roleBias: "lead" },
+  { id: "emotion_pushing_away_fear", labelKo: "상처받을까 두려워 먼저 차갑게 밀어내는", label: "Pushing away out of fear", descriptionKo: "다가가고 싶지만 또 상처받는 것이 두려워 자기방어적으로 선을 긋고 냉정하게 구는 상태.", promptCore: "pushing away out of fear of getting hurt, guarded longing, defensive coldness", promptShort: "pushing away out of fear", tag: "guarded", roleBias: "rap" },
+  { id: "emotion_cold_suppressed_anger", labelKo: "터질 듯한 분노를 차갑게 억누르는", label: "Coldly suppressed anger", descriptionKo: "폭발할 것 같은 거대한 분노를 품고 있지만, 이성을 붙잡고 싸늘하게 다스리는 상태.", promptCore: "coldly suppressing explosive anger, controlled rage, icy restraint", promptShort: "coldly suppressed anger", tag: "suppressed anger", roleBias: "rap" },
+  { id: "emotion_abandonment_anxiety", labelKo: "버림받을까 봐 조마조마하고 불안한", label: "Terrified of losing", descriptionKo: "겉으로는 태연해 보이려 하지만 상대방의 마음이 떠날까 봐 속으로 극도로 초조하고 불안한 상태.", promptCore: "anxious and terrified of losing, insecure attachment, fear of being left behind", promptShort: "anxious fear of losing", tag: "insecure", roleBias: "whisper" },
+  { id: "emotion_awkward_sincere_approach", labelKo: "어색하지만 진심을 다해 조심스럽게 다가가는", label: "Awkward but sincere", descriptionKo: "표현이 서툴고 쑥스럽지만 용기를 내어 진심을 조심스럽게 전하려는 상태.", promptCore: "awkward but sincerely and carefully approaching, clumsy honesty, careful affection", promptShort: "awkward but sincere", tag: "sincere", roleBias: "harmony" },
+  { id: "emotion_bitter_regret_self_blame", labelKo: "지난날을 뼈저리게 후회하며 자책하는", label: "Bitter regret and self-blame", descriptionKo: "되돌릴 수 없는 과거의 잘못이나 선택을 깊이 후회하며 스스로를 원망하는 상태.", promptCore: "bitterly regretting and blaming oneself, painful remorse, self-directed guilt", promptShort: "bitter regret and self-blame", tag: "self-blame", roleBias: "main" },
+  { id: "emotion_secret_yearning", labelKo: "들킬까 봐 숨죽이며 애태우는", label: "Secretly yearning", descriptionKo: "진짜 마음이 들통날까 봐 전전긍긍하며 혼자 속앓이를 하는 상태.", promptCore: "secretly yearning, painfully hiding true feelings, breath-held longing", promptShort: "secret yearning held back", tag: "secret longing", roleBias: "whisper" },
+  { id: "emotion_choked_gratitude", labelKo: "벅찬 감동에 가슴이 메이는", label: "Overwhelmed and choked up", descriptionKo: "큰 기쁨, 사랑, 위로를 받아 감정이 북받쳐 말을 잇지 못할 만큼 벅찬 상태.", promptCore: "overwhelmed with emotion, choked up with gratitude, heart-swelling tenderness", promptShort: "overwhelmed and choked up", tag: "choked up", roleBias: "main" },
+  { id: "emotion_burden_released", labelKo: "오랜 짐을 벗어던지고 온전히 후련한", label: "Free from a heavy burden", descriptionKo: "오랫동안 짓누르던 억압, 상처, 인연에서 벗어나 진정한 해방감과 자유를 느끼는 상태.", promptCore: "completely free, letting go of a heavy burden, cathartic release", promptShort: "free from a heavy burden", tag: "liberated", roleBias: "main" },
+];
+
+function resolveVocalEmotionLine(value: string | null | undefined): VocalEmotionLine | undefined {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return undefined;
+  return VOCAL_EMOTION_LINES.find((item) =>
+    item.id.toLowerCase() === normalized ||
+    item.label.toLowerCase() === normalized ||
+    item.labelKo.toLowerCase() === normalized
+  );
+}
+
+function resolveVocalEmotionCore(value: string | null | undefined): string {
+  const item = resolveVocalEmotionLine(value);
+  return item?.promptCore || String(value || "");
+}
+
+function resolveVocalEmotionShort(value: string | null | undefined): string {
+  const item = resolveVocalEmotionLine(value);
+  return item?.promptShort || "";
+}
+
+function getGlobalVocalEmotionCueForRole(
+  params: GenerateSongParams,
+  role: string,
+  tone: string,
+  index: number,
+): VocalExpressionCue | null {
+  const item = resolveVocalEmotionLine(params.vocal?.globalToneId);
+  if (!item) return null;
+  return adaptVocalEmotionCueForRole(item, role, tone, index);
+}
+
+type VocalExpressionCue = {
+  id: string;
+  label: string;
+  short: string;
+  tag: string;
+  roleBias: "main" | "lead" | "rap" | "whisper" | "harmony" | "any";
+};
+
+function isVocalExpressionStyleItem(item: ReturnType<typeof resolveStyleItem>): boolean {
+  if (!item) return false;
+  const text = [
+    item.id,
+    item.label,
+    item.labelKo,
+    item.style,
+    item.sound,
+    item.mood,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return (
+    item.id.toLowerCase().startsWith("vocal-") ||
+    /vocal|보컬|sing|spoken|말하듯|읊조|whisper|속삭|teary|울먹|pleading|애원|sarcastic|비꼬|emotion|감정/.test(text)
+  );
+}
+
+function vocalExpressionCueFromStyle(item: ReturnType<typeof resolveStyleItem>): VocalExpressionCue | null {
+  if (!item) return null;
+  const text = [item.id, item.label, item.labelKo, item.style, item.mood]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const label = item.labelKo || item.label || item.id;
+
+  const make = (
+    short: string,
+    tag: string,
+    roleBias: VocalExpressionCue["roleBias"] = "any",
+  ): VocalExpressionCue => ({ id: item.id, label, short, tag, roleBias });
+
+  if (/sarcastic|비꼬/.test(text)) return make("subtle sarcastic edge", "sarcastic", "rap");
+  if (/tossed|툭/.test(text)) return make("dry tossed-off attitude", "dry casual", "rap");
+  if (/spoken|말하듯/.test(text)) return make("spoken conversational phrasing", "conversational", "rap");
+  if (/reciting|읊조/.test(text)) return make("quiet reciting phrasing", "poetic calm", "lead");
+  if (/held|눌러|참/.test(text)) return make("held-back restrained emotion", "restrained", "main");
+  if (/teary|울먹/.test(text)) return make("tearful fragile emotion", "fragile", "lead");
+  if (/pleading|애원/.test(text)) return make("pleading vulnerable pull", "pleading", "main");
+  if (/cold|차가/.test(text)) return make("cold restrained distance", "cold", "rap");
+  if (/indifferent|무심/.test(text)) return make("detached indifferent calm", "detached", "rap");
+  if (/lazy|나른/.test(text)) return make("lazy relaxed phrasing", "laid-back", "lead");
+  if (/rough|거친|gritty/.test(text)) return make("rough gritty pressure", "gritty", "rap");
+  if (/dreamy|몽롱/.test(text)) return make("dreamy blurred softness", "dreamy", "lead");
+  if (/whisper|속삭/.test(text)) return make("whispery intimate restraint", "whispery", "whisper");
+  if (/explosive|폭발/.test(text)) return make("explosive emotional peak", "explosive", "main");
+  if (/smiling|웃는/.test(text)) return make("smiling playful warmth", "playful warm", "harmony");
+  if (/empty|허무/.test(text)) return make("hollow resigned emotion", "empty", "lead");
+  if (/suffocated|숨 막|breathless/.test(text)) return make("breathless pressured tension", "breathless tense", "main");
+  if (/emotional rise|감정 고조/.test(text)) return make("gradual emotional rise", "rising emotion", "main");
+  if (/delicate|섬세/.test(text)) return make("delicate controlled expression", "delicate", "lead");
+
+  const fallback = cleanPromptValue(item.style || item.mood || item.label || item.id);
+  if (!fallback) return null;
+  return make(limitText(fallback, 42), firstPromptWord(fallback), "any");
+}
+
+function getSelectedVocalExpressionCues(params: GenerateSongParams): VocalExpressionCue[] {
+  const cues: VocalExpressionCue[] = [];
+  const seen = new Set<string>();
+  for (const id of params.styles ?? []) {
+    const item = resolveStyleItem(id);
+    if (!isVocalExpressionStyleItem(item)) continue;
+    const cue = vocalExpressionCueFromStyle(item);
+    if (!cue || seen.has(cue.id)) continue;
+    seen.add(cue.id);
+    cues.push(cue);
+  }
+  return cues.slice(0, 4);
+}
+
+function roleBiasForVocalSplit(role: string, tone: string): VocalExpressionCue["roleBias"] {
+  const value = `${role} ${tone}`.toLowerCase();
+  if (/rap|talk|flow/.test(value)) return "rap";
+  if (/whisper|breathy/.test(value)) return "whisper";
+  if (/main|belt|high|climax/.test(value)) return "main";
+  if (/lead|airy|soft|dreamy/.test(value)) return "lead";
+  if (/sub|harmony|support/.test(value)) return "harmony";
+  return "any";
+}
+
+function pickVocalExpressionCueForRole(
+  params: GenerateSongParams,
+  role: string,
+  tone: string,
+  index: number,
+): VocalExpressionCue | null {
+  const cues = getSelectedVocalExpressionCues(params);
+  if (!cues.length) return null;
+  const roleBias = roleBiasForVocalSplit(role, tone);
+  const direct = cues.find((cue) => cue.roleBias === roleBias);
+  if (direct) return direct;
+  const any = cues.find((cue) => cue.roleBias === "any");
+  if (any) return any;
+  return cues[index % cues.length] || null;
+}
+
+function adaptVocalEmotionCueForRole(
+  item: VocalEmotionLine,
+  role: string,
+  tone: string,
+  index: number,
+): VocalExpressionCue {
+  const roleBias = roleBiasForVocalSplit(role, tone);
+  const core = `${item.promptCore} ${item.promptShort}`.toLowerCase();
+  let short = item.promptShort;
+  let tag = item.tag;
+
+  // A global emotion should be the emotional center, but each singer must express it differently.
+  // Otherwise every member receives the same phrase (ex: "numb and resigned") and the split loses color.
+  if (item.id === "emotion_resigned_empty" || /numb|resigned|empty/.test(core)) {
+    if (roleBias === "main") {
+      short = "numb but climactic";
+      tag = "numb";
+    } else if (roleBias === "lead") {
+      short = "hollow and fragile";
+      tag = "hollow";
+    } else if (roleBias === "rap") {
+      short = /low|husky|off/i.test(`${role} ${tone}`)
+        ? "tired cynical detachment"
+        : "numb but casually sharp";
+      tag = "numb";
+    } else if (roleBias === "whisper") {
+      short = "empty breath-held restraint";
+      tag = "empty";
+    } else {
+      short = "quiet numb restraint";
+      tag = "numb";
+    }
+  } else if (item.id === "emotion_smiling_hidden_pain" || /hidden pain|crying inside|wounded/.test(core)) {
+    if (roleBias === "main") short = "smiling through hidden pain";
+    else if (roleBias === "lead") short = "fragile pain under calm";
+    else if (roleBias === "rap") short = "dry pain behind bravado";
+    else if (roleBias === "whisper") short = "secret wounded restraint";
+    tag = roleBias === "rap" ? "hidden pain" : item.tag;
+  } else if (item.id === "emotion_resentful_lingering" || /resentful|longing|lingering/.test(core)) {
+    if (roleBias === "main") short = "aching resentful longing";
+    else if (roleBias === "lead") short = "soft lingering hurt";
+    else if (roleBias === "rap") short = "resentful sharp longing";
+    else if (roleBias === "whisper") short = "secret lingering resentment";
+    tag = "longing";
+  } else if (item.id === "emotion_cold_suppressed_anger" || /suppressed.*anger|controlled rage|icy restraint/.test(core)) {
+    if (roleBias === "main") short = "cold controlled anger";
+    else if (roleBias === "lead") short = "shaky restrained anger";
+    else if (roleBias === "rap") short = "icy aggressive restraint";
+    else if (roleBias === "whisper") short = "quiet dangerous anger";
+    tag = "suppressed anger";
+  } else if (item.id === "emotion_abandonment_anxiety" || /terrified|insecure|fear of being left/.test(core)) {
+    if (roleBias === "main") short = "insecure emotional urgency";
+    else if (roleBias === "lead") short = "fragile anxious hesitation";
+    else if (roleBias === "rap") short = "defensive anxious edge";
+    else if (roleBias === "whisper") short = "breath-held anxious fear";
+    tag = "anxious";
+  } else if (item.id === "emotion_pushing_away_fear" || /pushing away|guarded longing|defensive cold/.test(core)) {
+    if (roleBias === "main") short = "guarded longing";
+    else if (roleBias === "lead") short = "soft fear behind distance";
+    else if (roleBias === "rap") short = "cold defensive push-away";
+    else if (roleBias === "whisper") short = "secret guarded fear";
+    tag = "guarded";
+  } else {
+    // Light role-shaping for any future emotion item.
+    if (roleBias === "rap" && !/attitude|edge|sharp|cynical|flow/i.test(short)) short = `${short} attitude`;
+    if (roleBias === "whisper" && !/breath|secret|whisper|restraint/i.test(short)) short = `secretive ${short}`;
+    if (roleBias === "lead" && !/fragile|soft|hollow|airy|dreamy/i.test(short)) short = `soft ${short}`;
+    if (roleBias === "harmony" && !/supportive|warm|blend/i.test(short)) short = `supportive ${short}`;
+  }
+
+  return { id: item.id, label: item.labelKo, short, tag, roleBias: item.roleBias || "any" };
+}
+
+function adaptVocalExpressionCueForRole(
+  cue: VocalExpressionCue | null,
+  role: string,
+  tone: string,
+): VocalExpressionCue | null {
+  if (!cue) return null;
+  const roleBias = roleBiasForVocalSplit(role, tone);
+  const source = `${cue.short} ${cue.tag} ${cue.label}`.toLowerCase();
+  let short = cue.short;
+  let tag = cue.tag;
+
+  if (/rough|gritty|거친/.test(source)) {
+    if (roleBias === "main") {
+      short = "rough climactic pressure";
+      tag = "gritty";
+    } else if (roleBias === "lead") {
+      short = "fragile rough edge";
+      tag = "fragile";
+    } else if (roleBias === "rap") {
+      short = "gritty off-beat pressure";
+      tag = "gritty";
+    } else if (roleBias === "whisper") {
+      short = "breathy rough tension";
+      tag = "breathy";
+    }
+  } else if (/sarcastic|cynical|비꼬/.test(source) && roleBias !== "rap") {
+    short = roleBias === "main" ? "controlled cynical edge" : "subtle cynical color";
+    tag = "cynical";
+  } else if (/explosive|폭발/.test(source) && roleBias === "lead") {
+    short = "fragile build-up tension";
+    tag = "tense";
+  } else if (/whisper|속삭/.test(source) && roleBias !== "whisper") {
+    short = roleBias === "rap" ? "hushed talk-rap delivery" : "intimate soft restraint";
+    tag = roleBias === "rap" ? "hushed" : "intimate";
+  }
+
+  return { ...cue, short, tag, roleBias: cue.roleBias };
+}
+
+function mergeVocalExpressionIntoEmotion(baseEmotion: string, cue: VocalExpressionCue | null): string {
+  const base = String(baseEmotion || "").replace(/^with\s+/i, "").trim();
+  if (!cue?.short) return base;
+  const cueShort = cue.short.trim();
+  if (!cueShort) return base;
+  const low = base.toLowerCase();
+  const cueKey = firstPromptWord(cueShort).toLowerCase();
+  if (cueKey && low.includes(cueKey)) return base;
+  if (!base) return cueShort;
+  return `${base}, ${cueShort}`;
+}
+
+function buildSelectedVocalExpressionInstruction(params: GenerateSongParams): string {
+  const cues = getSelectedVocalExpressionCues(params);
+  if (!cues.length) return "No extra Vocal Expression style selected.";
+  return cues
+    .map((cue) => `- ${cue.label}: use ${cue.short}; lyric tags may include one short cue such as ${cue.tag}.`)
+    .join("\n");
 }
 
 function getSubGenreLabels(subGenreIds: string[] = []): string[] {
@@ -174,6 +503,89 @@ function getInstrumentSoundLabels(values: string[] = []): string[] {
     })
     .filter(NON_EMPTY);
 }
+
+
+function getInstrumentSoundPromptItems(values: string[] = []) {
+  return values
+    .map((value) => resolveInstrumentSoundItem(value) as any)
+    .filter((item) => item && String(item.promptCore || '').trim().length > 0)
+    .map((item) => ({
+      id: String(item.id || ''),
+      prompt: String(item.promptCore || '').trim(),
+      categoryKo: String(item.categoryKo || item.categoryLabel || '기타'),
+      labelKo: String(item.labelKo || item.label || item.id || ''),
+    }));
+}
+
+function compactSoundPromptsByCategory(values: string[] = []): string[] {
+  const items = getInstrumentSoundPromptItems(values);
+  if (!items.length) return [];
+
+  const byCategory = new Map<string, typeof items>();
+  items.forEach((item) => {
+    const list = byCategory.get(item.categoryKo) ?? [];
+    list.push(item);
+    byCategory.set(item.categoryKo, list);
+  });
+
+  const compacted: string[] = [];
+  const joinPrompts = (list: typeof items, max = 4) =>
+    list.map((item) => item.prompt).filter(Boolean).slice(0, max).join(', ');
+
+  byCategory.forEach((list, categoryKo) => {
+    if (list.length === 1) {
+      compacted.push(list[0].prompt);
+      return;
+    }
+
+    const prompts = joinPrompts(list, categoryKo === '전통악기' || categoryKo === '월드악기' ? 5 : 4);
+    switch (categoryKo) {
+      case '전통악기':
+        compacted.push(`Korean traditional ensemble with ${prompts}`);
+        break;
+      case '월드악기':
+        compacted.push(`world instrument color with ${prompts}`);
+        break;
+      case '리듬 악기':
+        compacted.push(`rhythm section with ${prompts}`);
+        break;
+      case '베이스':
+        compacted.push(`low-end foundation with ${prompts}`);
+        break;
+      case '기타':
+        compacted.push(`guitar layer with ${prompts}`);
+        break;
+      case '건반':
+        compacted.push(`keyboard layer with ${prompts}`);
+        break;
+      case '신스':
+        compacted.push(`synth layer with ${prompts}`);
+        break;
+      case '현악':
+        compacted.push(`string layer with ${prompts}`);
+        break;
+      case '관악':
+        compacted.push(`wind and brass color with ${prompts}`);
+        break;
+      case '타악':
+        compacted.push(`percussion accents with ${prompts}`);
+        break;
+      case '보컬효과':
+        compacted.push(`vocal FX layer with ${prompts}`);
+        break;
+      case '공간효과':
+        compacted.push(`space FX with ${prompts}`);
+        break;
+      case '질감효과':
+        compacted.push(`texture FX with ${prompts}`);
+        break;
+      default:
+        compacted.push(prompts);
+    }
+  });
+
+  return compacted.filter(Boolean);
+}
 function resolveMoodItem(value: string) {
   const normalized = value.trim().toLowerCase();
   return MOODS.find(
@@ -189,6 +601,8 @@ function resolveMoodValue(moodValue: string): string {
   return mood.mood ?? mood.promptCore ?? mood.label;
 }
 function resolveVocalToneValue(toneIdOrLabel: string): string {
+  const emotion = resolveVocalEmotionLine(toneIdOrLabel);
+  if (emotion) return emotion.promptCore;
   const normalized = toneIdOrLabel.trim().toLowerCase();
 
   const tone = VOCAL_TONES.find(
@@ -203,6 +617,8 @@ function resolveVocalToneValue(toneIdOrLabel: string): string {
 }
 
 function resolveVocalToneShortValue(toneIdOrLabel: string): string {
+  const emotion = resolveVocalEmotionLine(toneIdOrLabel);
+  if (emotion) return emotion.promptShort;
   const normalized = toneIdOrLabel.trim().toLowerCase();
 
   const tone = VOCAL_TONES.find(
@@ -219,6 +635,54 @@ function resolveVocalToneShortValue(toneIdOrLabel: string): string {
     tone.promptShort ||
     compactVocalToneForPrompt(tone.promptCore || tone.labelKo || tone.label)
   );
+}
+
+function resolveVocalToneItem(toneIdOrLabel: string | null | undefined) {
+  const normalized = String(toneIdOrLabel || "").trim().toLowerCase();
+  if (!normalized) return undefined;
+  return VOCAL_TONES.find(
+    (item) =>
+      item.id.toLowerCase() === normalized ||
+      item.label.toLowerCase() === normalized ||
+      (item.labelKo || "").toLowerCase() === normalized,
+  );
+}
+
+function describeVocalToneForSplit(
+  toneIdOrLabel: string | null | undefined,
+  role: string,
+  gender: string,
+): string {
+  const tone = resolveVocalToneItem(toneIdOrLabel);
+  const source = tone
+    ? `${tone.id} ${tone.label} ${tone.labelKo || ""} ${tone.promptShort || ""} ${tone.promptCore || ""}`
+    : String(toneIdOrLabel || "");
+  const raw = source.toLowerCase();
+  const roleRaw = String(role || "").toLowerCase();
+  const isRapRole = /rap|rapper|래퍼|랩/.test(roleRaw) || /rap|래/.test(raw);
+
+  if (isRapRole) {
+    if (/whisper|breathy|속삭|숨결/.test(raw)) return "whispery breathy rap texture";
+    if (/low|deep|husky|off-beat|offbeat|저음|낮|허스키/.test(raw)) return "low husky off-beat rap flow";
+    if (/swagger|stylish|sassy|confident|스타일|스웨그/.test(raw)) return "stylish rhythmic rap flow";
+    if (/aggressive|punchy|sharp|cutting|공격|날카/.test(raw)) return "sharp punchy rap flow";
+    if (/bright|clear|cute|밝|선명|맑/.test(raw)) return "bright playful rap flow";
+    return "rhythmic rap flow";
+  }
+
+  if (/whisper|breathy|속삭|숨결/.test(raw)) return "whispery breathy tone";
+  if (/airy|floating|dreamy|relaxed|나른|몽환|공기/.test(raw)) return "airy relaxed tone";
+  if (/sweet|bright|clear|clean|cute|맑|선명|밝|달콤/.test(raw)) return "clear bright tone";
+  if (/power|belt|high|고음|파워/.test(raw)) return "powerful high-note belt";
+  if (/r&b|rnb|soul|소울/.test(raw)) return "soulful R&B tone";
+  if (/jazz|velvet|smoky|재즈/.test(raw)) return "velvety smoky tone";
+  if (/conversational|spoken|talk|말하/.test(raw)) return "spoken conversational tone";
+  if (/husky|gritty|rough|허스키|거친/.test(raw)) return "husky textured tone";
+
+  const short = tone?.promptShort || compactVocalToneForPrompt(source);
+  const cleaned = String(short || "").replace(/\b(male|female)\b/gi, "").replace(/\s+/g, " ").trim();
+  if (cleaned && cleaned !== "character" && cleaned !== "natural") return cleaned;
+  return defaultToneForVocalSplitRole(role, gender);
 }
 
 /**
@@ -401,8 +865,8 @@ function buildLyricGuidancePrompt(
   return `
 - Ensure clear line breaks between sections if sections are used.
 - The lyrics should primarily follow the user's story/intention.
-- Provide both English and Korean versions.
-- Do not translate Korean literally; keep it natural and lyrical.
+- Follow the selected lyric language mode exactly; do not add unselected languages.
+- If translation is requested by language mode, keep it natural and lyrical rather than literal.
 ${buildLyricsLengthInstruction(lyricsLength)}
 `.trim();
 }
@@ -494,7 +958,12 @@ function getVocalFormation(vocal: VocalConfig): string | null {
   const total = male + female;
   const mode = vocal.mode;
 
-  if (total === 0) return null;
+  if (total === 0) {
+    if (mode === "solo") return "Auto solo vocal";
+    if (mode === "duo") return "Auto duo vocal";
+    if (mode === "group") return "Auto group vocal";
+    return null;
+  }
 
   if (mode === "solo") {
     return female > 0 ? "Solo female vocal" : "Solo male vocal";
@@ -528,7 +997,13 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
     getVocalFormation(vocal) || "Genre-based recommended vocal formation";
 
   let genderRule = "";
-  if (male > 0 && female > 0) {
+  if ((vocal as any).mode === "solo" && male === 0 && female === 0) {
+    genderRule = `Use exactly one suitable solo vocalist chosen to match the genre and mood. Do not print the phrase "random solo vocal" in the final prompt.`;
+  } else if ((vocal as any).mode === "duo" && male === 0 && female === 0) {
+    genderRule = `Use exactly two contrasting vocalists chosen to match the song, with clearly separated roles by section. The duo may be mixed, male duo, or female duo. Do not print the phrase "random-gender duo" in the final prompt.`;
+  } else if ((vocal as any).mode === "group" && male === 0 && female === 0) {
+    genderRule = `Use a group vocal split with suitable mixed or same-gender voices chosen to match the genre, using clear Main, Lead, Rap, and Harmony-style roles. Do not print the phrase "random-gender group" in the final prompt.`;
+  } else if (male > 0 && female > 0) {
     genderRule = `Use a balanced mix of male and female vocalists.`;
   } else if (male > 0) {
     genderRule = `Use ONLY male vocals. Female vocals are NOT allowed.`;
@@ -576,19 +1051,23 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
 
         const genderStr = m.gender === "male" ? "Male" : "Female";
         const rolesStr = hasRoles ? m.roles.join(", ") : "";
+        const roleForLabel = rolesStr || getDefaultMultiVocalRole(idx, vocal.members?.length ?? 0, Boolean(vocal.rap));
+        const toneValue = m.toneId
+          ? describeVocalToneForSplit(m.toneId, roleForLabel, m.gender)
+          : "";
+        const tagLabel = lyricTagLabelFromRoleTone(
+          roleForLabel,
+          toneValue || roleForLabel,
+          male > 0 && female > 0,
+          m.gender,
+        );
         let toneInfo = "";
         if (m.toneId) {
-          const toneValue = resolveVocalToneValue(m.toneId);
-          const displayLabel = toneValue
-            .toLowerCase()
-            .includes(genderStr.toLowerCase())
-            ? toneValue
-            : `${genderStr} ${toneValue}`;
-          toneInfo = `, Tone: ${displayLabel}`;
+          toneInfo = `, Tone: ${toneValue}`;
         }
 
         const rolesPart = rolesStr ? `: ${rolesStr}` : "";
-        return `- Member ${idx + 1} (${genderStr})${rolesPart}${toneInfo}`;
+        return `- ${tagLabel} (${genderStr})${rolesPart}${toneInfo}`;
       })
       .filter(Boolean)
       .join("\n");
@@ -622,7 +1101,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       userInput: first.userInput ?? "",
       songPrompt: first.songPrompt,
       lyricsLength: first.lyricsLength ?? "normal",
-      songStructure: first.songStructure ?? "2",
+      songStructure: first.songStructure ?? "1",
       useAutoDuration: first.useAutoDuration ?? true,
       vocal: first.vocal ?? { male: 0, female: 0, rap: false },
       tempo: first.tempo,
@@ -630,6 +1109,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       kpopMode: first.kpopMode ?? 0,
       isKpopSelected: first.isKpopSelected ?? false,
       isKoreanEnglishMix: first.isKoreanEnglishMix ?? false,
+      englishMixRatio: normalizeEnglishMixRatio((first as any).englishMixRatio),
       customStructure: first.customStructure ?? [],
       lyricDraft: first.lyricDraft ?? "",
       isLyricMode: first.isLyricMode ?? false,
@@ -637,10 +1117,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       isNoLyrics: first.isNoLyrics ?? false,
       includeLyrics:
         (first as any).includeLyrics ?? !(first.isNoLyrics ?? false),
-      lyricLanguages: ((first as any).lyricLanguages ?? [
-        "ko",
-        "en",
-      ]) as LanguageCode[],
+      lyricLanguages: ((first as any).lyricLanguages ?? ["ko"]) as LanguageCode[],
     };
   }
 
@@ -651,7 +1128,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     userInput,
     songPrompt = "",
     lyricsLength = "normal",
-    songStructure = "2",
+    songStructure = "1",
     useAutoDuration = true,
     maleCount = 0,
     femaleCount = 0,
@@ -699,7 +1176,9 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     kpopMode,
     isKpopSelected: genres?.includes("kpop") ?? false,
     isKoreanEnglishMix: false,
+    englishMixRatio: 10,
     customStructure: [],
+    lyricLanguages: ["ko"],
     lyricDraft: "",
     isLyricMode: false,
     lyricMode: "assist",
@@ -718,6 +1197,7 @@ function injectMixedPhrases(
   text: string,
   phrases: string[],
   detector: (text: string) => boolean,
+  maxInjections = 3,
 ): string {
   if (!text.trim() || detector(text)) return text;
 
@@ -737,32 +1217,168 @@ function injectMixedPhrases(
       injected += 1;
     }
 
-    if (injected >= 3) break;
+    if (injected >= maxInjections) break;
   }
 
   return lines.join("\n");
 }
 
-function enforceKpopMixedLyrics(lyrics: { english: string; korean: string }): {
+function countEnglishWords(text: string): number {
+  return (String(text || "").match(/[A-Za-z]+(?:[’'-][A-Za-z]+)?/g) || []).length;
+}
+
+function countKoreanWordUnits(text: string): number {
+  return String(text || "")
+    .split(/\s+/)
+    .filter((part) => /[가-힣]/.test(part)).length;
+}
+
+function countLyricWordUnits(text: string): number {
+  const plain = String(text || "")
+    // Remove Suno section tags from ratio calculation.
+    .replace(/^\s*\[[^\]]+\]\s*$/gm, "")
+    .trim();
+  return Math.max(1, countKoreanWordUnits(plain) + countEnglishWords(plain));
+}
+
+function removeEnglishFragmentsFromKoreanLine(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return line;
+  if (/^\[[^\]]+\]$/.test(trimmed)) return line;
+
+  // Remove standalone English ad-libs/lines.
+  if (/^\(?[A-Za-z0-9\s’'",.!?&-]+\)?$/.test(trimmed)) return "";
+
+  return line
+    // Remove English-only parenthetical phrases: (Stay with me)
+    .replace(/\s*\([A-Za-z0-9\s’'",.!?&-]+\)\s*/g, " ")
+    // Remove Latin words inside Korean lines.
+    .replace(/[A-Za-z]+(?:[’'-][A-Za-z]+)?/g, "")
+    // Clean separators left by removed English phrases.
+    .replace(/\s*,\s*,+/g, ", ")
+    .replace(/^[\s,.:;!?-]+|[\s,.:;!?-]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trimEnd();
+}
+
+function limitEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10): string {
+  const source = String(text || "");
+  const ratio = normalizeEnglishMixRatio(englishMixRatio);
+  if (!source.trim()) return source;
+  if (ratio <= 0) return stripEnglishAdlibsForKoreanOnlyLyrics(source);
+
+  const totalUnits = countLyricWordUnits(source);
+  const maxEnglishWords = Math.max(1, Math.floor((totalUnits * ratio) / 100));
+  const currentEnglishWords = countEnglishWords(source);
+  if (currentEnglishWords <= maxEnglishWords) return source;
+
+  let usedEnglishWords = 0;
+  const maxWordsPerKeptFragment = ratio <= 5 ? 3 : ratio <= 10 ? 5 : ratio <= 20 ? 8 : 12;
+
+  const limited = source
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return line;
+      if (/^\[[^\]]+\]$/.test(trimmed)) return line;
+
+      const englishWords = countEnglishWords(line);
+      if (englishWords === 0) return line;
+
+      const hasKorean = /[가-힣]/.test(line);
+      const isStandaloneEnglish = !hasKorean || /^\([A-Za-z0-9\s’'",.!?&-]+\)$/.test(trimmed);
+
+      if (
+        usedEnglishWords + englishWords <= maxEnglishWords &&
+        englishWords <= maxWordsPerKeptFragment &&
+        (isStandaloneEnglish || hasKorean)
+      ) {
+        usedEnglishWords += englishWords;
+        return line;
+      }
+
+      return removeEnglishFragmentsFromKoreanLine(line);
+    })
+    .filter((line, index, arr) => {
+      if (line.trim()) return true;
+      const prev = arr[index - 1]?.trim();
+      const next = arr[index + 1]?.trim();
+      return Boolean(prev && next && /^\[/.test(next));
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return limited;
+}
+
+function enforceKpopMixedLyrics(
+  lyrics: { english: string; korean: string },
+  englishMixRatio = 10,
+): {
   english: string;
   korean: string;
 } {
-  const koreanMixed = injectMixedPhrases(
-    lyrics.korean ?? "",
-    ["(Stay tonight)", "(You and I)", "(Feel alive)"],
-    containsLatin,
-  );
+  const ratio = normalizeEnglishMixRatio(englishMixRatio);
+  const maxInjections = ratio <= 5 ? 1 : ratio <= 10 ? 1 : ratio <= 20 ? 2 : 3;
+  const koreanSource = lyrics.korean ?? "";
+  const koreanTotalUnits = countLyricWordUnits(koreanSource);
+  const currentEnglishWords = countEnglishWords(koreanSource);
+  const maxEnglishWords = Math.max(1, Math.floor((koreanTotalUnits * ratio) / 100));
+
+  // Only add mixed accents when the model produced almost no English.
+  // If it already exceeded the selected ratio, do not inject more.
+  const koreanMixed = currentEnglishWords === 0
+    ? injectMixedPhrases(
+        koreanSource,
+        ratio <= 5 ? ["(Stay)"] : ["(Stay tonight)", "(You and I)", "(Feel alive)"],
+        containsLatin,
+        maxInjections,
+      )
+    : koreanSource;
 
   const englishMixed = injectMixedPhrases(
     lyrics.english ?? "",
     ["(이 밤에)", "(너와 나)", "(괜찮아)"],
     containsHangul,
+    maxInjections,
   );
 
   return {
-    korean: koreanMixed,
+    korean: limitEnglishMixRatioInKoreanLyrics(koreanMixed, ratio),
     english: englishMixed,
   };
+}
+
+
+function normalizeEnglishMixRatio(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 10;
+  return Math.max(0, Math.min(30, Math.round(numeric)));
+}
+
+function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
+  return String(text || "")
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return line;
+      // Keep Suno-style section tags such as [Verse 1] or [Chorus].
+      if (/^\[[^\]]+\]$/.test(trimmed)) return line;
+      // Remove standalone English ad-libs such as (Stay with me) or (I don't want you here).
+      if (/^\([A-Za-z0-9\s'",.!?&-]+\)$/.test(trimmed)) return "";
+      // Remove trailing English-only parenthetical ad-libs after Korean lines.
+      return line.replace(/\s*\([A-Za-z0-9\s'",.!?&-]+\)\s*$/g, "").trimEnd();
+    })
+    .filter((line, index, arr) => {
+      if (line.trim()) return true;
+      const prev = arr[index - 1]?.trim();
+      const next = arr[index + 1]?.trim();
+      return Boolean(prev && next && /^\[/.test(next));
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function buildAppliedKeywordPayload(
@@ -803,22 +1419,39 @@ function buildAppliedKeywordPayload(
     style: styles,
     instrumentSound: instrumentSounds,
     tempo: params.tempo ?? "",
+    tempoSource: params.tempoSource ?? undefined,
+    isRandomTempo: params.isRandomTempo ?? false,
     vocalType: vocalDescription.join(" + ") || "Default",
     lyricsLength: params.lyricsLength ?? "normal",
     songStructure:
-      params.songStructure === "custom" ? "custom" : resolvedStructure,
+      params.songStructure === "custom" ? "custom" : (params.songStructure ?? "1"),
     customStructure:
       params.songStructure === "custom" ? (params.customStructure ?? []) : [],
     maleCount: params.vocal?.male ?? 0,
     femaleCount: params.vocal?.female ?? 0,
     rapEnabled: params.vocal?.rap ?? false,
     isKoreanEnglishMix: params.isKoreanEnglishMix ?? false,
+    englishMixRatio: normalizeEnglishMixRatio(params.englishMixRatio),
     vocal: params.vocal ?? { male: 0, female: 0, rap: false },
     isNoLyrics: params.isNoLyrics ?? false,
     lyricDraft: params.lyricDraft,
     isLyricMode: params.isLyricMode ?? false,
     lyricMode: params.lyricMode ?? "assist",
   };
+}
+
+
+function normalizeLyricSectionNameForGeneration(sectionName: string): string {
+  return String(sectionName || "")
+    .replace(/\bRap\s+Verse\b/gi, "Rap Section")
+    .replace(/\bRap\s*Verse\b/gi, "Rap Section");
+}
+
+function normalizeLyricStructureTextForGeneration(structureText: string): string {
+  return String(structureText || "")
+    .split("→")
+    .map((part) => normalizeLyricSectionNameForGeneration(part.trim()))
+    .join(" → ");
 }
 
 function buildStructureText(
@@ -830,13 +1463,13 @@ function buildStructureText(
     return customStructure
       .map(
         (section) =>
-          `${section.section}${section.tags.length > 0 ? ` (${section.tags.join(", ")})` : ""}`,
+          `${normalizeLyricSectionNameForGeneration(section.section)}${section.tags.length > 0 ? ` (${section.tags.join(", ")})` : ""}`,
       )
       .join(" → ");
   }
 
   const structureMap: Record<Exclude<SongStructure, "custom">, string> = {
-    "1": "Intro → Verse 1 → Chorus / Drop → Outro",
+    "1": "Default free structure: arrange sections freely around the story arc and emotional climax",
     "2": BASIC_STRUCTURE,
     "3": "Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
   };
@@ -844,7 +1477,9 @@ function buildStructureText(
   const selected =
     (songStructure === "custom" ? resolvedStructure : songStructure) ??
     resolvedStructure;
-  return structureMap[(selected as Exclude<SongStructure, "custom">) || "2"];
+  return normalizeLyricStructureTextForGeneration(
+    structureMap[(selected as Exclude<SongStructure, "custom">) || "1"],
+  );
 }
 
 function buildStyle(params: GenerateSongParams): string {
@@ -932,7 +1567,8 @@ function buildSound(params: GenerateSongParams): string {
   };
 
   // 1. User selected sounds (Highest priority)
-  const selectedLabels = getInstrumentSoundLabels(selectedSoundIds);
+  // Recommendation presets are ignored directly; their applied instrument ids are compacted by category.
+  const selectedLabels = compactSoundPromptsByCategory(selectedSoundIds);
   selectedLabels.forEach((label) => {
     soundItems.push({ label, priority: 2, role: getRole(label) });
   });
@@ -1802,7 +2438,9 @@ function getVocalModeInfo(vocal?: VocalConfig) {
         ? "male"
         : female > 0
           ? "female"
-          : "character";
+          : mode === "solo" || mode === "duo" || mode === "group"
+            ? "random"
+            : "character";
   return { v, male, female, total, formation, mode, isSolo, isMulti, gender };
 }
 
@@ -1834,6 +2472,15 @@ function compactVocalToneForPrompt(value: string): string {
 
   // Keep the selected member voice color visible in the final [Vocals] line,
   // but compress it to short Suno-friendly English tags.
+  if (/stylish|swagger|sassy|스타일|스웨그/.test(raw)) addTone("stylish");
+  if (/confident|자신감|당당/.test(raw)) addTone("confident");
+  if (/denial|괜찮|숨기|hidden/.test(raw)) addTone("controlled");
+  if (/anxious|anxiety|불안|초조|unease/.test(raw)) addTone("anxious");
+  if (/desperate|절박|pleading|애원/.test(raw)) addTone("desperate");
+  if (/sarcastic|cynical|비꼬|냉소/.test(raw)) addTone("sarcastic");
+  if (/anger|rage|분노|화난/.test(raw)) addTone("angry");
+  if (/whisper|breathy|속삭|숨결/.test(raw)) addTone("whispery");
+  if (/airy|floating|dreamy|relaxed|공기|몽환|나른/.test(raw)) addTone("airy");
   if (/warm|따뜻/.test(raw)) addTone("warm");
   if (/smooth|silky|매끄|부드럽고|감미/.test(raw)) addTone("smooth");
   if (/r&b|rnb|알앤비|리듬.?앤.?블루스/.test(raw)) addTone("R&B");
@@ -2003,6 +2650,243 @@ function getMemberRoleForPrompt(
   if (normalized.includes("rapper")) return "rap";
   if (normalized.includes("sub")) return "sub";
   return limitText(role, 8).toLowerCase();
+}
+
+
+function getDefaultMultiVocalRole(index: number, total: number, rapEnabled = false): string {
+  if (total <= 2) return index === 0 ? "main" : (rapEnabled ? "rap/lead" : "lead");
+  if (total === 3) {
+    if (index === 0) return "main";
+    if (index === 1) return "lead";
+    return rapEnabled ? "sub/talk-rap" : "sub";
+  }
+  if (total === 4) {
+    if (index === 0) return "main";
+    if (index === 1) return "lead";
+    if (index === 2) return rapEnabled ? "rap" : "sub";
+    return "sub";
+  }
+  if (index === 0) return "main";
+  if (index === 1) return "lead";
+  if (index === 2) return "rap 1";
+  if (index === 3) return "rap 2";
+  return "bridge";
+}
+
+function normalizeVocalSplitRole(role: string): string {
+  const value = String(role || "").toLowerCase();
+  if (value.includes("rap") && value.includes("lead")) return "Rap/Lead";
+  if (value.includes("rap") && value.includes("1")) return "Rap";
+  if (value.includes("rap") && value.includes("2")) return "Rap";
+  if (value.includes("rapper") || value === "rap") return "Rap";
+  if (value.includes("main")) return "Main";
+  if (value.includes("lead")) return "Lead";
+  if (value.includes("bridge")) return "Bridge";
+  if (value.includes("talk")) return "Sub";
+  if (value.includes("sub")) return "Sub";
+  return sentenceCase(role || "Vocal");
+}
+
+function vocalLabelFromRoleTone(role: string, tone: string, usedLabels: Set<string>): string {
+  const normalizedRole = normalizeVocalSplitRole(role);
+  const value = `${role} ${tone}`.toLowerCase();
+
+  const candidates: string[] = [];
+  if (/main/.test(value)) candidates.push("Main Vocal");
+  if (/lead/.test(value)) candidates.push("Lead Vocal");
+  if (/rap/.test(value) && /whisper|breathy/.test(value)) candidates.push("Whisper Rap Vocal");
+  if (/rap/.test(value) && /stylish|swagger|sassy/.test(value)) candidates.push("Stylish Rap Vocal");
+  if (/rap/.test(value) && /low|husky|off/.test(value)) candidates.push("Low Rap Vocal");
+  if (/rap/.test(value) && /bright|fast|triplet|playful|talk|sharp|punchy/.test(value)) candidates.push("Rap Vocal");
+  if (/rap/.test(value)) candidates.push("Rap Vocal");
+  if (/whisper|soft whisper|breathy/.test(value)) candidates.push("Whisper Vocal");
+  if (/airy|dreamy|relaxed/.test(value)) candidates.push("Airy Vocal");
+  if (/sub|harmony|support/.test(value)) candidates.push("Harmony Vocal");
+  if (/bridge|high-note|build/.test(value)) candidates.push("Bridge Vocal");
+  candidates.push(`${normalizedRole} Vocal`.replace(/Vocal Vocal$/i, "Vocal"));
+
+  for (const candidate of candidates) {
+    const clean = candidate.replace(/\s+/g, " ").trim();
+    if (clean && !usedLabels.has(clean)) {
+      usedLabels.add(clean);
+      return clean;
+    }
+  }
+
+  const fallback = `${normalizedRole} Color`;
+  usedLabels.add(fallback);
+  return fallback;
+}
+
+function lyricTagLabelFromRoleTone(role: string, tone: string, mixedGender: boolean, gender: string): string {
+  const base = vocalLabelFromRoleTone(role, tone, new Set<string>())
+    .replace(/ Vocal$/i, " Vocal")
+    .trim();
+  if (!mixedGender) return base;
+  const genderPrefix = gender === "male" ? "Male" : gender === "female" ? "Female" : "";
+  return genderPrefix ? `${genderPrefix} ${base}` : base;
+}
+
+function defaultToneForVocalSplitRole(role: string, gender: string): string {
+  const value = String(role || "").toLowerCase();
+  if (value.includes("rap") && value.includes("2")) return gender === "male" ? "low husky off-beat flow" : "low husky off-beat flow";
+  if (value.includes("rap")) return "sharp rhythmic rap flow";
+  if (value.includes("bridge")) return "whisper-to-high-note build";
+  if (value.includes("main")) return "emotional high-note belt";
+  if (value.includes("lead")) return "airy soft tone";
+  if (value.includes("talk")) return "harmony support plus light talk-rap";
+  if (value.includes("sub")) return "harmony support";
+  return gender === "male" ? "natural male tone" : gender === "female" ? "natural female tone" : "natural tone";
+}
+
+function makeVocalSplitTone(value: string, role: string, gender: string): string {
+  const tone = compactVocalToneForPrompt(value || "");
+  if (!tone || tone === "character" || tone === "natural") {
+    return defaultToneForVocalSplitRole(role, gender);
+  }
+  const cleaned = tone.replace(/\b(male|female)\b/gi, "").replace(/\s+/g, " ").trim();
+  const roleDefault = defaultToneForVocalSplitRole(role, gender);
+  if (!cleaned) return roleDefault;
+  if (/rap/i.test(role) && !/rap|flow|talk/i.test(cleaned)) return `${cleaned} rap flow`;
+  if (/main/i.test(role) && !/belt|high|lead|vocal/i.test(cleaned)) return `${cleaned} main vocal tone`;
+  if (/lead/i.test(role) && !/soft|airy|melodic|vocal/i.test(cleaned)) return `${cleaned} lead vocal tone`;
+  if (/sub/i.test(role) && !/harmony|talk|support/i.test(cleaned)) return `${cleaned} harmony support`;
+  return cleaned;
+}
+
+function getVocalSplitEmotion(
+  params: GenerateSongParams,
+  role: string,
+  index: number,
+  tone = "",
+): string {
+  const mood = getEnglishMoodPhrase(params).toLowerCase();
+  const value = `${role || ""} ${tone || ""}`.toLowerCase();
+  if (/rap/.test(value)) {
+    if (/whisper|breathy/.test(value)) return "with secretive restrained tension";
+    if (/stylish|swagger|sassy/.test(value)) return "with confident sleek attitude";
+    if (/low|husky|off/.test(value)) return "with cool off-beat attitude";
+    if (/dark|intense|aggressive|powerful/.test(mood)) return "with confident, cutting attitude";
+    if (/playful|bright|cheerful/.test(mood)) return "with playful talk-like attitude";
+    return "with clear rhythmic attitude";
+  }
+  if (/whisper|breathy/.test(value)) return "with intimate secretive emotion";
+  if (/airy|relaxed|dreamy/.test(value)) return "with fragile floating emotion";
+  if (value.includes("main")) {
+    if (/sad|lonely|nostalgic|emotional|bittersweet/.test(mood)) return "with sincere emotional focus";
+    if (/powerful|intense|aggressive/.test(mood)) return "with bold climactic emotion";
+    return "with clear emotional focus";
+  }
+  if (value.includes("lead")) return "with soft, expressive phrasing";
+  if (value.includes("sub") || value.includes("harmony")) return "with supportive, conversational warmth";
+  if (value.includes("bridge")) return "with rising emotional tension";
+  return index === 0 ? "with clear character focus" : "with contrasting delivery";
+}
+
+function buildMemberVocalSplit(params: GenerateSongParams): string {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isMulti) return "";
+
+  const existingMembers = params.vocal?.members ?? [];
+  const isRandomDuo = info.mode === "duo" && info.total === 0 && existingMembers.length === 0;
+  const isRandomGroup = info.mode === "group" && info.total === 0 && existingMembers.length === 0;
+  const total = isRandomDuo ? 2 : isRandomGroup ? 4 : Math.max(info.total || 0, existingMembers.length);
+  if (total < 2) return "";
+
+  const mixedGender = info.gender === "mixed";
+  const usedLabels = new Set<string>();
+  const members = Array.from({ length: Math.min(total, 5) }, (_, index) => {
+    const member = existingMembers[index];
+    const gender =
+      member?.gender ||
+      (isRandomDuo || isRandomGroup
+        ? "vocal"
+        : info.gender === "female"
+          ? "female"
+          : info.gender === "male"
+            ? "male"
+            : index < info.female
+              ? "female"
+              : "male");
+    const rawRole =
+      member?.roles?.[0] ||
+      getDefaultMultiVocalRole(index, total, Boolean(params.vocal?.rap));
+    const tone = member?.toneId
+      ? describeVocalToneForSplit(member.toneId, rawRole, gender)
+      : makeVocalSplitTone("", rawRole, gender);
+    const baseEmotion = getVocalSplitEmotion(params, rawRole, index, tone).replace(/^with\s+/i, "");
+    const vocalExpressionCue = adaptVocalExpressionCueForRole(
+      pickVocalExpressionCueForRole(params, rawRole, tone, index),
+      rawRole,
+      tone,
+    );
+    const globalEmotionCue = getGlobalVocalEmotionCueForRole(params, rawRole, tone, index);
+    const emotionWithStyle = mergeVocalExpressionIntoEmotion(baseEmotion, vocalExpressionCue);
+    const emotion = mergeVocalExpressionIntoEmotion(emotionWithStyle, globalEmotionCue);
+    const label = vocalLabelFromRoleTone(rawRole, `${tone} ${vocalExpressionCue?.short || ""}`, usedLabels);
+    const lyricLabel = lyricTagLabelFromRoleTone(rawRole, tone, mixedGender, gender);
+    return { label, lyricLabel, tone, emotion, gender };
+  });
+
+  const head = isRandomDuo
+    ? `${total}-vocalist duo split with contrasting tones chosen to match the song`
+    : isRandomGroup
+      ? `${total}-voice group vocal split with suitable voices chosen to match the genre`
+      : `${total} ${info.gender === "female" ? "female" : info.gender === "male" ? "male" : "mixed"} vocal split`;
+  const body = members
+    .map((member) =>
+      `${member.label} (${member.tone}${member.emotion ? `, ${member.emotion}` : ""})`,
+    )
+    .join(", ");
+  // Keep the music prompt focused on vocal color, emotion, and role separation.
+  // Lyric tag formatting is handled in the lyric-generation instructions, not here,
+  // so the [Vocals] line does not get cut off by tag examples.
+  return `${head}: ${body}. Keep roles clearly separated by section.`;
+}
+
+function roleVoiceAgeColor(role: string): string {
+  const value = String(role || "").toLowerCase();
+  if (/엄마|어머니|mother|mom/.test(value)) return "middle-aged female vocal";
+  if (/아빠|아버지|father|dad/.test(value)) return "middle-aged male vocal";
+  if (/아들|son/.test(value)) return "young male vocal";
+  if (/딸|daughter/.test(value)) return "young female vocal";
+  return "";
+}
+
+function buildCharacterVocalSplitItem(
+  params: GenerateSongParams,
+  role: string,
+  roleIndex: number,
+  memberIndex = roleIndex,
+): string {
+  const roleName = compactRoleForPrompt(role);
+  const gender = getMemberGenderLabel(params, memberIndex);
+  const memberTone = getMemberToneForPrompt(params, memberIndex);
+  const fallbackTone = compactVocalToneForPrompt(inferSituationVocalTone(role, roleIndex));
+  const explicitAgeColor = roleVoiceAgeColor(role);
+  const voiceTone = explicitAgeColor || `${oneWordVocalTone(memberTone || fallbackTone || gender)} ${gender} vocal`.replace(/^natural\s+/i, "");
+  const rawStyleSource = [
+    params.situation?.speakers?.[roleIndex]?.speechStyle,
+    params.situation?.speakers?.[roleIndex]?.attitude,
+    roleIndex === 0 ? params.situation?.speakerAStyle : params.situation?.speakerBStyle,
+    roleIndex === 0
+      ? params.situation?.speakerAAttitude || params.situation?.attitudeA
+      : params.situation?.speakerBAttitude || params.situation?.attitudeB,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const situationDirection = mergeRoleDirection(role, rawStyleSource);
+  const expressionCue = rawStyleSource
+    ? null
+    : pickVocalExpressionCueForRole(params, getMemberRoleForPrompt(params, memberIndex), memberTone || fallbackTone, roleIndex);
+  const direction = limitText(
+    expressionCue
+      ? mergeVocalExpressionIntoEmotion(situationDirection, expressionCue)
+      : situationDirection,
+    128,
+  );
+  const acousticLabel = buildSituationAcousticTagLabel(params, role, roleIndex, memberIndex);
+  return `${acousticLabel} as ${roleName}, ${direction}`;
 }
 
 function firstPromptWord(value: string): string {
@@ -2722,6 +3606,77 @@ function cleanProductionPhrase(value: string): string {
   );
 }
 
+
+function variationProductionMeaning(
+  variation: CreativeVariationSeed,
+  params: GenerateSongParams,
+): string {
+  const styleText = selectedStyleText(params);
+  const genreProfile = getGenrePromptProfile(params);
+  const genreText = `${genreProfile.label} ${genreProfile.style} ${genreProfile.sound}`.toLowerCase();
+
+  const hasStageSwitch = /stage|전환|drop|드롭|twist|반전|붕괴|collapse|chaos|혼돈/.test(styleText);
+  const hasCyber = /cyber|사이버|glitch|글리치|electronic|전자|synth|신스|metallic|금속/.test(styleText + " " + genreText);
+  const hasTrap = /trap|트랩|808|hi-?hat|kick|hip\s*hop|힙합|drill|드릴/.test(styleText + " " + genreText);
+  const hasBand = /band|밴드|guitar|기타|drum|드럼|live|라이브|rock|록/.test(styleText + " " + genreText);
+  const hasSpace = /space|공간|reverb|잔향|room|hall|tunnel|radio|phone|underwater|수중|우주|성당|클럽/.test(styleText);
+
+  const map: Record<string, string> = {
+    "scene-first": "scene-framing instrumental details, warm foreground texture",
+    "confession-delay": "slow-build tension, delayed release accents",
+    "memory-fragment": "glitchy memory cuts, broken synth echoes, fragmented percussion",
+    "quiet-contradiction": "muted sub pressure, restrained metallic details, quiet hook impact",
+    "vocal-breath-focus": "close breath space, sparse sub-bass pulses, soft negative space",
+    "hook-object-focus": "object-like hook accents, focused motif repeats",
+    "denial-focus": "tight 808 pressure, clipped trap drums, cold synth pulses",
+    "late-image-focus": "delayed texture reveals, late-arriving shimmer accents",
+    "rhythm-phrase-focus": "syncopated trap accents, clipped phrase breaks, tight stop-start drums",
+    "contradictory-hook-focus": "hook-punch drops, reversed tension swells, sharp contrast breaks",
+    "scene-loop-focus": "looped scene motif, repeating texture shifts",
+    "micro-conflict-focus": "small-detail percussion hits, pressure-building synth stabs",
+
+    "interruption-cut-in": "sudden cut-ins, stop-start drum shocks, interruption hits",
+    "one-sided-pursuit": "chasing rhythm pulses, delayed reply impacts",
+    "negotiation-trade": "trade-off beat switches, answer-back drum accents",
+    "parallel-monologue": "split-channel textures, parallel rhythm beds",
+    "late-reveal": "hidden texture layers, delayed reveal swells",
+    "unresolved-comedy": "dry percussion pops, awkward pause hits",
+    "chorus-takeover": "chorus takeover impacts, front-loaded hook drums",
+    "echo-undercut": "echo stabs, undercut drops, dry reply accents",
+    "speaker-flaw-focus": "flaw-exposing pauses, uneven drum pressure",
+    "detail-hook-focus": "detail-led motif hits, sparse hook punctuation",
+    "role-reversal-focus": "reversal drops, section-flip impacts",
+    "silent-gap-focus": "negative space drops, short silence cuts",
+    "chorus-solo-A": "solo-hook spotlight, reduced backing pressure",
+    "chorus-solo-B": "unexpected solo-hook lift, redirected drop impact",
+    "together-hook-focus": "brief group-hook lift, separated verse textures",
+    "genre-led-structure": "genre-shaped groove shifts, part-specific production color",
+    "object-perspective-focus": "object-motif pulses, visible-anchor sound details",
+    "misread-intent-focus": "misread-reply glitches, delayed-response accents",
+    "comic-loop-focus": "looped hook accents, recurring offbeat hits",
+    "emotional-fakeout-focus": "fakeout swells, redirected bridge textures",
+    "status-game-focus": "status-battle drum pressure, control-shifting drops",
+    "memory-cut-focus": "jump-cut samples, memory-flash percussion",
+    "adlib-character-focus": "ad-lib pockets, sparse reaction hits",
+    "asymmetric-duet-focus": "asymmetric vocal pockets, uneven rhythm lanes",
+  };
+
+  const core = map[variation.id] || cleanupPromptTail(variation.arrangementLens);
+  const accents: string[] = [];
+  if (hasTrap) accents.push("808-weighted rhythm pressure");
+  if (hasCyber) accents.push("cyber glitch details");
+  if (hasStageSwitch) accents.push("hard switch-drop impact");
+  if (hasBand) accents.push("wide live-instrument edge");
+  if (hasSpace) accents.push("spatial depth shifts");
+
+  return cleanupPromptTail(
+    limitText(
+      phraseListForPrompt([core, ...accents].filter(Boolean).slice(0, 3)),
+      145,
+    ),
+  );
+}
+
 function variationArrangementMeaning(variation: CreativeVariationSeed): string {
   const map: Record<string, string> = {
     "interruption-cut-in":
@@ -2786,6 +3741,15 @@ function moodToMusicAdjective(moodValue: string): string {
     밝은: "bright",
     희망찬: "hopeful",
     긴장된: "tense",
+    평화로운: "peaceful",
+    낭만적: "romantic",
+    로맨틱: "romantic",
+    향수적: "nostalgic",
+    위로: "comforting",
+    위로되는: "comforting",
+    미니멀한: "minimal",
+    드라이브: "driving",
+    강력한: "powerful",
     bittersweet: "bittersweet",
     loneliness: "lonely",
     lonely: "lonely",
@@ -2875,6 +3839,51 @@ function withOptionalToneAndBreath(base: string, tone: string): string {
   return `${cleanBase} with ${cleanTone} tone and human breath`;
 }
 
+
+function normalizePromptGenreLabel(value: string): string {
+  const cleaned = cleanupPromptTail(String(value || ""))
+    .replace(/_/g, " ")
+    .replace(/\bKpop\b/gi, "K-Pop")
+    .replace(/\bJpop\b/gi, "J-Pop")
+    .replace(/\bRnb\b/gi, "R&B")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned
+    .replace(/\bK-Pop\s*[-/]\s*K-Pop\b/gi, "K-Pop")
+    .replace(/\bJ-Pop\s*[-/]\s*J-Pop\b/gi, "J-Pop")
+    .replace(/\bAlternative\s+R&B\s*[-/]\s*R&B\b/gi, "Alternative R&B")
+    .replace(/\bAlternative\s+R&B\s*[-/]\s*Rnb\b/gi, "Alternative R&B")
+    .replace(/\bR&B\s*[-/]\s*R&B\b/gi, "R&B")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isSameGenreFamily(a: string, b: string): boolean {
+  const normalize = (value: string) =>
+    normalizePromptGenreLabel(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+  const x = normalize(a);
+  const y = normalize(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  return x.includes(y) || y.includes(x);
+}
+
+function uniqueGenreLabels(values: string[]): string[] {
+  const result: string[] = [];
+  values
+    .map(normalizePromptGenreLabel)
+    .filter(Boolean)
+    .forEach((label) => {
+      if (!result.some((existing) => isSameGenreFamily(existing, label))) {
+        result.push(label);
+      }
+    });
+  return result;
+}
+
 function getGenreLabelForPrompt(params: GenerateSongParams): string {
   const genreMeta = getGenreMeta(params.genre || "");
   const subLabels = getSubGenreLabels(params.subGenre ?? [])
@@ -2886,38 +3895,47 @@ function getGenreLabelForPrompt(params: GenerateSongParams): string {
   const moodWords = getMoodWordsForMusicDirection(params);
 
   const rawGenre = String(params.genre || "").trim();
-  const baseCandidates = [
-    genreMeta?.label,
-    ...subLabels,
-    params.isKpopSelected ? "K-Pop" : "",
+  const rawGenreLabel =
     rawGenre && rawGenre !== "null" && rawGenre !== "undefined"
       ? sentenceCase(rawGenre)
-      : "",
-  ].filter(Boolean) as string[];
+      : "";
 
-  let genreCore = joinPromptPhrase(baseCandidates.slice(0, 3), "and");
+  // IMPORTANT: the deepest selected sub-genre is the song body.
+  // Do not append stale parent genre values such as K-Pop/J-Pop/R&B after a child
+  // genre is already selected. This prevents outputs like "7080 Folk with K-Pop color"
+  // and duplicated labels like "Alternative R&B-Rnb".
+  let genreParts = subLabels.length
+    ? uniqueGenreLabels(subLabels).slice(0, 1)
+    : uniqueGenreLabels([
+        genreMeta?.label || "",
+        params.isKpopSelected ? "K-Pop" : "",
+        rawGenreLabel,
+      ].filter(Boolean)).slice(0, 1);
+
+  if (!genreParts.length) {
+    genreParts = params.isKpopSelected
+      ? ["K-Pop"]
+      : styleLabels.length
+        ? ["Korean pop"]
+        : ["Pop"];
+  }
+
+  let genreCore = genreParts[0];
+
   if (
     !genreCore ||
     /^thin|^isolated|^cold|^floating|^lonely|^dreamy|^bittersweet/i.test(
       genreCore,
     )
   ) {
-    genreCore = params.isKpopSelected
-      ? "K-Pop"
-      : styleLabels.length
-        ? "Korean pop"
-        : "Pop";
+    genreCore = params.isKpopSelected ? "K-Pop" : "Pop";
   }
 
   const stylePhrase = joinPromptPhrase(styleLabels.slice(0, 2), "and");
   const moodPhrase = joinPromptPhrase(moodWords, "and");
 
-  const cleanGenreCore = genreCore
-    .replace(/\s+and\s+/gi, "-")
-    .replace(/\s*,\s*/g, " ")
-    .trim();
+  const cleanGenreCore = normalizePromptGenreLabel(genreCore);
   const cleanStyle = stylePhrase
-    .replace(/\s+and\s+/gi, " and ")
     .replace(/Style$/i, "style")
     .trim();
 
@@ -2929,6 +3947,270 @@ function getGenreLabelForPrompt(params: GenerateSongParams): string {
   return cleanupPromptTail(sentence) || "A pop track";
 }
 
+
+type GenrePromptProfile = {
+  id: string;
+  label: string;
+  style: string;
+  sound: string;
+  vocal: string;
+};
+
+function lookupPromptRecord<T>(
+  record: Record<string, T>,
+  id: string | null | undefined,
+): T | undefined {
+  const raw = String(id || "").trim();
+  if (!raw) return undefined;
+  const candidates = Array.from(
+    new Set([
+      raw,
+      raw.toLowerCase(),
+      raw.replace(/-/g, "_"),
+      raw.replace(/_/g, "-"),
+      raw.toLowerCase().replace(/-/g, "_"),
+      raw.toLowerCase().replace(/_/g, "-"),
+    ]),
+  );
+  return candidates.map((key) => record[key]).find(Boolean);
+}
+
+function findHierarchySubGenre(id: string) {
+  const normalized = id.toLowerCase();
+  for (const group of GENRE_HIERARCHY) {
+    for (const mid of group.children) {
+      const found = mid.children.find(
+        (child) =>
+          child.id.toLowerCase() === normalized ||
+          child.id.toLowerCase().replace(/-/g, "_") ===
+            normalized.replace(/-/g, "_"),
+      );
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function getGenrePromptProfile(params: GenerateSongParams): GenrePromptProfile {
+  const subId = (params.subGenre ?? []).find(Boolean) || "";
+  const genreId = String(params.genre || "").trim();
+
+  if (subId) {
+    const subPrompt = lookupPromptRecord(SUB_GENRE_PROMPTS, subId) || {};
+    const subItem = findHierarchySubGenre(subId);
+    return {
+      id: subId,
+      label: normalizePromptGenreLabel(subItem?.label || sentenceCase(subId)),
+      style: cleanPromptValue((subPrompt as any).style || ""),
+      sound: cleanPromptValue((subPrompt as any).sound || ""),
+      vocal: cleanPromptValue((subPrompt as any).vocal || ""),
+    };
+  }
+
+  const midPrompt = lookupPromptRecord(MID_GENRE_PROMPTS, genreId) || {};
+  const genreMeta = getGenreMeta(genreId);
+  return {
+    id: genreId || "pop",
+    label: normalizePromptGenreLabel(
+      genreMeta?.label || (genreId ? sentenceCase(genreId) : "Pop"),
+    ),
+    style: cleanPromptValue((midPrompt as any).style || genreMeta?.promptCore || ""),
+    sound: cleanPromptValue((midPrompt as any).sound || ""),
+    vocal: cleanPromptValue((midPrompt as any).vocal || ""),
+  };
+}
+
+type StyleRecipeProfile = {
+  genreLens: string;
+  productionLens: string;
+  arrangementLens: string;
+};
+
+function selectedStyleText(params: GenerateSongParams): string {
+  return (params.styles ?? [])
+    .map((id) => {
+      const item = resolveStyleItem(id);
+      return [
+        id,
+        item?.label,
+        item?.labelKo,
+        item?.style,
+        item?.sound,
+        item?.mood,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    })
+    .join(" ")
+    .toLowerCase();
+}
+
+function countSelectedStyleMatches(
+  params: GenerateSongParams,
+  patterns: RegExp[],
+): number {
+  return (params.styles ?? []).filter((id) => {
+    const item = resolveStyleItem(id);
+    const text = [
+      id,
+      item?.label,
+      item?.labelKo,
+      item?.style,
+      item?.sound,
+      item?.mood,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return patterns.some((pattern) => pattern.test(text));
+  }).length;
+}
+
+function buildStyleRecipeProfile(params: GenerateSongParams): StyleRecipeProfile {
+  const stageSwitchCount = countSelectedStyleMatches(params, [
+    /stage|전환|drop|드롭|twist|반전|horror|호러|붕괴|collapse|chaos|광기|공격성|darktrap|theater/,
+  ]);
+  const hookCount = countSelectedStyleMatches(params, [
+    /hook|훅|chorus|후렴|catchy|chant|떼창|repeat|반복|addictive|중독/,
+  ]);
+  const spaceCount = countSelectedStyleMatches(params, [
+    /space|공간|reverb|잔향|room|hall|tunnel|radio|phone|underwater|수중|우주|성당|클럽|distance|멀리/,
+  ]);
+  const vocalCount = countSelectedStyleMatches(params, [
+    /vocal|보컬|sing|spoken|말하듯|whisper|속삭|pleading|애원|gritty|거친|breath|숨|emotion|감정/,
+  ]);
+  const rhythmCount = countSelectedStyleMatches(params, [
+    /rhythm|리듬|groove|그루브|bounce|바운스|funk|펑키|shuffle|셔플|swing|스윙|dance|댄스/,
+  ]);
+  const synthCount = countSelectedStyleMatches(params, [
+    /synth|신스|electronic|전자|edm|future|glitch|cyber|analog|neon|pad/,
+  ]);
+  const bandCount = countSelectedStyleMatches(params, [
+    /band|밴드|guitar|기타|drum|드럼|piano|피아노|live|라이브|amp|앰프/,
+  ]);
+  const cinematicCount = countSelectedStyleMatches(params, [
+    /cinematic|시네마|ost|orchestra|오케스트라|trailer|영화|string|스트링|heroic|웅장/,
+  ]);
+  const eraCount = countSelectedStyleMatches(params, [
+    /70s|80s|90s|2000s|2010s|2020s|y2k|retro|레트로|vintage|빈티지|cassette|카세트|radio|라디오|mp3/,
+  ]);
+
+  const genreLenses: string[] = [];
+  const productionLenses: string[] = [];
+  const arrangementLenses: string[] = [];
+
+  if (stageSwitchCount >= 2 && hookCount >= 1) {
+    genreLenses.push("with a hook-driven stage-switching design");
+    productionLenses.push("sharp switch drops and addictive hook returns");
+    arrangementLenses.push("sudden section flips with recurring hook payoffs");
+  } else if (stageSwitchCount >= 1) {
+    genreLenses.push("with dramatic section-switch color");
+    productionLenses.push("stage-shift transitions");
+    arrangementLenses.push("clear contrast between sections");
+  } else if (hookCount >= 1) {
+    genreLenses.push("with a hook-centered pop design");
+    productionLenses.push("catchy hook emphasis");
+    arrangementLenses.push("hook returns that anchor the structure");
+  }
+
+  if (spaceCount >= 1) productionLenses.push("defined spatial depth");
+  if (vocalCount >= 1) genreLenses.push("colored by expressive vocal texture");
+  if (rhythmCount >= 1) productionLenses.push("elastic rhythmic movement");
+  if (synthCount >= 1) productionLenses.push("synth-space texture");
+  if (bandCount >= 1) productionLenses.push("live-performance body");
+  if (cinematicCount >= 1) arrangementLenses.push("cinematic scene-building lift");
+  if (eraCount >= 1) productionLenses.push("era-specific mix color");
+
+  return {
+    genreLens: joinPromptPhrase(genreLenses.slice(0, 2), "and"),
+    productionLens: phraseListForPrompt(productionLenses.slice(0, 4)),
+    arrangementLens: phraseListForPrompt(arrangementLenses.slice(0, 3)),
+  };
+}
+
+function buildDetailLayerGenreLens(detailLayer: string): string {
+  const note = String(detailLayer || "").trim();
+  if (!note) return "";
+  const profile = buildFreeTextDirectorProfile(note);
+  const parts = [profile.mood, profile.theme, profile.arrangement]
+    .map((part) => stripRemainingKoreanForProductionPrompt(part))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!parts.length) return "";
+  return cleanupPromptTail(`reimagined through ${joinPromptPhrase(parts, "and")}`);
+}
+
+function buildSituationGenreLens(params: GenerateSongParams): string {
+  if (!hasSituation(params.situation)) return "";
+  const scene = stripRemainingKoreanForProductionPrompt(compactSituationScene(params));
+  const version = compactVersionTone(
+    String(params.situation?.versionLabel || params.situation?.version || ""),
+  );
+  const parts = [scene, version ? `${version} dramatic tone` : ""]
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!parts.length) return "scene-led genre reinterpretation";
+  return cleanupPromptTail(`reinterpreted around ${joinPromptPhrase(parts, "and")}`);
+}
+
+type GenreReinterpretationLayer = {
+  genreLens: string;
+  productionLens: string;
+  arrangementLens: string;
+};
+
+function buildGenreReinterpretationLayer(
+  params: GenerateSongParams,
+  detailLayer: string,
+): GenreReinterpretationLayer {
+  const genreProfile = getGenrePromptProfile(params);
+  const styleRecipe = buildStyleRecipeProfile(params);
+  const genreStyle = takeCommaItems(genreProfile.style, 2, 82);
+  const userLens = buildDetailLayerGenreLens(detailLayer);
+  const situationLens = buildSituationGenreLens(params);
+
+  const moodLens = getMoodWordsForMusicDirection(params).length
+    ? `shaped by ${joinPromptPhrase(getMoodWordsForMusicDirection(params), "and")} emotion`
+    : "";
+
+  // Priority: Situation > user command > selected keywords > genre defaults.
+  // The selected genre always remains the body; these lenses only reinterpret it.
+  const genreLens = joinPromptPhrase(
+    [
+      situationLens,
+      !situationLens ? userLens : "",
+      !situationLens && !userLens ? styleRecipe.genreLens : styleRecipe.genreLens,
+      !situationLens && !userLens && !styleRecipe.genreLens ? genreStyle : "",
+      !situationLens && !userLens && !styleRecipe.genreLens ? moodLens : "",
+    ].filter(Boolean).slice(0, 3),
+    "and",
+  );
+
+  const productionLens = phraseListForPrompt(
+    [
+      styleRecipe.productionLens,
+      genreProfile.sound ? takeCommaItems(genreProfile.sound, 2, 70) : "",
+      userLens && !hasSituation(params.situation)
+        ? takeCommaItems(buildFreeTextDirectorProfile(detailLayer).sound, 2, 70)
+        : "",
+    ].filter(Boolean).slice(0, 4),
+  );
+
+  const arrangementLens = phraseListForPrompt(
+    [
+      styleRecipe.arrangementLens,
+      userLens && !hasSituation(params.situation)
+        ? takeCommaItems(buildFreeTextDirectorProfile(detailLayer).arrangement, 2, 70)
+        : "",
+    ].filter(Boolean).slice(0, 3),
+  );
+
+  return {
+    genreLens: cleanupPromptTail(limitText(genreLens, 150)),
+    productionLens: cleanupPromptTail(limitText(productionLens, 145)),
+    arrangementLens: cleanupPromptTail(limitText(arrangementLens, 110)),
+  };
+}
 function getEnglishMoodPhrase(params: GenerateSongParams): string {
   const moodWords = getMoodWordsForMusicDirection(params)
     .map((item) => stripRemainingKoreanForProductionPrompt(item))
@@ -2995,6 +4277,9 @@ function removeRepeatedMoodWordsFromStory(
       .replace(/\bin\s+a\s+[,\s]+mood\b/gi, "")
       .replace(/\bin\s+an\s+[,\s]+mood\b/gi, "")
       .replace(/\s{2,}/g, " ")
+      .replace(/\ba\s+and\s+emotional\s+scene\b/gi, "a tense emotional scene")
+      .replace(/\ban\s+and\s+emotional\s+scene\b/gi, "a tense emotional scene")
+      .replace(/\ba\s+emotional\s+scene\b/gi, "an emotional scene")
       .replace(/,\s*,/g, ","),
   );
 }
@@ -3037,9 +4322,19 @@ function buildNonSituationStoryClause(
     );
   }
   if (fallback && !/[가-힣]/.test(fallback)) {
-    return cleanupPromptTail(
-      `shaped by ${fallback.toLowerCase()}, where ${storyFunction}`,
+    const cleanFallback = cleanupPromptTail(
+      fallback
+        .toLowerCase()
+        .replace(/\ba\s+and\s+emotional\s+scene\b/gi, "an emotional scene")
+        .replace(/\ba\s+emotional\s+scene\b/gi, "an emotional scene")
+        .replace(/\band\s+emotional\s+scene\b/gi, "emotional scene")
+        .replace(/\s{2,}/g, " "),
     );
+    if (cleanFallback && cleanFallback !== "an emotional scene") {
+      return cleanupPromptTail(
+        `built around ${cleanFallback}, where ${storyFunction}`,
+      );
+    }
   }
   return cleanupPromptTail(
     `built around an emotional scene where ${storyFunction}`,
@@ -3077,16 +4372,17 @@ function buildNaturalVocals(
   }
 
   const info = getVocalModeInfo(params.vocal);
-  const members = params.vocal?.members ?? [];
-  if (info.isMulti && members.length >= 2) {
-    const items = members.slice(0, 2).map((member, index) => {
-      const gender = member.gender === "female" ? "female" : "male";
-      const tone = oneWordVocalTone(
-        member.toneId ? getMemberToneForPrompt(params, index) : gender,
-      );
-      return `${tone} ${gender}`;
-    });
-    return `${naturalVocalPrefix(params, `${info.mode || "duo"} vocals`)} with ${items.join(" vs ")} contrast`;
+  const splitPrompt = buildMemberVocalSplit(params);
+  if (info.isMulti && splitPrompt) {
+    return splitPrompt;
+  }
+
+  if (info.isSolo && info.total === 0) {
+    const globalEmotion = params.vocal?.globalToneId
+      ? resolveVocalEmotionShort(params.vocal.globalToneId)
+      : "";
+    const emotionPart = globalEmotion ? ` with ${globalEmotion} emotion` : "";
+    return `one suitable solo vocalist chosen to match the genre and mood${emotionPart}, with natural emotional delivery`;
   }
 
   const gender =
@@ -3095,12 +4391,12 @@ function buildNaturalVocals(
       : info.gender === "male"
         ? "male"
         : "vocal";
-  const globalTone = params.vocal?.globalToneId
-    ? resolveVocalToneShortValue(params.vocal.globalToneId)
-    : "natural";
-  const tone = oneWordVocalTone(globalTone);
+  const globalEmotion = params.vocal?.globalToneId
+    ? resolveVocalEmotionShort(params.vocal.globalToneId)
+    : "";
   const subject = gender === "vocal" ? "vocal" : `${gender} vocal`;
-  return withOptionalToneAndBreath(naturalVocalPrefix(params, subject), tone);
+  const base = naturalVocalPrefix(params, subject);
+  return globalEmotion ? `${base} with ${globalEmotion} emotion` : withOptionalToneAndBreath(base, "natural");
 }
 
 function buildSituationVocals(params: GenerateSongParams): string {
@@ -3184,19 +4480,27 @@ function buildSituationVocals(params: GenerateSongParams): string {
 
   if (roleEntries.length >= 2) {
     const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
-    const first = buildSituationRoleVocalItem(
+    const first = buildCharacterVocalSplitItem(
       params,
       roleEntries[0].role,
       0,
       matchedIndexes[0],
     );
-    const second = buildSituationRoleVocalItem(
+    const second = buildCharacterVocalSplitItem(
       params,
       roleEntries[1].role,
       1,
       matchedIndexes[1],
     );
-    return `${roleGenderFormation}: ${first} vs ${second}`;
+    const development = String(
+      situation?.developmentCustom || situation?.developmentPreset || situation?.development || "",
+    );
+    const dev = arrangementDevelopmentToEnglish(development);
+    const isParallelMonologue = /평행|독백|parallel|monologue/.test(`${development} ${dev}`.toLowerCase());
+    const ownershipRule = isParallelMonologue
+      ? "Keep each character clearly separated by section; choruses/hooks must be owned by one character, not alternating dialogue; the other character may only add one short parenthetical aside"
+      : "Keep each character clearly separated by section; use call-response only when the arrangement explicitly needs it";
+    return `2-character vocal split: ${first}. ${second}. ${ownershipRule}`;
   }
 
   if (roleEntries.length === 1) {
@@ -3244,10 +4548,27 @@ function buildSituationArrangement(params: GenerateSongParams): string {
       "",
   ).trim();
   const dev = arrangementDevelopmentToEnglish(development);
-  const base = isDialogue
-    ? `${dev || "separated dialogue sections"} with a call-response hook`
-    : `${dev || "solo narrative flow"} with section emotion tags and line ad-libs`;
-  return cleanupPromptTail(limitText(base, 86));
+  const devLower = `${development} ${dev}`.toLowerCase();
+  const isParallelMonologue = /평행|독백|parallel|monologue|unresolved parallel-line/.test(devLower);
+  const isExplicitCallResponse = /콜앤|call[-\s]?response|리스폰스/.test(devLower);
+  const isConversationDriven = /대화|dialogue|bicker|티격태격|받아치|push-and-reply/.test(devLower);
+
+  let base = "";
+  if (isDialogue) {
+    if (isParallelMonologue) {
+      base = `${dev || "parallel monologue sections"} with single-owner choruses, no balanced call-response`;
+    } else if (isExplicitCallResponse) {
+      base = `${dev || "call-response dialogue"} with a controlled call-response hook`;
+    } else if (isConversationDriven) {
+      base = `${dev || "separated dialogue sections"} with section-led ownership, not every chorus as A/B dialogue`;
+    } else {
+      base = `${dev || "separated character sections"} with one-speaker chorus focus`;
+    }
+  } else {
+    base = `${dev || "solo narrative flow"} with section emotion tags and line ad-libs`;
+  }
+
+  return cleanupPromptTail(limitText(base, 112));
 }
 
 function compactPromptBody(lines: string[]): string[] {
@@ -3262,7 +4583,7 @@ function compactPromptBody(lines: string[]): string[] {
   const allowExtendedVocalPrompt =
     vocalValue.length > 86 ||
     /\b(duo|group|trio|quartet|vs)\b/i.test(vocalValue);
-  const targetLimit = 500;
+  const targetLimit = 1050;
 
   if (countBody() <= targetLimit) return current;
 
@@ -3273,7 +4594,7 @@ function compactPromptBody(lines: string[]): string[] {
     Genre: 125,
     Instruments: 90,
     Atmosphere: 150,
-    Vocals: allowExtendedVocalPrompt ? 235 : 170,
+    Vocals: allowExtendedVocalPrompt ? 360 : 220,
     Arrangement: 80,
   };
 
@@ -3289,7 +4610,7 @@ function compactPromptBody(lines: string[]): string[] {
     Genre: 100,
     Instruments: 70,
     Atmosphere: 120,
-    Vocals: allowExtendedVocalPrompt ? 210 : 150,
+    Vocals: allowExtendedVocalPrompt ? 320 : 190,
     Arrangement: 60,
   };
 
@@ -4542,7 +5863,7 @@ function buildHybridTrackLine(
       ? ", "
       : ", built around "
     : "";
-  return cleanupPromptTail(limitText(`${base}${separator}${setting}.`, 255));
+  return sanitizeTrackOpeningArtifacts(limitText(`${base}${separator}${setting}.`, 255));
 }
 
 function phraseListForPrompt(items: string[]): string {
@@ -4562,10 +5883,125 @@ function phraseListForPrompt(items: string[]): string {
   return `${unique.slice(0, -1).join(", ")}, and ${unique[unique.length - 1]}`;
 }
 
+function sanitizePromptGenreArtifacts(line: string): string {
+  return cleanupPromptTail(
+    String(line || "")
+      .replace(/\bK-Pop\s*[-/]\s*Kpop\b/gi, "K-Pop")
+      .replace(/\bKpop\s*[-/]\s*K-Pop\b/gi, "K-Pop")
+      .replace(/\bJ-Pop\s*[-/]\s*Jpop\b/gi, "J-Pop")
+      .replace(/\bJpop\s*[-/]\s*J-Pop\b/gi, "J-Pop")
+      .replace(/\bAlternative\s+R&B\s*[-/]\s*Rnb\b/gi, "Alternative R&B")
+      .replace(/\bAlternative\s+R&B\s*[-/]\s*R&B\b/gi, "Alternative R&B")
+      .replace(/\bR&B\s*[-/]\s*Rnb\b/gi, "R&B")
+      .replace(/\bR&B\s*[-/]\s*R&B\b/gi, "R&B")
+      .replace(/\s{2,}/g, " "),
+  );
+}
+
+
+function sanitizeTrackOpeningArtifacts(value: string): string {
+  let line = cleanupPromptTail(String(value || "").replace(/\s+/g, " "));
+
+  line = line
+    .replace(/\bshaped\s+by\s+a\s+and\s+emotional\s+scene\s+where\s+/gi, "built around ")
+    .replace(/\bshaped\s+by\s+a\s+and\s+emotional\s+scene\b/gi, "built around emotional tension")
+    .replace(/\bshaped\s+by\s+an\s+emotional\s+scene\s+where\s+/gi, "built around ")
+    .replace(/\bshaped\s+by\s+a\s+tense\s+emotional\s+scene\s+where\s+/gi, "built around ")
+    .replace(/\ba\s+and\s+emotional\s+scene\b/gi, "a tense emotional scene")
+    .replace(/\ban\s+and\s+emotional\s+scene\b/gi, "a tense emotional scene")
+    .replace(/\ba\s+emotional\s+scene\b/gi, "an emotional scene")
+    .replace(/\bwhere\s+the\s+singer\s+insists\s+they\s+are\s+fine\s+while\s+the\s+details\s+say\s+otherwise,\s*where\s+/gi, "where ")
+    .replace(/\bwhere\s+a\s+tiny\s+everyday\s+conflict\s+carries\s+the\s+whole\s+relationship,\s*where\s+a\s+tiny\s+/gi, "where a tiny ")
+    .replace(/\bwhere\s+short\s+rhythmic\s+phrases\s+shape\s+the\s+emotional\s+groove,\s*where\s+short\s+rhythmic\s+/gi, "where short rhythmic ")
+    .replace(/\bbuilt\s+around\s+built\s+around\b/gi, "built around")
+    .replace(/\bwith\s+with\b/gi, "with")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s+,/g, ",")
+    .replace(/\s{2,}/g, " ");
+
+  line = line.replace(
+    /with\s+a\s+denial-under-the-surface\s+arc,\s*built\s+around\s+the\s+singer\s+insists\s+they\s+are\s+fine\s+while\s+the\s+details\s+say\s+otherwise/gi,
+    "built around emotional denial and small revealing details",
+  );
+  line = line.replace(
+    /with\s+a\s+phrase-rhythm\s+driven\s+feel,\s*built\s+around\s+short\s+rhythmic\s+phrases\s+shape\s+the\s+emotional\s+groove/gi,
+    "built around phrase-driven emotional rhythm",
+  );
+  line = line.replace(
+    /with\s+a\s+micro-conflict\s+emotional\s+lens,\s*built\s+around\s+a\s+tiny\s+everyday\s+conflict\s+carries\s+the\s+whole\s+relationship/gi,
+    "built around a tiny everyday conflict that carries the relationship",
+  );
+
+  return cleanupPromptTail(line);
+}
+
+function sanitizeNonSituationVocalPrompt(value: string): string {
+  return cleanupPromptTail(
+    String(value || "")
+      .replace(/\s+vs\s+/gi, " and ")
+      .replace(/\bmale\s+and\s+male\s+contrast\b/gi, "layered male vocal colors")
+      .replace(/\bfemale\s+and\s+female\s+contrast\b/gi, "layered female vocal colors")
+      .replace(/\bnatural\s+male\s+and\s+natural\s+male\s+contrast\b/gi, "natural layered male vocal colors")
+      .replace(/\bnatural\s+female\s+and\s+natural\s+female\s+contrast\b/gi, "natural layered female vocal colors")
+      .replace(/\bcontrast\b/gi, "layering")
+      .replace(/\s{2,}/g, " "),
+  );
+}
+
+function sanitizeProductionPromptTail(value: string): string {
+  let line = cleanupPromptTail(String(value || "").replace(/\s+/g, " "));
+
+  // When prompt compaction cuts the last word of a common phrase, complete it
+  // instead of leaving fragments like "clear sectional".
+  line = line
+    .replace(/\bclear\s+sectional\s*$/i, "clear sectional contrast")
+    .replace(/\bsectional\s*$/i, "sectional contrast")
+    .replace(/\bslow-drag\s*$/i, "slow-drag weighted sections")
+    .replace(/\bweighted\s*$/i, "weighted sections")
+    .replace(/\bstop-start\s*$/i, "stop-start drum movement")
+    .replace(/\bcyber\s+glitch\s*$/i, "cyber glitch details")
+    .replace(/\brhythmic\s*$/i, "rhythmic shocks")
+    .replace(/\bmetallic\s+synth\s*$/i, "metallic synth details")
+    .replace(/\b808-weighted\s+rhythm\s*$/i, "808-weighted rhythm pressure")
+    .replace(/\brepeating\s+texture\s*$/i, "repeating texture shifts")
+    .replace(/\bclipped\s+phrase\s*$/i, "clipped phrase breaks")
+    .replace(/\bsyncopated\s+trap\s*$/i, "syncopated trap accents")
+    .replace(/\bwith\s*$/i, "")
+    .replace(/,\s*$/g, "")
+    .trim();
+
+  return cleanupPromptTail(line);
+}
+
+function ensureProductionTempoPhrase(production: string, tempoPhrase: string): string {
+  let line = sanitizeProductionPromptTail(production)
+    .replace(/\s+with\s+tempo\s+set\s+to\s*$/i, "")
+    .replace(/\s+tempo\s+set\s+to\s*$/i, "")
+    .replace(/\s+Tempo:\s*$/i, "")
+    .replace(/,\s*$/g, "")
+    .trim();
+
+  const tempo = String(tempoPhrase || "").trim();
+  if (!tempo) return line;
+
+  const bpm = tempo.match(/(\d{2,3}\s*[–-]\s*\d{2,3}|\d{2,3})\s*BPM/i)?.[0];
+  if (!bpm) return line;
+  if (/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b|\b\d{2,3}\s*BPM\b/i.test(line)) return line;
+
+  // Keep tempo as a compact sentence so long sound palettes cannot cut it in half.
+  return `${line}. Tempo: ${bpm.replace(/\s+/g, " ")}.`;
+}
+
 function buildHybridProductionLine(
   instruments: string,
   arrangement: string,
+  productionVariation = "",
 ): string {
+  const variationSoundItems = cleanPromptValue(productionVariation)
+    .split(",")
+    .map((item) => cleanupPromptTail(item).replace(/\.+$/g, "").trim())
+    .filter(Boolean);
+
   const rawSoundItems = cleanPromptValue(instruments)
     .split(",")
     .map((item) => item.trim())
@@ -4605,7 +6041,9 @@ function buildHybridProductionLine(
     )
     .filter(Boolean);
 
-  const soundPhrase = phraseListForPrompt(soundItems.slice(0, 4));
+  const soundPhrase = phraseListForPrompt(
+    [...variationSoundItems, ...soundItems].slice(0, 5),
+  );
   const performancePhrase = phraseListForPrompt(
     [...feelItems, ...arrangementItems].slice(0, 5),
   );
@@ -4616,13 +6054,13 @@ function buildHybridProductionLine(
       : soundPhrase
     : performancePhrase || "a focused instrumental palette with clear movement";
 
-  return cleanupPromptTail(
+  return sanitizeProductionPromptTail(
     limitText(
       cleanProductionPhrase(production)
         .replace(/\bwith a call-response hook echo-and-undercut hook\b/gi, "with a call-response hook and echo-and-undercut tension")
         .replace(/\bcall-response hook echo-and-undercut hook\b/gi, "call-response hook and echo-and-undercut tension")
         .replace(/\s{2,}/g, " "),
-      165,
+      230,
     ),
   );
 }
@@ -4630,13 +6068,13 @@ function buildHybridProductionLine(
 function compactHybridPromptBody(lines: string[]): string[] {
   let current = [...lines];
   const countBody = () => current.join("\n").length;
-  const targetLimit = 500;
+  const targetLimit = 1050;
   if (countBody() <= targetLimit) return current;
 
   const firstPassLimits: Record<string, number> = {
-    Track: 220,
-    Vocals: 210,
-    Production: 145,
+    Track: 250,
+    Vocals: 520,
+    Production: 230,
   };
   current = current.map((line, index) => {
     const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
@@ -4652,9 +6090,9 @@ function compactHybridPromptBody(lines: string[]): string[] {
   if (countBody() <= targetLimit) return current;
 
   const secondPassLimits: Record<string, number> = {
-    Track: 190,
-    Vocals: 185,
-    Production: 120,
+    Track: 220,
+    Vocals: 440,
+    Production: 190,
   };
   current = current.map((line, index) => {
     const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
@@ -4679,10 +6117,19 @@ function buildFinalPrompt(
   const baseGenre = isFreeTextPrimaryMode(params)
     ? buildFreeTextDirectorProfile(detailLayer).genre
     : getGenreLabelForPrompt(params);
-  const genre = appendPromptLens(baseGenre, variation.genreLens, 165);
-  const instruments = isFreeTextPrimaryMode(params)
-    ? buildFreeTextDirectorProfile(detailLayer).sound
-    : cleanPromptValue(buildSound(params));
+  const reinterpretationLayer = buildGenreReinterpretationLayer(params, detailLayer);
+  const genre = appendPromptLens(
+    appendPromptLens(baseGenre, reinterpretationLayer.genreLens, 210),
+    variation.genreLens,
+    230,
+  );
+  const instruments = appendPromptLens(
+    isFreeTextPrimaryMode(params)
+      ? buildFreeTextDirectorProfile(detailLayer).sound
+      : cleanPromptValue(buildSound(params)),
+    reinterpretationLayer.productionLens,
+    190,
+  );
   const baseAtmosphere = getAtmosphereForPrompt(params, detailLayer);
   const atmosphere = situationActive
     ? buildVariedSituationAtmosphere(params, variation)
@@ -4692,26 +6139,36 @@ function buildFinalPrompt(
     : buildNaturalVocals(params, detailLayer);
   // Keep variation out of [Vocals]. Variation belongs to the track sentence and [Production]
   // so the vocal line never ends with cut fragments like "through" or "as".
-  const vocals = sanitizeVocalDirection(baseVocals);
+  // In normal non-Situation mode, never use "vs". It makes a single/group vocal sound
+  // like a dialogue battle even when the user did not select a conflict structure.
+  const vocals = situationActive
+    ? sanitizeVocalDirection(baseVocals)
+    : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(baseVocals));
   const arrangementBase = situationActive
     ? buildSituationArrangement(params)
     : isFreeTextPrimaryMode(params)
       ? buildFreeTextDirectorProfile(detailLayer).arrangement
       : cleanPromptValue(buildArrangement(params, resolvedStructure));
   const variedArrangementBase = appendPromptLens(
-    arrangementBase,
+    appendPromptLens(arrangementBase, reinterpretationLayer.arrangementLens, 145),
     variationArrangementMeaning(variation),
-    145,
+    165,
   );
-  const arrangement = params.tempo
-    ? `${variedArrangementBase}, ${params.tempo
-        .replace(/^Between\s+/i, "")
-        .replace(/^Exactly\s+/i, "")
-        .replace(/\s+and\s+/i, "–")}`
+  const tempoPhrase = buildTempoPromptPhrase(params);
+  const arrangement = tempoPhrase
+    ? `${tempoPhrase}, ${variedArrangementBase}`
     : variedArrangementBase;
 
   const trackLine = buildHybridTrackLine(params, genre, atmosphere, variation);
-  const production = buildHybridProductionLine(instruments, arrangement);
+  const productionVariation = variationProductionMeaning(variation, params);
+  const production = ensureProductionTempoPhrase(
+    buildHybridProductionLine(
+      instruments,
+      arrangement,
+      productionVariation,
+    ),
+    tempoPhrase,
+  );
 
   const bodyLines = compactHybridPromptBody([
     trackLine,
@@ -4719,19 +6176,606 @@ function buildFinalPrompt(
     `[Production] ${cleanupPromptTail(production)}`,
   ]);
 
-  const finalBodyLines = bodyLines.map((line) =>
-    cleanupPromptTail(
+  const finalBodyLines = bodyLines.map((line) => {
+    const cleaned = cleanupPromptTail(
       cleanProductionPhrase(line)
         .replace(/Fretless/gi, "fretless")
-        .replace(/\bthrough\s+becoming\b/gi, "where it becomes"),
-    ),
-  );
+        .replace(/\bthrough\s+becoming\b/gi, "where it becomes")
+        .replace(/\bshaped\s+by\s+a\s+and\s+emotional\s+scene\s+where\s+/gi, "built around ")
+        .replace(/\bshaped\s+by\s+a\s+and\s+emotional\s+scene\b/gi, "built around emotional tension")
+        .replace(/\ba\s+and\s+emotional\s+scene\b/gi, "a tense emotional scene")
+        .replace(/\bwhere a tiny everyday conflict carries the whole relationship, where a tiny\b/gi, "where a tiny everyday conflict carries the whole relationship")
+        .replace(/\bwhere short rhythmic phrases shape the emotional groove, where short rhythmic\b/gi, "where short rhythmic phrases shape the emotional groove"),
+    );
+    const genreCleaned = sanitizePromptGenreArtifacts(cleaned);
+    if (line.startsWith("[Production]")) {
+      return genreCleaned.replace(/^\[Production\]\s*/i, "[Production] ").replace(/^(\[Production\]\s*)(.*)$/i, (_, head, body) => `${head}${sanitizeProductionPromptTail(body)}`);
+    }
+    return line.startsWith("[") ? genreCleaned : sanitizeTrackOpeningArtifacts(genreCleaned);
+  });
 
   return enforceEnglishProductionPrompt(
     [...finalBodyLines, `[Audio quality improved to masterpiece]`].join("\n"),
   );
 }
 
+
+function isSingleGenderVocalGroup(params: GenerateSongParams): boolean {
+  const info = getVocalModeInfo(params.vocal);
+  return info.total >= 2 && (info.gender === "female" || info.gender === "male");
+}
+
+function sanitizeLyricTagGenderNoise(line: string, params: GenerateSongParams): string {
+  if (!isSingleGenderVocalGroup(params)) return line;
+  // In all-female/all-male groups, the [Vocals] prompt already states gender.
+  // Keep lyric tags compact: [Rap Vocal: husky flow], not [Rap Vocal: female, husky flow].
+  return line
+    .replace(
+      /\[([^\]\n:]+ Vocal[^\]\n:]*):\s*(?:female|male)\s*,\s*([^\]]*)\]/gi,
+      (_, label, desc) => `[${String(label).trim()}: ${String(desc).trim()}]`,
+    )
+    .replace(
+      /\[([^\]\n:]+ Vocal[^\]\n]*)\s*[-–]\s*(?:female|male)\s*,\s*([^\]]*)\]/gi,
+      (_, label, desc) => `[${String(label).trim()}: ${String(desc).trim()}]`,
+    );
+}
+
+
+function compactLyricTagCuePhrase(value: string): string {
+  const raw = String(value || "")
+    .replace(/\b(female|male|vocal|voice|tone|texture|delivery|emotion|attitude)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const lower = raw.toLowerCase();
+  const rules: Array<[RegExp, string]> = [
+    [/clear.*bright|bright.*clear/, "clear bright"],
+    [/airy|floating|relaxed/, "airy"],
+    [/low.*husky|husky.*off|off[-\s]?beat/, "husky off-beat"],
+    [/whisper|breathy/, "breathy"],
+    [/stylish|swagger|sassy/, "stylish"],
+    [/sharp|cutting/, "sharp"],
+    [/hidden pain|smiling.*pain|crying inside|wounded/, "hidden pain"],
+    [/resentful|longing|yearning|lingering/, "longing"],
+    [/numb|empty|resigned/, "numb"],
+    [/drained|exhausted/, "drained"],
+    [/guarded|push|fear|get hurt|distance/, "guarded"],
+    [/suppressed anger|rage|anger/, "suppressed anger"],
+    [/insecure|terrified|losing|anxious/, "anxious"],
+    [/awkward|sincere|careful/, "sincere"],
+    [/regret|self[-\s]?blame|guilt/, "self-blame"],
+    [/secret|hiding|held back/, "secretive"],
+    [/choked|overwhelmed|gratitude/, "choked up"],
+    [/liberat|free|burden|release|cathartic/, "liberated"],
+    [/sarcastic|cynical|irony/, "cynical"],
+    [/fragile|tearful|vulnerable/, "fragile"],
+    [/tense|tension|breathless/, "tense"],
+    [/playful|lighthearted|teasing/, "playful"],
+    [/warm|comfort|tender/, "warm"],
+    [/dream|ethereal|hazy/, "dreamy"],
+  ];
+  for (const [pattern, cue] of rules) {
+    if (pattern.test(lower)) return cue;
+  }
+  return raw
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" ");
+}
+
+function compactLyricVocalTagLine(line: string): string {
+  return String(line || "").replace(
+    /\[((?:[A-Za-z가-힣0-9 ]+\s)?(?:Main|Lead|Sub|Airy|Harmony|Whisper|Low\s+Rap|Rap|Bridge|Stylish\s+Rap|Whisper\s+Rap)\s+Vocal|Together)\s*:\s*([^\]]+)\]/gi,
+    (_, label, desc) => {
+      const chunks = String(desc || "")
+        .split(/[,/]|\band\b/gi)
+        .map((part) => compactLyricTagCuePhrase(part))
+        .filter(Boolean);
+      const unique: string[] = [];
+      for (const chunk of chunks) {
+        const normalized = chunk.toLowerCase();
+        if (!unique.some((item) => item.toLowerCase() === normalized)) unique.push(chunk);
+        if (unique.length >= 2) break;
+      }
+      const compact = unique.join(", ");
+      return compact ? `[${String(label).trim()}: ${compact}]` : `[${String(label).trim()}]`;
+    },
+  );
+}
+
+function sanitizeCompositeSectionVocalTag(line: string): string {
+  let cleaned = String(line || "");
+
+  // Suno generally follows composite sung-section tags better than split tags:
+  // [Verse 1: Airy Female Vocal, pleading]. Do NOT break these apart.
+  // Only normalize legacy section names while preserving the composite tag body.
+  cleaned = cleaned.replace(/^\s*\[Rap\s+Verse([^\]]*)\]/i, (_, rest) => `[Rap Section${rest}]`);
+
+  // Normalize tag-only variants using " - ..." into colon style, but keep section composites intact.
+  cleaned = cleaned.replace(
+    /^\s*\[((?:Main|Lead|Sub|Airy|Harmony|Whisper|Low\s+Rap|Rap|Bridge|Stylish\s+Rap|Whisper\s+Rap)\s+Vocal)\s*[-–]\s*([^\]]*)\]\s*/i,
+    (_, role, desc) => `[${String(role).trim()}: ${String(desc).trim()}] `,
+  );
+
+  return cleaned.trimEnd();
+}
+
+function isBracketTag(line: string): boolean {
+  return /^\[[^\]]+\]$/.test(line.trim());
+}
+
+function isBrokenBracketPlaceholder(line: string): boolean {
+  return /^\[\s*(?:\d+|[:;,.-]*)\s*\]\s*$/i.test(line.trim());
+}
+
+function stripBrokenBracketPrefix(line: string): string {
+  return line.replace(/^\s*(?:\[\s*(?:\d+|[:;,.-]*)\s*\]\s*)+/i, "").trimStart();
+}
+
+function isVocalRoleTag(line: string): boolean {
+  return /^\[[^\]]*(?:Vocal|Rap Vocal|Lead Vocal|Main Vocal|Harmony Vocal|Whisper Vocal|Airy Vocal|Together)[^\]]*\]$/i.test(
+    line.trim(),
+  );
+}
+
+function extractVocalRoleTag(line: string): string | null {
+  const trimmed = line.trim();
+  const match = trimmed.match(/^(\[[^\]]*(?:Vocal|Rap Vocal|Lead Vocal|Main Vocal|Harmony Vocal|Whisper Vocal|Airy Vocal|Together)[^\]]*\])/i);
+  return match ? match[1] : null;
+}
+
+function fillerForEmptySectionTag(tag: string): string {
+  const lower = tag.toLowerCase();
+  if (/intro/.test(lower)) return "(Instrumental intro)";
+  if (/solo/.test(lower)) return "(Instrumental solo)";
+  if (/drop/.test(lower)) return "(Beat drop)";
+  if (/breakdown|break/.test(lower)) return "(Instrumental break)";
+  return "";
+}
+
+function situationAcousticDescriptorFromText(value: string): string {
+  const raw = String(value || "").toLowerCase();
+  if (/reaper|저승|사신|grim|tired|피곤|퇴근|잔소리|nag/.test(raw)) return "Tired";
+  if (/ghost|귀신|유령|airy|fragile|pleading|애원|미련/.test(raw)) return "Airy";
+  if (/boss|상사|부장|manager|firm|press|command|명령|압박/.test(raw)) return "Firm";
+  if (/mother|엄마|어머니|warm|걱정|다정/.test(raw)) return "Warm";
+  if (/son|아들|young|defensive|방어/.test(raw)) return "Young";
+  if (/low|deep|husky|gritty|낮|허스키/.test(raw)) return "Low";
+  if (/dry|spoken|말하듯|건조|무심/.test(raw)) return "Dry";
+  if (/sharp|punchy|rap|래|날카|직설/.test(raw)) return "Sharp";
+  if (/soft|gentle|fragile|여린|부드/.test(raw)) return "Soft";
+  if (/clear|bright|맑|밝/.test(raw)) return "Clear";
+  return "Natural";
+}
+
+function situationAcousticVoiceTypeFromText(value: string): "Rap" | "Spoken Vocal" | "Vocal" {
+  const raw = String(value || "").toLowerCase();
+  if (/rap|래|flow|off[-\s]?beat|punchy/.test(raw)) return "Rap";
+  if (/spoken|talk|말하듯|dry|건조|대사|narrat/.test(raw)) return "Spoken Vocal";
+  return "Vocal";
+}
+
+function buildSituationAcousticTagLabel(
+  params: GenerateSongParams,
+  role: string,
+  roleIndex: number,
+  memberIndex = roleIndex,
+): string {
+  const genderHint = inferRoleGenderFromText(role);
+  const memberGender = getMemberGenderLabel(params, memberIndex);
+  const gender = genderHint === "male" || genderHint === "female" ? genderHint : memberGender;
+  const genderTitle = gender === "male" ? "Male" : gender === "female" ? "Female" : "Vocal";
+  const memberTone = getMemberToneForPrompt(params, memberIndex);
+  const fallbackTone = compactVocalToneForPrompt(inferSituationVocalTone(role, roleIndex));
+  const rawStyleSource = [
+    params.situation?.speakers?.[roleIndex]?.speechStyle,
+    params.situation?.speakers?.[roleIndex]?.attitude,
+    roleIndex === 0 ? params.situation?.speakerAStyle : params.situation?.speakerBStyle,
+    roleIndex === 0
+      ? params.situation?.speakerAAttitude || params.situation?.attitudeA
+      : params.situation?.speakerBAttitude || params.situation?.attitudeB,
+    role,
+    memberTone,
+    fallbackTone,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const descriptor = situationAcousticDescriptorFromText(rawStyleSource);
+  const voiceType = situationAcousticVoiceTypeFromText(rawStyleSource);
+
+  if (genderTitle === "Vocal") return `${descriptor} ${voiceType}`.replace(/\s+/g, " ").trim();
+  return `${descriptor} ${genderTitle} ${voiceType}`.replace(/\s+/g, " ").trim();
+}
+
+function getSituationAcousticTagPairs(params: GenerateSongParams): Array<[string, string]> {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return [];
+  const rawRoles = [situation?.targetA, situation?.targetB]
+    .map((role) => String(role || "").trim())
+    .filter(Boolean);
+  const speakerRoles = (situation?.speakers ?? [])
+    .slice(0, 2)
+    .map((speaker) => String(speaker.role || speaker.id || "").trim())
+    .filter(Boolean);
+  const roles = (rawRoles.length ? rawRoles : speakerRoles).slice(0, 2);
+  const roleEntries: SituationRoleEntry[] = roles.map((role) => ({
+    role,
+    genderHint: inferRoleGenderFromText(role),
+  }));
+  const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
+  return roles.map((role, index) => [
+    role,
+    buildSituationAcousticTagLabel(params, role, index, matchedIndexes[index] ?? index),
+  ] as [string, string]);
+}
+
+function getSituationAcousticTagLabels(params: GenerateSongParams): string[] {
+  return getSituationAcousticTagPairs(params).map(([, label]) => label);
+}
+
+function buildSituationDuoAcousticLabel(params: GenerateSongParams): string {
+  const labels = getSituationAcousticTagLabels(params);
+  const joined = labels.join(" ").toLowerCase();
+  if (/male/.test(joined) && /female/.test(joined)) return "Mixed Vocal Duo";
+  if (labels.length >= 2 && labels.every((label) => /male/i.test(label))) return "Male Vocal Duo";
+  if (labels.length >= 2 && labels.every((label) => /female/i.test(label))) return "Female Vocal Duo";
+  return "Vocal Duo";
+}
+
+function getSituationEnglishRoleLabels(params: GenerateSongParams): string[] {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return [];
+  const rawRoles = [situation?.targetA, situation?.targetB]
+    .map((role) => String(role || "").trim())
+    .filter(Boolean);
+  const speakerRoles = (situation?.speakers ?? [])
+    .slice(0, 2)
+    .map((speaker) => String(speaker.role || speaker.id || "").trim())
+    .filter(Boolean);
+  const roles = (rawRoles.length ? rawRoles : speakerRoles).slice(0, 2);
+  return roles.map((role, index) => englishRoleLabel(role, `Character ${index + 1}`));
+}
+
+function getSituationRoleLabelPairs(params: GenerateSongParams): Array<[string, string]> {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return [];
+  const rawRoles = [situation?.targetA, situation?.targetB]
+    .map((role) => String(role || "").trim())
+    .filter(Boolean);
+  const speakerRoles = (situation?.speakers ?? [])
+    .slice(0, 2)
+    .map((speaker) => String(speaker.role || speaker.id || "").trim())
+    .filter(Boolean);
+  const roles = (rawRoles.length ? rawRoles : speakerRoles).slice(0, 2);
+  return roles.map((role, index) => [role, englishRoleLabel(role, `Character ${index + 1}`)] as [string, string]);
+}
+
+function cleanCharacterCue(cue: string): string {
+  return String(cue || "")
+    .replace(/\b(?:male|female|mixed|duet|group)\b\s*,?\s*/gi, "")
+    .replace(/^[\s:,，ㆍ·-]+|[\s:,，ㆍ·-]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(", ");
+}
+
+function findSituationEnglishLabelFromTag(rawTag: string, params: GenerateSongParams): string {
+  if (!hasSituation(params.situation)) return "";
+  const normalizedTag = String(rawTag || "")
+    .replace(/[\[\]]/g, "")
+    .replace(/[,，]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!normalizedTag) return "";
+
+  const rolePairs = getSituationRoleLabelPairs(params);
+  for (const [raw, english] of rolePairs) {
+    const rawClean = String(raw || "").trim();
+    const englishClean = String(english || "").trim();
+    if (!rawClean && !englishClean) continue;
+    if (normalizedTag.toLowerCase() === englishClean.toLowerCase()) return englishClean;
+    if (rawClean && normalizedTag.includes(rawClean)) return englishClean;
+    if (englishClean && normalizedTag.toLowerCase().includes(englishClean.toLowerCase())) return englishClean;
+  }
+
+  // Strong fallback for common situation roles, even if Gemini outputs Korean labels.
+  if (/저승\s*사자|저승사자|사신|grim\s*reaper|reaper/i.test(normalizedTag)) return "Grim Reaper";
+  if (/귀신|유령|ghost|spirit/i.test(normalizedTag)) return "Ghost";
+  if (/엄마|어머니|mother|mom/i.test(normalizedTag)) return "Mother";
+  if (/아들|son/i.test(normalizedTag)) return "Son";
+  if (/딸|daughter/i.test(normalizedTag)) return "Daughter";
+  if (/아빠|아버지|father|dad/i.test(normalizedTag)) return "Father";
+  if (/직원|employee/i.test(normalizedTag)) return "Employee";
+  if (/상사|boss/i.test(normalizedTag)) return "Boss";
+
+  return "";
+}
+
+function findSituationAcousticLabelFromTag(rawTag: string, params: GenerateSongParams): string {
+  if (!hasSituation(params.situation)) return "";
+  const normalizedTag = String(rawTag || "")
+    .replace(/[\[\]]/g, "")
+    .replace(/[,，]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!normalizedTag) return "";
+
+  const acousticPairs = getSituationAcousticTagPairs(params);
+  const rolePairs = getSituationRoleLabelPairs(params);
+  if (/&|together|duo|both|shared harmony/i.test(normalizedTag) && acousticPairs.length >= 2) {
+    return buildSituationDuoAcousticLabel(params);
+  }
+  for (let index = 0; index < acousticPairs.length; index += 1) {
+    const [raw, acoustic] = acousticPairs[index];
+    const english = rolePairs[index]?.[1] || "";
+    const rawClean = String(raw || "").trim();
+    const englishClean = String(english || "").trim();
+    const acousticClean = String(acoustic || "").trim();
+    if (!acousticClean) continue;
+    if (normalizedTag.toLowerCase().includes(acousticClean.toLowerCase())) return acousticClean;
+    if (englishClean && normalizedTag.toLowerCase().includes(englishClean.toLowerCase())) return acousticClean;
+    if (rawClean && normalizedTag.includes(rawClean)) return acousticClean;
+  }
+
+  if (/저승\s*사자|저승사자|사신|grim\s*reaper|reaper/i.test(normalizedTag))
+    return acousticPairs[0]?.[1] || "Tired Male Rap";
+  if (/귀신|유령|ghost|spirit/i.test(normalizedTag))
+    return acousticPairs[1]?.[1] || "Airy Female Vocal";
+  if (/엄마|어머니|mother|mom/i.test(normalizedTag)) return "Warm Female Vocal";
+  if (/아들|son/i.test(normalizedTag)) return "Young Male Vocal";
+  if (/딸|daughter/i.test(normalizedTag)) return "Young Female Vocal";
+  if (/아빠|아버지|father|dad/i.test(normalizedTag)) return "Dry Male Spoken Vocal";
+  if (/직원|employee/i.test(normalizedTag)) return "Bright Female Vocal";
+  if (/상사|boss/i.test(normalizedTag)) return "Firm Male Spoken Vocal";
+
+  return "";
+}
+
+function normalizeSituationCharacterLyricTag(line: string, params: GenerateSongParams): string {
+  if (!hasSituation(params.situation)) return line;
+  const source = String(line || "");
+  const trimmed = source.trim();
+  const match = trimmed.match(/^\[([^\]]{1,120})\](.*)$/);
+  if (!match) return line;
+
+  const rawInside = match[1].trim();
+  const rest = String(match[2] || "");
+
+  // Composite section tag: [Verse 1: Ghost, pleading] -> [Verse 1: Airy Female Vocal, pleading]
+  const sectionComposite = rawInside.match(/^((?:Intro|Verse\s*\d*|Pre[-\s]?Chorus|Chorus(?:\s*\([^\]]+\))?|Hook|Rap\s*Verse|Rap\s*Section|Bridge|Breakdown|Drop|Final\s*Chorus|Outro|Solo|Instrumental)(?:\s*\/\s*Drop)?)\s*:\s*(.+)$/i);
+  if (sectionComposite) {
+    const sectionName = sectionComposite[1].replace(/^Rap\s+Verse$/i, "Rap Section").trim();
+    const body = sectionComposite[2].trim();
+    const parts = body.split(/[,，]/).map((part) => part.trim()).filter(Boolean);
+    const firstPart = parts[0] || body;
+    const acousticLabel = findSituationAcousticLabelFromTag(firstPart, params);
+    if (!acousticLabel) return line;
+    const cues = parts.slice(1).join(", ");
+    const cleanCue = cleanCharacterCue(cues);
+    return `[${sectionName}: ${acousticLabel}${cleanCue ? `, ${cleanCue}` : ""}]${rest.replace(/^\s*,\s*/, "")}`;
+  }
+
+  const acousticLabel = findSituationAcousticLabelFromTag(rawInside, params);
+  if (!acousticLabel) return line;
+
+  let cue = "";
+  const cueMatch = rawInside.match(/[:：,，]\s*(.*)$/);
+  if (cueMatch) cue = cleanCharacterCue(cueMatch[1]);
+
+  return `[${acousticLabel}${cue ? `: ${cue}` : ""}]${rest.replace(/^\s*,\s*/, "")}`;
+}
+
+function isGenericVocalRoleTagLabel(label: string): boolean {
+  return /^(?:Main|Lead|Sub|Airy|Harmony|Whisper|Low\s+Rap|Rap|Bridge)\s+Vocal$|^Together$/i.test(label.trim());
+}
+
+function normalizeGenericTagsInSituationLyrics(lines: string[], params: GenerateSongParams): string[] {
+  if (!hasSituation(params.situation)) return lines;
+  const labels = getSituationAcousticTagLabels(params);
+  if (labels.length < 2) return lines;
+  const [firstVoice, secondVoice] = labels;
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isMulti) return lines;
+
+  let currentVoice = firstVoice;
+  let genericCursor = 0;
+  return lines.map((line) => {
+    const trimmed = String(line || "").trim();
+    const match = trimmed.match(/^\[([^\]:]+)(?::\s*([^\]]*))?\](.*)$/);
+    if (!match) return line;
+    const label = match[1].trim();
+    const cue = String(match[2] || "").trim();
+    const rest = String(match[3] || "");
+
+    if (labels.some((item) => item.toLowerCase() === label.toLowerCase())) {
+      currentVoice = label;
+      return line;
+    }
+
+    if (!isGenericVocalRoleTagLabel(label)) return line;
+
+    let replacement = currentVoice;
+    if (/together/i.test(label)) {
+      replacement = buildSituationDuoAcousticLabel(params);
+    } else if (/air|main|lead|sub|harmony/i.test(label)) {
+      replacement = secondVoice;
+    } else if (/rap|low/i.test(label)) {
+      replacement = firstVoice;
+    } else {
+      replacement = genericCursor % 2 === 0 ? firstVoice : secondVoice;
+      genericCursor += 1;
+    }
+    currentVoice = replacement.includes("&") ? currentVoice : replacement;
+
+    const compactCue = cue
+      .replace(/(?:male|female|mixed|duet|group)\s*,?\s*/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/^,\s*|,\s*$/g, "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(", ");
+
+    return `[${replacement}${compactCue ? `: ${compactCue}` : ""}]${rest}`;
+  });
+}
+
+
+function normalizeGeneratedLyricTagSpacing(lyrics: string): string {
+  let text = String(lyrics || "").replace(/\r\n/g, "\n");
+
+  // If Gemini collapses the whole lyric into one paragraph, restore line breaks before tags.
+  text = text.replace(/\]\s+(?=\[)/g, "]\n");
+  // Situation roles can be arbitrary Korean user labels, so split before any compact bracket tag, not only known Suno tags.
+  text = text.replace(/([^\n])\s+(\[[^\]\n]{1,80}\])/g, "$1\n$2");
+  text = text.replace(
+    /([^\n])\s+(\[(?:Intro|Verse\s*\d*|Pre[-\s]?Chorus|Chorus(?:\s*\([^\]]+\))?|Hook|Rap\s*Verse|Rap\s*Section|Bridge|Breakdown|Drop|Final\s*Chorus|Outro|Solo|Together|Main\s+Vocal|Lead\s+Vocal|Sub\s+Vocal|Airy\s+Vocal|Harmony\s+Vocal|Whisper\s+Rap\s+Vocal|Whisper\s+Vocal|Low\s+Rap\s+Vocal|Rap\s+Vocal)[^\]]*\])/gi,
+    "$1\n$2",
+  );
+
+  // Normalize empty or broken placeholders that may appear inline.
+  text = text.replace(/\[\s*\]/g, "");
+  text = text.replace(/\[\s*\d+\s*\]/g, "");
+  text = text.replace(/\[\s*[:;,.-]+\s*\]/g, "");
+  text = text.replace(/\(\s*[:;,.-]+\s*\)/g, "");
+
+  return text;
+}
+
+
+function isTogetherVocalTag(line: string): boolean {
+  return /^\s*\[\s*Together(?:\s*:[^\]]*)?\]\s*$/i.test(String(line || "").trim());
+}
+
+function replaceTogetherTagWithSoloRole(line: string, replacement: string): string {
+  const trimmed = String(line || "").trim();
+  if (!isTogetherVocalTag(trimmed)) return line;
+  return `[${replacement}]`;
+}
+
+function limitRepeatedTogetherTags(lines: string[], params: GenerateSongParams): string[] {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isMulti) return lines;
+
+  const togetherIndices = lines
+    .map((line, index) => (isTogetherVocalTag(line) ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (togetherIndices.length <= 2) return lines;
+
+  // Keep one early shared hook and the final shared hook, but convert middle repeated
+  // Together blocks back into role-led tags so group songs do not collapse into choir mode.
+  const keep = new Set<number>([togetherIndices[0], togetherIndices[togetherIndices.length - 1]]);
+  let replacementCursor = 0;
+  const replacements = [
+    "Main Vocal: clear bright, focused",
+    "Airy Vocal: airy, fragile",
+    "Low Rap Vocal: husky off-beat",
+    "Whisper Rap Vocal: breathy, secretive",
+  ];
+
+  return lines.map((line, index) => {
+    if (!isTogetherVocalTag(line) || keep.has(index)) return line;
+    const replacement = replacements[replacementCursor % replacements.length];
+    replacementCursor += 1;
+    return replaceTogetherTagWithSoloRole(line, replacement);
+  });
+}
+
+function ensureLeadingSectionBeforeFirstVocal(lines: string[]): string[] {
+  const firstContentIndex = lines.findIndex((line) => line.trim());
+  if (firstContentIndex < 0) return lines;
+  const first = lines[firstContentIndex].trim();
+  if (isVocalRoleTag(first)) {
+    const copy = [...lines];
+    copy.splice(firstContentIndex, 0, "[Verse]");
+    return copy;
+  }
+  return lines;
+}
+
+function sanitizeGeneratedLyricTagsAndFragments(
+  lyrics: string,
+  params: GenerateSongParams,
+): string {
+  if (!lyrics) return "";
+
+  const rawLines = normalizeGeneratedLyricTagSpacing(lyrics)
+    .split("\n")
+    .map((line) =>
+      normalizeSituationCharacterLyricTag(
+        compactLyricVocalTagLine(sanitizeLyricTagGenderNoise(sanitizeCompositeSectionVocalTag(line), params)),
+        params,
+      )
+        .replace(/\(\s*:\s*\)/g, "")
+        .replace(/\(\s*,\s*\)/g, "")
+        .replace(/\(\s*\)/g, "")
+        .replace(/\s+,\s+/g, ", ")
+        .replace(/,\s*,/g, ",")
+        .replace(/\s+([,.!?])/g, "$1")
+        .replace(/\s{2,}/g, " ")
+        .trimEnd(),
+    );
+
+  const out: string[] = [];
+  let lastVocalTag: string | null = null;
+
+  for (let index = 0; index < rawLines.length; index += 1) {
+    let line = rawLines[index];
+    let trimmed = line.trim();
+
+    if (isBrokenBracketPlaceholder(trimmed)) {
+      continue;
+    }
+
+    if (/^\s*\[\s*(?:\d+|[:;,.-]*)\s*\]/i.test(line)) {
+      const lyricAfterBrokenTag = stripBrokenBracketPrefix(line);
+      if (!lyricAfterBrokenTag) continue;
+      line = lastVocalTag ? `${lastVocalTag} ${lyricAfterBrokenTag}` : lyricAfterBrokenTag;
+      trimmed = line.trim();
+    }
+
+    const currentVocalTag = extractVocalRoleTag(trimmed);
+    if (currentVocalTag) {
+      lastVocalTag = currentVocalTag;
+    }
+
+    // Remove empty role tags rather than leaving a naked singer label.
+    if (isVocalRoleTag(trimmed)) {
+      const nextNonEmpty = rawLines.slice(index + 1).find((next) => next.trim());
+      if (!nextNonEmpty || isBracketTag(nextNonEmpty) || isBrokenBracketPlaceholder(nextNonEmpty)) {
+        continue;
+      }
+    }
+
+    out.push(line);
+
+    // Instrumental section tags may be intentionally lyric-free, but avoid a totally empty tag.
+    if (isBracketTag(trimmed) && !isVocalRoleTag(trimmed)) {
+      const nextNonEmpty = rawLines.slice(index + 1).find((next) => next.trim());
+      if (!nextNonEmpty || isBracketTag(nextNonEmpty) || isBrokenBracketPlaceholder(nextNonEmpty)) {
+        const filler = fillerForEmptySectionTag(trimmed);
+        if (filler) out.push(filler);
+      }
+    }
+  }
+
+  const stabilizedLines = ensureLeadingSectionBeforeFirstVocal(
+    normalizeGenericTagsInSituationLyrics(limitRepeatedTogetherTags(out, params), params),
+  );
+
+  return stabilizedLines
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\[([^\]\n:]+ Vocal[^\]\n:]*):\s*,\s*/gi, "[$1: ")
+    .replace(/\[([^\]\n:]+ Vocal[^\]\n:]*):\s*\]/gi, "[$1]")
+    .trim();
+}
 export async function generateSong(
   ...args: GenerateSongInput
 ): Promise<SongResult> {
@@ -4740,7 +6784,7 @@ export async function generateSong(
     new Set(
       (params.lyricLanguages?.length
         ? params.lyricLanguages
-        : ["ko", "en"]
+        : ["ko"]
       ).filter(Boolean),
     ),
   ).slice(0, 2) as LanguageCode[];
@@ -4754,14 +6798,13 @@ export async function generateSong(
   const model: string = "gemini-3-flash-preview";
 
   const genresForDuration = params.genre ? [params.genre] : [];
+  const selectedStructureMode = (params.songStructure ?? "1") as SongStructure;
   const resolvedStructure = (
-    (params.useAutoDuration ?? true)
-      ? calculateSongStructure(
-          genresForDuration,
-          params.moods ?? [],
-          params.lyricsLength ?? "normal",
-        )
-      : (params.songStructure ?? "2")
+    selectedStructureMode === "custom"
+      ? "custom"
+      : selectedStructureMode === "1"
+        ? "1"
+        : selectedStructureMode
   ) as SongStructure;
 
   const lyricGuidancePrompt = buildLyricGuidancePrompt(
@@ -4809,6 +6852,7 @@ export async function generateSong(
     params.isKoreanEnglishMix ||
     (params.isKpopSelected && params.kpopMode === 2),
   );
+  const englishMixRatio = normalizeEnglishMixRatio(params.englishMixRatio);
 
   const languageNameMap: Record<LanguageCode, string> = {
     ko: "Korean",
@@ -4839,7 +6883,8 @@ export async function generateSong(
 - If Korean is selected, put Korean lyrics in JSON field lyrics.korean and create a natural Korean title.
 - If a non-Korean language is selected, put that language's lyrics in JSON field lyrics.english, even when the selected language is not English.
 - If a language is not selected, do not create a title or lyrics for that language.
-- Do not generate unselected lyric languages.`;
+- Do not generate unselected lyric languages.
+- In Korean-only mode, lyrics.korean must be Korean-only unless MIXED LANGUAGE MODE is explicitly active.`;
 
   const lyricsResponseSchema = params.isNoLyrics
     ? {}
@@ -4856,15 +6901,31 @@ export async function generateSong(
 
   const lyricsRequired = params.isNoLyrics ? [] : ["lyrics"];
 
+  const koreanOnlyNoEnglishInstruction =
+    !shouldUseMixedLyrics &&
+    !params.isNoLyrics &&
+    requestedLyricLanguages.includes("ko") &&
+    !requestedLyricLanguages.some((lang) => lang !== "ko")
+      ? `KOREAN-ONLY LYRIC MODE (MANDATORY):
+- Write lyrics.korean in Korean only.
+- Do NOT include English words, English sentences, romanized Korean, or English ad-libs.
+- Parentheses are allowed only for Korean inner thoughts, Korean ad-libs, or Korean sound expressions.
+- Do NOT add lines such as "(Stay)", "(I miss you)", "Oh baby", "tonight", or any English hook phrase unless the user explicitly asks for English.`
+      : "";
+
   const mixedLyricsInstruction =
     shouldUseMixedLyrics && !params.isNoLyrics
       ? `MIXED LANGUAGE MODE (MANDATORY):
-- Use natural Korean/English mixed lyrics.
-- Ratio: about 70-75% primary language flow and 25-30% mixed-language accents.
-- For lyrics.korean: keep Korean as the main language, but include natural English words or short phrases in MULTIPLE sections.
-- For lyrics.english: keep English as the main language, but include natural Korean words or short phrases in MULTIPLE sections.
-- The chorus or hook MUST contain visible code-switching.
-- Do not keep the two versions fully separated by language.
+- Use natural Korean/English mixed lyrics only because the user enabled mixed lyrics.
+- English share is a STRICT MAXIMUM of ${englishMixRatio}% of the entire lyric body, not ${englishMixRatio}% per section.
+- Count all English words, English ad-libs, English hook phrases, and English words inside parentheses as part of that total ratio.
+- Korean must remain the main language when Korean lyrics are selected.
+- For 5%: use at most one very short English accent in the whole lyric, or skip English entirely if not needed.
+- For 10%: use only a few short English accents across the whole lyric.
+- Do NOT place English in every section.
+- Avoid long English sentences unless the selected ratio is 25% or higher.
+- For lyrics.korean: keep Korean as the main language and place English accents very sparingly according to the selected whole-lyric ratio.
+- For lyrics.english: keep English as the main language only when a non-Korean lyric language is selected; otherwise leave lyrics.english empty.
 - Keep the code-switching natural and melodic, not forced.`
       : "";
 
@@ -4910,10 +6971,18 @@ ${exactStructureText}
   - Climax: The highest point of energy and emotional intensity.
 - Do not collapse this into a generic pop structure.
 - If Situation is active, every lyrical custom section must still follow the Situation roles and relationship.
-- Chorus, Hook, Rap Verse, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro must not become generic lyrics; keep the scenario and role conflict active.
+- Chorus, Hook, Rap Section, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro must not become generic lyrics; keep the scenario and role conflict active.
 - Instrumental, Solo, Drop, and Break can be mainly musical, but if they include lyrics or ad-libs, they must stay connected to the same Situation.`
-      : `SONG STRUCTURE (MANDATORY):
-- Selected mode: ${resolvedStructure}.
+      : (params.songStructure ?? "1") === "1"
+        ? `SONG STRUCTURE (DEFAULT / FREE):
+- Do not force a fixed Verse-Chorus template.
+- Build the most dramatic structure freely around the story arc, emotional turns, and hook payoff.
+- You may use sections such as Intro, Verse, Pre-Chorus, Hook, Chorus, Rap Section, Drop, Bridge, Breakdown, Final Chorus, Outro, or Instrumental only where they serve the story.
+- Sudden Beat Drops, irregular Rap Section entries, shortened verses, repeated hooks, or delayed choruses are allowed when they fit the emotional development.
+- For Suno stability, do not repeat identical bracket section tags back-to-back. If the same section continues with only a vocal/acoustic-role change, keep one composite section tag and use parentheses for short ad-libs or echoes.
+- Use composite lyric tags for sung sections, e.g. [Verse 1: Airy Female Vocal, pleading] or [Rap Section: Low Male Rap, tired]. Instrumental-only sections may use section-only tags.`
+        : `SONG STRUCTURE (MANDATORY):
+- Selected mode: ${resolvedStructure === "2" ? "1" : "2"}.
 - Use this exact structure:
 ${exactStructureText}
 - Do not substitute a different default structure.`;
@@ -4974,7 +7043,21 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Mood, genre, vocal technique, sound, tempo, hook, and arrangement instructions are NOT story themes.
 - Do NOT turn technical instructions into the title or lyrical topic.
 - Keep the final production prompt body up to 500 characters, excluding the fixed audio-quality line. Do not cut off genre identity, story scene, production movement, or vocal roles.
-- Good [Vocals] style: Natural duet with bright female vocals and sarcastic delivery (Employee) vs dry male vocals with a nagging tone (Boss). If the genre is K-pop/Trot/Gugak, Natural Korean duet is appropriate. Bad style: Female, pop, sad.
+- Good [Vocals] style for Situation: 2-character vocal split: Employee with bright female vocal, sarcastic but slightly hurt delivery. Boss with dry male vocal, nagging pressure. Keep each character separated. Good group style: 4 female vocal split: Main Vocal (...), Lead Vocal (...), Rap Vocal (...), Whisper Vocal (...). Bad style: Female group vocals, pop, sad.
+- For group lyric tags, NEVER use mechanical labels like [Member 1], [Member 2], etc. Use role-based tags such as [Main Vocal: clear bright, hidden pain], [Airy Vocal: airy, fragile], [Rap Vocal: sharp, cynical], [Whisper Rap Vocal: breathy, secretive].
+- If the group is all-female or all-male, do not repeat the gender in lyric tags. Only include gender in lyric tags for mixed-gender groups.
+- Keep lyric tags compact: [Role: one voice cue, one emotion cue]. Use at most 2 short cues after the colon. Do not put full sentences, long descriptions, or all vocal settings inside lyric tags.
+- LYRIC CONTENT SOURCE LOCK (MANDATORY): Lyrics must be created only from USER FREE-TEXT DIRECTOR NOTE, selected Theme, and active Situation if provided. Vocal emotion direction, vocal expression, vocal tone, Sound, Style, tempo, BPM, instrument names, and production texture are NOT lyric topics.
+- Vocal emotion direction and vocal expression are singer-performance directions only. They may appear in [Vocals] and compact lyric tags, but must NOT create lyric story, imagery, subject matter, repeated keywords, or narrative content. Do not write lyric lines that explain the selected emotion/expression. If no Theme/Situation/user note exists, keep lyrics broad and character-driven rather than explaining vocal settings.
+- In Situation/character lyrics, lyric tags must use acoustic voice labels from the production prompt, such as [Tired Male Rap] and [Airy Female Vocal]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], and never switch back to generic vocal labels after acoustic labels have been established.
+- KIM EANA-STYLE LYRIC FOUNDATION (MANDATORY): Write lyrics as character speech, not emotion exposition. Start from character, situation, desire, speech style, and lived detail. Prefer concrete everyday details, persona flaws, small behavior, and a believable scene over abstract emotion words. Chorus should express the character's real desire or repeating phrase, not summarize the selected vocal emotion.
+- Do not make tags empty. Every vocalist tag must be followed by at least 1-2 complete lyric or ad-lib lines. Never output broken placeholders like "( : )", "[ : ]", empty parentheses, or empty vocal tags.
+- Use composite lyric tags for sung sections: [Section: Vocal/Acoustic Role, short emotion or delivery]. Good: [Hook: Whisper Rap Vocal, breathy tension], [Rap Section: Low Male Rap, husky off-beat].
+- If the selected structure says Rap Verse, write it as [Rap Section] in generated lyrics. Composite form is allowed and preferred: [Rap Section: Low Male Rap, husky off-beat].
+- In group songs, [Together] is not the default singer. Use [Together] only for one short shared hook or the final hook unless the user explicitly asks for full-group singing.
+- For repeated Hook/Chorus sections, distribute ownership across roles: Main Vocal or Airy Vocal can lead early hooks, Rap/Whisper Rap can interrupt or answer, and Together should be saved for the final or most important hook.
+- Do not let [Together] own every repeated hook. Keep group unity, but preserve the selected vocal split.
+- Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse 1: Tired Male Rap, dry], [Rap Section: Low Male Rap, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format for Situation-led songs should feel like a short natural pitch, not a technical form. Prefer this hybrid structure:
   A {mood + genre + style} track with {core feel}, set around {story scene and nuance}.
@@ -5000,6 +7083,9 @@ ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- $
 
 MOOD LAYER (EMOTIONAL COLOR ONLY):
 ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
+
+VOCAL EXPRESSION STYLE LAYER (VOICE EMOTION / ATTITUDE / PHRASING):
+${buildSelectedVocalExpressionInstruction(params)}
 
 ${
   hasSituation(params.situation)
@@ -5035,6 +7121,7 @@ ${vocalPrompt}
 REFERENCE PRINCIPLES:
 ${basePromptSeed}
 
+${koreanOnlyNoEnglishInstruction}
 ${mixedLyricsInstruction}
 
 ${lyricDraftInstruction}
@@ -5216,47 +7303,42 @@ ${lyricGuidancePrompt}
 [LYRIC TAGGING RULES]
 - Keep all tags short. Tags guide singing; they are not prose.
 - MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
-- If there are two actual vocalists, every sung line block must be preceded by a bracket speaker tag: [Role: gender, short style].
-- Do not use (Role) at the start of lyric lines; convert it to [Role: gender, short style].
+- If there are two actual vocalists, every sung section should use one composite bracket tag: [Section: acoustic voice tag, short style].
+- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag such as [Verse 1: Low Male Rap, dry].
 - Solo songs: do NOT repeat [Female Vocal] or [Male Vocal] every section when the prompt already defines the vocal identity.
 - Solo section tags must include short performance/emotion tags, e.g. [Verse 1: low, intimate], [Chorus: clear hook, aching].
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
 - Use parentheses for short ad-libs, breath, inner thoughts, or rhythm points. Keep ad-libs sparse, 0-2 per section.
 - Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
 - Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
-- Duo/group vocal + two targets: use separated role vocal tags under the section tag. Include gender and the selected speaker style/attitude in EVERY speaker tag, e.g. [40대 엄마: female, worried nagging, spoken], [10대 아들: male, blunt defensive, spoken].
+- Duo/group vocal + two targets: use composite Suno tags for sung sections: [Section: acoustic voice tag, short cue]. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use physical sound labels such as [Verse 1: Tired Male Rap, dry nagging] or [Chorus: Airy Female Vocal, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.
 - If Target A/B speech style or attitude is provided, it is mandatory: reflect it in both the [Vocals] line concept and the lyric speaker tags.
 - User-provided style/attitude text is source material, not final wording. Interpret it into natural character behavior and short singable tags.
-- Final prompt sentences should sound like a producer directing a real singer; lyric tags should stay compact and musical.
+- Final prompt sentences should sound like a producer directing a real singer; lyric tags should stay compact and musical, with no more than 2 short cues after the colon.
 - NEVER write speaker names in parentheses such as (40대 엄마), (10대 아들), (상사), (직원). Parentheses are ONLY for ad-libs, breath, SFX, inner thoughts, or short reactions.
-- NEVER merge speaker identity into a section tag such as [Verse 1: 40대 엄마, male main spoken]. Keep section tags and speaker tags separate.
+- For sung sections, prefer composite tags because Suno follows them better: [Section: acoustic voice tag, short cue]. Do not split section and singer into separate tags unless the section is instrumental or purely SFX.
 - Correct multi-speaker format:
-  [Verse 1: short dialogue]
-  [40대 엄마: female, worried, spoken]
+  [Verse 1: Warm Female Vocal, worried spoken]
   ...
-  [10대 아들: male, blunt, spoken]
+  [Verse 1: Young Male Vocal, blunt reply]
   ...
-- Chorus ownership is flexible. A chorus can be solo-led, duet-led, echo-led, together-led, or call-response depending on the chosen section ownership map. Examples:
-  [Chorus: ghost-led hook]
-  [귀신: female, pleading]
+- Chorus ownership is flexible, but arrangement wording controls it. If the arrangement is parallel monologue / 평행 독백형 / one-sided monologue, the chorus should be owned by one acoustic voice, not A/B line-by-line dialogue. The other voice may appear only as one short parenthetical aside/ad-lib if needed. Use call-response choruses only when call-response is explicitly selected. Examples:
+  [Chorus: Airy Female Vocal, pleading hook]
   ...
-  [저승사자: male, dry interruption]
-  ...
+  (dry aside)
 
-  [Chorus: boss-led hook]
-  [직장상사: male, pressing]
+  [Chorus: Firm Male Spoken Vocal, pressing hook]
   ...
-  [MZ사원: female, short ad-lib]
-  (...)
+  (short aside)
 
-  [Chorus: together hook]
-  [Together: short hook]
+  [Final Chorus: Mixed Vocal Duo, short shared hook]
   ...
-- For actual duo/group conflict songs, do NOT collapse both characters into one generic narrator. However, do NOT force every section to alternate A/B line by line. Use speaker tags only where that speaker actually owns or interrupts that part.
-- Do NOT default every chorus to A/B/A/B dialogue. [Chorus: Together], [Chorus: A-led hook], [Chorus: B-led hook], [Chorus: echo hook], or [Chorus: call-response hook] are all allowed when they fit the genre and ownership map.
+- For actual duo/group conflict songs, do NOT collapse both characters into one generic narrator. However, do NOT force every section to alternate A/B line by line. Use acoustic composite tags only where that voice actually owns or interrupts that part.
+- Do NOT default every chorus to A/B/A/B dialogue. In parallel monologue, use [Chorus: A-led hook] or [Chorus: B-led hook] as the default. [Chorus: call-response hook] is allowed only when the arrangement explicitly says call-response.
 - When a section is call-response, keep each role block short, usually 2-4 lines. When a section is solo-led, one speaker may own the full section with only short interruptions or ad-libs from the other.
 - Avoid blended vocals when Arrangement says separated dialogue or call-response.
-- In custom structures, do not drop speaker tags in Chorus, Hook, Rap Verse, Breakdown, Bridge, or Outro when they contain lyrics.
+- In custom structures, do not drop section labels in Chorus, Hook, Rap Verse, Breakdown, Bridge, or Outro when they contain lyrics.
+- In custom structures, do not drop the vocal/acoustic role inside Chorus, Hook, Rap Section, Breakdown, Bridge, or Outro composite tags when they contain lyrics.
 - One line must not contain two speaker tags. Split them into separate lines/blocks.
 - Use the A→B pattern ONLY for sections explicitly chosen as call-response. Other sections may be A-only, B-only, Together-only, echo-style, interruption-style, or one speaker with the other appearing only as an ad-lib.
 - Avoid long tag explanations; keep tags short and musical.
@@ -5686,8 +7768,24 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       result.lyrics.english = "";
   }
 
-  if (shouldUseMixedLyrics && !params.isNoLyrics) {
-    result.lyrics = enforceKpopMixedLyrics(result.lyrics);
+  if (shouldUseMixedLyrics && !params.isNoLyrics && englishMixRatio > 0) {
+    // Only force tiny mixed accents when the model ignored an explicitly enabled mix mode.
+    result.lyrics = enforceKpopMixedLyrics(result.lyrics, englishMixRatio);
+  }
+
+  if (!shouldUseMixedLyrics && !params.isNoLyrics) {
+    const isKoreanOnly =
+      requestedLyricLanguages.includes("ko") &&
+      !requestedLyricLanguages.some((lang) => lang !== "ko");
+    if (isKoreanOnly) {
+      result.lyrics.korean = stripEnglishAdlibsForKoreanOnlyLyrics(result.lyrics.korean);
+      result.lyrics.english = "";
+    }
+  }
+
+  if (!params.isNoLyrics) {
+    result.lyrics.korean = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.korean, params);
+    result.lyrics.english = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.english, params);
   }
 
   result.prompt = finalPrompt;
@@ -5703,6 +7801,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     style: params.styles ?? [],
     instrumentSound: params.instrumentSounds ?? [],
     tempo: params.tempo,
+    tempoSource: params.tempoSource,
+    isRandomTempo: params.isRandomTempo ?? false,
     kpopMode: params.kpopMode ?? 0,
     lyricLanguages: requestedLyricLanguages as any,
     titleLanguages: requestedLyricLanguages as any,

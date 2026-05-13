@@ -3447,47 +3447,57 @@ const toggleCycleVariantSelection = (
   }, []);
 
   const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
-    let genreIds: string[] = [];
-    let subGenreIds: string[] = [];
+    const normalizeGenreKey = (value: string) => String(value || '')
+      .replace(/\bcore\b/gi, '')
+      .replace(/^\[[^\]]+\]\s*/, '')
+      .replace(/['"`]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
 
-    // Step 1: Restore SUB genre
-    if (appliedKeywords.subGenre && appliedKeywords.subGenre.length > 0) {
-      const subId = resolveSubGenreId(appliedKeywords.subGenre[0]);
-      if (subId) {
-        subGenreIds = [subId];
-        // Derive MID from SUB
-        for (const group of GENRE_HIERARCHY) {
-          for (const main of group.children) {
-            if (main.children.some(s => s.id === subId)) {
-              genreIds = [main.id];
-              break;
-            }
-          }
-          if (genreIds.length > 0) break;
-        }
+    const allSelectableGenres = GENRE_HIERARCHY.flatMap((group) =>
+      group.children.flatMap((main) => [main, ...(main.children || [])])
+    );
+
+    const resolveSelectableGenreId = (value: unknown): string | null => {
+      const raw = String(value || '').trim();
+      if (!raw || isSeparatorKeywordId(raw)) return null;
+
+      const exact = allSelectableGenres.find((item: any) =>
+        item.id === raw || item.label === raw || item.labelKo === raw
+      );
+      if (exact) return exact.id;
+
+      const normalized = normalizeGenreKey(raw);
+      const fuzzy = allSelectableGenres.find((item: any) => {
+        const keys = [item.id, item.label, item.labelKo]
+          .filter(Boolean)
+          .map((key) => normalizeGenreKey(String(key)));
+        return keys.includes(normalized);
+      });
+      if (fuzzy) return fuzzy.id;
+
+      const legacySub = resolveSubGenreId(raw);
+      if (legacySub) return legacySub;
+
+      const legacyMid = resolveMidGenreId(raw);
+      if (legacyMid) {
+        const midAsSelectable = allSelectableGenres.find((item: any) => item.id === legacyMid);
+        if (midAsSelectable) return midAsSelectable.id;
       }
-    }
 
-    // Step 2: Restore MID genre if not derived or if multiple exist
-    if (genreIds.length === 0 && appliedKeywords.genre && appliedKeywords.genre.length > 0) {
-      genreIds = appliedKeywords.genre.map(resolveMidGenreId).filter(Boolean) as string[];
-    }
+      return null;
+    };
 
-    // Step 3: Final validation - ensure MID is set if SUB is set
-    if (subGenreIds.length > 0 && genreIds.length === 0) {
-      const subId = subGenreIds[0];
-      for (const group of GENRE_HIERARCHY) {
-        for (const main of group.children) {
-          if (main.children.some(s => s.id === subId)) {
-            genreIds = [main.id];
-            break;
-          }
-        }
-        if (genreIds.length > 0) break;
-      }
-    }
+    // 중분류는 더 이상 별도 상태로 복원하지 않는다.
+    // 저장된 genre/subGenre 라벨을 모두 실제 선택 가능한 장르 ID로 풀어서 subGenre 슬롯에만 복원한다.
+    const restoredGenreIds = Array.from(new Set([
+      ...((appliedKeywords.subGenre ?? []) as string[]),
+      ...((appliedKeywords.genre ?? []) as string[]),
+    ]
+      .map(resolveSelectableGenreId)
+      .filter(Boolean) as string[]));
 
-    const restoredGenreIds = Array.from(new Set([...genreIds, ...subGenreIds]));
     setSelectedGenres([]);
     setSubGenre(limitFusionGenreIds(restoredGenreIds));
 
@@ -3511,10 +3521,10 @@ const toggleCycleVariantSelection = (
     setSelectedThemes(themeIds);
     setSelectedStyles(styleIds);
     setSelectedInstrumentSounds(instrumentSoundIds);
-    setKpopMode(genreIds.includes('kpop') ? resolvedKpopMode : 0);
+    setKpopMode(restoredGenreIds.includes('kpop') ? resolvedKpopMode : 0);
     setIsKoreanEnglishMix(resolvedMixedLyrics);
     setEnglishMixRatio(Math.max(0, Math.min(30, Number((appliedKeywords as any).englishMixRatio ?? 10) || 10)));
-    setCitypopMode(genreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
+    setCitypopMode(restoredGenreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
     if (appliedKeywords.lyricsLength) setLyricsLength(appliedKeywords.lyricsLength);
@@ -5130,7 +5140,11 @@ ${normalizePromptForDisplay(result.prompt)}
           .replace(/\bthe real reason hidden until the\s*$/i, 'the real reason hidden until later')
           .replace(/\bhidden until the\s*$/i, 'hidden until later')
           .replace(/\buntil the\s*$/i, 'until later')
-          .replace(/\buntil\s*$/i, 'until later');
+          .replace(/\buntil\s*$/i, 'until later')
+          .replace(/\bwhile the other\s*$/i, 'while the other voice pulls away')
+          .replace(/\binstead of\s*$/i, 'instead of balanced exchange')
+          .replace(/\bkeeps chasing while the other\s*$/i, 'keeps chasing while the other voice pulls away')
+          .replace(/\bas one voice keeps chasing while the other\s*$/i, 'as one voice keeps chasing while the other voice pulls away');
       }
 
       if (/^\[Vocals\]/i.test(repaired)) {

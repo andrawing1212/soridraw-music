@@ -1389,6 +1389,88 @@ function limitEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10):
   return limited;
 }
 
+
+function raiseEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10): string {
+  const ratio = normalizeEnglishMixRatio(englishMixRatio);
+  let source = String(text || "");
+  if (!source.trim() || ratio <= 0) return source;
+
+  const totalUnits = countLyricWordUnits(source);
+  const maxEnglishWords = Math.max(1, Math.floor((totalUnits * ratio) / 100));
+  const currentEnglishWords = countEnglishWords(source);
+
+  // Treat the selected value as the intended mix strength, not a random decoration.
+  // Still keep it safely below the selected maximum, then final limiter enforces the cap.
+  const targetEnglishWords = Math.max(
+    1,
+    Math.floor(
+      maxEnglishWords * (ratio >= 30 ? 0.98 : ratio >= 20 ? 0.85 : ratio >= 10 ? 0.65 : 0.35),
+    ),
+  );
+
+  if (currentEnglishWords >= targetEnglishWords) return source;
+
+  const phrasePool = ratio >= 30
+    ? ["(Stay with me)", "tonight", "One more time", "I need you", "Don't let go", "right now", "Feel alive", "You and I"]
+    : ratio >= 20
+      ? ["(Stay tonight)", "One more time", "You and I", "Feel alive"]
+      : ratio >= 10
+        ? ["(Stay)", "tonight", "You and I"]
+        : ["(Stay)"];
+
+  const maxInjections = ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
+  const lines = source.split("\n");
+  let usedEnglishWords = currentEnglishWords;
+  let injected = 0;
+  let phraseIndex = 0;
+
+  const choosePhrase = () => {
+    for (let attempt = 0; attempt < phrasePool.length; attempt += 1) {
+      const phrase = phrasePool[(phraseIndex + attempt) % phrasePool.length];
+      const words = countEnglishWords(phrase);
+      if (usedEnglishWords + words <= maxEnglishWords) {
+        phraseIndex += attempt + 1;
+        return { phrase, words };
+      }
+    }
+    return null;
+  };
+
+  // Prefer musical payoff sections first so English feels intentional, not scattered randomly.
+  const preferredIndexes: number[] = [];
+  let currentSection = "";
+  lines.forEach((line, index) => {
+    const tag = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (tag) {
+      currentSection = tag[1].toLowerCase();
+      return;
+    }
+    if (/chorus|hook|rap|bridge|final/.test(currentSection)) preferredIndexes.push(index);
+  });
+
+  const allIndexes = lines.map((_, index) => index);
+  const orderedIndexes = [...preferredIndexes, ...allIndexes.filter((index) => !preferredIndexes.includes(index))];
+
+  for (const index of orderedIndexes) {
+    if (injected >= maxInjections || usedEnglishWords >= targetEnglishWords) break;
+
+    const rawLine = lines[index] || "";
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) continue;
+    if (!/[가-힣]/.test(trimmed)) continue;
+    if (countEnglishWords(trimmed) > 0) continue;
+
+    const picked = choosePhrase();
+    if (!picked) break;
+
+    lines[index] = `${rawLine} ${picked.phrase}`.trimEnd();
+    usedEnglishWords += picked.words;
+    injected += 1;
+  }
+
+  return lines.join("\n");
+}
+
 function enforceKpopMixedLyrics(
   lyrics: { english: string; korean: string },
   englishMixRatio = 10,
@@ -1399,20 +1481,8 @@ function enforceKpopMixedLyrics(
   const ratio = normalizeEnglishMixRatio(englishMixRatio);
   const maxInjections = ratio <= 5 ? 1 : ratio <= 10 ? 1 : ratio <= 20 ? 2 : 3;
   const koreanSource = lyrics.korean ?? "";
-  const koreanTotalUnits = countLyricWordUnits(koreanSource);
-  const currentEnglishWords = countEnglishWords(koreanSource);
-  const maxEnglishWords = Math.max(1, Math.floor((koreanTotalUnits * ratio) / 100));
 
-  // Only add mixed accents when the model produced almost no English.
-  // If it already exceeded the selected ratio, do not inject more.
-  const koreanMixed = currentEnglishWords === 0
-    ? injectMixedPhrases(
-        koreanSource,
-        ratio <= 5 ? ["(Stay)"] : ["(Stay tonight)", "(You and I)", "(Feel alive)"],
-        containsLatin,
-        maxInjections,
-      )
-    : koreanSource;
+  const koreanMixed = raiseEnglishMixRatioInKoreanLyrics(koreanSource, ratio);
 
   const englishMixed = injectMixedPhrases(
     lyrics.english ?? "",
@@ -1995,6 +2065,10 @@ function cleanupPromptTail(value: string): string {
     .replace(/\bwhere\s+a\s+recurring\s*$/i, "with a recurring hook motif")
     .replace(/\bwhere\s+an?\s*$/i, "")
     .replace(/\bwhere\s*$/i, "")
+    .replace(/\bwhile\s+the\s+other\s*$/i, "while the other voice pulls away")
+    .replace(/\bkeeps\s+chasing\s+while\s+the\s+other\s*$/i, "keeps chasing while the other voice pulls away")
+    .replace(/\bas\s+one\s+voice\s+keeps\s+chasing\s+while\s+the\s+other\s*$/i, "as one voice keeps chasing while the other voice pulls away")
+    .replace(/\binstead\s+of\s*$/i, "instead of balanced exchange")
     .replace(/\bbuilt\s+around\s*$/i, "")
     .replace(/\bset\s+around\s*$/i, "")
     .replace(/\bwith\s+a\s*$/i, "")
@@ -4319,34 +4393,35 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
   const selectedGenres = getSelectedFusionGenres(params);
   const items: string[] = [];
 
+  // Directly selected sound/instrument keywords must never disappear.
+  // Put them first, then add a small genre-based core palette around them.
+  compactSoundPromptsByCategory(params.instrumentSounds ?? [])
+    .flatMap((item) => item.split(',').map((part) => part.trim()))
+    .slice(0, 6)
+    .forEach((item) => pushUniquePromptItem(items, item, 9));
+
   selectedGenres.forEach((genre, genreIndex) => {
     const profile = lookupGenreInstrumentProfile(genre.id);
-    const instrumentLimit = genreIndex === 0 ? 3 : 2;
+    const instrumentLimit = genreIndex === 0 ? 4 : 2;
     (profile?.instruments || [])
       .slice(0, instrumentLimit)
-      .forEach((item) => pushUniquePromptItem(items, item, 8));
+      .forEach((item) => pushUniquePromptItem(items, item, 9));
     // Rhythm/groove profile details belong in [Arrangement], not [Instruments].
   });
 
-  // Add direct user-selected sound only after the genre/fusion palette.
-  compactSoundPromptsByCategory(params.instrumentSounds ?? [])
-    .slice(0, 2)
-    .forEach((item) => pushUniquePromptItem(items, item, 8));
-
-  // Keep [Instruments] as actual sound sources only. Genre/groove style sounds are handled by [Genre]/[Arrangement].
   getStylePromptValuesByRole(params.styles ?? [], 'instruments', 'sound')
     .flatMap((value) => value.split(','))
     .slice(0, 3)
-    .forEach((part) => pushUniquePromptItem(items, part, 8));
+    .forEach((part) => pushUniquePromptItem(items, part, 9));
 
   if (!items.length) {
     cleanPromptValue(buildSound(params))
-      .split(",")
-      .slice(0, 5)
-      .forEach((item) => pushUniquePromptItem(items, item, 8));
+      .split(',')
+      .slice(0, 6)
+      .forEach((item) => pushUniquePromptItem(items, item, 9));
   }
 
-  return cleanupPromptTail(items.slice(0, 7).join(", ")) || "focused drums, bass, and melodic core instruments";
+  return cleanupPromptTail(items.slice(0, 9).join(', ')) || "focused drums, bass, and melodic core instruments";
 }
 
 function buildFiveLineAtmosphereValue(
@@ -4373,12 +4448,12 @@ function buildFiveLineAtmosphereValue(
     : "";
   const atmosphere = appendPromptLens(
     appendPromptLens(
-      appendPromptLens(base, styleAtmosphere, 155),
+      appendPromptLens(base, styleAtmosphere, 240),
       coreGenreGuard,
-      170,
+      260,
     ),
     situationActive ? "" : variation.atmosphereLens,
-    170,
+    260,
   );
   return cleanupPromptTail(stripRemainingKoreanForProductionPrompt(atmosphere || "balanced emotional air"));
 }
@@ -4514,15 +4589,15 @@ function buildFiveLineArrangementValue(
 function compactFiveLinePromptBody(lines: string[]): string[] {
   let current = [...lines];
   const countBody = () => current.join("\n").length;
-  const targetLimit = 720;
+  const targetLimit = 1100;
   if (countBody() <= targetLimit) return current;
 
   const firstPassLimits: Record<string, number> = {
-    Genre: 95,
-    Instruments: 125,
-    Atmosphere: 145,
-    Vocals: 225,
-    Arrangement: 115,
+    Genre: 115,
+    Instruments: 170,
+    Atmosphere: 260,
+    Vocals: 280,
+    Arrangement: 180,
   };
   current = current.map((line) => {
     const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
@@ -4533,21 +4608,21 @@ function compactFiveLinePromptBody(lines: string[]): string[] {
   if (countBody() <= targetLimit) return current;
 
   const secondPassLimits: Record<string, number> = {
-    Genre: 80,
-    Instruments: 95,
-    Atmosphere: 115,
-    Vocals: 190,
-    Arrangement: 85,
+    Genre: 95,
+    Instruments: 140,
+    Atmosphere: 220,
+    Vocals: 240,
+    Arrangement: 145,
   };
   current = current.map((line) => {
     const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
     if (!match) return line;
     const [, label, value] = match;
     if (label === "Instruments") {
-      return `[${label}] ${takeCommaItems(value, 5, secondPassLimits[label])}`;
+      return `[${label}] ${takeCommaItems(value, 7, secondPassLimits[label])}`;
     }
     if (label === "Arrangement") {
-      return `[${label}] ${takeCommaItems(value, 3, secondPassLimits[label])}`;
+      return `[${label}] ${takeCommaItems(value, 5, secondPassLimits[label])}`;
     }
     return `[${label}] ${cleanupPromptTail(limitText(value, secondPassLimits[label] ?? 70))}`;
   });
@@ -7232,7 +7307,7 @@ function normalizeGenericTagsInSituationLyrics(lines: string[], params: Generate
     currentVoice = replacement.includes("&") ? currentVoice : replacement;
 
     const compactCue = cue
-      .replace(/(?:male|female|mixed|duet|group)\s*,?\s*/gi, "")
+      .replace(/\b(?:male|female|mixed|duet|group)\b\s*,?\s*/gi, "")
       .replace(/\s{2,}/g, " ")
       .replace(/^,\s*|,\s*$/g, "")
       .split(",")
@@ -7686,6 +7761,7 @@ function sanitizeGeneratedLyricTagsAndFragments(
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+// SORIDRAW_V49_MIX_RATIO_SAFE_FIX
 export async function generateSong(
   ...args: GenerateSongInput
 ): Promise<SongResult> {
@@ -7830,14 +7906,16 @@ export async function generateSong(
     shouldUseMixedLyrics && !params.isNoLyrics
       ? `MIXED LANGUAGE MODE (MANDATORY):
 - Use natural Korean/English mixed lyrics only because the user enabled mixed lyrics.
-- English share is a STRICT MAXIMUM of ${englishMixRatio}% of the entire lyric body, not ${englishMixRatio}% per section.
+- Treat ${englishMixRatio}% as the intended whole-lyric English mix strength; aim close to it while keeping Korean as the main language.
 - Count all English words, English ad-libs, English hook phrases, and English words inside parentheses as part of that total ratio.
 - Korean must remain the main language when Korean lyrics are selected.
 - For 5%: use at most one very short English accent in the whole lyric, or skip English entirely if not needed.
 - For 10%: use only a few short English accents across the whole lyric.
-- Do NOT place English in every section.
-- Avoid long English sentences unless the selected ratio is 25% or higher.
-- For lyrics.korean: keep Korean as the main language and place English accents very sparingly according to the selected whole-lyric ratio.
+- For 20%: use occasional short English hooks/ad-libs in key payoff lines.
+- For 30%: use regular short English hooks/ad-libs in chorus, hook, rap, bridge, and final sections; use enough English to feel clearly mixed, but do not turn the whole song into English.
+- Do NOT place English in every section unless 30% is selected and it remains natural.
+- Avoid long English sentences unless the selected ratio is 30%.
+- For lyrics.korean: keep Korean as the main language and place English accents according to the selected whole-lyric ratio.
 - For lyrics.english: keep English as the main language only when a non-Korean lyric language is selected; otherwise leave lyrics.english empty.
 - Keep the code-switching natural and melodic, not forced.`
       : "";

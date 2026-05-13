@@ -2715,6 +2715,8 @@ function App() {
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
   const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + (hasActiveSituation(situation) ? 1 : 0);
+  const MAX_FUSION_GENRES = 2;
+  const limitFusionGenreIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(0, MAX_FUSION_GENRES);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleLongPressStart = (item: CategoryItem) => {
@@ -2761,8 +2763,8 @@ function App() {
       });
     }
 
-    setSelectedGenres(Array.from(inferredGenres));
-    setSubGenre(validSubGenres);
+    setSelectedGenres(limitFusionGenreIds(Array.from(inferredGenres)));
+    setSubGenre(limitFusionGenreIds(validSubGenres));
 
     // 2. Moods & Themes
     setSelectedMoods(filterValid(template.moods, MOODS));
@@ -3534,7 +3536,7 @@ const toggleCycleVariantSelection = (
 
   const randomizeCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
     const limits = {
-      genre: 1,
+      genre: 2,
       style: Number.POSITIVE_INFINITY,
       sound: 3,
       mood: 5,
@@ -3747,7 +3749,7 @@ const toggleCycleVariantSelection = (
       const nextMode = ((kpopMode + 1) % 3) as 0 | 1 | 2;
       let canChange = true;
       
-      if (nextMode !== 0 && !state.includes(id) && state.length >= 9) {
+      if (nextMode !== 0 && !state.includes(id) && state.length >= MAX_FUSION_GENRES) {
         canChange = false;
       }
 
@@ -3756,7 +3758,7 @@ const toggleCycleVariantSelection = (
         if (nextMode === 0) {
           set(state.filter(i => i !== id));
         } else if (!state.includes(id)) {
-          set([...state, id]);
+          set(limitFusionGenreIds([...state, id]));
         }
 
         // Update hover description
@@ -3775,7 +3777,7 @@ const toggleCycleVariantSelection = (
       const nextMode = ((citypopMode + 1) % 3) as 0 | 1 | 2;
       let canChange = true;
       
-      if (nextMode !== 0 && !state.includes(id) && state.length >= 9) {
+      if (nextMode !== 0 && !state.includes(id) && state.length >= MAX_FUSION_GENRES) {
         canChange = false;
       }
 
@@ -3784,7 +3786,7 @@ const toggleCycleVariantSelection = (
         if (nextMode === 0) {
           set(state.filter(i => i !== id));
         } else if (!state.includes(id)) {
-          set([...state, id]);
+          set(limitFusionGenreIds([...state, id]));
         }
 
         // Update hover description
@@ -3811,8 +3813,8 @@ const toggleCycleVariantSelection = (
           setSelectedMoods(prev => prev.filter(m => !moodsToRemove.includes(m)));
         }
       }
-    } else if (state.length < 10) {
-      set([...state, id]);
+    } else if (category === 'genre' ? state.length < MAX_FUSION_GENRES : state.length < 10) {
+      set(category === 'genre' ? limitFusionGenreIds([...state, id]) : [...state, id]);
       
       // Trot Logic: Auto-select moods
       if (category === 'genre') {
@@ -3856,8 +3858,8 @@ const toggleCycleVariantSelection = (
     } else {
       // When pinning, ensure it's also selected
       if (!selected.includes(id)) {
-        if (selected.length < 15) {
-          setSelected([...selected, id]);
+        if (category === 'genre' ? selected.length < MAX_FUSION_GENRES : selected.length < 15) {
+          setSelected(category === 'genre' ? limitFusionGenreIds([...selected, id]) : [...selected, id]);
           setPinned([...pinned, id]);
         }
       } else {
@@ -4285,7 +4287,7 @@ const saveRecentSong = async (newSong: any) => {
       if (user) {
         updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
       }
-      let finalGenres = [...selectedGenres];
+      let finalGenres = limitFusionGenreIds([...selectedGenres]);
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
       let finalStyles = [...selectedStyles];
@@ -4323,6 +4325,7 @@ const saveRecentSong = async (newSong: any) => {
           if (p.cat === 'sound') finalInstrumentSounds.push(p.id);
           randomKeywords.push(p.label);
         });
+        finalGenres = limitFusionGenreIds(finalGenres);
       }
 
       let currentMinBPM = minBPM;
@@ -4587,7 +4590,7 @@ const saveRecentSong = async (newSong: any) => {
 
       const payload = {
         genre: finalGenres[0] ?? null,
-        subGenre: subGenre ?? [],
+        subGenre: limitFusionGenreIds(subGenre ?? []),
         isKpopSelected: (selectedGenres ?? []).includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         themes: themeLabels,
@@ -4650,8 +4653,8 @@ const saveRecentSong = async (newSong: any) => {
           prompt: song.prompt,
           appliedKeywords: {
             ...song.appliedKeywords,
-            genre: selectedGenres,
-            subGenre: subGenre,
+            genre: limitFusionGenreIds(selectedGenres),
+            subGenre: limitFusionGenreIds(subGenre),
             ...(hasActiveSituation(situation) ? { situation } : {}),
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
@@ -5361,17 +5364,17 @@ ${result.prompt}
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
                 onSelectGenre={(id) => {
-                  setSelectedGenres([id]);
+                  setSelectedGenres((prev) => limitFusionGenreIds(prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]));
                   setIsGenreRandomized(false);
                 }}
                 onSelectSubGenre={(id) =>
                   setSubGenre((prev) =>
-                    prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+                    limitFusionGenreIds(prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id])
                   )
                 }
                 onCommitSelection={(mainId, subId) => {
-                  setSelectedGenres(mainId ? [mainId] : []);
-                  setSubGenre(subId ? [subId] : []);
+                  setSelectedGenres((prev) => limitFusionGenreIds(mainId ? [...prev.filter((id) => id !== mainId), mainId] : prev));
+                  setSubGenre((prev) => limitFusionGenreIds(subId ? [...prev.filter((id) => id !== subId), subId] : prev));
                   setIsGenreRandomized(false);
                 }}
                 onClear={() => {
@@ -9210,6 +9213,8 @@ function VocalControl({
   }, []);
 
   const [activeVocalTonePopup, setActiveVocalTonePopup] = useState<string | null>(null);
+  const [memberToneDirectInputId, setMemberToneDirectInputId] = useState<string | null>(null);
+  const [memberToneDirectDraft, setMemberToneDirectDraft] = useState('');
   const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0, width: 560, maxHeight: 320 });
 
   const updateMemberTonePopupPos = useCallback((trigger?: HTMLElement | null) => {
@@ -9234,10 +9239,33 @@ function VocalControl({
     const trigger = e.currentTarget as HTMLElement;
     if (activeVocalTonePopup === id) {
       setActiveVocalTonePopup(null);
+      setMemberToneDirectInputId(null);
+      setMemberToneDirectDraft('');
       return;
     }
+    setMemberToneDirectInputId(null);
+    setMemberToneDirectDraft('');
     updateMemberTonePopupPos(trigger);
     setActiveVocalTonePopup(id);
+  };
+
+  const startMemberToneDirectInput = (member: VocalMember) => {
+    setMemberToneDirectInputId(member.id);
+    setMemberToneDirectDraft(getVocalToneDisplayLabel(member.toneId, vocalTones));
+  };
+
+  const applyMemberToneDirectInput = (idx: number) => {
+    const nextTone = memberToneDirectDraft.trim();
+    if (!nextTone) return;
+    handleUpdateMember(idx, { toneId: nextTone });
+    setMemberToneDirectInputId(null);
+    setMemberToneDirectDraft('');
+    setActiveVocalTonePopup(null);
+  };
+
+  const cancelMemberToneDirectInput = () => {
+    setMemberToneDirectInputId(null);
+    setMemberToneDirectDraft('');
   };
 
   useEffect(() => {
@@ -9254,6 +9282,8 @@ function VocalControl({
       if (!target) return;
       if (target.closest('[data-member-tone-panel]') || target.closest('[data-tone-trigger]')) return;
       setActiveVocalTonePopup(null);
+      setMemberToneDirectInputId(null);
+      setMemberToneDirectDraft('');
     };
 
     const handleWindowChange = () => updateMemberTonePopupPos();
@@ -9918,7 +9948,7 @@ function VocalControl({
                               <div className="overflow-y-auto custom-scrollbar p-1.5 space-y-1 bg-[#050505]" style={{ maxHeight: vocalTonePopupPos.maxHeight }}>
                                 <button
                                   type="button"
-                                  onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setActiveVocalTonePopup(null); }}
+                                  onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setMemberToneDirectInputId(null); setMemberToneDirectDraft(''); setActiveVocalTonePopup(null); }}
                                   className={cn(
                                     "w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border",
                                     !member.toneId
@@ -9932,20 +9962,54 @@ function VocalControl({
                                   </div>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextTone = window.prompt('직접 입력할 보컬톤을 적어주세요. 예: 숨 섞인 허스키톤, 차갑고 건조한 톤', getVocalToneDisplayLabel(member.toneId, vocalTones));
-                                    if (nextTone && nextTone.trim()) {
-                                      handleUpdateMember(idx, { toneId: nextTone.trim() });
-                                    }
-                                    setActiveVocalTonePopup(null);
-                                  }}
-                                  className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
-                                >
-                                  <span>직접 입력</span>
-                                  <Edit2 className="w-3.5 h-3.5 shrink-0" />
-                                </button>
+                                {memberToneDirectInputId === member.id ? (
+                                  <div
+                                    className="rounded-lg border border-brand-orange/40 bg-[#111] p-2 space-y-2"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      value={memberToneDirectDraft}
+                                      onChange={(e) => setMemberToneDirectDraft(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') applyMemberToneDirectInput(idx);
+                                        if (e.key === 'Escape') cancelMemberToneDirectInput();
+                                      }}
+                                      placeholder="직접 입력: 예: 공기 섞인 콧소리, 2000s K-indie airy tone"
+                                      className="w-full rounded-lg border border-[#3a3a3a] bg-[#1f1f1f] px-2.5 py-2 text-[10px] font-bold text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:border-brand-orange/60"
+                                      autoFocus
+                                    />
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={cancelMemberToneDirectInput}
+                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a]"
+                                      >
+                                        취소
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => applyMemberToneDirectInput(idx)}
+                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-brand-orange border-brand-orange text-white shadow-lg shadow-brand-orange/20 disabled:opacity-50"
+                                        disabled={!memberToneDirectDraft.trim()}
+                                      >
+                                        적용
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startMemberToneDirectInput(member);
+                                    }}
+                                    className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
+                                  >
+                                    <span>직접 입력</span>
+                                    <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                                  </button>
+                                )}
 
                                 {vocalTones
                                   .filter(t => t.genderTarget === 'any' || t.genderTarget === 'unisex' || t.genderTarget === member.gender || (vocalMode === 'group' && t.genderTarget === 'group'))
@@ -9955,7 +10019,7 @@ function VocalControl({
                                       <button
                                         key={tone.id}
                                         type="button"
-                                        onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setActiveVocalTonePopup(null); }}
+                                        onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setMemberToneDirectInputId(null); setMemberToneDirectDraft(''); setActiveVocalTonePopup(null); }}
                                         className={cn(
                                           "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border text-left",
                                           isToneActive

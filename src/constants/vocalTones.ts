@@ -229,6 +229,28 @@ export const VOCAL_TONES: VocalTone[] = [
     isActive: true, isDefault: false, sortOrder: 20, genreTags: []
   },
   {
+    id: "female_airy_nasal",
+    label: "Female Airy Nasal",
+    labelKo: "공기 섞인 콧소리 여성 보컬",
+    description: "Airy nasal female vocal tone with light head resonance and soft breath texture.",
+    descriptionKo: "공기감과 코끝의 울림이 살짝 섞인 여성 톤입니다. 맑고 가볍게 떠오르는 보컬에 적합합니다.",
+    genderTarget: "female",
+    promptCore: "Airy nasal female vocal tone, light head resonance, soft breath texture, clear floating color.",
+    promptShort: "airy nasal female",
+    isActive: true, isDefault: false, sortOrder: 21, genreTags: []
+  },
+  {
+    id: "female_breezy_pop",
+    label: "Female Breezy Pop",
+    labelKo: "맑고 산뜻한 여성 팝 보컬",
+    description: "Clear breezy female pop tone with smiling brightness and light melodic charm.",
+    descriptionKo: "맑고 산뜻한 여성 팝 톤입니다. 웃는 듯한 밝기와 가벼운 멜로디감이 특징입니다.",
+    genderTarget: "female",
+    promptCore: "Clear breezy female pop vocal, smiling brightness, light melodic charm, refreshing tone.",
+    promptShort: "breezy clear female",
+    isActive: true, isDefault: false, sortOrder: 22, genreTags: []
+  },
+  {
     id: "female_indie_dreamy",
     label: "Female Indie Dreamy",
     labelKo: "신비로운 여성 인디 보컬",
@@ -237,7 +259,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "Whimsical dreamy female indie-pop vocal, unique ethereal breathy tone.",
     promptShort: "dreamy indie female",
-    isActive: true, isDefault: false, sortOrder: 21, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 23, genreTags: []
   },
   {
     id: "female_power_belter",
@@ -248,7 +270,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "High-energy powerful female belting, open bright high notes, crystal clear high register.",
     promptShort: "powerful belting female",
-    isActive: true, isDefault: false, sortOrder: 22, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 24, genreTags: []
   },
   {
     id: "female_jazz_velvet",
@@ -259,7 +281,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "Smoky velvety female tone, dark jazz phrasing, intimate low-mid color.",
     promptShort: "velvety jazz female",
-    isActive: true, isDefault: false, sortOrder: 23, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 25, genreTags: []
   },
   {
     id: "female_rnb_soul",
@@ -270,7 +292,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "Soulful female R&B vocal, expressive vocal runs, warm groovy phrasing.",
     promptShort: "soulful R&B female",
-    isActive: true, isDefault: false, sortOrder: 24, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 26, genreTags: []
   },
   {
     id: "female_anime_sparkle",
@@ -281,7 +303,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "High-pitched cute female character vocal, bright energetic J-Pop idol tone.",
     promptShort: "cute bright female",
-    isActive: true, isDefault: false, sortOrder: 25, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 27, genreTags: []
   },
   {
     id: "female_trot_queen",
@@ -292,7 +314,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "Elegant soulful female trot vocal, sorrowful vibrato, masterful ggeok-gi technique.",
     promptShort: "elegant trot female",
-    isActive: true, isDefault: false, sortOrder: 26, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 28, genreTags: []
   },
   {
     id: "female_rap_swagger",
@@ -303,7 +325,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "female",
     promptCore: "Confident female rap swagger, stylish rhythmic flow, sassy rap delivery.",
     promptShort: "confident rap female",
-    isActive: true, isDefault: false, sortOrder: 27, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 29, genreTags: []
   },
 
   // =========================
@@ -318,7 +340,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "group",
     promptCore: "Balanced group vocal blend, well-mixed harmonies, cohesive ensemble sound.",
     promptShort: "balanced group blend",
-    isActive: true, isDefault: true, sortOrder: 28, genreTags: []
+    isActive: true, isDefault: true, sortOrder: 30, genreTags: []
   },
   {
     id: "idol_group_harmony",
@@ -329,7 +351,7 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "group",
     promptCore: "Polished idol-style group vocals, synchronized harmonies, hook-focused delivery.",
     promptShort: "polished idol group",
-    isActive: true, isDefault: false, sortOrder: 29, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 31, genreTags: []
   },
   {
     id: "choir_cinematic",
@@ -340,6 +362,6 @@ export const VOCAL_TONES: VocalTone[] = [
     genderTarget: "group",
     promptCore: "Large cinematic choir texture, dramatic ensemble weight, emotional scale.",
     promptShort: "cinematic choir",
-    isActive: true, isDefault: false, sortOrder: 30, genreTags: []
+    isActive: true, isDefault: false, sortOrder: 32, genreTags: []
   }
 ];

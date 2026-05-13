@@ -240,7 +240,18 @@ type VocalExpressionCue = {
 };
 
 function isVocalExpressionStyleItem(item: ReturnType<typeof resolveStyleItem>): boolean {
-  if (!item) return false;
+  if (!item || isSeparatorLikeItem(item)) return false;
+
+  // IMPORTANT: Only the Style > Vocal Line category may feed [Vocals].
+  // Other style categories can contain words like "emotion", "dramatic", "string",
+  // or "cinematic", but those belong to [Atmosphere]/[Arrangement]/[Instruments],
+  // not vocal performance. This prevents Theme Music cues such as
+  // "dramatic string writing" from leaking into [Vocals].
+  const role = STYLE_ROLE_BY_VARIANT_ID[item.id];
+  const cycleId = STYLE_CYCLE_ID_BY_VARIANT_ID[item.id];
+  if (role && role !== "vocals") return false;
+  if (!role && cycleId && cycleId !== "vocal-expression") return false;
+
   const text = [
     item.id,
     item.label,
@@ -252,18 +263,27 @@ function isVocalExpressionStyleItem(item: ReturnType<typeof resolveStyleItem>): 
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+
   return (
+    role === "vocals" ||
+    cycleId === "vocal-expression" ||
     item.id.toLowerCase().startsWith("vocal-") ||
-    /vocal|보컬|sing|spoken|말하듯|읊조|whisper|속삭|teary|울먹|pleading|애원|sarcastic|비꼬|emotion|감정/.test(text)
+    /vocal|보컬|sing|spoken|말하듯|읊조|whisper|속삭|teary|울먹|pleading|애원|sarcastic|비꼬|emotion|감정|staccato|스타카토|broken|끊어|slur|흘리|pitch|음정|음이|off-pitch|음치|humming|흥얼|sick|감기|nasal|mumbled|발음|말끝|short-breath|숨이|unconfident|자신 없이|blank|멍하게|wobbly|삐걱/.test(text)
   );
 }
 
 function vocalExpressionCueFromStyle(item: ReturnType<typeof resolveStyleItem>): VocalExpressionCue | null {
-  if (!item) return null;
+  if (!item || !isVocalExpressionStyleItem(item)) return null;
   const text = [item.id, item.label, item.labelKo, item.style, item.mood]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+
+  // Safety net: never convert instrumental/theme/arrangement cues into vocal cues.
+  if (/string writing|strings?|drums?|bass|synth|guitar|piano|brass|horn|percussion|fx|sfx|ambience|texture|cinematic score|soundtrack|orchestra|arrangement|theme music/.test(text)) {
+    return null;
+  }
+
   const label = item.labelKo || item.label || item.id;
 
   const make = (
@@ -271,6 +291,18 @@ function vocalExpressionCueFromStyle(item: ReturnType<typeof resolveStyleItem>):
     tag: string,
     roleBias: VocalExpressionCue["roleBias"] = "any",
   ): VocalExpressionCue => ({ id: item.id, label, short, tag, roleBias });
+
+  // Vocal habits / imperfections: keep these as performance details, not story themes.
+  if (/broken sentence|문장마다|sentence delivery|끊어/.test(text)) return make("broken sentence delivery", "broken phrasing", "any");
+  if (/slurred ending|끝음|word ending|말끝|trailing/.test(text)) return make("fading word endings", "fading endings", "any");
+  if (/unstable pitch|음이 살짝|pitch feel|wobbly pitch|삐걱/.test(text)) return make("unstable pitch feel", "unstable pitch", "any");
+  if (/off-pitch|음정을|음치|못따/.test(text)) return make("off-pitch imperfection", "off-pitch", "any");
+  if (/careless humming|대충|흥얼/.test(text)) return make("careless humming feel", "careless humming", "lead");
+  if (/nasal sick|감기|sick voice|nasal/.test(text)) return make("nasal sick-voice texture", "nasal sick voice", "any");
+  if (/mumbled|발음|pronunciation|입안|굴리/.test(text)) return make("mumbled mouthy pronunciation", "mumbled", "any");
+  if (/short-breath|숨이 모자|breath delivery/.test(text)) return make("short-breath fragility", "short breath", "any");
+  if (/unconfident|자신 없이/.test(text)) return make("unconfident small delivery", "unconfident", "lead");
+  if (/blank sing|멍하게/.test(text)) return make("blank sing-along detachment", "blank singalong", "lead");
 
   if (/sarcastic|비꼬/.test(text)) return make("subtle sarcastic edge", "sarcastic", "rap");
   if (/tossed|툭/.test(text)) return make("dry tossed-off attitude", "dry casual", "rap");
@@ -308,7 +340,7 @@ function getSelectedVocalExpressionCues(params: GenerateSongParams): VocalExpres
     seen.add(cue.id);
     cues.push(cue);
   }
-  return cues.slice(0, 4);
+  return cues.slice(0, 12);
 }
 
 function roleBiasForVocalSplit(role: string, tone: string): VocalExpressionCue["roleBias"] {
@@ -467,6 +499,101 @@ function buildSelectedVocalExpressionInstruction(params: GenerateSongParams): st
   return cues
     .map((cue) => `- ${cue.label}: use ${cue.short}; lyric tags may include one short cue such as ${cue.tag}.`)
     .join("\n");
+}
+
+
+function dedupePromptParts(parts: string[], max = 12): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const cleaned = cleanPromptValue(part)
+      .replace(/\s+/g, " ")
+      .replace(/\bemotion\s+emotion\b/gi, "emotion")
+      .trim();
+    if (!cleaned) continue;
+    const key = cleaned
+      .toLowerCase()
+      .replace(/\b(vocal|voice|feel|delivery|phrasing|emotion|texture)\b/g, "")
+      .replace(/[^a-z0-9가-힣]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 3)
+      .join(" ");
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    result.push(cleaned);
+    if (result.length >= max) break;
+  }
+  return result;
+}
+
+function vocalCueGroup(cue: VocalExpressionCue): "emotion" | "phrasing" | "habit" | "style" {
+  const source = `${cue.id} ${cue.label} ${cue.short} ${cue.tag}`.toLowerCase();
+
+  // Human imperfection / habit cues must stay as performance habits.
+  if (
+    /broken sentence|fading word|slurred|unstable pitch|off-pitch|careless humming|nasal sick|mumbled|mouthy|short-breath|unconfident|blank sing|wobbly|문장마다|끝음|말끝|음이|음정|대충|흥얼|감기|발음|숨이|자신 없이|멍하게|삐걱/.test(source)
+  ) {
+    return "habit";
+  }
+
+  // Timing / technique / articulation cues.
+  if (
+    /phrasing|spoken|reciting|off-beat|laid-back|runs|sustain|syllable|staccato|delivery|singing|말하듯|읊조|엇박|눕혀|쪼개|이어|꺾|고음선|훅|그루브/.test(source)
+  ) {
+    return "phrasing";
+  }
+
+  // Emotional attitude cues.
+  if (
+    /emotion|restraint|restrained|resigned|numb|hollow|empty|tearful|pleading|cold|indifferent|lazy|dreamy|rough|whisper|explosive|smiling|sarcastic|suffocated|delicate|감정|울먹|애원|차가|무심|나른|몽롱|거친|속삭|폭발|허무|비꼬|숨 막|섬세|참는/.test(source)
+  ) {
+    return "emotion";
+  }
+
+  return "style";
+}
+
+function joinVocalCueItems(items: string[]): string {
+  const cleaned = dedupePromptParts(items, 24);
+  if (!cleaned.length) return "";
+  if (cleaned.length === 1) return cleaned[0];
+  return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
+}
+
+function buildSelectedVocalPerformancePhrase(params: GenerateSongParams, max = 12): string {
+  const cues = getSelectedVocalExpressionCues(params);
+  if (!cues.length) return "";
+
+  const grouped: Record<"emotion" | "phrasing" | "habit" | "style", string[]> = {
+    emotion: [],
+    phrasing: [],
+    habit: [],
+    style: [],
+  };
+
+  for (const cue of cues) {
+    grouped[vocalCueGroup(cue)].push(cue.short);
+  }
+
+  const ordered = [
+    ...dedupePromptParts(grouped.emotion, 4),
+    ...dedupePromptParts(grouped.phrasing, 4),
+    ...dedupePromptParts(grouped.habit, 6),
+    ...dedupePromptParts(grouped.style, 2),
+  ].slice(0, max);
+
+  return joinVocalCueItems(ordered)
+    .replace(/\bfading word(?! endings)\b/gi, "fading word endings")
+    .replace(/\b(word endings)\s+(restrained emotion|numb|resigned|hollow|lazy|dreamy)\b/gi, "$1, $2")
+    .replace(/\b(lazy dreamy phrasing|dreamy blurred softness|lazy relaxed phrasing)\s+(restrained emotion|numb|resigned|hollow)\b/gi, "$1, $2")
+    .replace(/\b(restrained emotion|numb resignation|hollow resigned emotion)\s+(lazy dreamy phrasing|dreamy blurred softness|lazy relaxed phrasing)\b/gi, "$1, $2")
+    .replace(/\b(dramatic string writing|cinematic string writing|string writing)\b/gi, "")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/,\s*and\s*$/i, "")
+    .replace(/,\s*$/g, "")
+    .trim();
 }
 
 function getSubGenreLabels(subGenreIds: string[] = []): string[] {
@@ -3011,7 +3138,9 @@ function buildMemberVocalSplit(params: GenerateSongParams): string {
   // Keep the music prompt focused on vocal color, emotion, and role separation.
   // Lyric tag formatting is handled in the lyric-generation instructions, not here,
   // so the [Vocals] line does not get cut off by tag examples.
-  return `${head}: ${body}. Keep roles clearly separated by section.`;
+  const overallPerformance = buildSelectedVocalPerformancePhrase(params, 10);
+  const overall = overallPerformance ? ` Overall vocal habits: ${overallPerformance}.` : "";
+  return `${head}: ${body}.${overall} Keep roles clearly separated by section.`;
 }
 
 function roleVoiceAgeColor(role: string): string {
@@ -4591,17 +4720,26 @@ function normalizeVocalPromptEmotion(value: string, params: GenerateSongParams):
   let line = cleanupPromptTail(String(value || ''))
     .replace(/\s+with\s+calmly\s+restrained\s+with\s+lightly\s+hopeful/gi, ' with calmly restrained and lightly hopeful delivery')
     .replace(/\bnumb\s+and\s+resigned\s+emotion\s+tossed-off\s+vocal\s+phrasing\s+and\s+lazy\s+relaxed\s+vocal\s+phrasing\b/gi, 'numb restrained emotion with lazy, breath-led phrasing')
+    .replace(/\bnumb\s+restrained\s+emotion\s+and\s+lazy,?\s+breath-led\s+phrasing\s+restrained\s+emotion\s+and\s+lazy\s+dreamy\s+phrasing\b/gi, 'numb restrained emotion, human breath, and lazy dreamy phrasing')
+    .replace(/\brestrained\s+emotion\s+and\s+lazy,?\s+breath-led\s+phrasing\s+restrained\s+emotion\s+and\s+lazy\s+dreamy\s+phrasing\b/gi, 'restrained emotion, human breath, and lazy dreamy phrasing')
+    .replace(/\b(lazy\s+dreamy\s+phrasing)(?:\s+and\s+\1|\s*,\s*\1)+\b/gi, '$1')
+    .replace(/\b(restrained\s+emotion)(?:\s+and\s+\1|\s*,\s*\1)+\b/gi, '$1')
+    .replace(/\bfading\s+word\s+restrained\s+emotion\b/gi, 'fading word endings and restrained emotion')
+    .replace(/\bfading\s+word\s*,?\s*$/gi, 'fading word endings')
+    .replace(/\bending\s+restrained\s+emotion\b/gi, 'endings and restrained emotion')
+    .replace(/\b(lazy\s+dreamy\s+phrasing)\s+(restrained\s+emotion)\b/gi, '$1 and $2')
+    .replace(/\b(restrained\s+emotion)\s+(lazy\s+dreamy\s+phrasing)\b/gi, '$1 and $2')
     .replace(/\s{2,}/g, ' ')
     .trim();
 
   const lens = vocalEmotionPerformanceLens(params);
   if (lens && !new RegExp(lens.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(line)) {
-    line = appendPromptLens(line, lens, 340);
+    line = appendPromptLens(line, lens, 520);
   }
 
   const info = getVocalModeInfo(params.vocal);
   if (info.isSolo && !/holding back|restrained emotion|human breath|fragile sadness/i.test(line)) {
-    line = appendPromptLens(line, 'singing as if holding back emotion', 340);
+    line = appendPromptLens(line, 'singing as if holding back emotion', 520);
   }
 
   return cleanupPromptTail(line.replace(/^natural\b/i, 'Natural'));
@@ -4613,7 +4751,7 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
     ? buildSituationVocals(params)
     : buildNaturalVocals(params, detailLayer);
   const styleVocalDirection = joinPromptPhrase(getStylePromptValuesByRole(params.styles ?? [], 'vocals', 'style').slice(0, 2), 'and');
-  const withStyle = appendPromptLens(base, styleVocalDirection, situationActive ? 340 : 320);
+  const withStyle = appendPromptLens(base, styleVocalDirection, situationActive ? 520 : 520);
   const cleaned = situationActive
     ? sanitizeVocalDirection(withStyle)
     : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(withStyle));
@@ -5117,8 +5255,13 @@ function buildNaturalVocals(
     const globalEmotion = params.vocal?.globalToneId
       ? resolveVocalEmotionShort(params.vocal.globalToneId)
       : "";
-    const emotionPart = globalEmotion ? ` with ${globalEmotion} emotion` : "";
-    return `one suitable solo vocalist chosen to match the genre and mood${emotionPart}, with natural emotional delivery`;
+    const performance = buildSelectedVocalPerformancePhrase(params, 12);
+    const parts = dedupePromptParts([
+      globalEmotion ? `${globalEmotion} emotion` : "",
+      performance,
+      "natural emotional delivery",
+    ], 14);
+    return `one suitable solo vocalist chosen to match the genre and mood with ${parts.join(", ")}`;
   }
 
   const gender =
@@ -5132,7 +5275,13 @@ function buildNaturalVocals(
     : "";
   const subject = gender === "vocal" ? "vocal" : `${gender} vocal`;
   const base = naturalVocalPrefix(params, subject);
-  return globalEmotion ? `${base} with ${globalEmotion} emotion` : withOptionalToneAndBreath(base, "natural");
+  const performance = buildSelectedVocalPerformancePhrase(params, 12);
+  const parts = dedupePromptParts([
+    globalEmotion ? `${globalEmotion} emotion` : "",
+    performance,
+  ], 14);
+  if (parts.length) return `${base} with ${parts.join(", ")}`;
+  return withOptionalToneAndBreath(base, "natural");
 }
 
 function buildSituationVocals(params: GenerateSongParams): string {
@@ -5319,7 +5468,7 @@ function compactPromptBody(lines: string[]): string[] {
   const allowExtendedVocalPrompt =
     vocalValue.length > 86 ||
     /\b(duo|group|trio|quartet|vs)\b/i.test(vocalValue);
-  const targetLimit = 680;
+  const targetLimit = 860;
 
   if (countBody() <= targetLimit) return current;
 
@@ -5330,7 +5479,7 @@ function compactPromptBody(lines: string[]): string[] {
     Genre: 125,
     Instruments: 90,
     Atmosphere: 150,
-    Vocals: allowExtendedVocalPrompt ? 360 : 220,
+    Vocals: allowExtendedVocalPrompt ? 460 : 360,
     Arrangement: 80,
   };
 
@@ -5346,7 +5495,7 @@ function compactPromptBody(lines: string[]): string[] {
     Genre: 100,
     Instruments: 70,
     Atmosphere: 120,
-    Vocals: allowExtendedVocalPrompt ? 320 : 190,
+    Vocals: allowExtendedVocalPrompt ? 420 : 320,
     Arrangement: 60,
   };
 
@@ -6823,7 +6972,7 @@ function buildHybridProductionLine(
 function compactHybridPromptBody(lines: string[]): string[] {
   let current = [...lines];
   const countBody = () => current.join("\n").length;
-  const targetLimit = 680;
+  const targetLimit = 860;
   if (countBody() <= targetLimit) return current;
 
   const firstPassLimits: Record<string, number> = {
@@ -7901,13 +8050,18 @@ function removeGenericSoloVocalLabelsFromLyricTags(lyrics: string, params: Gener
 
     const { label, cues } = splitLyricTagBody(composite.body);
     const normalizedLabel = cleanEnglishOnlyLyricTagPart(label);
+    const sectionName = normalizeLyricSectionDisplayName(composite.section);
+    const isRapSection = /rap/i.test(sectionName);
     const isGenericSoloLabel = /^(?:main|lead|sub)?\s*(?:male|female)?\s*vocal$/i.test(normalizedLabel)
-      || /^(?:main|lead|sub)\s+vocal$/i.test(normalizedLabel);
-    if (!isGenericSoloLabel) return line;
+      || /^(?:main|lead|sub)\s+vocal$/i.test(normalizedLabel)
+      || /^(?:airy|whisper|harmony|bridge)\s*(?:male|female)?\s*vocal$/i.test(normalizedLabel)
+      || /^(?:male|female)\s+(?:main|lead|sub|airy|whisper|harmony)\s+vocal$/i.test(normalizedLabel)
+      || (/\bvocal$/i.test(normalizedLabel) && !/rap/i.test(normalizedLabel));
+    const shouldKeepRapLabel = isRapSection && /rap/i.test(normalizedLabel);
+    if (!isGenericSoloLabel || shouldKeepRapLabel) return line;
 
     const cleanCues = cues.map((cue) => cleanEnglishOnlyLyricTagPart(cue)).filter(Boolean).slice(0, 2);
-    const section = normalizeLyricSectionDisplayName(composite.section);
-    return `[${section}${cleanCues.length ? `: ${cleanCues.join(", ")}` : ""}]${parsed.rest || ""}`;
+    return `[${sectionName}${cleanCues.length ? `: ${cleanCues.join(", ")}` : ""}]${parsed.rest || ""}`;
   }).join("\n");
 }
 
@@ -8676,7 +8830,7 @@ ${lyricGuidancePrompt}
 - MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
 - If there are two actual vocalists, every sung section should use one composite bracket tag: [Section: acoustic voice tag, short style].
 - Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag such as [Verse: Low Male Rap, dry].
-- Solo songs: do NOT repeat [Main Vocal], [Lead Vocal], [Female Vocal], or [Male Vocal] every section when the prompt already defines the vocal identity. Use [Verse: whispery numb], [Chorus: clear hook], [Bridge: hollow] style tags instead.
+- Solo songs: do NOT repeat the vocalist identity in section tags. Remove labels such as [Main Vocal], [Lead Vocal], [Airy Male Vocal], [Female Vocal], [Male Vocal], [Whisper Vocal] from every section when the prompt already defines the vocal identity. Use only emotion/performance cues like [Verse: whispery numb], [Chorus: clear hook], [Bridge: hollow]. Keep a rap label only for actual Rap Section tags.
 - Solo section tags must include short performance/emotion tags, e.g. [Verse: low, intimate], [Chorus: clear hook, aching].
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
 - Use parentheses only for short vocal gestures/ad-libs such as (sigh), (soft breath), (short laugh), (whisper), or brief sung English ad-libs. Environmental SFX, instrument textures, ambience, noise, and point sounds must go inside the [Section: ...] tag instead of parentheses.

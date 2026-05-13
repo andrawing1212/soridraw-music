@@ -4605,6 +4605,29 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
   return cleanupPromptTail(items.slice(0, 10).join(', ')) || "focused drums, bass, and melodic core instruments";
 }
 
+
+function dedupeAtmosphereRepeatedMoods(value: string): string {
+  let line = String(value || '');
+  const repeatedWords = ['lonely'];
+
+  repeatedWords.forEach((word) => {
+    const pattern = new RegExp(`\\b(${word})(?=[^,]*(?:,| and| where| with|$))(.*?)\\b${word}\\b`, 'gi');
+    let previous = '';
+    while (previous !== line) {
+      previous = line;
+      line = line.replace(pattern, (_match, first, middle) => `${first}${middle}`);
+    }
+  });
+
+  return line
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s+where\b/gi, ', where')
+    .replace(/,\s+with\b/gi, ', with')
+    .replace(/\s+,/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function normalizeAtmospherePromptLine(value: string): string {
   let line = stripRemainingKoreanForProductionPrompt(cleanupPromptTail(value || ""))
     .replace(/\s+/g, " ")
@@ -4622,6 +4645,8 @@ function normalizeAtmospherePromptLine(value: string): string {
     .replace(/\s+,/g, ",")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  line = dedupeAtmosphereRepeatedMoods(line);
 
   if (!line) return "balanced emotional air";
   return cleanupPromptTail(line);
@@ -4729,13 +4754,16 @@ function normalizeVocalPromptEmotion(value: string, params: GenerateSongParams):
     .replace(/\bending\s+restrained\s+emotion\b/gi, 'endings and restrained emotion')
     .replace(/\b(lazy\s+dreamy\s+phrasing)\s+(restrained\s+emotion)\b/gi, '$1 and $2')
     .replace(/\b(restrained\s+emotion)\s+(lazy\s+dreamy\s+phrasing)\b/gi, '$1 and $2')
+    .replace(/\b(dreamy blurred vocal phrasing and hollow resigned vocal phrasing restrained emotion and lazy dreamy phrasing)\b/gi, '')
+    .replace(/\b(dreamy blurred vocal phrasing|hollow resigned vocal phrasing)\s+(restrained emotion|lazy dreamy phrasing)\b/gi, '$1, $2')
+    .replace(/\b(short-breath fragility)\s+(dreamy blurred vocal phrasing|hollow resigned vocal phrasing|restrained emotion|lazy dreamy phrasing)\b/gi, '$1, $2')
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  const lens = vocalEmotionPerformanceLens(params);
-  if (lens && !new RegExp(lens.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(line)) {
-    line = appendPromptLens(line, lens, 520);
-  }
+  // V63: Do not append an extra vocal-performance lens here.
+  // buildNaturalVocals/buildMemberVocalSplit already include selected Vocal Line cues.
+  // Appending the lens again caused duplicated tails like
+  // "... short-breath fragility dreamy blurred vocal phrasing ...".
 
   const info = getVocalModeInfo(params.vocal);
   if (info.isSolo && !/holding back|restrained emotion|human breath|fragile sadness/i.test(line)) {
@@ -4750,11 +4778,11 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
   const base = situationActive
     ? buildSituationVocals(params)
     : buildNaturalVocals(params, detailLayer);
-  const styleVocalDirection = joinPromptPhrase(getStylePromptValuesByRole(params.styles ?? [], 'vocals', 'style').slice(0, 2), 'and');
-  const withStyle = appendPromptLens(base, styleVocalDirection, situationActive ? 520 : 520);
+  // V63: base already contains selected Vocal Line cues through
+  // buildSelectedVocalPerformancePhrase(). Do not append raw style values again.
   const cleaned = situationActive
-    ? sanitizeVocalDirection(withStyle)
-    : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(withStyle));
+    ? sanitizeVocalDirection(base)
+    : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(base));
   return normalizeVocalPromptEmotion(cleaned, params);
 }
 

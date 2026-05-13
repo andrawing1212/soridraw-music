@@ -5201,8 +5201,47 @@ ${normalizePromptForDisplay(result.prompt)}
 
   const copyToClipboard = async (text: string, type: string) => {
     try {
-      const normalizedText = type === 'prompt' ? normalizePromptForDisplay(text) : (type.startsWith('lyrics-') ? normalizeLyricsForDisplay(text) : normalizeClipboardText(text));
-      await navigator.clipboard.writeText(normalizedText);
+      const normalizedText = type === 'prompt'
+        ? normalizePromptForDisplay(text)
+        : (type.startsWith('lyrics-') ? normalizeLyricsForDisplay(text) : normalizeClipboardText(text));
+
+      // SORIDRAW_V52: keep line breaks when pasting into Suno, notes, mobile messengers, etc.
+      // Some targets collapse LF-only clipboard text, so copy with Windows-safe CRLF.
+      const clipboardText = normalizedText.replace(/\r?\n/g, '\r\n');
+
+      const htmlText = clipboardText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\r\n/g, '<br>')
+        .replace(/\n/g, '<br>');
+
+      // SORIDRAW_V53: write both plain text and HTML so rich editors, Suno, notes,
+      // and mobile paste targets keep line breaks instead of collapsing into one paragraph.
+      if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([clipboardText], { type: 'text/plain' }),
+            'text/html': new Blob([htmlText], { type: 'text/html' }),
+          })
+        ]);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(clipboardText);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = clipboardText;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
       setCopiedType(type);
       setToast({ message: '복사되었습니다', visible: true });
       setTimeout(() => setCopiedType(null), 2000);

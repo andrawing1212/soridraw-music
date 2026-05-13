@@ -2003,14 +2003,8 @@ function cleanupPromptTail(value: string): string {
       /(?:,|\s)+(?:with|and|feat\.?|featuring|plus|or|vs|&|그리고|및)$/i,
       "",
     )
-    .replace(/\bwith\s+([^,;.]{3,60}?)\s+with\s+([^,;.]{3,60}?)(?=;|,|\.|$)/gi, "with $1 and $2")
-    .replace(/\bone-sided\s*$/i, "one-sided monologue focus")
-    .replace(/\bsingle-owner\s*$/i, "single-owner hooks")
-    .replace(/\bno\s+balanced\s*$/i, "no balanced call-response")
-    .replace(/\bcall-response\s*$/i, "call-response dialogue")
-    .replace(/\bshort\s+point\s+accents\s+in\s+key\s+transitions,\s*one-sided\s*$/i, "short point accents in key transitions, one-sided monologue focus")
     .replace(/\b(?:with|and|feat\.?|featuring|plus|or|vs|&)$/i, "")
-    .replace(/[,;\s]+$/g, "")
+    .replace(/[,\s]+$/g, "")
     .trim();
 }
 
@@ -4520,15 +4514,15 @@ function buildFiveLineArrangementValue(
 function compactFiveLinePromptBody(lines: string[]): string[] {
   let current = [...lines];
   const countBody = () => current.join("\n").length;
-  const targetLimit = 860;
+  const targetLimit = 720;
   if (countBody() <= targetLimit) return current;
 
   const firstPassLimits: Record<string, number> = {
-    Genre: 110,
-    Instruments: 145,
-    Atmosphere: 175,
-    Vocals: 275,
-    Arrangement: 155,
+    Genre: 95,
+    Instruments: 125,
+    Atmosphere: 145,
+    Vocals: 225,
+    Arrangement: 115,
   };
   current = current.map((line) => {
     const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
@@ -4539,11 +4533,11 @@ function compactFiveLinePromptBody(lines: string[]): string[] {
   if (countBody() <= targetLimit) return current;
 
   const secondPassLimits: Record<string, number> = {
-    Genre: 95,
-    Instruments: 115,
-    Atmosphere: 145,
-    Vocals: 235,
-    Arrangement: 125,
+    Genre: 80,
+    Instruments: 95,
+    Atmosphere: 115,
+    Vocals: 190,
+    Arrangement: 85,
   };
   current = current.map((line) => {
     const match = line.match(/^\[([^\]]+)\]\s*(.*)$/);
@@ -6666,20 +6660,6 @@ function compactHybridPromptBody(lines: string[]): string[] {
   return current;
 }
 
-function sanitizeFinalFiveLinePromptLine(line: string): string {
-  const fixed = cleanupPromptTail(line)
-    .replace(/\bwith\s+([^,;.]{3,60}?)\s+with\s+([^,;.]{3,60}?)(?=;|,|\.|$)/gi, "with $1 and $2")
-    .replace(/\[Arrangement\]([^^\n]*?),\s*one-sided\s*$/i, "[Arrangement]$1, one-sided monologue focus")
-    .replace(/\[Arrangement\]([^^\n]*?)\bone-sided\s*$/i, "[Arrangement]$1one-sided monologue focus")
-    .replace(/\[Arrangement\]([^^\n]*?)\bsingle-owner\s*$/i, "[Arrangement]$1single-owner hooks")
-    .replace(/\[Arrangement\]([^^\n]*?)\bno\s+balanced\s*$/i, "[Arrangement]$1no balanced call-response")
-    .replace(/\s+;/g, ";")
-    .replace(/;\s*$/g, "")
-    .replace(/,\s*$/g, "")
-    .replace(/\s{2,}/g, " ");
-  return cleanupPromptTail(fixed);
-}
-
 function buildFinalPrompt(
   params: GenerateSongParams,
   resolvedStructure: SongStructure,
@@ -6713,7 +6693,7 @@ function buildFinalPrompt(
         .replace(/\[Vocals\]([^\n]*)\bsingalong chorus point\b/gi, (_m, pre) => `[Vocals]${pre}`)
         .replace(/\s{2,}/g, " "),
     );
-    return sanitizeFinalFiveLinePromptLine(sanitizePromptGenreArtifacts(cleaned));
+    return sanitizePromptGenreArtifacts(cleaned);
   });
 
   return enforceEnglishProductionPrompt(

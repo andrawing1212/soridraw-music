@@ -4351,7 +4351,9 @@ const saveRecentSong = async (newSong: any) => {
       : [];
     const requestedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions?.generationCount) || 1)));
 
-    if (selectedGenres.length === 0 && !hasFreeTextDirectorNote) {
+    const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
+
+    if (!hasAnySelectedGenre && !hasFreeTextDirectorNote) {
       showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
       return;
     }
@@ -4677,7 +4679,7 @@ const saveRecentSong = async (newSong: any) => {
       const songPrompt = buildSongPrompt();
 
       const payload = {
-        genre: selectedGenres[0] ?? null,
+        genre: selectedGenres[0] ?? subGenre[0] ?? finalGenres[0] ?? null,
         subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
         isKpopSelected: ([...selectedGenres, ...subGenre] ?? []).includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
@@ -4850,13 +4852,13 @@ ${keywords}
 ${songTitleCopy}
 
 [Lyrics - English]
-${result.lyrics.english}
+${normalizeLyricsForDisplay(result.lyrics.english)}
 
 [Lyrics - Korean]
-${result.lyrics.korean}
+${normalizeLyricsForDisplay(result.lyrics.korean)}
 
 [Music Prompt]
-${result.prompt}
+${normalizePromptForDisplay(result.prompt)}
     `.trim();
     copyToClipboard(text, 'all');
   };
@@ -5107,6 +5109,7 @@ ${result.prompt}
     return [formatInlineTitle(song)];
   };
 
+  // SORIDRAW_V49: generation fix + prompt UI/copy repair preserved
   const normalizeClipboardText = (value: string) => {
     return String(value || '')
       .replace(/\r\n/g, '\n')
@@ -5116,9 +5119,75 @@ ${result.prompt}
       .trim();
   };
 
+
+  const normalizePromptForDisplay = (value: string) => {
+    const repairLine = (line: string) => {
+      let repaired = String(line || '').replace(/\s+/g, ' ').trim();
+
+      if (/^\[Atmosphere\]/i.test(repaired)) {
+        repaired = repaired
+          .replace(/\bwith the real reason hidden until the\s*$/i, 'with the real reason hidden until later')
+          .replace(/\bthe real reason hidden until the\s*$/i, 'the real reason hidden until later')
+          .replace(/\bhidden until the\s*$/i, 'hidden until later')
+          .replace(/\buntil the\s*$/i, 'until later')
+          .replace(/\buntil\s*$/i, 'until later');
+      }
+
+      if (/^\[Vocals\]/i.test(repaired)) {
+        repaired = repaired
+          .replace(/\bwith\s+calmly restrained\s+with\s+lightly hopeful\b/gi, 'with calmly restrained and lightly hopeful delivery')
+          .replace(/\bwith\s+lightly hopeful\s+with\s+calmly restrained\b/gi, 'with lightly hopeful and calmly restrained delivery')
+          .replace(/\bwith\s+tossed-off and dry\s+with\s+pleading regret\b/gi, 'with tossed-off dry delivery and pleading regret')
+          .replace(/\bwith\s+([^,;:.]{3,46}?)\s+with\s+([^,;:.]{3,46}?)(?=,|;|\.|$)/gi, 'with $1 and $2')
+          .replace(/\bwith calmly restrained\s*$/i, 'with calmly restrained delivery')
+          .replace(/\bwith lightly hopeful\s*$/i, 'with lightly hopeful delivery')
+          .replace(/\bwith tossed-off and dry\s*$/i, 'with tossed-off dry delivery')
+          .replace(/\s+,/g, ',');
+      }
+
+      if (/^\[Arrangement\]/i.test(repaired)) {
+        repaired = repaired
+          .replace(/\bone-sided\s*$/i, 'one-sided monologue focus')
+          .replace(/\bsingle-owner\s*$/i, 'single-owner hook')
+          .replace(/\bno balanced\s*$/i, 'no balanced call-response')
+          .replace(/\bclear sectional\s*$/i, 'clear sectional contrast')
+          .replace(/\buse ([^,]+?) as short point accents in key\s*$/i, 'use $1 as short point accents in key transitions')
+          .replace(/\bclear sectional contrast\s*,\s*clear section contrast\b/gi, 'clear sectional contrast')
+          .replace(/\bclear section contrast\s*,\s*clear sectional contrast\b/gi, 'clear sectional contrast')
+          .replace(/\bclear section contrast\b/gi, 'clear sectional contrast');
+      }
+
+      return repaired.replace(/\s{2,}/g, ' ').trim();
+    };
+
+    return normalizeClipboardText(value)
+      .split('\n')
+      .map(repairLine)
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const normalizeLyricsForDisplay = (value: string) => {
+    let normalized = normalizeClipboardText(value)
+      .replace(sectionRegex, '\n\n$1')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // Remove redundant generic instrumental note when the Intro section tag already says it.
+    normalized = normalized.replace(
+      /(\[Intro[^\]]*\bInstrumental(?:\s+Opening)?[^\]]*\])\s*\n+\s*\(Instrumental intro\)\s*(?=\n|$)/gi,
+      '$1'
+    );
+
+    return normalized
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
+
   const copyToClipboard = async (text: string, type: string) => {
     try {
-      const normalizedText = normalizeClipboardText(text);
+      const normalizedText = type === 'prompt' ? normalizePromptForDisplay(text) : (type.startsWith('lyrics-') ? normalizeLyricsForDisplay(text) : normalizeClipboardText(text));
       await navigator.clipboard.writeText(normalizedText);
       setCopiedType(type);
       setToast({ message: '복사되었습니다', visible: true });
@@ -6569,7 +6638,7 @@ ${result.prompt}
                   </h3>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => copyToClipboard(result.prompt, 'prompt')}
+                      onClick={() => copyToClipboard(normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
@@ -6581,7 +6650,7 @@ ${result.prompt}
                 </div>
                 <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
                   <pre className="whitespace-pre-wrap font-mono text-[var(--text-secondary)] leading-relaxed text-sm w-full">
-                    {result.prompt}
+                    {normalizePromptForDisplay(result.prompt)}
                   </pre>
                 </div>
               </div>
@@ -6657,11 +6726,7 @@ ${result.prompt}
                             <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
                               <div className="flex-1" />
                               <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                                {lyricsText
-                                  .replace(/\\n/g, '\n')
-                                  .replace(sectionRegex, '\n\n$1')
-                                  .replace(/\n{3,}/g, '\n\n')
-                                  .trim()}
+                                {normalizeLyricsForDisplay(lyricsText)}
                               </pre>
                               <div className="flex-1" />
                             </div>

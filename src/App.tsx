@@ -1542,22 +1542,67 @@ const resolveSubGenreId = (val: string) => {
   return null;
 };
 
+function isSeparatorKeywordId(value: unknown): boolean {
+  return /^separator[-_]/i.test(String(value || '').trim());
+}
+
+function isSelectableKeywordItem(item: any): boolean {
+  return Boolean(item && item.kind !== 'separator' && !isSeparatorKeywordId(item.id));
+}
+
+function filterSelectableIds(values: string[] = []) {
+  return values.filter((value) => value && !isSeparatorKeywordId(value));
+}
+
 function resolveStyleIds(labelsOrIds: string[] = []) {
-  return Array.from(new Set(labelsOrIds.map((value) => STYLE_LABEL_TO_ID[value] ?? (STYLE_VARIANT_LOOKUP[value] ? value : null)).filter(Boolean) as string[]));
+  return Array.from(new Set(labelsOrIds.map((value) => STYLE_LABEL_TO_ID[value] ?? (STYLE_VARIANT_LOOKUP[value] && !isSeparatorKeywordId(value) ? value : null)).filter(Boolean) as string[]));
 }
 
 function resolveSoundTextureIds(labelsOrIds: string[] = []) {
-  return Array.from(new Set(labelsOrIds.map((value) => SOUND_LABEL_TO_ID[value] ?? (SOUND_VARIANT_LOOKUP[value] ? value : null)).filter(Boolean) as string[]));
+  return Array.from(new Set(labelsOrIds.map((value) => SOUND_LABEL_TO_ID[value] ?? (SOUND_VARIANT_LOOKUP[value] && !isSeparatorKeywordId(value) ? value : null)).filter(Boolean) as string[]));
 }
 
 function getStyleVariantLabelById(id: string) {
+  if (isSeparatorKeywordId(id)) return '';
   const variant = STYLE_VARIANT_LOOKUP[id];
+  if ((variant as any)?.kind === 'separator') return '';
   return variant?.labelKo || variant?.label || id;
 }
 
 function getSoundVariantLabelById(id: string) {
+  if (isSeparatorKeywordId(id)) return '';
   const variant = SOUND_VARIANT_LOOKUP[id];
+  if ((variant as any)?.kind === 'separator') return '';
   return variant?.labelKo || variant?.label || id;
+}
+
+function getPointSoundTagLabelById(id: string) {
+  if (isSeparatorKeywordId(id)) return '';
+  const variant = SOUND_VARIANT_LOOKUP[id] as any;
+  if (variant?.kind === 'separator') return '';
+  const raw = String(
+    variant?.promptCore ||
+    variant?.sound ||
+    variant?.style ||
+    variant?.label ||
+    id
+  ).trim();
+
+  const compact = raw
+    .split(',')[0]
+    .replace(/\s+-\s+.*$/g, '')
+    .replace(/[가-힣]+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return compact || variant?.label || id;
+}
+
+function getPointSoundTagDisplayLabelById(id: string) {
+  if (isSeparatorKeywordId(id)) return '';
+  const variant = SOUND_VARIANT_LOOKUP[id] as any;
+  if (variant?.kind === 'separator') return '';
+  return String(variant?.labelKo || variant?.label || getPointSoundTagLabelById(id)).trim();
 }
 
 function buildThemeSentence(themeLabels: string[] = []): string {
@@ -2456,6 +2501,8 @@ function App() {
 
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
+  const [selectedPointSounds, setSelectedPointSounds] = useState<string[]>([]);
+  const [isPointSoundMode, setIsPointSoundMode] = useState(false);
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songStructure, setSongStructure] = useState<SongStructure>('1');
@@ -2714,7 +2761,7 @@ function App() {
   const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
-  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + (hasActiveSituation(situation) ? 1 : 0);
+  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const MAX_FUSION_GENRES = 2;
   const limitFusionGenreIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(0, MAX_FUSION_GENRES);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -3545,8 +3592,8 @@ const toggleCycleVariantSelection = (
     
     const allRaw = category === 'genre' ? GENRES : (category === 'mood' ? MOODS : (category === 'theme' ? THEMES : (category === 'style' ? SOUND_STYLES : INSTRUMENT_SOUNDS)));
     const all = category === 'sound'
-      ? (allRaw as any[]).filter((item) => String(item.promptCore || '').trim().length > 0)
-      : allRaw;
+      ? (allRaw as any[]).filter((item) => isSelectableKeywordItem(item) && String(item.promptCore || '').trim().length > 0)
+      : (allRaw as any[]).filter(isSelectableKeywordItem);
     const pinned = category === 'genre' ? pinnedGenres : (category === 'theme' ? [] : (category === 'style' ? pinnedStyles : pinnedInstrumentSounds));
     const isGenre = category === 'genre';
     
@@ -3555,7 +3602,7 @@ const toggleCycleVariantSelection = (
                        (category === 'mood' ? 0 : selectedMoods.length) +
                        (category === 'theme' ? 0 : selectedThemes.length) +
                        (category === 'style' ? 0 : selectedStyles.length) +
-                       (category === 'sound' ? 0 : selectedInstrumentSounds.length);
+                       (category === 'sound' ? 0 : selectedInstrumentSounds.length + selectedPointSounds.length);
     
     const maxForCat = limits[category];
     const maxAllowedByTotal = Math.max(0, 15 - otherCount);
@@ -3600,10 +3647,17 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  const applyRecommendedSoundCombo = useCallback((variantId: string) => {
-    const recommendation = SOUND_TEXTURE_CYCLES
+  // SORIDRAW_RECOMMENDED_SOUND_COMBO_FIX_V20: 추천조합 해제 시 새 조합이 다시 적용되지 않도록 분리
+  const recommendedSoundComboAppliedIdsRef = useRef<Record<string, string[]>>({});
+
+  const getRecommendedSoundComboVariant = useCallback((variantId: string) => {
+    return SOUND_TEXTURE_CYCLES
       .flatMap((cycle) => cycle.variants as readonly any[])
-      .find((variant) => variant.id === variantId && Array.isArray((variant as any).applyPools));
+      .find((variant) => isSelectableKeywordItem(variant) && variant.id === variantId && Array.isArray((variant as any).applyPools));
+  }, []);
+
+  const applyRecommendedSoundCombo = useCallback((variantId: string) => {
+    const recommendation = getRecommendedSoundComboVariant(variantId);
 
     if (!recommendation) return false;
 
@@ -3611,12 +3665,37 @@ const toggleCycleVariantSelection = (
     if (!pools.length) return false;
 
     const pickedPool = pools[Math.floor(Math.random() * pools.length)] ?? [];
-    const nextSounds = [variantId, ...pickedPool].filter(Boolean);
-    setSelectedInstrumentSounds(Array.from(new Set(nextSounds)));
+    const nextSounds = Array.from(new Set([variantId, ...pickedPool].filter(Boolean)));
+    recommendedSoundComboAppliedIdsRef.current = { [variantId]: nextSounds };
+    setSelectedInstrumentSounds(nextSounds);
     setIsSoundTextureRandomized(false);
     return true;
-  }, []);
+  }, [getRecommendedSoundComboVariant]);
 
+  const clearRecommendedSoundCombo = useCallback((variantId: string) => {
+    const recommendation = getRecommendedSoundComboVariant(variantId);
+    if (!recommendation) return false;
+
+    const appliedIds = recommendedSoundComboAppliedIdsRef.current[variantId];
+    const fallbackPoolIds = ((recommendation as any).applyPools as string[][] | undefined)?.flat?.() ?? [];
+    const idsToRemove = new Set([variantId, ...(appliedIds ?? fallbackPoolIds)]);
+
+    delete recommendedSoundComboAppliedIdsRef.current[variantId];
+    setSelectedInstrumentSounds((prev) => prev.filter((id) => !idsToRemove.has(id)));
+    setIsSoundTextureRandomized(false);
+    return true;
+  }, [getRecommendedSoundComboVariant]);
+
+  const recommendedComboAppliedSoundIds = useMemo(() => {
+    const recommenderIds = new Set(Object.keys(recommendedSoundComboAppliedIdsRef.current));
+    return Array.from(
+      new Set(
+        Object.values(recommendedSoundComboAppliedIdsRef.current)
+          .flat()
+          .filter((id) => selectedInstrumentSounds.includes(id) && !recommenderIds.has(id))
+      )
+    );
+  }, [selectedInstrumentSounds]);
 
   const handleGenreSelect = (genreId: string) => {
     setSelectedGenres([genreId]);
@@ -3888,7 +3967,10 @@ const toggleCycleVariantSelection = (
       setIsStyleRandomized(false);
     }
     if (category === 'sound') {
+      recommendedSoundComboAppliedIdsRef.current = {};
       setSelectedInstrumentSounds(pinnedInstrumentSounds);
+      setSelectedPointSounds([]);
+      setIsPointSoundMode(false);
       setIsSoundTextureRandomized(false);
     }
   };
@@ -3933,7 +4015,10 @@ const toggleCycleVariantSelection = (
     setSelectedMoods([]);
     setSelectedThemes(preservePinned ? pinnedThemesRef.current : []);
     setSelectedStyles(preservePinned ? pinnedStylesRef.current : []);
+    recommendedSoundComboAppliedIdsRef.current = {};
     setSelectedInstrumentSounds(preservePinned ? pinnedInstrumentSoundsRef.current : []);
+    setSelectedPointSounds([]);
+    setIsPointSoundMode(false);
     setSelectedVocalToneId(undefined);
     setSituation(createEmptySituation());
 
@@ -4045,7 +4130,8 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  // Reset filters on navigation to Home, but preserve generated song history
+  // Keep the in-progress Home draft when navigating away and back.
+  // Only pending shared/playlist keywords intentionally replace the current draft.
   useEffect(() => {
     if (location.pathname !== '/') return;
 
@@ -4093,8 +4179,7 @@ const toggleCycleVariantSelection = (
         return;
       }
 
-      // Clear current state only when there is no pending shared/playlist setting to apply.
-      await clearAll({ preserveHistory: true, preservePinned: true });
+      // Do not clear selected keywords when returning from Library/Favorites.
       if (!isCancelled) window.scrollTo(0, 0);
     };
 
@@ -4155,8 +4240,8 @@ const toggleCycleVariantSelection = (
 
     // 2. Other categories with their limits
     // Limits: Style 3, Sound 3, Mood 5, Theme 4
-    let s = getRandomForCategory(SOUND_STYLES, pinnedStyles, 3);
-    let snd = getRandomForCategory(INSTRUMENT_SOUNDS, pinnedInstrumentSounds, 3);
+    let s = getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3);
+    let snd = getRandomForCategory(INSTRUMENT_SOUNDS.filter(isSelectableKeywordItem), pinnedInstrumentSounds, 3);
     let m = getRandomForCategory(MOODS, [], 5);
     let t = getRandomForCategory(THEMES, [], 4);
 
@@ -4290,15 +4375,16 @@ const saveRecentSong = async (newSong: any) => {
       let finalGenres = limitFusionGenreIds([...selectedGenres]);
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
-      let finalStyles = [...selectedStyles];
-      let finalInstrumentSounds = [...selectedInstrumentSounds];
+      let finalStyles = filterSelectableIds([...selectedStyles]);
+      let finalInstrumentSounds = filterSelectableIds([...selectedInstrumentSounds]);
       let randomKeywords: string[] = [];
 
       const hasGenre = finalGenres.length > 0;
       const hasMood = finalMoods.length > 0;
       const hasTheme = finalThemes.length > 0;
       const hasStyle = finalStyles.length > 0;
-      const hasSound = finalInstrumentSounds.length > 0;
+      const finalPointSounds = filterSelectableIds([...selectedPointSounds]);
+      const hasSound = finalInstrumentSounds.length > 0 || finalPointSounds.length > 0;
       const hasFreeTextDirectorNote = userInput.trim().length > 0;
 
       const selectedCount = [hasGenre, hasMood, hasTheme, hasStyle, hasSound].filter(Boolean).length;
@@ -4310,8 +4396,8 @@ const saveRecentSong = async (newSong: any) => {
           ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
           ...MOODS.map(i => ({ ...i, cat: 'mood' as const })),
           ...THEMES.map(i => ({ ...i, cat: 'theme' as const })),
-          ...SOUND_STYLES.map(i => ({ ...i, cat: 'style' as const })),
-          ...INSTRUMENT_SOUNDS.map(i => ({ ...i, cat: 'sound' as const })),
+          ...SOUND_STYLES.filter(isSelectableKeywordItem).map(i => ({ ...i, cat: 'style' as const })),
+          ...INSTRUMENT_SOUNDS.filter(isSelectableKeywordItem).map(i => ({ ...i, cat: 'sound' as const })),
         ];
 
         const count = Math.floor(Math.random() * 11) + 5; // 5-15
@@ -4597,6 +4683,7 @@ const saveRecentSong = async (newSong: any) => {
         ...(hasActiveSituation(situation) ? { situation } : {}),
         styles: finalStyles,
         instrumentSounds: finalInstrumentSounds,
+        pointSounds: finalPointSounds,
         userInput,
         songPrompt,
         lyricsLength,
@@ -4658,6 +4745,7 @@ const saveRecentSong = async (newSong: any) => {
             ...(hasActiveSituation(situation) ? { situation } : {}),
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
+            pointSounds: finalPointSounds,
             vocalType: formation || 'Default',
             vocalEmotion: selectedVocalToneId
               ? getVocalEmotionDisplayLabel(selectedVocalToneId)
@@ -5037,6 +5125,7 @@ ${result.prompt}
     selectedThemes.length > 0 ||
     selectedStyles.length > 0 ||
     selectedInstrumentSounds.length > 0 ||
+    selectedPointSounds.length > 0 ||
     userInput !== '' ||
     lyricsLength !== 'normal' ||
     songStructure !== '1' ||
@@ -5432,14 +5521,50 @@ ${result.prompt}
             descriptionKo="악기 톤과 배경 질감을 설정합니다. 기본 장르에 적용된 악기 사운드의 질감을 바꿔서 원하는 느낌으로 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
             cycles={filteredSoundTextureCycles}
             selected={selectedInstrumentSounds}
+            pointSelected={selectedPointSounds}
+            isPointSelectionMode={isPointSoundMode}
+            highlightedVariantIds={recommendedComboAppliedSoundIds}
+            extraHeaderControls={(
+              <button
+                type="button"
+                onClick={() => setIsPointSoundMode((prev) => !prev)}
+                onMouseEnter={() => setHoveredItem({ id: 'point-sound-mode', label: 'Point Mode', labelKo: '포인트모드', description: '켜면 선택한 사운드가 곡 전체 악기가 아니라 특정 전환/섹션 포인트로 적용됩니다.' })}
+                onMouseLeave={() => setHoveredItem(null)}
+                className={cn(
+                  "h-[42px] w-[42px] rounded-xl transition-all shadow-btn border flex items-center justify-center",
+                  isPointSoundMode
+                    ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.28)]"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                )}
+                title="포인트 사운드 모드"
+                aria-label="포인트 사운드 모드"
+              >
+                <Zap className="w-4 h-4" />
+              </button>
+            )}
             onCycleToggle={(cycleId, variantId) => {
+              const activeSelected = isPointSoundMode ? selectedPointSounds : selectedInstrumentSounds;
+              const activeSetter = isPointSoundMode ? setSelectedPointSounds : setSelectedInstrumentSounds;
               if (variantId) {
-                if (applyRecommendedSoundCombo(variantId)) return;
-                toggleCycleVariantSelection(variantId, selectedInstrumentSounds, setSelectedInstrumentSounds);
+                const isRecommendedCombo = !!getRecommendedSoundComboVariant(variantId);
+                if (!isPointSoundMode && isRecommendedCombo) {
+                  if (selectedInstrumentSounds.includes(variantId)) {
+                    clearRecommendedSoundCombo(variantId);
+                    return;
+                  }
+                  if (applyRecommendedSoundCombo(variantId)) return;
+                }
+                toggleCycleVariantSelection(variantId, activeSelected, activeSetter);
               }
-              else cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
+              else cycleFamilySelection(cycleId, activeSelected, activeSetter, SOUND_TEXTURE_CYCLES);
             }}
-            onClear={() => { setSelectedInstrumentSounds([]); setIsSoundTextureRandomized(false); }}
+            onClear={() => {
+              recommendedSoundComboAppliedIdsRef.current = {};
+              setSelectedInstrumentSounds([]);
+              setSelectedPointSounds([]);
+              setIsPointSoundMode(false);
+              setIsSoundTextureRandomized(false);
+            }}
             onRandom={() => randomizeCategory('sound')}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
@@ -5739,6 +5864,12 @@ ${result.prompt}
               user={user}
               userTier={effectiveUserTier}
               sectionTags={sectionTags}
+              pointSoundTags={filterSelectableIds(selectedPointSounds).map(getPointSoundTagLabelById).filter(Boolean)}
+              pointSoundTagLabels={Object.fromEntries(
+                filterSelectableIds(selectedPointSounds)
+                  .map((id) => [getPointSoundTagLabelById(id), getPointSoundTagDisplayLabelById(id)] as const)
+                  .filter(([tag, label]) => Boolean(tag && label))
+              )}
             />
           </div>
         </div>
@@ -5984,8 +6115,9 @@ ${result.prompt}
                 ...displayGenreKeywords,
                 ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
                 ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
-                ...selectedStyles.map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })),
-                ...selectedInstrumentSounds.map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })),
+                ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
+                ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
+                ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
                 ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#한/영 혼합' }] : []),
                 ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
                 ...(selectedVocalToneId ? [{ 
@@ -5998,6 +6130,8 @@ ${result.prompt}
                     ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
                     : item.type === 'sound'
                       ? 'px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
+                      : item.type === 'point-sound'
+                        ? 'px-3 py-1.5 rounded-full bg-fuchsia-500/10 border border-fuchsia-400/20 text-fuchsia-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
                       : item.type === 'mix' || item.type === 'rap' || item.type === 'vocal-tone'
                         ? 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm'
                         : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
@@ -7229,6 +7363,7 @@ function GenreSelectModal({
   );
 }
 
+// SORIDRAW_SOUND_INSTRUMENT_SEPARATORS_V19: CycleKeywordPopup separator row support
 interface CycleSectionProps {
   title: string;
   titleKo?: string;
@@ -7240,6 +7375,7 @@ interface CycleSectionProps {
     titleKo?: string;
     variants: readonly { 
       id: string; 
+      kind?: 'separator';
       label: string; 
       labelKo?: string;
       description: string;
@@ -7249,6 +7385,9 @@ interface CycleSectionProps {
     }[] 
   }[];
   selected: string[];
+  pointSelected?: string[];
+  isPointSelectionMode?: boolean;
+  extraHeaderControls?: React.ReactNode;
   onCycleToggle: (cycleId: string, variantId?: string) => void;
   onClear: () => void;
   onRandom: () => void;
@@ -7257,6 +7396,7 @@ interface CycleSectionProps {
   onLongPressEnd: () => void;
   titleClassName?: string;
   isRandomized?: boolean;
+  highlightedVariantIds?: string[];
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onHeightChange?: (height: number) => void;
@@ -7269,7 +7409,10 @@ function CycleSection({
   description, 
   descriptionKo,
   cycles, 
-  selected, 
+  selected,
+  pointSelected = [],
+  isPointSelectionMode = false,
+  extraHeaderControls,
   onCycleToggle, 
   onClear, 
   onRandom, 
@@ -7278,6 +7421,7 @@ function CycleSection({
   onLongPressEnd, 
   titleClassName, 
   isRandomized,
+  highlightedVariantIds = [],
   isExpanded = false,
   onToggleExpand,
   onHeightChange,
@@ -7298,11 +7442,15 @@ function CycleSection({
   }, [cycles, onHeightChange]);
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
-  const selectedKeywordCount = selected.length;
-  const totalKeywordCount = cycles.reduce((sum, cycle) => sum + cycle.variants.length, 0);
+  const activeSelected = isPointSelectionMode ? pointSelected : selected;
+  const selectedKeywordCount = selected.length + pointSelected.length;
+  const totalKeywordCount = cycles.reduce((sum, cycle) => sum + cycle.variants.filter((variant) => variant.kind !== 'separator').length, 0);
   const maxSelectableCount = Number.POSITIVE_INFINITY;
-  const countLabel = `${selectedKeywordCount}/${totalKeywordCount}`;
+  const countLabel = isPointSelectionMode
+    ? `${selectedKeywordCount}/${totalKeywordCount} · P${pointSelected.length}`
+    : `${selectedKeywordCount}/${totalKeywordCount}`;
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
+  const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
@@ -7337,6 +7485,7 @@ function CycleSection({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {extraHeaderControls}
             <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? 'bg-brand-orange text-white border-brand-orange' : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
               <Dices className="w-4 h-4" />
             </button>
@@ -7346,7 +7495,7 @@ function CycleSection({
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
-                (selected.length > 0 || isRandomized)
+                (activeSelected.length > 0 || isRandomized)
                   ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
@@ -7367,11 +7516,15 @@ function CycleSection({
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {cycles.map((cycle) => {
-              const selectedVariants = cycle.variants.filter((variant) => selected.includes(variant.id));
-              const activeVariant = selectedVariants[0] ?? null;
+              const selectedVariants = cycle.variants.filter((variant) => variant.kind !== 'separator' && selected.includes(variant.id));
+              const pointSelectedVariants = cycle.variants.filter((variant) => variant.kind !== 'separator' && pointSelected.includes(variant.id));
+              const activeModeVariants = isPointSelectionMode ? pointSelectedVariants : selectedVariants;
+              const activeVariant = activeModeVariants[0] ?? selectedVariants[0] ?? pointSelectedVariants[0] ?? null;
               const selectedCountInCycle = selectedVariants.length;
+              const pointSelectedCountInCycle = pointSelectedVariants.length;
+              const hasHighlightedSelectedVariant = selectedVariants.some((variant) => highlightedVariantIdSet.has(variant.id));
 
-              const baseVariant = cycle.variants[0];
+              const baseVariant = cycle.variants.find((variant) => variant.kind !== 'separator') ?? cycle.variants[0];
               const hoverItem: CategoryItem = activeVariant
                 ? {
                     id: cycle.id,
@@ -7397,16 +7550,30 @@ function CycleSection({
                   className={cn(
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
                     selectedVariants.length > 0
-                      ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.24)]"
-                      : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                      ? hasHighlightedSelectedVariant
+                        ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.28)]"
+                        : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.24)]"
+                      : pointSelectedVariants.length > 0
+                        ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.24)]"
+                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
                   <span className="text-[13px] md:text-[13.5px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
                     {folderLabel}
                   </span>
                   {selectedCountInCycle > 0 && (
-                    <span className="absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-white text-brand-orange border border-brand-orange/50 shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none">
+                    <span className={cn(
+                      "absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-white border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none",
+                      hasHighlightedSelectedVariant
+                        ? "text-sky-700 border-sky-300"
+                        : "text-brand-orange border-brand-orange/50"
+                    )}>
                       {selectedCountInCycle}
+                    </span>
+                  )}
+                  {pointSelectedCountInCycle > 0 && (
+                    <span className="absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-fuchsia-600 text-white border border-fuchsia-300/70 shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none">
+                      {pointSelectedCountInCycle}
                     </span>
                   )}
                 </button>
@@ -7419,17 +7586,17 @@ function CycleSection({
       <div 
         className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
       >
-        {selected.length > 0 ? (
-          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            {selected
-              .map((id) => cycles.flatMap(c => c.variants).find(v => v.id === id))
+        {activeSelected.length > 0 ? (
+          <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-fuchsia-300" : "text-brand-orange")}>
+            {isPointSelectionMode ? '포인트: ' : ''}{activeSelected
+              .map((id) => cycles.flatMap(c => c.variants).find(v => v.kind !== 'separator' && v.id === id))
               .filter(Boolean)
               .map((v) => v?.labelKo || v?.label)
               .join(', ')}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            {titleKo || title} 키워드를 선택하세요.
+          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-fuchsia-400/45" : "text-brand-orange/40")}>
+            {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
         )}
       </div>
@@ -7440,7 +7607,9 @@ function CycleSection({
           <CycleKeywordPopup
             title={titleKo || title}
             cycle={activePopupCycle}
-            selected={selected}
+            selected={activeSelected}
+            highlightedVariantIds={isPointSelectionMode ? [] : highlightedVariantIds}
+            isPointSelectionMode={isPointSelectionMode}
             maxSelectableCount={maxSelectableCount}
             onClose={() => setKeywordPopupCycleId(null)}
             onToggleVariant={(variantId) => onCycleToggle(activePopupCycle.id, variantId)}
@@ -7471,6 +7640,8 @@ function CycleKeywordPopup({
   title,
   cycle,
   selected,
+  highlightedVariantIds = [],
+  isPointSelectionMode = false,
   maxSelectableCount,
   onClose,
   onToggleVariant,
@@ -7483,6 +7654,7 @@ function CycleKeywordPopup({
     titleKo?: string;
     variants: readonly {
       id: string;
+      kind?: 'separator';
       label: string;
       labelKo?: string;
       description: string;
@@ -7492,18 +7664,21 @@ function CycleKeywordPopup({
     }[];
   };
   selected: string[];
+  highlightedVariantIds?: string[];
+  isPointSelectionMode?: boolean;
   maxSelectableCount: number;
   onClose: () => void;
   onToggleVariant: (variantId: string) => void;
   onHover: (item: CategoryItem | null) => void;
 }) {
   const closeFromHistoryRef = useRef(false);
-  const cycleVariantIds = useMemo(() => cycle.variants.map((variant) => variant.id), [cycle.variants]);
+  const cycleVariantIds = useMemo(() => cycle.variants.filter((variant) => variant.kind !== 'separator').map((variant) => variant.id), [cycle.variants]);
   const initialSelectedRef = useRef<string[]>(selected.filter((id) => cycleVariantIds.includes(id)));
   const [localSelected, setLocalSelected] = useState<string[]>(initialSelectedRef.current);
 
   const normalizeIds = useCallback((ids: string[]) => [...ids].sort().join('|'), []);
   const hasChanges = normalizeIds(localSelected) !== normalizeIds(initialSelectedRef.current);
+  const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
 
   const closePopup = useCallback(() => {
     if (window.history.state?.cycleKeywordPopup && !closeFromHistoryRef.current) {
@@ -7581,7 +7756,7 @@ function CycleKeywordPopup({
         >
           <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[10px] font-black tracking-[0.16em] text-brand-orange uppercase mb-1">{title} Keyword</p>
+              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isPointSelectionMode ? "text-fuchsia-400" : "text-brand-orange")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
@@ -7604,7 +7779,9 @@ function CycleKeywordPopup({
                 className={cn(
                   "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
                   hasChanges
-                    ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
+                    ? isPointSelectionMode
+                      ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.28)]"
+                      : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
                 )}
                 title={hasChanges ? '변경 적용' : '닫기'}
@@ -7620,7 +7797,16 @@ function CycleKeywordPopup({
             onTouchMove={(e) => e.stopPropagation()}
           >
             {cycle.variants.map((variant) => {
+              if (variant.kind === 'separator') {
+                return (
+                  <div key={variant.id} className="pt-2 pb-1 flex items-center gap-2 text-[10.5px] font-black tracking-[0.14em] uppercase text-brand-orange/80 select-none">
+                    <span className="shrink-0">{variant.labelKo || variant.label}</span>
+                    <span className="h-px flex-1 bg-brand-orange/20" />
+                  </div>
+                );
+              }
               const isSelected = localSelected.includes(variant.id);
+              const isHighlightedSelected = isSelected && highlightedVariantIdSet.has(variant.id);
               const disabled = !isSelected && isAtLimit;
               const hoverItem: CategoryItem = {
                 id: variant.id,
@@ -7647,7 +7833,11 @@ function CycleKeywordPopup({
                   className={cn(
                     "w-full rounded-2xl border px-4 py-3 text-left transition-all",
                     isSelected
-                      ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
+                      ? isPointSelectionMode
+                        ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.24)]"
+                        : isHighlightedSelected
+                          ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.26)]"
+                          : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
                       : disabled
                         ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover hover:border-brand-orange/40"
@@ -8020,6 +8210,8 @@ interface SongStructureIntegratedControlProps {
   user: User | null;
   userTier: TagTier;
   sectionTags: SectionTag[];
+  pointSoundTags?: string[];
+  pointSoundTagLabels?: Record<string, string>;
   onModalStateChange?: (isOpen: boolean) => void;
 }
 
@@ -8037,6 +8229,8 @@ function SongStructureIntegratedControl({
   user,
   userTier,
   sectionTags,
+  pointSoundTags = [],
+  pointSoundTagLabels = {},
   onModalStateChange
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
@@ -8792,6 +8986,8 @@ function SongStructureIntegratedControl({
             onLongPressEnd={onLongPressEnd}
             userTier={userTier}
             sectionTags={sectionTags}
+            pointSoundTags={pointSoundTags}
+            pointSoundTagLabels={pointSoundTagLabels}
           />
         )}
       </AnimatePresence>
@@ -8812,6 +9008,92 @@ interface SongStructureControlProps {
   userTier: TagTier;
 }
 
+
+// SORIDRAW_SECTION_TAG_KOREAN_DISPLAY_V32
+const SECTION_TAG_LABEL_KO_LOCAL: Record<string, string> = {
+  'Solo': '솔로',
+  'Duet': '듀엣',
+  'Group': '그룹',
+  'Rap': '랩',
+  'Harmony': '화음',
+  'Adlib': '애드리브',
+  'Minimal': '미니멀',
+  'Minimalist': '미니멀리스트',
+  'Ambient': '앰비언트',
+  'Ambient Start': '앰비언트 시작',
+  'Slow Build': '천천히 쌓기',
+  'Hook-first': '훅 먼저',
+  'Soft Entry': '부드러운 진입',
+  'Instrumental Opening': '연주 오프닝',
+  'Gradual Layering': '점진적 레이어링',
+  'Teaser Opening': '티저 오프닝',
+  'Muted emotion': '절제된 감정',
+  'Restrained': '절제된 표현',
+  'Urgent': '긴박한 진입',
+  'piano solo': '피아노 솔로',
+  'soft melancholic melody': '부드러운 멜랑콜리 멜로디',
+  'vinyl crackle': '바이닐 노이즈',
+  'Low Energy': '낮은 에너지',
+  'Story Focused': '이야기 중심',
+  'Rhythmic Flow': '리듬 흐름',
+  'Sparse Arrangement': '비워둔 편곡',
+  'Groove Driven': '그루브 중심',
+  'Laid-back': '느긋한 무드',
+  'Steady Pace': '안정된 진행',
+  'Subtle Build': '은근한 빌드업',
+  'Build-up': '빌드업',
+  'Rising Energy': '상승 에너지',
+  'Tension Lift': '긴장감 상승',
+  'Dynamic Increase': '다이내믹 증가',
+  'Momentum Shift': '흐름 전환',
+  'Intensity Growth': '강도 상승',
+  'Lead-in': '진입 유도',
+  'Anticipation': '기대감 조성',
+  'High Energy': '높은 에너지',
+  'Explosive': '폭발감',
+  'Full Arrangement': '풀 편곡',
+  'Peak Section': '피크 구간',
+  'Anthemic': '앤섬 느낌',
+  'Wide Impact': '넓은 임팩트',
+  'Powerful Delivery': '강한 전달감',
+  'Hook Emphasis': '후렴 강조',
+  'Breakdown': '브레이크다운',
+  'Contrast Section': '대비 구간',
+  'Energy Drop': '에너지 다운',
+  'Minimal Reset': '미니멀 리셋',
+  'Unexpected Shift': '예상 밖 전환',
+  'Dynamic Change': '다이내믹 변화',
+  'Rebuild Start': '재빌드 시작',
+  'Transition Focused': '전환 중심',
+  'Fade-out': '페이드아웃',
+  'Soft Ending': '부드러운 엔딩',
+  'Gradual Exit': '점진적 퇴장',
+  'Echo Finish': '에코 마무리',
+  'Energy Release': '에너지 해소',
+  'Minimal Ending': '미니멀 엔딩',
+  'Calm Closure': '차분한 마무리',
+  'Loop-friendly Ending': '루프형 엔딩',
+  'Off-beat Flow': '엇박 플로우',
+  'Punchy Reply': '강한 응답',
+  'Dry Spoken Rap': '건조한 스포큰 랩',
+  'Character Switch': '화자 전환',
+  'Piano': '피아노',
+  'Acoustic Guitar': '어쿠스틱 기타',
+  'Electric Guitar': '일렉 기타',
+  'Synth': '신스',
+  'Pad': '패드',
+  'Strings': '현악',
+  'Bass': '베이스',
+  'Drums': '드럼',
+  'Percussion': '타악',
+  'Pluck': '플럭',
+  'Saxophone': '색소폰',
+  'Trumpet': '트럼펫',
+  'Flute': '플루트',
+  'Gayageum': '가야금',
+  'Haegeum': '해금',
+};
+
 function TagEditModal({
   isOpen,
   onClose,
@@ -8822,7 +9104,9 @@ function TagEditModal({
   onLongPressStart,
   onLongPressEnd,
   userTier,
-  sectionTags
+  sectionTags,
+  pointSoundTags = [],
+  pointSoundTagLabels = {}
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -8834,9 +9118,22 @@ function TagEditModal({
   onLongPressEnd: () => void;
   userTier: TagTier;
   sectionTags: SectionTag[];
+  pointSoundTags?: string[];
+  pointSoundTagLabels?: Record<string, string>;
 }) {
   const [selectedTags, setSelectedTags] = useState<string[]>(tags);
   const isInstrumental = section === 'Instrumental' || section === 'Solo';
+  const pointSoundTagSet = useMemo(() => new Set(pointSoundTags), [pointSoundTags]);
+
+  const getTagDisplayLabel = useCallback((tag: string) => {
+    const fsTag = sectionTags.find(t => t.label === tag) as any;
+    return String(
+      fsTag?.labelKo ||
+      pointSoundTagLabels[tag] ||
+      SECTION_TAG_LABEL_KO_LOCAL[tag] ||
+      tag
+    );
+  }, [sectionTags, pointSoundTagLabels]);
 
   const allowedTags = useMemo(() => {
     // 1. Get all tags from Firestore for this section
@@ -8857,10 +9154,15 @@ function TagEditModal({
     // 3. Only include ACTIVE tags from Firestore
     const activeFsLabels = fsTagsForSection.filter(t => t.isActive).map(t => t.label);
 
-    // 4. Merge: Active Firestore tags + Constants not yet in Firestore
-    const merged = [...activeFsLabels, ...missingFromFs];
+    const pointSoundAllowedSections = new Set(['Intro', 'Bridge', 'Breakdown', 'Break', 'Instrumental', 'Solo', 'Outro']);
+    const pointSoundFallbacks = pointSoundAllowedSections.has(section)
+      ? pointSoundTags.filter(Boolean)
+      : [];
+
+    // 4. Merge: Active Firestore tags + Constants not yet in Firestore + selected point-sound cues
+    const merged = [...activeFsLabels, ...missingFromFs, ...pointSoundFallbacks];
     return Array.from(new Set(merged));
-  }, [section, isInstrumental, sectionTags]);
+  }, [section, isInstrumental, sectionTags, pointSoundTags]);
 
   const getTagTier = (tag: string) => {
     const fsTag = sectionTags.find(t => t.label === tag);
@@ -8874,6 +9176,9 @@ function TagEditModal({
     const fsTag = sectionTags.find(t => t.label === tag);
     if (fsTag) return fsTag.description || '';
 
+    if (pointSoundTagSet.has(tag)) {
+      return '포인트모드에서 선택한 사운드입니다. 실제 프롬프트는 영어 태그로 유지되며, 해당 섹션의 짧은 효과음/질감 지문으로만 사용됩니다.';
+    }
     if (isInstrumental) {
       return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || '';
     }
@@ -8958,6 +9263,8 @@ function TagEditModal({
             {allowedTags.map(tag => {
               const tier = getTagTier(tag);
               const description = getTagDescription(tag);
+              const displayLabel = getTagDisplayLabel(tag);
+              const isPointSoundTag = pointSoundTagSet.has(tag);
               const isLocked = !isInstrumental && (
                 (tier === 'pro' && userTier !== 'pro') ||
                 (tier === 'basic' && userTier === 'free')
@@ -8970,7 +9277,7 @@ function TagEditModal({
                   onMouseEnter={() => onHover({ 
                     id: `tag-${tag}`, 
                     label: tag, 
-                    labelKo: tag, 
+                    labelKo: displayLabel, 
                     description: description || (isInstrumental ? '독주용 악기를 선택합니다.' : '음악적 디렉션을 추가합니다.')
                   })}
                   onMouseLeave={() => {
@@ -8980,20 +9287,24 @@ function TagEditModal({
                   onTouchStart={() => onLongPressStart({ 
                     id: `tag-${tag}`, 
                     label: tag, 
-                    labelKo: tag, 
+                    labelKo: displayLabel, 
                     description: description || (isInstrumental ? '독주용 악기를 선택합니다.' : '음악적 디렉션을 추가합니다.')
                   })}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
                     "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5",
                     selectedTags.includes(tag)
-                      ? "bg-brand-orange border-orange-400 text-white"
+                      ? isPointSoundTag
+                        ? "bg-brand-orange border-pink-400 text-white shadow-[0_0_0_1px_rgba(244,114,182,0.65),0_0_14px_rgba(244,114,182,0.22)]"
+                        : "bg-brand-orange border-orange-400 text-white"
                       : isLocked
                         ? "bg-white/5 border-white/10 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
-                        : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                        : isPointSoundTag
+                          ? "bg-white/5 border-pink-400/80 text-[var(--text-primary)] hover:bg-pink-500/10 shadow-[0_0_0_1px_rgba(244,114,182,0.25)]"
+                          : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
                   )}
                 >
-                  {tag}
+                  {displayLabel}
                   {isLocked && <Lock className="w-3 h-3" />}
                   {tier !== 'free' && !isLocked && <Sparkles className="w-3 h-3 text-yellow-500" />}
                 </button>

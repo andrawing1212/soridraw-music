@@ -8,6 +8,7 @@ import {
   GENRES,
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
+  STYLE_CYCLES,
   MID_GENRE_PROMPTS,
   SUB_GENRE_PROMPTS,
   MOODS,
@@ -57,6 +58,7 @@ interface GenerateSongParams {
   situation?: SituationConfig;
   styles?: string[];
   instrumentSounds?: string[];
+  pointSounds?: string[];
   userInput: string;
   lyricDraft?: string;
   isLyricMode?: boolean;
@@ -136,22 +138,38 @@ function buildTempoPromptPhrase(
   return `tempo set to ${tempo}`;
 }
 
+function isSeparatorLikeId(value: unknown): boolean {
+  return /^separator[-_]/i.test(String(value || '').trim());
+}
+
+function isSeparatorLikeItem(item: any): boolean {
+  return Boolean(item?.kind === 'separator' || isSeparatorLikeId(item?.id));
+}
+
+function filterPromptSelectionIds(values: string[] = []): string[] {
+  return values.filter((value) => value && !isSeparatorLikeId(value));
+}
+
 function resolveStyleItem(value: string) {
+  if (isSeparatorLikeId(value)) return undefined;
   const normalized = value.trim().toLowerCase();
-  return SOUND_STYLES.find(
+  const found = SOUND_STYLES.find(
     (item) =>
       item.id.toLowerCase() === normalized ||
       item.label.toLowerCase() === normalized,
   );
+  return isSeparatorLikeItem(found) ? undefined : found;
 }
 
 function resolveInstrumentSoundItem(value: string) {
+  if (isSeparatorLikeId(value)) return undefined;
   const normalized = value.trim().toLowerCase();
-  return INSTRUMENT_SOUNDS.find(
+  const found = INSTRUMENT_SOUNDS.find(
     (item) =>
       item.id.toLowerCase() === normalized ||
       item.label.toLowerCase() === normalized,
   );
+  return isSeparatorLikeItem(found) ? undefined : found;
 }
 
 
@@ -490,14 +508,63 @@ function getStyleLabels(styleValues: string[] = []): string[] {
     .filter(NON_EMPTY);
 }
 
+type StylePromptRole = 'genre' | 'instruments' | 'atmosphere' | 'vocals' | 'arrangement';
+
+type ResolvedStyleItem = NonNullable<ReturnType<typeof resolveStyleItem>>;
+
+const STYLE_CYCLE_ROLE_BY_ID: Record<string, StylePromptRole> = {
+  'fusion-genre': 'genre',
+  'rhythm-bounce': 'genre',
+  'rap-beat-texture': 'genre',
+  'synth-space': 'genre',
+  'band-live': 'genre',
+  'cinematic-scene': 'genre',
+  'era-texture': 'genre',
+  'space-texture': 'atmosphere',
+  'vocal-expression': 'vocals',
+  'hook-addiction': 'arrangement',
+  'stage-shift': 'arrangement',
+  'groove-flow': 'arrangement',
+};
+
+const STYLE_CYCLE_ID_BY_VARIANT_ID: Record<string, string> = STYLE_CYCLES.reduce((acc, cycle) => {
+  cycle.variants.forEach((variant) => {
+    if (!isSeparatorLikeItem(variant)) acc[variant.id] = cycle.id;
+  });
+  return acc;
+}, {} as Record<string, string>);
+
+const STYLE_ROLE_BY_VARIANT_ID: Record<string, StylePromptRole> = STYLE_CYCLES.reduce((acc, cycle) => {
+  const role = STYLE_CYCLE_ROLE_BY_ID[cycle.id];
+  if (!role) return acc;
+  cycle.variants.forEach((variant) => {
+    if (!isSeparatorLikeItem(variant)) acc[variant.id] = role;
+  });
+  return acc;
+}, {} as Record<string, StylePromptRole>);
+
+function getStyleItemsByPromptRole(styleValues: string[] = [], role: StylePromptRole) {
+  return filterPromptSelectionIds(styleValues)
+    .map((value) => resolveStyleItem(value))
+    .filter((item): item is ResolvedStyleItem =>
+      Boolean(item && !isSeparatorLikeItem(item) && STYLE_ROLE_BY_VARIANT_ID[item.id] === role),
+    );
+}
+
+function getStylePromptValuesByRole(styleValues: string[] = [], role: StylePromptRole, field: 'label' | 'style' | 'sound' | 'mood' = 'label'): string[] {
+  return getStyleItemsByPromptRole(styleValues, role)
+    .map((item) => String((item as any)[field] || item.label || '').trim())
+    .filter(NON_EMPTY);
+}
+
 function getInstrumentSoundPromptCores(values: string[] = []): string[] {
-  return values
+  return filterPromptSelectionIds(values)
     .map((value) => resolveInstrumentSoundItem(value)?.promptCore ?? "")
     .filter(NON_EMPTY);
 }
 
 function getInstrumentSoundLabels(values: string[] = []): string[] {
-  return values
+  return filterPromptSelectionIds(values)
     .map((value) => {
       const item = resolveInstrumentSoundItem(value);
       return item?.promptCore ?? item?.label ?? sentenceCase(value);
@@ -507,9 +574,9 @@ function getInstrumentSoundLabels(values: string[] = []): string[] {
 
 
 function getInstrumentSoundPromptItems(values: string[] = []) {
-  return values
+  return filterPromptSelectionIds(values)
     .map((value) => resolveInstrumentSoundItem(value) as any)
-    .filter((item) => item && String(item.promptCore || '').trim().length > 0)
+    .filter((item) => item && !isSeparatorLikeItem(item) && String(item.promptCore || '').trim().length > 0)
     .map((item) => ({
       id: String(item.id || ''),
       prompt: String(item.promptCore || '').trim(),
@@ -1099,6 +1166,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       situation: first.situation,
       styles: first.styles ?? [],
       instrumentSounds: first.instrumentSounds ?? [],
+      pointSounds: (first as any).pointSounds ?? [],
       userInput: first.userInput ?? "",
       songPrompt: first.songPrompt,
       lyricsLength: first.lyricsLength ?? "normal",
@@ -1162,6 +1230,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     situation: undefined,
     styles: [],
     instrumentSounds: [],
+    pointSounds: [],
     userInput: userInput ?? "",
     songPrompt: songPrompt ?? "",
     lyricsLength,
@@ -1389,6 +1458,7 @@ function buildAppliedKeywordPayload(
   const themes = params.themes ?? [];
   const styles = params.styles ?? [];
   const instrumentSounds = params.instrumentSounds ?? [];
+  const pointSounds = params.pointSounds ?? [];
   const vocalDescription: string[] = [];
 
   const formation = getVocalFormation(
@@ -1419,6 +1489,7 @@ function buildAppliedKeywordPayload(
     situationSummary: buildSituationSummary(params.situation),
     style: styles,
     instrumentSound: instrumentSounds,
+    pointSound: pointSounds,
     tempo: params.tempo ?? "",
     tempoSource: params.tempoSource ?? undefined,
     isRandomTempo: params.isRandomTempo ?? false,
@@ -4057,14 +4128,20 @@ function getGenreLabelById(id: string): string {
 }
 
 function getSelectedFusionGenres(params: GenerateSongParams): FusionGenreIdentity[] {
-  // Sub-genre selections are the real musical choices. The old parent genre value
-  // remains for compatibility, but fusion should use the first two actual selected leaves.
-  const rawIds = [
-    ...(params.subGenre ?? []),
-    ...(params.subGenre?.length ? [] : [params.genre || ""]),
-  ]
+  // If a leaf sub-genre is selected through the hierarchy, that leaf is the real
+  // musical choice. The parent MID genre is only kept in App state so the UI can
+  // reopen the right folder; it must not be treated as a second musical genre.
+  const subIds = (params.subGenre ?? [])
     .map((id) => normalizeGenreIdForProfile(id))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((id) => !isSeparatorLikeId(id));
+
+  const parentIds = [params.genre || ""]
+    .map((id) => normalizeGenreIdForProfile(id))
+    .filter(Boolean)
+    .filter((id) => !isSeparatorLikeId(id));
+
+  const rawIds = subIds.length > 0 ? subIds : parentIds;
 
   const result: FusionGenreIdentity[] = [];
   rawIds.forEach((id) => {
@@ -4081,21 +4158,67 @@ function getSelectedFusionGenres(params: GenerateSongParams): FusionGenreIdentit
   return result.slice(0, 2);
 }
 
+function isEraTextureStyleItem(item: ResolvedStyleItem): boolean {
+  return STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === 'era-texture' || /^era-prefix-/i.test(item.id);
+}
+
+function getEraTexturePrefix(params: GenerateSongParams): string {
+  const eraItem = getStyleItemsByPromptRole(params.styles ?? [], 'genre').find(isEraTextureStyleItem);
+  const raw = String((eraItem as any)?.style || eraItem?.label || '').trim();
+  if (!raw) return '';
+  return cleanupPromptTail(raw)
+    .replace(/\bera\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function formatGenreInfluence(label: string): string {
+  const cleaned = cleanupPromptTail(label).replace(/\s+as\s+the\s+core$/i, '').trim();
+  if (!cleaned) return '';
+  if (/idol\s*dance/i.test(cleaned)) return 'Idol Dance energy';
+  if (/retro\s*disco/i.test(cleaned)) return 'Retro Disco groove';
+  if (/70s[-\s]*disco/i.test(cleaned)) return '70s Disco groove';
+  if (/nu[-\s]*disco/i.test(cleaned)) return 'Nu-Disco fusion';
+  if (/dance/i.test(cleaned) && !/pop/i.test(cleaned)) return `${cleaned} energy`;
+  if (/groove|disco|funk/i.test(cleaned)) return `${cleaned} groove`;
+  if (/texture|era/i.test(cleaned)) return `${cleaned} texture`;
+  return `${cleaned} influence`;
+}
+
+function getStyleGenreInfluenceLabels(params: GenerateSongParams, mainLabels: string[]): string[] {
+  return getStyleItemsByPromptRole(params.styles ?? [], 'genre')
+    .filter((item) => !isEraTextureStyleItem(item))
+    .map((item) => String((item as any).style || item.label || '').replace(/\bfusion\b/gi, '').trim() || item.label)
+    .filter((label) => label && !mainLabels.some((main) => isSameGenreFamily(main, label)))
+    .map(formatGenreInfluence)
+    .filter(NON_EMPTY)
+    .filter((label, index, arr) => arr.findIndex((item) => item.toLowerCase() === label.toLowerCase()) === index)
+    .slice(0, 3);
+}
+
 function buildFiveLineGenreValue(params: GenerateSongParams): string {
   if (isFreeTextPrimaryMode(params)) {
     return cleanupPromptTail(buildFreeTextDirectorProfile(params.userInput || "").genre || "Pop as the core");
   }
 
-  const genres = getSelectedFusionGenres(params);
-  const main = genres[0]?.label || "Pop";
-  const fusion = genres[1]?.label || "";
-  const moodWords = getMoodWordsForMusicDirection(params).slice(0, 1);
-  const moodPrefix = moodWords.length ? `${stripRemainingKoreanForProductionPrompt(moodWords[0])} ` : "";
+  const selectedGenres = getSelectedFusionGenres(params);
+  const main = selectedGenres[0]?.label || "Pop";
+  const secondary = selectedGenres[1]?.label || "";
+  const eraPrefix = getEraTexturePrefix(params);
 
-  if (fusion && !isSameGenreFamily(main, fusion)) {
-    return cleanupPromptTail(`${moodPrefix}${main} as the core, fused with ${fusion}`);
-  }
-  return cleanupPromptTail(`${moodPrefix}${main} as the core`);
+  const core = secondary && !isSameGenreFamily(main, secondary)
+    ? `${main}-based ${secondary}`
+    : `${main}`;
+
+  const influences = getStyleGenreInfluenceLabels(params, [main, secondary].filter(Boolean));
+  const influencePhrase = influences.length
+    ? ` with ${joinPromptPhrase(influences, 'and')}`
+    : " as the core";
+
+  return cleanupPromptTail(`${eraPrefix ? `${eraPrefix} ` : ''}${core}${influencePhrase}`)
+    .replace(/\bfused\s+with\s+(early|mid|late|\d{2}s|\d{4}s)/gi, '$1')
+    .replace(/\b(lonely|relaxing|infectious|upbeat|bright|sad|warm|calm|dark|hopeful|tense)\s+(?=[A-Z0-9])/gi, '')
+    .replace(/\s{2,}/g, ' ');
 }
 
 function lookupGenreInstrumentProfile(id: string) {
@@ -4134,9 +4257,7 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
     (profile?.instruments || [])
       .slice(0, instrumentLimit)
       .forEach((item) => pushUniquePromptItem(items, item, 8));
-    (profile?.rhythm || [])
-      .slice(0, 1)
-      .forEach((item) => pushUniquePromptItem(items, item, 8));
+    // Rhythm/groove profile details belong in [Arrangement], not [Instruments].
   });
 
   // Add direct user-selected sound only after the genre/fusion palette.
@@ -4144,16 +4265,11 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
     .slice(0, 2)
     .forEach((item) => pushUniquePromptItem(items, item, 8));
 
-  // Style can add one texture but should not override the genre instruments.
-  (params.styles ?? []).slice(0, 1).forEach((id) => {
-    const item = resolveStyleItem(id);
-    if (item?.sound) {
-      item.sound
-        .split(",")
-        .slice(0, 1)
-        .forEach((part) => pushUniquePromptItem(items, part, 8));
-    }
-  });
+  // Keep [Instruments] as actual sound sources only. Genre/groove style sounds are handled by [Genre]/[Arrangement].
+  getStylePromptValuesByRole(params.styles ?? [], 'instruments', 'sound')
+    .flatMap((value) => value.split(','))
+    .slice(0, 3)
+    .forEach((part) => pushUniquePromptItem(items, part, 8));
 
   if (!items.length) {
     cleanPromptValue(buildSound(params))
@@ -4174,12 +4290,35 @@ function buildFiveLineAtmosphereValue(
   const base = situationActive
     ? buildVariedSituationAtmosphere(params, variation)
     : getAtmosphereForPrompt(params, detailLayer);
+  const styleAtmosphere = situationActive
+    ? ""
+    : joinPromptPhrase(
+        [
+          ...getStylePromptValuesByRole(params.styles ?? [], 'atmosphere', 'mood'),
+          ...getStylePromptValuesByRole(params.styles ?? [], 'atmosphere', 'sound'),
+        ].slice(0, 2),
+        'and',
+      );
   const atmosphere = appendPromptLens(
-    base,
+    appendPromptLens(base, styleAtmosphere, 155),
     situationActive ? "" : variation.atmosphereLens,
     155,
   );
   return cleanupPromptTail(stripRemainingKoreanForProductionPrompt(atmosphere || "balanced emotional air"));
+}
+
+function removeArrangementTermsFromVocalLine(value: string): string {
+  return cleanupPromptTail(String(value || '')
+    .replace(/,?\s*singalong chorus point/gi, '')
+    .replace(/,?\s*catchy hook(?:s)?/gi, '')
+    .replace(/,?\s*memorable hook(?:s)?/gi, '')
+    .replace(/,?\s*chorus lift/gi, '')
+    .replace(/,?\s*hook point/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\(\s*,/g, '(')
+    .replace(/,\s*\)/g, ')')
+    .replace(/\(\s*\)/g, '')
+    .replace(/,\s*,/g, ','));
 }
 
 function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: string): string {
@@ -4187,10 +4326,56 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
   const base = situationActive
     ? buildSituationVocals(params)
     : buildNaturalVocals(params, detailLayer);
+  const styleVocalDirection = situationActive
+    ? ""
+    : joinPromptPhrase(getStylePromptValuesByRole(params.styles ?? [], 'vocals', 'style').slice(0, 2), 'and');
+  const withStyle = appendPromptLens(base, styleVocalDirection, 230);
   const cleaned = situationActive
-    ? sanitizeVocalDirection(base)
-    : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(base));
+    ? sanitizeVocalDirection(withStyle)
+    : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(withStyle));
   return cleanupPromptTail(cleaned.replace(/^natural\b/i, "Natural"));
+}
+
+function getCompactPointSoundPrompts(pointSoundIds: string[] = []): string[] {
+  return compactSoundPromptsByCategory(filterPromptSelectionIds(pointSoundIds))
+    .flatMap((item) => item.split(',').map((part) => part.trim()))
+    .map((item) => cleanProductionPhrase(stripRemainingKoreanForProductionPrompt(item)))
+    .filter(NON_EMPTY)
+    .slice(0, 4);
+}
+
+function buildPointSoundArrangementPhrase(pointSoundIds: string[] = []): string {
+  const pointSounds = getCompactPointSoundPrompts(pointSoundIds);
+
+  if (!pointSounds.length) return "";
+
+  return `use ${joinPromptPhrase(pointSounds, 'and')} as short point accents in key transitions`;
+}
+
+function buildPointSoundSectionInstruction(params: GenerateSongParams): string {
+  const pointSounds = getCompactPointSoundPrompts(params.pointSounds ?? []);
+  if (!pointSounds.length) return "";
+
+  const cueList = pointSounds.join(', ');
+  const isCustom = params.songStructure === 'custom' && (params.customStructure ?? []).length > 0;
+
+  if (isCustom) {
+    return `POINT SOUND SECTION CUES (CUSTOM MODE):
+- Available point sound cues selected in Sound Point Mode: ${cueList}.
+- These are sound/stage cues only. Do NOT turn them into lyric words, story topics, metaphors, or repeated hook phrases.
+- If one of these cues appears in the custom section tags, keep it as a short English section tag or immediate parenthetical sound cue only.
+- Section sound cues must stay in English parentheticals/tags, even when the lyrics are Korean.
+- Do not add extra point sound cues to sections where the user did not place them.`;
+  }
+
+  return `POINT SOUND SECTION CUES (AUTO MODE):
+- Selected point sound cues: ${cueList}.
+- These are sound/stage cues only. Do NOT turn them into lyric words, story topics, metaphors, or repeated hook phrases.
+- Automatically place them as short English section cues in only 1-2 sections total.
+- Allowed automatic sections only: Intro, Bridge, Breakdown, Instrumental, Outro.
+- Do not place these cues in Verse, Pre-Chorus, Chorus, Final Chorus, Hook, or Rap Section unless custom mode explicitly places them there.
+- Instrumental sections may use these cues, but never add lyric lines inside an instrumental-only section.
+- Never invent unselected Foley/SFX such as doors, clocks, sirens, footsteps, typing, or radio noise.`;
 }
 
 function buildFiveLineArrangementValue(
@@ -4206,6 +4391,10 @@ function buildFiveLineArrangementValue(
       ? buildFreeTextDirectorProfile(params.userInput || "").arrangement
       : cleanPromptValue(buildArrangement(params, resolvedStructure));
   const variationMeaning = variationArrangementMeaning(variation);
+  const styleArrangement = situationActive
+    ? ""
+    : joinPromptPhrase(getStylePromptValuesByRole(params.styles ?? [], 'arrangement', 'style').slice(0, 2), 'and');
+  const pointSoundArrangement = buildPointSoundArrangementPhrase(params.pointSounds ?? []);
   const tempoPhrase = buildTempoPromptPhrase(params);
   const structureNote =
     params.songStructure === "custom" && (params.customStructure ?? []).length > 0
@@ -4213,8 +4402,13 @@ function buildFiveLineArrangementValue(
       : "clear section contrast";
   const combined = [
     tempoPhrase,
+    pointSoundArrangement,
     appendPromptLens(
-      appendPromptLens(base, reinterpretationLayer.arrangementLens, 105),
+      appendPromptLens(
+        appendPromptLens(base, styleArrangement, 105),
+        reinterpretationLayer.arrangementLens,
+        105,
+      ),
       variationMeaning,
       120,
     ),
@@ -6398,7 +6592,11 @@ function buildFinalPrompt(
         .replace(/\bparallel monologue focus with a call-response hook\b/gi, "parallel monologue focus with single-owner hook")
         .replace(/\bno balanced call-response with a call-response hook\b/gi, "single-owner hook, no balanced call-response")
         .replace(/\bMixed Vocal Duo\b/gi, "separated vocal roles")
-        .replace(/\bTogether\b/gi, "All Vocals"),
+        .replace(/\bTogether\b/gi, "All Vocals")
+        .replace(/\[Genre\]\s+(lonely|relaxing|infectious|upbeat|bright|sad|warm|calm|dark|hopeful|tense)\s+/gi, "[Genre] ")
+        .replace(/\bfused with ((?:early|mid|late)\s+\d{2}s|\d{2}s|\d{4}s|Y2K|modern)\b/gi, "$1")
+        .replace(/\[Vocals\]([^\n]*)\bsingalong chorus point\b/gi, (_m, pre) => `[Vocals]${pre}`)
+        .replace(/\s{2,}/g, " "),
     );
     return sanitizePromptGenreArtifacts(cleaned);
   });
@@ -7491,6 +7689,8 @@ export async function generateSong(
       : hasKoreanLanguage
         ? `Return the title as: 'Korean Title'. Do not create an English or other-language title.`
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
+  const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
+
   const requestedLanguageInstruction = effectiveNoLyrics
     ? ""
     : `OUTPUT LANGUAGE RULE (MANDATORY):
@@ -7697,6 +7897,10 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
   [Arrangement] {tempo only when selected, section contrast, vocal separation, structural movement}
   [Audio quality improved to masterpiece]
 - Do not collapse this back into [Track] / [Production]. Keep [Genre], [Instruments], [Atmosphere], [Vocals], and [Arrangement] separated.
+- Never output any separator-* value. Separator rows are UI-only and must be ignored.
+- Era texture goes before the main genre, e.g. late 90s Alternative R&B, never “fused with late 90s”.
+- Mood words such as lonely, relaxing, infectious, upbeat, bright, sad, warm, calm, dark, hopeful, tense belong in [Atmosphere] or [Arrangement], not [Genre].
+- Groove/rhythm/pulse/hook/transition terms belong in [Arrangement], not [Instruments].
 
 ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 
@@ -7759,6 +7963,8 @@ ${mixedLyricsInstruction}
 ${lyricDraftInstruction}
 
 ${structureInstruction}
+
+${pointSoundSectionInstruction}
 
 ${requestedLanguageInstruction}
 

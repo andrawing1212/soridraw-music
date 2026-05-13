@@ -56,7 +56,7 @@ interface Props {
   onClear: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
-  onCommitSelection?: (mainId: string | null, subId: string | null) => void;
+  onCommitSelection?: (mainId: string | null, subId: string | null, meta?: { removeMainId?: string | null; removeSubId?: string | null }) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   isRandomized?: boolean;
@@ -215,42 +215,48 @@ export default function GenreHierarchySelector({
       lastSyncedGenreRef.current = committedGenre;
       lastSyncedSubGenreRef.current = committedSubGenre;
 
-      if (committedGenre.length > 0) {
-        const mainId = committedGenre[0];
-        setPendingMainId(mainId);
+      const activeIds = Array.from(new Set([...committedGenre, ...committedSubGenre]));
+      const firstId = activeIds[0] ?? null;
 
-        let foundGroup: GroupItem | null = null;
-        let foundMain: MainGenreItem | null = null;
-        let foundSubId: string | null = null;
+      let foundGroup: GroupItem | null = null;
+      let foundMain: MainGenreItem | null = null;
+      let foundSubId: string | null = null;
+      let foundMainBaseId: string | null = null;
 
+      if (firstId) {
         for (const group of groups) {
-          const main = group.children.find((m) => m.id === mainId);
-          if (main) {
-            foundGroup = group;
-            foundMain = main;
-            foundSubId =
-              main.children.find((s) => committedSubGenre.includes(s.id))?.id ||
-              null;
-            break;
+          for (const main of group.children) {
+            if (main.id === firstId) {
+              foundGroup = group;
+              foundMain = main;
+              foundMainBaseId = main.id;
+              break;
+            }
+            const sub = main.children.find((s) => s.id === firstId);
+            if (sub) {
+              foundGroup = group;
+              foundMain = main;
+              foundSubId = sub.id;
+              break;
+            }
           }
+          if (foundMain) break;
         }
+      }
 
-        setPendingSubId(foundSubId);
+      setPendingMainId(foundMainBaseId);
+      setPendingSubId(foundSubId);
 
-        // Sync modal view if open
-        if (activeGroup && foundGroup && activeGroup.id !== foundGroup.id) {
-          setActiveGroup(foundGroup);
-        }
-        if (
-          modalStep === "sub" &&
-          foundMain &&
-          activeMain?.id !== foundMain.id
-        ) {
-          setActiveMain(foundMain);
-        }
-      } else {
-        setPendingMainId(null);
-        setPendingSubId(null);
+      // Sync modal view if open
+      if (activeGroup && foundGroup && activeGroup.id !== foundGroup.id) {
+        setActiveGroup(foundGroup);
+      }
+      if (
+        modalStep === "sub" &&
+        foundMain &&
+        activeMain?.id !== foundMain.id
+      ) {
+        setActiveMain(foundMain);
       }
     }
   }, [
@@ -290,32 +296,25 @@ export default function GenreHierarchySelector({
 
   const selectedCount = committedGenre.length + committedSubGenre.length;
 
-  const selectedMainLabel = useMemo(() => {
-    for (const group of groups) {
-      const matched = group.children.find((main) =>
-        committedGenre.includes(main.id),
-      );
-      if (matched) return matched.labelKo || matched.label;
-    }
-    return null;
-  }, [groups, committedGenre]);
-
-  const selectedSubLabels = useMemo(() => {
-    const labels: string[] = [];
+  const resolveGenreDisplayLabel = (id: string): string => {
     for (const group of groups) {
       for (const main of group.children) {
-        for (const sub of main.children) {
-          if (committedSubGenre.includes(sub.id))
-            labels.push(sub.labelKo || sub.label);
-        }
+        if (main.id === id) return main.labelKo || main.label;
+        const sub = main.children.find((item) => item.id === id);
+        if (sub) return sub.labelKo || sub.label;
       }
     }
-    return labels;
-  }, [groups, committedSubGenre]);
+    return GENRE_TITLE_MAP[id] || id;
+  };
+
+  const selectedDisplayLabels = useMemo(() => {
+    const ids = Array.from(new Set([...committedGenre, ...committedSubGenre]));
+    return ids.map(resolveGenreDisplayLabel).filter(Boolean);
+  }, [committedGenre, committedSubGenre, groups]);
 
   const finalizeAndClose = (shouldCommit = true, skipHistory = false) => {
     if (shouldCommit && hasChangedInModal) {
-      commitSelection(pendingMainId, pendingMainId ? pendingSubId : null);
+      commitSelection(pendingMainId, pendingSubId);
     }
     if (!skipHistory && modalHistoryDepthRef.current > 0) {
       window.history.go(-modalHistoryDepthRef.current);
@@ -332,21 +331,13 @@ export default function GenreHierarchySelector({
   };
 
   const openMainModal = (group: GroupItem) => {
-    const currentMainId = committedGenre[0] ?? null;
-    const currentMain =
-      group.children.find((main) => main.id === currentMainId) ?? null;
-
-    const currentSubId =
-      currentMain?.children.find((sub) => committedSubGenre.includes(sub.id))
-        ?.id ?? null;
-
     setActiveGroup(group);
     setActiveMain(null);
     setModalStep("main");
-    setPendingMainId(currentMainId);
-    setPendingSubId(currentSubId);
-    initialModalMainIdRef.current = currentMainId;
-    initialModalSubIdRef.current = currentMainId ? currentSubId : null;
+    setPendingMainId(null);
+    setPendingSubId(null);
+    initialModalMainIdRef.current = null;
+    initialModalSubIdRef.current = null;
     setHasChangedInModal(false);
 
     window.history.pushState({ genreModal: "main" }, "");
@@ -361,12 +352,11 @@ export default function GenreHierarchySelector({
     nextMainId: string | null,
     nextSubId: string | null,
   ) => {
-    const normalizedNextSubId = nextMainId ? nextSubId : null;
     const initialMainId = initialModalMainIdRef.current;
-    const initialSubId = initialMainId ? initialModalSubIdRef.current : null;
+    const initialSubId = initialModalSubIdRef.current;
 
     setHasChangedInModal(
-      nextMainId !== initialMainId || normalizedNextSubId !== initialSubId,
+      nextMainId !== initialMainId || nextSubId !== initialSubId,
     );
   };
 
@@ -379,27 +369,23 @@ export default function GenreHierarchySelector({
   };
 
   const handleMainClick = (main: MainGenreItem) => {
-    const nextMainId = pendingMainId === main.id ? null : main.id;
-    const nextSubId = null;
-
-    setPendingMainId(nextMainId);
-    setPendingSubId(nextSubId);
-    updateModalDirty(nextMainId, nextSubId);
+    handleOpenSub(main);
   };
 
   const handleOpenSub = (main: MainGenreItem) => {
-    // 세부장르 더보기는 탐색 동작이다.
-    // 중분류 선택/해제 상태나 확인 버튼 상태를 바꾸지 않는다.
-    const committedSubForThisMain = committedGenre.includes(main.id)
-      ? (main.children.find((sub) => committedSubGenre.includes(sub.id))?.id ??
-        null)
-      : null;
+    // 중분류는 더 이상 선택값이 아니라 폴더/탭 역할만 한다.
+    // 실제 선택은 이 화면에서 main 자체를 포함한 항목 목록으로만 처리한다.
+    const currentBaseSelected = committedGenre.includes(main.id) || committedSubGenre.includes(main.id);
+    const currentSubId = main.children.find((sub) => committedSubGenre.includes(sub.id))?.id ?? null;
 
-    if (pendingMainId !== main.id) {
-      setPendingSubId(committedSubForThisMain);
-    } else if (!main.children.some((sub) => sub.id === pendingSubId)) {
-      setPendingSubId(null);
-    }
+    const nextMainId = currentBaseSelected ? main.id : null;
+    const nextSubId = currentBaseSelected ? null : currentSubId;
+
+    setPendingMainId(nextMainId);
+    setPendingSubId(nextSubId);
+    initialModalMainIdRef.current = nextMainId;
+    initialModalSubIdRef.current = nextSubId;
+    setHasChangedInModal(false);
 
     setActiveMain(main);
     setModalStep("sub");
@@ -408,11 +394,16 @@ export default function GenreHierarchySelector({
     modalHistoryDepthRef.current = 2;
   };
 
-  const handleSubClick = (subId: string) => {
+  const handleSubClick = (itemId: string) => {
     if (!activeMain) return;
 
-    const nextMainId = activeMain.id;
-    const nextSubId = pendingSubId === subId ? null : subId;
+    const isBaseMainItem = itemId === activeMain.id;
+    const nextMainId = isBaseMainItem
+      ? pendingMainId === activeMain.id && !pendingSubId
+        ? null
+        : activeMain.id
+      : null;
+    const nextSubId = isBaseMainItem ? null : pendingSubId === itemId ? null : itemId;
 
     setPendingMainId(nextMainId);
     setPendingSubId(nextSubId);
@@ -420,27 +411,35 @@ export default function GenreHierarchySelector({
   };
 
   const commitSelection = (mainId: string | null, subId: string | null) => {
+    const initialMainId = initialModalMainIdRef.current;
+    const initialSubId = initialModalSubIdRef.current;
+    const meta = {
+      removeMainId:
+        initialMainId && initialMainId !== mainId ? initialMainId : null,
+      removeSubId:
+        initialSubId && initialSubId !== subId ? initialSubId : null,
+    };
+
     if (onCommitSelection) {
-      onCommitSelection(mainId, subId);
+      onCommitSelection(mainId, subId, meta);
       return;
     }
 
-    committedGenre.forEach((genreId) => onSelectGenre(genreId));
-    committedSubGenre.forEach((subGenreId) => onSelectSubGenre(subGenreId));
-
+    if (meta.removeMainId) onSelectGenre(meta.removeMainId);
+    if (meta.removeSubId) onSelectSubGenre(meta.removeSubId);
     if (mainId) onSelectGenre(mainId);
     if (subId) onSelectSubGenre(subId);
   };
 
   const applyMain = () => {
-    if (!pendingMainId) return;
+    if (!hasChangedInModal) return;
     commitSelection(pendingMainId, null);
     setHasChangedInModal(false);
     finalizeAndClose(false);
   };
 
   const applySub = () => {
-    if (!pendingMainId) return;
+    if (!hasChangedInModal) return;
     commitSelection(pendingMainId, pendingSubId);
     setHasChangedInModal(false);
     finalizeAndClose(false);
@@ -642,7 +641,9 @@ export default function GenreHierarchySelector({
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {groups.map((group) => {
               const hasSelectedMain = group.children.some((main) =>
-                committedGenre.includes(main.id),
+                committedGenre.includes(main.id) ||
+                committedSubGenre.includes(main.id) ||
+                main.children.some((sub) => committedSubGenre.includes(sub.id)),
               );
               return (
                 <button
@@ -678,16 +679,13 @@ export default function GenreHierarchySelector({
       </div>
 
       <div className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden">
-        {selectedMainLabel ? (
+        {selectedDisplayLabels.length > 0 ? (
           <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            {selectedMainLabel}
-            {selectedSubLabels.length > 0
-              ? ` · ${selectedSubLabels.join(", ")}`
-              : ""}
+            {selectedDisplayLabels.join(" · ")}
           </p>
         ) : (
           <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            메인 장르를 선택하세요.
+            장르를 선택하세요.
           </p>
         )}
       </div>
@@ -817,7 +815,10 @@ export default function GenreHierarchySelector({
                 {modalStep === "main" && (
                   <div className="grid grid-cols-1 gap-3">
                     {activeGroup.children.map((main) => {
-                      const isActiveVisual = pendingMainId === main.id;
+                      const isActiveVisual =
+                        committedGenre.includes(main.id) ||
+                        committedSubGenre.includes(main.id) ||
+                        main.children.some((sub) => committedSubGenre.includes(sub.id));
 
                       return (
                         <div
@@ -837,20 +838,14 @@ export default function GenreHierarchySelector({
                           <button
                             onClick={() => handleMainClick(main)}
                             className={cn(
-                              "w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-between hover:scale-[1.02] active:scale-[0.98]",
+                              "w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.02] active:scale-[0.98]",
                               isActiveVisual
                                 ? "bg-brand-orange border-transparent text-white shadow-lg shadow-brand-orange/30"
                                 : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 text-[var(--text-primary)] shadow-btn",
                             )}
+                            title="세부 장르 열기"
                           >
-                            {/* Left Spacer to maintain center alignment of text within the card */}
-                            <div
-                              className="w-20 flex-shrink-0"
-                              aria-hidden="true"
-                            />
-
-                            {/* Text Area */}
-                            <div className="flex-1 min-w-0 text-center pr-5">
+                            <div className="w-full min-w-0">
                               <div className="font-bold text-lg tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
@@ -867,22 +862,6 @@ export default function GenreHierarchySelector({
                                   DEFAULT_MAIN_DESCRIPTION}
                               </div>
                             </div>
-
-                            {/* Right Button Area */}
-                            <div className="w-20 flex-shrink-0 flex items-center justify-center">
-                              {main.children.length > 0 && (
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenSub(main);
-                                  }}
-                                  className="w-12 h-12 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center bg-[#2f2f2f] border-white/20 text-brand-orange shadow-btn hover:border-brand-orange/60 hover:bg-[#3a3a3a]"
-                                  title="세부장르 더보기"
-                                >
-                                  <ChevronRight className="w-6 h-6" />
-                                </div>
-                              )}
-                            </div>
                           </button>
                         </div>
                       );
@@ -892,20 +871,32 @@ export default function GenreHierarchySelector({
 
                 {modalStep === "sub" && activeMain && (
                   <div className="grid grid-cols-2 gap-3">
-                    {activeMain.children.map((sub) => {
-                      const isActiveVisual = pendingSubId === sub.id;
+                    {[
+                      {
+                        id: activeMain.id,
+                        label: activeMain.label,
+                        labelKo: activeMain.labelKo,
+                        description: activeMain.description,
+                        descriptionKo: activeMain.descriptionKo,
+                        isBaseMain: true,
+                      },
+                      ...activeMain.children.map((sub) => ({ ...sub, isBaseMain: false })),
+                    ].map((item) => {
+                      const isActiveVisual = item.isBaseMain
+                        ? pendingMainId === activeMain.id && !pendingSubId
+                        : pendingSubId === item.id;
 
                       return (
                         <button
-                          key={sub.id}
-                          onClick={() => handleSubClick(sub.id)}
+                          key={item.id}
+                          onClick={() => handleSubClick(item.id)}
                           onMouseEnter={() =>
                             setHoveredModalItem({
-                              label: sub.labelKo || sub.label,
+                              label: item.labelKo || item.label,
                               description:
-                                sub.descriptionKo ||
-                                sub.description ||
-                                DEFAULT_SUB_DESCRIPTION,
+                                item.descriptionKo ||
+                                item.description ||
+                                (item.isBaseMain ? DEFAULT_MAIN_DESCRIPTION : DEFAULT_SUB_DESCRIPTION),
                             })
                           }
                           onMouseLeave={() => setHoveredModalItem(null)}
@@ -916,7 +907,7 @@ export default function GenreHierarchySelector({
                               : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 shadow-btn",
                           )}
                         >
-                          {sub.labelKo || sub.label}
+                          {item.labelKo || item.label}
                         </button>
                       );
                     })}

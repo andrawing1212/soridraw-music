@@ -2761,7 +2761,7 @@ function App() {
   const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
-  const selectedKeywordCount = selectedGenres.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
+  const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const MAX_FUSION_GENRES = 2;
   const limitFusionGenreIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(0, MAX_FUSION_GENRES);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -2796,22 +2796,10 @@ function App() {
     const validGenres = filterValid(template.genre, GENRES);
     const validSubGenres = filterValid(template.subGenre, allSubGenres);
 
-    // Ensure that if a subGenre is selected, its parent main genre is also in selectedGenres
-    const inferredGenres = new Set(validGenres);
-    if (validSubGenres.length > 0) {
-      validSubGenres.forEach(subId => {
-        GENRE_HIERARCHY.forEach(group => {
-          group.children.forEach(mainGenre => {
-            if (mainGenre.id === subId || mainGenre.children?.some(sub => sub.id === subId)) {
-              inferredGenres.add(mainGenre.id);
-            }
-          });
-        });
-      });
-    }
-
-    setSelectedGenres(limitFusionGenreIds(Array.from(inferredGenres)));
-    setSubGenre(limitFusionGenreIds(validSubGenres));
+    // 중분류는 더 이상 자동 선택하지 않는다.
+    // 템플릿의 실제 장르 선택값은 모두 subGenre 슬롯에 합쳐서 보관한다.
+    setSelectedGenres([]);
+    setSubGenre(limitFusionGenreIds([...validGenres, ...validSubGenres]));
 
     // 2. Moods & Themes
     setSelectedMoods(filterValid(template.moods, MOODS));
@@ -3499,8 +3487,9 @@ const toggleCycleVariantSelection = (
       }
     }
 
-    setSelectedGenres(Array.from(new Set(genreIds)));
-    setSubGenre(Array.from(new Set(subGenreIds)));
+    const restoredGenreIds = Array.from(new Set([...genreIds, ...subGenreIds]));
+    setSelectedGenres([]);
+    setSubGenre(limitFusionGenreIds(restoredGenreIds));
 
     const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
@@ -3511,7 +3500,7 @@ const toggleCycleVariantSelection = (
     }
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
     const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
-    const resolvedKpopMode = appliedKeywords.kpopMode ?? (genreIds.includes('kpop') ? 1 : 0);
+    const resolvedKpopMode = appliedKeywords.kpopMode ?? (restoredGenreIds.includes('kpop') ? 1 : 0);
     const resolvedMixedLyrics = appliedKeywords.isKoreanEnglishMix ?? (appliedKeywords.kpopMode === 2);
 
     // Overwrite pinned keywords when applying from Favorites or Results
@@ -3630,7 +3619,8 @@ const toggleCycleVariantSelection = (
     const final = [...result, ...pickedIds];
     
     if (category === 'genre') {
-      setSelectedGenres(final);
+      setSelectedGenres([]);
+      setSubGenre(limitFusionGenreIds(final));
       setIsGenreRandomized(true);
     } else if (category === 'mood') {
       setSelectedMoods(final);
@@ -3697,8 +3687,18 @@ const toggleCycleVariantSelection = (
     );
   }, [selectedInstrumentSounds]);
 
+  const getSubGenreIdsForMainGenre = useCallback((mainId: string | null | undefined): string[] => {
+    if (!mainId) return [];
+    for (const group of GENRE_HIERARCHY) {
+      const main = group.children.find((item) => item.id === mainId);
+      if (main) return (main.children || []).map((sub) => sub.id);
+    }
+    return [];
+  }, []);
+
   const handleGenreSelect = (genreId: string) => {
-    setSelectedGenres([genreId]);
+    setSelectedGenres([]);
+    setSubGenre([genreId]);
     setIsGenreRandomized(false);
 
     if (genreId === 'kpop') {
@@ -4010,8 +4010,8 @@ const toggleCycleVariantSelection = (
       setPinnedInstrumentSounds([]);
     }
 
-    setSelectedGenres(preservePinned ? pinnedGenresRef.current : []);
-    setSubGenre([]);
+    setSelectedGenres([]);
+    setSubGenre(preservePinned ? limitFusionGenreIds(pinnedGenresRef.current) : []);
     setSelectedMoods([]);
     setSelectedThemes(preservePinned ? pinnedThemesRef.current : []);
     setSelectedStyles(preservePinned ? pinnedStylesRef.current : []);
@@ -4053,8 +4053,10 @@ const toggleCycleVariantSelection = (
     setLyricMode('assist');
     setLyricsLength('normal');
     setSongStructure('1');
+    setVocalMode('solo');
     setMaleCount(0);
     setFemaleCount(0);
+    setVocalMembers([]);
     setRapEnabled(false);
     setCustomStructure([]);
 
@@ -4372,14 +4374,14 @@ const saveRecentSong = async (newSong: any) => {
       if (user) {
         updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
       }
-      let finalGenres = limitFusionGenreIds([...selectedGenres]);
+      let finalGenres = limitFusionGenreIds([...selectedGenres, ...subGenre]);
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
       let finalStyles = filterSelectableIds([...selectedStyles]);
       let finalInstrumentSounds = filterSelectableIds([...selectedInstrumentSounds]);
       let randomKeywords: string[] = [];
 
-      const hasGenre = finalGenres.length > 0;
+      const hasGenre = finalGenres.length > 0 || subGenre.length > 0;
       const hasMood = finalMoods.length > 0;
       const hasTheme = finalThemes.length > 0;
       const hasStyle = finalStyles.length > 0;
@@ -4675,9 +4677,9 @@ const saveRecentSong = async (newSong: any) => {
       const songPrompt = buildSongPrompt();
 
       const payload = {
-        genre: finalGenres[0] ?? null,
-        subGenre: limitFusionGenreIds(subGenre ?? []),
-        isKpopSelected: (selectedGenres ?? []).includes('kpop'),
+        genre: selectedGenres[0] ?? null,
+        subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
+        isKpopSelected: ([...selectedGenres, ...subGenre] ?? []).includes('kpop'),
         moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
         themes: themeLabels,
         ...(hasActiveSituation(situation) ? { situation } : {}),
@@ -4740,8 +4742,8 @@ const saveRecentSong = async (newSong: any) => {
           prompt: song.prompt,
           appliedKeywords: {
             ...song.appliedKeywords,
-            genre: limitFusionGenreIds(selectedGenres),
-            subGenre: limitFusionGenreIds(subGenre),
+            genre: [],
+            subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
             ...(hasActiveSituation(situation) ? { situation } : {}),
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
@@ -5121,6 +5123,7 @@ ${result.prompt}
 
   const isGlobalClearable = 
     selectedGenres.length > 0 ||
+    subGenre.length > 0 ||
     selectedMoods.length > 0 ||
     selectedThemes.length > 0 ||
     selectedStyles.length > 0 ||
@@ -5146,26 +5149,23 @@ ${result.prompt}
     isSoundTextureRandomized;
 
   // --- Genre Display Logic ---
-  const displayGenreKeywords = subGenre.length > 0 
-    ? subGenre.map(id => {
-        let label = id;
-        for (const group of GENRE_HIERARCHY) {
-          for (const main of group.children) {
-            const sub = main.children.find(s => s.id === id);
-            if (sub) {
-              label = sub.label;
-              break;
-            }
-          }
-          if (label !== id) break;
-        }
-        return { id, type: 'genre' as const, label };
-      })
-    : selectedGenres.map(id => ({ 
-        id, 
-        type: 'genre' as const, 
-        label: GENRES.find(item => item.id === id)?.labelKo || GENRES.find(item => item.id === id)?.label || id 
-      }));
+  const resolveGenreChipLabel = (id: string): string => {
+    for (const group of GENRE_HIERARCHY) {
+      for (const main of group.children) {
+        if (main.id === id) return main.labelKo || main.label;
+        const sub = main.children.find((s) => s.id === id);
+        if (sub) return sub.labelKo || sub.label;
+      }
+    }
+    return GENRES.find(item => item.id === id)?.labelKo || GENRES.find(item => item.id === id)?.label || id;
+  };
+
+  const displayGenreKeywords = Array.from(new Set([...subGenre, ...selectedGenres]))
+    .map(id => ({
+      id,
+      type: 'genre' as const,
+      label: resolveGenreChipLabel(id),
+    }));
 
 
   const floatingActionBarVariants = {
@@ -5453,7 +5453,10 @@ ${result.prompt}
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
                 onSelectGenre={(id) => {
-                  setSelectedGenres((prev) => limitFusionGenreIds(prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]));
+                  setSelectedGenres([]);
+                  setSubGenre((prev) =>
+                    limitFusionGenreIds(prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id])
+                  );
                   setIsGenreRandomized(false);
                 }}
                 onSelectSubGenre={(id) =>
@@ -5461,9 +5464,23 @@ ${result.prompt}
                     limitFusionGenreIds(prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id])
                   )
                 }
-                onCommitSelection={(mainId, subId) => {
-                  setSelectedGenres((prev) => limitFusionGenreIds(mainId ? [...prev.filter((id) => id !== mainId), mainId] : prev));
-                  setSubGenre((prev) => limitFusionGenreIds(subId ? [...prev.filter((id) => id !== subId), subId] : prev));
+                onCommitSelection={(mainId, subId, meta) => {
+                  const removeMainId = meta?.removeMainId ?? null;
+                  const removeSubId = meta?.removeSubId ?? null;
+
+                  const nextIds = Array.from(
+                    new Set(
+                      subGenre
+                        .filter((id) => id !== removeMainId && id !== removeSubId)
+                        .filter((id) => id !== mainId && id !== subId)
+                    )
+                  );
+
+                  if (mainId) nextIds.push(mainId);
+                  if (subId) nextIds.push(subId);
+
+                  setSelectedGenres([]);
+                  setSubGenre(limitFusionGenreIds(nextIds));
                   setIsGenreRandomized(false);
                 }}
                 onClear={() => {
@@ -5472,16 +5489,13 @@ ${result.prompt}
                   setIsGenreRandomized(false);
                 }}
                 onRandom={() => {
-                  const allMainGenres = GENRE_HIERARCHY.flatMap((g) => g.children);
-                  const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
-                  if (!randomMain) return;
-                  
-                  const randomSub = randomMain.children.length > 0
-                    ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
-                    : null;
-                    
-                  setSelectedGenres([randomMain.id]);
-                  setSubGenre(randomSub ? [randomSub.id] : []);
+                  const allSelectableGenres = GENRE_HIERARCHY.flatMap((g) =>
+                    g.children.flatMap((main) => [main, ...(main.children || [])])
+                  );
+                  const randomItem = allSelectableGenres[Math.floor(Math.random() * allSelectableGenres.length)];
+                  if (!randomItem) return;
+                  setSelectedGenres([]);
+                  setSubGenre([randomItem.id]);
                   setIsGenreRandomized(true);
                 }}
                 onHover={setHoveredItem}

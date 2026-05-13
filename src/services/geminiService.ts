@@ -513,15 +513,22 @@ type StylePromptRole = 'genre' | 'instruments' | 'atmosphere' | 'vocals' | 'arra
 type ResolvedStyleItem = NonNullable<ReturnType<typeof resolveStyleItem>>;
 
 const STYLE_CYCLE_ROLE_BY_ID: Record<string, StylePromptRole> = {
+  // [Genre] only: categories that directly define musical genre / era identity.
   'fusion-genre': 'genre',
-  'rhythm-bounce': 'genre',
-  'rap-beat-texture': 'genre',
-  'synth-space': 'genre',
-  'band-live': 'genre',
-  'cinematic-scene': 'genre',
-  'era-texture': 'genre',
+  'rhythm-bounce': 'genre', // 재즈 & 알앤비
+  'rap-beat-texture': 'genre', // 힙합
+  'synth-space': 'genre', // EDM & 댄스
+  'band-live': 'genre', // 라이브 밴드
+  'era-texture': 'genre', // 시대 질감, compacted into short genre tokens
+
+  // [Atmosphere]: scene, space, cinematic/theme color. Do not treat as genre.
   'space-texture': 'atmosphere',
+  'cinematic-scene': 'atmosphere', // 테마 뮤직
+
+  // [Vocals]: only vocal line / phrasing / tone cues.
   'vocal-expression': 'vocals',
+
+  // [Arrangement]: hook, transition, groove, rhythm, section movement.
   'hook-addiction': 'arrangement',
   'stage-shift': 'arrangement',
   'groove-flow': 'arrangement',
@@ -1556,7 +1563,7 @@ function buildStructureText(
 
 function buildStyle(params: GenerateSongParams): string {
   const subGenreIds = params.subGenre ?? [];
-  const genreId = (params.genre || "pop").toLowerCase();
+  const genreId = (getPrimarySelectedGenreId(params) || "pop").toLowerCase();
 
   let genreStyle = "";
   if (subGenreIds.length > 0) {
@@ -1602,7 +1609,7 @@ function buildStyle(params: GenerateSongParams): string {
 
 function buildSound(params: GenerateSongParams): string {
   const subGenreIds = params.subGenre ?? [];
-  const genreId = (params.genre || "pop").toLowerCase();
+  const genreId = (getPrimarySelectedGenreId(params) || "pop").toLowerCase();
   const selectedSoundIds = params.instrumentSounds ?? [];
 
   interface SoundItem {
@@ -1662,7 +1669,8 @@ function buildSound(params: GenerateSongParams): string {
   // 2. Genre sounds (SubGenre takes precedence over MidGenre)
   let genreSoundSource = "";
   if (subGenreIds.length > 0) {
-    genreSoundSource = SUB_GENRE_PROMPTS[subGenreIds[0]]?.sound || "";
+    const firstSubId = subGenreIds[0];
+    genreSoundSource = SUB_GENRE_PROMPTS[firstSubId]?.sound || MID_GENRE_PROMPTS[firstSubId]?.sound || "";
   } else if (genreId) {
     genreSoundSource = MID_GENRE_PROMPTS[genreId]?.sound || "";
   }
@@ -1738,7 +1746,7 @@ function buildMoodTexture(params: GenerateSongParams): string {
 function buildVocal(params: GenerateSongParams): string {
   const v = params.vocal ?? { male: 0, female: 0, rap: false };
   const subGenreIds = (params.subGenre ?? []).map((id) => id.toLowerCase());
-  const genreId = (params.genre || "").toLowerCase();
+  const genreId = (getPrimarySelectedGenreId(params) || "").toLowerCase();
   const parts: string[] = [];
 
   const isHiphop =
@@ -1779,7 +1787,8 @@ function buildVocal(params: GenerateSongParams): string {
 
   let genreVocalSource = "";
   if (subGenreIds.length > 0) {
-    genreVocalSource = SUB_GENRE_PROMPTS[subGenreIds[0]]?.vocal || "";
+    const firstSubId = subGenreIds[0];
+    genreVocalSource = SUB_GENRE_PROMPTS[firstSubId]?.vocal || MID_GENRE_PROMPTS[firstSubId]?.vocal || "";
   } else if (genreId) {
     genreVocalSource = MID_GENRE_PROMPTS[genreId]?.vocal || "";
   }
@@ -1925,7 +1934,7 @@ function buildArrangement(
   params: GenerateSongParams,
   resolvedStructure: SongStructure,
 ): string {
-  const genreId = params.genre;
+  const genreId = getPrimarySelectedGenreId(params) || params.genre;
   let genreFlow = "dynamic progression with clear sectional contrast";
 
   if (genreId === "drill")
@@ -4072,20 +4081,51 @@ function findHierarchySubGenre(id: string) {
   return null;
 }
 
+function getMidGenreById(id: string) {
+  const normalized = id.toLowerCase();
+  for (const group of GENRE_HIERARCHY) {
+    const found = group.children.find(
+      (mid) =>
+        mid.id.toLowerCase() === normalized ||
+        mid.id.toLowerCase().replace(/-/g, "_") === normalized.replace(/-/g, "_"),
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
+function getPrimarySelectedGenreId(params: GenerateSongParams): string {
+  return String((params.subGenre ?? []).find(Boolean) || params.genre || "").trim();
+}
+
 function getGenrePromptProfile(params: GenerateSongParams): GenrePromptProfile {
   const subId = (params.subGenre ?? []).find(Boolean) || "";
   const genreId = String(params.genre || "").trim();
 
   if (subId) {
-    const subPrompt = lookupPromptRecord(SUB_GENRE_PROMPTS, subId) || {};
     const subItem = findHierarchySubGenre(subId);
-    return {
-      id: subId,
-      label: normalizePromptGenreLabel(subItem?.label || sentenceCase(subId)),
-      style: cleanPromptValue((subPrompt as any).style || ""),
-      sound: cleanPromptValue((subPrompt as any).sound || ""),
-      vocal: cleanPromptValue((subPrompt as any).vocal || ""),
-    };
+    if (subItem) {
+      const subPrompt = lookupPromptRecord(SUB_GENRE_PROMPTS, subId) || {};
+      return {
+        id: subId,
+        label: normalizePromptGenreLabel(subItem.label || sentenceCase(subId)),
+        style: cleanPromptValue((subPrompt as any).style || ""),
+        sound: cleanPromptValue((subPrompt as any).sound || ""),
+        vocal: cleanPromptValue((subPrompt as any).vocal || ""),
+      };
+    }
+
+    const midItem = getMidGenreById(subId);
+    const midPromptFromSubSlot = lookupPromptRecord(MID_GENRE_PROMPTS, subId) || {};
+    if (midItem || Object.keys(midPromptFromSubSlot).length > 0) {
+      return {
+        id: subId,
+        label: normalizePromptGenreLabel(midItem?.label || sentenceCase(subId)),
+        style: cleanPromptValue((midPromptFromSubSlot as any).style || ""),
+        sound: cleanPromptValue((midPromptFromSubSlot as any).sound || ""),
+        vocal: cleanPromptValue((midPromptFromSubSlot as any).vocal || ""),
+      };
+    }
   }
 
   const midPrompt = lookupPromptRecord(MID_GENRE_PROMPTS, genreId) || {};
@@ -4162,61 +4202,89 @@ function isEraTextureStyleItem(item: ResolvedStyleItem): boolean {
   return STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === 'era-texture' || /^era-prefix-/i.test(item.id);
 }
 
+function compactGenreToken(value: string): string {
+  let cleaned = cleanupPromptTail(cleanPromptValue(value))
+    .replace(/\bfusion\b/gi, '')
+    .replace(/\binfluence\b/gi, '')
+    .replace(/\btexture\b/gi, '')
+    .replace(/\bas\s+the\s+core\b/gi, '')
+    .replace(/\bfused\s+with\b/gi, '')
+    .replace(/\bbased\s+on\b/gi, '')
+    .replace(/\brooted\s+in\b/gi, '')
+    .replace(/\bera\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // Genre line is intentionally compact. Keep only broad era cues, not early/mid/late detail.
+  cleaned = cleaned
+    .replace(/\bearly\s+2000s\b/gi, 'Y2K')
+    .replace(/\bmid\s+2000s\b/gi, '2000s')
+    .replace(/\blate\s+2000s\b/gi, '2000s')
+    .replace(/\bearly\s+(\d{2})s\b/gi, '$1s')
+    .replace(/\bmid\s+(\d{2})s\b/gi, '$1s')
+    .replace(/\blate\s+(\d{2})s\b/gi, '$1s')
+    .replace(/\b(\d{2})s\s+era\b/gi, '$1s')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return sanitizePromptGenreArtifacts(normalizePromptGenreLabel(cleaned));
+}
+
 function getEraTexturePrefix(params: GenerateSongParams): string {
   const eraItem = getStyleItemsByPromptRole(params.styles ?? [], 'genre').find(isEraTextureStyleItem);
   const raw = String((eraItem as any)?.style || eraItem?.label || '').trim();
   if (!raw) return '';
-  return cleanupPromptTail(raw)
-    .replace(/\bera\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  return compactGenreToken(raw);
 }
 
 function formatGenreInfluence(label: string): string {
-  const cleaned = cleanupPromptTail(label).replace(/\s+as\s+the\s+core$/i, '').trim();
-  if (!cleaned) return '';
-  if (/idol\s*dance/i.test(cleaned)) return 'Idol Dance energy';
-  if (/retro\s*disco/i.test(cleaned)) return 'Retro Disco groove';
-  if (/70s[-\s]*disco/i.test(cleaned)) return '70s Disco groove';
-  if (/nu[-\s]*disco/i.test(cleaned)) return 'Nu-Disco fusion';
-  if (/dance/i.test(cleaned) && !/pop/i.test(cleaned)) return `${cleaned} energy`;
-  if (/groove|disco|funk/i.test(cleaned)) return `${cleaned} groove`;
-  if (/texture|era/i.test(cleaned)) return `${cleaned} texture`;
-  return `${cleaned} influence`;
+  // For [Genre], do not write explanatory glue such as influence / fused with / as the core.
+  // Keep genre/style identity as short comma-separated tokens only.
+  return compactGenreToken(label);
 }
 
 function getStyleGenreInfluenceLabels(params: GenerateSongParams, mainLabels: string[]): string[] {
   return getStyleItemsByPromptRole(params.styles ?? [], 'genre')
     .filter((item) => !isEraTextureStyleItem(item))
-    .map((item) => String((item as any).style || item.label || '').replace(/\bfusion\b/gi, '').trim() || item.label)
-    .filter((label) => label && !mainLabels.some((main) => isSameGenreFamily(main, label)))
+    // Genre categories contribute the visible genre name, not long style prose.
+    // Example: Hip-hop, Britpop, Nu-Disco.
+    .map((item) => String(item.label || (item as any).style || '').trim())
     .map(formatGenreInfluence)
+    .filter((label) => label && !mainLabels.some((main) => isSameGenreFamily(main, label)))
     .filter(NON_EMPTY)
     .filter((label, index, arr) => arr.findIndex((item) => item.toLowerCase() === label.toLowerCase()) === index)
     .slice(0, 3);
 }
 
+function isTrapOrHiphopCoreGenre(params: GenerateSongParams): boolean {
+  if (isFreeTextPrimaryMode(params)) return false;
+
+  const firstGenre = getSelectedFusionGenres(params)[0];
+  const raw = `${firstGenre?.id || ''} ${firstGenre?.label || ''}`.toLowerCase();
+
+  return /\b(k[-\s]?trap|dark\s*trap|trap|hip[-\s]?hop|hiphop|drill|boom\s*bap)\b/.test(raw);
+}
+
 function buildFiveLineGenreValue(params: GenerateSongParams): string {
   if (isFreeTextPrimaryMode(params)) {
-    return cleanupPromptTail(buildFreeTextDirectorProfile(params.userInput || "").genre || "Pop as the core");
+    return compactGenreToken(buildFreeTextDirectorProfile(params.userInput || "").genre || "Pop");
   }
 
   const selectedGenres = getSelectedFusionGenres(params);
-  const main = selectedGenres[0]?.label || "Pop";
-  const secondary = selectedGenres[1]?.label || "";
+  const mainLabels = selectedGenres.map((genre) => compactGenreToken(genre.label)).filter(NON_EMPTY);
   const eraPrefix = getEraTexturePrefix(params);
+  const styleGenreTokens = getStyleGenreInfluenceLabels(params, mainLabels);
 
-  const core = secondary && !isSameGenreFamily(main, secondary)
-    ? `${main}-based ${secondary}`
-    : `${main}`;
+  const coreGenre = mainLabels[0] ? `${mainLabels[0]} core` : '';
+  const secondaryMainGenres = mainLabels.slice(1);
+  const genreTokens = uniqueGenreLabels([
+    eraPrefix,
+    coreGenre,
+    ...secondaryMainGenres,
+    ...styleGenreTokens,
+  ].filter(NON_EMPTY));
 
-  const influences = getStyleGenreInfluenceLabels(params, [main, secondary].filter(Boolean));
-  const influencePhrase = influences.length
-    ? ` with ${joinPromptPhrase(influences, 'and')}`
-    : " as the core";
-
-  return cleanupPromptTail(`${eraPrefix ? `${eraPrefix} ` : ''}${core}${influencePhrase}`)
-    .replace(/\bfused\s+with\s+(early|mid|late|\d{2}s|\d{4}s)/gi, '$1')
+  return cleanupPromptTail((genreTokens.length ? genreTokens : ['Pop']).join(', '))
     .replace(/\b(lonely|relaxing|infectious|upbeat|bright|sad|warm|calm|dark|hopeful|tense)\s+(?=[A-Z0-9])/gi, '')
     .replace(/\s{2,}/g, ' ');
 }
@@ -4296,13 +4364,21 @@ function buildFiveLineAtmosphereValue(
         [
           ...getStylePromptValuesByRole(params.styles ?? [], 'atmosphere', 'mood'),
           ...getStylePromptValuesByRole(params.styles ?? [], 'atmosphere', 'sound'),
+          ...getStylePromptValuesByRole(params.styles ?? [], 'atmosphere', 'style'),
         ].slice(0, 2),
         'and',
       );
+  const coreGenreGuard = !situationActive && isTrapOrHiphopCoreGenre(params)
+    ? "carried by dark confidence and restrained hip-hop edge"
+    : "";
   const atmosphere = appendPromptLens(
-    appendPromptLens(base, styleAtmosphere, 155),
+    appendPromptLens(
+      appendPromptLens(base, styleAtmosphere, 155),
+      coreGenreGuard,
+      170,
+    ),
     situationActive ? "" : variation.atmosphereLens,
-    155,
+    170,
   );
   return cleanupPromptTail(stripRemainingKoreanForProductionPrompt(atmosphere || "balanced emotional air"));
 }
@@ -4417,11 +4493,22 @@ function buildFiveLineArrangementValue(
     .filter(Boolean)
     .join(", ");
 
-  return cleanupPromptTail(
-    cleanProductionPhrase(combined)
-      .replace(/dynamic progression with clear sectional contrast/gi, "clear sectional contrast")
-      .replace(/,\s*clear section contrast,\s*clear section contrast/gi, ", clear section contrast"),
-  );
+  const parts = cleanProductionPhrase(combined)
+    .replace(/dynamic progression with clear sectional contrast/gi, "clear sectional contrast")
+    .replace(/clear section contrast/gi, "clear sectional contrast")
+    .split(',')
+    .map((part) => cleanupPromptTail(part.trim()))
+    .filter(NON_EMPTY);
+
+  const uniqueParts: string[] = [];
+  parts.forEach((part) => {
+    const key = part.toLowerCase().replace(/\s+/g, ' ');
+    if (!uniqueParts.some((existing) => existing.toLowerCase().replace(/\s+/g, ' ') === key)) {
+      uniqueParts.push(part);
+    }
+  });
+
+  return cleanupPromptTail(uniqueParts.join(', '));
 }
 
 function compactFiveLinePromptBody(lines: string[]): string[] {
@@ -6400,6 +6487,13 @@ function sanitizeNonSituationVocalPrompt(value: string): string {
       .replace(/\bnatural\s+male\s+and\s+natural\s+male\s+contrast\b/gi, "natural layered male vocal colors")
       .replace(/\bnatural\s+female\s+and\s+natural\s+female\s+contrast\b/gi, "natural layered female vocal colors")
       .replace(/\bcontrast\b/gi, "layering")
+      // Genre/style category names belong in [Genre] or [Atmosphere], not repeated inside [Vocals].
+      .replace(/,?\s*\b(?:Anisong\s+Pop|Britpop|Idol\s+Dance|Retro\s+Disco|Nu-Disco|Hip-hop|Jazz\s+Hip-hop|Alternative\s+R&B|K-Pop|J-Pop)\s+fusion\b/gi, "")
+      .replace(/,?\s*\b(?:Anisong\s+Pop|Britpop|Idol\s+Dance|Retro\s+Disco|Nu-Disco)\s+(?:color|phrasing|style)\b/gi, "")
+      .replace(/\(\s*,/g, "(")
+      .replace(/,\s*\)/g, ")")
+      .replace(/\(\s*\)/g, "")
+      .replace(/,\s*,/g, ",")
       .replace(/\s{2,}/g, " "),
   );
 }
@@ -6595,6 +6689,7 @@ function buildFinalPrompt(
         .replace(/\bTogether\b/gi, "All Vocals")
         .replace(/\[Genre\]\s+(lonely|relaxing|infectious|upbeat|bright|sad|warm|calm|dark|hopeful|tense)\s+/gi, "[Genre] ")
         .replace(/\bfused with ((?:early|mid|late)\s+\d{2}s|\d{2}s|\d{4}s|Y2K|modern)\b/gi, "$1")
+        .replace(/\b(as the core|fused with|influence|based on|rooted in)\b/gi, "")
         .replace(/\[Vocals\]([^\n]*)\bsingalong chorus point\b/gi, (_m, pre) => `[Vocals]${pre}`)
         .replace(/\s{2,}/g, " "),
     );
@@ -7890,7 +7985,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Never put Korean story role labels inside brackets. Story roles may appear in lyric lines, but bracket tags must stay English acoustic/section tags only.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format is locked to this 5-line structure plus the fixed quality line:
-  [Genre] {main genre as the core, optionally fused with second genre}
+  [Genre] {compact comma-separated genre tokens only; no influence/core/fused/based wording}
   [Instruments] {main genre instruments + fusion genre instruments + selected core sound}
   [Atmosphere] {scene, air, emotional temperature}
   [Vocals] {sentence-style acoustic vocal direction; no artist names}
@@ -7898,7 +7993,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
   [Audio quality improved to masterpiece]
 - Do not collapse this back into [Track] / [Production]. Keep [Genre], [Instruments], [Atmosphere], [Vocals], and [Arrangement] separated.
 - Never output any separator-* value. Separator rows are UI-only and must be ignored.
-- Era texture goes before the main genre, e.g. late 90s Alternative R&B, never “fused with late 90s”.
+- Genre line must be maximally compressed: use comma-separated tokens such as "80s retro synth, Jazz Hip-hop, Britpop". Remove influence, texture, as the core, fused with, based, and rooted in. Compress early/mid/late era detail unless essential, e.g. late 90s radio pop -> 90s radio pop, early 2000s glossy pop -> Y2K glossy pop.
 - Mood words such as lonely, relaxing, infectious, upbeat, bright, sad, warm, calm, dark, hopeful, tense belong in [Atmosphere] or [Arrangement], not [Genre].
 - Groove/rhythm/pulse/hook/transition terms belong in [Arrangement], not [Instruments].
 

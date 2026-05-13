@@ -5107,9 +5107,19 @@ ${result.prompt}
     return [formatInlineTitle(song)];
   };
 
+  const normalizeClipboardText = (value: string) => {
+    return String(value || '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
+
   const copyToClipboard = async (text: string, type: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      const normalizedText = normalizeClipboardText(text);
+      await navigator.clipboard.writeText(normalizedText);
       setCopiedType(type);
       setToast({ message: '복사되었습니다', visible: true });
       setTimeout(() => setCopiedType(null), 2000);

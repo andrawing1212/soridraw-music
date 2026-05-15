@@ -1786,6 +1786,10 @@ function buildThemeSentence(themeLabels: string[] = []): string {
 }
 
 
+const TEMPO_MIN_BPM = 20;
+const TEMPO_MAX_BPM = 200;
+const TEMPO_MAX_ACTIVE_RANGE = 20;
+
 const calculateOptimalBPM = (genres: string[], moods: string[], subGenre: string[] = []) => {
   let sumMin = 0;
   let sumMax = 0;
@@ -1827,8 +1831,8 @@ const calculateOptimalBPM = (genres: string[], moods: string[], subGenre: string
   let avgMax = Math.round(sumMax / count);
 
   const range = avgMax - avgMin;
-  const finalMin = Math.max(40, avgMin + Math.floor(Math.random() * (range / 4)));
-  const finalMax = Math.min(200, finalMin + Math.max(10, Math.floor(Math.random() * (range / 2 + 10))));
+  const finalMin = Math.max(TEMPO_MIN_BPM, avgMin + Math.floor(Math.random() * (range / 4)));
+  const finalMax = Math.min(TEMPO_MAX_BPM, finalMin + Math.max(10, Math.floor(Math.random() * (range / 2 + 10))));
 
   return { min: finalMin, max: finalMax };
 };
@@ -4605,8 +4609,8 @@ const saveRecentSong = async (newSong: any) => {
       const isManualTempoMode = !tempoEnabled;
       const isValidTempoRange =
         currentMaxBPM >= currentMinBPM &&
-        currentMaxBPM - currentMinBPM <= 40 &&
-        (currentMinBPM !== 40 || currentMaxBPM !== 160);
+        currentMaxBPM - currentMinBPM <= TEMPO_MAX_ACTIVE_RANGE &&
+        (currentMinBPM !== TEMPO_MIN_BPM || currentMaxBPM !== TEMPO_MAX_BPM);
 
       // Tempo priority rule:
       // - Random tempo mode sends the current genre/mood-based BPM range to the prompt.
@@ -11705,6 +11709,7 @@ function VocalControl({
   );
 }
 
+
 interface TempoControlProps {
   enabled: boolean;
   onEnabledChange: (val: boolean) => void;
@@ -11736,7 +11741,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
       const rect = sliderRef.current.getBoundingClientRect();
       const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
       const percent = x / rect.width;
-      const val = Math.round(40 + percent * (160 - 40));
+      const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
 
       if (isDragging === 'min') {
         if (val <= max) onMinChange(val);
@@ -11774,9 +11779,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   const displayMin = min;
   const displayMax = max;
-  const minPos = ((displayMin - 40) / (160 - 40)) * 100;
-  const maxPos = ((displayMax - 40) / (160 - 40)) * 100;
-  const isValid = (max - min <= 40) && (min !== 40 || max !== 160);
+  const minPos = ((displayMin - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
+  const maxPos = ((displayMax - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
+  const isValid = (max - min <= TEMPO_MAX_ACTIVE_RANGE) && (min !== TEMPO_MIN_BPM || max !== TEMPO_MAX_BPM);
 
   return (
     <div className={cn(
@@ -11804,14 +11809,14 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             >
               <input
                 type="number"
-                min={40}
+                min={TEMPO_MIN_BPM}
                 max={max}
                 value={min}
                 disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   if (!isNaN(val)) {
-                    const clamped = Math.max(40, Math.min(val, max));
+                    const clamped = Math.max(TEMPO_MIN_BPM, Math.min(val, max));
                     onMinChange(clamped);
                   }
                 }}
@@ -11821,13 +11826,13 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               <input
                 type="number"
                 min={min}
-                max={160}
+                max={TEMPO_MAX_BPM}
                 value={max}
                 disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   if (!isNaN(val)) {
-                    const clamped = Math.max(min, Math.min(val, 160));
+                    const clamped = Math.max(min, Math.min(val, TEMPO_MAX_BPM));
                     onMaxChange(clamped);
                   }
                 }}
@@ -11918,14 +11923,14 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
         >
           <input
             type="number"
-            min={40}
+            min={TEMPO_MIN_BPM}
             max={max}
             value={min}
             disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
-                const clamped = Math.max(40, Math.min(val, max));
+                const clamped = Math.max(TEMPO_MIN_BPM, Math.min(val, max));
                 onMinChange(clamped);
               }
             }}
@@ -11935,13 +11940,13 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           <input
             type="number"
             min={min}
-            max={160}
+            max={TEMPO_MAX_BPM}
             value={max}
             disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
-                const clamped = Math.max(min, Math.min(val, 160));
+                const clamped = Math.max(min, Math.min(val, TEMPO_MAX_BPM));
                 onMaxChange(clamped);
               }
             }}
@@ -11967,7 +11972,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             const rect = sliderRef.current!.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const percent = x / rect.width;
-            const val = Math.round(40 + percent * (160 - 40));
+            const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
             
             // Snap to nearest handle but respect constraints
             if (Math.abs(val - min) < Math.abs(val - max)) {

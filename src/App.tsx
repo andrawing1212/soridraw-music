@@ -62,7 +62,8 @@ import {
   Youtube as YoutubeIcon,
   ExternalLink,
   Zap,
-  Key
+  Key,
+  Bookmark
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { createPortal } from 'react-dom';
@@ -9133,7 +9134,7 @@ function SongStructureIntegratedControl({
     )}>
       <div className="flex flex-col gap-3 mb-4 min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장 섹션</p>
+          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">Keep 섹션</p>
           <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
         </div>
         <div className="space-y-2">
@@ -9178,7 +9179,7 @@ function SongStructureIntegratedControl({
           <div className="rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-6 text-center">
             <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
             <p className="text-[12px] text-[var(--text-secondary)]">
-              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장 섹션이 없습니다.'}
+              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : 'Keep 섹션이 없습니다.'}
             </p>
           </div>
         ) : (
@@ -9189,7 +9190,7 @@ function SongStructureIntegratedControl({
                   <button
                     onClick={() => confirmEditPresetTitle(preset.id)}
                     className="w-7 h-7 rounded-lg border bg-brand-orange/20 border-brand-orange/50 text-brand-orange hover:bg-brand-orange/30 transition-all flex items-center justify-center"
-                    aria-label="저장 섹션 이름 수정 완료"
+                    aria-label="Keep 섹션 이름 수정 완료"
                   >
                     <Check className="w-3.5 h-3.5" />
                   </button>
@@ -9197,7 +9198,7 @@ function SongStructureIntegratedControl({
                   <button
                     onClick={() => startEditPresetTitle(preset)}
                     className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 transition-all flex items-center justify-center"
-                    aria-label="저장 섹션 이름 편집"
+                    aria-label="Keep 섹션 이름 편집"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
@@ -9208,7 +9209,7 @@ function SongStructureIntegratedControl({
                     "w-7 h-7 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center",
                     deleteConfirmPresetId === preset.id && "bg-red-500/20 border-red-400 text-red-200"
                   )}
-                  aria-label="저장 섹션 삭제"
+                  aria-label="Keep 섹션 삭제"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -9621,31 +9622,31 @@ function SongStructureIntegratedControl({
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-end gap-2 shrink-0">
+                    <div className="flex items-center justify-between gap-2 shrink-0 w-full lg:w-auto">
+                      <button
+                        type="button"
+                        onClick={openSavedSectionsModal}
+                        title="Keep 섹션"
+                        aria-label="Keep 섹션"
+                        className="xl:hidden w-10 h-10 rounded-xl border border-brand-orange/45 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/15 transition-all shadow-btn flex items-center justify-center"
+                      >
+                        <Bookmark className="w-[18px] h-[18px]" />
+                      </button>
                       <button
                         onClick={openSaveStructureModal}
                         className={cn(
-                          "px-4 py-2.5 rounded-xl border transition-all font-bold text-sm shadow-btn",
+                          "px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all font-bold text-xs sm:text-sm shadow-btn",
                           (draftStructure ?? []).length > 0
                             ? "bg-btn-bg text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
                             : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
                         disabled={(draftStructure ?? []).length === 0}
                       >
-                        섹션저장
+                        저장
                       </button>
                     </div>
                   </div>
 
-                  <div className="xl:hidden flex justify-end">
-                    <button
-                      type="button"
-                      onClick={openSavedSectionsModal}
-                      className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/5 text-[var(--text-primary)] text-[12px] font-bold hover:bg-white/10 transition-all shadow-btn"
-                    >
-                      저장 섹션
-                    </button>
-                  </div>
 
                   <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(330px,0.72fr)] gap-4 min-w-0 items-stretch">
                     <div className="space-y-3 min-w-0 flex flex-col h-[520px]">
@@ -9710,7 +9711,7 @@ function SongStructureIntegratedControl({
                       <div className="h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
                       <div className="flex flex-col gap-3 mb-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장 섹션</p>
+                          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">Keep 섹션</p>
                           <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
                         </div>
                         
@@ -9761,7 +9762,7 @@ function SongStructureIntegratedControl({
                           <div className="rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-6 text-center">
                             <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
                             <p className="text-[12px] text-[var(--text-secondary)]">
-                              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장 섹션이 없습니다.'}
+                              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : 'Keep 섹션이 없습니다.'}
                             </p>
                           </div>
                         ) : (
@@ -9772,7 +9773,7 @@ function SongStructureIntegratedControl({
                                   <button
                                     onClick={() => confirmEditPresetTitle(preset.id)}
                                     className="w-7 h-7 rounded-lg border bg-brand-orange/20 border-brand-orange/50 text-brand-orange hover:bg-brand-orange/30 transition-all flex items-center justify-center"
-                                    aria-label="저장 섹션 이름 수정 완료"
+                                    aria-label="Keep 섹션 이름 수정 완료"
                                   >
                                     <Check className="w-3.5 h-3.5" />
                                   </button>
@@ -9780,7 +9781,7 @@ function SongStructureIntegratedControl({
                                   <button
                                     onClick={() => startEditPresetTitle(preset)}
                                     className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 transition-all flex items-center justify-center"
-                                    aria-label="저장 섹션 이름 편집"
+                                    aria-label="Keep 섹션 이름 편집"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
                                   </button>
@@ -9791,7 +9792,7 @@ function SongStructureIntegratedControl({
                                     "w-7 h-7 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center",
                                     deleteConfirmPresetId === preset.id && "bg-red-500/20 border-red-400 text-red-200"
                                   )}
-                                  aria-label="저장 섹션 삭제"
+                                  aria-label="Keep 섹션 삭제"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -9912,7 +9913,7 @@ function SongStructureIntegratedControl({
             >
               <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between gap-3 shrink-0">
                 <div>
-                  <p className="text-sm font-black text-brand-orange">저장 섹션</p>
+                  <p className="text-sm font-black text-brand-orange">Keep 섹션</p>
                   <p className="text-[11px] text-[var(--text-secondary)]">저장된 섹션 구조를 불러오거나 편집합니다.</p>
                 </div>
                 <button
@@ -9956,7 +9957,7 @@ function SongStructureIntegratedControl({
             >
               <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-brand-orange">섹션저장</h3>
+                  <h3 className="text-base font-bold text-brand-orange">저장</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">현재 구조를 저장할 제목을 입력합니다.</p>
                 </div>
                 <button

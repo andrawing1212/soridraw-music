@@ -5869,6 +5869,19 @@ ${normalizePromptForDisplay(result.prompt)}
               }
               else cycleFamilySelection(cycleId, activeSelected, activeSetter, SOUND_TEXTURE_CYCLES);
             }}
+            onOtherModeVariantToggle={(variantId) => {
+              if (isPointSoundMode) {
+                setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId));
+                const combo = getRecommendedSoundComboVariant(variantId);
+                if (combo) {
+                  recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
+                    Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([, comboId]) => comboId !== variantId)
+                  );
+                }
+              } else {
+                setSelectedPointSounds((prev) => prev.filter((id) => id !== variantId));
+              }
+            }}
             onClear={() => {
               recommendedSoundComboAppliedIdsRef.current = {};
               setSelectedInstrumentSounds([]);
@@ -7708,6 +7721,7 @@ interface CycleSectionProps {
   isPointSelectionMode?: boolean;
   extraHeaderControls?: React.ReactNode;
   onCycleToggle: (cycleId: string, variantId?: string) => void;
+  onOtherModeVariantToggle?: (variantId: string) => void;
   onClear: () => void;
   onRandom: () => void;
   onHover: (item: CategoryItem | null) => void;
@@ -7733,6 +7747,7 @@ function CycleSection({
   isPointSelectionMode = false,
   extraHeaderControls,
   onCycleToggle, 
+  onOtherModeVariantToggle,
   onClear, 
   onRandom, 
   onHover, 
@@ -7762,6 +7777,25 @@ function CycleSection({
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
   const activeSelected = isPointSelectionMode ? pointSelected : selected;
+  const otherSelected = isPointSelectionMode ? selected : pointSelected;
+  const selectedDisplayItems = useMemo(() => {
+    const allVariants = cycles.flatMap((cycle) => cycle.variants).filter((variant) => variant.kind !== 'separator');
+    const variantMap = new Map(allVariants.map((variant) => [variant.id, variant]));
+    return [
+      ...selected.map((id) => ({ id, mode: 'normal' as const, label: variantMap.get(id)?.labelKo || variantMap.get(id)?.label || '' })),
+      ...pointSelected.map((id) => ({ id, mode: 'point' as const, label: variantMap.get(id)?.labelKo || variantMap.get(id)?.label || '' })),
+    ].filter((item) => item.label);
+  }, [cycles, selected, pointSelected]);
+  const selectedDisplayTextLength = selectedDisplayItems.reduce((sum, item) => sum + item.label.length + (item.mode === 'point' ? 5 : 2), 0);
+  const selectedDisplayTextClass = selectedDisplayTextLength > 120
+    ? 'text-[8.5px] leading-[1.05]'
+    : selectedDisplayTextLength > 92
+      ? 'text-[9.5px] leading-[1.08]'
+      : selectedDisplayTextLength > 68
+        ? 'text-[10.5px] leading-[1.12]'
+        : selectedDisplayTextLength > 44
+          ? 'text-[11.5px] leading-[1.15]'
+          : 'text-sm leading-tight';
   const selectedKeywordCount = selected.length + pointSelected.length;
   const totalKeywordCount = cycles.reduce((sum, cycle) => sum + cycle.variants.filter((variant) => variant.kind !== 'separator').length, 0);
   const maxSelectableCount = Number.POSITIVE_INFINITY;
@@ -7903,16 +7937,16 @@ function CycleSection({
       </div>
 
       <div 
-        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
+        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-3 py-2 flex items-center justify-center text-center overflow-hidden"
       >
-        {activeSelected.length > 0 ? (
-          <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-fuchsia-300" : "text-brand-orange")}>
-            {isPointSelectionMode ? '포인트: ' : ''}{activeSelected
-              .map((id) => cycles.flatMap(c => c.variants).find(v => v.kind !== 'separator' && v.id === id))
-              .filter(Boolean)
-              .map((v) => v?.labelKo || v?.label)
-              .join(', ')}
-          </p>
+        {selectedDisplayItems.length > 0 ? (
+          <div className={cn("w-full max-h-[42px] overflow-hidden font-semibold break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
+            {selectedDisplayItems.map((item, index) => (
+              <span key={`${item.mode}-${item.id}`} className={cn(item.mode === 'point' ? 'text-fuchsia-300' : 'text-brand-orange')}>
+                {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
+              </span>
+            ))}
+          </div>
         ) : (
           <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-fuchsia-400/45" : "text-brand-orange/40")}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
@@ -7927,11 +7961,13 @@ function CycleSection({
             title={titleKo || title}
             cycle={activePopupCycle}
             selected={activeSelected}
+            otherSelected={otherSelected}
             highlightedVariantIds={isPointSelectionMode ? [] : highlightedVariantIds}
             isPointSelectionMode={isPointSelectionMode}
             maxSelectableCount={maxSelectableCount}
             onClose={() => setKeywordPopupCycleId(null)}
             onToggleVariant={(variantId) => onCycleToggle(activePopupCycle.id, variantId)}
+            onToggleOtherVariant={onOtherModeVariantToggle}
             onHover={onHover}
           />
         )}
@@ -7959,11 +7995,13 @@ function CycleKeywordPopup({
   title,
   cycle,
   selected,
+  otherSelected = [],
   highlightedVariantIds = [],
   isPointSelectionMode = false,
   maxSelectableCount,
   onClose,
   onToggleVariant,
+  onToggleOtherVariant,
   onHover,
 }: {
   title: string;
@@ -7983,20 +8021,24 @@ function CycleKeywordPopup({
     }[];
   };
   selected: string[];
+  otherSelected?: string[];
   highlightedVariantIds?: string[];
   isPointSelectionMode?: boolean;
   maxSelectableCount: number;
   onClose: () => void;
   onToggleVariant: (variantId: string) => void;
+  onToggleOtherVariant?: (variantId: string) => void;
   onHover: (item: CategoryItem | null) => void;
 }) {
   const closeFromHistoryRef = useRef(false);
   const cycleVariantIds = useMemo(() => cycle.variants.filter((variant) => variant.kind !== 'separator').map((variant) => variant.id), [cycle.variants]);
   const initialSelectedRef = useRef<string[]>(selected.filter((id) => cycleVariantIds.includes(id)));
+  const initialOtherSelectedRef = useRef<string[]>(otherSelected.filter((id) => cycleVariantIds.includes(id)));
   const [localSelected, setLocalSelected] = useState<string[]>(initialSelectedRef.current);
+  const [localOtherSelected, setLocalOtherSelected] = useState<string[]>(initialOtherSelectedRef.current);
 
   const normalizeIds = useCallback((ids: string[]) => [...ids].sort().join('|'), []);
-  const hasChanges = normalizeIds(localSelected) !== normalizeIds(initialSelectedRef.current);
+  const hasChanges = normalizeIds(localSelected) !== normalizeIds(initialSelectedRef.current) || normalizeIds(localOtherSelected) !== normalizeIds(initialOtherSelectedRef.current);
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
 
   const closePopup = useCallback(() => {
@@ -8011,15 +8053,20 @@ function CycleKeywordPopup({
   const applyChangesAndClose = useCallback(() => {
     const before = new Set(initialSelectedRef.current);
     const after = new Set(localSelected);
+    const otherBefore = new Set(initialOtherSelectedRef.current);
+    const otherAfter = new Set(localOtherSelected);
 
     cycleVariantIds.forEach((variantId) => {
       if (before.has(variantId) !== after.has(variantId)) {
         onToggleVariant(variantId);
       }
+      if (onToggleOtherVariant && otherBefore.has(variantId) !== otherAfter.has(variantId)) {
+        onToggleOtherVariant(variantId);
+      }
     });
 
     closePopup();
-  }, [closePopup, cycleVariantIds, localSelected, onToggleVariant]);
+  }, [closePopup, cycleVariantIds, localOtherSelected, localSelected, onToggleOtherVariant, onToggleVariant]);
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -8125,8 +8172,9 @@ function CycleKeywordPopup({
                 );
               }
               const isSelected = localSelected.includes(variant.id);
+              const isOtherSelected = localOtherSelected.includes(variant.id);
               const isHighlightedSelected = isSelected && highlightedVariantIdSet.has(variant.id);
-              const disabled = !isSelected && isAtLimit;
+              const disabled = !isSelected && !isOtherSelected && isAtLimit;
               const hoverItem: CategoryItem = {
                 id: variant.id,
                 label: variant.label,
@@ -8140,11 +8188,15 @@ function CycleKeywordPopup({
                   disabled={disabled}
                   onClick={() => {
                     if (disabled) return;
-                    setLocalSelected((prev) =>
-                      prev.includes(variant.id)
-                        ? prev.filter((id) => id !== variant.id)
-                        : [...prev, variant.id]
-                    );
+                    if (!isSelected && isOtherSelected && onToggleOtherVariant) {
+                      setLocalOtherSelected((prev) => prev.filter((id) => id !== variant.id));
+                    } else {
+                      setLocalSelected((prev) =>
+                        prev.includes(variant.id)
+                          ? prev.filter((id) => id !== variant.id)
+                          : [...prev, variant.id]
+                      );
+                    }
                     onHover({ ...hoverItem, _ts: Date.now() } as CategoryItem);
                   }}
                   onMouseEnter={() => onHover(hoverItem)}
@@ -8157,6 +8209,10 @@ function CycleKeywordPopup({
                         : isHighlightedSelected
                           ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.26)]"
                           : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
+                      : isOtherSelected
+                        ? isPointSelectionMode
+                          ? "bg-brand-orange/80 text-white border-brand-orange/80 shadow-[0_0_14px_rgba(255,132,0,0.16)]"
+                          : "bg-fuchsia-600/85 text-white border-fuchsia-500/85 shadow-[0_0_14px_rgba(217,70,239,0.16)]"
                       : disabled
                         ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover hover:border-brand-orange/40"
@@ -8164,7 +8220,7 @@ function CycleKeywordPopup({
                 >
                   <div className="min-w-0">
                     <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
-                    <p className={cn("text-xs mt-1 leading-snug line-clamp-2", isSelected ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
+                    <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                   </div>
                 </button>
               );

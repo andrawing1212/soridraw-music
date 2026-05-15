@@ -9656,7 +9656,7 @@ function SongStructureIntegratedControl({
                           <button
                             onClick={resetDraftStructure}
                             className={cn(
-                              "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-btn",
+                              "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
                               (draftStructure ?? []).length > 0 || editingSavedStructureId
                                 ? "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                                 : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
@@ -9669,7 +9669,7 @@ function SongStructureIntegratedControl({
                             onClick={handleApplyCustomStructure}
                             disabled={(draftStructure ?? []).length === 0}
                             className={cn(
-                              "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-btn",
+                              "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
                               (draftStructure ?? []).length > 0
                                 ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
                                 : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"

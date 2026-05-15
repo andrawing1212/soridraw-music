@@ -8126,7 +8126,7 @@ function CycleKeywordPopup({
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
-                {localSelected.length > 0 ? ` · 이 카드에서 ${localSelected.length}개 선택됨` : ''}
+                {localSelected.length > 0 ? ` · ${localSelected.length}개 선택` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">

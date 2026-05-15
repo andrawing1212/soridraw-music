@@ -9461,7 +9461,7 @@ function SongStructureIntegratedControl({
             >
               <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
                 <div>
-                  <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">섹션 커스텀 섹션</h3>
+                  <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">섹션 커스텀</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 곡 구조를 만드세요.</p>
                 </div>
                 <button

@@ -143,12 +143,103 @@ import {
   TagTier,
   INSTRUMENTAL_SOLO_TAGS,
   INSTRUMENT_TAGS,
-  INSTRUMENT_TAG_DESCRIPTIONS
+  INSTRUMENT_TAG_DESCRIPTIONS,
+  VOCAL_TECHNIQUES,
+  VOCAL_VOICE_TONES,
+  VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
+
+
+
+const USER_CUSTOM_SECTIONS_STORAGE_KEY = 'soridraw_user_custom_sections_v1';
+const USER_CUSTOM_SECTION_TAGS_STORAGE_KEY = 'soridraw_user_custom_section_tags_v1';
+
+const safeReadJsonArray = <T,>(key: string): T[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeJsonArray = <T,>(key: string, value: T[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn('Failed to write local custom data:', error);
+  }
+};
+
+const sanitizeCustomLabel = (value: string) =>
+  String(value || '')
+    .replace(/[\[\]\n\r]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+
+const normalizeUserCustomSections = (input: any): UserCustomSectionDefinition[] => {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      const label = sanitizeCustomLabel(item?.label || item?.labelEn);
+      if (!label) return null;
+      const labelKo = sanitizeCustomLabel(item?.labelKo || item?.displayLabel || item?.label || '');
+      const kind = ['vocal', 'rap', 'instrumental', 'transition', 'build', 'theme', 'other'].includes(item?.kind)
+        ? item.kind as CustomSectionKind
+        : 'other';
+      const now = Date.now();
+      const defaultTags = Array.isArray(item?.defaultTags)
+        ? item.defaultTags.map((tag: any) => sanitizeCustomLabel(String(tag))).filter(Boolean).slice(0, 4)
+        : [];
+      return {
+        id: String(item?.id || `custom_section_${now}_${Math.random().toString(36).slice(2, 7)}`),
+        label,
+        labelKo,
+        tagCue: sanitizeCustomLabel(item?.tagCue || ''),
+        promptFull: String(item?.promptFull || '').replace(/[\n\r]/g, ' ').trim().slice(0, 160),
+        description: String(item?.description || '').replace(/[\n\r]/g, ' ').trim().slice(0, 120),
+        kind,
+        defaultTags,
+        allowVocal: typeof item?.allowVocal === 'boolean' ? item.allowVocal : kind !== 'instrumental' && kind !== 'transition',
+        isInstrumental: typeof item?.isInstrumental === 'boolean' ? item.isInstrumental : kind === 'instrumental',
+        createdAt: Number(item?.createdAt || now),
+        updatedAt: Number(item?.updatedAt || now),
+      } as UserCustomSectionDefinition;
+    })
+    .filter((item): item is UserCustomSectionDefinition => Boolean(item));
+};
+
+const normalizeUserCustomSectionTags = (input: any): UserCustomSectionTagDefinition[] => {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      const label = sanitizeCustomLabel(item?.label);
+      const section = sanitizeCustomLabel(item?.section);
+      if (!label || !section) return null;
+      const now = Date.now();
+      return {
+        id: String(item?.id || `custom_tag_${now}_${Math.random().toString(36).slice(2, 7)}`),
+        label,
+        labelKo: sanitizeCustomLabel(item?.labelKo || item?.label || ''),
+        promptFull: String(item?.promptFull || '').replace(/[\n\r]/g, ' ').trim().slice(0, 160),
+        description: String(item?.description || '').replace(/[\n\r]/g, ' ').trim().slice(0, 160),
+        section,
+        tier: 'free' as TagTier,
+        createdAt: Number(item?.createdAt || now),
+        updatedAt: Number(item?.updatedAt || now),
+      } as UserCustomSectionTagDefinition;
+    })
+    .filter((item): item is UserCustomSectionTagDefinition => Boolean(item));
+};
 
 const normalizeSectionName = (section: string): string => {
   const normalized = String(section || '').trim();
@@ -187,7 +278,7 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   }
 };
 
-import { generateSong, translateLyrics } from './services/geminiService';
+import { generateSong, translateLyrics, generateCustomSectionMetadata } from './services/geminiService';
 import { 
   collection, 
   query, 
@@ -1042,13 +1133,15 @@ const ReorderableSectionItem = ({
   index, 
   onEdit, 
   onRemove, 
-  onHover 
+  onHover,
+  sectionDisplayLabel,
 }: { 
   item: CustomSectionItem; 
   index: number; 
   onEdit: (index: number) => void; 
   onRemove: (index: number) => void; 
   onHover: (item: CategoryItem | null) => void;
+  sectionDisplayLabel?: string;
   key?: React.Key;
 }) => {
   const controls = useDragControls();
@@ -1081,7 +1174,7 @@ const ReorderableSectionItem = ({
       </span>
       
       <div className="flex-1 min-w-0">
-        <span className="text-sm font-bold text-[var(--text-primary)] block">{item.section}</span>
+        <span className="text-sm font-bold text-[var(--text-primary)] block">{sectionDisplayLabel || item.section}</span>
         {SECTION_META[item.section]?.descriptionKo && (
           <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep">
             {SECTION_META[item.section].descriptionKo}
@@ -1605,6 +1698,82 @@ function getPointSoundTagDisplayLabelById(id: string) {
   return String(variant?.labelKo || variant?.label || getPointSoundTagLabelById(id)).trim();
 }
 
+function safeVocalTagPart(value: string) {
+  return String(value || '')
+    .replace(/[\[\]{}()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^\s*[,|:/-]+\s*|\s*[,|:/-]+\s*$/g, '')
+    .trim();
+}
+
+function getMemberVisibleName(member: VocalMember, index: number, members: VocalMember[]) {
+  const sameGenderBefore = members.slice(0, index).filter((item) => item.gender === member.gender).length + 1;
+  return `${member.gender === 'male' ? '남성' : '여성'}${sameGenderBefore}`;
+}
+
+function inferVocalActualLabel(member: VocalMember) {
+  const role = member.roles?.includes('rapper') ? 'Rap Vocal' : 'Vocal';
+  const char = member.character || {};
+  const phrase = [
+    VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore,
+    VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore,
+    ...(char.techniqueIds || []).map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.promptCore),
+    char.customVoiceTone,
+    char.customPersonality,
+    char.customTechnique,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (role === 'Rap Vocal') {
+    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return 'Low Rap Vocal';
+    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return 'Wet Rap Vocal';
+    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return 'Creaky Rap Vocal';
+    if (/bright|head|clear|두성|맑/.test(phrase)) return 'Bright Rap Vocal';
+    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return 'Playful Rap Vocal';
+    return `${member.gender === 'male' ? 'Male' : 'Female'} Rap Vocal`;
+  }
+
+  if (/hollow|distant|empty|공허/.test(phrase)) return `Hollow ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return `Airy ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return `Clear ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  if (/wet|nasal|젖은|비성/.test(phrase)) return `Wet ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  if (/deep|heavy|chest|low|묵직/.test(phrase)) return `Deep ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  return `${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+}
+
+function buildCompactVocalCue(member: VocalMember) {
+  const char = member.character || {};
+  const techniqueCues = (char.techniqueIds || [])
+    .map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.promptCore)
+    .filter(Boolean)
+    .map((value) => safeVocalTagPart(value as string))
+    .slice(0, 2);
+  const toneCue = safeVocalTagPart(VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore || char.customVoiceTone || '');
+  const personalityCue = safeVocalTagPart(VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore || char.customPersonality || '');
+  return [toneCue, ...techniqueCues, personalityCue]
+    .filter(Boolean)
+    .filter((item, index, arr) => arr.findIndex((other) => other.toLowerCase() === item.toLowerCase()) === index)
+    .slice(0, 2)
+    .join(', ');
+}
+
+function buildVocalSectionTagOptions(members: VocalMember[], vocalMode: VocalMode): VocalSectionTagOption[] {
+  if (vocalMode !== 'group' || members.length === 0) return [];
+  const options = members.slice(0, 5).map((member, index) => {
+    const displayLabel = getMemberVisibleName(member, index, members);
+    const actualLabel = inferVocalActualLabel(member);
+    const cue = buildCompactVocalCue(member);
+    return {
+      tag: `VOCAL::${safeVocalTagPart(actualLabel)}::${safeVocalTagPart(cue)}`,
+      displayLabel,
+      description: `${displayLabel}를 이 섹션에 단독 배치합니다. 실제 가사 태그에는 ${actualLabel}${cue ? `, ${cue}` : ''}로 적용되고 ONLY가 붙습니다.`,
+    };
+  });
+  if (options.length >= 2) {
+    options.push({ tag: 'VOCAL_ALL::All Vocals::', displayLabel: '전체보컬', description: '이 섹션을 모든 보컬이 함께 부르는 구간으로 지정합니다. ONLY는 붙지 않습니다.' });
+  }
+  return options;
+}
+
 function buildThemeSentence(themeLabels: string[] = []): string {
   if (!themeLabels.length) return '';
   if (themeLabels.length === 1) return `Focused on ${themeLabels[0].toLowerCase()}.`;
@@ -1788,6 +1957,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
     }
     setIsExpanded(false);
   };
+
 
   return (
     <>
@@ -2762,6 +2932,10 @@ function App() {
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
+  const vocalSectionTagOptions = useMemo(
+    () => buildVocalSectionTagOptions(vocalMembers, vocalMode),
+    [vocalMembers, vocalMode]
+  );
   const MAX_FUSION_GENRES = 2;
   const limitFusionGenreIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(0, MAX_FUSION_GENRES);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -3541,11 +3715,7 @@ const toggleCycleVariantSelection = (
 
     if (appliedKeywords.vocal) {
       const v = appliedKeywords.vocal;
-      if (v.isToneSelected && v.globalToneId) {
-        setSelectedVocalToneId(v.globalToneId);
-      } else {
-        setSelectedVocalToneId(undefined);
-      }
+      setSelectedVocalToneId(undefined);
       if (v.mode) setVocalMode(v.mode);
       if (v.members) setVocalMembers(v.members);
     }
@@ -4639,9 +4809,8 @@ const saveRecentSong = async (newSong: any) => {
         };
         const auxiliaryVocal = pickOneGenreVocal(genreVocalParts);
 
-        const selectedVocalEmotion = selectedVocalToneId ? getVocalEmotionDisplayLabel(selectedVocalToneId) : null;
         const recTone = recommendedTone?.label;
-        const primaryTone = selectedVocalEmotion || recTone;
+        const primaryTone = recTone;
 
         const vocalDesignParts = [];
         if (formation) vocalDesignParts.push(formation);
@@ -4708,11 +4877,6 @@ const saveRecentSong = async (newSong: any) => {
           female: femaleCount,
           rap: rapEnabled,
           mode: vocalMode,
-          globalToneId: selectedVocalToneId,
-          isToneSelected: !!selectedVocalToneId,
-          tonePrompt: selectedVocalToneId
-            ? getVocalEmotionPromptValue(selectedVocalToneId)
-            : undefined,
           members: vocalMembers,
         },
         tempo: tempoInfo,
@@ -4761,9 +4925,6 @@ const saveRecentSong = async (newSong: any) => {
             vocal: payload.vocal,
             pointSounds: finalPointSounds,
             vocalType: formation || 'Default',
-            vocalEmotion: selectedVocalToneId
-              ? getVocalEmotionDisplayLabel(selectedVocalToneId)
-              : null,
             rapEnabled: rapEnabled,
             isNoLyrics: !requestedIncludeLyrics,
             lyricLanguages: requestedLyricLanguages,
@@ -5272,7 +5433,6 @@ ${normalizePromptForDisplay(result.prompt)}
     maxBPM !== 110 ||
     kpopMode !== 0 ||
     isKoreanEnglishMix ||
-    selectedVocalToneId !== undefined ||
     citypopMode !== 0 ||
     isGenreRandomized ||
     isMoodRandomized ||
@@ -5954,13 +6114,11 @@ ${normalizePromptForDisplay(result.prompt)}
               vocalMode={vocalMode}
               vocalTones={vocalTones}
               vocalMembers={vocalMembers}
-              selectedToneId={selectedVocalToneId}
               rapEnabled={rapEnabled}
               onMaleChange={setMaleCount}
               onFemaleChange={setFemaleCount}
               onModeChange={setVocalMode}
               onMembersChange={setVocalMembers}
-              onToneChange={setSelectedVocalToneId}
               onRapChange={setRapEnabled}
               isKoreanEnglishMix={isKoreanEnglishMix}
               englishMixRatio={englishMixRatio}
@@ -6016,6 +6174,7 @@ ${normalizePromptForDisplay(result.prompt)}
                   .map((id) => [getPointSoundTagLabelById(id), getPointSoundTagDisplayLabelById(id)] as const)
                   .filter(([tag, label]) => Boolean(tag && label))
               )}
+              vocalSectionTags={vocalSectionTagOptions}
             />
           </div>
         </div>
@@ -6266,11 +6425,6 @@ ${normalizePromptForDisplay(result.prompt)}
                 ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
                 ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#한/영 혼합' }] : []),
                 ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
-                ...(selectedVocalToneId ? [{ 
-                  id: 'vocal-tone', 
-                  type: 'vocal-tone' as const, 
-                  label: `#보컬감정: ${getVocalEmotionDisplayLabel(selectedVocalToneId) || '선택됨'}` 
-                }] : []),
               ].map((item) => {
                   const chipClassName = item.type === 'style'
                     ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
@@ -6296,8 +6450,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           else if (item.type === 'sound') setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
                           else if (item.type === 'mix') { setIsKoreanEnglishMix(false); setEnglishMixRatio(10); }
                           else if (item.type === 'rap') setRapEnabled(false);
-                          else if (item.type === 'vocal-tone') setSelectedVocalToneId(undefined);
-                        }}
+                              }}
                         className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
                       >
                         <X className="w-3 h-3" />
@@ -6935,7 +7088,7 @@ ${normalizePromptForDisplay(result.prompt)}
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/' 
                 ? (!isActionButtonsCollapsed && !isAnyModalOpen
-                    ? "bottom-10 md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
+                    ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
                 : "bottom-10 max-w-[250px] md:max-w-[400px]"
             )}
@@ -7118,6 +7271,24 @@ ${normalizePromptForDisplay(result.prompt)}
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
+
+        .saved-structure-scroll::-webkit-scrollbar {
+          height: 2px;
+        }
+        .saved-structure-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .saved-structure-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.08);
+          border-radius: 999px;
+        }
+        .saved-structure-scroll:hover::-webkit-scrollbar-thumb {
+          background: rgba(255,130,0,0.22);
+        }
+        .saved-structure-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.10) transparent;
+        }
         @keyframes marquee-right {
           0% { transform: translateX(-50%); }
           100% { transform: translateX(0); }
@@ -7131,6 +7302,7 @@ ${normalizePromptForDisplay(result.prompt)}
 }
 
 function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClose: () => void; applyTemplate: (template: PromptTemplate) => void }) {
+
   if (!isOpen) return null;
 
   const guides = [
@@ -7176,7 +7348,7 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
                 <YoutubeIcon className="w-6 h-6 text-red-500" />
                 가이드 템플릿
               </h2>
-              <button onClick={onClose} className="p-2 hover:bg-btn-hover rounded-full transition-colors">
+              <button onClick={() => closeTagModal()} className="p-2 hover:bg-btn-hover rounded-full transition-colors">
                 <X className="w-5 h-5 text-[var(--text-secondary)]" />
               </button>
             </div>
@@ -7896,7 +8068,7 @@ function CycleKeywordPopup({
           className="w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4">
+          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
             <div className="min-w-0">
               <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isPointSelectionMode ? "text-fuchsia-400" : "text-brand-orange")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
@@ -8354,6 +8526,7 @@ interface SongStructureIntegratedControlProps {
   sectionTags: SectionTag[];
   pointSoundTags?: string[];
   pointSoundTagLabels?: Record<string, string>;
+  vocalSectionTags?: VocalSectionTagOption[];
   onModalStateChange?: (isOpen: boolean) => void;
 }
 
@@ -8373,31 +8546,167 @@ function SongStructureIntegratedControl({
   sectionTags,
   pointSoundTags = [],
   pointSoundTagLabels = {},
+  vocalSectionTags = [],
   onModalStateChange
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const customModalHistoryPushedRef = useRef(false);
+  const customModalBackdropMouseDownRef = useRef(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [editingSavedStructureId, setEditingSavedStructureId] = useState<string | null>(null);
+  const [isSaveStructureModalOpen, setIsSaveStructureModalOpen] = useState(false);
+  const saveStructureModalHistoryPushedRef = useRef(false);
+  const saveStructureModalBackdropMouseDownRef = useRef(false);
+  const [isSavedSectionsModalOpen, setIsSavedSectionsModalOpen] = useState(false);
+  const savedSectionsModalHistoryPushedRef = useRef(false);
+  const savedSectionsModalBackdropMouseDownRef = useRef(false);
   const [structureSearch, setStructureSearch] = useState('');
   const [structureFilter, setStructureFilter] = useState<'all' | 'like' | 'dislike'>('all');
+  const [deleteConfirmPresetId, setDeleteConfirmPresetId] = useState<string | null>(null);
+  const [editingPresetTitleId, setEditingPresetTitleId] = useState<string | null>(null);
+  const [editingPresetTitleDraft, setEditingPresetTitleDraft] = useState('');
+  const [userCustomSections, setUserCustomSections] = useState<UserCustomSectionDefinition[]>([]);
+  const [userCustomSectionTags, setUserCustomSectionTags] = useState<UserCustomSectionTagDefinition[]>([]);
+  const [isCustomSectionEditorOpen, setIsCustomSectionEditorOpen] = useState(false);
+  const [editingCustomSectionId, setEditingCustomSectionId] = useState<string | null>(null);
+  const [customSectionDraft, setCustomSectionDraft] = useState({ labelKo: '', labelEn: '' });
+  const customSectionEditorHistoryPushedRef = useRef(false);
+  const customSectionEditorBackdropMouseDownRef = useRef(false);
+  const [sectionLibraryFilter, setSectionLibraryFilter] = useState<'all' | 'basic' | 'my'>('all');
+  const [isCustomSectionConverting, setIsCustomSectionConverting] = useState(false);
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
   useEffect(() => {
-    onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null);
-  }, [isCustomModalOpen, editingSectionIndex, onModalStateChange]);
+    onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen);
+  }, [isCustomModalOpen, editingSectionIndex, isCustomSectionEditorOpen, isSaveStructureModalOpen, isSavedSectionsModalOpen, onModalStateChange]);
 
   useEffect(() => {
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);
     }
   }, [lyricsLength, songStructure, customStructure]);
+
+
+  useEffect(() => {
+    setUserCustomSections(normalizeUserCustomSections(safeReadJsonArray<UserCustomSectionDefinition>(USER_CUSTOM_SECTIONS_STORAGE_KEY)));
+    setUserCustomSectionTags(normalizeUserCustomSectionTags(safeReadJsonArray<UserCustomSectionTagDefinition>(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY)));
+  }, []);
+
+  const persistUserCustomSections = useCallback((next: UserCustomSectionDefinition[]) => {
+    const normalized = normalizeUserCustomSections(next).slice(0, 40);
+    setUserCustomSections(normalized);
+    writeJsonArray(USER_CUSTOM_SECTIONS_STORAGE_KEY, normalized);
+  }, []);
+
+  const persistUserCustomSectionTags = useCallback((next: UserCustomSectionTagDefinition[]) => {
+    const normalized = normalizeUserCustomSectionTags(next).slice(0, 120);
+    setUserCustomSectionTags(normalized);
+    writeJsonArray(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY, normalized);
+  }, []);
+
+  const customSectionMap = useMemo(() => new Map(userCustomSections.map((item) => [item.label, item])), [userCustomSections]);
+  const allStructureSections = useMemo(() => {
+    const builtIns = CUSTOM_STRUCTURE_SECTIONS.map((label) => ({ label, custom: null as UserCustomSectionDefinition | null }));
+    const customItems = userCustomSections
+      .filter((item) => !CUSTOM_STRUCTURE_SECTIONS.includes(item.label as any))
+      .map((item) => ({ label: item.label, custom: item }));
+    if (sectionLibraryFilter === 'basic') return builtIns;
+    if (sectionLibraryFilter === 'my') return customItems;
+    return [...builtIns, ...customItems];
+  }, [userCustomSections, sectionLibraryFilter]);
+
+  const resetCustomSectionDraft = () => {
+    setEditingCustomSectionId(null);
+    setCustomSectionDraft({ labelKo: '', labelEn: '' });
+  };
+
+  const closeCustomSectionEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && customSectionEditorHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setIsCustomSectionEditorOpen(false);
+    customSectionEditorHistoryPushedRef.current = false;
+    resetCustomSectionDraft();
+  }, []);
+
+  const openCustomSectionEditor = (section?: UserCustomSectionDefinition) => {
+    if (section) {
+      setEditingCustomSectionId(section.id);
+      setCustomSectionDraft({
+        labelKo: section.labelKo || '',
+        labelEn: section.label || '',
+      });
+    } else {
+      resetCustomSectionDraft();
+    }
+    setIsCustomSectionEditorOpen(true);
+    if (!customSectionEditorHistoryPushedRef.current) {
+      window.history.pushState({ modal: 'custom-section-editor' }, '');
+      customSectionEditorHistoryPushedRef.current = true;
+    }
+  };
+
+  const saveCustomSectionDefinition = async () => {
+    const rawKo = sanitizeCustomLabel(customSectionDraft.labelKo);
+    const rawEn = sanitizeCustomLabel(customSectionDraft.labelEn);
+    const labelKo = rawKo || rawEn;
+    if (!labelKo || isCustomSectionConverting) return;
+    setIsCustomSectionConverting(true);
+    try {
+      const prevItem = userCustomSections.find((item) => item.id === editingCustomSectionId);
+      const shouldAutoGenerate = !rawEn || Boolean(prevItem && rawKo && rawKo !== (prevItem.labelKo || ''));
+      const autoMeta = shouldAutoGenerate ? await generateCustomSectionMetadata({
+        labelKo,
+        description: '',
+        kind: 'other',
+        context: 'section',
+      }) : null;
+      const label = sanitizeCustomLabel(shouldAutoGenerate ? (autoMeta?.labelEn || rawEn || labelKo) : (rawEn || autoMeta?.labelEn || labelKo));
+      const tagCue = sanitizeCustomLabel(autoMeta?.tagCue || prevItem?.tagCue || label);
+      const promptFull = String(autoMeta?.promptFull || prevItem?.promptFull || tagCue)
+        .replace(/[\n\r]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160);
+      if (!label) return;
+      const kind = (autoMeta?.kind || prevItem?.kind || 'other') as CustomSectionKind;
+      const now = Date.now();
+      const nextItem: UserCustomSectionDefinition = {
+        id: editingCustomSectionId || `custom_section_${now}_${Math.random().toString(36).slice(2, 7)}`,
+        label,
+        labelKo,
+        tagCue,
+        promptFull,
+        description: labelKo,
+        kind,
+        defaultTags: [],
+        allowVocal: typeof autoMeta?.allowVocal === 'boolean' ? autoMeta.allowVocal : (prevItem?.allowVocal ?? (kind !== 'instrumental' && kind !== 'transition')),
+        isInstrumental: typeof autoMeta?.isInstrumental === 'boolean' ? autoMeta.isInstrumental : (prevItem?.isInstrumental ?? kind === 'instrumental'),
+        createdAt: prevItem?.createdAt || now,
+        updatedAt: now,
+      };
+      const next = editingCustomSectionId
+        ? userCustomSections.map((item) => item.id === editingCustomSectionId ? nextItem : item)
+        : [nextItem, ...userCustomSections];
+      persistUserCustomSections(next);
+      closeCustomSectionEditor();
+    } finally {
+      setIsCustomSectionConverting(false);
+    }
+  };
+  const deleteCustomSectionDefinition = (id: string) => {
+    const target = userCustomSections.find((item) => item.id === id);
+    if (!target) return;
+    persistUserCustomSections(userCustomSections.filter((item) => item.id !== id));
+    persistUserCustomSectionTags(userCustomSectionTags.filter((item) => item.section !== target.label));
+  };
 
   const lyricsOptions = [
     { id: 'very-short', label: 'Very Short', labelKo: '더짧게', description: '매우 간결하고 함축적인 가사 (트로트)' },
@@ -8455,6 +8764,51 @@ function SongStructureIntegratedControl({
     customModalHistoryPushedRef.current = false;
   }, []);
 
+  const resetDraftStructure = useCallback(() => {
+    setDraftStructure([]);
+    setPresetName('');
+    setEditingSavedStructureId(null);
+    setStructureSearch('');
+    setStructureFilter('all');
+    setDeleteConfirmPresetId(null);
+  }, []);
+
+  const closeSaveStructureModal = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && saveStructureModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setIsSaveStructureModalOpen(false);
+    saveStructureModalHistoryPushedRef.current = false;
+  }, []);
+
+
+  const closeSavedSectionsModal = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && savedSectionsModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setIsSavedSectionsModalOpen(false);
+    savedSectionsModalHistoryPushedRef.current = false;
+  }, []);
+
+  const openSavedSectionsModal = useCallback(() => {
+    setIsSavedSectionsModalOpen(true);
+    if (!savedSectionsModalHistoryPushedRef.current) {
+      window.history.pushState({ modal: 'saved-sections' }, '');
+      savedSectionsModalHistoryPushedRef.current = true;
+    }
+  }, []);
+
+  const openSaveStructureModal = useCallback(() => {
+    if ((draftStructure ?? []).length === 0) return;
+    setIsSaveStructureModalOpen(true);
+    if (!saveStructureModalHistoryPushedRef.current) {
+      window.history.pushState({ modal: 'save-structure' }, '');
+      saveStructureModalHistoryPushedRef.current = true;
+    }
+  }, [draftStructure]);
+
   useEffect(() => {
     if (!isCustomModalOpen) return;
     const originalOverflow = document.body.style.overflow;
@@ -8462,7 +8816,13 @@ function SongStructureIntegratedControl({
 
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (editingSectionIndex !== null) {
+        if (isSavedSectionsModalOpen) {
+          closeSavedSectionsModal();
+        } else if (isSaveStructureModalOpen) {
+          closeSaveStructureModal();
+        } else if (isCustomSectionEditorOpen) {
+          closeCustomSectionEditor();
+        } else if (editingSectionIndex !== null) {
           setEditingSectionIndex(null);
         } else {
           closeCustomModal();
@@ -8471,6 +8831,7 @@ function SongStructureIntegratedControl({
     };
 
     const handlePopState = (e: PopStateEvent) => {
+      if (editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen) return;
       if (isCustomModalOpen) {
         closeCustomModal('history');
       }
@@ -8484,7 +8845,79 @@ function SongStructureIntegratedControl({
       window.removeEventListener('keydown', handleKeydown);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [isCustomModalOpen, closeCustomModal, editingSectionIndex]);
+  }, [isCustomModalOpen, closeCustomModal, editingSectionIndex, isCustomSectionEditorOpen, closeCustomSectionEditor, isSaveStructureModalOpen, closeSaveStructureModal, isSavedSectionsModalOpen, closeSavedSectionsModal]);
+
+  useEffect(() => {
+    if (!isCustomSectionEditorOpen) return;
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCustomSectionEditor();
+    };
+    const handlePopState = () => {
+      closeCustomSectionEditor('history');
+    };
+    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isCustomSectionEditorOpen, closeCustomSectionEditor]);
+
+  useEffect(() => {
+    if (!isSaveStructureModalOpen) return;
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeSaveStructureModal();
+    };
+    const handlePopState = () => {
+      closeSaveStructureModal('history');
+    };
+    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isSaveStructureModalOpen, closeSaveStructureModal]);
+
+
+  useEffect(() => {
+    if (!isSavedSectionsModalOpen) return;
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeSavedSectionsModal();
+    };
+    const handlePopState = () => {
+      closeSavedSectionsModal('history');
+    };
+    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isSavedSectionsModalOpen, closeSavedSectionsModal]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!isCustomModalOpen && !isSavedSectionsModalOpen && !isSaveStructureModalOpen && editingSectionIndex === null && !isCustomSectionEditorOpen) return;
+      // Fullscreen mode can disrupt the stacked history entries on some mobile/desktop browsers.
+      // Close custom-structure overlays directly so X, ESC, and Back remain responsive after fullscreen changes.
+      setIsSavedSectionsModalOpen(false);
+      savedSectionsModalHistoryPushedRef.current = false;
+      setIsSaveStructureModalOpen(false);
+      saveStructureModalHistoryPushedRef.current = false;
+      setIsCustomSectionEditorOpen(false);
+      customSectionEditorHistoryPushedRef.current = false;
+      setEditingSectionIndex(null);
+      setIsCustomModalOpen(false);
+      customModalHistoryPushedRef.current = false;
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    };
+  }, [isCustomModalOpen, isSavedSectionsModalOpen, isSaveStructureModalOpen, editingSectionIndex, isCustomSectionEditorOpen]);
 
   const persistSavedStructures = async (next: SavedStructurePreset[]) => {
     if (!user) return;
@@ -8513,11 +8946,17 @@ function SongStructureIntegratedControl({
 
   function formatStructureText(structure: CustomSectionItem[]) {
     const normalized = normalizeCustomStructure(structure);
+    const vocalLabelMap = Object.fromEntries(vocalSectionTags.map((item) => [item.tag, item.displayLabel] as const));
+    const customTagLabelMap = Object.fromEntries(userCustomSectionTags.map((item) => [item.label, item.labelKo || item.label] as const));
+    const getDisplay = (tag: string) => vocalLabelMap[tag] || customTagLabelMap[tag] || pointSoundTagLabels[tag] || tag;
+    const getSectionDisplay = (section: string) => customSectionMap.get(section)?.labelKo || section;
     return normalized.map(s => {
-      if (s.section === 'Instrumental' && (s.tags ?? []).length > 0) {
-        return `${s.section}: ${(s.tags ?? [])[0]}`;
+      const sectionLabel = getSectionDisplay(String(s.section));
+      const visibleTags = (s.tags ?? []).map(getDisplay);
+      if (s.section === 'Instrumental' && visibleTags.length > 0) {
+        return `${sectionLabel}: ${visibleTags[0]}`;
       }
-      return `${s.section}${(s.tags ?? []).length > 0 ? ` · ${(s.tags ?? []).join(' · ')}` : ''}`;
+      return `${sectionLabel}${visibleTags.length > 0 ? ` · ${visibleTags.join(' · ')}` : ''}`;
     }).join(' → ');
   }
 
@@ -8612,19 +9051,59 @@ function SongStructureIntegratedControl({
     setEditingSavedStructureId(null);
     setStructureSearch('');
     setStructureFilter('all');
+    setDeleteConfirmPresetId(null);
+    setEditingPresetTitleId(null);
+    setEditingPresetTitleDraft('');
+    closeSaveStructureModal();
   };
 
   const handleLoadPreset = (preset: SavedStructurePreset) => {
     setDraftStructure(normalizeCustomStructure(preset.sections));
     setPresetName(preset.name);
     setEditingSavedStructureId(preset.id);
+    setDeleteConfirmPresetId(null);
+    setEditingPresetTitleId(null);
+    setEditingPresetTitleDraft('');
+  };
+
+  const startEditPresetTitle = (preset: SavedStructurePreset) => {
+    setDeleteConfirmPresetId(null);
+    setEditingPresetTitleId(preset.id);
+    setEditingPresetTitleDraft(preset.name);
+  };
+
+  const cancelEditPresetTitle = () => {
+    setEditingPresetTitleId(null);
+    setEditingPresetTitleDraft('');
+  };
+
+  const confirmEditPresetTitle = (presetId: string) => {
+    const trimmedName = editingPresetTitleDraft.trim();
+    if (!trimmedName) {
+      cancelEditPresetTitle();
+      return;
+    }
+    persistSavedStructures(savedStructures.map((preset) => (
+      preset.id === presetId ? { ...preset, name: trimmedName } : preset
+    )));
+    cancelEditPresetTitle();
   };
 
   const handleDeletePreset = (presetId: string) => {
+    if (deleteConfirmPresetId !== presetId) {
+      setDeleteConfirmPresetId(presetId);
+      window.setTimeout(() => {
+        setDeleteConfirmPresetId((current) => current === presetId ? null : current);
+      }, 2600);
+      return;
+    }
     persistSavedStructures(savedStructures.filter((preset) => preset.id !== presetId));
+    setDeleteConfirmPresetId(null);
+    if (editingPresetTitleId === presetId) cancelEditPresetTitle();
   };
 
   const handleToggleReaction = (presetId: string, reaction: 'like' | 'dislike') => {
+    setDeleteConfirmPresetId(null);
     const next = savedStructures.map(p => {
       if (p.id === presetId) {
         return {
@@ -8645,6 +9124,178 @@ function SongStructureIntegratedControl({
       return matchesSearch && matchesFilter;
     });
   }, [savedStructures, structureSearch, structureFilter]);
+
+
+  const renderSavedSectionPanel = (modalMode = false) => (
+    <div className={cn(
+      "h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col",
+      modalMode ? "bg-[var(--card-bg)]" : ""
+    )}>
+      <div className="flex flex-col gap-3 mb-4 min-w-0">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장 섹션</p>
+          <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
+        </div>
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-secondary)]" />
+            <input
+              type="text"
+              value={structureSearch}
+              onChange={(e) => setStructureSearch(e.target.value)}
+              placeholder="구조 이름 또는 내용 검색..."
+              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40 shadow-inner"
+            />
+            {structureSearch && (
+              <button onClick={() => setStructureSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="w-3 h-3 text-[var(--text-secondary)]" />
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1">
+            {(['all', 'like', 'dislike'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setStructureFilter(f)}
+                className={cn(
+                  "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-btn",
+                  structureFilter === f
+                    ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
+                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                )}
+              >
+                {f === 'all' && '전체'}
+                {f === 'like' && <><ThumbsUp className="w-3 h-3" /> </>}
+                {f === 'dislike' && <><ThumbsDown className="w-3 h-3" /> </>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2">
+        {filteredSavedStructures.length === 0 ? (
+          <div className="rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-6 text-center">
+            <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
+            <p className="text-[12px] text-[var(--text-secondary)]">
+              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장 섹션이 없습니다.'}
+            </p>
+          </div>
+        ) : (
+          filteredSavedStructures.map((preset) => (
+            <div key={preset.id} className="relative rounded-2xl bg-[var(--bg-secondary)] border border-btn-border p-3 min-h-[132px] hover:border-brand-orange/30 transition-all group shadow-sm overflow-hidden min-w-0">
+              <div className="absolute right-3 top-2 z-10 flex items-center gap-1.5">
+                {editingPresetTitleId === preset.id ? (
+                  <button
+                    onClick={() => confirmEditPresetTitle(preset.id)}
+                    className="w-7 h-7 rounded-lg border bg-brand-orange/20 border-brand-orange/50 text-brand-orange hover:bg-brand-orange/30 transition-all flex items-center justify-center"
+                    aria-label="저장 섹션 이름 수정 완료"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => startEditPresetTitle(preset)}
+                    className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 transition-all flex items-center justify-center"
+                    aria-label="저장 섹션 이름 편집"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDeletePreset(preset.id)}
+                  className={cn(
+                    "w-7 h-7 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center",
+                    deleteConfirmPresetId === preset.id && "bg-red-500/20 border-red-400 text-red-200"
+                  )}
+                  aria-label="저장 섹션 삭제"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+              <AnimatePresence>
+                {deleteConfirmPresetId === preset.id && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    className="absolute right-3 top-10 z-20 w-36 rounded-xl border border-red-500/40 bg-[var(--card-bg)] px-2.5 py-2 text-[10px] font-bold text-red-300 shadow-xl pointer-events-none"
+                  >
+                    한번 더 클릭시 삭제됩니다
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <div className="min-w-0 pr-20">
+                <div className="flex items-center gap-2 mb-1 min-w-0">
+                  {editingPresetTitleId === preset.id ? (
+                    <input
+                      autoFocus
+                      value={editingPresetTitleDraft}
+                      onChange={(e) => setEditingPresetTitleDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') confirmEditPresetTitle(preset.id);
+                        if (e.key === 'Escape') cancelEditPresetTitle();
+                      }}
+                      className="min-w-0 flex-1 rounded-lg bg-black/20 border border-brand-orange/40 px-2 py-1 text-sm font-bold text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                    />
+                  ) : (
+                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
+                  )}
+                  {preset.reaction && editingPresetTitleId !== preset.id && (
+                    <span className={cn(
+                      "shrink-0 p-1 rounded-md",
+                      preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
+                    )}>
+                      {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div
+                className="mt-2 h-9 w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-xl border border-btn-border bg-black/10 px-3 flex items-center saved-structure-scroll cursor-grab active:cursor-grabbing overscroll-x-contain"
+                title={formatStructureText(preset.sections)}
+              >
+                <span className="inline-block whitespace-nowrap text-[11px] text-[var(--text-secondary)] leading-none">
+                  {formatStructureText(preset.sections)}
+                </span>
+              </div>
+              <div className="mt-3 flex gap-2 min-w-0">
+                <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+                  <button
+                    onClick={() => handleToggleReaction(preset.id, 'like')}
+                    className={cn(
+                      "p-1.5 rounded-lg transition-all",
+                      preset.reaction === 'like' ? "bg-brand-orange text-white shadow-sm" : "text-[var(--text-secondary)] hover:bg-white/10"
+                    )}
+                  >
+                    <ThumbsUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleToggleReaction(preset.id, 'dislike')}
+                    className={cn(
+                      "p-1.5 rounded-lg transition-all",
+                      preset.reaction === 'dislike' ? "bg-white/20 text-white shadow-sm" : "text-[var(--text-secondary)] hover:bg-white/10"
+                    )}
+                  >
+                    <ThumbsDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    handleLoadPreset(preset);
+                    if (modalMode) closeSavedSectionsModal();
+                  }}
+                  className="flex-1 py-1.5 rounded-xl bg-white/10 border border-white/15 text-[11px] font-bold text-[var(--text-primary)] hover:bg-white/15 transition-all"
+                >
+                  불러오기
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -8790,19 +9441,26 @@ function SongStructureIntegratedControl({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-            onClick={() => closeCustomModal()}
+            onMouseDown={(e) => {
+              customModalBackdropMouseDownRef.current = e.target === e.currentTarget;
+            }}
+            onClick={(e) => {
+              if (customModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomModal();
+              customModalBackdropMouseDownRef.current = false;
+            }}
           >
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-              className="w-full max-w-4xl max-h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+              className="w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4">
+              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
                 <div>
-                  <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">커스텀 곡 구조 편집</h3>
+                  <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">섹션 커스텀 섹션</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 곡 구조를 만드세요.</p>
                 </div>
                 <button
@@ -8813,19 +9471,40 @@ function SongStructureIntegratedControl({
                 </button>
               </div>
 
-              <div className="p-5 overflow-y-auto custom-scrollbar max-h-[calc(86vh-82px)] space-y-5">
+              <div className="p-5 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-h-0 space-y-5">
                 <div>
-                  <p className="text-xs font-bold text-brand-orange uppercase tracking-wider mb-3">섹션 추가</p>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">섹션 추가</p>
+                    <div className="flex gap-1 rounded-xl bg-black/10 border border-btn-border p-1">
+                      {(['all', 'basic', 'my'] as const).map((filter) => (
+                        <button
+                          key={filter}
+                          type="button"
+                          onClick={() => setSectionLibraryFilter(filter)}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg text-[10px] font-black transition-all",
+                            sectionLibraryFilter === filter
+                              ? "bg-brand-orange text-white"
+                              : "text-[var(--text-secondary)] hover:bg-white/10"
+                          )}
+                        >
+                          {filter === 'all' ? '전체' : filter === 'basic' ? '기본 섹션' : 'MY 섹션'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {CUSTOM_STRUCTURE_SECTIONS.map((section) => {
-                      const meta = SECTION_META[section];
+                    {allStructureSections.map(({ label: section, custom }) => {
+                      const displaySection = custom ? custom.label : section;
+                      const meta = SECTION_META[section] || (custom ? { tier: 'free' as TagTier, descriptionKo: custom.labelKo || custom.description || custom.promptFull || custom.tagCue || custom.label } : undefined);
                       const sectionTier = meta?.tier || 'free';
                       const isLocked = (sectionTier === 'pro' && userTier !== 'pro') || 
                                        (sectionTier === 'basic' && userTier === 'free');
 
                       return (
                         <button
-                          key={section}
+                          key={custom?.id || section}
+                          type="button"
                           onClick={() => {
                             if (isLocked) {
                               const tierLabel = sectionTier === 'pro' ? 'Pro' : 'Basic';
@@ -8836,149 +9515,202 @@ function SongStructureIntegratedControl({
                           }}
                           onMouseEnter={() => onHover({ 
                             id: `section-add-${section}`, 
-                            label: section, 
+                            label: section,
+                            labelKo: custom?.labelKo || displaySection, 
                             description: isLocked 
                               ? `${sectionTier === 'pro' ? 'Pro' : 'Basic'} 플랜 전용 섹션입니다.` 
-                                : (SECTION_META[section]?.descriptionKo || '')
+                                : (SECTION_META[section]?.descriptionKo || custom?.labelKo || custom?.description || custom?.promptFull || '')
                             })
                           }
                           onMouseLeave={() => onHover(null)}
                           className={cn(
-                            "px-3.5 py-2 rounded-xl border text-[13px] font-bold transition-all flex items-center gap-1.5 shadow-btn",
+                            "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5 shadow-btn",
                             isLocked 
-                              ? "bg-btn-bg border-btn-border text-[var(--text-secondary)]/40 cursor-not-allowed"
+                              ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
                               : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                           )}
                         >
-                          {section}
+                          {displaySection}
+                          {custom && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openCustomSectionEditor(custom); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openCustomSectionEditor(custom); } }}
+                              className="ml-1 inline-flex items-center rounded-md px-1.5 py-1 text-brand-orange/95 hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
+                              title="내 섹션 수정"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </span>
+                          )}
                           {isLocked && <Lock className="w-3 h-3" />}
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.9fr] gap-5">
-                  <div className="space-y-4">
-                    {/* Action Buttons & Preview moved here */}
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => closeCustomModal()}
-                          className="px-4 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-primary)] hover:bg-btn-hover transition-all font-bold text-sm shadow-btn"
-                        >
-                          취소
-                        </button>
-                        {(editingSavedStructureId || (draftStructure ?? []).length > 0) && (
-                          <button
-                            onClick={handleSavePreset}
-                            className={cn(
-                              "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm shadow-btn",
-                              (draftStructure ?? []).length > 0
-                                ? "bg-btn-bg text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
-                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
-                            )}
-                            disabled={(draftStructure ?? []).length === 0}
-                          >
-                            {editingSavedStructureId ? '업데이트 저장' : '구조 저장'}
-                          </button>
-                        )}
-                        <button
-                          onClick={handleApplyCustomStructure}
-                          disabled={(draftStructure ?? []).length === 0}
-                          className={cn(
-                            "px-5 py-2.5 rounded-xl font-bold transition-all border text-sm shadow-btn",
-                            (draftStructure ?? []).length > 0
-                              ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
-                              : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
-                          )}
-                        >
-                          적용
-                        </button>
-                      </div>
-
-                      {(draftStructure ?? []).length > 0 && (
-                        <div className="rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3">
-                          <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
-                          <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
-                            {formatStructureText(draftStructure)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
-                      <button
-                        onClick={() => setDraftStructure([])}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-btn",
-                          (draftStructure ?? []).length > 0
-                            ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                            : "bg-btn-bg border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed"
-                        )}
-                        disabled={(draftStructure ?? []).length === 0}
-                      >
-                        전체 초기화
-                      </button>
-                    </div>
-
-                    <Reorder.Group 
-                      axis="y" 
-                      values={draftStructure ?? []} 
-                      onReorder={setDraftStructure}
-                      className="min-h-[180px] rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2"
-                      as="div"
+                    <button
+                      type="button"
+                      onClick={() => openCustomSectionEditor()}
+                      className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
                     >
-                      {(draftStructure ?? []).length === 0 ? (
-                        <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
-                          구조가 비어 있습니다. 위의 섹션 버튼을 눌러 추가하세요.
-                        </div>
-                      ) : (
-                        (draftStructure ?? []).map((item, index) => (
-                          <ReorderableSectionItem
-                            key={item.id}
-                            item={item}
-                            index={index}
-                            onEdit={setEditingSectionIndex}
-                            onRemove={removeSectionAt}
-                            onHover={onHover}
-                          />
-                        ))
-                      )}
-                    </Reorder.Group>
+                      <Plus className="w-3.5 h-3.5" /> 섹션 추가
+                    </button>
                   </div>
+
+                  {isCustomSectionEditorOpen && (
+                    <div
+                      className="fixed inset-0 z-[185] flex items-center justify-center px-4 backdrop-blur-[1.5px]"
+                      onMouseDown={(e) => { customSectionEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
+                      onClick={(e) => {
+                        if (customSectionEditorBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomSectionEditor();
+                        customSectionEditorBackdropMouseDownRef.current = false;
+                      }}
+                    >
+                      <div
+                        className="w-[min(92vw,460px)] rounded-2xl border border-brand-orange/40 bg-[var(--card-bg)] shadow-2xl p-4 space-y-3"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black text-brand-orange">커스텀 섹션 {editingCustomSectionId ? '수정' : '추가'}</p>
+                            <p className="text-[11px] text-[var(--text-secondary)]">
+                              {editingCustomSectionId ? '한글은 설명용, 영어는 실제 가사 태그용입니다.' : '한글 섹션명만 입력하면 영어 태그명은 자동 생성됩니다.'}
+                            </p>
+                          </div>
+                          <button type="button" onClick={() => closeCustomSectionEditor()} className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
+                        </div>
+                        <input
+                          value={customSectionDraft.labelKo}
+                          onChange={(e) => setCustomSectionDraft((prev) => ({ ...prev, labelKo: e.target.value }))}
+                          placeholder="한글 섹션명: 예: 속삭이는 랩"
+                          className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                        />
+                        {editingCustomSectionId && (
+                          <input
+                            value={customSectionDraft.labelEn}
+                            onChange={(e) => setCustomSectionDraft((prev) => ({ ...prev, labelEn: e.target.value }))}
+                            placeholder="영어 태그명: 예: Whisper Rap"
+                            className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                          />
+                        )}
+                        <div className={cn("grid gap-2", editingCustomSectionId ? "grid-cols-3" : "grid-cols-2")}>
+                          {editingCustomSectionId && (
+                            <button
+                              type="button"
+                              onClick={() => { deleteCustomSectionDefinition(editingCustomSectionId); closeCustomSectionEditor(); }}
+                              className="py-2.5 rounded-xl bg-red-500/10 border border-red-500/40 text-sm font-bold text-red-300"
+                            >
+                              삭제
+                            </button>
+                          )}
+                          <button type="button" onClick={() => closeCustomSectionEditor()} className="py-2.5 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)]">취소</button>
+                          <button type="button" onClick={saveCustomSectionDefinition} disabled={isCustomSectionConverting} className="py-2.5 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white disabled:opacity-60">{isCustomSectionConverting ? '자동 변환 중...' : '저장'}</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-4">
-                    <div className="rounded-2xl border border-[var(--border-color)] p-4 space-y-3">
-                      <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조 저장</p>
-                      <input
-                        type="text"
-                        value={presetName}
-                        onChange={(e) => setPresetName(e.target.value)}
-                        placeholder="예: 감성 발라드형"
-                        className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 shadow-inner"
-                      />
+                <div className="space-y-4 min-w-0">
+                  <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch min-w-0">
+                    <div className="flex-1 min-w-0 rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3 overflow-hidden">
+                      <p className="text-[11px] font-bold text-brand-orange mb-2">미리보기</p>
+                      <div className="h-[42px] overflow-y-auto pr-1 custom-scrollbar">
+                        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
+                          {(draftStructure ?? []).length > 0 ? formatStructureText(draftStructure) : '섹션을 추가하면 현재 구조가 여기에 표시됩니다.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 shrink-0">
                       <button
-                        onClick={handleSavePreset}
-                        disabled={(draftStructure ?? []).length === 0}
+                        onClick={openSaveStructureModal}
                         className={cn(
-                          "w-full py-2.5 rounded-xl font-bold text-sm transition-all border",
+                          "px-4 py-2.5 rounded-xl border transition-all font-bold text-sm shadow-btn",
                           (draftStructure ?? []).length > 0
-                            ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
+                            ? "bg-btn-bg text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
                             : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
+                        disabled={(draftStructure ?? []).length === 0}
                       >
-                        {editingSavedStructureId ? '업데이트 저장' : '구조 저장'}
+                        섹션저장
                       </button>
                     </div>
+                  </div>
 
-                    <div className="rounded-2xl border border-[var(--border-color)] p-4">
-                      <div className="flex flex-col gap-3 mb-4">
+                  <div className="xl:hidden flex justify-end">
+                    <button
+                      type="button"
+                      onClick={openSavedSectionsModal}
+                      className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/5 text-[var(--text-primary)] text-[12px] font-bold hover:bg-white/10 transition-all shadow-btn"
+                    >
+                      저장 섹션
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(330px,0.72fr)] gap-4 min-w-0 items-stretch">
+                    <div className="space-y-3 min-w-0 flex flex-col h-[520px]">
+                      <div className="flex items-center justify-between gap-3 shrink-0">
+                        <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={resetDraftStructure}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-btn",
+                              (draftStructure ?? []).length > 0 || editingSavedStructureId
+                                ? "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                            )}
+                            disabled={(draftStructure ?? []).length === 0 && !editingSavedStructureId}
+                          >
+                            취소
+                          </button>
+                          <button
+                            onClick={handleApplyCustomStructure}
+                            disabled={(draftStructure ?? []).length === 0}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all shadow-btn",
+                              (draftStructure ?? []).length > 0
+                                ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
+                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                            )}
+                          >
+                            적용
+                          </button>
+                        </div>
+                      </div>
+
+                      <Reorder.Group 
+                        axis="y" 
+                        values={draftStructure ?? []} 
+                        onReorder={setDraftStructure}
+                        className="flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2 overflow-y-auto custom-scrollbar"
+                        as="div"
+                      >
+                        {(draftStructure ?? []).length === 0 ? (
+                          <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
+                            구조가 비어 있습니다. 위의 섹션 버튼을 눌러 추가하세요.
+                          </div>
+                        ) : (
+                          (draftStructure ?? []).map((item, index) => (
+                            <ReorderableSectionItem
+                              key={item.id}
+                              item={item}
+                              index={index}
+                              onEdit={setEditingSectionIndex}
+                              onRemove={removeSectionAt}
+                              onHover={onHover}
+                              sectionDisplayLabel={customSectionMap.get(String(item.section))?.label || String(item.section)}
+                            />
+                          ))
+                        )}
+                      </Reorder.Group>
+                    </div>
+
+                    <div className="hidden xl:block min-w-0 overflow-hidden h-[520px]">
+                      <div className="h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
+                      <div className="flex flex-col gap-3 mb-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장된 구조</p>
+                          <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">저장 섹션</p>
                           <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
                         </div>
                         
@@ -9024,45 +9756,94 @@ function SongStructureIntegratedControl({
                         </div>
                       </div>
 
-                      <div className="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
+                      <div className="space-y-2 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2">
                         {filteredSavedStructures.length === 0 ? (
                           <div className="rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-6 text-center">
                             <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
                             <p className="text-[12px] text-[var(--text-secondary)]">
-                              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장된 구조가 없습니다.'}
+                              {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : '저장 섹션이 없습니다.'}
                             </p>
                           </div>
                         ) : (
                           filteredSavedStructures.map((preset) => (
-                            <div key={preset.id} className="rounded-2xl bg-[var(--bg-secondary)] border border-btn-border p-3 hover:border-brand-orange/30 transition-all group shadow-sm">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
-                                    {preset.reaction && (
-                                      <span className={cn(
-                                        "shrink-0 p-1 rounded-md",
-                                        preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
-                                      )}>
-                                        {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                                    {formatStructureText(preset.sections)}
-                                  </p>
-                                </div>
-                                <div className="flex flex-col gap-1 shrink-0">
+                            <div key={preset.id} className="relative rounded-2xl bg-[var(--bg-secondary)] border border-btn-border p-3 min-h-[132px] hover:border-brand-orange/30 transition-all group shadow-sm overflow-hidden min-w-0">
+                              <div className="absolute right-3 top-2 z-10 flex items-center gap-1.5">
+                                {editingPresetTitleId === preset.id ? (
                                   <button
-                                    onClick={() => handleDeletePreset(preset.id)}
-                                    className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
+                                    onClick={() => confirmEditPresetTitle(preset.id)}
+                                    className="w-7 h-7 rounded-lg border bg-brand-orange/20 border-brand-orange/50 text-brand-orange hover:bg-brand-orange/30 transition-all flex items-center justify-center"
+                                    aria-label="저장 섹션 이름 수정 완료"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Check className="w-3.5 h-3.5" />
                                   </button>
+                                ) : (
+                                  <button
+                                    onClick={() => startEditPresetTitle(preset)}
+                                    className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 transition-all flex items-center justify-center"
+                                    aria-label="저장 섹션 이름 편집"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeletePreset(preset.id)}
+                                  className={cn(
+                                    "w-7 h-7 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center",
+                                    deleteConfirmPresetId === preset.id && "bg-red-500/20 border-red-400 text-red-200"
+                                  )}
+                                  aria-label="저장 섹션 삭제"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <AnimatePresence>
+                                {deleteConfirmPresetId === preset.id && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                    className="absolute right-3 top-10 z-20 w-36 rounded-xl border border-red-500/40 bg-[var(--card-bg)] px-2.5 py-2 text-[10px] font-bold text-red-300 shadow-xl pointer-events-none"
+                                  >
+                                    한번 더 클릭시 삭제됩니다
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                              <div className="min-w-0 pr-20">
+                                <div className="flex items-center gap-2 mb-1 min-w-0">
+                                  {editingPresetTitleId === preset.id ? (
+                                    <input
+                                      autoFocus
+                                      value={editingPresetTitleDraft}
+                                      onChange={(e) => setEditingPresetTitleDraft(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') confirmEditPresetTitle(preset.id);
+                                        if (e.key === 'Escape') cancelEditPresetTitle();
+                                      }}
+                                      className="min-w-0 flex-1 rounded-lg bg-black/20 border border-brand-orange/40 px-2 py-1 text-sm font-bold text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                                    />
+                                  ) : (
+                                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
+                                  )}
+                                  {preset.reaction && editingPresetTitleId !== preset.id && (
+                                    <span className={cn(
+                                      "shrink-0 p-1 rounded-md",
+                                      preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
+                                    )}>
+                                      {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
+                              <div
+                                className="mt-2 h-9 w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-xl border border-btn-border bg-black/10 px-3 flex items-center saved-structure-scroll cursor-grab active:cursor-grabbing overscroll-x-contain"
+                                title={formatStructureText(preset.sections)}
+                              >
+                                <span className="inline-block whitespace-nowrap text-[11px] text-[var(--text-secondary)] leading-none">
+                                  {formatStructureText(preset.sections)}
+                                </span>
+                              </div>
                               
-                              <div className="mt-3 flex gap-2">
+                              <div className="mt-3 flex gap-2 min-w-0">
                                 <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
                                   <button
                                     onClick={() => handleToggleReaction(preset.id, 'like')}
@@ -9102,6 +9883,119 @@ function SongStructureIntegratedControl({
                   </div>
                 </div>
               </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isSavedSectionsModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[190] flex items-center justify-center px-4 backdrop-blur-[1.5px]"
+            onMouseDown={(e) => { savedSectionsModalBackdropMouseDownRef.current = e.target === e.currentTarget; }}
+            onClick={(e) => {
+              if (savedSectionsModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeSavedSectionsModal();
+              savedSectionsModalBackdropMouseDownRef.current = false;
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              className="w-[min(94vw,440px)] h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between gap-3 shrink-0">
+                <div>
+                  <p className="text-sm font-black text-brand-orange">저장 섹션</p>
+                  <p className="text-[11px] text-[var(--text-secondary)]">저장된 섹션 구조를 불러오거나 편집합니다.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => closeSavedSectionsModal()}
+                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 p-3 overflow-hidden">
+                {renderSavedSectionPanel(true)}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isSaveStructureModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[190] bg-black/0 backdrop-blur-[1px] flex items-center justify-center px-4"
+            onMouseDown={(e) => {
+              saveStructureModalBackdropMouseDownRef.current = e.target === e.currentTarget;
+            }}
+            onClick={(e) => {
+              if (saveStructureModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeSaveStructureModal();
+              saveStructureModalBackdropMouseDownRef.current = false;
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ duration: 0.16 }}
+              className="w-full max-w-md rounded-2xl bg-[var(--card-bg)] border border-brand-orange/50 shadow-2xl overflow-hidden"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-brand-orange">섹션저장</h3>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">현재 구조를 저장할 제목을 입력합니다.</p>
+                </div>
+                <button
+                  onClick={() => closeSaveStructureModal()}
+                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <input
+                  autoFocus
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (draftStructure ?? []).length > 0) handleSavePreset();
+                  }}
+                  placeholder="예: 감성 발라드형"
+                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 shadow-inner"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => closeSaveStructureModal()}
+                    className="py-3 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)] hover:bg-btn-hover transition-all"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePreset}
+                    disabled={(draftStructure ?? []).length === 0}
+                    className="py-3 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                  >
+                    {editingSavedStructureId ? '업데이트 저장' : '저장'}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -9130,6 +10024,10 @@ function SongStructureIntegratedControl({
             sectionTags={sectionTags}
             pointSoundTags={pointSoundTags}
             pointSoundTagLabels={pointSoundTagLabels}
+            vocalSectionTags={vocalSectionTags}
+            customSectionTags={userCustomSectionTags}
+            customSections={userCustomSections}
+            onCustomSectionTagsChange={persistUserCustomSectionTags}
           />
         )}
       </AnimatePresence>
@@ -9248,7 +10146,11 @@ function TagEditModal({
   userTier,
   sectionTags,
   pointSoundTags = [],
-  pointSoundTagLabels = {}
+  pointSoundTagLabels = {},
+  vocalSectionTags = [],
+  customSectionTags = [],
+  customSections = [],
+  onCustomSectionTagsChange
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -9262,20 +10164,41 @@ function TagEditModal({
   sectionTags: SectionTag[];
   pointSoundTags?: string[];
   pointSoundTagLabels?: Record<string, string>;
+  vocalSectionTags?: VocalSectionTagOption[];
+  customSectionTags?: UserCustomSectionTagDefinition[];
+  customSections?: UserCustomSectionDefinition[];
+  onCustomSectionTagsChange?: (tags: UserCustomSectionTagDefinition[]) => void;
 }) {
   const [selectedTags, setSelectedTags] = useState<string[]>(tags);
-  const isInstrumental = section === 'Instrumental' || section === 'Solo';
+  const [tagLibraryFilter, setTagLibraryFilter] = useState<'all' | 'basic' | 'my'>('all');
+  const [showCustomTagEditor, setShowCustomTagEditor] = useState(false);
+  const [customTagDraft, setCustomTagDraft] = useState({ labelKo: '', labelEn: '' });
+  const [editingCustomTagId, setEditingCustomTagId] = useState<string | null>(null);
+  const [isCustomTagConverting, setIsCustomTagConverting] = useState(false);
+  const tagModalHistoryPushedRef = useRef(false);
+  const customTagEditorHistoryPushedRef = useRef(false);
+  const tagModalBackdropMouseDownRef = useRef(false);
+  const customTagEditorBackdropMouseDownRef = useRef(false);
+  const customSectionDef = customSections.find((item) => item.label === section);
+  const isInstrumental = section === 'Instrumental' || section === 'Solo' || Boolean(customSectionDef?.isInstrumental);
   const pointSoundTagSet = useMemo(() => new Set(pointSoundTags), [pointSoundTags]);
+  const vocalSectionTagMap = useMemo(() => new Map(vocalSectionTags.map((item) => [item.tag, item])), [vocalSectionTags]);
+  const vocalSectionTagSet = useMemo(() => new Set(vocalSectionTags.map((item) => item.tag)), [vocalSectionTags]);
+  const localCustomTagsForSection = useMemo(() => customSectionTags.filter((item) => item.section === section), [customSectionTags, section]);
+  const localCustomTagSet = useMemo(() => new Set(localCustomTagsForSection.map((item) => item.label)), [localCustomTagsForSection]);
 
   const getTagDisplayLabel = useCallback((tag: string) => {
+    const localCustomTag = localCustomTagsForSection.find((item) => item.label === tag);
+    if (localCustomTag) return localCustomTag.label;
     const fsTag = sectionTags.find(t => t.label === tag) as any;
+    // Built-in section tags must stay in English for Suno tag clarity.
+    // Korean is kept only for hover descriptions / custom labels, not button display.
     return String(
-      fsTag?.labelKo ||
+      vocalSectionTagMap.get(tag)?.displayLabel ||
       pointSoundTagLabels[tag] ||
-      SECTION_TAG_LABEL_KO_LOCAL[tag] ||
       tag
     );
-  }, [sectionTags, pointSoundTagLabels]);
+  }, [sectionTags, pointSoundTagLabels, vocalSectionTagMap, localCustomTagsForSection]);
 
   const allowedTags = useMemo(() => {
     // 1. Get all tags from Firestore for this section
@@ -9301,12 +10224,25 @@ function TagEditModal({
       ? pointSoundTags.filter(Boolean)
       : [];
 
-    // 4. Merge: Active Firestore tags + Constants not yet in Firestore + selected point-sound cues
-    const merged = [...activeFsLabels, ...missingFromFs, ...pointSoundFallbacks];
+    const vocalPlacementFallbacks = !isInstrumental
+      ? vocalSectionTags.map((item) => item.tag).filter(Boolean)
+      : [];
+
+    const localCustomTagLabels = localCustomTagsForSection.map((item) => item.label);
+
+    // 4. Merge: Active Firestore tags + Constants not yet in Firestore + local custom tags + selected point-sound cues + vocal placement tags
+    const merged = [...activeFsLabels, ...missingFromFs, ...localCustomTagLabels, ...pointSoundFallbacks, ...vocalPlacementFallbacks];
     return Array.from(new Set(merged));
-  }, [section, isInstrumental, sectionTags, pointSoundTags]);
+  }, [section, isInstrumental, sectionTags, pointSoundTags, vocalSectionTags, localCustomTagsForSection]);
+
+  const visibleTags = useMemo(() => {
+    if (tagLibraryFilter === 'my') return allowedTags.filter((tag) => localCustomTagSet.has(tag));
+    if (tagLibraryFilter === 'basic') return allowedTags.filter((tag) => !localCustomTagSet.has(tag));
+    return allowedTags;
+  }, [allowedTags, localCustomTagSet, tagLibraryFilter]);
 
   const getTagTier = (tag: string) => {
+    if (vocalSectionTagSet.has(tag) || localCustomTagSet.has(tag)) return 'free';
     const fsTag = sectionTags.find(t => t.label === tag);
     if (fsTag) return fsTag.tier;
 
@@ -9318,6 +10254,12 @@ function TagEditModal({
     const fsTag = sectionTags.find(t => t.label === tag);
     if (fsTag) return fsTag.description || '';
 
+    const localCustomTag = localCustomTagsForSection.find((item) => item.label === tag);
+    if (localCustomTag) return localCustomTag.labelKo || localCustomTag.description || '사용자가 직접 추가한 섹션 태그입니다.';
+
+    if (vocalSectionTagSet.has(tag)) {
+      return vocalSectionTagMap.get(tag)?.description || '보컬 캐릭터를 이 섹션에 직접 배치합니다.';
+    }
     if (pointSoundTagSet.has(tag)) {
       return '포인트모드에서 선택한 사운드입니다. 실제 프롬프트는 영어 태그로 유지되며, 해당 섹션의 짧은 효과음/질감 지문으로만 사용됩니다.';
     }
@@ -9329,9 +10271,70 @@ function TagEditModal({
 
   const maxSelectable = isInstrumental ? 1 : 2;
 
+  const closeCustomTagEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && customTagEditorHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setShowCustomTagEditor(false);
+    setEditingCustomTagId(null);
+    setCustomTagDraft({ labelKo: '', labelEn: '' });
+    customTagEditorHistoryPushedRef.current = false;
+  }, []);
+
+  const closeTagModal = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (showCustomTagEditor) {
+      closeCustomTagEditor(source);
+      return;
+    }
+    if (source === 'ui' && tagModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    tagModalHistoryPushedRef.current = false;
+    onClose();
+  }, [showCustomTagEditor, closeCustomTagEditor, onClose]);
+
   useEffect(() => {
     if (isOpen) setSelectedTags(tags);
   }, [isOpen, tags]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!tagModalHistoryPushedRef.current) {
+      window.history.pushState({ modal: 'section-tag-editor' }, '');
+      tagModalHistoryPushedRef.current = true;
+    }
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeTagModal();
+    };
+    const handlePopState = () => {
+      if (showCustomTagEditor) return;
+      closeTagModal('history');
+    };
+    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen, showCustomTagEditor, closeTagModal]);
+
+  useEffect(() => {
+    if (!showCustomTagEditor) return;
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCustomTagEditor();
+    };
+    const handlePopState = () => {
+      closeCustomTagEditor('history');
+    };
+    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showCustomTagEditor, closeCustomTagEditor]);
 
   const toggleTag = (tag: string) => {
     const tier = getTagTier(tag);
@@ -9357,9 +10360,89 @@ function TagEditModal({
         return [tag];
       }
 
+
+    if (vocalSectionTagSet.has(tag)) {
+        const withoutVocal = prev.filter(t => !vocalSectionTagSet.has(t));
+        const existingVocal = prev.filter(t => vocalSectionTagSet.has(t));
+        if (tag.startsWith('VOCAL_ALL::')) return [...withoutVocal, tag];
+        const nextVocal = existingVocal.filter(t => !t.startsWith('VOCAL_ALL::'));
+        if (nextVocal.length >= 2) return [...withoutVocal, nextVocal[0], tag];
+        return [...withoutVocal, ...nextVocal, tag].slice(0, maxSelectable);
+      }
+
       if (prev.length >= maxSelectable) return prev;
       return [...prev, tag];
     });
+  };
+
+  const openCustomSectionTagEditor = (item?: UserCustomSectionTagDefinition) => {
+    if (item) {
+      setEditingCustomTagId(item.id);
+      setCustomTagDraft({ labelKo: item.labelKo || '', labelEn: item.label || '' });
+    } else {
+      setEditingCustomTagId(null);
+      setCustomTagDraft({ labelKo: '', labelEn: '' });
+    }
+    setShowCustomTagEditor(true);
+    if (!customTagEditorHistoryPushedRef.current) {
+      window.history.pushState({ modal: 'custom-section-tag-editor' }, '');
+      customTagEditorHistoryPushedRef.current = true;
+    }
+  };
+
+
+  const addCustomSectionTag = async () => {
+    const rawKo = sanitizeCustomLabel(customTagDraft.labelKo);
+    const rawEn = sanitizeCustomLabel(customTagDraft.labelEn);
+    const labelKo = rawKo || rawEn;
+    if (!labelKo || isCustomTagConverting) return;
+    setIsCustomTagConverting(true);
+    try {
+      const prevItem = localCustomTagsForSection.find((item) => item.id === editingCustomTagId);
+      const shouldAutoGenerate = !rawEn || Boolean(prevItem && rawKo && rawKo !== (prevItem.labelKo || ''));
+      const autoMeta = shouldAutoGenerate
+        ? await generateCustomSectionMetadata({
+            labelKo,
+            description: '',
+            context: 'tag',
+          })
+        : null;
+      const englishLabel = sanitizeCustomLabel(shouldAutoGenerate ? (autoMeta?.labelEn || rawEn || labelKo) : (rawEn || autoMeta?.labelEn || labelKo));
+      const cue = sanitizeCustomLabel(autoMeta?.tagCue || prevItem?.description || englishLabel);
+      const promptFull = String(autoMeta?.promptFull || prevItem?.promptFull || cue || englishLabel)
+        .replace(/[\n\r]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160);
+      if (!englishLabel) return;
+      const now = Date.now();
+      const nextTag: UserCustomSectionTagDefinition = {
+        id: editingCustomTagId || `custom_tag_${now}_${Math.random().toString(36).slice(2, 7)}`,
+        label: englishLabel,
+        labelKo,
+        promptFull,
+        description: labelKo,
+        section,
+        tier: 'free',
+        createdAt: prevItem?.createdAt || now,
+        updatedAt: now,
+      };
+      const next = editingCustomTagId
+        ? normalizeUserCustomSectionTags((customSectionTags || []).map((item) => item.id === editingCustomTagId ? nextTag : item))
+        : normalizeUserCustomSectionTags([...(customSectionTags || []), nextTag]);
+      onCustomSectionTagsChange?.(next);
+      setCustomTagDraft({ labelKo: '', labelEn: '' });
+      setEditingCustomTagId(null);
+      closeCustomTagEditor();
+      setSelectedTags((prev) => Array.from(new Set([...prev, nextTag.label])).slice(0, maxSelectable));
+    } finally {
+      setIsCustomTagConverting(false);
+    }
+  };
+  const deleteCustomSectionTag = (tagLabel: string) => {
+    const next = (customSectionTags || []).filter((item) => !(item.section === section && item.label === tagLabel));
+    onCustomSectionTagsChange?.(next);
+    setSelectedTags((prev) => prev.filter((tag) => tag !== tagLabel));
   };
 
   if (!isOpen) return null;
@@ -9370,7 +10453,13 @@ function TagEditModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        tagModalBackdropMouseDownRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (tagModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeTagModal();
+        tagModalBackdropMouseDownRef.current = false;
+      }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -9378,6 +10467,7 @@ function TagEditModal({
         exit={{ opacity: 0, scale: 0.95 }}
         className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
@@ -9392,7 +10482,7 @@ function TagEditModal({
             </p>
           </div>
           <button 
-            onClick={onClose} 
+            onClick={() => closeTagModal()} 
             className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-secondary)]"
             onMouseEnter={() => onHover({ id: 'tag-modal-close', label: 'Close', labelKo: '닫기', description: '태그 편집 창을 닫습니다.' })}
             onMouseLeave={() => onHover(null)}
@@ -9401,12 +10491,33 @@ function TagEditModal({
           </button>
         </div>
         <div className="p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex gap-1 rounded-xl bg-black/10 border border-btn-border p-1">
+              {(['all', 'basic', 'my'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setTagLibraryFilter(filter)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[10px] font-black transition-all",
+                    tagLibraryFilter === filter
+                      ? "bg-brand-orange text-white"
+                      : "text-[var(--text-secondary)] hover:bg-white/10"
+                  )}
+                >
+                  {filter === 'all' ? '전체' : filter === 'basic' ? '기본 태그' : 'MY 태그'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2">
-            {allowedTags.map(tag => {
+            {visibleTags.map(tag => {
               const tier = getTagTier(tag);
               const description = getTagDescription(tag);
               const displayLabel = getTagDisplayLabel(tag);
               const isPointSoundTag = pointSoundTagSet.has(tag);
+              const isVocalPlacement = vocalSectionTagSet.has(tag);
               const isLocked = !isInstrumental && (
                 (tier === 'pro' && userTier !== 'pro') ||
                 (tier === 'basic' && userTier === 'free')
@@ -9436,26 +10547,98 @@ function TagEditModal({
                   className={cn(
                     "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5",
                     selectedTags.includes(tag)
-                      ? isPointSoundTag
-                        ? "bg-brand-orange border-pink-400 text-white shadow-[0_0_0_1px_rgba(244,114,182,0.65),0_0_14px_rgba(244,114,182,0.22)]"
-                        : "bg-brand-orange border-orange-400 text-white"
+                      ? isVocalPlacement
+                        ? "bg-sky-500 border-sky-300 text-white shadow-[0_0_0_1px_rgba(125,211,252,0.65),0_0_14px_rgba(14,165,233,0.22)]"
+                        : isPointSoundTag
+                          ? "bg-brand-orange border-pink-400 text-white shadow-[0_0_0_1px_rgba(244,114,182,0.65),0_0_14px_rgba(244,114,182,0.22)]"
+                          : "bg-brand-orange border-orange-400 text-white"
                       : isLocked
                         ? "bg-white/5 border-white/10 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
-                        : isPointSoundTag
-                          ? "bg-white/5 border-pink-400/80 text-[var(--text-primary)] hover:bg-pink-500/10 shadow-[0_0_0_1px_rgba(244,114,182,0.25)]"
-                          : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                        : isVocalPlacement
+                          ? "bg-white/5 border-sky-400/80 text-[var(--text-primary)] hover:bg-sky-500/10 shadow-[0_0_0_1px_rgba(125,211,252,0.25)]"
+                          : isPointSoundTag
+                            ? "bg-white/5 border-pink-400/80 text-[var(--text-primary)] hover:bg-pink-500/10 shadow-[0_0_0_1px_rgba(244,114,182,0.25)]"
+                            : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
                   )}
                 >
                   {displayLabel}
+                  {localCustomTagSet.has(tag) && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); const target = localCustomTagsForSection.find((item) => item.label === tag); if (target) openCustomSectionTagEditor(target); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); const target = localCustomTagsForSection.find((item) => item.label === tag); if (target) openCustomSectionTagEditor(target); } }}
+                      className={cn("ml-1 inline-flex items-center rounded-md px-1 py-0.5 transition-all", selectedTags.includes(tag) ? "text-white bg-black/20 hover:bg-black/30" : "text-brand-orange/90 hover:text-[var(--text-primary)] hover:bg-white/10")}
+                      title="내 태그 수정"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </span>
+                  )}
                   {isLocked && <Lock className="w-3 h-3" />}
-                  {tier !== 'free' && !isLocked && <Sparkles className="w-3 h-3 text-yellow-500" />}
+                  {tier !== 'free' && !isLocked && !localCustomTagSet.has(tag) && <Sparkles className="w-3 h-3 text-yellow-500" />}
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => openCustomSectionTagEditor()}
+              className="px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border border-white/20 bg-white/5 text-[var(--text-primary)] hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
+            >
+              <Plus className="w-3 h-3" /> 태그 추가
+            </button>
           </div>
+
+          {showCustomTagEditor && (
+            <div
+              className="fixed inset-0 z-[185] flex items-center justify-center px-4 backdrop-blur-[1.5px]"
+              onMouseDown={(e) => { customTagEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
+              onClick={(e) => {
+                if (customTagEditorBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomTagEditor();
+                customTagEditorBackdropMouseDownRef.current = false;
+              }}
+            >
+              <div
+                className="w-[min(92vw,420px)] rounded-2xl border border-brand-orange/40 bg-[var(--card-bg)] shadow-2xl p-4 space-y-3"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-brand-orange">커스텀 태그 {editingCustomTagId ? '수정' : '추가'}</p>
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      {editingCustomTagId ? '한글은 설명용, 영어는 실제 태그용입니다.' : '한글 태그명만 입력하면 영어 실행 태그는 자동 생성됩니다.'}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => closeCustomTagEditor()} className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
+                </div>
+                <input
+                  value={customTagDraft.labelKo}
+                  onChange={(e) => setCustomTagDraft((prev) => ({ ...prev, labelKo: e.target.value }))}
+                  placeholder="한글 태그명: 예: 숨죽인 톤"
+                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                />
+                {editingCustomTagId && (
+                  <input
+                    value={customTagDraft.labelEn}
+                    onChange={(e) => setCustomTagDraft((prev) => ({ ...prev, labelEn: e.target.value }))}
+                    placeholder="영어 태그명: 예: held-back muted tone"
+                    className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                  />
+                )}
+                <div className={cn("grid gap-2", editingCustomTagId ? "grid-cols-3" : "grid-cols-2")}>
+                  {editingCustomTagId && (
+                    <button type="button" onClick={() => { const target = localCustomTagsForSection.find((item) => item.id === editingCustomTagId); if (target) deleteCustomSectionTag(target.label); closeCustomTagEditor(); }} className="py-2.5 rounded-xl bg-red-500/10 border border-red-500/40 text-sm font-bold text-red-300">삭제</button>
+                  )}
+                  <button type="button" onClick={() => closeCustomTagEditor()} className="py-2.5 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)]">취소</button>
+                  <button type="button" onClick={addCustomSectionTag} disabled={isCustomTagConverting} className="py-2.5 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white disabled:opacity-60">{isCustomTagConverting ? '자동 변환 중...' : '저장'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             <button
-              onClick={onClose}
+              onClick={() => closeTagModal()}
               onMouseEnter={() => onHover({ id: 'tag-modal-cancel', label: 'Cancel', labelKo: '취소', description: '변경사항을 취소하고 닫습니다.' })}
               onMouseLeave={() => onHover(null)}
               className="flex-1 py-3 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)] hover:bg-btn-hover transition-all shadow-btn"
@@ -9536,6 +10719,8 @@ export const CUSTOM_STRUCTURE_SECTIONS = [
   'Outro',
   'Breakdown',
   'Drop',
+  'Break',
+  'Stop',
   'Rap Section',
   'Solo',
   'Instrumental',
@@ -9603,13 +10788,11 @@ interface VocalControlProps {
   vocalMode: VocalMode;
   vocalTones: VocalTone[];
   vocalMembers: VocalMember[];
-  selectedToneId?: string;
   rapEnabled: boolean;
   onMaleChange: (count: number) => void;
   onFemaleChange: (count: number) => void;
   onModeChange: (mode: VocalMode) => void;
   onMembersChange: (members: VocalMember[]) => void;
-  onToneChange: (toneId: string | undefined) => void;
   onRapChange: (enabled: boolean) => void;
   isKoreanEnglishMix: boolean;
   englishMixRatio: number;
@@ -9627,7 +10810,6 @@ function VocalControl({
   vocalMode,
   vocalTones,
   vocalMembers,
-  selectedToneId,
   rapEnabled,
   isKoreanEnglishMix,
   englishMixRatio,
@@ -9637,7 +10819,6 @@ function VocalControl({
   onFemaleChange, 
   onModeChange,
   onMembersChange,
-  onToneChange,
   onRapChange,
   onClear,
   onHover, 
@@ -9645,26 +10826,12 @@ function VocalControl({
   onLongPressEnd,
 }: VocalControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Height is now handled by overflow-visible
-  }, [maleCount, femaleCount, vocalMode, vocalMembers, selectedToneId, rapEnabled, isKoreanEnglishMix]);
-  const [showToneSelector, setShowToneSelector] = useState(false);
-  const [isGlobalToneDirectInput, setIsGlobalToneDirectInput] = useState(false);
-  const [globalToneDraft, setGlobalToneDraft] = useState('');
-  const globalToneButtonRef = useRef<HTMLButtonElement>(null);
-  const [globalTonePopupPos, setGlobalTonePopupPos] = useState({ top: 0, left: 0, width: 0 });
-  const updateGlobalTonePopupPos = useCallback(() => {
-    const rect = globalToneButtonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setGlobalTonePopupPos({
-      top: rect.bottom + 8,
-      left: rect.left,
-      width: rect.width,
-    });
-  }, []);
-
+  }, [maleCount, femaleCount, vocalMode, vocalMembers, rapEnabled, isKoreanEnglishMix]);
   const [activeVocalTonePopup, setActiveVocalTonePopup] = useState<string | null>(null);
   const [memberToneDirectInputId, setMemberToneDirectInputId] = useState<string | null>(null);
   const [memberToneDirectDraft, setMemberToneDirectDraft] = useState('');
@@ -9754,26 +10921,8 @@ function VocalControl({
     };
   }, [activeVocalTonePopup, updateMemberTonePopupPos]);
 
-  useEffect(() => {
-    if (!showToneSelector) return;
-    updateGlobalTonePopupPos();
-    const handleWindowChange = () => updateGlobalTonePopupPos();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowToneSelector(false);
-    };
-    window.addEventListener('resize', handleWindowChange);
-    window.addEventListener('scroll', handleWindowChange, true);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('resize', handleWindowChange);
-      window.removeEventListener('scroll', handleWindowChange, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showToneSelector, updateGlobalTonePopupPos]);
-
   const getModeLabel = (mode: VocalMode) => {
     if (mode === 'solo') return "솔로";
-    if (mode === 'duo') return "듀오";
     return "그룹";
   };
 
@@ -9800,28 +10949,22 @@ function VocalControl({
   }, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, isKoreanEnglishMix, englishMixRatio]);
 
   const handleModeClick = (mode: VocalMode) => {
-    onModeChange(mode);
-    
+    const nextMode = mode === 'duo' ? 'group' : mode;
+    onModeChange(nextMode);
+
     // Reset counts when mode changes to keep it consistent
-    if (mode === 'solo') {
+    if (nextMode === 'solo') {
       if (maleCount > 0) { onMaleChange(1); onFemaleChange(0); }
       else if (femaleCount > 0) { onMaleChange(0); onFemaleChange(1); }
       else { onMaleChange(1); onFemaleChange(0); } // Default to male solo
-    } else if (mode === 'duo') {
-      if (maleCount > 1) { onMaleChange(2); onFemaleChange(0); }
-      else if (femaleCount > 1) { onMaleChange(0); onFemaleChange(2); }
-      else if (maleCount > 0 && femaleCount > 0) { onMaleChange(1); onFemaleChange(1); }
-      else if (maleCount > 0) { onMaleChange(2); onFemaleChange(0); }
-      else if (femaleCount > 0) { onMaleChange(0); onFemaleChange(2); }
-      else { onMaleChange(1); onFemaleChange(1); } // Default to mixed duo
-    } else if (mode === 'group') {
-      // Start with a reasonable group if empty
-      if (maleCount + femaleCount < 3) {
-        onMaleChange(2); onFemaleChange(1);
+    } else if (nextMode === 'group') {
+      // Start with a simple two-person group if empty.
+      if (maleCount + femaleCount < 2) {
+        onMaleChange(1); onFemaleChange(1);
       }
     }
-    
-    onHover({ id: 'vocal-mode', label: 'Vocal Mode', labelKo: getModeLabel(mode), description: `${getModeLabel(mode)} 모드로 전환합니다.`, _ts: Date.now() });
+
+    onHover({ id: 'vocal-mode', label: 'Vocal Mode', labelKo: getModeLabel(nextMode), description: `${getModeLabel(nextMode)} 모드로 전환합니다.`, _ts: Date.now() });
   };
 
   const handleGenderToggle = (gender: 'male' | 'female') => {
@@ -9844,25 +10987,6 @@ function VocalControl({
           onMaleChange(0);
           onFemaleChange(1);
         }
-      }
-    } else if (vocalMode === 'duo') {
-      // Duo mode uses gender flags, then converts them to valid duo counts:
-      // male only = 2 male, female only = 2 female, both = 1 male + 1 female, none = random duo.
-      const nextMaleActive = gender === 'male' ? maleCount === 0 : maleCount > 0;
-      const nextFemaleActive = gender === 'female' ? femaleCount === 0 : femaleCount > 0;
-
-      if (nextMaleActive && nextFemaleActive) {
-        onMaleChange(1);
-        onFemaleChange(1);
-      } else if (nextMaleActive) {
-        onMaleChange(2);
-        onFemaleChange(0);
-      } else if (nextFemaleActive) {
-        onMaleChange(0);
-        onFemaleChange(2);
-      } else {
-        onMaleChange(0);
-        onFemaleChange(0);
       }
     } else if (vocalMode === 'group') {
       // Group mode has explicit add/remove member controls.
@@ -9912,6 +11036,42 @@ function VocalControl({
     onMembersChange(newMembers);
   };
 
+
+  const updateMemberCharacter = (idx: number, updates: Partial<NonNullable<VocalMember['character']>>) => {
+    const current = vocalMembers[idx]?.character || {};
+    handleUpdateMember(idx, {
+      character: {
+        ...current,
+        ...updates,
+      },
+    });
+  };
+
+  const toggleMemberTechnique = (idx: number, techniqueId: string) => {
+    const current = vocalMembers[idx]?.character?.techniqueIds || [];
+    const next = current.includes(techniqueId)
+      ? current.filter((id) => id !== techniqueId)
+      : [...current, techniqueId];
+    updateMemberCharacter(idx, { techniqueIds: next });
+  };
+
+  const getVocalCharacterSummary = (member: VocalMember) => {
+    const character = member.character || {};
+    const voice = VOCAL_VOICE_TONES.find((item) => item.id === character.voiceToneId)?.labelKo;
+    const personality = VOCAL_PERSONALITIES.find((item) => item.id === character.personalityId)?.labelKo;
+    const techniques = (character.techniqueIds || [])
+      .map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.labelKo)
+      .filter(Boolean)
+      .slice(0, 3);
+    const parts = [voice, personality, ...techniques].filter(Boolean);
+    return parts.length > 0 ? parts.join(' · ') : '창법 / 목소리 / 성격';
+  };
+
+  const editingVocalMemberIndex = editingVocalMemberId
+    ? vocalMembers.findIndex((member) => member.id === editingVocalMemberId)
+    : -1;
+  const editingVocalMember = editingVocalMemberIndex >= 0 ? vocalMembers[editingVocalMemberIndex] : null;
+
   const filteredTones = vocalTones.filter(t => {
     const target = t.genderTarget as string;
     if (target === 'any' || target === 'unisex') return true;
@@ -9928,23 +11088,6 @@ function VocalControl({
     
     return true;
   });
-
-  const selectedEmotion = getVocalEmotionLine(selectedToneId);
-  const selectedToneLabel = getVocalEmotionDisplayLabel(selectedToneId);
-
-  const applyGlobalToneDirectInput = () => {
-    const next = globalToneDraft.trim();
-    if (!next) return;
-    onToneChange(next);
-    setIsGlobalToneDirectInput(false);
-    setShowToneSelector(false);
-  };
-
-  const startGlobalToneDirectInput = () => {
-    setGlobalToneDraft(selectedToneLabel || '');
-    setShowToneSelector(false);
-    setIsGlobalToneDirectInput(true);
-  };
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl pt-3 px-5 pb-10 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
@@ -10061,15 +11204,15 @@ function VocalControl({
           <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}
           <div className="flex gap-1 bg-btn-bg p-1 rounded-xl border border-btn-border shadow-btn">
-            {(['solo', 'duo', 'group'] as VocalMode[]).map((mode) => (
+            {(['solo', 'group'] as VocalMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleModeClick(mode)}
                 onMouseEnter={() => {
                   const modeInfo = {
                     solo: { label: 'Solo', labelKo: '솔로', description: '혼자서 노래하는 솔로 보컬을 선택합니다.' },
-                    duo: { label: 'Duo', labelKo: '듀오', description: '두 명이서 노래하는 듀오 보컬을 선택합니다.' },
-                    group: { label: 'Group', labelKo: '그룹', description: '여러 명이서 노래하는 그룹 보컬을 선택합니다.' }
+                    duo: { label: 'Group', labelKo: '그룹', description: '두 명 이상을 캐릭터별로 설정합니다.' },
+                    group: { label: 'Group', labelKo: '그룹', description: '두 명 이상을 캐릭터별로 설정합니다.' }
                   };
                   onHover({ id: `vocal-mode-${mode}`, ...modeInfo[mode] });
                 }}
@@ -10154,152 +11297,15 @@ function VocalControl({
           )}
 
 
-          {/* Global Vocal Tone */}
-          <div className="relative space-y-1.5">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">보컬 감정 방향</p>
-              {selectedToneId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onToneChange(undefined);
-                    setGlobalToneDraft('');
-                    setIsGlobalToneDirectInput(false);
-                    setShowToneSelector(false);
-                  }}
-                  className="text-[9px] font-bold text-[var(--text-secondary)] hover:text-red-400 transition-all"
-                >
-                  지우기
-                </button>
-              )}
-            </div>
-
-            {isGlobalToneDirectInput ? (
-              <div className="flex items-center gap-2 rounded-xl border border-brand-orange bg-[var(--input-bg)] px-3 py-2">
-                <input
-                  value={globalToneDraft}
-                  onChange={(e) => setGlobalToneDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') applyGlobalToneDirectInput();
-                    if (e.key === 'Escape') {
-                      setIsGlobalToneDirectInput(false);
-                      setGlobalToneDraft(selectedToneLabel || '');
-                    }
-                  }}
-                  placeholder="직접 입력: 예: 속으로 우는, 밀어내듯 차가운, 후련한"
-                  className="min-w-0 flex-1 bg-transparent text-[11px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsGlobalToneDirectInput(false);
-                    setGlobalToneDraft(selectedToneLabel || '');
-                  }}
-                  className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-red-400 hover:bg-btn-hover transition-all"
-                  aria-label="보컬 감정 방향 직접 입력 취소"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={applyGlobalToneDirectInput}
-                  className="p-1.5 rounded-lg text-brand-orange hover:bg-brand-orange/10 transition-all"
-                  aria-label="보컬 감정 방향 직접 입력 적용"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                ref={globalToneButtonRef}
-                type="button"
-                onClick={() => {
-                  updateGlobalTonePopupPos();
-                  setShowToneSelector(prev => !prev);
-                }}
-                className={cn(
-                  "w-full py-2.5 px-3 rounded-xl text-[11px] font-bold transition-all border flex items-center justify-between shadow-btn",
-                  selectedToneId
-                    ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
-                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                )}
-              >
-                <span className="truncate">{selectedToneId ? selectedToneLabel : '감정 방향 선택 또는 직접 입력'}</span>
-                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showToneSelector && "rotate-180")} />
-              </button>
-            )}
-
-            <AnimatePresence>
-              {showToneSelector && !isGlobalToneDirectInput && (
-                <Portal>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[950]"
-                    onClick={() => setShowToneSelector(false)}
-                  >
-                    <motion.div
-                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                      transition={{ duration: 0.14 }}
-                      style={{
-                        position: 'fixed',
-                        top: globalTonePopupPos.top,
-                        left: globalTonePopupPos.left,
-                        width: globalTonePopupPos.width || undefined,
-                      }}
-                      className="rounded-2xl bg-[#050505] border border-[var(--border-color)] shadow-2xl shadow-black/60 overflow-hidden"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="p-2 max-h-64 overflow-y-auto custom-scrollbar space-y-1.5 bg-[#050505]">
-                        <button
-                          type="button"
-                          onClick={startGlobalToneDirectInput}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
-                        >
-                          <span>직접 입력</span>
-                          <Edit2 className="w-3.5 h-3.5 shrink-0" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { onToneChange(undefined); setShowToneSelector(false); }}
-                          className={cn(
-                            "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
-                            !selectedToneId ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
-                          )}
-                        >
-                          기본 추천 사용
-                        </button>
-                        {VOCAL_EMOTION_LINES.map((tone) => (
-                          <button
-                            key={tone.id}
-                            type="button"
-                            onClick={() => { onToneChange(tone.id); setShowToneSelector(false); }}
-                            className={cn(
-                              "w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all border",
-                              selectedToneId === tone.id ? "bg-brand-orange text-white border-brand-orange shadow-lg shadow-brand-orange/20" : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-brand-orange"
-                            )}
-                          >
-                            {tone.labelKo || tone.label}
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                </Portal>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* Global vocal emotion direction removed.
+              Vocal emotion/attitude is now handled per character through 성격. */}
 
           {/* Member Roles */}
           {vocalMembers.length > 0 && (
             <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-color)]">
               <div className="flex items-center justify-between px-1">
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버별 설정 ({vocalMembers.length}/7)</p>
-                <span className="text-[9px] text-[var(--text-secondary)] opacity-50">역할 및 톤 개별 설정</span>
+                <span className="text-[9px] text-[var(--text-secondary)] opacity-50">창법 · 목소리 · 성격 개별 설정</span>
               </div>
               <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
                 {vocalMembers.map((member, idx) => (
@@ -10362,6 +11368,30 @@ function VocalControl({
                           );
                         })}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditingVocalMemberId(member.id)}
+                        className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all hover:border-brand-orange/40 hover:bg-brand-orange/5 group/character"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-brand-orange tracking-tight">보컬 캐릭터 만들기</span>
+                              <span className="rounded-full bg-btn-bg border border-btn-border px-2 py-0.5 text-[8px] font-bold text-[var(--text-secondary)]">팝업</span>
+                            </div>
+                            <p className="mt-1 text-[10px] font-bold text-[var(--text-primary)] truncate">
+                              {getVocalCharacterSummary(member)}
+                            </p>
+                            <p className="mt-0.5 text-[9px] text-[var(--text-secondary)]">
+                              창법 · 목소리 · 성격을 넓은 화면에서 따로 설정합니다.
+                            </p>
+                          </div>
+                          <div className="shrink-0 rounded-xl bg-brand-orange/10 border border-brand-orange/30 p-2 text-brand-orange group-hover/character:bg-brand-orange group-hover/character:text-white transition-all">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+                      </button>
 
                           <div className="relative">
                             <button
@@ -10501,6 +11531,175 @@ function VocalControl({
       </div>
     </motion.div>
       </div>
+
+      <AnimatePresence>
+        {editingVocalMember && (
+          <Portal>
+            <motion.div
+              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditingVocalMemberId(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[var(--border-color)] bg-[#111] shadow-2xl shadow-black/70"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] bg-[#151515] px-5 py-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        editingVocalMember.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
+                      )} />
+                      <h4 className="text-lg font-black text-[var(--text-primary)]">
+                        {editingVocalMember.gender === 'male' ? '남성' : '여성'} {editingVocalMemberIndex + 1} 캐릭터
+                      </h4>
+                    </div>
+                    <p className="mt-1 truncate text-xs font-bold text-brand-orange">{getVocalCharacterSummary(editingVocalMember)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingVocalMemberId(null)}
+                    className="rounded-full border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-brand-orange/40 hover:text-brand-orange"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4">
+                  <div className="space-y-5">
+                    <section className="space-y-3">
+                      <div className="flex items-end justify-between gap-3">
+                        <div>
+                          <h5 className="text-sm font-black text-[var(--text-primary)]">창법</h5>
+                          <p className="text-[11px] text-[var(--text-secondary)]">실제 창법명, 설명, 용도를 보고 선택합니다.</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-brand-orange">기본 · 실험 창법</span>
+                      </div>
+
+                      {(['basic', 'experimental'] as const).map((category) => (
+                        <div key={category} className="space-y-2">
+                          <p className="text-[10px] font-black text-[var(--text-secondary)]">{category === 'basic' ? '기본 창법' : '실험 창법'}</p>
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                            {VOCAL_TECHNIQUES.filter((item) => item.category === category).map((technique) => {
+                              const isActive = !!editingVocalMember.character?.techniqueIds?.includes(technique.id);
+                              return (
+                                <button
+                                  key={technique.id}
+                                  type="button"
+                                  onClick={() => toggleMemberTechnique(editingVocalMemberIndex, technique.id)}
+                                  className={cn(
+                                    "rounded-2xl border p-3 text-left transition-all",
+                                    isActive
+                                      ? "border-brand-orange bg-brand-orange/15 shadow-lg shadow-brand-orange/10"
+                                      : category === 'experimental'
+                                        ? "border-purple-400/20 bg-purple-500/5 hover:border-purple-300/40 hover:bg-purple-500/10"
+                                        : "border-[var(--border-color)] bg-[#1a1a1a] hover:border-brand-orange/35 hover:bg-brand-orange/5"
+                                  )}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className={cn("text-sm font-black", isActive ? "text-brand-orange" : "text-[var(--text-primary)]")}>{technique.labelKo}</span>
+                                    {isActive && <Check className="h-4 w-4 text-brand-orange" />}
+                                  </div>
+                                  <p className="mt-1 text-[11px] leading-snug text-[var(--text-secondary)]">{technique.descriptionKo}</p>
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {technique.usageKo.map((usage) => (
+                                      <span key={usage} className="rounded-full border border-btn-border bg-btn-bg px-2 py-0.5 text-[9px] font-bold text-[var(--text-secondary)]">
+                                        {usage}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </section>
+
+                    <section className="space-y-3">
+                      <div>
+                        <h5 className="text-sm font-black text-[var(--text-primary)]">목소리</h5>
+                        <p className="text-[11px] text-[var(--text-secondary)]">짧고 감각적인 톤을 하나 고릅니다.</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                        {VOCAL_VOICE_TONES.map((voiceTone) => {
+                          const isActive = editingVocalMember.character?.voiceToneId === voiceTone.id;
+                          return (
+                            <button
+                              key={voiceTone.id}
+                              type="button"
+                              onClick={() => updateMemberCharacter(editingVocalMemberIndex, { voiceToneId: isActive ? undefined : voiceTone.id })}
+                              className={cn(
+                                "rounded-2xl border px-3 py-3 text-left text-sm font-black transition-all",
+                                isActive
+                                  ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
+                                  : "border-[var(--border-color)] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/35 hover:bg-brand-orange/5"
+                              )}
+                            >
+                              {voiceTone.labelKo}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    <section className="space-y-3">
+                      <div>
+                        <h5 className="text-sm font-black text-[var(--text-primary)]">성격</h5>
+                        <p className="text-[11px] text-[var(--text-secondary)]">보컬의 태도와 감정 방향을 짧게 잡습니다.</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        {VOCAL_PERSONALITIES.map((personality) => {
+                          const isActive = editingVocalMember.character?.personalityId === personality.id;
+                          return (
+                            <button
+                              key={personality.id}
+                              type="button"
+                              onClick={() => updateMemberCharacter(editingVocalMemberIndex, { personalityId: isActive ? undefined : personality.id })}
+                              className={cn(
+                                "rounded-2xl border px-3 py-3 text-center text-sm font-black transition-all",
+                                isActive
+                                  ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
+                                  : "border-[var(--border-color)] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/35 hover:bg-brand-orange/5"
+                              )}
+                            >
+                              {personality.labelKo}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 border-t border-[var(--border-color)] bg-[#151515] px-5 py-4">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateMember(editingVocalMemberIndex, { character: undefined })}
+                    className="rounded-xl border border-btn-border bg-btn-bg px-4 py-2 text-xs font-bold text-[var(--text-secondary)] transition-all hover:border-red-400/40 hover:text-red-300"
+                  >
+                    캐릭터 초기화
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingVocalMemberId(null)}
+                    className="rounded-xl bg-brand-orange px-5 py-2 text-xs font-black text-white shadow-lg shadow-brand-orange/20 transition-all hover:bg-brand-orange/90"
+                  >
+                    완료
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </Portal>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

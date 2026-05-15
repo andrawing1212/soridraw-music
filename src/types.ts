@@ -49,9 +49,52 @@ export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
 export type SongStructure = '1' | '2' | '3' | 'custom';
 
-export type VocalMode = 'solo' | 'duo' | 'group';
+export type VocalMode = 'solo' | 'duo' | 'group'; // 'duo' is kept for legacy saved data; UI now uses solo/group.
 
 export type VocalRole = 'main' | 'lead' | 'sub' | 'rapper';
+
+
+export type VocalTechniqueCategory = 'basic' | 'experimental';
+
+export interface VocalTechniqueOption {
+  id: string;
+  category: VocalTechniqueCategory;
+  label: string;
+  labelKo: string;
+  descriptionKo: string;
+  usageKo: string[];
+  promptCore: string;
+  promptNatural: string;
+}
+
+export interface VocalVoiceToneOption {
+  id: string;
+  label: string;
+  labelKo: string;
+  promptCore: string;
+}
+
+export interface VocalPersonalityOption {
+  id: string;
+  label: string;
+  labelKo: string;
+  promptCore: string;
+}
+
+export interface VocalCharacterSelection {
+  techniqueIds?: string[];
+  voiceToneId?: string;
+  personalityId?: string;
+  customTechnique?: string;
+  customVoiceTone?: string;
+  customPersonality?: string;
+  emphasizeInLyrics?: boolean;
+  sunoReferenceUrl?: string;
+  referenceSection?: string;
+  referenceMemo?: string;
+  displayName?: string;
+  prompt?: string;
+}
 
 export interface VocalMember {
   id: string;
@@ -59,6 +102,7 @@ export interface VocalMember {
   roles: VocalRole[];
   toneId?: string;
   tonePrompt?: string;
+  character?: VocalCharacterSelection;
 }
 
 export interface VocalTone {
@@ -157,12 +201,54 @@ export interface TempoConfig {
 export type CustomSectionType = 
   | 'Intro' | 'Verse 1' | 'Verse 2' | 'Pre-Chorus' | 'Chorus' | 'Hook' | 'Drop' 
   | 'Bridge' | 'Breakdown' | 'Instrumental' | 'Solo' | 'Rap Verse' | 'Final Chorus' | 'Outro'
-  | 'Theme A' | 'Theme B' | 'Build-up' | 'Main Theme' | 'Climax';
+  | 'Theme A' | 'Theme B' | 'Build-up' | 'Main Theme' | 'Climax' | 'Break' | 'Stop';
+
+
+export type CustomSectionKind = 'vocal' | 'rap' | 'instrumental' | 'transition' | 'build' | 'theme' | 'other';
+
+export interface UserCustomSectionDefinition {
+  id: string;
+  /** English Suno-facing section label used inside lyrics tags, e.g. Whisper Rap. */
+  label: string;
+  /** User-facing Korean/custom display label, e.g. 속삭이는 랩. */
+  labelKo?: string;
+  /** Short cue used inside lyric tags, e.g. held-back muted rap. */
+  tagCue?: string;
+  /** Fuller internal prompt used as an interpretation helper, not always printed. */
+  promptFull?: string;
+  description?: string;
+  kind: CustomSectionKind;
+  defaultTags?: string[];
+  allowVocal: boolean;
+  isInstrumental: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface UserCustomSectionTagDefinition {
+  id: string;
+  /** Short English tag cue used in lyric tags. */
+  label: string;
+  labelKo?: string;
+  /** Fuller internal prompt used as an interpretation helper, not always printed. */
+  promptFull?: string;
+  description?: string;
+  section: string;
+  tier?: TagTier;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface CustomSectionItem {
   id: string;
   section: CustomSectionType | string;
   tags: string[];
+}
+
+export interface VocalSectionTagOption {
+  tag: string;
+  displayLabel: string;
+  description: string;
 }
 
 export type GenreSubItem = {

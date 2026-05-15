@@ -312,6 +312,19 @@ export default function GenreHierarchySelector({
     return ids.map(resolveGenreDisplayLabel).filter(Boolean);
   }, [committedGenre, committedSubGenre, groups]);
 
+  const buildModalTooltip = (item: {
+    label: string;
+    labelKo?: string;
+    description?: string;
+    descriptionKo?: string;
+  }) => ({
+    label: item.labelKo || item.label,
+    description:
+      item.descriptionKo ||
+      item.description ||
+      DEFAULT_SUB_DESCRIPTION,
+  });
+
   const finalizeAndClose = (shouldCommit = true, skipHistory = false) => {
     if (shouldCommit && hasChangedInModal) {
       commitSelection(pendingMainId, pendingSubId);
@@ -333,6 +346,7 @@ export default function GenreHierarchySelector({
   const openMainModal = (group: GroupItem) => {
     setActiveGroup(group);
     setActiveMain(null);
+    setHoveredModalItem(buildModalTooltip(group));
     setModalStep("main");
     setPendingMainId(null);
     setPendingSubId(null);
@@ -369,6 +383,7 @@ export default function GenreHierarchySelector({
   };
 
   const handleMainClick = (main: MainGenreItem) => {
+    setHoveredModalItem(buildModalTooltip(main));
     handleOpenSub(main);
   };
 
@@ -388,6 +403,7 @@ export default function GenreHierarchySelector({
     setHasChangedInModal(false);
 
     setActiveMain(main);
+    setHoveredModalItem(buildModalTooltip(main));
     setModalStep("sub");
 
     window.history.pushState({ genreModal: "sub" }, "");
@@ -396,6 +412,14 @@ export default function GenreHierarchySelector({
 
   const handleSubClick = (itemId: string) => {
     if (!activeMain) return;
+
+    const clickedItem =
+      itemId === activeMain.id
+        ? activeMain
+        : activeMain.children.find((item) => item.id === itemId);
+    if (clickedItem) {
+      setHoveredModalItem(buildModalTooltip(clickedItem));
+    }
 
     const isBaseMainItem = itemId === activeMain.id;
     const nextMainId = isBaseMainItem
@@ -465,6 +489,13 @@ export default function GenreHierarchySelector({
   };
 
   const showConfirmButton = hasChangedInModal;
+  const currentModalTooltip =
+    hoveredModalItem ||
+    (modalStep === "sub" && activeMain
+      ? buildModalTooltip(activeMain)
+      : activeGroup
+        ? buildModalTooltip(activeGroup)
+        : null);
 
   useEffect(() => {
     if (!activeGroup) return;
@@ -921,18 +952,18 @@ export default function GenreHierarchySelector({
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1 text-center">
-                  {hoveredModalItem ? (
+                  {currentModalTooltip ? (
                     <motion.div
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      key={hoveredModalItem.label}
+                      key={currentModalTooltip.label}
                       className="flex flex-col items-center"
                     >
                       <div className="text-sm font-bold text-[var(--text-primary)] mb-1 break-keep">
-                        {hoveredModalItem.label}
+                        {currentModalTooltip.label}
                       </div>
                       <div className="text-[12px] text-[var(--text-secondary)] leading-relaxed line-clamp-2 font-medium break-keep">
-                        {hoveredModalItem.description}
+                        {currentModalTooltip.description}
                       </div>
                     </motion.div>
                   ) : (

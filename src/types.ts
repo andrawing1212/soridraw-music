@@ -300,6 +300,10 @@ export interface AppliedKeywords {
   situationSummary?: string;
   style?: string[];
   instrumentSound?: string[];
+  pointSound?: string | string[];
+  pointSounds?: string[];
+  customMoodInput?: string;
+  customThemeInput?: string;
   tempo?: string;
   tempoConfig?: TempoConfig | null;
   vocalType?: string;
@@ -332,6 +336,9 @@ export interface GenerateSongParams {
   situation?: SituationConfig;
   styles: string[];
   instrumentSounds: string[];
+  pointSounds?: string[];
+  customMoodInput?: string;
+  customThemeInput?: string;
   tempo: string;
   vocal: VocalConfig;
   userInput?: string;

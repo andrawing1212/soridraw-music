@@ -12,7 +12,6 @@ import {
   MID_GENRE_PROMPTS,
   SUB_GENRE_PROMPTS,
   MOODS,
-  THEMES,
   GENRE_INSTRUMENT_PROFILES,
   VOCAL_TECHNIQUES,
   VOCAL_VOICE_TONES,
@@ -924,8 +923,7 @@ function resolveMoodItem(value: string) {
   return MOODS.find(
     (item) =>
       item.id.toLowerCase() === normalized ||
-      item.label.toLowerCase() === normalized ||
-      String(item.labelKo || "").toLowerCase() === normalized,
+      item.label.toLowerCase() === normalized,
   );
 }
 
@@ -2641,10 +2639,51 @@ function normalizeLyricStructureTextForGeneration(structureText: string): string
     .join(" → ");
 }
 
+
+function buildRepresentativeDefaultStructure(params: GenerateSongParams): string {
+  const key = getSelectedPrimaryGenreKey(params);
+  const text = [
+    key,
+    params.genre || '',
+    ...(params.subGenre ?? []),
+    selectedStyleText(params),
+  ].join(' ').toLowerCase();
+  const hasRap = Boolean(params.vocal?.rap) || /\brap\b|hip[-\s]?hop|trap|rapper|래퍼|랩/.test(text);
+
+  if (/hip[-_\s]?hop|\brap\b|trap|boom[-\s]?bap|drill/.test(text)) {
+    return 'Intro → Rap Section → Hook → Rap Section → Break → Pre-Hook → Hook → Stop → Bridge → Final Hook → Outro';
+  }
+
+  if (/edm|dance|house|techno|future|dubstep/.test(text)) {
+    return 'Intro → Verse → Build-up → Drop → Verse → Pre-Chorus → Chorus → Stop → Bridge → Final Drop → Outro';
+  }
+
+  if (/city\s*pop|citypop|nu[-\s]?disco|disco|funk/.test(text)) {
+    return hasRap
+      ? 'Intro → Verse → Pre-Chorus → Chorus → Break → Rap Section → Chorus → Instrumental → Stop → Bridge → Final Chorus → Outro'
+      : 'Intro → Verse → Pre-Chorus → Chorus → Break → Verse → Chorus → Instrumental → Stop → Bridge → Final Chorus → Outro';
+  }
+
+  if (/j[-_\s]?pop|utaite|anime|anisong|rock|glitch|alternative/.test(text)) {
+    return 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Stop → Bridge → Final Chorus / Drop → Outro';
+  }
+
+  if (/ballad|acoustic|folk/.test(text)) {
+    return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Stop → Bridge → Final Chorus → Outro';
+  }
+
+  if (/lo[-_\s]?fi|chill/.test(text)) {
+    return 'Intro → Verse → Hook → Verse → Break → Hook → Stop → Bridge → Final Hook → Outro';
+  }
+
+  return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus → Chorus → Stop → Bridge → Final Chorus → Outro';
+}
+
 function buildStructureText(
   songStructure: SongStructure | undefined,
   resolvedStructure: SongStructure,
   customStructure: CustomSectionItem[] = [],
+  params?: GenerateSongParams,
 ): string {
   if (songStructure === "custom" && customStructure.length > 0) {
     return customStructure
@@ -2659,7 +2698,7 @@ function buildStructureText(
   }
 
   const structureMap: Record<Exclude<SongStructure, "custom">, string> = {
-    "1": "Default free structure: arrange sections freely around the story arc and emotional climax",
+    "1": params ? buildRepresentativeDefaultStructure(params) : "Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus → Chorus → Stop → Bridge → Final Chorus → Outro",
     "2": BASIC_STRUCTURE,
     "3": "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
   };
@@ -2670,6 +2709,98 @@ function buildStructureText(
   return normalizeLyricStructureTextForGeneration(
     structureMap[(selected as Exclude<SongStructure, "custom">) || "1"],
   );
+}
+
+
+function sectionPartBaseName(part: string): string {
+  return String(part || '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\s*:\s*.*$/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function addMoodShiftToSectionPart(part: string, transitionCue: string): string {
+  const cue = cleanupPromptTail(transitionCue || 'controlled emotional turn');
+  if (!part || /mood\s*shift/i.test(part)) return part;
+
+  const match = String(part).match(/^(.*?)(?:\s*\((.*?)\))?$/);
+  const name = cleanupPromptTail(match?.[1] || part);
+  const rawTags = (match?.[2] || '')
+    .split(',')
+    .map((item) => cleanupPromptTail(item))
+    .filter(Boolean);
+
+  const tags: string[] = [];
+  const add = (value: string) => {
+    const clean = cleanupPromptTail(value);
+    if (clean && !tags.some((existing) => existing.toLowerCase() === clean.toLowerCase())) tags.push(clean);
+  };
+
+  // Keep vocal owner first, then make the transition explicit. Limit to 3 tags.
+  rawTags.filter((tag) => /^(ONLY\s+|All Vocals|[A-Za-z].*Vocal|.*Rap)/i.test(tag)).slice(0, 1).forEach(add);
+  add('Mood Shift');
+  add(cue);
+  rawTags.filter((tag) => !/^(ONLY\s+|All Vocals|[A-Za-z].*Vocal|.*Rap)/i.test(tag) && !/mood\s*shift/i.test(tag)).forEach(add);
+
+  return `${name} (${tags.slice(0, 3).join(', ')})`;
+}
+
+function applyMoodShiftToStructureText(structureText: string, transitionCue: string): string {
+  if (!transitionCue || !structureText.trim()) return structureText;
+  const parts = structureText
+    .split('→')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!parts.length) return structureText;
+
+  const isStop = (part: string) => /^stop$/i.test(sectionPartBaseName(part));
+  const isBridge = (part: string) => /^bridge\b/i.test(sectionPartBaseName(part));
+  const isFinal = (part: string) => /^(final\s+chorus|final\s+hook)\b/i.test(sectionPartBaseName(part));
+  const hasMoodShift = parts.findIndex((part) => /mood\s*shift/i.test(part));
+  if (hasMoodShift >= 0) return parts.join(' → ');
+
+  const bridgeIndexes = parts.map((part, idx) => (isBridge(part) ? idx : -1)).filter((idx) => idx >= 0);
+  let targetIndex = -1;
+  if (bridgeIndexes.length) {
+    const finalIndex = parts.findIndex(isFinal);
+    if (finalIndex >= 0) {
+      const beforeFinal = bridgeIndexes.filter((idx) => idx < finalIndex);
+      if (beforeFinal.length) targetIndex = beforeFinal[beforeFinal.length - 1];
+    }
+    if (targetIndex < 0) {
+      const halfway = Math.floor(parts.length * 0.45);
+      const later = bridgeIndexes.filter((idx) => idx >= halfway);
+      targetIndex = (later.length ? later[later.length - 1] : bridgeIndexes[bridgeIndexes.length - 1]);
+    }
+  }
+
+  const next = [...parts];
+  if (targetIndex >= 0) {
+    if (targetIndex === 0 || !isStop(next[targetIndex - 1])) {
+      next.splice(targetIndex, 0, 'Stop');
+      targetIndex += 1;
+    }
+    next[targetIndex] = addMoodShiftToSectionPart(next[targetIndex], transitionCue);
+    return next.join(' → ');
+  }
+
+  const insertBefore = (() => {
+    const finalIndex = next.findIndex(isFinal);
+    if (finalIndex >= 0) return finalIndex;
+    for (let i = next.length - 1; i >= 0; i -= 1) {
+      if (/^(chorus|hook)\b/i.test(sectionPartBaseName(next[i]))) return i;
+    }
+    const outroIndex = next.findIndex((part) => /^outro\b/i.test(sectionPartBaseName(part)));
+    return outroIndex >= 0 ? outroIndex : next.length;
+  })();
+
+  const insert: string[] = [];
+  if (insertBefore === 0 || !isStop(next[insertBefore - 1])) insert.push('Stop');
+  insert.push(addMoodShiftToSectionPart('Bridge', transitionCue));
+  next.splice(insertBefore, 0, ...insert);
+  return next.join(' → ');
 }
 
 function buildStyle(params: GenerateSongParams): string {
@@ -3078,11 +3209,13 @@ const DEFAULT_NO_THEME_DIRECTION =
 
 const TECHNICAL_DIRECTION_LYRICS_GUARD = `
 TECHNICAL DIRECTION GUARD (MANDATORY):
-- Treat genre, mood, sound, vocal, tempo, hook, and arrangement words as production instructions only, unless the user explicitly states they are the story topic.
-- Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, R&B groove, indie-pop production, genre labels.
-- Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 장르명.
+- Treat genre, style, mood, sound, instrument, vocal, tempo, hook, transition, and arrangement words as production instructions only, unless the user explicitly states they are the story topic.
+- LYRIC CONTENT SOURCE LOCK: the actual lyric event, objects, relationship, setting, and conflict must come from the selected Theme, active Situation, lyric draft, or user director note. Mood only changes tone, pacing, emotional behavior, and point of view.
+- Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, beat, drop, glitch, neon pulse, melody line, sound layer, R&B groove, anime rock, synthwave, indie-pop production, genre labels.
+- Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 비트, 드롭, 글리치, 네온, 멜로디라인, 사운드레이어, 장르명.
 - These terms should shape performance, phrasing, arrangement, and production, but must NOT become repeated lyric phrases, metaphors, title concepts, or the central story.
-- Selected mood labels are never lyric vocabulary. If the user selected 평화로운 / peaceful, do not write the word 평화로운 or peaceful in the lyrics; translate it into performance temperature such as restrained calm, tense composure, or soft pacing depending on the actual story.
+- Selected mood labels are never lyric vocabulary. If the user selected playful/dark/cute/magical or 장난끼/어두운/귀여운/마법같은, do not write those words literally. Translate them into how the character behaves, hides, hesitates, jokes, panics, or changes pressure inside the Theme story.
+- Do not import genre/style/sound imagery into lyrics just because it was selected. For Synthwave/Anime Rock, do not automatically write neon, glitch, synth, anime, melody line, or guitar. If the Theme is 설렘, write the small fluttering event itself, such as a message mistake, delayed reply, trembling fingers, a too-quiet room, or awkward timing.
 - If the theme says “everyday freedom,” write about ordinary freedom or self-expression through concrete scenes, not about vocal rhythm or tempo.
 `;
 
@@ -4967,49 +5100,56 @@ function sanitizeVocalDirection(value: string): string {
 
 function moodToMusicAdjective(moodValue: string): string {
   const item = resolveMoodItem(moodValue);
-  const label = (item?.label || moodValue || "").toLowerCase().trim();
-  const map: Record<string, string> = {
-    달콤쌉쌀: "bittersweet",
-    고독한: "lonely",
-    몽환적: "dreamy",
-    아련한: "wistful",
-    따뜻한: "warm",
-    차분한: "calm",
-    어두운: "dark",
-    밝은: "bright",
-    희망찬: "hopeful",
-    긴장된: "tense",
-    평화로운: "peaceful",
-    낭만적: "romantic",
-    로맨틱: "romantic",
-    향수적: "nostalgic",
-    위로: "comforting",
-    위로되는: "comforting",
-    미니멀한: "minimal",
-    드라이브: "driving",
-    강력한: "powerful",
-    bittersweet: "bittersweet",
-    loneliness: "lonely",
-    lonely: "lonely",
-    dreamy: "dreamy",
-    sad: "sad",
-    warm: "warm",
-    calm: "calm",
-    dark: "dark",
-    bright: "bright",
-    hopeful: "hopeful",
-    nostalgic: "nostalgic",
-    tense: "tense",
-    peaceful: "peaceful",
-    emotional: "emotional",
-    groovy: "groovy",
-    funky: "funky",
-    upbeat: "upbeat",
-  };
-  return (
-    map[label] ||
-    cleanPromptValue(item?.label || sentenceCase(moodValue)).toLowerCase()
-  );
+  const raw = [
+    moodValue,
+    item?.id,
+    item?.label,
+    item?.labelKo,
+    item?.mood,
+    item?.description,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .trim();
+
+  const map: Array<[RegExp, string]> = [
+    [/sharp|anxious|high[-\s]?tension|긴장/, "tense"],
+    [/rich|immersive|raw depth|heartfelt|감성/, "emotional"],
+    [/complex|mixed color|bittersweet|달콤|쌉쌀|씁쓸/, "bittersweet"],
+    [/vintage|retro|analog|faded|misty|빈티지|레트로/, "vintage"],
+    [/wistful|아련|lonely|외로|고독|quiet empty/, "wistful"],
+    [/sad|슬픈|melancholic|우울/, "melancholic"],
+    [/sorrow|grieving|비통/, "sorrowful"],
+    [/warm|따뜻|cozy|아늑|몽글/, "warm"],
+    [/calm|차분|peaceful|평화|meditative|명상/, "calm"],
+    [/relax|chill|laid[-\s]?back|릴렉스|칠한/, "relaxed"],
+    [/bright|luminous|밝은/, "bright"],
+    [/dark|shadow|어두/, "dark"],
+    [/hope|희망/, "hopeful"],
+    [/comic|comedic|웃픈|코믹|funny/, "comic"],
+    [/playful|mischievous|장난|능청|cheeky/, "playful"],
+    [/cute|adorable|귀여|깜찍|perky/, "cute"],
+    [/fantasy|magical|storybook|마법|판타지|동화/, "magical"],
+    [/mysterious|신비|ethereal|에테리얼|dreamlike|dreamy|드리미|몽환/, "dreamy"],
+    [/ambient|spacious|공간|앰비언트|airy|에어리/, "spacious"],
+    [/groovy|그루비/, "groovy"],
+    [/funky|펑키/, "funky"],
+    [/upbeat|업비트|cheerful|쾌활/, "upbeat"],
+    [/powerful|파워풀|bold/, "powerful"],
+    [/catchy|캐치|hooky/, "catchy"],
+    [/minimal|미니멀/, "minimal"],
+    [/moody|무디/, "moody"],
+    [/urban|도시/, "urban"],
+    [/cinematic|시네마틱|dramatic/, "cinematic"],
+    [/smooth|스무스|mellow|부드/, "smooth"],
+  ];
+
+  for (const [pattern, value] of map) {
+    if (pattern.test(raw)) return value;
+  }
+
+  return cleanPromptValue(item?.label || sentenceCase(moodValue)).toLowerCase();
 }
 
 function getMoodWordsForMusicDirection(params: GenerateSongParams): string[] {
@@ -5769,21 +5909,28 @@ function buildFiveLineAtmosphereValue(
     ? variation.atmosphereLens
     : "";
 
-  const themeMoodAnalysis = analyzeThemeMoodContext(params);
-  const themeMoodAtmosphere =
-    situationActive && themeMoodAnalysis.atmosphereCue && themeMoodAnalysis.atmosphereCue !== "balanced emotional scene"
-      ? themeMoodAnalysis.atmosphereCue
-      : "";
+  const interpreted = buildThemeMoodInterpretation(params);
+  const interpretedCue = interpreted.atmosphereCue;
+  const shouldMergeThemeMood = Boolean(interpretedCue) && !isFreeTextPrimaryMode(params);
 
-  const atmosphere = [
-    base,
-    themeMoodAtmosphere,
-    spaceCues ? `with ${spaceCues}` : "",
-    coreGenreGuard,
-    variationLens,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const atmosphere = situationActive
+    ? [
+        base,
+        shouldMergeThemeMood ? interpretedCue : "",
+        coreGenreGuard,
+        variationLens,
+        !shouldMergeThemeMood && spaceCues ? `with ${spaceCues}` : "",
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : [
+        shouldMergeThemeMood ? interpretedCue : base,
+        coreGenreGuard,
+        !shouldMergeThemeMood && spaceCues ? `with ${spaceCues}` : "",
+        !shouldMergeThemeMood ? variationLens : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
 
   return normalizeAtmospherePromptLine(atmosphere || "balanced emotional air");
 }
@@ -5857,6 +6004,9 @@ function normalizeVocalPromptEmotion(value: string, params: GenerateSongParams):
 
   return cleanupPromptTail(
     line
+      .replace(/\bwarm\s+and\s+feeling\b/gi, 'warm feeling')
+      .replace(/\bmood\s+feeling\b/gi, 'moody feeling')
+      .replace(/\bwarm\s+and\s+moody\s+feeling\b/gi, 'warm moody feeling')
       .replace(/ghostly inward-inhaled singing\s+singing/gi, 'ghostly inward-inhaled breaths')
       .replace(/ghostly inward-inhaled singing/gi, 'ghostly inward-inhaled breaths')
       .replace(/\bsinging\s+singing\b/gi, 'singing')
@@ -5872,15 +6022,15 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
     : buildNaturalVocals(params, detailLayer);
   // V63: base already contains selected Vocal Line cues through
   // buildSelectedVocalPerformancePhrase(). Do not append raw style values again.
+  const interpreted = buildThemeMoodInterpretation(params);
+  const moodVocalCue = interpreted.vocalCue;
   const cleaned = situationActive
     ? sanitizeVocalDirection(base)
     : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(base));
-  const analysis = analyzeThemeMoodContext(params);
-  const withThemeMood =
-    analysis.vocalCue && !/^(?:mood colors only as brief delivery nuance:\s*)?$/i.test(analysis.vocalCue)
-      ? appendPromptLens(cleaned, analysis.vocalCue, situationActive ? 360 : 300)
-      : cleaned;
-  return normalizeVocalPromptEmotion(withThemeMood, params);
+  const withMood = moodVocalCue
+    ? cleanupPromptTail(`${cleaned} with ${moodVocalCue}`)
+    : cleaned;
+  return normalizeVocalPromptEmotion(withMood, params);
 }
 
 function getCompactPointSoundPrompts(pointSoundIds: string[] = []): string[] {
@@ -5909,6 +6059,30 @@ function normalizeTempoForArrangement(tempoPhrase: string): string {
   );
 }
 
+
+function getGenreDefaultTempoForArrangement(params: GenerateSongParams): string {
+  const text = [
+    getSelectedPrimaryGenreKey(params),
+    params.genre || '',
+    ...(params.subGenre ?? []),
+    selectedStyleText(params),
+    params.userInput || '',
+  ].join(' ').toLowerCase();
+
+  if (/glitch/.test(text)) return '82–112 BPM';
+  if (/anime|anisong|j[-_\s]?pop|utaite|alternative\s*pop/.test(text)) return '86–118 BPM';
+  if (/synthwave/.test(text)) return '84–112 BPM';
+  if (/city\s*pop|citypop|nu[-_\s]?disco|시티팝/.test(text)) return '94–118 BPM';
+  if (/neo[-_\s]?soul|r&b|rnb|soul/.test(text)) return '70–92 BPM';
+  if (/hip[-_\s]?hop|rap|trap/.test(text)) return '76–104 BPM';
+  if (/ballad|발라드/.test(text)) return '62–82 BPM';
+  if (/edm|dance|house|disco/.test(text)) return '108–128 BPM';
+  if (/rock|록|band/.test(text)) return '96–132 BPM';
+  if (/lo[-_\s]?fi|chill/.test(text)) return '70–92 BPM';
+  if (/jazz/.test(text)) return '72–104 BPM';
+  return '80–110 BPM';
+}
+
 function getGenreArrangementDNA(params: GenerateSongParams): string {
   const key = getSelectedPrimaryGenreKey(params);
   const map: Record<string, string> = {
@@ -5922,7 +6096,15 @@ function getGenreArrangementDNA(params: GenerateSongParams): string {
     rock: 'band-driven build, guitar-led section lift, live drum transitions, direct chorus release',
     trot: 'steady trot rhythm, clear verse-to-chorus lift, rounded vibrato space, stage-like emotional peaks',
   };
-  return map[key] || '';
+  if (map[key]) return map[key];
+
+  const text = [key, params.genre || '', ...(params.subGenre ?? []), selectedStyleText(params)].join(' ').toLowerCase();
+  if (/glitch/.test(text)) return 'glitch-pop stutter groove, sharp hook cuts, digital stop-start contrast, focused chorus impact';
+  if (/anime|anisong|j[-_\s]?pop|utaite/.test(text)) return 'anime-opening section drive, fast pre-chorus lift, high-impact hook, final chorus surge';
+  if (/synthwave/.test(text)) return 'retro synth pulse, driving night rhythm, clean build into hook, cinematic bridge turn';
+  if (/alternative/.test(text)) return 'alternative pop contrast, tense verse space, hook-centered lift, dynamic bridge turn';
+  if (/bollywood/.test(text)) return 'Bollywood pop lift, rhythmic melodic turns, cinematic chorus bloom';
+  return '';
 }
 
 function normalizeArrangementPart(part: string): string {
@@ -5936,6 +6118,11 @@ function normalizeArrangementPart(part: string): string {
       .replace(/\bstable structure\b/gi, '')
       .replace(/\bwarm structure\b/gi, '')
       .replace(/\bharmonic support\b/gi, '')
+      .replace(/\bstage[-\s]?light\s+collapse\s+imagery\b/gi, 'soft collapse turn')
+      .replace(/\bcollapse\s+imagery\b/gi, 'soft collapse turn')
+      .replace(/\bpsychological\s+horror\s+transition\b/gi, 'subtle psychological turn')
+      .replace(/\bhorror\s+transition\b/gi, 'dark emotional turn')
+      .replace(/\bclear\s+contrast\s+between\s+sections\s+and\s+cinematic\s+scene-building\s+lift\b/gi, 'clear section contrast')
       .replace(/\bgentle transitions\b/gi, 'gentle traditional transitions')
       .replace(/\bseamless\b/gi, '')
       .replace(/\brelaxed pacing\b/gi, '')
@@ -5972,6 +6159,24 @@ function normalizeArrangementLine(parts: string[]): string {
   });
 
   return cleanupPromptTail(mergeHookArrangementParts(unique).join(', '));
+}
+
+
+function buildMoodTransitionSectionInstruction(params: GenerateSongParams, exactStructureText: string): string {
+  const transitionCue = compactMoodTransitionCue(params);
+  if (!transitionCue) return "";
+  const hasExplicitOrder = exactStructureText.includes("→");
+  const placementLine = hasExplicitOrder
+    ? `- The song structure already contains the required transition placement:\n${exactStructureText}`
+    : `- Insert one transition event in the middle-late structure, preferably [Stop] then [Bridge: Mood Shift, ${transitionCue}] before Final Chorus or the final hook.`;
+  return `MOOD TRANSITION SECTION RULE (MANDATORY):
+- The selected mood-transition is a SECTION EVENT, not a global Atmosphere keyword.
+- Use this transition cue only at the selected transition section: Mood Shift, ${transitionCue}.
+${placementLine}
+- Do NOT add another Stop if a Stop already appears immediately before the Mood Shift Bridge.
+- If multiple Bridge sections exist, only ONE Bridge may carry Mood Shift: the middle-late Bridge closest to Final Chorus or the one already marked Mood Shift.
+- Do NOT write [Stop] [Stop] [Bridge]. Never duplicate Stop.
+- Do not spread the transition cue across every section; keep it localized to that Bridge or equivalent transition section.`;
 }
 
 function buildPointSoundSectionInstruction(params: GenerateSongParams): string {
@@ -6037,7 +6242,9 @@ function buildFiveLineArrangementValue(
 ): string {
   const situationActive = hasSituation(params.situation);
   const reinterpretationLayer = buildGenreReinterpretationLayer(params, params.userInput || "");
-  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params));
+  // Keep BPM in [Arrangement]. If the UI did not pass an explicit/random tempo,
+  // use a compact genre-based fallback so the final prompt does not lose tempo guidance.
+  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
   const genreDNA = getGenreArrangementDNA(params);
   const directDirectorArrangement = isFreeTextPrimaryMode(params)
     ? buildFreeTextDirectorProfile(params.userInput || "").arrangement
@@ -6057,8 +6264,8 @@ function buildFiveLineArrangementValue(
     params.songStructure === "custom" && (params.customStructure ?? []).length > 0
       ? "custom section flow"
       : "";
+  const interpretedArrangement = buildThemeMoodInterpretation(params).arrangementCue;
 
-  const themeMoodArrangement = analyzeThemeMoodContext(params).arrangementCue;
   const parts = [
     tempo,
     pointSoundArrangement,
@@ -6067,12 +6274,14 @@ function buildFiveLineArrangementValue(
     genreDNA,
     styleArrangement,
     reinterpretationLayer.arrangementLens,
-    themeMoodArrangement,
+    interpretedArrangement,
     variationMeaning,
     customFlow,
   ];
 
-  const line = normalizeArrangementLine(parts);
+  const line = normalizeArrangementLine(parts)
+    .replace(/\bstage[-\s]?light\s+collapse\s+imagery\b/gi, 'soft collapse turn')
+    .replace(/\bcollapse\s+imagery\b/gi, 'soft collapse turn');
 
   if (line) return line;
 
@@ -6366,7 +6575,8 @@ function getEnglishThemePhrase(params: GenerateSongParams): string {
   return joinPromptPhrase(rawThemes, "and").toLowerCase();
 }
 
-type ThemeMoodAnalysis = {
+
+type ThemeMoodInterpretation = {
   atmosphereCue: string;
   vocalCue: string;
   arrangementCue: string;
@@ -6375,357 +6585,343 @@ type ThemeMoodAnalysis = {
   strength: "weak" | "normal" | "strong";
 };
 
-function resolveThemeItem(value: string) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (!normalized) return undefined;
-  return THEMES.find(
-    (item) =>
-      item.id.toLowerCase() === normalized ||
-      item.label.toLowerCase() === normalized ||
-      String(item.labelKo || "").toLowerCase() === normalized,
-  );
-}
-
-function resolveThemeLabel(value: string): string {
-  const item = resolveThemeItem(value);
-  return cleanupPromptTail(item?.labelKo || item?.label || value);
-}
-
-function resolveMoodLabel(value: string): string {
-  const item = resolveMoodItem(value);
-  return cleanupPromptTail(item?.labelKo || item?.label || value);
-}
-
-function normalizeMoodCueForStory(value: string): string {
-  const raw = String(value || "").toLowerCase();
-  const map: Array<[RegExp, string]> = [
-    [/(장난끼|playful|mischievous)/i, "playful"],
-    [/(능청미|deadpan|cheeky|sly)/i, "deadpan comic"],
-    [/(웃픈|comic but sad|funny yet bittersweet)/i, "comic but sad"],
-    [/(코믹|comedic|humorous)/i, "comic"],
-    [/(귀여|cute|adorable|perky|bubbly)/i, "cute"],
-    [/(기묘|strange|uncanny|quirky|odd)/i, "uncanny"],
-    [/(판타지|fantasy)/i, "fantasy-like"],
-    [/(마법|magical)/i, "magical"],
-    [/(빈티지|vintage|retro|analog|nostalgic|misty|faded)/i, "vintage"],
-    [/(드리미|dreamy|dreamlike|hazy|floating|몽환)/i, "dreamy"],
-    [/(앰비언트|ambient|spacious|atmospheric|공간)/i, "spacious ambient"],
-    [/(에어리|airy|light|open)/i, "airy"],
-    [/(에테리얼|ethereal|weightless|otherworldly)/i, "ethereal"],
-    [/(글로시|glossy|sparkling)/i, "glossy"],
-    [/(소울풀|soulful)/i, "soulful"],
-    [/(로파이|lo-fi|lofi|dusty)/i, "lo-fi"],
-    [/(릴렉스|relaxed|chill|laid-back|편안)/i, "relaxed"],
-    [/(스무스|smooth|mellow|부드)/i, "smooth"],
-    [/(아련|wistful|쓸쓸|lonely|고독)/i, "wistful"],
-    [/(담담|restrained|understated)/i, "restrained"],
-    [/(애틋|tender|affectionate)/i, "tender"],
-    [/(공허|hollow|empty)/i, "hollow"],
-    [/(불안|uneasy|unstable|tense)/i, "uneasy"],
-    [/(서늘|cold|icy)/i, "cold"],
-    [/(몽글|soft and tender|soft)/i, "soft"],
-    [/(벅찬|swelling|overwhelming)/i, "swelling"],
-    [/(위태|fragile|on the edge)/i, "fragile"],
-    [/(밝|bright|luminous)/i, "bright"],
-    [/(어두|dark|somber|shadow)/i, "dark"],
-    [/(희망|hopeful|optimistic)/i, "hopeful"],
-    [/(치유|healing|comforting)/i, "healing"],
-    [/(우울|melancholic|blue)/i, "melancholic"],
-    [/(달콤|bittersweet)/i, "bittersweet"],
-    [/(슬픈|sad|mournful)/i, "sad"],
-    [/(낭만|romantic)/i, "romantic"],
-    [/(감성|emotional|heartfelt)/i, "emotional"],
-    [/(그루비|groovy)/i, "groovy"],
-    [/(펑키|funky)/i, "funky"],
-    [/(업비트|upbeat|driving|energetic)/i, "upbeat"],
-    [/(파워풀|powerful|bold)/i, "powerful"],
-    [/(캐치|catchy|hooky|memorable)/i, "catchy"],
-    [/(미니멀|minimal|bare)/i, "minimal"],
-    [/(시네마틱|cinematic|dramatic)/i, "cinematic"],
-    [/(도시|urban|metropolitan)/i, "urban"],
-    [/(무디|moody)/i, "moody"],
-    [/(비통|sorrowful|grieving)/i, "sorrowful"],
-  ];
-  for (const [pattern, cue] of map) {
-    if (pattern.test(raw)) return cue;
-  }
-  return cleanPromptValue(stripRemainingKoreanForProductionPrompt(value)).toLowerCase();
-}
-
-function normalizeThemeCueForStory(value: string): string {
-  const label = resolveThemeLabel(value);
-  const raw = `${value} ${label}`.toLowerCase();
-  const map: Array<[RegExp, string]> = [
-    [/(사랑|love)/i, "love"],
-    [/(짝사랑|crush)/i, "one-sided crush"],
-    [/(설렘|curiosity|flutter)/i, "first flutter"],
-    [/(고백|confession)/i, "confession"],
-    [/(만남|encounter)/i, "new encounter"],
-    [/(이별|breakup)/i, "breakup"],
-    [/(미련|lingering)/i, "lingering attachment"],
-    [/(그리움|longing)/i, "longing"],
-    [/(기다림|waiting)/i, "waiting"],
-    [/(재회|reunion)/i, "reunion"],
-    [/(오해|misunderstanding)/i, "misunderstanding"],
-    [/(화해|reconciliation)/i, "reconciliation"],
-    [/(우정|friendship)/i, "friendship"],
-    [/(가족|family)/i, "family"],
-    [/(어린시절|childhood)/i, "childhood"],
-    [/(청춘|youth)/i, "youth"],
-    [/(고향|hometown)/i, "hometown"],
-    [/(자아|identity)/i, "identity"],
-    [/(꿈|dream)/i, "dream"],
-    [/(자유|freedom)/i, "freedom"],
-    [/(방황|wandering)/i, "wandering"],
-    [/(버팀|endurance)/i, "endurance"],
-    [/(성장|growth)/i, "growth"],
-    [/(변화|change)/i, "change"],
-    [/(희망|hope)/i, "hope"],
-    [/(퇴근|after work)/i, "after-work"],
-    [/(야근|overtime)/i, "overtime"],
-    [/(회사생활|work life)/i, "office life"],
-    [/(월요일|monday)/i, "Monday"],
-    [/(혼자밥|eating alone)/i, "eating alone"],
-    [/(술자리|alcohol|drinks)/i, "drinks after hours"],
-    [/(소확행|small happiness)/i, "small everyday happiness"],
-    [/(주말|weekend)/i, "weekend"],
-    [/(도시|city)/i, "city"],
-    [/(골목|alley)/i, "alley"],
-    [/(정류장|stop|station)/i, "bus stop"],
-    [/(지하철|subway)/i, "subway"],
-    [/(편의점|convenience)/i, "convenience store"],
-    [/(카페|cafe)/i, "cafe"],
-    [/(방\b|room)/i, "room"],
-    [/(산책|walk)/i, "walk"],
-    [/(드라이브|drive)/i, "drive"],
-    [/(여행|travel)/i, "travel"],
-    [/(바다|sea|ocean)/i, "sea"],
-    [/(밤|night)/i, "night"],
-    [/(새벽|dawn)/i, "dawn"],
-    [/(시간|time)/i, "time"],
-    [/(계절|season)/i, "season"],
-    [/(비\b|rain)/i, "rain"],
-    [/(추억|memory)/i, "memory"],
-    [/(회상|reminiscence)/i, "reminiscence"],
-    [/(외로움|loneliness)/i, "loneliness"],
-    [/(후회|regret)/i, "regret"],
-    [/(집착|obsession)/i, "obsession"],
-    [/(저항|resistance)/i, "resistance"],
-    [/(분노|anger)/i, "anger"],
-    [/(불안|anxiety)/i, "anxiety"],
-    [/(운명|fate)/i, "fate"],
-    [/(위로|comfort)/i, "comfort"],
-    [/(안식처|shelter)/i, "shelter"],
-    [/(선물|gift)/i, "gift"],
-  ];
-  for (const [pattern, cue] of map) {
-    if (pattern.test(raw)) return cue;
-  }
-  return cleanPromptValue(stripRemainingKoreanForProductionPrompt(label || value)).toLowerCase();
-}
-
-function themeMoodSceneTemplate(theme: string, moodCues: string[]): {
-  scene: string;
-  details: string[];
-} {
-  const has = (...items: string[]) => moodCues.some((cue) => items.some((item) => cue.includes(item)));
-  const comic = has("comic", "playful", "deadpan");
-  const cute = has("cute");
-  const vintage = has("vintage", "wistful");
-  const fantasy = has("fantasy", "magical", "ethereal", "uncanny");
-
-  const byTheme: Record<string, { scene: string; details: string[] }> = {
-    friendship: vintage
-      ? { scene: "old friends walking through city lights with changed but warm distance", details: ["old sneakers", "convenience-store bench", "changed walking pace", "unsaid thanks"] }
-      : { scene: "friends staying beside each other through a small everyday night", details: ["shared jokes", "same bus stop", "late messages", "matched footsteps"] },
-    breakup: { scene: "a person sorting through ordinary traces after goodbye", details: ["leftover receipt", "half-empty cup", "unread message", "quiet room"] },
-    "one-sided crush": cute
-      ? { scene: "a shy crush growing through tiny imagined moments", details: ["saved message draft", "checked profile photo", "new shoes", "late-night smile"] }
-      : { scene: "a hidden crush held back by timing and hesitation", details: ["unsent text", "passing glance", "same hallway", "missed timing"] },
-    confession: { scene: "someone trying to say one honest sentence before the moment closes", details: ["shaking thumb", "open chat window", "short breath", "one step closer"] },
-    "small everyday happiness": { scene: "a small ordinary moment becoming enough for the day", details: ["warm cup", "short walk", "favorite seat", "small purchase"] },
-    "after-work": { scene: "the walk home after a long day carrying small relief and leftover thoughts", details: ["loosened tie", "empty train", "convenience-store light", "tired shoes"] },
-    overtime: comic
-      ? { scene: "a tired worker joking through overtime while hiding exhaustion", details: ["cold coffee", "blinking monitor", "group chat silence", "last train"] }
-      : { scene: "a late office night where exhaustion turns into quiet self-talk", details: ["empty desk", "cold coffee", "last train", "screen glow"] },
-    "office life": { scene: "small office rules turning into a private emotional battle", details: ["meeting room", "team chat", "lunch menu", "approval stamp"] },
-    "eating alone": { scene: "eating alone while pretending the quiet is comfortable", details: ["single tray", "corner seat", "phone screen", "slow spoon"] },
-    city: { scene: "a city night where small lives pass each other without fully touching", details: ["neon sign", "crosswalk", "window light", "distant bus"] },
-    alley: { scene: "a narrow alley holding a private feeling nobody else notices", details: ["old signboard", "footsteps", "small window", "cool wall"] },
-    "bus stop": { scene: "waiting at a stop where leaving and staying feel equally difficult", details: ["timetable", "passing headlights", "cold bench", "one missed bus"] },
-    room: { scene: "a room that keeps showing what the speaker cannot say", details: ["unmade bed", "small receipt", "dim lamp", "closed window"] },
-    travel: { scene: "leaving a familiar place while carrying a feeling that has not caught up yet", details: ["small suitcase", "platform light", "ticket", "window seat"] },
-    sea: { scene: "standing near the sea and letting an unsaid feeling loosen with the tide", details: ["wet shoes", "salt air", "distant light", "folded sleeve"] },
-    dream: fantasy
-      ? { scene: "escaping ordinary life through a strange sparkling dream gate", details: ["glowing door", "floating street", "unreal clock", "soft alarm"] }
-      : { scene: "chasing a dream while doubting whether it is still possible", details: ["old notebook", "practice room", "crossed-out plan", "morning light"] },
-    freedom: { scene: "leaving old routines behind for one small self-chosen step", details: ["open window", "untied shoes", "empty road", "first deep breath"] },
-    family: { scene: "a familiar family moment where love is shown indirectly", details: ["leftover side dish", "missed call", "worn slippers", "small nagging"] },
-    youth: { scene: "youth caught between wanting to run and not knowing where to go", details: ["school stairs", "borrowed jacket", "first bus", "messy notebook"] },
-    growth: { scene: "a quiet moment of realizing the self has changed", details: ["old photo", "new key", "packed box", "changed reflection"] },
-    comfort: { scene: "someone finding a small place to breathe after a hard day", details: ["warm blanket", "low light", "quiet message", "slow exhale"] },
-  };
-
-  const base = byTheme[theme] || {
-    scene: `${theme} turned into one concrete everyday emotional scene`,
-    details: ["one small object", "a familiar place", "an unsaid sentence", "a delayed reaction"],
-  };
-
-  if (comic && !/joking|comic|funny|playful/i.test(base.scene)) {
-    return {
-      scene: `${base.scene}, with pain hidden behind small jokes and practical replies`,
-      details: base.details,
-    };
-  }
-  if (fantasy && !/dream|gate|unreal|magical|fantasy/i.test(base.scene)) {
-    return {
-      scene: `${base.scene}, touched by one magical or unreal detail`,
-      details: base.details,
-    };
-  }
-  return base;
-}
-
-function buildMoodPairCue(moodCues: string[]): string {
-  const has = (...items: string[]) => moodCues.some((cue) => items.some((item) => cue.includes(item)));
-  if (has("bright") && has("wistful")) return "bright yet wistful";
-  if (has("upbeat") && has("melancholic")) return "upbeat but melancholic";
-  if (has("warm") && has("hollow")) return "warm but hollow";
-  if (has("comic") && (has("sad") || has("sorrowful") || has("bittersweet"))) return "comic but sad";
-  if (has("playful") && has("sorrowful")) return "playful but sorrowful";
-  if (has("relaxed") && has("uneasy")) return "relaxed but uneasy";
-  if (has("minimal") && has("emotional")) return "restrained emotional depth";
-  if (has("vintage") && has("warm")) return "warm vintage glow";
-  if (has("dreamy") && (has("ambient") || has("spacious"))) return "dreamy spacious texture";
-  if (has("catchy") && has("bittersweet")) return "bittersweet catchy hook mood";
-  if (has("moody") && has("urban")) return "moody urban flow";
-  if (has("magical") && has("cute")) return "cute magical sparkle";
-  return "";
-}
-
-function analyzeThemeMoodContext(params: GenerateSongParams): ThemeMoodAnalysis {
-  const situationActive = hasSituation(params.situation);
-  const rawThemes = (params.themes ?? []).map(resolveThemeLabel).filter(Boolean);
-  const themeCues = (params.themes ?? []).map(normalizeThemeCueForStory).filter(Boolean);
-  const rawMoodValues = (params.moods ?? [])
-    .map((mood) => resolveMoodValue(mood))
-    .filter(Boolean);
-  const moodCues = (rawMoodValues.length ? rawMoodValues : (params.moods ?? []))
-    .map(normalizeMoodCueForStory)
+function selectedThemeText(params: GenerateSongParams): string {
+  return (params.themes ?? [])
+    .map((theme) => stripRemainingKoreanForProductionPrompt(theme || ""))
     .filter(Boolean)
-    .filter((item, index, arr) => arr.indexOf(item) === index)
-    .slice(0, 4);
+    .join(" ")
+    .toLowerCase();
+}
 
-  const primaryTheme = themeCues[0] || "";
-  const pairCue = buildMoodPairCue(moodCues);
-  const moodSummary = cleanupPromptTail(
-    [pairCue, ...moodCues.filter((cue) => !pairCue.toLowerCase().includes(cue))]
-      .filter(Boolean)
-      .slice(0, situationActive ? 2 : 3)
-      .join(" "),
+function selectedMoodText(params: GenerateSongParams): string {
+  return getMoodWordsForMusicDirection(params).join(" ").toLowerCase();
+}
+
+function buildCompactMoodAngle(params: GenerateSongParams): string {
+  const moods = getMoodWordsForMusicDirection(params)
+    .map((mood) => cleanupPromptTail(stripRemainingKoreanForProductionPrompt(mood || "")).toLowerCase())
+    .filter(Boolean);
+  const text = moods.join(" ").toLowerCase();
+  if (!moods.length) return "";
+
+  if (/tense/.test(text) && /bittersweet/.test(text)) return "tense bittersweet";
+  if (/upbeat/.test(text) && /melancholic/.test(text)) return "upbeat but melancholic";
+  if (/bright/.test(text) && /(wistful|melancholic|lonely)/.test(text)) return "bright yet wistful";
+  if (/(comic|playful)/.test(text) && /(sad|sorrow|melancholic|bittersweet)/.test(text)) return "comic but bittersweet";
+  if (/playful/.test(text) && /dark/.test(text)) return "playful dark";
+  if (/warm/.test(text) && /(hollow|empty|wistful)/.test(text)) return "warm but hollow";
+  if (/minimal/.test(text) && /emotional/.test(text)) return "restrained emotional";
+  if (/vintage/.test(text) && /warm/.test(text)) return "warm vintage";
+  if (/dreamy/.test(text) && /spacious/.test(text)) return "dreamy spacious";
+  if (/tense/.test(text) && /emotional/.test(text)) return "emotionally tense";
+  if (/bittersweet/.test(text) && /emotional/.test(text)) return "bittersweet emotional";
+  if (/warm/.test(text) && /(mood|moody|dreamy|ambient|spacious|ethereal|mystic|mysterious)/.test(text)) return "warm moody";
+  if (/warm/.test(text) && /(soft|cozy|tender|relax|chill)/.test(text)) return "warm soft";
+  if (/hollow|empty/.test(text) && /(dreamy|ambient|spacious)/.test(text)) return "hollow spacious";
+
+  const compact = joinPromptPhrase(moods.slice(0, 2), "and")
+    .replace(/\bmood\b/gi, "moody")
+    .replace(/\bwarm\s+and\s+moody\b/gi, "warm moody")
+    .replace(/\bwarm\s+and\s+feeling\b/gi, "warm feeling")
+    .replace(/\bplayful\s+and\s+dark\b/gi, "playful dark")
+    .replace(/\s+/g, " ");
+
+  return cleanupPromptTail(compact);
+}
+
+
+function buildUserTextCoreScene(params: GenerateSongParams): { scene: string; detail: string } | null {
+  // Direct Theme input can carry the real story scene even when the free-text command box is empty.
+  // Treat userInput, lyricDraft, and selected/direct theme labels as one scene source for interpretation.
+  const note = [
+    params.userInput,
+    params.lyricDraft,
+    ...(params.themes ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (!note) return null;
+  const text = note.toLowerCase();
+
+  if (/(우주인|우주복|astronaut|space traveler|cosmonaut|우주를\s*떠도|우주에서|지구|earth)/i.test(note) && /(메시지|message|발신|transmission|신호|signal|던지|보내|send)/i.test(note)) {
+    return {
+      scene: "an astronaut drifting far from Earth while sending one last message to someone left behind",
+      detail: "a small blue Earth, a helmet view, a fading signal, a final unsent confession",
+    };
+  }
+
+  if (/(오타|실수|하트|문자|메시지|답장|읽음|전송|texting|message|reply|typing|sent)/i.test(note) && /(설렘|떨림|좋아|고백|crush|flutter|confession|heart)/i.test(note)) {
+    return {
+      scene: "a small message mistake growing into a confession",
+      detail: "trembling fingers, a delayed reply, a too-quiet room, one changed word",
+    };
+  }
+
+  if (/(고향|hometown)/i.test(note) && /(재회|다시\s*만|옛사랑|old love|reunion)/i.test(note)) {
+    return {
+      scene: "hometown reunion with an old love and unresolved feelings",
+      detail: "familiar streets, a small room, changed distance, unsaid words",
+    };
+  }
+
+  if (/(정류장|버스|지하철|station|subway)/i.test(note) && /(이별|떠나|그리움|breakup|goodbye|longing)/i.test(note)) {
+    return {
+      scene: "a goodbye carried through a late-night stop or station",
+      detail: "a dim station light, a paused step, a message not sent, passing windows",
+    };
+  }
+
+  return null;
+}
+
+function buildThemeCoreScene(params: GenerateSongParams): { scene: string; detail: string } {
+  const userTextScene = buildUserTextCoreScene(params);
+  if (userTextScene) return userTextScene;
+
+  const themeText = selectedThemeText(params);
+  const rawThemeText = [...(params.themes ?? []), themeText].join(" ").toLowerCase();
+  const has = (pattern: RegExp) => pattern.test(rawThemeText);
+
+  if (has(/reunion|재회/) && has(/hometown|고향/) && has(/love|사랑/)) {
+    return {
+      scene: "hometown reunion with an old love and unresolved feelings",
+      detail: "familiar streets, a small room, changed distance, unsaid words",
+    };
+  }
+  if (has(/friendship|우정/)) {
+    return {
+      scene: "old friendship seen through everyday city memories",
+      detail: "old sneakers, a convenience-store bench, changed walking pace, unsaid thanks",
+    };
+  }
+  if (has(/breakup|이별/)) {
+    return {
+      scene: "breakup aftermath carried by small objects left behind",
+      detail: "a toothbrush, a half-folded receipt, an empty room, paused hands",
+    };
+  }
+  if (has(/flutter|excitement|설렘|thrill|두근|떨림/)) {
+    return {
+      scene: "a small fluttering mistake",
+      detail: "a changed word, delayed reply, trembling fingers, a too-quiet room, awkward timing",
+    };
+  }
+  if (has(/crush|짝사랑|confession|고백/)) {
+    return {
+      scene: "shy confession or one-sided love hidden in ordinary moments",
+      detail: "unsent messages, delayed replies, a familiar profile photo, awkward timing",
+    };
+  }
+  if (has(/longing|그리움|waiting|기다림|memory|추억|reminiscence|회상/)) {
+    return {
+      scene: "lingering memory returning through familiar places",
+      detail: "old photos, quiet streets, repeated routes, a name almost spoken",
+    };
+  }
+  if (has(/work|company|after work|퇴근|야근|월요일|회사/)) {
+    return {
+      scene: "tired everyday life trying to find one small emotional escape",
+      detail: "office lights, last train, convenience-store food, unread messages",
+    };
+  }
+  if (has(/family|가족|childhood|어린시절|home|방/)) {
+    return {
+      scene: "family memory and private room silence",
+      detail: "old drawers, family photos, quiet hallway light, a childhood object",
+    };
+  }
+  if (has(/freedom|자유|dream|꿈|growth|성장|change|변화|youth|청춘/)) {
+    return {
+      scene: "a private decision to leave an old version of the self behind",
+      detail: "packed bags, open windows, a late-night road, one brave step",
+    };
+  }
+  if (has(/travel|여행|drive|드라이브|sea|바다|station|정류장|subway|지하철/)) {
+    return {
+      scene: "moving through a place while an unresolved feeling follows",
+      detail: "station lights, passing windows, sea air, a bag held too tightly",
+    };
+  }
+  if (rawThemeText.trim()) {
+    return {
+      scene: `${getEnglishThemePhrase(params)} shown through one everyday incident`,
+      detail: "one visible object, one small action, one unsaid feeling",
+    };
+  }
+  return {
+    scene: "one concrete everyday emotional scene",
+    detail: "a small place, a visible object, and a feeling shown through behavior",
+  };
+}
+
+function compactSpaceAndTransitionCue(params: GenerateSongParams): string {
+  // Space texture belongs to Atmosphere. Mood-transition values do NOT belong here;
+  // they are structural events and are handled by compactMoodTransitionCue().
+  const space = getAtmosphereSpaceCues(params)
+    .map((item) => cleanProductionPhrase(stripRemainingKoreanForProductionPrompt(item)))
+    .filter(Boolean)
+    .slice(0, 2);
+  const text = [space.join(" "), selectedStyleText(params)].join(" ").toLowerCase();
+  const cues: string[] = [];
+
+  if (/room|small room|방|intimate/.test(text)) cues.push("intimate room echoes");
+  else if (/alley|street|urban|city|도시|골목/.test(text)) cues.push("urban reflections");
+  else if (/space|spacious|ambient|reverb|echo|앰비언트|공간/.test(text)) cues.push("spatial echoes");
+
+  return joinPromptPhrase(cues.slice(0, 1), "and");
+}
+
+function compactMoodTransitionCue(params: GenerateSongParams): string {
+  const style = buildStyleRecipeProfile(params);
+  const arrangement = cleanProductionPhrase(stripRemainingKoreanForProductionPrompt(style.arrangementLens || ""));
+  const text = [arrangement, selectedStyleText(params)].join(" ").toLowerCase();
+
+  if (!/transition|전환|shift|switch|turn|twist|반전|horror|psychological|심리공포|burst|drop|release|climax|collapse|붕괴|조명/i.test(text)) {
+    return "";
+  }
+
+  if (/귀여움.*광기|광기|madness|obsess|obsessive|cute.*mad|mad.*cute/.test(text)) return "cute-to-obsessive tension";
+  if (/collapse|붕괴|조명|stage[-\s]?light/.test(text)) return "soft collapse turn";
+  if (/horror|심리공포|psychological/.test(text)) return "subtle psychological tension";
+  if (/comic|코믹|comedy|웃픈/.test(text)) return "comic turn";
+  if (/dark|어두|cold|차갑/.test(text)) return "darker turn";
+  if (/dream|몽환|dreamy/.test(text)) return "dreamy turn";
+  if (/burst|폭발|climax|터지는/.test(text)) return "emotional burst";
+  if (/release|풀리는|warm|따뜻/.test(text)) return "warm release";
+  if (/drop|식는|cold/.test(text)) return "cold drop";
+  return "controlled emotional turn";
+}
+
+function hasMoodTransitionCue(params: GenerateSongParams): boolean {
+  return Boolean(compactMoodTransitionCue(params));
+}
+
+function rawUserMoodSceneText(params: GenerateSongParams): string {
+  return [
+    ...(params.moods ?? []),
+    params.userInput || '',
+    params.lyricDraft || '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function astronautMoodAtmospherePrefix(params: GenerateSongParams): string {
+  const raw = rawUserMoodSceneText(params);
+  const parts: string[] = [];
+  const add = (value: string) => {
+    if (value && !parts.some((part) => part.toLowerCase() === value.toLowerCase())) parts.push(value);
+  };
+
+  if (/빈티지|vintage|retro|레트로/.test(raw)) add('vintage');
+  if (/아늑|cozy|coziness|포근/.test(raw)) add('cozy');
+  if (/텅\s*빈|empty|hollow|공허/.test(raw)) add('empty-space');
+  if (/앰비언트|ambient|조용히\s*들|distant\s+music|quiet\s+music/.test(raw)) add('ambient');
+  if (/몽글|dreamy|드리미|몽환/.test(raw)) add('dreamy');
+  if (/릴렉스|relax|calm|차분|명상/.test(raw)) add('calm');
+
+  return parts.slice(0, 3).join(' ');
+}
+
+function buildThemeMoodInterpretation(params: GenerateSongParams): ThemeMoodInterpretation {
+  const situationActive = hasSituation(params.situation);
+  const moodAngle = buildCompactMoodAngle(params);
+  const theme = buildThemeCoreScene(params);
+  const spaceCue = compactSpaceAndTransitionCue(params);
+  const transitionCue = compactMoodTransitionCue(params);
+  const hasThemes = Boolean((params.themes ?? []).filter(Boolean).length);
+  const hasMoods = Boolean((params.moods ?? []).filter(Boolean).length);
+
+  if (!hasThemes && !hasMoods && !spaceCue && !transitionCue) {
+    return { atmosphereCue: "", vocalCue: "", arrangementCue: "", lyricSceneCue: "", lyricDetailCue: "", strength: "weak" };
+  }
+
+  const strength: ThemeMoodInterpretation["strength"] = situationActive ? "weak" : hasThemes ? "strong" : "normal";
+  const baseScene = situationActive ? "the active situation" : theme.scene;
+  const moodPrefix = moodAngle ? `${moodAngle} ` : "";
+  const spaceTail = spaceCue ? `with ${spaceCue}` : "";
+
+  // Keep theme/story nouns visible in Atmosphere. Mood-transition cues are NOT placed here;
+  // they are structural events handled by Arrangement + Bridge section tags.
+  const joinedScene = (() => {
+    if (situationActive) {
+      return cleanupPromptTail([moodAngle ? `${moodAngle} color` : "", spaceTail].filter(Boolean).join(" with "));
+    }
+    if (!moodAngle) return cleanupPromptTail(`${baseScene}${spaceTail ? `, ${spaceTail}` : ""}`);
+    const scene = cleanupPromptTail(baseScene);
+    const sceneWithoutArticle = scene.replace(/^(?:a|an|one)\s+/i, "");
+    const isFlutterScene = /flutter|mistake|message|reply|설렘/i.test(scene);
+    const isAstronautMessageScene = /astronaut|space|earth|message|signal|transmission/i.test(scene)
+      && /astronaut|earth|message|signal|transmission/i.test(scene);
+    if (isFlutterScene && /obsessive/.test(transitionCue)) {
+      return cleanupPromptTail(`${moodAngle} crush tension, a small fluttering mistake spiraling into obsession${spaceTail ? `, ${spaceTail}` : ""}`);
+    }
+    if (isAstronautMessageScene) {
+      const directMoodPrefix = astronautMoodAtmospherePrefix(params);
+      const prefix = directMoodPrefix || moodAngle || '';
+      const hasDirectAmbientCue = /ambient|quiet music|distant music|앰비언트|조용히\s*들/i.test(rawUserMoodSceneText(params));
+      const atmosphereTailParts = [
+        hasDirectAmbientCue ? 'distant ambient music' : '',
+        spaceCue,
+      ].filter(Boolean);
+      const atmosphereTail = atmosphereTailParts.length ? ` with ${atmosphereTailParts.join(' and ')}` : '';
+      return cleanupPromptTail(`${prefix ? `${prefix} ` : ''}astronaut solitude, a final message drifting back toward Earth${atmosphereTail}`);
+    }
+    const bridge = isFlutterScene ? "tension around" : "around";
+    return cleanupPromptTail(`${moodAngle} ${bridge} ${sceneWithoutArticle}${spaceTail ? `, ${spaceTail}` : ""}`);
+  })();
+
+  const atmosphereCue = cleanupPromptTail(joinedScene
+    .replace(/\bwarm\s+and\s+astronaut\b/gi, "warm moody astronaut")
+    .replace(/\bwarm\s+and\s+mood\b/gi, "warm moody")
+    .replace(/\bwarm\s+and\s+feeling\b/gi, "warm feeling")
+    .replace(/\s{2,}/g, " "));
+
+  const vocalCue = cleanupPromptTail(
+    (situationActive
+      ? [moodAngle ? `${moodAngle} restraint` : "", /comic|playful/.test(moodAngle) ? "playful subtext" : ""].filter(Boolean).join(" and ")
+      : [moodAngle ? `${moodAngle} feeling` : "natural emotional restraint", hasThemes ? "story-aware delivery" : ""].filter(Boolean).join(" and "))
+      .replace(/\bwarm\s+and\s+feeling\b/gi, "warm feeling")
+      .replace(/\bwarm\s+and\s+moody\s+feeling\b/gi, "warm moody feeling"),
   );
-  const template = primaryTheme
-    ? themeMoodSceneTemplate(primaryTheme, moodCues)
-    : {
-        scene: moodSummary
-          ? `${moodSummary} mood shaped into a small believable scene`
-          : "one believable everyday emotional scene",
-        details: ["one small object", "a familiar place", "an unsaid sentence", "a delayed reaction"],
-      };
 
-  const hasMood = moodCues.length > 0 || Boolean(pairCue);
-  const hasTheme = themeCues.length > 0;
-  const strength: ThemeMoodAnalysis["strength"] = situationActive
-    ? "weak"
-    : hasTheme || hasMood
-      ? "strong"
-      : "normal";
-
-  const atmosphereCue = situationActive
-    ? cleanupPromptTail(
-        [
-          hasTheme ? `with ${primaryTheme || rawThemes[0]} as a lyric focus` : "",
-          moodSummary ? `colored by ${moodSummary}` : "",
-        ]
-          .filter(Boolean)
-          .join(", "),
-      )
-    : cleanupPromptTail(
-        [
-          moodSummary,
-          template.scene,
-        ]
-          .filter(Boolean)
-          .join(", "),
-      );
-
-  const vocalCue = situationActive
-    ? cleanupPromptTail(
-        moodSummary
-          ? `mood colors only as brief delivery nuance: ${moodSummary}`
-          : "",
-      )
-    : cleanupPromptTail(
-        moodSummary
-          ? `${moodSummary} vocal emotion without naming the keywords`
-          : "natural emotion shaped by the story",
-      );
-
-  const arrangementCue = situationActive
-    ? cleanupPromptTail(
-        pairCue
-          ? `${pairCue} as a subtle section turn`
-          : "",
-      )
-    : cleanupPromptTail(
-        [
-          moodCues.includes("swelling") || moodCues.includes("hopeful")
-            ? "gentle emotional bloom"
-            : "",
-          moodCues.includes("minimal") || moodCues.includes("restrained")
-            ? "restrained verses"
-            : "",
-          moodCues.includes("catchy") || moodCues.includes("upbeat")
-            ? "memorable chorus lift"
-            : "",
-          pairCue && !/hook mood/i.test(pairCue) ? `${pairCue} development` : "",
-        ]
-          .filter(Boolean)
-          .slice(0, 2)
-          .join(", "),
-      );
+  const moodShiftArrangement = transitionCue ? `mood shift after Stop into Bridge: ${transitionCue}` : "";
+  const arrangementCue = cleanupPromptTail(
+    situationActive
+      ? [moodShiftArrangement, spaceCue, moodAngle && /tense|bittersweet/.test(moodAngle) ? "restrained emotional pressure" : ""].filter(Boolean).join(", ")
+      : [moodShiftArrangement, spaceCue, /tense/.test(moodAngle) ? "restrained tension" : "", /bittersweet|wistful|warm/.test(moodAngle) ? "soft emotional release" : ""].filter(Boolean).join(", "),
+  );
 
   return {
-    atmosphereCue: atmosphereCue || "balanced emotional scene",
-    vocalCue,
-    arrangementCue,
-    lyricSceneCue: template.scene,
-    lyricDetailCue: template.details.join(", "),
+    atmosphereCue: limitText(atmosphereCue, situationActive ? 90 : 145),
+    vocalCue: limitText(vocalCue, 90),
+    arrangementCue: limitText(arrangementCue, 95),
+    lyricSceneCue: theme.scene,
+    lyricDetailCue: theme.detail,
     strength,
   };
 }
 
 function buildThemeMoodLyricInstruction(params: GenerateSongParams): string {
-  const analysis = analyzeThemeMoodContext(params);
-  const situationActive = hasSituation(params.situation);
-  const selectedThemeText = (params.themes ?? []).map(resolveThemeLabel).filter(Boolean).join(", ") || "none";
-  const selectedMoodText = (params.moods ?? []).map(resolveMoodLabel).filter(Boolean).join(", ") || "none";
-  return `
-[THEME + MOOD STORY INTERPRETATION]
-- Selected themes: ${selectedThemeText}
-- Selected moods: ${selectedMoodText}
-- Shared interpretation for prompt and lyrics: ${analysis.lyricSceneCue}
-- Concrete lyric details to consider: ${analysis.lyricDetailCue}
-- Do not directly list the selected theme/mood words in the lyrics. Turn them into actions, objects, places, speech habits, and small lived details.
-- The production prompt and lyrics must share this same interpretation so they do not feel like different songs.
-${
-  situationActive
-    ? "- Situation mode is active: keep the selected Situation as the main story. Use theme/mood only as subtle support or missing color, not as a new plot."
-    : "- No Situation mode: themes define what the song talks about, and moods define how that story feels, moves, and is sung."
+  const ctx = buildThemeMoodInterpretation(params);
+  if (!ctx.lyricSceneCue && !ctx.lyricDetailCue && !ctx.atmosphereCue) return "";
+  const situationMode = ctx.strength === "weak";
+  const mode = situationMode
+    ? "Use Theme/Mood only as subtle color inside the active Situation. Do not create a new plot from Mood."
+    : "Use Theme as the lyric content source, and use Mood only as emotional behavior, pressure, pacing, and scene temperature.";
+  return `THEME + MOOD LYRIC BOUNDARY (MANDATORY):
+- ${mode}
+- Lyric story source: ${ctx.lyricSceneCue || "the active situation"}.
+- Allowed concrete details from Theme/Situation: ${ctx.lyricDetailCue || "small visible behavior and everyday objects"}.
+- Mood must NOT become lyric subject matter. It may only decide how the character speaks, hides, hesitates, jokes, panics, softens, or escalates inside the Theme story.
+- Do NOT directly repeat selected mood labels, mood English values, genre/style names, sound names, instrument names, hook/transition terms, or production words in lyric lines OR section-tag cues.
+- Section tags may use only compact performance/section-function cues. Convert mood into behavior cues such as hesitant, tense, playful subtext, soft panic, restrained, or emotional lift; do not write literal labels such as magical, dark, cute, synthwave, glitchy, neon, guitar, synth.
+- Prefer lyric section tags that describe emotional execution, not production texture: use [Verse: small panic], [Pre-Chorus: rising tension], [Chorus / Drop: unstable confession], [Bridge: Mood Shift, obsessive tension]. Avoid [Verse: fragmented] and [Chorus: glitchy] unless they are rewritten as nervous fragments or unstable tension.
+- Do NOT turn Genre/Style/Sound into lyric imagery. Keep musical words in the prompt only; lyrics should use ordinary life details from the Theme/Situation.
+- Keep the lyrics aligned with the final [Atmosphere], [Vocals], and [Arrangement], but express that alignment through behavior, place, object, timing, and speech style rather than keyword mentions.`;
 }
-`.trim();
-}
-
 
 function buildNonSituationStoryClause(
   params: GenerateSongParams,
@@ -6785,19 +6981,15 @@ function getAtmosphereForPrompt(
       buildFreeTextDirectorProfile(detailLayer).mood,
     );
 
-  const analysis = analyzeThemeMoodContext(params);
-  if (analysis.strength === "strong" && analysis.atmosphereCue) {
-    return cleanupPromptTail(analysis.atmosphereCue);
-  }
+  const interpreted = buildThemeMoodInterpretation(params);
+  if (interpreted.atmosphereCue) return interpreted.atmosphereCue;
 
   const moodPhrase = getEnglishMoodPhrase(params);
   const themePhrase = getEnglishThemePhrase(params);
   if (themePhrase && themePhrase !== "a clear emotional scene") {
-    return cleanupPromptTail(
-      `a ${moodPhrase} mood built around ${themePhrase}`,
-    );
+    return cleanupPromptTail(`${moodPhrase} ${themePhrase} scene`);
   }
-  return cleanupPromptTail(`a ${moodPhrase} emotional scene`);
+  return cleanupPromptTail(`${moodPhrase} emotional scene`);
 }
 
 function buildNaturalVocals(
@@ -9043,13 +9235,16 @@ function sanitizeLyricBracketTagToEnglish(line: string, params: GenerateSongPara
     if (composite) {
       const sectionName = normalizeLyricSectionNameForGeneration(composite[1].trim());
       const body = String(composite[2] || "").trim();
-      const parts = stripVocalLabelsFromInstrumentalTagParts(
+      const rawParts = stripVocalLabelsFromInstrumentalTagParts(
         sectionName,
         body
           .split(/[,，]/)
           .map((part) => cleanEnglishOnlyLyricTagPart(part))
           .filter(Boolean)
-      ).slice(0, 3);
+      );
+      const parts = isInstrumentalLikeSection(sectionName)
+        ? rawParts.slice(0, 3)
+        : normalizeSungSectionCueParts(rawParts, sectionName).slice(0, 3);
       if (!parts.length) return `[${sectionName}]`;
       return `[${sectionName}: ${parts.join(", ")}]`;
     }
@@ -9386,6 +9581,54 @@ function acousticLabelFromMemberToken(label: string, params: GenerateSongParams)
     return buildSituationDuoAcousticLabel(params);
   }
   return "";
+}
+
+
+function normalizeSungSectionCuePart(cue: string, sectionName: string): string {
+  const original = cleanEnglishOnlyLyricTagPart(cue);
+  const lower = original.toLowerCase().trim();
+  if (!lower) return '';
+  const section = String(sectionName || '').toLowerCase();
+  const isHookSection = /chorus|hook|drop/.test(section);
+  const isBridgeSection = /bridge|breakdown/.test(section);
+
+  // Section tags should guide vocal/emotional execution. Convert genre/sound texture
+  // words into performance or emotional-function cues unless the section is instrumental.
+  if (/^fragmented$|fragmented\s+(?:verse|phrasing|line)/i.test(original)) return 'nervous fragments';
+  if (/\bglitch(?:y|ed)?\b|glitch[-\s]?pop/i.test(original)) return isHookSection ? 'unstable hook' : 'unstable tension';
+  if (/\bdigital\b|\bstutter(?:ing|ed)?\b|stop[-\s]?start/i.test(original)) return 'nervous stop-start';
+  if (/\bbrass[-\s]?like\s+synth\s+stab\b|\bsynth\s+stab\b|\bstab\b/i.test(original)) return 'sharp accent';
+  if (/\bambient\s+guitar\b|\bguitar\b|\bsynth\b|\bbass\b|\bdrums?\b|\bbeat\b|\bpads?\b|\btexture\b|\bpulse\b|\bmotif\b/i.test(original)) {
+    if (/ambient|reverb|echo|room|space/i.test(original)) return 'hollow space';
+    if (/bright|high|lift/i.test(original)) return isHookSection ? 'bright lift' : 'lifted tension';
+    return '';
+  }
+  if (/wide\s+reverb|spatial\s+echo|spatial\s+echoes|distant\s+ambience|room\s+echo|intimate\s+room\s+echo|space\s+echo/i.test(original)) return 'spatial echoes';
+  if (/^magical$|magic/i.test(original)) return 'wonder-struck';
+  if (/^dark$|shadow/i.test(original)) return 'shadowed tension';
+  if (/^cute$|adorable/i.test(original)) return 'playful softness';
+  if (/obsess/i.test(original)) return 'obsessive tension';
+  if (/dramatic\s+burst/i.test(original)) return 'emotional burst';
+  if (/full\s+drive/i.test(original)) return 'full release';
+  if (/high\s+tension/i.test(original)) return 'high tension';
+  if (/cold\s+drop/i.test(original)) return isBridgeSection ? 'cold drop' : 'cold turn';
+  if (/nu[-\s]?disco|disco\s+groove|groove|funk\s+bass|bass\s+lift|drum\s+pulse|disco\s+beat|laid[-\s]?back\s+groove/i.test(original)) {
+    return isBridgeSection ? 'emotional lift' : '';
+  }
+  if (/stage[-\s]?light.*collapse|collapse.*imagery|조명.*붕괴/i.test(original)) return 'soft collapse turn';
+  return original;
+}
+
+function normalizeSungSectionCueParts(parts: string[], sectionName: string): string[] {
+  const out: string[] = [];
+  for (const part of parts) {
+    const clean = normalizeSungSectionCuePart(part, sectionName);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (!out.some((item) => item.toLowerCase() === key)) out.push(clean);
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 function isLikelyInstrumentalCueLabel(label: string): boolean {
@@ -10142,6 +10385,180 @@ function sanitizeCustomLyricTagNoiseFinal(lyrics: string): string {
     .join('\n');
 }
 
+
+function addCueToBracketTagLine(line: string, cueParts: string[]): string {
+  const match = String(line || '').match(/^\s*\[([^\]:]+)(?::\s*([^\]]*))?\]\s*$/);
+  if (!match) return line;
+  const section = cleanupPromptTail(match[1]);
+  const existing = String(match[2] || '')
+    .split(',')
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .filter((part) => !/^(instrumental|break)$/i.test(part));
+  const next: string[] = [];
+  const add = (value: string) => {
+    const clean = cleanupPromptTail(value);
+    if (!clean) return;
+    const lower = clean.toLowerCase();
+    const isDuplicate = next.some((item) => {
+      const existing = item.toLowerCase();
+      if (existing === lower) return true;
+      if (existing.includes(lower) || lower.includes(existing)) return true;
+      if (/obsessive\s+tension/.test(lower) && /cute[-\s]?to[-\s]?obsessive\s+tension/.test(existing)) return true;
+      if (/obsessive\s+tension/.test(existing) && /cute[-\s]?to[-\s]?obsessive\s+tension/.test(lower)) return true;
+      if (/spatial\s+echoes/.test(existing) && /reverb|echo|ambience|ambient|space/.test(lower)) return true;
+      if (/spatial\s+echoes/.test(lower) && /reverb|echo|ambience|ambient|space/.test(existing)) return true;
+      return false;
+    });
+    if (!isDuplicate) next.push(clean);
+  };
+  existing.filter((part) => /^ONLY\s+|All Vocals|Vocal|Rap/i.test(part)).slice(0, 1).forEach(add);
+  cueParts.forEach(add);
+  existing.filter((part) => !/^ONLY\s+|All Vocals|Vocal|Rap/i.test(part)).forEach(add);
+  return `[${section}${next.length ? `: ${next.slice(0, 3).join(', ')}` : ''}]`;
+}
+
+
+function lyricEmotionCueForBareSection(section: string, params: GenerateSongParams): string[] {
+  const name = normalizeLyricSectionDisplayName(section || "");
+  if (!name || /^(?:Break|Stop|Instrumental|Solo|Intro|Outro)$/i.test(name)) return [];
+  const themeText = selectedThemeText(params);
+  const moodText = selectedMoodText(params);
+  const transitionCue = compactMoodTransitionCue(params);
+  const isFlutter = /flutter|excitement|설렘|thrill|두근|떨림/.test(themeText);
+  const isDarkPlayful = /playful|comic|cute|dark|tense|장난|귀여|어두|긴장/.test(`${moodText} ${transitionCue}`);
+
+  if (/^Verse/i.test(name)) return [isFlutter ? "small panic" : isDarkPlayful ? "nervous restraint" : "intimate detail"];
+  if (/Pre[-\s]?Chorus/i.test(name)) return [isFlutter ? "rising tension" : "emotional build"];
+  if (/Chorus|Hook|Drop/i.test(name) && !/^Final/i.test(name)) return [isFlutter ? "unstable hook" : "emotional hook"];
+  if (/^Bridge/i.test(name)) return transitionCue ? ["Mood Shift", transitionCue] : ["emotional turn"];
+  if (/^Final\s+(?:Chorus|Hook)/i.test(name)) return [transitionCue ? "out-of-control release" : "final release"];
+  return [];
+}
+
+function collapseDuplicateStopTags(lyrics: string): string {
+  const lines = String(lyrics || '').split('\n');
+  const out: string[] = [];
+  const isStop = (line: string) => /^\s*\[\s*Stop(?:\s*:\s*[^\]]*)?\s*\]\s*$/i.test(line.trim());
+  const lastNonEmpty = () => {
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+      if (out[i].trim()) return out[i].trim();
+    }
+    return '';
+  };
+
+  lines.forEach((line) => {
+    if (isStop(line) && isStop(lastNonEmpty())) return;
+    out.push(line);
+  });
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function removeEmptyBridgeBeforeMoodShift(lyrics: string): string {
+  const lines = String(lyrics || '').split('\n');
+  const out: string[] = [];
+  const isTag = (line: string) => /^\s*\[[^\]]+\]\s*$/.test(line.trim());
+  const isBridge = (line: string) => /^\s*\[\s*Bridge\b/i.test(line.trim());
+  const isStop = (line: string) => /^\s*\[\s*Stop(?:\s*:\s*[^\]]*)?\s*\]\s*$/i.test(line.trim());
+  const isMoodShiftBridge = (line: string) => isBridge(line) && /mood\s*shift/i.test(line);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!isBridge(line) || isMoodShiftBridge(line)) {
+      out.push(line);
+      continue;
+    }
+
+    let j = i + 1;
+    while (j < lines.length && !lines[j].trim()) j += 1;
+    if (j < lines.length && isTag(lines[j]) && (isStop(lines[j]) || isMoodShiftBridge(lines[j]))) {
+      // Drop an empty Bridge A/B marker created right before the real Mood Shift transition.
+      continue;
+    }
+
+    out.push(line);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function ensureEmotionCuesForBareLyricSections(lyrics: string, params: GenerateSongParams): string {
+  if (!lyrics.trim()) return lyrics;
+  const lines = String(lyrics || '').split('\n');
+  const isBareSungSection = (inside: string) => {
+    const clean = normalizeLyricSectionDisplayName(inside || '');
+    if (!clean || !isSectionOnlyLyricTagInside(clean)) return false;
+    return !/^(?:Break|Stop|Instrumental|Instrumental Opening|Solo|Intro|Outro)$/i.test(clean);
+  };
+  let changed = false;
+  const next = lines.map((line) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return line;
+    if (parsed.inside.includes(':')) return line;
+    if (!isBareSungSection(parsed.inside)) return line;
+    const cues = lyricEmotionCueForBareSection(parsed.inside, params);
+    if (!cues.length) return line;
+    changed = true;
+    return addCueToBracketTagLine(line, cues);
+  });
+  return changed ? next.join('\n').replace(/\n{3,}/g, '\n\n').trim() : lyrics;
+}
+
+
+function moodShiftSectionSpaceCue(params: GenerateSongParams): string {
+  const cue = compactSpaceAndTransitionCue(params);
+  if (/space|spatial|ambient|reverb|echo|room|intimate|우주|공간/i.test(cue)) return cue;
+  const text = [
+    selectedStyleText(params),
+    selectedSoundText(params),
+    selectedMoodText(params),
+    params.userInput || '',
+  ].join(' ').toLowerCase();
+  if (/space|cosmic|astronaut|earth|ambient|reverb|echo|우주|지구|공간|앰비언트|잔향/.test(text)) return 'spatial echoes';
+  return '';
+}
+
+function ensureMoodShiftBridgeInLyrics(lyrics: string, params: GenerateSongParams): string {
+  const cue = compactMoodTransitionCue(params);
+  if (!cue || !lyrics.trim()) return lyrics;
+  const lines = String(lyrics || '').split('\n');
+  if (lines.some((line) => /^\s*\[[^\]]*\bmood\s*shift\b/i.test(line))) return lyrics;
+
+  const isTag = (line: string) => /^\s*\[[^\]]+\]\s*$/.test(line.trim());
+  const isStop = (line: string) => /^\s*\[\s*Stop(?:\s*:\s*[^\]]*)?\s*\]\s*$/i.test(line.trim());
+  const isBridge = (line: string) => /^\s*\[\s*Bridge\b/i.test(line.trim());
+  const isFinal = (line: string) => /^\s*\[\s*(?:Final\s+Chorus|Final\s+Hook)\b/i.test(line.trim());
+
+  const bridgeIndexes = lines.map((line, idx) => (isTag(line) && isBridge(line) ? idx : -1)).filter((idx) => idx >= 0);
+  if (!bridgeIndexes.length) return lyrics;
+
+  const finalIndex = lines.findIndex((line) => isTag(line) && isFinal(line));
+  let target = -1;
+  if (finalIndex >= 0) {
+    const beforeFinal = bridgeIndexes.filter((idx) => idx < finalIndex);
+    if (beforeFinal.length) target = beforeFinal[beforeFinal.length - 1];
+  }
+  if (target < 0) {
+    const halfway = Math.floor(lines.length * 0.45);
+    const later = bridgeIndexes.filter((idx) => idx >= halfway);
+    target = later.length ? later[later.length - 1] : bridgeIndexes[bridgeIndexes.length - 1];
+  }
+
+  if (target < 0) return lyrics;
+  const spaceCue = moodShiftSectionSpaceCue(params);
+  lines[target] = addCueToBracketTagLine(lines[target], ['Mood Shift', cue, spaceCue].filter(Boolean));
+
+  // If the chosen Bridge is not preceded by Stop, insert one directly before it.
+  let prevTagIndex = target - 1;
+  while (prevTagIndex >= 0 && !isTag(lines[prevTagIndex])) prevTagIndex -= 1;
+  if (prevTagIndex < 0 || !isStop(lines[prevTagIndex])) {
+    lines.splice(target, 0, '[Stop]', '');
+  }
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function sanitizeGeneratedLyricTagsAndFragments(
   lyrics: string,
   params: GenerateSongParams,
@@ -10252,7 +10669,14 @@ function sanitizeGeneratedLyricTagsAndFragments(
     ),
   );
 
-  return sanitizeCustomLyricTagNoiseFinal(normalizeGeneratedLyricLineBreaks(lyricTextWithTransitions))
+  const lyricTextWithMoodShift = collapseDuplicateStopTags(
+    removeEmptyBridgeBeforeMoodShift(
+      ensureMoodShiftBridgeInLyrics(lyricTextWithTransitions, params),
+    ),
+  );
+  const lyricTextWithEmotionCues = ensureEmotionCuesForBareLyricSections(lyricTextWithMoodShift, params);
+
+  return sanitizeCustomLyricTagNoiseFinal(normalizeGeneratedLyricLineBreaks(collapseDuplicateStopTags(lyricTextWithEmotionCues)))
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -10305,6 +10729,7 @@ export async function generateSong(
   );
   const themePrompt = buildThemePrompt(params.themes ?? []);
   const themeSentence = buildThemeSentence(params.themes ?? []);
+  const themeMoodLyricInstruction = buildThemeMoodLyricInstruction(params);
   const vocalPrompt = buildVocalPrompt(
     params.vocal ?? { male: 0, female: 0, rap: false },
     params.subGenre ?? [],
@@ -10323,11 +10748,16 @@ export async function generateSong(
   );
   console.log("🔥 generateSong called");
   console.log("🔥 FINAL PROMPT:", finalPrompt);
-  const exactStructureText = buildStructureText(
+  const rawStructureText = buildStructureText(
     params.songStructure,
     resolvedStructure,
     params.customStructure ?? [],
+    params,
   );
+  const moodTransitionCue = compactMoodTransitionCue(params);
+  const exactStructureText = rawStructureText.includes("→")
+    ? applyMoodShiftToStructureText(rawStructureText, moodTransitionCue)
+    : rawStructureText;
 
   const shouldUseMixedLyrics = Boolean(
     params.isKoreanEnglishMix ||
@@ -10356,6 +10786,7 @@ export async function generateSong(
         ? `Return the title as: 'Korean Title'. Do not create an English or other-language title.`
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
+  const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
 
   const requestedLanguageInstruction = effectiveNoLyrics
     ? ""
@@ -10474,22 +10905,16 @@ ${exactStructureText}
 - Chorus, Hook, Rap Section, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro must not become generic lyrics; keep the scenario and role conflict active.
 - Instrumental, Solo, and Drop can be mainly musical, but if they include lyrics or ad-libs, they must stay connected to the same Situation. Break and Stop must remain lyric-free transition tags.`
       : (params.songStructure ?? "1") === "1"
-        ? `SONG STRUCTURE (DEFAULT / ADAPTIVE EXPERIMENTAL):
-- Do not force a fixed Verse-Chorus template. Build a coherent but experimental song architecture around the story arc, hook timing, and emotional reveal.
-- Use about 9-12 major sections so the song does not feel too short. A compact song is allowed only when the user explicitly asks for a very short lyric.
-- Prefer an asymmetric spine rather than a plain Verse→Pre-Chorus→Chorus loop. Use at least TWO non-standard or transition sections when appropriate: [Hook], [Drop], [Breakdown], [Instrumental], [Solo], [Build-up], [Climax], [Main Theme], or [Final Hook].
-- Repetition is allowed when it has a musical purpose: Verse may return, Hook/Chorus may return, and Breakdown/Drop may appear more than once if the energy changes.
-- For the default/free structure, use [Verse] as the normal verse tag. If two Verse sections appear back-to-back for different voices or viewpoints, label them [Verse A: ...] and [Verse B: ...] so the order stays clear. Otherwise, do not use numbered [Verse 1]/[Verse 2].
-- Chorus/Hook should have ONE main owner per occurrence unless call-response is explicitly selected. The owner may change between Chorus and Final Hook/Final Chorus to create a story turn.
-- Do not always place Chorus once in the middle and Final Chorus right before Outro. Rotate ending patterns: Breakdown→Outro, Hook reprise→sudden stop, Drop→Outro, Instrumental→spoken Outro, Final Hook→fade, Bridge→unresolved ending, or Rap Section→cold ending are allowed.
-- Final Chorus/Final Hook does not always need to resolve the conflict. It may be unresolved, bitter, comic, reversed, quieter, or bigger depending on the Situation.
-- Avoid consecutive identical bracket section tags except [Verse A] → [Verse B]. If a hook returns late, use [Final Hook], [Hook], [Breakdown], or [Drop] according to the musical function rather than duplicating the same tag twice in a row.
-- Use composite lyric tags for every sung section, e.g. [Verse A: Airy Female Vocal, pleading] or [Rap Section: Low Male Rap, tired]. Instrumental-only sections may use section-only tags.
-- If a custom or suggested section cue says ONLY plus one vocal label, keep ONLY in the section tag only for that single-owner section. Do not use ONLY for Chorus, Final Chorus, or All Vocals.
-- Instrumental, Solo, and Drop sections must never include vocal labels. Break and Stop must remain standalone tags.
-- Intro/Outro marked as Instrumental must remain pure instrumental: remove vocals, humming, 구음, chant, breath, and lyric lines.
-- Never output a bare acoustic tag like [Tired Male Rap: dry] or [Airy Female Vocal: pleading]. It must always include the section first: [Verse A: Tired Male Rap, dry] or [Chorus: Airy Female Vocal, pleading].
-- For Situation songs, character story roles still drive the lyric content, but section labels must stay musical, varied, and intentional.`
+        ? `SONG STRUCTURE (DEFAULT / GENRE REPRESENTATIVE):
+- Selected mode: Default. Use this genre-representative structure as the main section order:
+${exactStructureText}
+- Output lyric sections in this order as closely as possible. Do not replace it with a free Verse A/B/C structure.
+- Use [Verse] for the first verse and reuse [Verse] when it returns; do not output [Verse A], [Verse B], or [Verse C] unless the structure explicitly contains those labels or there are multiple different speakers in a Situation.
+- If the structure contains [Stop] then [Bridge: Mood Shift, ...], keep that exact transition event. Do not remove Mood Shift and do not duplicate Stop.
+- Chorus / Drop may be written as [Chorus / Drop] when the structure says so. Otherwise keep the listed section name.
+- Instrumental sections may carry short sound cues, but do not turn them into sung lyric sections.
+- Break and Stop are standalone transition tags with no lyric lines.
+- Keep section tags compact and functional: [Section: short cue]. Do not dump genre, instrument, or mood keyword lists into tags.`
         : `SONG STRUCTURE (MANDATORY):
 - Selected mode: ${resolvedStructure === "2" ? "1" : "2"}.
 - Use this exact structure:
@@ -10606,8 +11031,9 @@ ${genrePromptCore || (detailLayer ? "Infer the root genre from the USER FREE-TEX
 INSTRUMENT / SOUND LAYERS:
 ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- ${s}`).join("\n") : "- No extra instrument/sound layer selected."}
 
-MOOD LAYER (EMOTIONAL COLOR ONLY):
+MOOD LAYER (EMOTIONAL COLOR ONLY, NOT LYRIC TOPIC):
 ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
+- Use these mood choices only to color phrasing, emotional pressure, and scene temperature. Do not write the mood words themselves as lyric content.
 
 VOCAL EXPRESSION STYLE LAYER (VOICE EMOTION / ATTITUDE / PHRASING):
 ${buildSelectedVocalExpressionInstruction(params)}
@@ -10637,7 +11063,7 @@ Expanded story direction: ${themeSentence}`
     : ""
 }
 
-${buildThemeMoodLyricInstruction(params)}
+${themeMoodLyricInstruction}
 
 LOCKED FINAL PRODUCTION PROMPT:
 ${finalPrompt}
@@ -10654,6 +11080,8 @@ ${mixedLyricsInstruction}
 ${lyricDraftInstruction}
 
 ${structureInstruction}
+
+${moodTransitionSectionInstruction}
 
 ${pointSoundSectionInstruction}
 

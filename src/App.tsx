@@ -1709,14 +1709,22 @@ function getCycleVariantLabel(cycles: readonly { id: string; title: string; vari
 
 const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
   return labels.map(label => {
+    const raw = String(label || '').trim();
+    if (!raw) return null;
+
+    // Preserve direct-input pseudo IDs as-is.
+    if (isCustomMoodKeyword(raw) || isCustomThemeKeyword(raw)) {
+      return raw;
+    }
+
     // Special case for City Pop and K-Pop which might have extra labels
-    if (label.includes('City Pop') || label === '80s Japanese Pop' || label === 'Funk' || label === 'Groovy' || label === 'Retro' || label === 'Nu-Disco' || label === 'Synth-pop') {
+    if (raw.includes('City Pop') || raw === '80s Japanese Pop' || raw === 'Funk' || raw === 'Groovy' || raw === 'Retro' || raw === 'Nu-Disco' || raw === 'Synth-pop') {
       return 'citypop';
     }
-    if (label.includes('K-Pop')) {
+    if (raw.includes('K-Pop')) {
       return 'kpop';
     }
-    const item = category.find(c => c.label === label || c.id === label);
+    const item = category.find(c => c.label === raw || c.labelKo === raw || c.id === raw);
     return item ? item.id : null;
   }).filter(Boolean) as string[];
 };
@@ -3960,8 +3968,38 @@ const toggleCycleVariantSelection = (
     setSelectedGenres([]);
     setSubGenre(limitFusionGenreIds(restoredGenreIds));
 
-    const moodIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.mood, MOODS)));
-    const themeIds = Array.from(new Set(mapLabelsToIds(appliedKeywords.theme, THEMES)));
+    const rawMoodValues = Array.isArray(appliedKeywords.mood) ? appliedKeywords.mood : [];
+    const rawThemeValues = Array.isArray(appliedKeywords.theme) ? appliedKeywords.theme : [];
+    const explicitCustomMoodInput = String((appliedKeywords as any).customMoodInput || '').trim();
+    const explicitCustomThemeInput = String((appliedKeywords as any).customThemeInput || '').trim();
+
+    const moodIds = Array.from(new Set(mapLabelsToIds(rawMoodValues, MOODS)));
+    const themeIds = Array.from(new Set(mapLabelsToIds(rawThemeValues, THEMES)));
+
+    const restoredMoodIds = explicitCustomMoodInput
+      ? [makeCustomKeywordId(CUSTOM_MOOD_PREFIX, explicitCustomMoodInput)]
+      : moodIds.length > 0
+        ? moodIds
+        : rawMoodValues.length === 1
+          ? [makeCustomKeywordId(CUSTOM_MOOD_PREFIX, String(rawMoodValues[0] || '').trim())].filter((id) => id !== makeCustomKeywordId(CUSTOM_MOOD_PREFIX, ''))
+          : [];
+
+    const restoredThemeIds = explicitCustomThemeInput
+      ? [makeCustomKeywordId(CUSTOM_THEME_PREFIX, explicitCustomThemeInput)]
+      : themeIds.length > 0
+        ? themeIds
+        : rawThemeValues.length === 1
+          ? [makeCustomKeywordId(CUSTOM_THEME_PREFIX, String(rawThemeValues[0] || '').trim())].filter((id) => id !== makeCustomKeywordId(CUSTOM_THEME_PREFIX, ''))
+          : [];
+
+    const normalizeStringList = (value: unknown): string[] => {
+      if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+      const single = String(value || '').trim();
+      return single ? [single] : [];
+    };
+
+    const pointSoundIds = resolveSoundTextureIds(normalizeStringList((appliedKeywords as any).pointSounds ?? (appliedKeywords as any).pointSound));
+
     if ((appliedKeywords as any).situation) {
       setSituation((appliedKeywords as any).situation as SituationConfig);
     } else {
@@ -3976,10 +4014,12 @@ const toggleCycleVariantSelection = (
     setPinnedGenres([]);
     setPinnedThemes([]);
 
-    setSelectedMoods(moodIds);
-    setSelectedThemes(themeIds);
+    setSelectedMoods(restoredMoodIds);
+    setSelectedThemes(restoredThemeIds);
     setSelectedStyles(styleIds);
     setSelectedInstrumentSounds(instrumentSoundIds);
+    setSelectedPointSounds(pointSoundIds);
+    setIsPointSoundMode(pointSoundIds.length > 0);
     setKpopMode(restoredGenreIds.includes('kpop') ? resolvedKpopMode : 0);
     setIsKoreanEnglishMix(resolvedMixedLyrics);
     setEnglishMixRatio(Math.max(0, Math.min(30, Number((appliedKeywords as any).englishMixRatio ?? 10) || 10)));
@@ -4026,7 +4066,7 @@ const toggleCycleVariantSelection = (
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
+  }, [setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -4989,6 +5029,8 @@ const saveRecentSong = async (newSong: any) => {
       const effectiveStyleIds = Array.from(new Set(finalStyles ?? []));
       const styleLabels = getCycleVariantLabel(STYLE_CYCLES, effectiveStyleIds);
       const themeLabels = finalThemes.map(getThemeKeywordLabel);
+      const customMoodInput = finalMoods.map((id) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX)).find(Boolean) || undefined;
+      const customThemeInput = finalThemes.map((id) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX)).find(Boolean) || undefined;
       const soundTextureLabels = getCycleVariantLabel(SOUND_TEXTURE_CYCLES, finalInstrumentSounds);
       const hasBalladStyle = effectiveStyleIds.some((id) => ['ballad', 'classic-ballad'].includes(id));
 
@@ -5201,6 +5243,8 @@ const saveRecentSong = async (newSong: any) => {
         styles: finalStyles,
         instrumentSounds: finalInstrumentSounds,
         pointSounds: finalPointSounds,
+        customMoodInput,
+        customThemeInput,
         userInput,
         songPrompt,
         lyricsLength,
@@ -5258,6 +5302,8 @@ const saveRecentSong = async (newSong: any) => {
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
             pointSounds: finalPointSounds,
+            customMoodInput,
+            customThemeInput,
             vocalType: formation || 'Default',
             rapEnabled: rapEnabled,
             isNoLyrics: !requestedIncludeLyrics,
@@ -10153,7 +10199,7 @@ function SongStructureIntegratedControl({
             className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
           >
             <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-            섹션
+            섹션구조
           </h3>
           <div className="flex items-center gap-2">
             <button

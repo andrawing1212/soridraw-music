@@ -4045,8 +4045,11 @@ const toggleCycleVariantSelection = (
       if (v.members) setVocalMembers(v.members);
     }
 
+    const appliedTempoSource = String((appliedKeywords as any).tempoSource || '').trim().toLowerCase();
+    const shouldRestoreRandomTempo = Boolean((appliedKeywords as any).isRandomTempo) || appliedTempoSource === 'random';
+
     if (appliedKeywords.tempoConfig) {
-      setTempoEnabled(appliedKeywords.tempoConfig.enabled);
+      setTempoEnabled(shouldRestoreRandomTempo ? true : appliedKeywords.tempoConfig.enabled);
       setMinBPM(appliedKeywords.tempoConfig.min);
       setMaxBPM(appliedKeywords.tempoConfig.max);
     } else if (appliedKeywords.tempo) {
@@ -4060,8 +4063,14 @@ const toggleCycleVariantSelection = (
           setMinBPM(parseInt(bpmMatch[0]));
           setMaxBPM(parseInt(bpmMatch[1]));
         }
-        setTempoEnabled(false); // Manual mode
+        // 다음곡 적용에서 랜덤 템포로 생성된 곡은 수동 BPM으로 고정하지 않는다.
+        // UI에 표시된 이전 BPM 범위는 복원하되, 생성 시에는 현재 장르/분위기 기준으로 다시 최적화된다.
+        setTempoEnabled(shouldRestoreRandomTempo ? true : false);
+      } else if (shouldRestoreRandomTempo) {
+        setTempoEnabled(true);
       }
+    } else if (shouldRestoreRandomTempo) {
+      setTempoEnabled(true);
     }
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
@@ -10333,11 +10342,18 @@ function SongStructureIntegratedControl({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-            onMouseDown={(e) => {
+            onPointerDown={(e) => {
               customModalBackdropMouseDownRef.current = e.target === e.currentTarget;
             }}
-            onClick={(e) => {
-              if (customModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomModal();
+            onPointerUp={(e) => {
+              if (customModalBackdropMouseDownRef.current && e.target === e.currentTarget) {
+                customModalBackdropMouseDownRef.current = false;
+                closeCustomModal();
+                return;
+              }
+              customModalBackdropMouseDownRef.current = false;
+            }}
+            onPointerCancel={() => {
               customModalBackdropMouseDownRef.current = false;
             }}
           >
@@ -10349,6 +10365,8 @@ function SongStructureIntegratedControl({
               className="w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
             >
               <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
                 <div>
@@ -10357,7 +10375,8 @@ function SongStructureIntegratedControl({
                 </div>
                 <button
                   onClick={() => closeCustomModal()}
-                  className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                  className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand-orange/25 transition-all flex items-center justify-center shrink-0"
+                  aria-label="섹션 커스텀 닫기"
                 >
                   <X className="w-4 h-4" />
                 </button>

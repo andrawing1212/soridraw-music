@@ -65,7 +65,7 @@ import {
   Key,
   Bookmark
 } from 'lucide-react';
-import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 
 // Portal component for top-level rendering
@@ -158,6 +158,8 @@ import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, f
 
 const USER_CUSTOM_SECTIONS_STORAGE_KEY = 'soridraw_user_custom_sections_v1';
 const USER_CUSTOM_SECTION_TAGS_STORAGE_KEY = 'soridraw_user_custom_section_tags_v1';
+const USER_SAVED_STRUCTURES_STORAGE_KEY = 'soridraw_saved_structures_v1';
+const getSavedStructuresStorageKey = (uid?: string | null) => `${USER_SAVED_STRUCTURES_STORAGE_KEY}_${uid || 'guest'}`;
 
 const safeReadJsonArray = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -277,6 +279,36 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
     console.error('Failed to normalize custom structure:', error);
     return [];
   }
+};
+
+const formatStoredCustomStructureText = (structure: any): string => {
+  const normalized = normalizeCustomStructure(structure);
+  const formatTag = (tag: any): string => {
+    const raw = String(tag || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('VOCAL_ALL::')) return '전체보컬';
+    if (raw.startsWith('VOCAL::')) {
+      const parts = raw.split('::');
+      return (parts[1] || 'Vocal').replace(/\s{2,}/g, ' ').trim();
+    }
+    return raw.replace(/\s{2,}/g, ' ').trim();
+  };
+
+  return normalized.map((sectionItem) => {
+    const section = String(sectionItem.section || '').trim() || 'Section';
+    const visibleTags = (sectionItem.tags ?? [])
+      .map(formatTag)
+      .filter(Boolean)
+      .filter((tag, index, arr) => arr.findIndex((other) => String(other).toLowerCase() === String(tag).toLowerCase()) === index)
+      .slice(0, 3);
+
+    if (/^(Instrumental|Break|Stop)$/i.test(section)) {
+      if (/^Instrumental$/i.test(section) && visibleTags.length > 0) return `${section}: ${visibleTags[0]}`;
+      return section;
+    }
+
+    return `${section}${visibleTags.length > 0 ? ` · ${visibleTags.join(' · ')}` : ''}`;
+  }).join(' → ');
 };
 
 import { generateSong, translateLyrics, generateCustomSectionMetadata } from './services/geminiService';
@@ -1135,36 +1167,49 @@ const ReorderableSectionItem = ({
   onEdit, 
   onRemove, 
   onHover,
+  onSelect,
+  onDragStart,
+  isReorderDragging,
+  isDraggingItem,
+  isInsertionTarget,
   sectionDisplayLabel,
+  tagDisplayLabel,
 }: { 
   item: CustomSectionItem; 
   index: number; 
   onEdit: (index: number) => void; 
   onRemove: (index: number) => void; 
   onHover: (item: CategoryItem | null) => void;
+  onSelect: (index: number) => void;
+  onDragStart: (index: number, event: React.PointerEvent<HTMLButtonElement>) => void;
+  isReorderDragging?: boolean;
+  isDraggingItem?: boolean;
+  isInsertionTarget?: boolean;
   sectionDisplayLabel?: string;
+  tagDisplayLabel?: (tag: string) => string;
   key?: React.Key;
 }) => {
-  const controls = useDragControls();
-  
   return (
-    <Reorder.Item
-      value={item}
-      dragListener={false}
-      dragControls={controls}
-      className="flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 touch-pan-y shadow-sm"
-      as="div"
-      whileDrag={{ 
-        scale: 1.02, 
-        boxShadow: "0 8px 30px rgba(0,0,0,0.3)", 
-        borderColor: "rgba(255,165,0,0.3)",
-        backgroundColor: "rgba(255,255,255,0.08)"
+    <div
+      data-reorder-section-id={item.id}
+      onClick={() => {
+        if (isReorderDragging) return;
+        onSelect(index);
       }}
+      className={cn(
+        "flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 select-none shadow-sm cursor-pointer transition-[border-color,background-color,opacity,transform] duration-150",
+        isDraggingItem
+          ? "border-brand-orange/70 bg-white/[0.08] opacity-80 scale-[0.995]"
+          : isInsertionTarget
+            ? "border-white/70 bg-white/[0.07] ring-1 ring-white/35"
+            : "border-btn-border hover:border-white/30 hover:bg-white/[0.04]"
+      )}
     >
       <button
-        onPointerDown={(e) => controls.start(e)}
+        onPointerDown={(e) => onDragStart(index, e)}
+        onClick={(e) => e.stopPropagation()}
         className="w-8 h-8 rounded-lg border bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 touch-none shadow-btn"
-        onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 눌러 위아래로 드래그하여 순서를 변경합니다.' })}
+        onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 누른 채 위아래로 드래그하여 순서를 변경합니다. 목록 끝에 가까워지면 자동으로 스크롤됩니다.' })}
         onMouseLeave={() => onHover(null)}
       >
         <ArrowUpDown className="w-4 h-4" />
@@ -1183,14 +1228,18 @@ const ReorderableSectionItem = ({
         )}
         {(item.tags ?? []).length > 0 && (
           <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate">
-            {(item.tags ?? []).join(' · ')}
+            {(item.tags ?? [])
+              .map((tag) => tagDisplayLabel ? tagDisplayLabel(tag) : tag)
+              .filter(Boolean)
+              .filter((tag, idx, arr) => arr.findIndex((other) => String(other).toLowerCase() === String(tag).toLowerCase()) === idx)
+              .join(' · ')}
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-1">
         <button
-          onClick={() => onEdit(index)}
+          onClick={(e) => { e.stopPropagation(); onEdit(index); }}
           onMouseEnter={() => onHover({ id: 'section-edit-tags', label: '태그 편집', description: '이 섹션에 세부 디렉션(태그)을 추가하거나 수정합니다.' })}
           onMouseLeave={() => onHover(null)}
           className="w-8 h-8 rounded-lg border bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center justify-center shadow-btn"
@@ -1198,7 +1247,7 @@ const ReorderableSectionItem = ({
           <Tag className="w-3.5 h-3.5" />
         </button>
         <button
-          onClick={() => onRemove(index)}
+          onClick={(e) => { e.stopPropagation(); onRemove(index); }}
           onMouseEnter={() => onHover({ id: 'section-remove', label: '삭제', description: '이 섹션을 구조에서 제거합니다.' })}
           onMouseLeave={() => onHover(null)}
           className="w-8 h-8 rounded-lg border bg-white/5 border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center"
@@ -1206,7 +1255,7 @@ const ReorderableSectionItem = ({
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
-    </Reorder.Item>
+    </div>
   );
 };
 
@@ -1713,6 +1762,7 @@ function getMemberVisibleName(member: VocalMember, index: number, members: Vocal
 }
 
 function inferVocalActualLabel(member: VocalMember) {
+  const genderLabel = member.gender === 'male' ? 'Male' : 'Female';
   const role = member.roles?.includes('rapper') ? 'Rap Vocal' : 'Vocal';
   const char = member.character || {};
   const phrase = [
@@ -1725,36 +1775,92 @@ function inferVocalActualLabel(member: VocalMember) {
   ].filter(Boolean).join(' ').toLowerCase();
 
   if (role === 'Rap Vocal') {
-    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return 'Low Rap Vocal';
-    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return 'Wet Rap Vocal';
-    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return 'Creaky Rap Vocal';
-    if (/bright|head|clear|두성|맑/.test(phrase)) return 'Bright Rap Vocal';
-    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return 'Playful Rap Vocal';
-    return `${member.gender === 'male' ? 'Male' : 'Female'} Rap Vocal`;
+    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return `Low ${genderLabel} Rap Vocal`;
+    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return `Wet ${genderLabel} Rap Vocal`;
+    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return `Creaky ${genderLabel} Rap Vocal`;
+    if (/bright|head|clear|두성|맑/.test(phrase)) return `Bright ${genderLabel} Rap Vocal`;
+    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return `Playful ${genderLabel} Rap Vocal`;
+    return `${genderLabel} Rap Vocal`;
   }
 
-  if (/hollow|distant|empty|공허/.test(phrase)) return `Hollow ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return `Airy ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return `Clear ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/wet|nasal|젖은|비성/.test(phrase)) return `Wet ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/deep|heavy|chest|low|묵직/.test(phrase)) return `Deep ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  return `${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  if (/hollow|distant|empty|공허/.test(phrase)) return `Hollow ${genderLabel} Vocal`;
+  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return `Airy ${genderLabel} Vocal`;
+  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return `Clear ${genderLabel} Vocal`;
+  if (/wet|nasal|젖은|비성/.test(phrase)) return `Wet ${genderLabel} Vocal`;
+  if (/deep|heavy|chest|low|묵직/.test(phrase)) return `Deep ${genderLabel} Vocal`;
+  return `${genderLabel} Vocal`;
+}
+
+function compactVocalLyricCueText(value: string, isRap: boolean) {
+  const raw = safeVocalTagPart(value).toLowerCase();
+  if (!raw) return '';
+
+  const cueMap: Array<[RegExp, string]> = [
+    [/anticipat|앞박|당겨/, isRap ? 'anticipated rap' : 'anticipated'],
+    [/nasal|비성|비음/, 'nasal'],
+    [/falsetto|가성/, 'thin falsetto'],
+    [/breathy|breath|숨|에어리|airy/, 'breathy'],
+    [/half[-_\s]?air|air stop|하프/, 'half-air'],
+    [/reverse[-_\s]?breath|역호흡/, 'reverse breath'],
+    [/microtonal|미분음|melting/, 'melting slides'],
+    [/glissando|글리산도|slide/, 'glissando'],
+    [/layback|laid[-\s]?back|느슨/, 'laid-back'],
+    [/staccato|스타카토/, 'staccato'],
+    [/vibrato|비브라토/, 'vibrato'],
+    [/husky|허스키/, 'husky'],
+    [/creaky|fry|크리키/, 'creaky'],
+    [/bright|밝|lively/, 'bright'],
+    [/lazy|relaxed|게으른/, 'lazy'],
+    [/dry|건조/, 'dry'],
+    [/wet|젖은/, 'wet'],
+    [/clear|맑|clean/, 'clear'],
+    [/low|deep|heavy|낮|저음|묵직/, 'low'],
+    [/playful|bounce|bouncy|장난|톡톡/, 'playful bounce'],
+    [/whisper|속삭/, 'whisper'],
+  ];
+
+  for (const [pattern, cue] of cueMap) {
+    if (pattern.test(raw)) return cue;
+  }
+  return safeVocalTagPart(value)
+    .replace(/\b(?:vocal\s+tone|vocal|tone|phrasing|resonance|delivery|voice)\b/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .split(/[,，]/)[0]
+    .trim();
 }
 
 function buildCompactVocalCue(member: VocalMember) {
   const char = member.character || {};
-  const techniqueCues = (char.techniqueIds || [])
-    .map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.promptCore)
-    .filter(Boolean)
-    .map((value) => safeVocalTagPart(value as string))
-    .slice(0, 2);
-  const toneCue = safeVocalTagPart(VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore || char.customVoiceTone || '');
-  const personalityCue = safeVocalTagPart(VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore || char.customPersonality || '');
-  return [toneCue, ...techniqueCues, personalityCue]
-    .filter(Boolean)
-    .filter((item, index, arr) => arr.findIndex((other) => other.toLowerCase() === item.toLowerCase()) === index)
-    .slice(0, 2)
-    .join(', ');
+  const isRap = member.roles?.includes('rapper');
+  const selectedTechniqueTexts = (char.techniqueIds || [])
+    .map((id) => {
+      const item = VOCAL_TECHNIQUES.find((technique) => technique.id === id);
+      return item?.promptCore || item?.label || item?.labelKo || id;
+    })
+    .filter(Boolean);
+
+  const selectedToneText = VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore || char.customVoiceTone || '';
+  const selectedPersonalityText = VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore || char.customPersonality || '';
+  const customTechniqueText = char.customTechnique || '';
+
+  const cues: string[] = [];
+  const pushCue = (cue: string) => {
+    const clean = safeVocalTagPart(cue);
+    if (!clean) return;
+    if (!cues.some((item) => item.toLowerCase() === clean.toLowerCase())) cues.push(clean);
+  };
+
+  // 창법이 보컬 캐릭터의 핵심이므로 technique을 가장 먼저 압축한다.
+  selectedTechniqueTexts.forEach((text) => pushCue(compactVocalLyricCueText(text, isRap)));
+  if (customTechniqueText) pushCue(compactVocalLyricCueText(customTechniqueText, isRap));
+
+  // 창법 cue가 부족할 때만 톤/성격에서 1개를 보강한다.
+  if (cues.length < 1 && selectedToneText) pushCue(compactVocalLyricCueText(selectedToneText, isRap));
+  if (cues.length < 1 && selectedPersonalityText) pushCue(compactVocalLyricCueText(selectedPersonalityText, isRap));
+
+  // 너무 긴 보컬 설명을 반복하지 않기 위해 가사 섹션에는 대표 창법 cue 1개만 둔다.
+  return cues.slice(0, 1).join(', ');
 }
 
 function buildVocalSectionTagOptions(members: VocalMember[], vocalMode: VocalMode): VocalSectionTagOption[] {
@@ -2382,6 +2488,60 @@ function App() {
 
   const RECENT_SONGS_CACHE_TTL_MS = 10 * 60 * 1000;
   const getRecentSongsCacheKey = (uid: string) => `soridraw_recent_songs_cache_${uid}`;
+  const getRecentSongsBackupKey = (uid: string) => `soridraw_recent_songs_cache_backup_${uid}`;
+
+  const isSongLike = (value: any) => {
+    if (!value || typeof value !== 'object') return false;
+    return Boolean(value.title || value.koreanTitle || value.englishTitle || value.prompt || value.lyrics);
+  };
+
+  const normalizeRecentSongList = (value: any): SongResult[] => {
+    const rawList = Array.isArray(value)
+      ? value
+      : Array.isArray(value?.songs)
+        ? value.songs
+        : Array.isArray(value?.history)
+          ? value.history
+          : Array.isArray(value?.recentSongs)
+            ? value.recentSongs
+            : Array.isArray(value?.items)
+              ? value.items
+              : [];
+
+    const seen = new Set<string>();
+    return rawList
+      .filter(isSongLike)
+      .filter((song: any) => {
+        const key = [song.id, song.createdAt, song.title, song.koreanTitle, song.englishTitle, song.prompt]
+          .filter(Boolean)
+          .join('::');
+        const fallbackKey = JSON.stringify({ title: song.title || song.koreanTitle || song.englishTitle || '', prompt: song.prompt || '', lyrics: song.lyrics || '' }).slice(0, 500);
+        const finalKey = key || fallbackKey;
+        if (seen.has(finalKey)) return false;
+        seen.add(finalKey);
+        return true;
+      }) as SongResult[];
+  };
+
+  const sortRecentSongs = (songs: SongResult[]) => [...songs].sort((a: any, b: any) => {
+    const timeA = Number(a.createdAt || a.updatedAt || a.savedAt || 0);
+    const timeB = Number(b.createdAt || b.updatedAt || b.savedAt || 0);
+    return timeB - timeA;
+  });
+
+  const mergeRecentSongLists = (...lists: any[][]): SongResult[] => {
+    const seen = new Set<string>();
+    const merged: SongResult[] = [];
+    lists.flat().filter(isSongLike).forEach((song: any) => {
+      const key = [song.id, song.createdAt, song.title, song.koreanTitle, song.englishTitle, song.prompt]
+        .filter(Boolean)
+        .join('::') || JSON.stringify({ title: song.title || song.koreanTitle || song.englishTitle || '', prompt: song.prompt || '', lyrics: song.lyrics || '' }).slice(0, 500);
+      if (seen.has(key)) return;
+      seen.add(key);
+      merged.push(song as SongResult);
+    });
+    return sortRecentSongs(merged).slice(0, 10);
+  };
 
   const loadRecentSongsCache = (uid: string) => {
     try {
@@ -2400,16 +2560,62 @@ function App() {
     }
   };
 
+  const loadRecentSongsBackup = (uid: string): SongResult[] => {
+    try {
+      const raw = localStorage.getItem(getRecentSongsBackupKey(uid));
+      if (!raw) return [];
+      return normalizeRecentSongList(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const findRecoverableLocalRecentSongs = (uid: string): SongResult[] => {
+    if (typeof window === 'undefined') return [];
+    const candidates: SongResult[][] = [];
+    try {
+      const currentCache = loadRecentSongsCache(uid);
+      if (currentCache?.history?.length) candidates.push(currentCache.history);
+      const backup = loadRecentSongsBackup(uid);
+      if (backup.length) candidates.push(backup);
+
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i) || '';
+        const lowerKey = key.toLowerCase();
+        if (!lowerKey.includes('soridraw')) continue;
+        if (!(lowerKey.includes('recent') || lowerKey.includes('history') || lowerKey.includes('song'))) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const songs = normalizeRecentSongList(parsed);
+          if (songs.length) candidates.push(songs);
+        } catch {}
+      }
+    } catch {}
+    return mergeRecentSongLists(...candidates);
+  };
+
   const saveRecentSongsCache = (uid: string, payload: {
     history: SongResult[];
     historyIndex: number;
     latestGenerationBatchId: string | null;
   }) => {
     try {
+      const existing = loadRecentSongsCache(uid);
+      const existingHistory = normalizeRecentSongList(existing?.history || []);
+      const nextHistory = normalizeRecentSongList(payload.history || []);
+
+      // If a bug or temporary empty state tries to shrink the cache, keep the larger list as backup first.
+      if (existingHistory.length > nextHistory.length) {
+        localStorage.setItem(getRecentSongsBackupKey(uid), JSON.stringify({ songs: existingHistory, backedUpAt: Date.now() }));
+      }
+
       localStorage.setItem(
         getRecentSongsCacheKey(uid),
         JSON.stringify({
           ...payload,
+          history: nextHistory,
           cachedAt: Date.now(),
         })
       );
@@ -3213,6 +3419,7 @@ const toggleCycleVariantSelection = (
   const historyRef = useRef(history);
   const historyIndexRef = useRef(historyIndex);
   const preserveHistoryIndexOnNextSnapshotRef = useRef<number | null>(null);
+  const recentSongsReadyToCacheRef = useRef(false);
   const userRef = useRef(user);
 
   useEffect(() => { pinnedGenresRef.current = pinnedGenres; }, [pinnedGenres]);
@@ -3909,9 +4116,11 @@ const toggleCycleVariantSelection = (
     setIsGenreRandomized(true);
   };
 
-  // History state is cached locally first and fetched from Firestore only when cache is missing or stale.
+  // History state is cached locally first, but Firestore remains the source of truth.
+  // Important: do not treat an empty/poisoned local cache as fresh, or it can hide older generated songs.
   useEffect(() => {
     if (!user) {
+      recentSongsReadyToCacheRef.current = false;
       setHistory([]);
       setResult(null);
       setHistoryIndex(-1);
@@ -3920,13 +4129,17 @@ const toggleCycleVariantSelection = (
     }
 
     let isCancelled = false;
-    const cached = loadRecentSongsCache(user.uid);
-    const hasFreshCache = !!cached && Date.now() - (cached.cachedAt || 0) < RECENT_SONGS_CACHE_TTL_MS;
+    recentSongsReadyToCacheRef.current = false;
 
-    if (cached) {
-      applyRecentSongsState(cached.history || [], {
-        preferredIndex: cached.historyIndex,
-        latestBatchId: cached.latestGenerationBatchId || null,
+    const cached = loadRecentSongsCache(user.uid);
+    const cachedHistory = Array.isArray(cached?.history) ? cached!.history : [];
+    const hasUsableCache = cachedHistory.length > 0;
+    const hasFreshCache = hasUsableCache && Date.now() - (cached?.cachedAt || 0) < RECENT_SONGS_CACHE_TTL_MS;
+
+    if (hasUsableCache) {
+      applyRecentSongsState(cachedHistory, {
+        preferredIndex: cached?.historyIndex,
+        latestBatchId: cached?.latestGenerationBatchId || null,
       });
     } else {
       setHistory([]);
@@ -3936,6 +4149,7 @@ const toggleCycleVariantSelection = (
     }
 
     if (hasFreshCache) {
+      recentSongsReadyToCacheRef.current = true;
       return;
     }
 
@@ -3945,26 +4159,30 @@ const toggleCycleVariantSelection = (
         const snap = await getDoc(ref);
         if (isCancelled) return;
 
-        if (snap.exists()) {
-          const songs = snap.data().songs || [];
-          const finalSongs = [...songs].sort((a, b) => {
-            const timeA = a.createdAt || 0;
-            const timeB = b.createdAt || 0;
-            return timeB - timeA;
-          });
+        const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
+        preserveHistoryIndexOnNextSnapshotRef.current = null;
 
-          const preferredIndex = preserveHistoryIndexOnNextSnapshotRef.current ?? cached?.historyIndex ?? 0;
-          preserveHistoryIndexOnNextSnapshotRef.current = null;
-          applyRecentSongsState(finalSongs, {
-            preferredIndex,
-            latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
-          });
-        } else {
-          preserveHistoryIndexOnNextSnapshotRef.current = null;
-          applyRecentSongsState([], { preferredIndex: -1, latestBatchId: null });
+        const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
+        const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
+        const finalSongs = mergeRecentSongLists(firestoreSongs, recoverySongs);
+
+        const preferredIndex = preservedIndex ?? cached?.historyIndex ?? 0;
+        applyRecentSongsState(finalSongs, {
+          preferredIndex: finalSongs.length ? preferredIndex : -1,
+          latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+        });
+
+        // If Firestore was accidentally overwritten with a shorter list, restore the merged list once.
+        if (finalSongs.length > firestoreSongs.length) {
+          await setDoc(ref, sanitizeForFirestore({ songs: finalSongs }), { merge: true });
         }
+
+        recentSongsReadyToCacheRef.current = true;
       } catch (error) {
-        if (!cached) {
+        // If Firestore fails, keep a usable cache as temporary fallback.
+        // If there is no usable cache, do not save the empty placeholder over the cache.
+        recentSongsReadyToCacheRef.current = hasUsableCache;
+        if (!hasUsableCache) {
           console.error('Failed to load recent songs:', error);
         }
       }
@@ -3978,7 +4196,7 @@ const toggleCycleVariantSelection = (
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !recentSongsReadyToCacheRef.current) return;
     saveRecentSongsCache(user.uid, {
       history,
       historyIndex,
@@ -4468,16 +4686,16 @@ const saveRecentSong = async (newSong: any) => {
   try {
     const ref = doc(db, "user_recent_songs", user.uid);
     const snap = await getDoc(ref);
-
-    let existingSongs: any[] = [];
-
-    if (snap.exists()) {
-      existingSongs = snap.data().songs || [];
-    }
-
-    const updatedSongs = [newSong, ...existingSongs].slice(0, 10);
+    const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
+    const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
+    const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
 
     await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
+    recentSongsReadyToCacheRef.current = true;
+    applyRecentSongsState(updatedSongs, {
+      preferredIndex: 0,
+      latestBatchId: (updatedSongs[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+    });
 
   } catch (e) {
     console.error("Failed to save recent songs:", e);
@@ -4834,13 +5052,8 @@ const saveRecentSong = async (newSong: any) => {
         ].filter(Boolean).slice(0, 1).join(', '); // Limit to one additional styling
 
         const arrangement = [
-          songStructure === 'custom' 
-            ? `Custom structure: ${customStructure.map(s => {
-                if (s.section === 'Instrumental' && s.tags.length > 0) {
-                  return `${s.section}: ${s.tags[0]} Solo`;
-                }
-                return `${s.section}${s.tags.length > 0 ? ` (${s.tags.join(', ')})` : ''}`;
-              }).join(' → ')}`
+          songStructure === 'custom'
+            ? `Custom structure: ${formatStoredCustomStructureText(customStructure)}`
             : `Base structure: ${songStructure === '1' ? '기본 자유 전개' : songStructure === '2' ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
@@ -6818,12 +7031,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
                             {result.appliedKeywords.songStructure === 'custom' 
-                              ? (result.appliedKeywords.customStructure ?? []).map(s => {
-                                  if (s.section === 'Instrumental' && (s.tags ?? []).length > 0) {
-                                    return `${s.section}: ${(s.tags ?? [])[0]}`;
-                                  }
-                                  return `${s.section}${(s.tags ?? []).length > 0 ? ` (${(s.tags ?? []).join(', ')})` : ''}`;
-                                }).join(' → ')
+                              ? formatStoredCustomStructureText(result.appliedKeywords.customStructure ?? [])
                               : result.appliedKeywords.songStructure === '1'
                                 ? '기본 자유 전개'
                                 : result.appliedKeywords.songStructure === '2'
@@ -8616,6 +8824,13 @@ function SongStructureIntegratedControl({
   const customModalHistoryPushedRef = useRef(false);
   const customModalBackdropMouseDownRef = useRef(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
+  const [selectedInsertIndex, setSelectedInsertIndex] = useState<number | null>(null);
+  const currentStructureScrollRef = useRef<HTMLDivElement | null>(null);
+  const [isReorderDragging, setIsReorderDragging] = useState(false);
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+  const draggingSectionIdRef = useRef<string | null>(null);
+  const dragPointerYRef = useRef<number | null>(null);
+  const reorderFrameRef = useRef<number | null>(null);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
@@ -8640,6 +8855,7 @@ function SongStructureIntegratedControl({
   const customSectionEditorBackdropMouseDownRef = useRef(false);
   const [sectionLibraryFilter, setSectionLibraryFilter] = useState<'all' | 'basic' | 'my'>('all');
   const [isCustomSectionConverting, setIsCustomSectionConverting] = useState(false);
+  const [clearedStructureTagSnapshot, setClearedStructureTagSnapshot] = useState<{ id: string; tags: string[] }[] | null>(null);
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
@@ -8652,6 +8868,131 @@ function SongStructureIntegratedControl({
       setContentHeight(contentRef.current.scrollHeight);
     }
   }, [lyricsLength, songStructure, customStructure]);
+
+  const moveDraftSectionById = useCallback((dragId: string, targetIndex: number) => {
+    setDraftStructure((prev) => {
+      const currentItems = prev ?? [];
+      const fromIndex = currentItems.findIndex((item) => item.id === dragId);
+      if (fromIndex < 0 || currentItems.length <= 1) return currentItems;
+      const safeTargetIndex = Math.max(0, Math.min(targetIndex, currentItems.length - 1));
+      if (fromIndex === safeTargetIndex) return currentItems;
+      const nextItems = [...currentItems];
+      const [movedItem] = nextItems.splice(fromIndex, 1);
+      nextItems.splice(safeTargetIndex, 0, movedItem);
+      return nextItems;
+    });
+    setSelectedInsertIndex(null);
+  }, []);
+
+  const processManualReorderDrag = useCallback(() => {
+    const dragId = draggingSectionIdRef.current;
+    const pointerY = dragPointerYRef.current;
+    const container = currentStructureScrollRef.current;
+    if (!dragId || pointerY == null || !container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const edgeSize = 74;
+    const maxScrollStep = 18;
+    let scrollStep = 0;
+
+    if (pointerY < containerRect.top + edgeSize) {
+      const ratio = (containerRect.top + edgeSize - pointerY) / edgeSize;
+      scrollStep = -Math.ceil(Math.min(maxScrollStep, Math.max(4, ratio * maxScrollStep)));
+    } else if (pointerY > containerRect.bottom - edgeSize) {
+      const ratio = (pointerY - (containerRect.bottom - edgeSize)) / edgeSize;
+      scrollStep = Math.ceil(Math.min(maxScrollStep, Math.max(4, ratio * maxScrollStep)));
+    }
+
+    if (scrollStep !== 0) {
+      container.scrollTop += scrollStep;
+    }
+
+    const sectionNodes = Array.from(container.querySelectorAll<HTMLElement>('[data-reorder-section-id]'));
+    if (sectionNodes.length <= 1) return;
+
+    let targetIndex = sectionNodes.length - 1;
+    for (let i = 0; i < sectionNodes.length; i += 1) {
+      const rect = sectionNodes[i].getBoundingClientRect();
+      if (pointerY < rect.top + rect.height / 2) {
+        targetIndex = i;
+        break;
+      }
+    }
+
+    moveDraftSectionById(dragId, targetIndex);
+  }, [moveDraftSectionById]);
+
+  const stopManualReorderDrag = useCallback(() => {
+    if (reorderFrameRef.current !== null) {
+      cancelAnimationFrame(reorderFrameRef.current);
+      reorderFrameRef.current = null;
+    }
+    draggingSectionIdRef.current = null;
+    dragPointerYRef.current = null;
+    setDraggingSectionId(null);
+    setIsReorderDragging(false);
+  }, []);
+
+  const startManualReorderLoop = useCallback(() => {
+    if (reorderFrameRef.current !== null) return;
+    const tick = () => {
+      if (!draggingSectionIdRef.current) {
+        reorderFrameRef.current = null;
+        return;
+      }
+      processManualReorderDrag();
+      reorderFrameRef.current = requestAnimationFrame(tick);
+    };
+    reorderFrameRef.current = requestAnimationFrame(tick);
+  }, [processManualReorderDrag]);
+
+  const handleSectionReorderPointerDown = useCallback((index: number, event: React.PointerEvent<HTMLButtonElement>) => {
+    const targetItem = (draftStructure ?? [])[index];
+    if (!targetItem) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    draggingSectionIdRef.current = targetItem.id;
+    dragPointerYRef.current = event.clientY;
+    setDraggingSectionId(targetItem.id);
+    setIsReorderDragging(true);
+    setSelectedInsertIndex(null);
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is best-effort only.
+    }
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      dragPointerYRef.current = moveEvent.clientY;
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('blur', handlePointerUp);
+      stopManualReorderDrag();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    window.addEventListener('pointercancel', handlePointerUp, { once: true });
+    window.addEventListener('blur', handlePointerUp, { once: true });
+
+    startManualReorderLoop();
+  }, [draftStructure, startManualReorderLoop, stopManualReorderDrag]);
+
+  useEffect(() => {
+    return () => {
+      if (reorderFrameRef.current !== null) {
+        cancelAnimationFrame(reorderFrameRef.current);
+      }
+    };
+  }, []);
 
 
   useEffect(() => {
@@ -8776,12 +9117,6 @@ function SongStructureIntegratedControl({
     { id: 'long', label: 'Long', labelKo: '길게', description: '서사적이고 풍부한 가사(랩,오페라 등)' }
   ];
 
-  const structureOptions = [
-    { id: '1', label: '기본', description: '감정선과 스토리에 맞춰 곡 구조를 자유롭게 구성합니다.' },
-    { id: '2', label: '1', description: '일반적인 기본 구조. 추천 2~4분' },
-    { id: '3', label: '2', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
-    { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
-  ] as const;
 
   useEffect(() => {
     if (!user) {
@@ -8789,24 +9124,33 @@ function SongStructureIntegratedControl({
       return;
     }
 
+    const storageKey = getSavedStructuresStorageKey(user.uid);
+    const localBackup = safeReadJsonArray<SavedStructurePreset>(storageKey)
+      .map((item) => normalizeSavedStructurePreset(item))
+      .filter((item): item is SavedStructurePreset => item !== null);
+    if (localBackup.length > 0) {
+      setSavedStructures(localBackup);
+    }
+
     const loadStructures = () => {
       try {
         const ref = doc(db, 'user_structures', user.uid);
         return onSnapshot(ref, (snap) => {
           if (!snap.exists()) {
-            setSavedStructures([]);
+            setSavedStructures(localBackup);
             return;
           }
 
           const normalized = readSavedStructurePresets(snap.data());
           setSavedStructures(normalized);
+          writeJsonArray(storageKey, normalized);
         }, (error) => {
           console.error('Failed to sync saved song structures:', error);
-          setSavedStructures([]);
+          setSavedStructures(localBackup);
         });
       } catch (error) {
         console.error('Failed to set up song structures listener:', error);
-        setSavedStructures([]);
+        setSavedStructures(localBackup);
       }
     };
     
@@ -8832,6 +9176,7 @@ function SongStructureIntegratedControl({
     setStructureSearch('');
     setStructureFilter('all');
     setDeleteConfirmPresetId(null);
+    setClearedStructureTagSnapshot(null);
   }, []);
 
   const closeSaveStructureModal = useCallback((source: 'ui' | 'history' = 'ui') => {
@@ -8983,13 +9328,19 @@ function SongStructureIntegratedControl({
   const persistSavedStructures = async (next: SavedStructurePreset[]) => {
     if (!user) return;
 
+    const sanitized = next
+      .map((item) => normalizeSavedStructurePreset(item))
+      .filter((item): item is SavedStructurePreset => item !== null)
+      .slice(0, 20);
+
+    // Update the UI and the local backup immediately. This prevents the Keep
+    // loader from reopening an older cached version while Firestore snapshot
+    // synchronization is still pending.
+    setSavedStructures(sanitized);
+    writeJsonArray(getSavedStructuresStorageKey(user.uid), sanitized);
+
     try {
       const ref = doc(db, 'user_structures', user.uid);
-      const sanitized = next
-        .map((item) => normalizeSavedStructurePreset(item))
-        .filter((item): item is SavedStructurePreset => item !== null)
-        .slice(0, 20);
-
       await setDoc(ref, sanitizeForFirestore({ structures: sanitized }), { merge: true });
     } catch (error) {
       console.error('Failed to save song structures to Firestore:', error);
@@ -8998,28 +9349,66 @@ function SongStructureIntegratedControl({
 
   const openCustomModal = () => {
     setDraftStructure(normalizeCustomStructure(customStructure));
+    setSelectedInsertIndex(null);
     setPresetName('');
     setEditingSavedStructureId(null);
+    setClearedStructureTagSnapshot(null);
     setIsCustomModalOpen(true);
     window.history.pushState({ modal: 'custom-structure' }, '');
     customModalHistoryPushedRef.current = true;
   };
 
+  const vocalLabelMapForStructure = useMemo(() => Object.fromEntries(vocalSectionTags.map((item) => [item.tag, item.displayLabel] as const)), [vocalSectionTags]);
+  const currentVocalActualLabelsForStructure = useMemo(() => vocalSectionTags
+    .map((item) => {
+      const raw = String(item.tag || '').trim();
+      if (!raw.startsWith('VOCAL::')) return '';
+      return (raw.split('::')[1] || '').replace(/\s{2,}/g, ' ').trim();
+    })
+    .filter(Boolean), [vocalSectionTags]);
+  const customTagLabelMapForStructure = useMemo(() => Object.fromEntries(userCustomSectionTags.map((item) => [item.label, item.labelKo || item.label] as const)), [userCustomSectionTags]);
+  const parseVocalTagFallbackForStructure = useCallback((tag: string) => {
+    const raw = String(tag || '').trim();
+    if (raw.startsWith('VOCAL_ALL::')) return '전체보컬';
+    if (raw.startsWith('VOCAL::')) {
+      const parts = raw.split('::');
+      const label = (parts[1] || 'Vocal').replace(/\s{2,}/g, ' ').trim();
+      const noGender = label.replace(/\b(?:Male|Female)\s+/gi, '').replace(/\s{2,}/g, ' ').trim().toLowerCase();
+      const liveGenderedLabel = currentVocalActualLabelsForStructure.find((item) => item.replace(/\b(?:Male|Female)\s+/gi, '').replace(/\s{2,}/g, ' ').trim().toLowerCase() === noGender);
+      return liveGenderedLabel || label;
+    }
+    return '';
+  }, [currentVocalActualLabelsForStructure]);
+  const getStructureTagDisplay = useCallback((tag: string) => {
+    const raw = String(tag || '').trim();
+    return vocalLabelMapForStructure[raw] || parseVocalTagFallbackForStructure(raw) || customTagLabelMapForStructure[raw] || pointSoundTagLabels[raw] || raw;
+  }, [vocalLabelMapForStructure, parseVocalTagFallbackForStructure, customTagLabelMapForStructure, pointSoundTagLabels]);
+
   function formatStructureText(structure: CustomSectionItem[]) {
     const normalized = normalizeCustomStructure(structure);
-    const vocalLabelMap = Object.fromEntries(vocalSectionTags.map((item) => [item.tag, item.displayLabel] as const));
-    const customTagLabelMap = Object.fromEntries(userCustomSectionTags.map((item) => [item.label, item.labelKo || item.label] as const));
-    const getDisplay = (tag: string) => vocalLabelMap[tag] || customTagLabelMap[tag] || pointSoundTagLabels[tag] || tag;
+    const getDisplay = getStructureTagDisplay;
     const getSectionDisplay = (section: string) => customSectionMap.get(section)?.labelKo || section;
     return normalized.map(s => {
       const sectionLabel = getSectionDisplay(String(s.section));
-      const visibleTags = (s.tags ?? []).map(getDisplay);
+      const visibleTags = (s.tags ?? [])
+        .map(getDisplay)
+        .filter(Boolean)
+        .filter((tag, index, arr) => arr.findIndex((other) => String(other).toLowerCase() === String(tag).toLowerCase()) === index)
+        .slice(0, 3);
       if (s.section === 'Instrumental' && visibleTags.length > 0) {
         return `${sectionLabel}: ${visibleTags[0]}`;
       }
       return `${sectionLabel}${visibleTags.length > 0 ? ` · ${visibleTags.join(' · ')}` : ''}`;
     }).join(' → ');
   }
+
+
+  const structureOptions = [
+    { id: '1', label: '기본', description: '감정선과 스토리에 맞춰 곡 구조를 자유롭게 구성합니다.' },
+    { id: '2', label: '1', description: '일반적인 기본 구조. 추천 2~4분' },
+    { id: '3', label: '2', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
+    { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
+  ] as const;
 
   const handleSelectStructure = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
@@ -9067,17 +9456,58 @@ function SongStructureIntegratedControl({
       section,
       tags: []
     };
-    setDraftStructure((prev) => [...prev, newItem]);
+    setDraftStructure((prev) => {
+      const insertAfter = selectedInsertIndex !== null && selectedInsertIndex >= 0 && selectedInsertIndex < prev.length
+        ? selectedInsertIndex
+        : prev.length - 1;
+      const insertAt = insertAfter + 1;
+      const next = [...prev.slice(0, insertAt), newItem, ...prev.slice(insertAt)];
+      setSelectedInsertIndex(insertAt);
+      return next;
+    });
   };
 
   const removeSectionAt = (index: number) => {
     setDraftStructure((prev) => prev.filter((_, idx) => idx !== index));
+    setSelectedInsertIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
   };
+
+  const hasDraftStructureTags = useMemo(() => (draftStructure ?? []).some((item) => (item.tags ?? []).length > 0), [draftStructure]);
+  const canToggleDraftStructureTags = hasDraftStructureTags || Boolean(clearedStructureTagSnapshot?.length);
+  const isDraftStructureTagsCleared = !hasDraftStructureTags && Boolean(clearedStructureTagSnapshot?.length);
+
+  const toggleClearDraftStructureTags = useCallback(() => {
+    if (isDraftStructureTagsCleared && clearedStructureTagSnapshot?.length) {
+      const snapshotById = new Map(clearedStructureTagSnapshot.map((item) => [item.id, item.tags] as const));
+      setDraftStructure((prev) => (prev ?? []).map((item) => ({
+        ...item,
+        tags: snapshotById.get(item.id) ?? item.tags ?? []
+      })));
+      setClearedStructureTagSnapshot(null);
+      return;
+    }
+
+    if (!hasDraftStructureTags) return;
+
+    const snapshot = (draftStructure ?? [])
+      .filter((item) => (item.tags ?? []).length > 0)
+      .map((item) => ({ id: item.id, tags: [...(item.tags ?? [])] }));
+
+    setClearedStructureTagSnapshot(snapshot);
+    setDraftStructure((prev) => (prev ?? []).map((item) => ({ ...item, tags: [] })));
+    setSelectedInsertIndex(null);
+  }, [clearedStructureTagSnapshot, draftStructure, hasDraftStructureTags, isDraftStructureTagsCleared]);
 
   const handleApplyCustomStructure = () => {
     if ((draftStructure ?? []).length === 0) return;
     onCustomStructureChange(draftStructure);
     onSongStructureChange('custom');
+    setClearedStructureTagSnapshot(null);
     closeCustomModal();
     onHover({
       id: 'song-structure-custom-applied',
@@ -9119,7 +9549,14 @@ function SongStructureIntegratedControl({
   };
 
   const handleLoadPreset = (preset: SavedStructurePreset) => {
-    setDraftStructure(normalizeCustomStructure(preset.sections));
+    const loadedSections = normalizeCustomStructure(preset.sections).map((item, index) => ({
+      ...item,
+      id: item.id || `${preset.id}-${index}-${Date.now()}`,
+      tags: Array.isArray(item.tags) ? [...item.tags] : [],
+    }));
+    setDraftStructure(loadedSections);
+    setSelectedInsertIndex(null);
+    setClearedStructureTagSnapshot(null);
     setPresetName(preset.name);
     setEditingSavedStructureId(preset.id);
     setDeleteConfirmPresetId(null);
@@ -9714,6 +10151,29 @@ function SongStructureIntegratedControl({
                         <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
+                            onClick={toggleClearDraftStructureTags}
+                            disabled={!canToggleDraftStructureTags}
+                            title={isDraftStructureTagsCleared ? '태그 되돌리기' : '적용된 태그 전체삭제'}
+                            aria-label={isDraftStructureTagsCleared ? '태그 되돌리기' : '적용된 태그 전체삭제'}
+                            className={cn(
+                              "relative w-9 h-9 rounded-xl border transition-all shadow-btn flex items-center justify-center",
+                              canToggleDraftStructureTags
+                                ? isDraftStructureTagsCleared
+                                  ? "bg-brand-orange/10 border-brand-orange/45 text-brand-orange hover:bg-brand-orange/15"
+                                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-red-300 hover:border-red-500/45 hover:bg-red-500/10"
+                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/35 cursor-not-allowed"
+                            )}
+                          >
+                            <Tag className="w-4 h-4" />
+                            {isDraftStructureTagsCleared ? (
+                              <RotateCcw className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-brand-orange p-[1px]" />
+                            ) : (
+                              <X className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-red-300 p-[1px]" />
+                            )}
+                          </button>
+                          <div className="h-7 w-px bg-[var(--border-color)] mx-1" aria-hidden="true" />
+                          <button
                             onClick={resetDraftStructure}
                             className={cn(
                               "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
@@ -9740,12 +10200,12 @@ function SongStructureIntegratedControl({
                         </div>
                       </div>
 
-                      <Reorder.Group 
-                        axis="y" 
-                        values={draftStructure ?? []} 
-                        onReorder={setDraftStructure}
-                        className="flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2 overflow-y-auto custom-scrollbar"
-                        as="div"
+                      <div
+                        ref={currentStructureScrollRef}
+                        className={cn(
+                          "flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 overflow-y-auto custom-scrollbar flex flex-col gap-2 overscroll-contain",
+                          isReorderDragging && "cursor-grabbing select-none"
+                        )}
                       >
                         {(draftStructure ?? []).length === 0 ? (
                           <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
@@ -9760,11 +10220,17 @@ function SongStructureIntegratedControl({
                               onEdit={setEditingSectionIndex}
                               onRemove={removeSectionAt}
                               onHover={onHover}
+                              onSelect={setSelectedInsertIndex}
+                              onDragStart={handleSectionReorderPointerDown}
+                              isReorderDragging={isReorderDragging}
+                              isDraggingItem={draggingSectionId === item.id}
+                              isInsertionTarget={selectedInsertIndex === index}
                               sectionDisplayLabel={customSectionMap.get(String(item.section))?.label || String(item.section)}
+                              tagDisplayLabel={getStructureTagDisplay}
                             />
                           ))
                         )}
-                      </Reorder.Group>
+                      </div>
                     </div>
 
                     <div className="hidden xl:block min-w-0 overflow-hidden h-[520px]">
@@ -10330,7 +10796,7 @@ function TagEditModal({
     return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || SECTION_TAG_DESCRIPTIONS_LOCAL[tag] || '';
   };
 
-  const maxSelectable = isInstrumental ? 1 : 2;
+  const maxSelectable = isInstrumental ? 1 : 3;
 
   const closeCustomTagEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && customTagEditorHistoryPushedRef.current) {
@@ -10590,8 +11056,8 @@ function TagEditModal({
                   onClick={() => toggleTag(tag)}
                   onMouseEnter={() => onHover({ 
                     id: `tag-${tag}`, 
-                    label: tag, 
-                    labelKo: displayLabel, 
+                    label: displayLabel, 
+                    labelKo: description || displayLabel, 
                     description: description || (isInstrumental ? '독주용 악기를 선택합니다.' : '음악적 디렉션을 추가합니다.')
                   })}
                   onMouseLeave={() => {
@@ -10600,8 +11066,8 @@ function TagEditModal({
                   }}
                   onTouchStart={() => onLongPressStart({ 
                     id: `tag-${tag}`, 
-                    label: tag, 
-                    labelKo: displayLabel, 
+                    label: displayLabel, 
+                    labelKo: description || displayLabel, 
                     description: description || (isInstrumental ? '독주용 악기를 선택합니다.' : '음악적 디렉션을 추가합니다.')
                   })}
                   onTouchEnd={onLongPressEnd}

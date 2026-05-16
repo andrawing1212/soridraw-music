@@ -12,6 +12,7 @@ import {
   MID_GENRE_PROMPTS,
   SUB_GENRE_PROMPTS,
   MOODS,
+  THEMES,
   GENRE_INSTRUMENT_PROFILES,
   VOCAL_TECHNIQUES,
   VOCAL_VOICE_TONES,
@@ -923,7 +924,8 @@ function resolveMoodItem(value: string) {
   return MOODS.find(
     (item) =>
       item.id.toLowerCase() === normalized ||
-      item.label.toLowerCase() === normalized,
+      item.label.toLowerCase() === normalized ||
+      String(item.labelKo || "").toLowerCase() === normalized,
   );
 }
 
@@ -1805,25 +1807,9 @@ function uniquifyVocalLabel(label: string, used: Set<string>): string {
   return candidate;
 }
 
-function addGenderToVocalLabel(label: string, gender: string): string {
-  const clean = String(label || "").replace(/\s+/g, " ").trim();
-  if (!clean) return clean;
-  const genderTitle = gender === "female" ? "Female" : gender === "male" ? "Male" : "";
-  if (!genderTitle || new RegExp(`\\b${genderTitle}\\b`, "i").test(clean)) return clean;
-  if (/\bRap\s+Vocal\b/i.test(clean)) {
-    return clean.replace(/\bRap\s+Vocal\b/i, `${genderTitle} Rap Vocal`).replace(/\s+/g, " ").trim();
-  }
-  if (/\bVocal\b/i.test(clean)) {
-    return clean.replace(/\bVocal\b/i, `${genderTitle} Vocal`).replace(/\s+/g, " ").trim();
-  }
-  return `${clean} ${genderTitle} Vocal`.replace(/\s+/g, " ").trim();
-}
-
 function buildCharacterVocalLabel(member: any, index: number, params: GenerateSongParams, used: Set<string>): string {
   const rawRole = member?.roles?.[0] || getDefaultMultiVocalRole(index, params.vocal?.members?.length || 2, Boolean(params.vocal?.rap));
   const base = rawVocalRoleBase(rawRole);
-  const gender = member?.gender || getMemberGenderLabel(params, index);
-  const genderTitle = gender === "female" ? "Female" : gender === "male" ? "Male" : "";
   const characterPhrase = buildVocalIntentResult(member, params, false).phrase.toLowerCase();
   const displayName = String(member?.character?.displayName || "").trim();
   if (displayName) {
@@ -1832,38 +1818,31 @@ function buildCharacterVocalLabel(member: any, index: number, params: GenerateSo
       .replace(/[^a-zA-Z0-9가-힣\s-]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    if (safe && safe.length <= 24) return uniquifyVocalLabel(addGenderToVocalLabel(safe, gender), used);
+    if (safe && safe.length <= 24) return uniquifyVocalLabel(safe, used);
   }
 
-  const has = (pattern: RegExp) => pattern.test(characterPhrase);
-  const isRap = base === "Rap Vocal";
-  const roleWord = isRap ? "Rap Vocal" : "Vocal";
-  const gendered = genderTitle ? `${genderTitle} ${roleWord}` : roleWord;
-  const compact: string[] = [];
-
-  // 3+ vocal casts need distinctive, technique-led labels. Prefer combined
-  // singing-method identities over generic Main/Lead/Female labels.
-  if (isRap) {
-    if (has(/bright|lively|톡톡|anticipated|front[-\s]?beat|early|urgent|앞박|당겨/)) compact.push(`Bright ${gendered}`);
-    if (has(/low|deep|heavy|chesty|낮|저음|묵직/)) compact.push(`Low ${gendered}`);
-    if (has(/wet|젖은/)) compact.push(`Wet ${gendered}`);
-    if (has(/nasal|비성|비음/)) compact.push(`Nasal ${gendered}`);
-    if (has(/breath|breathy|whisper|숨|하프|reverse/)) compact.push(`Breathy ${gendered}`);
-    if (has(/playful|bounce|bouncy|장난/)) compact.push(`Playful ${gendered}`);
-    compact.push(gendered);
+  const candidates: string[] = [];
+  if (base === "Rap Vocal") {
+    if (/deep|heavy|chesty|low|chest/.test(characterPhrase)) candidates.push("Low Rap Vocal");
+    if (/wet|nasal/.test(characterPhrase)) candidates.push("Wet Rap Vocal");
+    if (/creaky|growl|rough/.test(characterPhrase)) candidates.push("Creaky Rap Vocal");
+    if (/bright|head-voice|head voice|clear/.test(characterPhrase)) candidates.push("Bright Rap Vocal");
+    if (/breath|breathy|airy|whisper/.test(characterPhrase)) candidates.push("Whisper Rap Vocal");
+    if (/playful|flip|click|rhythmic/.test(characterPhrase)) candidates.push("Playful Rap Vocal");
+    if (/stubborn|grit|intensity/.test(characterPhrase)) candidates.push("Stubborn Rap Vocal");
+    candidates.push("Rap Vocal");
   } else {
-    if (has(/wet|젖은/) && has(/falsetto|가성/)) compact.push(`Wet Falsetto ${genderTitle || ''} Vocal`.replace(/\s+/g, ' ').trim());
-    if (has(/lazy|relaxed|나른/) && has(/nasal|비성|비음/)) compact.push(`Lazy Nasal ${genderTitle || ''} Vocal`.replace(/\s+/g, ' ').trim());
-    if (has(/falsetto|가성/)) compact.push(`Falsetto ${genderTitle || ''} Vocal`.replace(/\s+/g, ' ').trim());
-    if (has(/wet|젖은/)) compact.push(`Wet ${gendered}`);
-    if (has(/nasal|비성|비음/)) compact.push(`Nasal ${gendered}`);
-    if (has(/airy|breath|breathy|숨|에어리/)) compact.push(`Airy ${gendered}`);
-    if (has(/clear|bright|head-voice|맑|선명/)) compact.push(`Clear ${gendered}`);
-    if (has(/deep|low|heavy|낮|저음/)) compact.push(`Deep ${gendered}`);
-    compact.push(gendered);
+    const suffix = base === "Vocal" ? "Vocal" : base;
+    if (/hollow|distant|empty/.test(characterPhrase)) candidates.push(`Hollow ${suffix}`.replace(/Vocal Vocal$/i, "Vocal"));
+    if (/airy|falsetto|breath|breathy/.test(characterPhrase)) candidates.push(`Airy ${suffix}`.replace(/Vocal Vocal$/i, "Vocal"));
+    if (/clear|bright|head-voice|first-love/.test(characterPhrase)) candidates.push(`Clear ${suffix}`.replace(/Vocal Vocal$/i, "Vocal"));
+    if (/wet|nasal/.test(characterPhrase)) candidates.push(`Wet ${suffix}`.replace(/Vocal Vocal$/i, "Vocal"));
+    if (/deep|heavy|chesty|low/.test(characterPhrase)) candidates.push(`Deep ${suffix}`.replace(/Vocal Vocal$/i, "Vocal"));
+    if (/calm|plain|restraint|relaxed/.test(characterPhrase)) candidates.push(`Calm ${suffix}`.replace(/Vocal Vocal$/i, "Vocal"));
+    candidates.push(base);
   }
 
-  const first = compact.map((c) => c.replace(/\s+/g, " ").trim()).find(Boolean) || addGenderToVocalLabel(base, gender);
+  const first = candidates.map((c) => c.replace(/\s+/g, " ").trim()).find(Boolean) || base;
   return uniquifyVocalLabel(first, used);
 }
 
@@ -1895,22 +1874,6 @@ function buildExtraTechniqueLyricTagInstruction(params: GenerateSongParams): str
   });
   if (!lines.length) return '';
   return `\n[VOCAL CHARACTER LYRIC TAG CANDIDATES]\n${lines.join('\n')}\n- Use these only once when musically useful. Do not stuff every section tag with technique names.`;
-}
-
-
-function buildActiveVocalCastLyricInstruction(params: GenerateSongParams): string {
-  const entries = activeVocalCharacterEntries(params);
-  if (!entries.length) return '';
-  const list = entries
-    .map((entry) => {
-      const cue = entry.cue ? `, compact cue: ${entry.cue}` : '';
-      return `- ${entry.lyricLabel}${cue}`;
-    })
-    .join('\n');
-  const situationNote = hasSituation(params.situation)
-    ? '- Situation roles and vocal cast are separate: a 2-role story may use 3 or more vocal characters. Extra same-gender vocals may act as echo, emotional lift, alternate hook, or bridge color for that story role.'
-    : '- Use these vocal characters as the only available singers for section ownership.';
-  return `\n[ACTIVE VOCAL CHARACTER CAST - HARD RULE]\n${list}\n${situationNote}\n- Lyric section owner labels must use only these labels or All Vocals. Do not invent labels such as Male Low Rap Vocal or Female Main Vocal.\n- When no user vocal tag is attached to a lyrical section, you may still use ONLY for separation, but choose the owner from this cast only.\n- When a user vocal tag is attached, that selected cast member is mandatory for the section.\n- Keep each lyric tag compact: ONLY cast label + one compact technique cue + one execution/situation cue at most. Avoid semantic duplicates such as lazy nasal + lazy nasal hook, nasal + nasal pleading, or front-beat rap + sharp front-beat; rewrite the second cue by function, e.g. soft hook, fragile pleading, or sharp attack.`;
 }
 
 function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
@@ -2447,7 +2410,7 @@ function isCustomInstrumentalTag(tag: string): boolean {
   // Only explicit instrumental/no-vocal ownership tags should force a whole
   // section to become instrumental. Cues like "Instrumental break" should
   // not turn a vocal section into an instrumental section.
-  return /^(?:Instrumental|Instrumental Opening|Only Instrumental|Instrumental only|No vocals|No humming|No chant|Pure instrumental)$/i.test(raw);
+  return /^(?:Instrumental|Instrumental Opening|Instrumental only|No vocals|No humming|No chant|Pure instrumental)$/i.test(raw);
 }
 
 function isHumanVoiceCueText(value: string): boolean {
@@ -2458,17 +2421,11 @@ function isHumanVoiceCueText(value: string): boolean {
 function cleanInstrumentalCueText(value: string): string {
   return cleanupPromptTail(
     cleanEnglishOnlyLyricTagPart(String(value || ''))
-      // Avoid redundant generated tags like [Outro: Instrumental, Instrumental fade-out].
-      // The section formatter already adds the leading "Instrumental" when needed
-      // for non-instrumental section names such as Outro/Intro.
-      .replace(/\binstrumental\s+(fade[-\s]?out|soft\s+ending|ending|outro|intro)\b/gi, '$1')
-      .replace(/^\s*instrumental\s*$/gi, ' ')
       .replace(/\b(?:ONLY\s+)?(?:Low|Wet|Creaky|Bright|Whisper|Playful|Stubborn|Deep|Airy|Hollow|Clear|Male|Female|Rap|Main|Sub|Harmony|All)\s+Vocals?\b/gi, ' ')
       .replace(/\b(?:ONLY\s+)?Lead\s+Vocals?\b/gi, ' ')
       .replace(/\b(?:male|female)\s+(?:vocal|rap)\b/gi, ' ')
       .replace(/\b(?:vocal|vocals|voice|rap|singer|singing|spoken|lead\s+vocal|main\s+vocal|sub\s+vocal|harmony\s+vocal|all\s+vocals|choir|ad[-\s]?lib|adlib|chant|chanting|humming|hum|whisper|breath|breathy|sigh|sob|cry|gasp|laugh)\b/gi, ' ')
       .replace(/구음|허밍|목소리|보컬|랩|노래|가창|합창|애드립|숨소리|한숨|속삭임/g, ' ')
-      .replace(/\bhigh[-\s]+pressure\b/gi, 'High Pressure')
       .replace(/\s{2,}/g, ' ')
       .trim(),
   );
@@ -2478,16 +2435,7 @@ function cleanInstrumentalCueParts(parts: string[]): string[] {
   const out: string[] = [];
   parts.forEach((part) => {
     const raw = String(part || '').trim();
-    if (!raw || isHumanVoiceCueText(raw)) return;
-
-    // Keep the user's explicit control tag visible when they selected it.
-    // Other instrumental-control aliases are only used internally to force no-vocal sections.
-    if (/^(?:Only\s+Instrumental|Instrumental\s+only)$/i.test(raw)) {
-      if (!out.some((item) => item.toLowerCase() === 'only instrumental')) out.push('Only Instrumental');
-      return;
-    }
-    if (isCustomInstrumentalTag(raw)) return;
-
+    if (!raw || isCustomInstrumentalTag(raw) || isHumanVoiceCueText(raw)) return;
     const clean = cleanInstrumentalCueText(raw);
     if (!clean || isHumanVoiceCueText(clean)) return;
     if (!out.some((item) => item.toLowerCase() === clean.toLowerCase())) out.push(clean);
@@ -2529,13 +2477,7 @@ function buildInstrumentalOnlyTag(section: string, cues: string[] = []): string 
   // [Intro: Instrumental, ...] because the section name itself is not an
   // instrumental cue.
   const sectionAlreadyInstrumental = /^(?:Instrumental|Instrumental Opening|Solo|Drop|Breakdown)$/i.test(cleanSection);
-  const explicitOnlyInstrumental = cleanCues.find((cue) => /^(?:Only\s+Instrumental|Instrumental\s+only)$/i.test(cue));
-  const nonOnlyCues = cleanCues.filter((cue) => cue !== explicitOnlyInstrumental);
-  const bodyParts = sectionAlreadyInstrumental
-    ? cleanCues
-    : explicitOnlyInstrumental
-      ? [explicitOnlyInstrumental, ...nonOnlyCues]
-      : ['Instrumental', ...cleanCues];
+  const bodyParts = sectionAlreadyInstrumental ? cleanCues : ['Instrumental', ...cleanCues];
   const body = bodyParts.filter(Boolean).join(', ');
   return `[${cleanSection}${body ? `: ${body}` : ''}]`;
 }
@@ -2632,511 +2574,12 @@ function compactStructureCue(tag: string): string {
     .replace(/\b(?:ONLY\s+)?(?:Male|Female)\s+(?:Main\s+)?Vocal\b/gi, ' ')
     .replace(/\b(?:ONLY\s+)?(?:Male|Female|Main Vocal|Lead Vocal|Sub Vocal)\b/gi, ' ')
     .replace(/\bInstrumental\s+break\b/gi, ' ')
-    .replace(/\b(?:gender|internal)\b/gi, ' ')
-    .replace(/\bhigh[-\s]+pressure\b/gi, 'High Pressure')
     .replace(/\s{2,}/g, ' ')
     .trim());
 }
 
-function lyricVocalLabelForSection(label: string): string {
-  const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(String(label || '').replace(/^ONLY\s+/i, ''))).trim();
-  if (!clean) return clean;
-  // Lyric section tags should stay compact. Keep Vocal for sung vocals,
-  // but shorten Rap Vocal -> Rap because the section name already carries rap context.
-  return clean
-    .replace(/\bRap\s+Vocal\b/gi, 'Rap')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
 
-function compactVocalCharacterCueForLyric(rawCue: string, label = ''): string[] {
-  const source = cleanEnglishOnlyLyricTagPart(String(rawCue || ''))
-    .replace(/\bbright\s+lively\s+vocal\s+tone\b/gi, 'bright')
-    .replace(/\blazy\s+relaxed\s+vocal\s+tone\b/gi, 'lazy')
-    .replace(/\bnasal\s+resonance\b/gi, 'nasal')
-    .replace(/\banticipated\s+phrasing\b/gi, 'anticipated')
-    .replace(/\bvocal\s+tone\b/gi, 'tone')
-    .replace(/\bphrasing\b/gi, ' ')
-    .replace(/\bresonance\b/gi, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-  if (!source) return [];
-
-  const lower = source.toLowerCase();
-  const isRap = /\brap\b/i.test(label);
-  const cues: string[] = [];
-  const push = (cue: string) => {
-    const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(cue).replace(/\s{2,}/g, ' ').trim());
-    if (!clean) return;
-    if (!cues.some((item) => item.toLowerCase() === clean.toLowerCase())) cues.push(clean);
-  };
-
-  const has = (pattern: RegExp) => pattern.test(lower);
-  const isWetFalsettoLabel = /wet\s+falsetto/i.test(label);
-
-  // Wet Falsetto characters should not collapse to a bare "nasal" lyric cue.
-  // Nasality is part of the voice color, but the section cue must preserve the
-  // distinctive falsetto technique.
-  if (isWetFalsettoLabel || (has(/wet|젖은/) && has(/falsetto|가성/))) {
-    if (has(/muted|mute|뮤트|먹먹/)) push('muted falsetto');
-    else push('wet falsetto');
-  } else if (has(/lazy|relaxed/) && has(/nasal|비성|비음/)) push('lazy nasal');
-  else if (has(/nasal|비성|비음/)) push('nasal');
-
-  if (!isWetFalsettoLabel && has(/falsetto|가성/)) push(has(/thin|얇/) ? 'thin falsetto' : 'airy falsetto');
-  if (has(/anticipat|앞박|당겨/)) push(isRap ? 'anticipated rap' : 'anticipated');
-  if (has(/front[-\s]?beat|early|urgent entr|앞박/)) push(isRap ? 'front-beat rap' : 'front-beat');
-  if (has(/breath|breathy|airy|숨|에어리/)) push('breathy');
-  if (has(/half[-\s]?air|air stop|하프/)) push('half-air');
-  if (has(/reverse[-\s]?breath|역호흡/)) push('reverse breath');
-  if (has(/microtonal|melting/)) push('melting slides');
-  if (has(/glissando|slide|글리산도/)) push('glissando');
-  if (has(/layback|laid[-\s]?back/)) push('laid-back');
-  if (has(/staccato|스타카토/)) push('staccato');
-  if (has(/vibrato|비브라토/)) push('vibrato');
-  if (has(/husky|허스키/)) push('husky');
-  if (has(/creaky|fry|크리키/)) push('creaky');
-  if (has(/bright|lively|밝/) && !/bright/i.test(label)) push('bright');
-  if (has(/dry|건조/)) push('dry');
-  if (has(/wet|젖은/)) push('wet');
-  if (has(/clear|clean|맑/)) push('clear');
-  if (has(/low|deep|heavy|낮|저음|묵직/) && !/\blow\b|\bdeep\b/i.test(label)) push('low');
-  if (has(/playful|bounce|bouncy|장난|톡톡/)) push('playful bounce');
-  if (has(/whisper|속삭/)) push('whisper');
-
-  if (!cues.length) {
-    const fallback = cleanupPromptTail(source
-      .replace(/\b(?:vocal|voice|tone|delivery|phrase|phrasing|resonance)\b/gi, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim()
-      .split(/[,，]/)[0] || '');
-    if (fallback) push(fallback);
-  }
-
-  // One compact technique cue is enough; the full technique profile lives in [Vocals].
-  return cues.slice(0, 1);
-}
-
-
-function compactVocalCharacterCuesForPrompt(rawCue: string, label = '', limit = 2): string[] {
-  const source = cleanEnglishOnlyLyricTagPart(String(rawCue || ''))
-    .replace(/\bbright\s+lively\s+vocal\s+tone\b/gi, 'bright lively')
-    .replace(/\blazy\s+relaxed\s+vocal\s+tone\b/gi, 'lazy relaxed')
-    .replace(/\bnasal\s+resonance\b/gi, 'nasal')
-    .replace(/\banticipated\s+phrasing\b/gi, 'anticipated')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-  if (!source) return [];
-  const lower = source.toLowerCase();
-  const isRap = /\brap\b/i.test(label);
-  const cues: string[] = [];
-  const push = (cue: string) => {
-    const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(cue).replace(/\s{2,}/g, ' ').trim());
-    if (!clean) return;
-    if (!cues.some((item) => item.toLowerCase() === clean.toLowerCase())) cues.push(clean);
-  };
-  const has = (pattern: RegExp) => pattern.test(lower);
-
-  if (has(/front[-\s]?beat|early|urgent entr|앞박/)) push(isRap ? 'front-beat rap' : 'front-beat');
-  if (has(/anticipat|당겨/)) push(isRap ? 'anticipated rap' : 'anticipated');
-  const isWetFalsettoLabel = /wet\s+falsetto/i.test(label);
-  if (isWetFalsettoLabel || (has(/wet|젖은/) && has(/falsetto|가성/))) push('wet falsetto');
-  else if (has(/lazy|relaxed/) && has(/nasal|비성|비음/)) push('lazy nasal');
-  else if (has(/nasal|비성|비음/)) push('nasal');
-  if (!isWetFalsettoLabel && has(/falsetto|가성/) && !has(/wet|젖은/)) push('falsetto');
-  if (has(/muted|mute|뮤트|먹먹/)) push('muted pronunciation');
-  if (has(/bending|bend|벤딩/)) push('soft bending');
-  if (has(/half[-\s]?air|air stop|하프/)) push('half-air stops');
-  if (has(/reverse[-\s]?breath|역호흡/)) push('reverse breath');
-  if (has(/breath|breathy|airy|숨|에어리/)) push('breathy');
-  if (has(/microtonal|melting/)) push('melting slides');
-  if (has(/playful|bounce|bouncy|톡톡|장난/)) push('playful bounce');
-  if (has(/bright|lively|밝/) && !/bright/i.test(label)) push('bright');
-  if (has(/wet|젖은/) && !/wet/i.test(label)) push('wet tone');
-  if (has(/dry|건조/)) push('dry');
-
-  if (!cues.length) {
-    const fallback = cleanupPromptTail(source
-      .replace(/\b(?:vocal|voice|tone|delivery|phrase|phrasing|resonance)\b/gi, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim()
-      .split(/[,，]/)[0] || '');
-    if (fallback) push(fallback);
-  }
-  return cues.slice(0, Math.max(1, limit));
-}
-
-function buildCompactVocalCastPrompt(entries: Array<{ label: string; lyricLabel: string; cue: string; gender: string; isRap: boolean; index: number }>, params: GenerateSongParams, roleEntries: SituationRoleEntry[] = [], matchedIndexes: number[] = []): string {
-  const members = params.vocal?.members || [];
-  const hasRoles = roleEntries.length > 0;
-  const roleForEntry = (entry: { gender: string; index: number }) => {
-    // Story roles and vocal cast members are separate. Only the first role-count
-    // members may claim a direct role; extra same-gender cast members must keep an
-    // alt/echo/lift role label so they do not collapse into the main role.
-    const directRoleIndex = entry.index < roleEntries.length
-      ? matchedIndexes.findIndex((memberIndex) => memberIndex === entry.index)
-      : -1;
-    if (directRoleIndex >= 0 && roleEntries[directRoleIndex]) return compactRoleForPrompt(roleEntries[directRoleIndex].role);
-    const sameGenderRoleIndex = roleEntries.findIndex((roleEntry) => {
-      const inferred = roleEntry.genderHint && roleEntry.genderHint !== 'any' ? roleEntry.genderHint : inferRoleGenderFromText(roleEntry.role);
-      return inferred !== 'any' && inferred === entry.gender;
-    });
-    if (sameGenderRoleIndex >= 0 && roleEntries[sameGenderRoleIndex]) {
-      const roleName = compactRoleForPrompt(roleEntries[sameGenderRoleIndex].role);
-      const roleLower = roleEntries[sameGenderRoleIndex].role.toLowerCase();
-      if (/귀신|ghost|spirit|유령/.test(roleLower)) return `${roleName} alt`;
-      if (/저승|reaper|grim|사자/.test(roleLower)) return `${roleName} alt`;
-      return `${roleName} alt`;
-    }
-    // If gender inference is unavailable, do not let extra cast members lose
-    // their story-role relation. Attach them as an alt/echo color to the nearest
-    // non-primary role, usually the second story role in a 2-role situation.
-    if (hasRoles && entry.index >= roleEntries.length && roleEntries.length) {
-      const fallback = roleEntries[Math.min(1, roleEntries.length - 1)];
-      return `${compactRoleForPrompt(fallback.role)} alt`;
-    }
-    return '';
-  };
-
-  const items = entries.slice(0, 5).map((entry) => {
-    const member = members[entry.index];
-    const prompt = member ? buildVocalCharacterPrompt(member, params, false) : '';
-    const cues = compactVocalCharacterCuesForPrompt(prompt, entry.label, 2);
-    const normalizedCues = /wet\s+falsetto/i.test(entry.label)
-      ? cues.map((cue) => (/^nasal$/i.test(cue.trim()) ? 'wet falsetto' : cue))
-      : cues;
-    const cueText = normalizedCues.length ? normalizedCues.join(', ') : (entry.cue || 'distinct color');
-    const roleText = hasRoles ? roleForEntry(entry) : '';
-    const label = entry.lyricLabel || lyricVocalLabelForSection(entry.label);
-    return `${label}${roleText ? `/${roleText}` : ''} — ${cueText}`;
-  });
-
-  const prefix = hasRoles ? `${roleEntries.length}-role story, ${entries.length}-vocal cast` : `${entries.length}-vocal cast`;
-  return `${prefix}: ${items.join('; ')}. Clear section ownership`;
-}
-
-function lyricTagExecutionCueFromParts(parts: string[]): string[] {
-  const raw = parts.join(', ').toLowerCase();
-  const cues: string[] = [];
-
-  const pushCue = (cue: string) => {
-    const cleaned = cleanupPromptTail(cue).trim();
-    if (!cleaned) return;
-    if (!cues.some((item) => item.toLowerCase() === cleaned.toLowerCase())) cues.push(cleaned);
-  };
-
-  for (const part of parts) {
-    const cleaned = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part)
-      .replace(/\b(?:gender|internal)\b/gi, ' ')
-      .replace(/\bhigh[-\s]+pressure\b/gi, 'High Pressure')
-      .replace(/\s{2,}/g, ' ')
-      .trim());
-    if (!cleaned) continue;
-    if (/^(?:ONLY\s+)?(?:Male|Female|Main Vocal|Lead Vocal|Sub Vocal|Rap Vocal)$/i.test(cleaned)) continue;
-    pushCue(cleaned);
-    if (cues.length >= 2) break;
-  }
-
-  return cues.slice(0, 2);
-}
-
-function canonicalCustomVocalLabels(params: GenerateSongParams): string[] {
-  const labels: string[] = [];
-
-  // Prefer the live Vocal Character labels because older saved structures can still
-  // contain stale VOCAL:: labels such as "Bright Rap Vocal" without gender.
-  // The Vocal menu is the source of truth for the actual singer identity.
-  getVocalCharacterTagLabels(params).forEach((label) => {
-    if (label) labels.push(label);
-  });
-
-  (params.customStructure || []).forEach((item) => {
-    (item.tags || []).forEach((tag) => {
-      const parsed = parseVocalPlacementStructureTag(tag);
-      if (parsed?.label && parsed.type === 'single') labels.push(parsed.label);
-    });
-  });
-
-  return Array.from(new Set(labels.filter(Boolean)));
-}
-
-function normalizeLyricVocalLabelFromCustom(label: string, params: GenerateSongParams): string {
-  let cleaned = cleanupPromptTail(String(label || '').replace(/^ONLY\s+/i, '').trim());
-  if (!cleaned) return cleaned;
-
-  const canonical = canonicalCustomVocalLabels(params);
-  const stripGender = (value: string) => String(value || '')
-    .replace(/\b(?:Male|Female)\s+/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .toLowerCase();
-  const hasGender = (value: string) => /\b(?:Male|Female)\b/i.test(value);
-
-  // Prefer the live gendered Vocal Character label over an older saved VOCAL:: label.
-  // Old saved tags can still say "Bright Rap Vocal" while the current [Vocals]
-  // line has already resolved it to "Bright Male Rap Vocal". In lyric tags, the
-  // sound label must match the resolved [Vocals] label.
-  const cleanedNoGender = stripGender(cleaned);
-  const genderedByNoGender = canonical.find((item) => hasGender(item) && stripGender(item) === cleanedNoGender);
-  if (!hasGender(cleaned) && genderedByNoGender) return genderedByNoGender;
-
-  const exact = canonical.find((item) => item.toLowerCase() === cleaned.toLowerCase());
-  if (exact) return exact;
-
-  const byNoGender = canonical.find((item) => stripGender(item) === cleanedNoGender);
-  if (byNoGender) return byNoGender;
-
-  // Backward compatibility for older generated tags in this project flow.
-  if (/^Bright\s+Rap\s+Vocal$/i.test(cleaned)) {
-    const brightMale = canonical.find((item) => /^Bright\s+Male\s+Rap\s+Vocal$/i.test(item));
-    if (brightMale) return brightMale;
-  }
-  return cleaned;
-}
-
-function syncKnownVocalLabelsInLyricTag(line: string, params: GenerateSongParams): string {
-  const canonical = canonicalCustomVocalLabels(params);
-  if (!canonical.length) return line;
-  let output = String(line || '');
-  canonical.forEach((label) => {
-    if (!/\b(?:Male|Female)\b/i.test(label)) return;
-    const noGender = label.replace(/\b(?:Male|Female)\s+/gi, '').replace(/\s{2,}/g, ' ').trim();
-    if (!noGender || noGender.toLowerCase() === label.toLowerCase()) return;
-    const escaped = noGender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-    output = output.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), label);
-  });
-  return output;
-}
-
-
-function activeVocalCharacterEntries(params: GenerateSongParams): Array<{ label: string; lyricLabel: string; cue: string; gender: string; isRap: boolean; index: number }> {
-  const labels = getVocalCharacterTagLabels(params).filter(Boolean);
-  const members = params.vocal?.members || [];
-  return labels.map((label, index) => {
-    const member = members[index];
-    const prompt = member ? buildVocalCharacterPrompt(member, params, false) : '';
-    const cue = compactVocalCharacterCueForLyric(prompt, label)[0] || '';
-    const gender = member?.gender || getMemberGenderLabel(params, index);
-    const role = String(member?.roles?.[0] || '').toLowerCase();
-    const isRap = /\brap|rapper|래퍼/.test(`${role} ${label}`.toLowerCase());
-    return {
-      label,
-      lyricLabel: lyricVocalLabelForSection(label),
-      cue,
-      gender,
-      isRap,
-      index,
-    };
-  });
-}
-
-function getVocalCharacterLyricCueByLabel(label: string, params?: GenerateSongParams): string[] {
-  if (!params) return [];
-  const clean = cleanupPromptTail(String(label || '').replace(/^ONLY\s+/i, '').trim());
-  if (!clean) return [];
-  const entries = activeVocalCharacterEntries(params);
-  if (!entries.length) return [];
-  const normalized = normalizeLyricVocalLabelFromCustom(clean, params);
-  const strip = (value: string) => String(value || '')
-    .replace(/\bVocal\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-    .toLowerCase();
-  const found = entries.find((entry) =>
-    entry.label.toLowerCase() === normalized.toLowerCase() ||
-    entry.lyricLabel.toLowerCase() === clean.toLowerCase() ||
-    strip(entry.label) === strip(normalized) ||
-    strip(entry.lyricLabel) === strip(clean),
-  );
-  return found?.cue ? [found.cue] : [];
-}
-
-
-function buildSituationVocalCastItems(
-  params: GenerateSongParams,
-  roleEntries: SituationRoleEntry[],
-  matchedIndexes: number[],
-): string[] {
-  const entries = activeVocalCharacterEntries(params);
-  const members = params.vocal?.members || [];
-  if (!entries.length) return [];
-
-  if (entries.length >= 3) {
-    return buildCompactVocalCastPrompt(entries, params, roleEntries, matchedIndexes)
-      .replace(/^.*?:\s*/, '')
-      .replace(/\.\s*Clear section ownership\s*$/i, '')
-      .split(';')
-      .map((item) => cleanupPromptTail(item.trim()))
-      .filter(Boolean);
-  }
-
-  const roleForEntry = (entry: { gender: string; index: number }): { roleText: string; roleIndex: number | null; isExtra: boolean } => {
-    // Only actual story-role slots get direct role ownership. Extra vocal cast
-    // members should be labeled as alt/echo/lift colors for the nearest role.
-    const directRoleIndex = entry.index < roleEntries.length
-      ? matchedIndexes.findIndex((memberIndex) => memberIndex === entry.index)
-      : -1;
-    if (directRoleIndex >= 0 && roleEntries[directRoleIndex]) {
-      return {
-        roleText: compactRoleForPrompt(roleEntries[directRoleIndex].role),
-        roleIndex: directRoleIndex,
-        isExtra: false,
-      };
-    }
-
-    const sameGenderRoleIndex = roleEntries.findIndex((roleEntry) => {
-      const inferred = roleEntry.genderHint && roleEntry.genderHint !== 'any'
-        ? roleEntry.genderHint
-        : inferRoleGenderFromText(roleEntry.role);
-      return inferred !== 'any' && inferred === entry.gender;
-    });
-
-    if (sameGenderRoleIndex >= 0 && roleEntries[sameGenderRoleIndex]) {
-      const roleName = compactRoleForPrompt(roleEntries[sameGenderRoleIndex].role);
-      const roleLower = roleEntries[sameGenderRoleIndex].role.toLowerCase();
-      const extraFunction = /귀신|ghost|spirit|유령/.test(roleLower)
-        ? 'echo or emotional lift'
-        : /저승|reaper|grim|사자/.test(roleLower)
-          ? 'alternate ad-lib or response voice'
-          : 'alternate color or emotional lift';
-      return {
-        roleText: `${roleName} ${extraFunction}`,
-        roleIndex: sameGenderRoleIndex,
-        isExtra: true,
-      };
-    }
-
-    const fallbackRole = roleEntries[entry.gender === 'female' && roleEntries[1] ? 1 : 0]?.role || `Character ${entry.index + 1}`;
-    return {
-      roleText: `${compactRoleForPrompt(fallbackRole)} alternate vocal color`,
-      roleIndex: roleEntries.length ? (entry.gender === 'female' && roleEntries[1] ? 1 : 0) : null,
-      isExtra: true,
-    };
-  };
-
-  return entries.map((entry) => {
-    const member = members[entry.index];
-    const characterPrompt = member ? buildVocalCharacterPrompt(member, params, false) : '';
-    const roleInfo = roleForEntry(entry);
-    const roleIndex = roleInfo.roleIndex ?? Math.min(entry.index, Math.max(roleEntries.length - 1, 0));
-    const role = roleEntries[roleIndex]?.role || roleInfo.roleText;
-    const rawStyleSource = [
-      params.situation?.speakers?.[roleIndex]?.speechStyle,
-      params.situation?.speakers?.[roleIndex]?.attitude,
-      roleIndex === 0 ? params.situation?.speakerAStyle : params.situation?.speakerBStyle,
-      roleIndex === 0
-        ? params.situation?.speakerAAttitude || params.situation?.attitudeA
-        : params.situation?.speakerBAttitude || params.situation?.attitudeB,
-    ]
-      .filter(Boolean)
-      .join(', ');
-    const situationDirection = compactSituationVocalDirectionForLine(role, mergeRoleDirection(role, rawStyleSource));
-    const compactTechniqueCue = entry.cue || '';
-    const combinedDirection = cleanupPromptTail(
-      [characterPrompt || compactTechniqueCue, situationDirection]
-        .filter(Boolean)
-        .join(', ')
-        .replace(/\s{2,}/g, ' ')
-        .trim(),
-    );
-    return `${entry.label} as ${roleInfo.roleText} with ${combinedDirection || compactTechniqueCue || situationDirection || 'distinct vocal color'}`;
-  });
-}
-
-function resolveActiveVocalLabelForGeneratedLyricLabel(label: string, params?: GenerateSongParams, sectionName = ''): string {
-  const raw = cleanupPromptTail(String(label || '').replace(/^ONLY\s+/i, '').trim());
-  if (!raw) return raw;
-  const normalized = params ? normalizeKnownLyricSectionVocalLabelHard(raw, params) : raw;
-  const entries = params ? activeVocalCharacterEntries(params) : [];
-  if (!entries.length) return normalized;
-
-  const rawLower = `${raw} ${sectionName}`.toLowerCase();
-  const exact = entries.find((entry) =>
-    entry.label.toLowerCase() === normalized.toLowerCase() ||
-    entry.lyricLabel.toLowerCase() === normalized.toLowerCase(),
-  );
-  if (exact) return exact.lyricLabel;
-
-  const wantsMale = /\bmale\b|남성/.test(rawLower);
-  const wantsFemale = /\bfemale\b|여성/.test(rawLower);
-  const wantsRap = /\brap\b|래퍼|rap\s*section/.test(rawLower);
-  const wantsShared = /\ball\s+vocals\b|together|duet|both/.test(rawLower);
-  if (wantsShared) return 'All Vocals';
-
-  const byGenderAndRole = entries.find((entry) =>
-    (!wantsMale || entry.gender === 'male') &&
-    (!wantsFemale || entry.gender === 'female') &&
-    (!wantsRap || entry.isRap),
-  );
-  if (byGenderAndRole) return byGenderAndRole.lyricLabel;
-
-  const byGender = entries.find((entry) =>
-    (!wantsMale || entry.gender === 'male') &&
-    (!wantsFemale || entry.gender === 'female'),
-  );
-  if (byGender) return byGender.lyricLabel;
-
-  const byRap = entries.find((entry) => wantsRap && entry.isRap);
-  if (byRap) return byRap.lyricLabel;
-
-  return entries[0].lyricLabel || normalized;
-}
-
-function compactSituationVocalDirectionForLine(role: string, direction: string): string {
-  const roleText = String(role || '').toLowerCase();
-  let clean = cleanupPromptTail(String(direction || '')
-    .replace(/\s+with\s+calmly\s+restrained\s+and\s+direct\s+and\s+pointed\b/gi, '')
-    .replace(/\s+with\s+calmly\s+restrained\b/gi, '')
-    .replace(/\s+with\s+direct\s+and\s+pointed\b/gi, '')
-    .replace(/\bfragile\s+restraint\s+with\s+fragile\b/gi, 'fragile restraint')
-    .replace(/\btired\s+authority\s+and\s+reluctant\s+sympathy\s+with\s+playfully\s+sarcastic\b/gi, 'tired authority, playful nagging, and reluctant sympathy')
-    .replace(/\btired\s+authority\s+and\s+reluctant\s+sympathy\s+with\s+playful(?:ly)?[^,;.]*\b/gi, 'tired authority, playful nagging, and reluctant sympathy')
-    .replace(/\s{2,}/g, ' ')
-    .trim());
-
-  if (/저승사자|사자|reaper|grim/.test(roleText)) {
-    if (/nagging|잔소리|playful|sarcastic/i.test(direction)) {
-      return 'tired authority, playful nagging, and reluctant sympathy';
-    }
-    return clean || 'tired authority and reluctant sympathy';
-  }
-  if (/귀신|유령|ghost|spirit/.test(roleText)) {
-    return 'pleading regret and fragile restraint';
-  }
-  return clean;
-}
-
-function compactCompositeSectionTagParts(sectionName: string, body: string, params: GenerateSongParams): string[] {
-  const rawParts = String(body || '')
-    .split(/[,，]/)
-    .map((part) => cleanEnglishOnlyLyricTagPart(part))
-    .filter(Boolean);
-
-  if (/^(?:Instrumental|Instrumental Opening|Solo|Drop|Break)$/i.test(String(sectionName || '').trim())) {
-    return stripVocalLabelsFromInstrumentalTagParts(sectionName, rawParts).slice(0, 2);
-  }
-
-  let vocalLabel = '';
-  const executionParts: string[] = [];
-  for (const part of rawParts) {
-    const withoutOnly = part.replace(/^ONLY\s+/i, '').trim();
-    if (!vocalLabel && /(?:Vocal|Rap\s+Vocal|All\s+Vocals|Together)$/i.test(withoutOnly)) {
-      vocalLabel = /^All\s+Vocals$/i.test(withoutOnly) || /^Together$/i.test(withoutOnly)
-        ? 'All Vocals'
-        : `ONLY ${normalizeLyricVocalLabelFromCustom(withoutOnly, params)}`;
-      continue;
-    }
-    executionParts.push(part);
-  }
-
-  const output: string[] = [];
-  if (vocalLabel) output.push(vocalLabel);
-  output.push(...lyricTagExecutionCueFromParts(executionParts));
-  return output.slice(0, vocalLabel ? 3 : 2);
-}
-
-
-function formatCustomStructureTagForPrompt(sectionName: string, tags: string[], params: GenerateSongParams): string[] {
+function formatCustomStructureTagForPrompt(sectionName: string, tags: string[]): string[] {
   const isInstrumentalSection = /^(?:Instrumental|Solo)$/i.test(String(sectionName || '').trim());
   const requestedInstrumental = isInstrumentalSection || tags.some((tag) => isCustomInstrumentalTag(tag));
   const vocalTags = tags.map(parseVocalPlacementStructureTag).filter(Boolean) as Array<{ type: 'single' | 'all'; label: string; cue: string }>;
@@ -3145,7 +2588,7 @@ function formatCustomStructureTagForPrompt(sectionName: string, tags: string[], 
 
   if (requestedInstrumental) {
     const musicalCues = cleanInstrumentalCueParts(rawNormalTags);
-    return ['Only Instrumental', ...musicalCues].filter(Boolean).slice(0, 4);
+    return ['Instrumental only, no vocals', ...musicalCues].filter(Boolean).slice(0, 4);
   }
 
   void stopRequested;
@@ -3171,23 +2614,13 @@ function formatCustomStructureTagForPrompt(sectionName: string, tags: string[], 
   const singles = vocalTags.filter((item) => item.type === 'single');
   if (singles.length === 1) {
     const item = singles[0];
-    const normalizedLabel = normalizeLyricVocalLabelFromCustom(item.label, params);
-    const label = lyricVocalLabelForSection(normalizedLabel);
-    const vocalCue = compactVocalCharacterCueForLyric(item.cue, normalizedLabel);
-    const characterCue = vocalCue.length ? vocalCue : getVocalCharacterLyricCueByLabel(normalizedLabel, params);
-    return [`ONLY ${label}`, ...characterCue, ...cleanNormalTags].filter(Boolean).slice(0, 3);
+    const cue = cleanupPromptTail(compactStructureCue(item.cue)).split(',').map((part) => part.trim()).filter(Boolean).slice(0, 2).join(', ');
+    return [`ONLY ${item.label}${cue ? `, ${cue}` : ''}`, ...cleanNormalTags].filter(Boolean).slice(0, 3);
   }
 
-  const labels = singles
-    .map((item) => lyricVocalLabelForSection(normalizeLyricVocalLabelFromCustom(item.label, params)))
-    .filter(Boolean)
-    .join(' + ');
-  const cues = singles.flatMap((item) => {
-    const normalizedLabel = normalizeLyricVocalLabelFromCustom(item.label, params);
-    const cue = compactVocalCharacterCueForLyric(item.cue, normalizedLabel);
-    return cue.length ? cue : getVocalCharacterLyricCueByLabel(normalizedLabel, params);
-  }).filter(Boolean).slice(0, 1);
-  return [labels, ...cues, ...cleanNormalTags].filter(Boolean).slice(0, 3);
+  const labels = singles.map((item) => item.label).filter(Boolean).join(' + ');
+  const cues = singles.map((item) => compactStructureCue(item.cue)).filter(Boolean).slice(0, 1).join(', ');
+  return [`${labels}${cues ? `, ${cues}` : ''}`, ...cleanNormalTags].filter(Boolean).slice(0, 3);
 }
 
 function stripVocalLabelsFromInstrumentalTagParts(sectionName: string, parts: string[]): string[] {
@@ -3208,85 +2641,17 @@ function normalizeLyricStructureTextForGeneration(structureText: string): string
     .join(" → ");
 }
 
-
-type DefaultStructureFamily = "rap" | "dance" | "ballad" | "rock" | "citypop" | "jpop" | "lofi" | "pop";
-
-function structureGenreText(params?: GenerateSongParams): string {
-  if (!params) return "";
-  const genreId = String(params.genre || "");
-  const genreLabel = genreId ? (getGenreMeta(genreId)?.label || genreId) : "";
-  const subLabels = getSubGenreLabels(params.subGenre ?? []);
-  const styleLabels = (params.styles ?? []).map((id) => resolveStyleItem(id)?.label || id);
-  const userText = params.userInput || "";
-  return [genreId, genreLabel, ...subLabels, ...styleLabels, userText].filter(Boolean).join(" ").toLowerCase();
-}
-
-function defaultStructureFamilyForGenre(params?: GenerateSongParams): DefaultStructureFamily {
-  const text = structureGenreText(params);
-  if (/\b(hip[-\s]?hop|rap|trap|drill|boom\s*bap|lofi\s*hip|phonk|grime)\b/i.test(text)) return "rap";
-  if (/\b(edm|dance|house|techno|trance|dubstep|future\s*bass|club|drop)\b/i.test(text)) return "dance";
-  if (/\b(ballad|r\s*&\s*b\s*ballad|acoustic\s*ballad|slow\s*jam)\b/i.test(text)) return "ballad";
-  if (/\b(rock|band|punk|metal|indie\s*rock|alternative)\b/i.test(text)) return "rock";
-  if (/\b(city\s*pop|nu[-\s]?disco|disco|funk|synthwave|dreamwave|retro)\b/i.test(text)) return "citypop";
-  if (/\b(j[-\s]?pop|utaite|anisong|anime\s*song|vocaloid)\b/i.test(text)) return "jpop";
-  if (/\b(lo[-\s]?fi|ambient|chill|study|library|focus)\b/i.test(text)) return "lofi";
-  return "pop";
-}
-
-function pickArrayItem<T>(items: T[]): T {
-  return items[Math.floor(Math.random() * items.length)] ?? items[0];
-}
-
-function hasExplicitRapSectionNeed(params?: GenerateSongParams): boolean {
-  if (!params) return false;
-  const text = structureGenreText(params);
-  const members = params.vocal?.members ?? [];
-  const hasRapMember = members.some((member) =>
-    (member.roles ?? []).some((role) => /rapper|rap|래퍼|랩/i.test(String(role || "")))
-  );
-  return Boolean(
-    params.vocal?.rap ||
-    hasRapMember ||
-    /\b(?:hip[-\s]?hop|rap|trap|drill|boom\s*bap|lofi\s*hip|phonk|grime|rap\s*fusion|hip[-\s]?hop\s*fusion)\b/i.test(text)
-  );
-}
-
-function buildGenreAdaptiveDefaultStructure(params?: GenerateSongParams): string {
-  const family = defaultStructureFamilyForGenre(params);
-  const allowRapSections = family === "rap" || hasExplicitRapSectionNeed(params);
-
-  // Default mode should feel like the most representative structure for the detected genre,
-  // not a free-form dialogue template. Keep this intentionally stable and genre-shaped.
-  const representativeStructures: Record<DefaultStructureFamily, string> = {
-    citypop: allowRapSections
-      ? "Intro → Verse → Pre-Chorus → Chorus → Break → Rap Section → Chorus → Instrumental → Bridge → Final Chorus → Outro"
-      : "Intro → Verse → Pre-Chorus → Chorus → Break → Verse 2 → Chorus → Instrumental → Bridge → Final Chorus → Outro",
-    jpop: allowRapSections
-      ? "Intro → Verse → Pre-Chorus → Chorus → Rap Section → Chorus → Bridge → Final Chorus → Outro"
-      : "Intro → Verse → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro",
-    rap: "Intro → Rap Section → Hook → Rap Section → Break → Pre-Hook → Hook → Bridge → Rap Section → Final Hook → Outro",
-    dance: "Intro → Verse → Build-up → Drop → Break → Verse 2 → Pre-Chorus → Chorus → Build-up → Final Drop → Outro",
-    ballad: "Intro → Verse → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus → Outro",
-    rock: "Intro → Verse → Pre-Chorus → Chorus → Guitar Break → Verse 2 → Chorus → Bridge → Final Chorus → Outro",
-    lofi: "Intro → Verse → Hook → Instrumental → Verse 2 → Hook → Bridge → Outro",
-    pop: "Intro → Verse → Pre-Chorus → Chorus → Break → Verse 2 → Chorus → Bridge → Final Chorus → Outro",
-  };
-
-  return normalizeLyricStructureTextForGeneration(representativeStructures[family]);
-}
-
 function buildStructureText(
   songStructure: SongStructure | undefined,
   resolvedStructure: SongStructure,
   customStructure: CustomSectionItem[] = [],
-  params?: GenerateSongParams,
 ): string {
   if (songStructure === "custom" && customStructure.length > 0) {
     return customStructure
       .map(
         (section) => {
           const sectionName = normalizeLyricSectionNameForGeneration(section.section);
-          const tags = formatCustomStructureTagForPrompt(sectionName, section.tags || [], params || { genre: '', subGenre: [], moods: [], themes: [], styles: [], instrumentSounds: [], tempo: '', vocal: { male: 0, female: 0, rap: false }, userInput: '', customStructure });
+          const tags = formatCustomStructureTagForPrompt(sectionName, section.tags || []);
           return `${sectionName}${tags.length > 0 ? ` (${tags.join(", ")})` : ""}`;
         },
       )
@@ -3294,7 +2659,7 @@ function buildStructureText(
   }
 
   const structureMap: Record<Exclude<SongStructure, "custom">, string> = {
-    "1": buildGenreAdaptiveDefaultStructure(params),
+    "1": "Default free structure: arrange sections freely around the story arc and emotional climax",
     "2": BASIC_STRUCTURE,
     "3": "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
   };
@@ -4696,12 +4061,6 @@ function buildMemberVocalSplit(params: GenerateSongParams): string {
   });
 
   const hasCharacterMembers = members.some((member) => member.hasCharacter);
-  if (hasCharacterMembers && total >= 3) {
-    const activeEntries = activeVocalCharacterEntries(params);
-    if (activeEntries.length >= 3) {
-      return buildCompactVocalCastPrompt(activeEntries, params);
-    }
-  }
   const head = hasCharacterMembers
     ? `${total} ${info.gender === "female" ? "female" : info.gender === "male" ? "male" : "mixed"} vocal character split`
     : isRandomDuo
@@ -4758,26 +4117,14 @@ function buildCharacterVocalSplitItem(
   const expressionCue = rawStyleSource
     ? null
     : pickVocalExpressionCueForRole(params, getMemberRoleForPrompt(params, memberIndex), memberTone || fallbackTone, roleIndex);
-  const direction = compactSituationVocalDirectionForLine(
-    role,
-    limitText(
-      expressionCue
-        ? mergeVocalExpressionIntoEmotion(situationDirection, expressionCue)
-        : situationDirection,
-      128,
-    ),
+  const direction = limitText(
+    expressionCue
+      ? mergeVocalExpressionIntoEmotion(situationDirection, expressionCue)
+      : situationDirection,
+    128,
   );
   const acousticLabel = buildSituationAcousticTagLabel(params, role, roleIndex, memberIndex);
-  const member = params.vocal?.members?.[memberIndex];
-  const characterPrompt = member ? buildVocalCharacterPrompt(member, params, false) : "";
-  const combinedDirection = cleanupPromptTail(
-    [characterPrompt, direction]
-      .filter(Boolean)
-      .join(', ')
-      .replace(/\s{2,}/g, ' ')
-      .trim(),
-  );
-  return `${acousticLabel} as ${roleName} with ${combinedDirection || direction}`;
+  return `${acousticLabel} as ${roleName}, ${direction}`;
 }
 
 function firstPromptWord(value: string): string {
@@ -5342,10 +4689,7 @@ function variationAtmosphereMeaning(
   variation: CreativeVariationSeed,
   params: GenerateSongParams,
 ): string {
-  const rawDetail = cleanupPromptTail(getSituationDetailFocus(params));
-  const safeDetail = rawDetail && !/^one small unfinished detail$/i.test(rawDetail)
-    ? rawDetail
-    : 'one visible story detail';
+  const detail = getSituationDetailFocus(params);
   const map: Record<string, string> = {
     "interruption-cut-in":
       "through interruptions that keep breaking the emotional flow",
@@ -5360,7 +4704,7 @@ function variationAtmosphereMeaning(
     "echo-undercut": "through dry echoes, corrections, and undercut replies",
     "speaker-flaw-focus":
       "through one exposed character flaw rather than a balanced argument",
-    "detail-hook-focus": `with ${safeDetail} becoming the emotional hook`,
+    "detail-hook-focus": `through ${detail} becoming the emotional hook`,
     "role-reversal-focus": "as the expected power balance quietly shifts",
     "silent-gap-focus": "through pauses, short replies, and unsaid feelings",
     "chorus-solo-A":
@@ -5370,7 +4714,7 @@ function variationAtmosphereMeaning(
       "through a brief shared hook that does not solve the conflict",
     "genre-led-structure":
       "through a part structure shaped by the selected genre",
-    "object-perspective-focus": `with ${safeDetail} as the visible anchor of the scene`,
+    "object-perspective-focus": `through ${detail} as the visible anchor of the scene`,
     "misread-intent-focus":
       "as both characters keep answering the wrong emotional question",
     "comic-loop-focus":
@@ -6425,8 +5769,15 @@ function buildFiveLineAtmosphereValue(
     ? variation.atmosphereLens
     : "";
 
+  const themeMoodAnalysis = analyzeThemeMoodContext(params);
+  const themeMoodAtmosphere =
+    situationActive && themeMoodAnalysis.atmosphereCue && themeMoodAnalysis.atmosphereCue !== "balanced emotional scene"
+      ? themeMoodAnalysis.atmosphereCue
+      : "";
+
   const atmosphere = [
     base,
+    themeMoodAtmosphere,
     spaceCues ? `with ${spaceCues}` : "",
     coreGenreGuard,
     variationLens,
@@ -6524,7 +5875,12 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
   const cleaned = situationActive
     ? sanitizeVocalDirection(base)
     : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(base));
-  return normalizeVocalPromptEmotion(cleaned, params);
+  const analysis = analyzeThemeMoodContext(params);
+  const withThemeMood =
+    analysis.vocalCue && !/^(?:mood colors only as brief delivery nuance:\s*)?$/i.test(analysis.vocalCue)
+      ? appendPromptLens(cleaned, analysis.vocalCue, situationActive ? 360 : 300)
+      : cleaned;
+  return normalizeVocalPromptEmotion(withThemeMood, params);
 }
 
 function getCompactPointSoundPrompts(pointSoundIds: string[] = []): string[] {
@@ -6702,6 +6058,7 @@ function buildFiveLineArrangementValue(
       ? "custom section flow"
       : "";
 
+  const themeMoodArrangement = analyzeThemeMoodContext(params).arrangementCue;
   const parts = [
     tempo,
     pointSoundArrangement,
@@ -6710,6 +6067,7 @@ function buildFiveLineArrangementValue(
     genreDNA,
     styleArrangement,
     reinterpretationLayer.arrangementLens,
+    themeMoodArrangement,
     variationMeaning,
     customFlow,
   ];
@@ -7008,6 +6366,367 @@ function getEnglishThemePhrase(params: GenerateSongParams): string {
   return joinPromptPhrase(rawThemes, "and").toLowerCase();
 }
 
+type ThemeMoodAnalysis = {
+  atmosphereCue: string;
+  vocalCue: string;
+  arrangementCue: string;
+  lyricSceneCue: string;
+  lyricDetailCue: string;
+  strength: "weak" | "normal" | "strong";
+};
+
+function resolveThemeItem(value: string) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return undefined;
+  return THEMES.find(
+    (item) =>
+      item.id.toLowerCase() === normalized ||
+      item.label.toLowerCase() === normalized ||
+      String(item.labelKo || "").toLowerCase() === normalized,
+  );
+}
+
+function resolveThemeLabel(value: string): string {
+  const item = resolveThemeItem(value);
+  return cleanupPromptTail(item?.labelKo || item?.label || value);
+}
+
+function resolveMoodLabel(value: string): string {
+  const item = resolveMoodItem(value);
+  return cleanupPromptTail(item?.labelKo || item?.label || value);
+}
+
+function normalizeMoodCueForStory(value: string): string {
+  const raw = String(value || "").toLowerCase();
+  const map: Array<[RegExp, string]> = [
+    [/(장난끼|playful|mischievous)/i, "playful"],
+    [/(능청미|deadpan|cheeky|sly)/i, "deadpan comic"],
+    [/(웃픈|comic but sad|funny yet bittersweet)/i, "comic but sad"],
+    [/(코믹|comedic|humorous)/i, "comic"],
+    [/(귀여|cute|adorable|perky|bubbly)/i, "cute"],
+    [/(기묘|strange|uncanny|quirky|odd)/i, "uncanny"],
+    [/(판타지|fantasy)/i, "fantasy-like"],
+    [/(마법|magical)/i, "magical"],
+    [/(빈티지|vintage|retro|analog|nostalgic|misty|faded)/i, "vintage"],
+    [/(드리미|dreamy|dreamlike|hazy|floating|몽환)/i, "dreamy"],
+    [/(앰비언트|ambient|spacious|atmospheric|공간)/i, "spacious ambient"],
+    [/(에어리|airy|light|open)/i, "airy"],
+    [/(에테리얼|ethereal|weightless|otherworldly)/i, "ethereal"],
+    [/(글로시|glossy|sparkling)/i, "glossy"],
+    [/(소울풀|soulful)/i, "soulful"],
+    [/(로파이|lo-fi|lofi|dusty)/i, "lo-fi"],
+    [/(릴렉스|relaxed|chill|laid-back|편안)/i, "relaxed"],
+    [/(스무스|smooth|mellow|부드)/i, "smooth"],
+    [/(아련|wistful|쓸쓸|lonely|고독)/i, "wistful"],
+    [/(담담|restrained|understated)/i, "restrained"],
+    [/(애틋|tender|affectionate)/i, "tender"],
+    [/(공허|hollow|empty)/i, "hollow"],
+    [/(불안|uneasy|unstable|tense)/i, "uneasy"],
+    [/(서늘|cold|icy)/i, "cold"],
+    [/(몽글|soft and tender|soft)/i, "soft"],
+    [/(벅찬|swelling|overwhelming)/i, "swelling"],
+    [/(위태|fragile|on the edge)/i, "fragile"],
+    [/(밝|bright|luminous)/i, "bright"],
+    [/(어두|dark|somber|shadow)/i, "dark"],
+    [/(희망|hopeful|optimistic)/i, "hopeful"],
+    [/(치유|healing|comforting)/i, "healing"],
+    [/(우울|melancholic|blue)/i, "melancholic"],
+    [/(달콤|bittersweet)/i, "bittersweet"],
+    [/(슬픈|sad|mournful)/i, "sad"],
+    [/(낭만|romantic)/i, "romantic"],
+    [/(감성|emotional|heartfelt)/i, "emotional"],
+    [/(그루비|groovy)/i, "groovy"],
+    [/(펑키|funky)/i, "funky"],
+    [/(업비트|upbeat|driving|energetic)/i, "upbeat"],
+    [/(파워풀|powerful|bold)/i, "powerful"],
+    [/(캐치|catchy|hooky|memorable)/i, "catchy"],
+    [/(미니멀|minimal|bare)/i, "minimal"],
+    [/(시네마틱|cinematic|dramatic)/i, "cinematic"],
+    [/(도시|urban|metropolitan)/i, "urban"],
+    [/(무디|moody)/i, "moody"],
+    [/(비통|sorrowful|grieving)/i, "sorrowful"],
+  ];
+  for (const [pattern, cue] of map) {
+    if (pattern.test(raw)) return cue;
+  }
+  return cleanPromptValue(stripRemainingKoreanForProductionPrompt(value)).toLowerCase();
+}
+
+function normalizeThemeCueForStory(value: string): string {
+  const label = resolveThemeLabel(value);
+  const raw = `${value} ${label}`.toLowerCase();
+  const map: Array<[RegExp, string]> = [
+    [/(사랑|love)/i, "love"],
+    [/(짝사랑|crush)/i, "one-sided crush"],
+    [/(설렘|curiosity|flutter)/i, "first flutter"],
+    [/(고백|confession)/i, "confession"],
+    [/(만남|encounter)/i, "new encounter"],
+    [/(이별|breakup)/i, "breakup"],
+    [/(미련|lingering)/i, "lingering attachment"],
+    [/(그리움|longing)/i, "longing"],
+    [/(기다림|waiting)/i, "waiting"],
+    [/(재회|reunion)/i, "reunion"],
+    [/(오해|misunderstanding)/i, "misunderstanding"],
+    [/(화해|reconciliation)/i, "reconciliation"],
+    [/(우정|friendship)/i, "friendship"],
+    [/(가족|family)/i, "family"],
+    [/(어린시절|childhood)/i, "childhood"],
+    [/(청춘|youth)/i, "youth"],
+    [/(고향|hometown)/i, "hometown"],
+    [/(자아|identity)/i, "identity"],
+    [/(꿈|dream)/i, "dream"],
+    [/(자유|freedom)/i, "freedom"],
+    [/(방황|wandering)/i, "wandering"],
+    [/(버팀|endurance)/i, "endurance"],
+    [/(성장|growth)/i, "growth"],
+    [/(변화|change)/i, "change"],
+    [/(희망|hope)/i, "hope"],
+    [/(퇴근|after work)/i, "after-work"],
+    [/(야근|overtime)/i, "overtime"],
+    [/(회사생활|work life)/i, "office life"],
+    [/(월요일|monday)/i, "Monday"],
+    [/(혼자밥|eating alone)/i, "eating alone"],
+    [/(술자리|alcohol|drinks)/i, "drinks after hours"],
+    [/(소확행|small happiness)/i, "small everyday happiness"],
+    [/(주말|weekend)/i, "weekend"],
+    [/(도시|city)/i, "city"],
+    [/(골목|alley)/i, "alley"],
+    [/(정류장|stop|station)/i, "bus stop"],
+    [/(지하철|subway)/i, "subway"],
+    [/(편의점|convenience)/i, "convenience store"],
+    [/(카페|cafe)/i, "cafe"],
+    [/(방\b|room)/i, "room"],
+    [/(산책|walk)/i, "walk"],
+    [/(드라이브|drive)/i, "drive"],
+    [/(여행|travel)/i, "travel"],
+    [/(바다|sea|ocean)/i, "sea"],
+    [/(밤|night)/i, "night"],
+    [/(새벽|dawn)/i, "dawn"],
+    [/(시간|time)/i, "time"],
+    [/(계절|season)/i, "season"],
+    [/(비\b|rain)/i, "rain"],
+    [/(추억|memory)/i, "memory"],
+    [/(회상|reminiscence)/i, "reminiscence"],
+    [/(외로움|loneliness)/i, "loneliness"],
+    [/(후회|regret)/i, "regret"],
+    [/(집착|obsession)/i, "obsession"],
+    [/(저항|resistance)/i, "resistance"],
+    [/(분노|anger)/i, "anger"],
+    [/(불안|anxiety)/i, "anxiety"],
+    [/(운명|fate)/i, "fate"],
+    [/(위로|comfort)/i, "comfort"],
+    [/(안식처|shelter)/i, "shelter"],
+    [/(선물|gift)/i, "gift"],
+  ];
+  for (const [pattern, cue] of map) {
+    if (pattern.test(raw)) return cue;
+  }
+  return cleanPromptValue(stripRemainingKoreanForProductionPrompt(label || value)).toLowerCase();
+}
+
+function themeMoodSceneTemplate(theme: string, moodCues: string[]): {
+  scene: string;
+  details: string[];
+} {
+  const has = (...items: string[]) => moodCues.some((cue) => items.some((item) => cue.includes(item)));
+  const comic = has("comic", "playful", "deadpan");
+  const cute = has("cute");
+  const vintage = has("vintage", "wistful");
+  const fantasy = has("fantasy", "magical", "ethereal", "uncanny");
+
+  const byTheme: Record<string, { scene: string; details: string[] }> = {
+    friendship: vintage
+      ? { scene: "old friends walking through city lights with changed but warm distance", details: ["old sneakers", "convenience-store bench", "changed walking pace", "unsaid thanks"] }
+      : { scene: "friends staying beside each other through a small everyday night", details: ["shared jokes", "same bus stop", "late messages", "matched footsteps"] },
+    breakup: { scene: "a person sorting through ordinary traces after goodbye", details: ["leftover receipt", "half-empty cup", "unread message", "quiet room"] },
+    "one-sided crush": cute
+      ? { scene: "a shy crush growing through tiny imagined moments", details: ["saved message draft", "checked profile photo", "new shoes", "late-night smile"] }
+      : { scene: "a hidden crush held back by timing and hesitation", details: ["unsent text", "passing glance", "same hallway", "missed timing"] },
+    confession: { scene: "someone trying to say one honest sentence before the moment closes", details: ["shaking thumb", "open chat window", "short breath", "one step closer"] },
+    "small everyday happiness": { scene: "a small ordinary moment becoming enough for the day", details: ["warm cup", "short walk", "favorite seat", "small purchase"] },
+    "after-work": { scene: "the walk home after a long day carrying small relief and leftover thoughts", details: ["loosened tie", "empty train", "convenience-store light", "tired shoes"] },
+    overtime: comic
+      ? { scene: "a tired worker joking through overtime while hiding exhaustion", details: ["cold coffee", "blinking monitor", "group chat silence", "last train"] }
+      : { scene: "a late office night where exhaustion turns into quiet self-talk", details: ["empty desk", "cold coffee", "last train", "screen glow"] },
+    "office life": { scene: "small office rules turning into a private emotional battle", details: ["meeting room", "team chat", "lunch menu", "approval stamp"] },
+    "eating alone": { scene: "eating alone while pretending the quiet is comfortable", details: ["single tray", "corner seat", "phone screen", "slow spoon"] },
+    city: { scene: "a city night where small lives pass each other without fully touching", details: ["neon sign", "crosswalk", "window light", "distant bus"] },
+    alley: { scene: "a narrow alley holding a private feeling nobody else notices", details: ["old signboard", "footsteps", "small window", "cool wall"] },
+    "bus stop": { scene: "waiting at a stop where leaving and staying feel equally difficult", details: ["timetable", "passing headlights", "cold bench", "one missed bus"] },
+    room: { scene: "a room that keeps showing what the speaker cannot say", details: ["unmade bed", "small receipt", "dim lamp", "closed window"] },
+    travel: { scene: "leaving a familiar place while carrying a feeling that has not caught up yet", details: ["small suitcase", "platform light", "ticket", "window seat"] },
+    sea: { scene: "standing near the sea and letting an unsaid feeling loosen with the tide", details: ["wet shoes", "salt air", "distant light", "folded sleeve"] },
+    dream: fantasy
+      ? { scene: "escaping ordinary life through a strange sparkling dream gate", details: ["glowing door", "floating street", "unreal clock", "soft alarm"] }
+      : { scene: "chasing a dream while doubting whether it is still possible", details: ["old notebook", "practice room", "crossed-out plan", "morning light"] },
+    freedom: { scene: "leaving old routines behind for one small self-chosen step", details: ["open window", "untied shoes", "empty road", "first deep breath"] },
+    family: { scene: "a familiar family moment where love is shown indirectly", details: ["leftover side dish", "missed call", "worn slippers", "small nagging"] },
+    youth: { scene: "youth caught between wanting to run and not knowing where to go", details: ["school stairs", "borrowed jacket", "first bus", "messy notebook"] },
+    growth: { scene: "a quiet moment of realizing the self has changed", details: ["old photo", "new key", "packed box", "changed reflection"] },
+    comfort: { scene: "someone finding a small place to breathe after a hard day", details: ["warm blanket", "low light", "quiet message", "slow exhale"] },
+  };
+
+  const base = byTheme[theme] || {
+    scene: `${theme} turned into one concrete everyday emotional scene`,
+    details: ["one small object", "a familiar place", "an unsaid sentence", "a delayed reaction"],
+  };
+
+  if (comic && !/joking|comic|funny|playful/i.test(base.scene)) {
+    return {
+      scene: `${base.scene}, with pain hidden behind small jokes and practical replies`,
+      details: base.details,
+    };
+  }
+  if (fantasy && !/dream|gate|unreal|magical|fantasy/i.test(base.scene)) {
+    return {
+      scene: `${base.scene}, touched by one magical or unreal detail`,
+      details: base.details,
+    };
+  }
+  return base;
+}
+
+function buildMoodPairCue(moodCues: string[]): string {
+  const has = (...items: string[]) => moodCues.some((cue) => items.some((item) => cue.includes(item)));
+  if (has("bright") && has("wistful")) return "bright yet wistful";
+  if (has("upbeat") && has("melancholic")) return "upbeat but melancholic";
+  if (has("warm") && has("hollow")) return "warm but hollow";
+  if (has("comic") && (has("sad") || has("sorrowful") || has("bittersweet"))) return "comic but sad";
+  if (has("playful") && has("sorrowful")) return "playful but sorrowful";
+  if (has("relaxed") && has("uneasy")) return "relaxed but uneasy";
+  if (has("minimal") && has("emotional")) return "restrained emotional depth";
+  if (has("vintage") && has("warm")) return "warm vintage glow";
+  if (has("dreamy") && (has("ambient") || has("spacious"))) return "dreamy spacious texture";
+  if (has("catchy") && has("bittersweet")) return "bittersweet catchy hook mood";
+  if (has("moody") && has("urban")) return "moody urban flow";
+  if (has("magical") && has("cute")) return "cute magical sparkle";
+  return "";
+}
+
+function analyzeThemeMoodContext(params: GenerateSongParams): ThemeMoodAnalysis {
+  const situationActive = hasSituation(params.situation);
+  const rawThemes = (params.themes ?? []).map(resolveThemeLabel).filter(Boolean);
+  const themeCues = (params.themes ?? []).map(normalizeThemeCueForStory).filter(Boolean);
+  const rawMoodValues = (params.moods ?? [])
+    .map((mood) => resolveMoodValue(mood))
+    .filter(Boolean);
+  const moodCues = (rawMoodValues.length ? rawMoodValues : (params.moods ?? []))
+    .map(normalizeMoodCueForStory)
+    .filter(Boolean)
+    .filter((item, index, arr) => arr.indexOf(item) === index)
+    .slice(0, 4);
+
+  const primaryTheme = themeCues[0] || "";
+  const pairCue = buildMoodPairCue(moodCues);
+  const moodSummary = cleanupPromptTail(
+    [pairCue, ...moodCues.filter((cue) => !pairCue.toLowerCase().includes(cue))]
+      .filter(Boolean)
+      .slice(0, situationActive ? 2 : 3)
+      .join(" "),
+  );
+  const template = primaryTheme
+    ? themeMoodSceneTemplate(primaryTheme, moodCues)
+    : {
+        scene: moodSummary
+          ? `${moodSummary} mood shaped into a small believable scene`
+          : "one believable everyday emotional scene",
+        details: ["one small object", "a familiar place", "an unsaid sentence", "a delayed reaction"],
+      };
+
+  const hasMood = moodCues.length > 0 || Boolean(pairCue);
+  const hasTheme = themeCues.length > 0;
+  const strength: ThemeMoodAnalysis["strength"] = situationActive
+    ? "weak"
+    : hasTheme || hasMood
+      ? "strong"
+      : "normal";
+
+  const atmosphereCue = situationActive
+    ? cleanupPromptTail(
+        [
+          hasTheme ? `with ${primaryTheme || rawThemes[0]} as a lyric focus` : "",
+          moodSummary ? `colored by ${moodSummary}` : "",
+        ]
+          .filter(Boolean)
+          .join(", "),
+      )
+    : cleanupPromptTail(
+        [
+          moodSummary,
+          template.scene,
+        ]
+          .filter(Boolean)
+          .join(", "),
+      );
+
+  const vocalCue = situationActive
+    ? cleanupPromptTail(
+        moodSummary
+          ? `mood colors only as brief delivery nuance: ${moodSummary}`
+          : "",
+      )
+    : cleanupPromptTail(
+        moodSummary
+          ? `${moodSummary} vocal emotion without naming the keywords`
+          : "natural emotion shaped by the story",
+      );
+
+  const arrangementCue = situationActive
+    ? cleanupPromptTail(
+        pairCue
+          ? `${pairCue} as a subtle section turn`
+          : "",
+      )
+    : cleanupPromptTail(
+        [
+          moodCues.includes("swelling") || moodCues.includes("hopeful")
+            ? "gentle emotional bloom"
+            : "",
+          moodCues.includes("minimal") || moodCues.includes("restrained")
+            ? "restrained verses"
+            : "",
+          moodCues.includes("catchy") || moodCues.includes("upbeat")
+            ? "memorable chorus lift"
+            : "",
+          pairCue && !/hook mood/i.test(pairCue) ? `${pairCue} development` : "",
+        ]
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(", "),
+      );
+
+  return {
+    atmosphereCue: atmosphereCue || "balanced emotional scene",
+    vocalCue,
+    arrangementCue,
+    lyricSceneCue: template.scene,
+    lyricDetailCue: template.details.join(", "),
+    strength,
+  };
+}
+
+function buildThemeMoodLyricInstruction(params: GenerateSongParams): string {
+  const analysis = analyzeThemeMoodContext(params);
+  const situationActive = hasSituation(params.situation);
+  const selectedThemeText = (params.themes ?? []).map(resolveThemeLabel).filter(Boolean).join(", ") || "none";
+  const selectedMoodText = (params.moods ?? []).map(resolveMoodLabel).filter(Boolean).join(", ") || "none";
+  return `
+[THEME + MOOD STORY INTERPRETATION]
+- Selected themes: ${selectedThemeText}
+- Selected moods: ${selectedMoodText}
+- Shared interpretation for prompt and lyrics: ${analysis.lyricSceneCue}
+- Concrete lyric details to consider: ${analysis.lyricDetailCue}
+- Do not directly list the selected theme/mood words in the lyrics. Turn them into actions, objects, places, speech habits, and small lived details.
+- The production prompt and lyrics must share this same interpretation so they do not feel like different songs.
+${
+  situationActive
+    ? "- Situation mode is active: keep the selected Situation as the main story. Use theme/mood only as subtle support or missing color, not as a new plot."
+    : "- No Situation mode: themes define what the song talks about, and moods define how that story feels, moves, and is sung."
+}
+`.trim();
+}
+
+
 function buildNonSituationStoryClause(
   params: GenerateSongParams,
   variation: CreativeVariationSeed,
@@ -7065,6 +6784,11 @@ function getAtmosphereForPrompt(
     return stripRemainingKoreanForProductionPrompt(
       buildFreeTextDirectorProfile(detailLayer).mood,
     );
+
+  const analysis = analyzeThemeMoodContext(params);
+  if (analysis.strength === "strong" && analysis.atmosphereCue) {
+    return cleanupPromptTail(analysis.atmosphereCue);
+  }
 
   const moodPhrase = getEnglishMoodPhrase(params);
   const themePhrase = getEnglishThemePhrase(params);
@@ -7241,14 +6965,6 @@ function buildSituationVocals(params: GenerateSongParams): string {
     const ownershipRule = isParallelMonologue
       ? "separate sections, single-owner hooks"
       : "separate sections, call-response only if chosen";
-    const activeCast = activeVocalCharacterEntries(params);
-    const uniqueMatchedIndexes = Array.from(new Set(matchedIndexes.filter((index) => index >= 0)));
-    if (activeCast.length > uniqueMatchedIndexes.length) {
-      const castItems = buildSituationVocalCastItems(params, roleEntries, matchedIndexes);
-      if (castItems.length) {
-        return `${roleEntries.length}-role story with ${activeCast.length}-vocal cast: ${castItems.join('; ')}. ${ownershipRule}`;
-      }
-    }
     return `2-character split: ${first}; ${second}. ${ownershipRule}`;
   }
 
@@ -9102,10 +8818,6 @@ function buildSituationAcousticTagLabel(
   roleIndex: number,
   memberIndex = roleIndex,
 ): string {
-  const characterLabels = getVocalCharacterTagLabels(params);
-  const selectedCharacterLabel = characterLabels[memberIndex];
-  if (selectedCharacterLabel) return selectedCharacterLabel;
-
   const genderHint = inferRoleGenderFromText(role);
   const memberGender = getMemberGenderLabel(params, memberIndex);
   const gender = genderHint === "male" || genderHint === "female" ? genderHint : memberGender;
@@ -9213,7 +8925,7 @@ function cleanCharacterCue(cue: string): string {
 function translateKoreanLyricTagCue(value: string): string {
   let text = String(value || "");
   const replacements: Array<[RegExp, string]> = [
-    [/저승\s*사자|저승사자|사신/g, "Bright Male Rap Vocal"],
+    [/저승\s*사자|저승사자|사신/g, "Tired Male Rap"],
     [/귀신|유령/g, "Airy Female Vocal"],
     [/엄마|어머니/g, "Warm Female Vocal"],
     [/아빠|아버지/g, "Dry Male Spoken Vocal"],
@@ -9331,7 +9043,13 @@ function sanitizeLyricBracketTagToEnglish(line: string, params: GenerateSongPara
     if (composite) {
       const sectionName = normalizeLyricSectionNameForGeneration(composite[1].trim());
       const body = String(composite[2] || "").trim();
-      const parts = compactCompositeSectionTagParts(sectionName, body, params);
+      const parts = stripVocalLabelsFromInstrumentalTagParts(
+        sectionName,
+        body
+          .split(/[,，]/)
+          .map((part) => cleanEnglishOnlyLyricTagPart(part))
+          .filter(Boolean)
+      ).slice(0, 3);
       if (!parts.length) return `[${sectionName}]`;
       return `[${sectionName}: ${parts.join(", ")}]`;
     }
@@ -9410,7 +9128,7 @@ function findSituationAcousticLabelFromTag(rawTag: string, params: GenerateSongP
   }
 
   if (/저승\s*사자|저승사자|사신|grim\s*reaper|reaper/i.test(normalizedTag))
-    return acousticPairs[0]?.[1] || "Bright Male Rap Vocal";
+    return acousticPairs[0]?.[1] || "Tired Male Rap";
   if (/귀신|유령|ghost|spirit/i.test(normalizedTag))
     return acousticPairs[1]?.[1] || "Airy Female Vocal";
   if (/엄마|어머니|mother|mom/i.test(normalizedTag)) return "Warm Female Vocal";
@@ -9973,188 +9691,6 @@ function normalizeCompositeLyricTagsFinal(lyrics: string, params: GenerateSongPa
     .replace(/\[(Instrumental(?:\s+Opening)?|Solo|Drop|Breakdown):\s*Instrumental\s*\]/gi, '[$1]');
 }
 
-
-function isCustomStructureVocalLabelPart(part: string): boolean {
-  const text = String(part || '').trim();
-  return /^(?:ONLY\s+.+\b(?:Vocal|Rap)\b(?:\s*,.*)?|All\s+Vocals|Together)$/i.test(text);
-}
-
-function isCustomStructureInstrumentalControlPart(part: string): boolean {
-  return /^(?:Only\s+Instrumental|Instrumental\s+only(?:,\s*no\s+vocals)?|No\s+vocals|No\s+humming|No\s+chant|Pure\s+instrumental)$/i.test(String(part || '').trim());
-}
-
-function customStructureLyricTagSequence(params: GenerateSongParams): Array<{ section: string; parts: string[]; forcedInstrumental: boolean }> {
-  if (params.songStructure !== 'custom' || !(params.customStructure || []).length) return [];
-  return (params.customStructure || [])
-    .map((item) => {
-      const section = normalizeLyricSectionDisplayName(String(item.section || '').trim());
-      const parts = formatCustomStructureTagForPrompt(section, item.tags || [], params)
-        .map((part) => cleanupPromptTail(String(part || '').replace(/\bhigh[-\s]+pressure\b/gi, 'High Pressure')).trim())
-        .filter(Boolean);
-      return {
-        section,
-        parts,
-        forcedInstrumental: isForcedInstrumentalLyricSection(section, params) || parts.some(isCustomStructureInstrumentalControlPart),
-      };
-    })
-    .filter((item) => item.section);
-}
-
-function lyricCueSemanticKeys(cue: string): string[] {
-  const text = String(cue || '').toLowerCase();
-  const keys: string[] = [];
-  const add = (key: string) => { if (!keys.includes(key)) keys.push(key); };
-  if (/lazy|relaxed|나른/.test(text)) add('lazy');
-  if (/nasal|비성|비음/.test(text)) add('nasal');
-  if (/front[-\s]?beat|early\s+entr|urgent\s+entr|앞박|당겨/.test(text)) add('frontbeat');
-  if (/falsetto|가성/.test(text)) add('falsetto');
-  if (/wet|젖은/.test(text)) add('wet');
-  if (/muted|mute|뮤트|먹먹/.test(text)) add('muted');
-  if (/breath|breathy|숨|하프|reverse/.test(text)) add('breath');
-  if (/hook/.test(text)) add('hook');
-  if (/pleading|regret|longing|yearning|그리움|미련|애원/.test(text)) add('pleading');
-  if (/sharp|punchy|attack/.test(text)) add('attack');
-  if (/urgent|tension|pressure/.test(text)) add('tension');
-  return keys;
-}
-
-function rewriteRedundantLyricCue(cue: string, existing: string[]): string {
-  const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(cue).replace(/\s{2,}/g, ' ').trim());
-  if (!clean) return '';
-  const lower = clean.toLowerCase();
-  const existingKeys = new Set(existing.flatMap(lyricCueSemanticKeys));
-
-  // If the vocal character cue already says nasal/lazy/front-beat, keep the
-  // section cue but rewrite it to its musical function instead of repeating
-  // the same technique word.
-  if (existingKeys.has('nasal') && /nasal|비성|비음/.test(lower)) {
-    if (/hook/.test(lower)) return 'soft hook';
-    if (/pleading|regret|longing|yearning/.test(lower)) return 'fragile pleading';
-    if (/focus/.test(lower)) return 'soft focus';
-    if (/lift|impact/.test(lower)) return /wide|impact/.test(lower) ? 'Wide Impact' : 'emotional lift';
-    if (/falsetto|wet|muted/.test(lower)) return clean.replace(/\bnasal\b/gi, '').replace(/\s{2,}/g, ' ').replace(/^,|,$/g, '').trim() || 'wet falsetto';
-    return '';
-  }
-
-  if (existingKeys.has('lazy') && /lazy|relaxed|나른/.test(lower)) {
-    if (/hook/.test(lower)) return 'soft hook';
-    if (/longing|yearning/.test(lower)) return 'soft longing';
-    return clean.replace(/\b(?:lazy|relaxed)\b/gi, '').replace(/\s{2,}/g, ' ').trim();
-  }
-
-  if (existingKeys.has('frontbeat') && /front[-\s]?beat|early\s+entr|urgent\s+entr|앞박|당겨/.test(lower)) {
-    if (/sharp|punchy|attack/.test(lower)) return 'sharp attack';
-    if (/urgent|bounce/.test(lower)) return 'urgent bounce';
-    if (/tension|pressure/.test(lower)) return 'tense entry';
-    return '';
-  }
-
-  return clean;
-}
-
-function pushSemanticLyricCue(out: string[], cue: string): void {
-  const rewritten = rewriteRedundantLyricCue(cue, out);
-  if (!rewritten) return;
-  const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(rewritten)
-    .replace(/\bhigh[-\s]+pressure\b/gi, 'High Pressure')
-    .replace(/\s{2,}/g, ' ')
-    .trim());
-  if (!clean) return;
-  if (out.some((item) => item.toLowerCase() === clean.toLowerCase())) return;
-  const cleanKeys = lyricCueSemanticKeys(clean);
-  const existingKeys = new Set(out.flatMap(lyricCueSemanticKeys));
-  const isPureDuplicateTechnique = cleanKeys.length > 0
-    && cleanKeys.every((key) => existingKeys.has(key))
-    && !/(?:hook|pleading|regret|longing|yearning|lift|impact|attack|bounce|tension|pressure|fade|drop|build)/i.test(clean);
-  if (isPureDuplicateTechnique) return;
-  out.push(clean);
-}
-
-function dedupeLyricCueParts(parts: string[], max = 2): string[] {
-  const out: string[] = [];
-  parts.forEach((part) => {
-    const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part)
-      .replace(/\bhigh[-\s]+pressure\b/gi, 'High Pressure')
-      .replace(/\s{2,}/g, ' ')
-      .trim());
-    if (!clean || isCustomStructureVocalLabelPart(clean) || isCustomStructureInstrumentalControlPart(clean)) return;
-    pushSemanticLyricCue(out, clean);
-  });
-  return out.slice(0, max);
-}
-
-function enforceCustomStructureTagsInGeneratedLyrics(lyrics: string, params: GenerateSongParams): string {
-  const sequence = customStructureLyricTagSequence(params);
-  if (!sequence.length) return lyrics;
-
-  let cursor = 0;
-  return String(lyrics || '').split('\n').map((line) => {
-    const parsed = parseBracketOnlyLine(line);
-    if (!parsed) return line;
-    const composite = parseCompositeLyricTagInside(parsed.inside);
-    if (!composite) return line;
-
-    const section = normalizeLyricSectionDisplayName(composite.section);
-    let matchIndex = -1;
-    for (let i = cursor; i < sequence.length; i += 1) {
-      if (sequence[i].section.toLowerCase() === section.toLowerCase()) {
-        matchIndex = i;
-        break;
-      }
-    }
-    if (matchIndex < 0) return line;
-
-    cursor = matchIndex + 1;
-    const target = sequence[matchIndex];
-    const targetParts = target.parts;
-
-    if (target.forcedInstrumental) {
-      const currentParts = compactCompositeSectionTagParts(section, composite.body, params);
-      const instrumentalCues = targetParts.length
-        ? dedupeLyricCueParts(targetParts, 3)
-        : dedupeLyricCueParts(currentParts, 3);
-      return `${buildInstrumentalOnlyTag(section, instrumentalCues)}${parsed.rest || ''}`;
-    }
-
-    // Critical rule: custom structure is NOT allowed to rewrite the musical/vocal
-    // interpretation that Gemini naturally produced from Situation + [Vocals].
-    // If no tag was applied to this section, keep Gemini's section tag exactly as-is.
-    if (!targetParts.length) return line;
-
-    const targetVocal = targetParts.find(isCustomStructureVocalLabelPart);
-    const targetCues = dedupeLyricCueParts(
-      targetParts.filter((part) => part !== targetVocal),
-      targetVocal ? 2 : 3,
-    );
-
-    // If a vocal-placement tag exists, the user's Vocal Character is the owner
-    // of this section. Use that compact owner label, then add one compressed
-    // technique cue and one execution/situation cue at most.
-    if (targetVocal) {
-      const rawParts = String(composite.body || '')
-        .split(/[,，]/)
-        .map((part) => cleanEnglishOnlyLyricTagPart(part))
-        .filter(Boolean);
-      const generatedCues = rawParts.slice(1);
-      const ownerRaw = String(targetVocal || '').replace(/^ONLY\s+/i, '').split(',')[0].trim();
-      const ownerLabel = resolveActiveVocalLabelForGeneratedLyricLabel(ownerRaw, params, section);
-      const characterCue = getVocalCharacterLyricCueByLabel(ownerLabel, params);
-      const cleanCues = dedupeLyricCueParts([...characterCue, ...targetCues, ...generatedCues], 2)
-        .map((cue) => (/wet\s+falsetto/i.test(ownerLabel) && /^nasal$/i.test(cue.trim()) ? 'wet falsetto' : cue));
-      return `[${section}: ONLY ${ownerLabel}${cleanCues.length ? `, ${cleanCues.join(', ')}` : ''}]${parsed.rest || ''}`;
-    }
-
-    // Non-vocal custom tags are execution tags. Preserve the generated label/cues
-    // and append only the explicitly selected execution tags if missing.
-    const currentParts = String(composite.body || '')
-      .split(/[,，]/)
-      .map((part) => cleanEnglishOnlyLyricTagPart(part))
-      .filter(Boolean);
-    const merged = dedupeLyricCueParts([...currentParts, ...targetCues], 4);
-    return `[${section}${merged.length ? `: ${merged.join(', ')}` : ''}]${parsed.rest || ''}`;
-  }).join('\n');
-}
-
 function removeUiModeWordsFromLyrics(lyrics: string): string {
   return String(lyrics || "")
     .replace(/사회\s*풍자(?:형|라니)?/g, "")
@@ -10588,105 +10124,13 @@ function applyCustomStopAndVocalBreaks(lyrics: string, params: GenerateSongParam
 }
 
 
-
-function normalizeKnownLyricSectionVocalLabelHard(label: string, params?: GenerateSongParams): string {
-  const raw = String(label || '').replace(/^ONLY\s+/i, '').trim();
-  if (!raw) return raw;
-  const normalized = params ? normalizeLyricVocalLabelFromCustom(raw, params) : raw;
-
-  // Hard backward-compatibility for older saved custom section vocal tags.
-  // Some saved structures still contain "Bright Rap Vocal" while the final
-  // [Vocals] line has already resolved the same character to "Bright Male Rap Vocal".
-  if (/^Bright\s+Rap\s+Vocal$/i.test(normalized)) return 'Bright Male Rap Vocal';
-  if (/^Wet\s+Rap\s+Vocal$/i.test(normalized)) return 'Wet Male Rap Vocal';
-  if (/^Low\s+Rap\s+Vocal$/i.test(normalized)) return 'Low Male Rap Vocal';
-  if (/^Whisper\s+Rap\s+Vocal$/i.test(normalized)) return 'Whisper Male Rap Vocal';
-  if (/^Playful\s+Rap\s+Vocal$/i.test(normalized)) return 'Playful Male Rap Vocal';
-  if (/^Airy\s+Vocal$/i.test(normalized)) return 'Airy Female Vocal';
-  return normalized;
-}
-
-function isForbiddenLyricSectionCue(part: string): boolean {
-  const value = String(part || '').trim();
-  if (!value) return true;
-  return /\b(?:tone\s*계열|gender|internal|female\s+main\s+vocal|only\s+male|only\s+female|instrumental\s+break|vocal\s+break)\b/i.test(value)
-    || /^(?:male|female)$/i.test(value);
-}
-
-function compactAllowedLyricSectionCue(part: string): string {
-  const raw = cleanupPromptTail(String(part || '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/^[\s,，:：;-]+|[\s,，:：;-]+$/g, '')
-    .trim());
-  if (!raw) return '';
-  const lower = raw.toLowerCase();
-  if (/^wide\s+impact/i.test(lower)) return 'Wide Impact';
-  if (/^fade[-\s]?out/i.test(lower)) return 'Fade-out';
-  if (/^slowly$/i.test(raw)) return 'Slowly';
-  if (/^energy\s+drop$/i.test(raw)) return 'Energy Drop';
-  return raw;
-}
-
-function sanitizeOneLyricSectionTagLineHard(line: string, params?: GenerateSongParams): string {
-  const trimmed = String(line || '').trim();
-  const match = trimmed.match(/^\[([^\]\n:]+)(?::\s*([^\]\n]*))?\](.*)$/);
-  if (!match) return line;
-  const sectionName = match[1].trim();
-  const body = String(match[2] || '').trim();
-  const tail = String(match[3] || '');
-  if (!body) return line;
-
-  const isInstrumentalLike = /^(?:Instrumental|Solo|Drop|Break)$/i.test(sectionName);
-  const rawParts = body.split(/[,，]/).map((part) => part.trim()).filter(Boolean);
-  const outParts: string[] = [];
-  let vocalLabel = '';
-  let hasLazyRelaxed = false;
-  let hasNasalResonance = false;
-
-  for (const rawPart of rawParts) {
-    const part = cleanEnglishOnlyLyricTagPart(rawPart);
-    if (!part) continue;
-    const withoutOnly = part.replace(/^ONLY\s+/i, '').trim();
-
-    if (/^(?:All\s+Vocals|Together)$/i.test(withoutOnly)) {
-      if (!isInstrumentalLike && !vocalLabel) vocalLabel = 'All Vocals';
-      continue;
-    }
-
-    if (/(?:Vocal|Rap\s+Vocal|Rap)$/i.test(withoutOnly)) {
-      if (!isInstrumentalLike && !vocalLabel) {
-        const resolvedLabel = resolveActiveVocalLabelForGeneratedLyricLabel(withoutOnly, params, sectionName);
-        vocalLabel = `ONLY ${resolvedLabel}`;
-        const characterCue = getVocalCharacterLyricCueByLabel(resolvedLabel, params)[0];
-        if (characterCue) {
-          pushSemanticLyricCue(outParts, characterCue);
-        }
-      }
-      continue;
-    }
-
-    if (isForbiddenLyricSectionCue(part)) continue;
-
-    const cue = compactAllowedLyricSectionCue(part);
-    if (!cue) continue;
-    pushSemanticLyricCue(outParts, cue);
-  }
-
-  void hasLazyRelaxed;
-  void hasNasalResonance;
-
-  const finalParts = [vocalLabel, ...outParts].filter(Boolean).slice(0, vocalLabel ? 3 : 3);
-  if (!finalParts.length) return `[${sectionName}]${tail}`.trimEnd();
-  return `[${sectionName}: ${finalParts.join(', ')}]${tail}`.trimEnd();
-}
-
-function sanitizeCustomLyricTagNoiseFinal(lyrics: string, params?: GenerateSongParams): string {
+function sanitizeCustomLyricTagNoiseFinal(lyrics: string): string {
   return String(lyrics || '')
     .split('\n')
     .map((line) => {
       const trimmed = line.trim();
       if (!/^\[[^\]\n]+\]/.test(trimmed)) return line;
-      return sanitizeOneLyricSectionTagLineHard(line, params)
+      return line
         .replace(/,\s*(?:ONLY\s+)?(?:Male|Female)(?:\s+Main\s+Vocal)?\s*(?=,|\])/gi, '')
         .replace(/,\s*(?:Instrumental\s+break|vocal\s+break)\s*(?=,|\])/gi, '')
         .replace(/,\s*,/g, ',')
@@ -10707,12 +10151,9 @@ function sanitizeGeneratedLyricTagsAndFragments(
   const rawLines = normalizeGeneratedLyricTagSpacing(lyrics)
     .split("\n")
     .map((line) =>
-      syncKnownVocalLabelsInLyricTag(
-        sanitizeLyricBracketTagToEnglish(
-          normalizeSituationCharacterLyricTag(
-            compactLyricVocalTagLine(sanitizeLyricTagGenderNoise(sanitizeCompositeSectionVocalTag(line), params)),
-            params,
-          ),
+      sanitizeLyricBracketTagToEnglish(
+        normalizeSituationCharacterLyricTag(
+          compactLyricVocalTagLine(sanitizeLyricTagGenderNoise(sanitizeCompositeSectionVocalTag(line), params)),
           params,
         ),
         params,
@@ -10786,10 +10227,7 @@ function sanitizeGeneratedLyricTagsAndFragments(
 
 
   const cleanedLyricText = removeUiModeWordsFromLyrics(
-    enforceCustomStructureTagsInGeneratedLyrics(
-      normalizeCompositeLyricTagsFinal(stabilizedText, params),
-      params,
-    ),
+    normalizeCompositeLyricTagsFinal(stabilizedText, params),
   )
     .split('\n')
     .map((line) => {
@@ -10814,13 +10252,7 @@ function sanitizeGeneratedLyricTagsAndFragments(
     ),
   );
 
-  return sanitizeCustomLyricTagNoiseFinal(
-    enforceCustomStructureTagsInGeneratedLyrics(
-      normalizeGeneratedLyricLineBreaks(lyricTextWithTransitions),
-      params,
-    ),
-    params,
-  )
+  return sanitizeCustomLyricTagNoiseFinal(normalizeGeneratedLyricLineBreaks(lyricTextWithTransitions))
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -10895,7 +10327,6 @@ export async function generateSong(
     params.songStructure,
     resolvedStructure,
     params.customStructure ?? [],
-    params,
   );
 
   const shouldUseMixedLyrics = Boolean(
@@ -11020,13 +10451,11 @@ export async function generateSong(
 - Use this exact section order without omission, replacement, renaming, or extra sections:
 ${exactStructureText}
 - Output lyric sections in this exact order. Do not add numbering such as Rap Section 1, Rap Section 2, Bridge 2, Member 1, or Member 2 unless that exact text exists in the custom structure.
-- Every sung custom section must be one compact composite tag: [Selected Section: Acoustic Voice, short cue]. Bad: [Rap Section 1: Member 1] then [저승사자: male]. Good: [Rap Section: Bright Male Rap, anticipated rap].
-- If a custom section includes an ONLY vocal placement cue, use the selected Vocal Character as the section owner and keep it compact: [Verse: ONLY Bright Male Rap, anticipated rap]. Put the full vocal technique profile in [Vocals], not in every lyric tag.
-- If no vocal tag is attached to a custom lyrical section, you may still use ONLY for vocal separation, but choose ONLY from the active Vocal Character labels defined in [Vocals]; never invent generic owners such as Male Low Rap Vocal or Female Main Vocal.
-- Situation story role count and vocal cast count are separate. If [Vocals] says a 2-role story with a 3-vocal cast, use all available vocal cast members musically; do not collapse them back to two generic owners.
+- Every sung custom section must be one composite tag: [Selected Section: Acoustic Voice, short cue]. Bad: [Rap Section 1: Member 1] then [저승사자: male]. Good: [Rap Section: Tired Male Rap, dry authority].
+- If a custom section includes an ONLY vocal placement cue such as (ONLY Low Rap Vocal, creaky growl), use that exact vocal label inside the lyric tag: [Verse: ONLY Low Rap Vocal, creaky growl].
 - If a section includes All Vocals or two vocal labels joined by +, do NOT use ONLY.
 - Break and Stop are standalone transition sections. Output them exactly as [Break] or [Stop], with no colon, no vocals, no parenthetical cues, and no lyric lines.
-- Instrumental, Solo, and Drop sections must never include vocal labels such as Lead Vocal, Low Male Rap Vocal, Wet Male Rap Vocal, or All Vocals.
+- Instrumental, Solo, and Drop sections must never include vocal labels such as Lead Vocal, Low Rap Vocal, Wet Rap Vocal, or All Vocals.
 - If a custom section is marked Instrumental, its section tag must stay instrumental-only: no vocalist, no humming, no 구음, no ad-libs, no sung lyric lines.
 - If the same selected section appears multiple times in the custom order, repeat the exact same section name each time rather than inventing numbers.
 - Each tag in parentheses is a real arrangement instruction. Apply it musically, not just as a label.
@@ -11037,30 +10466,30 @@ ${exactStructureText}
   - Climax: The highest point of energy and emotional intensity.
 - Do not collapse this into a generic pop structure.
 - If Situation is active, use Situation only as character identity and story context. The user's custom section order, instrumental setting, vocal placement, and rap/instrumental ownership are higher priority and must not be rewritten.
-- Rap Section must remain rap delivery. If a Rap Section has a single vocal placement, use [Rap Section: ONLY {compact label}, one compact technique cue]. Never turn a Rap Section into a sung female vocal unless the user explicitly placed a female rap vocal there.
+- Rap Section must remain rap delivery. If a Rap Section has a single vocal placement, use [Rap Section: ONLY {label}, rhythmic rap delivery]. Never turn a Rap Section into a sung female vocal unless the user explicitly placed a female rap vocal there.
 - Instrumental/solo custom sections must include the exact selected instrument/point-sound cue from the custom structure tag when available, e.g. [Instrumental: Melody Lead Synth]. They must include no vocal, no humming, no chant.
-- Do not copy UI-only gender/role tokens like ONLY Male, ONLY Female Main Vocal, Male, Female, or Instrumental break into lyric tags. Use only the resolved Vocal Character label plus one short technique cue and, if selected, one execution tag.
+- Do not copy UI-only gender/role tokens like ONLY Male, ONLY Female Main Vocal, Male, Female, or Instrumental break into lyric tags. Use only the resolved acoustic label from [Vocals] plus one short performance cue.
 - Do not invent undefined vocal labels such as Bright Rap Vocal unless that exact label was defined in [Vocals] or selected by the user.
 - If Situation is active, every lyrical custom section must still follow the Situation roles and relationship.
 - Chorus, Hook, Rap Section, Bridge, Verse, Pre-Chorus, Final Chorus, and Outro must not become generic lyrics; keep the scenario and role conflict active.
 - Instrumental, Solo, and Drop can be mainly musical, but if they include lyrics or ad-libs, they must stay connected to the same Situation. Break and Stop must remain lyric-free transition tags.`
       : (params.songStructure ?? "1") === "1"
-        ? `SONG STRUCTURE (DEFAULT / GENRE-ADAPTIVE):
-- Default mode must NOT be a generic free structure and must NOT repeatedly start with Verse A / Verse B.
-- Use this representative genre-adaptive spine as the primary structure for this generation:
-${exactStructureText}
-- Follow the recommended spine as the section order. Do not freely expand it into Verse A / Verse B / Verse C, Bridge A / Bridge B, or a dialogue template unless the spine itself explicitly contains that shape.
-- Keep section names musical and genre-shaped. Situation can change ownership and emotion inside the spine, but it must not replace the spine.
-- Use the section count implied by the recommended spine. Rap/Hip-Hop structures may be denser with more short Rap Section/Hook/Break/Stop movement; Ballad structures may be smoother and simpler; Dance/EDM may use Build-up/Drop; City Pop/Nu-Disco should remain melodic/groove-led with Instrumental, Break, Bridge, and Final Chorus movement.
-- Situation mode changes vocal ownership, tension, and lyric perspective inside this genre-led structure; it should not force Verse A/Verse B unless two consecutive viewpoint sections truly require it.
+        ? `SONG STRUCTURE (DEFAULT / ADAPTIVE EXPERIMENTAL):
+- Do not force a fixed Verse-Chorus template. Build a coherent but experimental song architecture around the story arc, hook timing, and emotional reveal.
+- Use about 9-12 major sections so the song does not feel too short. A compact song is allowed only when the user explicitly asks for a very short lyric.
+- Prefer an asymmetric spine rather than a plain Verse→Pre-Chorus→Chorus loop. Use at least TWO non-standard or transition sections when appropriate: [Hook], [Drop], [Breakdown], [Instrumental], [Solo], [Build-up], [Climax], [Main Theme], or [Final Hook].
+- Repetition is allowed when it has a musical purpose: Verse may return, Hook/Chorus may return, and Breakdown/Drop may appear more than once if the energy changes.
+- For the default/free structure, use [Verse] as the normal verse tag. If two Verse sections appear back-to-back for different voices or viewpoints, label them [Verse A: ...] and [Verse B: ...] so the order stays clear. Otherwise, do not use numbered [Verse 1]/[Verse 2].
 - Chorus/Hook should have ONE main owner per occurrence unless call-response is explicitly selected. The owner may change between Chorus and Final Hook/Final Chorus to create a story turn.
-- Repetition is allowed only when it has a musical purpose: Hook/Chorus may return, Rap Section may return in rap-led songs, and Instrumental/Break may appear when energy changes.
-- Avoid consecutive identical bracket section tags except intentional Break/Stop transitions or a clearly justified viewpoint pair.
-- Use composite lyric tags for every sung section, e.g. [Rap Section: ONLY Bright Male Rap, front-beat rap] or [Chorus: ONLY Lazy Nasal Female Vocal, soft hook]. Instrumental-only sections may use section-only tags.
-- If a suggested section cue says ONLY plus one vocal label, keep ONLY in the section tag only for that single-owner section. Do not use ONLY for All Vocals.
+- Do not always place Chorus once in the middle and Final Chorus right before Outro. Rotate ending patterns: Breakdown→Outro, Hook reprise→sudden stop, Drop→Outro, Instrumental→spoken Outro, Final Hook→fade, Bridge→unresolved ending, or Rap Section→cold ending are allowed.
+- Final Chorus/Final Hook does not always need to resolve the conflict. It may be unresolved, bitter, comic, reversed, quieter, or bigger depending on the Situation.
+- Avoid consecutive identical bracket section tags except [Verse A] → [Verse B]. If a hook returns late, use [Final Hook], [Hook], [Breakdown], or [Drop] according to the musical function rather than duplicating the same tag twice in a row.
+- Use composite lyric tags for every sung section, e.g. [Verse A: Airy Female Vocal, pleading] or [Rap Section: Low Male Rap, tired]. Instrumental-only sections may use section-only tags.
+- If a custom or suggested section cue says ONLY plus one vocal label, keep ONLY in the section tag only for that single-owner section. Do not use ONLY for Chorus, Final Chorus, or All Vocals.
 - Instrumental, Solo, and Drop sections must never include vocal labels. Break and Stop must remain standalone tags.
 - Intro/Outro marked as Instrumental must remain pure instrumental: remove vocals, humming, 구음, chant, breath, and lyric lines.
-- Never output a bare acoustic tag like [Bright Male Rap Vocal: dry] or [Airy Female Vocal: pleading]. It must always include the section first: [Rap Section: Bright Male Rap, dry] or [Chorus: Airy Female Vocal, pleading].`
+- Never output a bare acoustic tag like [Tired Male Rap: dry] or [Airy Female Vocal: pleading]. It must always include the section first: [Verse A: Tired Male Rap, dry] or [Chorus: Airy Female Vocal, pleading].
+- For Situation songs, character story roles still drive the lyric content, but section labels must stay musical, varied, and intentional.`
         : `SONG STRUCTURE (MANDATORY):
 - Selected mode: ${resolvedStructure === "2" ? "1" : "2"}.
 - Use this exact structure:
@@ -11125,21 +10554,21 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Do NOT turn technical instructions into the title or lyrical topic.
 - Keep the final production prompt dense rather than over-compressed: aim for about 650-750 characters when many selections are active, excluding the fixed audio-quality line. Remove duplicate wording first; do not cut off genre identity, story scene, production movement, tempo, hook behavior, or vocal roles.
 - Good [Vocals] style for Situation: 2-character vocal split: Employee with bright female vocal, sarcastic but slightly hurt delivery. Boss with dry male vocal, nagging pressure. Keep each character separated. Good group style: 4 female vocal split: Main Vocal (...), Lead Vocal (...), Low Rap Vocal (...), Whisper Vocal (...). Bad style: Female group vocals, pop, sad.
-- For group lyric tags, NEVER use mechanical labels like [Member 1], [Member 2], Rap Vocal 1, or Rap Vocal 2 when character labels exist. Use descriptive role-based tags from [Vocals], such as [Low Male Rap Vocal: husky off-beat], [Wet Male Rap Vocal: glissando], [Airy Female Vocal: fragile], [Whisper Male Rap Vocal: breathy].
-- If a selected vocal character label includes gender, preserve that exact gendered label in both [Vocals] and lyric section tags. Do not strip Male/Female from labels such as Bright Male Rap Vocal or Airy Female Vocal.
+- For group lyric tags, NEVER use mechanical labels like [Member 1], [Member 2], Rap Vocal 1, or Rap Vocal 2 when character labels exist. Use descriptive role-based tags from [Vocals], such as [Low Rap Vocal: husky off-beat], [Wet Rap Vocal: glissando], [Airy Vocal: fragile], [Whisper Rap Vocal: breathy].
+- If the group is all-female or all-male, do not repeat the gender in lyric tags. Only include gender in lyric tags for mixed-gender groups.
 - Keep lyric tags compact: [Role: one voice cue, one emotion cue]. Use at most 2 short cues after the colon. Do not put full sentences, long descriptions, or all vocal settings inside lyric tags.
 - LYRIC CONTENT SOURCE LOCK (MANDATORY): Lyrics must be created only from USER FREE-TEXT DIRECTOR NOTE, selected Theme, and active Situation if provided. Vocal emotion direction, vocal expression, vocal tone, Sound, Style, tempo, BPM, instrument names, and production texture are NOT lyric topics.
 - Vocal emotion direction and vocal expression are singer-performance directions only. They may appear in [Vocals] and compact lyric tags, but must NOT create lyric story, imagery, subject matter, repeated keywords, or narrative content. Do not write lyric lines that explain the selected emotion/expression. If no Theme/Situation/user note exists, keep lyrics broad and character-driven rather than explaining vocal settings.
-- In Situation/character lyrics, lyric tags must use composite acoustic tags: [Section: Acoustic Voice Label, short cue], e.g. [Verse A: Bright Male Rap Vocal, tired authority] or [Chorus: Airy Female Vocal, pleading hook]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], never output bare acoustic tags like [Bright Male Rap Vocal: dry], and never switch back to generic vocal labels after acoustic labels have been established.
+- In Situation/character lyrics, lyric tags must use composite acoustic tags: [Section: Acoustic Voice Label, short cue], e.g. [Verse A: Tired Male Rap, dry authority] or [Chorus: Airy Female Vocal, pleading hook]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], never output bare acoustic tags like [Tired Male Rap: dry], and never switch back to generic vocal labels after acoustic labels have been established.
 - Every sung tag must include a section name before the colon. Bad: [Airy Female Vocal: empty]. Good: [Outro: Airy Female Vocal, empty].
 - KIM EANA-STYLE LYRIC FOUNDATION (MANDATORY): Write lyrics as character speech, not emotion exposition. Start from character, situation, desire, speech style, and lived detail. Prefer concrete everyday details, persona flaws, small behavior, and a believable scene over abstract emotion words. Chorus should express the character's real desire or repeating phrase, not summarize the selected vocal emotion.
 - Do not make tags empty. Every vocalist tag must be followed by at least 1-2 complete lyric or ad-lib lines. Never output broken placeholders like "( : )", "[ : ]", empty parentheses, or empty vocal tags.
-- Use composite lyric tags for sung sections: [Section: Vocal/Acoustic Role, short emotion or delivery]. Good: [Hook: Whisper Male Rap Vocal, breathy tension], [Rap Section: Low Male Rap Vocal, husky off-beat].
-- If the selected structure says Rap Section, write it as [Rap Section] in generated lyrics. Composite form is allowed and preferred: [Rap Section: Low Male Rap Vocal, husky off-beat].
+- Use composite lyric tags for sung sections: [Section: Vocal/Acoustic Role, short emotion or delivery]. Good: [Hook: Whisper Rap Vocal, breathy tension], [Rap Section: Low Male Rap, husky off-beat].
+- If the selected structure says Rap Section, write it as [Rap Section] in generated lyrics. Composite form is allowed and preferred: [Rap Section: Low Male Rap, husky off-beat].
 - In group songs, [Together] is not the default singer. Use [Together] only for one short shared hook or the final hook unless the user explicitly asks for full-group singing.
 - For repeated Hook/Chorus sections, distribute ownership across roles: Main Vocal or Airy Vocal can lead early hooks, Rap/Whisper Rap can interrupt or answer, and Together should be saved for the final or most important hook.
 - Do not let [Together] own every repeated hook. Keep group unity, but preserve the selected vocal split.
-- Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse: Bright Male Rap Vocal, dry], [Rap Section: Low Male Rap Vocal, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
+- Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse: Tired Male Rap, dry], [Rap Section: Low Male Rap, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
 - If Gemini starts a sung block with a bare acoustic tag such as [Tired Male Rap: ...] or [Airy Female Vocal: ...], rewrite it into the nearest musical section: [Verse A: ...], [Verse B: ...], [Rap Section: ...], [Bridge: ...], or [Outro: ...].
 - Never put Korean story role labels inside brackets. Story roles may appear in lyric lines, but bracket tags must stay English acoustic/section tags only.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
@@ -11207,6 +10636,8 @@ ${themePrompt}
 Expanded story direction: ${themeSentence}`
     : ""
 }
+
+${buildThemeMoodLyricInstruction(params)}
 
 LOCKED FINAL PRODUCTION PROMPT:
 ${finalPrompt}
@@ -11402,15 +10833,15 @@ ${lyricGuidancePrompt}
 - Keep all tags short. Tags guide singing; they are not prose.
 - MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
 - If there are two actual vocalists, every sung section should use one composite bracket tag: [Section: acoustic voice tag, short style].
-- If [Vocals] defines Vocal Character labels, lyric tags must reuse only those active labels for sung sections. Avoid generic fallback labels like Male Low Rap Vocal, Female Main Vocal, Rap Vocal 1, or Member 1 when character labels exist. Use [Final Chorus: All Vocals, ...] only for real shared moments.
-- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag such as [Verse: Low Male Rap Vocal, dry].
+- If [Vocals] defines character labels such as Low Rap Vocal / Wet Rap Vocal / Airy Vocal / Main Vocal, lyric tags must reuse those exact labels for sung sections. Avoid numbered labels like Rap Vocal 1 / Rap Vocal 2 unless no descriptive label exists. Use [Final Chorus: All Vocals, ...] only for real shared moments.
+- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag such as [Verse: Low Male Rap, dry].
 - Solo songs: do NOT repeat the vocalist identity in section tags. Remove labels such as [Main Vocal], [Lead Vocal], [Airy Male Vocal], [Female Vocal], [Male Vocal], [Whisper Vocal] from every section when the prompt already defines the vocal identity. Use only emotion/performance cues like [Verse: whispery numb], [Chorus: clear hook], [Bridge: hollow]. Keep a rap label only for actual Rap Section tags.
 - Solo section tags must include short performance/emotion tags, e.g. [Verse: low, intimate], [Chorus: clear hook, aching].
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
 - Use parentheses only for short vocal gestures/ad-libs such as (sigh), (soft breath), (short laugh), (whisper), or brief sung English ad-libs. Environmental SFX, instrument textures, ambience, noise, and point sounds must go inside the [Section: ...] tag instead of parentheses.
 - Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
 - Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
-- Duo/group vocal + two targets: use composite Suno tags for sung sections: [Section: acoustic voice tag, short cue]. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use physical sound labels such as [Verse: Bright Male Rap Vocal, tired authority] or [Chorus: Airy Female Vocal, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.
+- Duo/group vocal + two targets: use composite Suno tags for sung sections: [Section: acoustic voice tag, short cue]. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use physical sound labels such as [Verse: Tired Male Rap, dry nagging] or [Chorus: Airy Female Vocal, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.
 - If Target A/B speech style or attitude is provided, it is mandatory: reflect it in both the [Vocals] line concept and the lyric speaker tags.
 - User-provided style/attitude text is source material, not final wording. Interpret it into natural character behavior and short singable tags.
 - Final prompt sentences should sound like a producer directing a real singer; lyric tags should stay compact and musical, with no more than 2 short cues after the colon.
@@ -11444,7 +10875,6 @@ Examples:
 - Use the A→B pattern ONLY for sections explicitly chosen as call-response. Other sections may be A-only, B-only, Together-only, echo-style, interruption-style, or one speaker with the other appearing only as an ad-lib.
 - Avoid long tag explanations; keep tags short and musical.
 - Keep English around 10% or less, mostly as short ad-libs or rhythm points.
-${buildActiveVocalCastLyricInstruction(params)}
 ${buildExtraTechniqueLyricTagInstruction(params)}
 - UI mode words such as 사회풍자형, 평행 독백형, 대화형, 콜앤리스폰스형, 보컬감정, or 연출 톤 are internal controls. Never write those words directly in the lyric body; express them through character behavior and concrete details.
 

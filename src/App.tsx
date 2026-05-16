@@ -65,7 +65,7 @@ import {
   Key,
   Bookmark
 } from 'lucide-react';
-import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 
 // Portal component for top-level rendering
@@ -73,6 +73,32 @@ function Portal({ children }: { children: React.ReactNode }) {
   if (typeof document === 'undefined') return null;
   return createPortal(children, document.body);
 }
+
+
+const isDocumentFullscreenActive = () => {
+  if (typeof document === 'undefined') return false;
+  const webkitFullscreenElement = (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement;
+  return Boolean(document.fullscreenElement || webkitFullscreenElement);
+};
+
+const CUSTOM_MOOD_PREFIX = '__custom_mood__:';
+const CUSTOM_THEME_PREFIX = '__custom_theme__:';
+
+const makeCustomKeywordId = (prefix: string, text: string) => `${prefix}${encodeURIComponent(text.trim())}`;
+
+const getCustomKeywordText = (id: string, prefix: string) => {
+  if (!id.startsWith(prefix)) return null;
+  try {
+    return decodeURIComponent(id.slice(prefix.length)).trim();
+  } catch {
+    return id.slice(prefix.length).trim();
+  }
+};
+
+const isCustomMoodKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX) !== null;
+const isCustomThemeKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX) !== null;
+const getMoodKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX) || MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id;
+const getThemeKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX) || THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id;
 
 
 type VocalEmotionLine = {
@@ -158,9 +184,8 @@ import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, f
 
 const USER_CUSTOM_SECTIONS_STORAGE_KEY = 'soridraw_user_custom_sections_v1';
 const USER_CUSTOM_SECTION_TAGS_STORAGE_KEY = 'soridraw_user_custom_section_tags_v1';
-const USER_CUSTOM_DATA_SYNC_VERSION = 1;
-
-const getUserStructureDocRef = (uid: string) => doc(db, 'user_structures', uid);
+const USER_SAVED_STRUCTURES_STORAGE_KEY = 'soridraw_saved_structures_v1';
+const getSavedStructuresStorageKey = (uid?: string | null) => `${USER_SAVED_STRUCTURES_STORAGE_KEY}_${uid || 'guest'}`;
 
 const safeReadJsonArray = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -449,6 +474,51 @@ class ErrorBoundary extends Component<any, any> {
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function useStableContentHeight(
+  contentRef: React.RefObject<HTMLElement>,
+  setHeight: (value: number | string | ((prev: number | string) => number | string)) => void,
+  deps: React.DependencyList,
+  onHeightChange?: (height: number) => void
+) {
+  useEffect(() => {
+    let frameId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const measure = () => {
+      const el = contentRef.current;
+      if (!el) return;
+      const nextHeight = el.scrollHeight || el.getBoundingClientRect().height || 0;
+      if (nextHeight <= 0) return;
+      setHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+      onHeightChange?.(nextHeight);
+    };
+
+    const scheduleMeasure = () => {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    timeoutId = window.setTimeout(measure, 80);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && contentRef.current) {
+      observer = new ResizeObserver(scheduleMeasure);
+      observer.observe(contentRef.current);
+    }
+
+    window.addEventListener('resize', scheduleMeasure);
+
+    return () => {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      observer?.disconnect();
+      window.removeEventListener('resize', scheduleMeasure);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 }
 
 const getVocalToneDisplayLabel = (toneId: string | undefined, vocalTones: VocalTone[]) => {
@@ -1169,7 +1239,9 @@ const ReorderableSectionItem = ({
   onRemove, 
   onHover,
   onSelect,
-  onDragActiveChange,
+  onDragStart,
+  isReorderDragging,
+  isDraggingItem,
   isInsertionTarget,
   sectionDisplayLabel,
   tagDisplayLabel,
@@ -1180,46 +1252,35 @@ const ReorderableSectionItem = ({
   onRemove: (index: number) => void; 
   onHover: (item: CategoryItem | null) => void;
   onSelect: (index: number) => void;
-  onDragActiveChange?: (isActive: boolean) => void;
+  onDragStart: (index: number, event: React.PointerEvent<HTMLButtonElement>) => void;
+  isReorderDragging?: boolean;
+  isDraggingItem?: boolean;
   isInsertionTarget?: boolean;
   sectionDisplayLabel?: string;
   tagDisplayLabel?: (tag: string) => string;
   key?: React.Key;
 }) => {
-  const controls = useDragControls();
-  
   return (
-    <Reorder.Item
-      value={item}
-      dragListener={false}
-      dragControls={controls}
-      onClick={() => onSelect(index)}
-      className={cn(
-        "flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 touch-pan-y shadow-sm cursor-pointer transition-all",
-        isInsertionTarget
-          ? "border-white/70 bg-white/[0.07] ring-1 ring-white/35"
-          : "border-btn-border hover:border-white/30 hover:bg-white/[0.04]"
-      )}
-      as="div"
-      whileDrag={{ 
-        scale: 1.02, 
-        boxShadow: "0 8px 30px rgba(0,0,0,0.3)", 
-        borderColor: "rgba(255,165,0,0.3)",
-        backgroundColor: "rgba(255,255,255,0.08)"
+    <div
+      data-reorder-section-id={item.id}
+      onClick={() => {
+        if (isReorderDragging) return;
+        onSelect(index);
       }}
+      className={cn(
+        "flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 select-none shadow-sm cursor-pointer transition-[border-color,background-color,opacity,transform] duration-150",
+        isDraggingItem
+          ? "border-brand-orange/70 bg-white/[0.08] opacity-80 scale-[0.995]"
+          : isInsertionTarget
+            ? "border-white/70 bg-white/[0.07] ring-1 ring-white/35"
+            : "border-btn-border hover:border-white/30 hover:bg-white/[0.04]"
+      )}
     >
       <button
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          onDragActiveChange?.(true);
-          controls.start(e);
-        }}
-        onPointerUp={(e) => {
-          e.stopPropagation();
-          onDragActiveChange?.(false);
-        }}
+        onPointerDown={(e) => onDragStart(index, e)}
+        onClick={(e) => e.stopPropagation()}
         className="w-8 h-8 rounded-lg border bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 touch-none shadow-btn"
-        onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 눌러 위아래로 드래그하여 순서를 변경합니다.' })}
+        onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 누른 채 위아래로 드래그하여 순서를 변경합니다. 목록 끝에 가까워지면 자동으로 스크롤됩니다.' })}
         onMouseLeave={() => onHover(null)}
       >
         <ArrowUpDown className="w-4 h-4" />
@@ -1265,7 +1326,7 @@ const ReorderableSectionItem = ({
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
-    </Reorder.Item>
+    </div>
   );
 };
 
@@ -1772,6 +1833,7 @@ function getMemberVisibleName(member: VocalMember, index: number, members: Vocal
 }
 
 function inferVocalActualLabel(member: VocalMember) {
+  const genderLabel = member.gender === 'male' ? 'Male' : 'Female';
   const role = member.roles?.includes('rapper') ? 'Rap Vocal' : 'Vocal';
   const char = member.character || {};
   const phrase = [
@@ -1784,36 +1846,92 @@ function inferVocalActualLabel(member: VocalMember) {
   ].filter(Boolean).join(' ').toLowerCase();
 
   if (role === 'Rap Vocal') {
-    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return 'Low Rap Vocal';
-    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return 'Wet Rap Vocal';
-    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return 'Creaky Rap Vocal';
-    if (/bright|head|clear|두성|맑/.test(phrase)) return 'Bright Rap Vocal';
-    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return 'Playful Rap Vocal';
-    return `${member.gender === 'male' ? 'Male' : 'Female'} Rap Vocal`;
+    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return `Low ${genderLabel} Rap Vocal`;
+    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return `Wet ${genderLabel} Rap Vocal`;
+    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return `Creaky ${genderLabel} Rap Vocal`;
+    if (/bright|head|clear|두성|맑/.test(phrase)) return `Bright ${genderLabel} Rap Vocal`;
+    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return `Playful ${genderLabel} Rap Vocal`;
+    return `${genderLabel} Rap Vocal`;
   }
 
-  if (/hollow|distant|empty|공허/.test(phrase)) return `Hollow ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return `Airy ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return `Clear ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/wet|nasal|젖은|비성/.test(phrase)) return `Wet ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  if (/deep|heavy|chest|low|묵직/.test(phrase)) return `Deep ${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
-  return `${member.gender === 'male' ? 'Male' : 'Female'} Vocal`;
+  if (/hollow|distant|empty|공허/.test(phrase)) return `Hollow ${genderLabel} Vocal`;
+  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return `Airy ${genderLabel} Vocal`;
+  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return `Clear ${genderLabel} Vocal`;
+  if (/wet|nasal|젖은|비성/.test(phrase)) return `Wet ${genderLabel} Vocal`;
+  if (/deep|heavy|chest|low|묵직/.test(phrase)) return `Deep ${genderLabel} Vocal`;
+  return `${genderLabel} Vocal`;
+}
+
+function compactVocalLyricCueText(value: string, isRap: boolean) {
+  const raw = safeVocalTagPart(value).toLowerCase();
+  if (!raw) return '';
+
+  const cueMap: Array<[RegExp, string]> = [
+    [/anticipat|앞박|당겨/, isRap ? 'anticipated rap' : 'anticipated'],
+    [/nasal|비성|비음/, 'nasal'],
+    [/falsetto|가성/, 'thin falsetto'],
+    [/breathy|breath|숨|에어리|airy/, 'breathy'],
+    [/half[-_\s]?air|air stop|하프/, 'half-air'],
+    [/reverse[-_\s]?breath|역호흡/, 'reverse breath'],
+    [/microtonal|미분음|melting/, 'melting slides'],
+    [/glissando|글리산도|slide/, 'glissando'],
+    [/layback|laid[-\s]?back|느슨/, 'laid-back'],
+    [/staccato|스타카토/, 'staccato'],
+    [/vibrato|비브라토/, 'vibrato'],
+    [/husky|허스키/, 'husky'],
+    [/creaky|fry|크리키/, 'creaky'],
+    [/bright|밝|lively/, 'bright'],
+    [/lazy|relaxed|게으른/, 'lazy'],
+    [/dry|건조/, 'dry'],
+    [/wet|젖은/, 'wet'],
+    [/clear|맑|clean/, 'clear'],
+    [/low|deep|heavy|낮|저음|묵직/, 'low'],
+    [/playful|bounce|bouncy|장난|톡톡/, 'playful bounce'],
+    [/whisper|속삭/, 'whisper'],
+  ];
+
+  for (const [pattern, cue] of cueMap) {
+    if (pattern.test(raw)) return cue;
+  }
+  return safeVocalTagPart(value)
+    .replace(/\b(?:vocal\s+tone|vocal|tone|phrasing|resonance|delivery|voice)\b/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .split(/[,，]/)[0]
+    .trim();
 }
 
 function buildCompactVocalCue(member: VocalMember) {
   const char = member.character || {};
-  const techniqueCues = (char.techniqueIds || [])
-    .map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.promptCore)
-    .filter(Boolean)
-    .map((value) => safeVocalTagPart(value as string))
-    .slice(0, 2);
-  const toneCue = safeVocalTagPart(VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore || char.customVoiceTone || '');
-  const personalityCue = safeVocalTagPart(VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore || char.customPersonality || '');
-  return [toneCue, ...techniqueCues, personalityCue]
-    .filter(Boolean)
-    .filter((item, index, arr) => arr.findIndex((other) => other.toLowerCase() === item.toLowerCase()) === index)
-    .slice(0, 2)
-    .join(', ');
+  const isRap = member.roles?.includes('rapper');
+  const selectedTechniqueTexts = (char.techniqueIds || [])
+    .map((id) => {
+      const item = VOCAL_TECHNIQUES.find((technique) => technique.id === id);
+      return item?.promptCore || item?.label || item?.labelKo || id;
+    })
+    .filter(Boolean);
+
+  const selectedToneText = VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore || char.customVoiceTone || '';
+  const selectedPersonalityText = VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore || char.customPersonality || '';
+  const customTechniqueText = char.customTechnique || '';
+
+  const cues: string[] = [];
+  const pushCue = (cue: string) => {
+    const clean = safeVocalTagPart(cue);
+    if (!clean) return;
+    if (!cues.some((item) => item.toLowerCase() === clean.toLowerCase())) cues.push(clean);
+  };
+
+  // 창법이 보컬 캐릭터의 핵심이므로 technique을 가장 먼저 압축한다.
+  selectedTechniqueTexts.forEach((text) => pushCue(compactVocalLyricCueText(text, isRap)));
+  if (customTechniqueText) pushCue(compactVocalLyricCueText(customTechniqueText, isRap));
+
+  // 창법 cue가 부족할 때만 톤/성격에서 1개를 보강한다.
+  if (cues.length < 1 && selectedToneText) pushCue(compactVocalLyricCueText(selectedToneText, isRap));
+  if (cues.length < 1 && selectedPersonalityText) pushCue(compactVocalLyricCueText(selectedPersonalityText, isRap));
+
+  // 너무 긴 보컬 설명을 반복하지 않기 위해 가사 섹션에는 대표 창법 cue 1개만 둔다.
+  return cues.slice(0, 1).join(', ');
 }
 
 function buildVocalSectionTagOptions(members: VocalMember[], vocalMode: VocalMode): VocalSectionTagOption[] {
@@ -3355,7 +3473,9 @@ const toggleCycleVariantSelection = (
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
-  const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen;
+  const [isCycleKeywordPopupOpen, setIsCycleKeywordPopupOpen] = useState(false);
+  const [isVocalCharacterModalOpen, setIsVocalCharacterModalOpen] = useState(false);
+  const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen;
   
   const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
   const effectiveUserTier: TagTier = useMemo(() => {
@@ -4235,8 +4355,14 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    const removeDirectCustomKeyword = (values: string[]) => {
+      if (category === 'mood') return values.filter((value) => !isCustomMoodKeyword(value));
+      if (category === 'theme') return values.filter((value) => !isCustomThemeKeyword(value));
+      return values;
+    };
+
     if (state.includes(id)) {
-      set(state.filter(i => i !== id));
+      set(removeDirectCustomKeyword(state.filter(i => i !== id)));
       
       // Trot Logic: Auto-unselect moods
       if (category === 'genre') {
@@ -4248,8 +4374,9 @@ const toggleCycleVariantSelection = (
           setSelectedMoods(prev => prev.filter(m => !moodsToRemove.includes(m)));
         }
       }
-    } else if (category === 'genre' ? state.length < MAX_FUSION_GENRES : state.length < 10) {
-      set(category === 'genre' ? limitFusionGenreIds([...state, id]) : [...state, id]);
+    } else if (category === 'genre' ? state.length < MAX_FUSION_GENRES : removeDirectCustomKeyword(state).length < 10) {
+      const nextState = removeDirectCustomKeyword([...state, id]);
+      set(category === 'genre' ? limitFusionGenreIds(nextState) : nextState);
       
       // Trot Logic: Auto-select moods
       if (category === 'genre') {
@@ -4274,6 +4401,42 @@ const toggleCycleVariantSelection = (
     if (item) {
       setHoveredItem({ ...item, _ts: Date.now() });
     }
+  };
+
+  const applyDirectMoodInput = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setIsMoodRandomized(false);
+    setSelectedMoods([makeCustomKeywordId(CUSTOM_MOOD_PREFIX, trimmed)]);
+    setHoveredItem({
+      id: 'custom-mood-direct-input',
+      label: trimmed,
+      labelKo: trimmed,
+      description: '직접 입력한 분위기 키워드입니다.',
+      _ts: Date.now(),
+    });
+  };
+
+  const applyDirectThemeInput = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setIsThemeRandomized(false);
+    setSelectedThemes([makeCustomKeywordId(CUSTOM_THEME_PREFIX, trimmed)]);
+    setHoveredItem({
+      id: 'custom-theme-direct-input',
+      label: trimmed,
+      labelKo: trimmed,
+      description: '직접 입력한 주제 키워드입니다.',
+      _ts: Date.now(),
+    });
+  };
+
+  const clearDirectMoodInput = () => {
+    setSelectedMoods((prev) => prev.filter((id) => !isCustomMoodKeyword(id)));
+  };
+
+  const clearDirectThemeInput = () => {
+    setSelectedThemes((prev) => prev.filter((id) => !isCustomThemeKeyword(id)));
   };
 
   const togglePin = (id: string, category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
@@ -4825,7 +4988,7 @@ const saveRecentSong = async (newSong: any) => {
 
       const effectiveStyleIds = Array.from(new Set(finalStyles ?? []));
       const styleLabels = getCycleVariantLabel(STYLE_CYCLES, effectiveStyleIds);
-      const themeLabels = finalThemes.map((id) => THEMES.find((item) => item.id === id)?.label || id);
+      const themeLabels = finalThemes.map(getThemeKeywordLabel);
       const soundTextureLabels = getCycleVariantLabel(SOUND_TEXTURE_CYCLES, finalInstrumentSounds);
       const hasBalladStyle = effectiveStyleIds.some((id) => ['ballad', 'classic-ballad'].includes(id));
 
@@ -4910,7 +5073,7 @@ const saveRecentSong = async (newSong: any) => {
             ? 'Free-text director note defines the main genre and style'
             : 'Pop';
         const moodStr = finalMoods.length > 0
-          ? finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id).join(', ')
+          ? finalMoods.map(getMoodKeywordLabel).join(', ')
           : hasFreeTextDirectorNote
             ? 'Mood should follow the free-text director note'
             : 'Emotional';
@@ -5032,7 +5195,7 @@ const saveRecentSong = async (newSong: any) => {
         genre: selectedGenres[0] ?? subGenre[0] ?? finalGenres[0] ?? null,
         subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
         isKpopSelected: ([...selectedGenres, ...subGenre] ?? []).includes('kpop'),
-        moods: finalMoods.map(id => MOODS.find(m => m.id === id)?.label || id),
+        moods: finalMoods.map(getMoodKeywordLabel),
         themes: themeLabels,
         ...(hasActiveSituation(situation) ? { situation } : {}),
         styles: finalStyles,
@@ -5990,6 +6153,7 @@ ${normalizePromptForDisplay(result.prompt)}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
             forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+            onModalStateChange={setIsCycleKeywordPopupOpen}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -6064,6 +6228,7 @@ ${normalizePromptForDisplay(result.prompt)}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
             forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+            onModalStateChange={setIsCycleKeywordPopupOpen}
           />
         </div>
 
@@ -6102,6 +6267,12 @@ ${normalizePromptForDisplay(result.prompt)}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
+              uniformKeywordGrid={true}
+              directInput={{
+                selectedText: selectedMoods.map((id) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX)).find(Boolean) || '',
+                onApply: applyDirectMoodInput,
+                onCancelSelected: clearDirectMoodInput,
+              }}
             />
             <CategorySection 
               title="Theme" 
@@ -6124,6 +6295,12 @@ ${normalizePromptForDisplay(result.prompt)}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}
+              uniformKeywordGrid={true}
+              directInput={{
+                selectedText: selectedThemes.map((id) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX)).find(Boolean) || '',
+                onApply: applyDirectThemeInput,
+                onCancelSelected: clearDirectThemeInput,
+              }}
             />
             <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-visible relative z-[20]">
               <div className="p-4 md:p-5 flex items-center justify-between gap-3">
@@ -6332,6 +6509,7 @@ ${normalizePromptForDisplay(result.prompt)}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
+              onModalStateChange={setIsVocalCharacterModalOpen}
             />
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
@@ -6602,8 +6780,8 @@ ${normalizePromptForDisplay(result.prompt)}
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
               {[
                 ...displayGenreKeywords,
-                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id })),
-                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id })),
+                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
+                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
                 ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
                 ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
                 ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
@@ -7605,11 +7783,7 @@ function GenreCategorySection({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
-  useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [isExpanded, groups]);
+  useStableContentHeight(contentRef, setContentHeight, [isExpanded, groups]);
 
   const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
@@ -7895,6 +8069,7 @@ interface CycleSectionProps {
   onToggleExpand?: () => void;
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
 function CycleSection({ 
@@ -7920,23 +8095,21 @@ function CycleSection({
   isExpanded = false,
   onToggleExpand,
   onHeightChange,
-  forcedHeight
+  forcedHeight,
+  onModalStateChange
 }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
-  useEffect(() => {
-    if (contentRef.current) {
-      const height = contentRef.current.scrollHeight;
-      setContentHeight(height);
-      if (onHeightChange) {
-        onHeightChange(height);
-      }
-    }
-  }, [cycles, onHeightChange]);
+  useStableContentHeight(contentRef, setContentHeight, [isExpanded, cycles, selected, pointSelected, isPointSelectionMode, forcedHeight], onHeightChange);
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
+
+  useEffect(() => {
+    onModalStateChange?.(keywordPopupCycleId !== null);
+  }, [keywordPopupCycleId, onModalStateChange]);
+
   const activeSelected = isPointSelectionMode ? pointSelected : selected;
   const otherSelected = isPointSelectionMode ? selected : pointSelected;
   const selectedDisplayItems = useMemo(() => {
@@ -8201,6 +8374,7 @@ function CycleKeywordPopup({
   const normalizeIds = useCallback((ids: string[]) => [...ids].sort().join('|'), []);
   const hasChanges = normalizeIds(localSelected) !== normalizeIds(initialSelectedRef.current) || normalizeIds(localOtherSelected) !== normalizeIds(initialOtherSelectedRef.current);
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
+  const cyclePopupBackdropPointerDownRef = useRef(false);
 
   const closePopup = useCallback(() => {
     if (window.history.state?.cycleKeywordPopup && !closeFromHistoryRef.current) {
@@ -8270,8 +8444,17 @@ function CycleKeywordPopup({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[300] bg-black/20 backdrop-blur-[1px] flex items-center justify-center p-4"
-        onClick={hasChanges ? applyChangesAndClose : closePopup}
+        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        onPointerDown={(e) => {
+          cyclePopupBackdropPointerDownRef.current = e.target === e.currentTarget;
+        }}
+        onPointerUp={(e) => {
+          if (cyclePopupBackdropPointerDownRef.current && e.target === e.currentTarget) {
+            (hasChanges ? applyChangesAndClose : closePopup)();
+          }
+          cyclePopupBackdropPointerDownRef.current = false;
+        }}
+        onPointerCancel={() => { cyclePopupBackdropPointerDownRef.current = false; }}
       >
         <motion.div
           initial={{ scale: 0.96, opacity: 0, y: 18 }}
@@ -8279,6 +8462,8 @@ function CycleKeywordPopup({
           exit={{ scale: 0.96, opacity: 0, y: 18 }}
           transition={{ duration: 0.18, ease: 'easeOut' }}
           className="w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
@@ -8419,6 +8604,12 @@ interface CategorySectionProps {
   hidePin?: boolean;
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
+  uniformKeywordGrid?: boolean;
+  directInput?: {
+    selectedText?: string;
+    onApply: (value: string) => void;
+    onCancelSelected?: () => void;
+  };
 }
 
 function CategorySection({ 
@@ -8446,21 +8637,46 @@ function CategorySection({
   isRandomized = false,
   hidePin = false,
   onHeightChange,
-  forcedHeight
+  forcedHeight,
+  uniformKeywordGrid = false,
+  directInput
 }: CategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
+  const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
+  const [directInputDraft, setDirectInputDraft] = useState('');
 
-  useEffect(() => {
-    if (contentRef.current) {
-      const height = contentRef.current.scrollHeight;
-      setContentHeight(height);
-      if (onHeightChange) {
-        onHeightChange(height);
-      }
+  useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid, forcedHeight], onHeightChange);
+
+  const resolveSelectedLabel = (id: string) => {
+    const customMoodText = getCustomKeywordText(id, CUSTOM_MOOD_PREFIX);
+    if (customMoodText) return customMoodText;
+    const customThemeText = getCustomKeywordText(id, CUSTOM_THEME_PREFIX);
+    if (customThemeText) return customThemeText;
+    const item = items.find(i => i.id === id);
+    return item?.labelKo || item?.label || id;
+  };
+
+  const openDirectInput = () => {
+    setDirectInputDraft(directInput?.selectedText || '');
+    setIsDirectInputEditing(true);
+  };
+
+  const applyDirectInput = () => {
+    const value = directInputDraft.trim();
+    if (!value) {
+      setIsDirectInputEditing(false);
+      return;
     }
-  }, [items, onHeightChange]);
+    directInput?.onApply(value);
+    setIsDirectInputEditing(false);
+  };
+
+  const cancelDirectInput = () => {
+    setDirectInputDraft(directInput?.selectedText || '');
+    setIsDirectInputEditing(false);
+  };
 
   return (
     <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
@@ -8555,7 +8771,14 @@ function CategorySection({
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="overflow-hidden min-h-[40px] md:min-h-[84px]"
         >
-          <div ref={contentRef} className="flex flex-wrap gap-2">
+          <div
+            ref={contentRef}
+            className={cn(
+              uniformKeywordGrid
+                ? "grid grid-cols-3 lg:grid-cols-7 gap-2"
+                : "flex flex-wrap gap-2"
+            )}
+          >
             {items.map((item) => {
             const isPinned = pinned.includes(item.id);
             const isSelected = selected.includes(item.id);
@@ -8570,6 +8793,13 @@ function CategorySection({
             let kpopStyle = "";
             let displayLabel = item.labelKo ?? item.label;
             let displayDescription = item.descriptionKo ?? item.description;
+
+            const labelLength = String(displayLabel ?? '').replace(/\s+/g, '').length;
+            const uniformLabelTextClass = labelLength >= 6
+              ? "text-[10px] md:text-[10.5px] leading-[1.05]"
+              : labelLength >= 4
+                ? "text-[11px] md:text-[11.5px] leading-[1.08]"
+                : "text-[12px] md:text-[12.5px] leading-tight";
 
             if (isKpop) {
               if (kpopMode === 2) {
@@ -8606,7 +8836,7 @@ function CategorySection({
             }
 
             return (
-              <div key={item.id} className="relative group/btn">
+              <div key={item.id} className={cn("relative group/btn", uniformKeywordGrid && "min-w-0")}>
                 <button
                   onMouseEnter={(event) => {
                     const tooltipItem = { 
@@ -8645,7 +8875,9 @@ function CategorySection({
                     }
                   }}
                   className={cn(
-                    "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2 shadow-btn",
+                    uniformKeywordGrid
+                      ? "w-full min-w-0 h-10 md:h-11 px-1.5 py-1 rounded-xl font-bold transition-all border flex items-center justify-center text-center shadow-btn"
+                      : "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2 shadow-btn",
                     (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
                     isPrimaryMood
                       ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
@@ -8668,7 +8900,15 @@ function CategorySection({
                       citypopMode === 1 ? "bg-white" : "bg-emerald-200"
                     )} />
                   )}
-                  {displayLabel}
+                  <span
+                    className={cn(
+                      uniformKeywordGrid
+                        ? ["block w-full whitespace-normal break-keep text-center", uniformLabelTextClass]
+                        : ""
+                    )}
+                  >
+                    {displayLabel}
+                  </span>
                 </button>
                 
 
@@ -8697,19 +8937,58 @@ function CategorySection({
       </div>
 
       <div 
-        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden"
+        className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden relative"
       >
-        {selected.length > 0 ? (
-          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
-            {selected.map(id => {
-              const item = items.find(i => i.id === id);
-              return item?.labelKo || item?.label;
-            }).join(', ')}
+        {isDirectInputEditing && directInput ? (
+          <div className="flex items-center gap-2 w-full">
+            <input
+              value={directInputDraft}
+              onChange={(event) => setDirectInputDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyDirectInput();
+                if (event.key === 'Escape') cancelDirectInput();
+              }}
+              autoFocus
+              placeholder={`${titleKo || title} 직접 입력`}
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-semibold text-brand-orange text-center placeholder:text-brand-orange/30"
+            />
+            <button
+              type="button"
+              onClick={applyDirectInput}
+              className="shrink-0 w-8 h-8 bg-transparent border-0 text-brand-orange/80 hover:text-brand-orange transition-colors flex items-center justify-center"
+              aria-label="직접입력 적용"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={cancelDirectInput}
+              className="shrink-0 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-red-400 transition-colors flex items-center justify-center"
+              aria-label="직접입력 취소"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : selected.length > 0 ? (
+          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10">
+            {selected.map(id => resolveSelectedLabel(id)).join(', ')}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
+          <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10">
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
+        )}
+        {directInput && !isDirectInputEditing && (
+          <button
+            type="button"
+            onClick={openDirectInput}
+            onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
+            onMouseLeave={() => onHover(null)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-brand-orange transition-colors flex items-center justify-center"
+            aria-label={`${titleKo || title} 직접 입력`}
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
         )}
       </div>
 
@@ -8780,6 +9059,10 @@ function SongStructureIntegratedControl({
   const [selectedInsertIndex, setSelectedInsertIndex] = useState<number | null>(null);
   const currentStructureScrollRef = useRef<HTMLDivElement | null>(null);
   const [isReorderDragging, setIsReorderDragging] = useState(false);
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+  const draggingSectionIdRef = useRef<string | null>(null);
+  const dragPointerYRef = useRef<number | null>(null);
+  const reorderFrameRef = useRef<number | null>(null);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
   const [presetName, setPresetName] = useState('');
@@ -8804,6 +9087,14 @@ function SongStructureIntegratedControl({
   const customSectionEditorBackdropMouseDownRef = useRef(false);
   const [sectionLibraryFilter, setSectionLibraryFilter] = useState<'all' | 'basic' | 'my'>('all');
   const [isCustomSectionConverting, setIsCustomSectionConverting] = useState(false);
+  const [clearedStructureTagSnapshot, setClearedStructureTagSnapshot] = useState<{ id: string; tags: string[] }[] | null>(null);
+  const customBackupLoadedRef = useRef(false);
+  const customBackupLoadingRef = useRef(false);
+  const customBackupDirtyRef = useRef(false);
+  const customBackupSavingRef = useRef(false);
+  const savedStructuresRef = useRef<SavedStructurePreset[]>([]);
+  const userCustomSectionsRef = useRef<UserCustomSectionDefinition[]>([]);
+  const userCustomSectionTagsRef = useRef<UserCustomSectionTagDefinition[]>([]);
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
@@ -8811,84 +9102,264 @@ function SongStructureIntegratedControl({
     onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen);
   }, [isCustomModalOpen, editingSectionIndex, isCustomSectionEditorOpen, isSaveStructureModalOpen, isSavedSectionsModalOpen, onModalStateChange]);
 
-  useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [lyricsLength, songStructure, customStructure]);
+  useStableContentHeight(contentRef, setContentHeight, [lyricsLength, songStructure, customStructure]);
 
-  useEffect(() => {
-    if (!isReorderDragging) return;
+  const moveDraftSectionById = useCallback((dragId: string, targetIndex: number) => {
+    setDraftStructure((prev) => {
+      const currentItems = prev ?? [];
+      const fromIndex = currentItems.findIndex((item) => item.id === dragId);
+      if (fromIndex < 0 || currentItems.length <= 1) return currentItems;
+      const safeTargetIndex = Math.max(0, Math.min(targetIndex, currentItems.length - 1));
+      if (fromIndex === safeTargetIndex) return currentItems;
+      const nextItems = [...currentItems];
+      const [movedItem] = nextItems.splice(fromIndex, 1);
+      nextItems.splice(safeTargetIndex, 0, movedItem);
+      return nextItems;
+    });
+    setSelectedInsertIndex(null);
+  }, []);
+
+  const processManualReorderDrag = useCallback(() => {
+    const dragId = draggingSectionIdRef.current;
+    const pointerY = dragPointerYRef.current;
     const container = currentStructureScrollRef.current;
-    if (!container) return;
+    if (!dragId || pointerY == null || !container) return;
 
-    const handlePointerMove = (event: PointerEvent) => {
-      const rect = container.getBoundingClientRect();
-      const threshold = 72;
-      const maxSpeed = 18;
-      let delta = 0;
+    const containerRect = container.getBoundingClientRect();
+    const edgeSize = 74;
+    const maxScrollStep = 18;
+    let scrollStep = 0;
 
-      if (event.clientY < rect.top + threshold) {
-        delta = -Math.min(maxSpeed, Math.ceil((rect.top + threshold - event.clientY) / 4));
-      } else if (event.clientY > rect.bottom - threshold) {
-        delta = Math.min(maxSpeed, Math.ceil((event.clientY - (rect.bottom - threshold)) / 4));
+    if (pointerY < containerRect.top + edgeSize) {
+      const ratio = (containerRect.top + edgeSize - pointerY) / edgeSize;
+      scrollStep = -Math.ceil(Math.min(maxScrollStep, Math.max(4, ratio * maxScrollStep)));
+    } else if (pointerY > containerRect.bottom - edgeSize) {
+      const ratio = (pointerY - (containerRect.bottom - edgeSize)) / edgeSize;
+      scrollStep = Math.ceil(Math.min(maxScrollStep, Math.max(4, ratio * maxScrollStep)));
+    }
+
+    if (scrollStep !== 0) {
+      container.scrollTop += scrollStep;
+    }
+
+    const sectionNodes = Array.from(container.querySelectorAll<HTMLElement>('[data-reorder-section-id]'));
+    if (sectionNodes.length <= 1) return;
+
+    let targetIndex = sectionNodes.length - 1;
+    for (let i = 0; i < sectionNodes.length; i += 1) {
+      const rect = sectionNodes[i].getBoundingClientRect();
+      if (pointerY < rect.top + rect.height / 2) {
+        targetIndex = i;
+        break;
       }
+    }
 
-      if (delta !== 0) {
-        container.scrollTop += delta;
+    moveDraftSectionById(dragId, targetIndex);
+  }, [moveDraftSectionById]);
+
+  const stopManualReorderDrag = useCallback(() => {
+    if (reorderFrameRef.current !== null) {
+      cancelAnimationFrame(reorderFrameRef.current);
+      reorderFrameRef.current = null;
+    }
+    draggingSectionIdRef.current = null;
+    dragPointerYRef.current = null;
+    setDraggingSectionId(null);
+    setIsReorderDragging(false);
+  }, []);
+
+  const startManualReorderLoop = useCallback(() => {
+    if (reorderFrameRef.current !== null) return;
+    const tick = () => {
+      if (!draggingSectionIdRef.current) {
+        reorderFrameRef.current = null;
+        return;
       }
+      processManualReorderDrag();
+      reorderFrameRef.current = requestAnimationFrame(tick);
+    };
+    reorderFrameRef.current = requestAnimationFrame(tick);
+  }, [processManualReorderDrag]);
+
+  const handleSectionReorderPointerDown = useCallback((index: number, event: React.PointerEvent<HTMLButtonElement>) => {
+    const targetItem = (draftStructure ?? [])[index];
+    if (!targetItem) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    draggingSectionIdRef.current = targetItem.id;
+    dragPointerYRef.current = event.clientY;
+    setDraggingSectionId(targetItem.id);
+    setIsReorderDragging(true);
+    setSelectedInsertIndex(null);
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is best-effort only.
+    }
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      dragPointerYRef.current = moveEvent.clientY;
     };
 
-    const stopDragging = () => setIsReorderDragging(false);
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('pointerup', stopDragging);
-    window.addEventListener('pointercancel', stopDragging);
-    return () => {
+    const handlePointerUp = () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', stopDragging);
-      window.removeEventListener('pointercancel', stopDragging);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('blur', handlePointerUp);
+      stopManualReorderDrag();
     };
-  }, [isReorderDragging]);
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    window.addEventListener('pointercancel', handlePointerUp, { once: true });
+    window.addEventListener('blur', handlePointerUp, { once: true });
+
+    startManualReorderLoop();
+  }, [draftStructure, startManualReorderLoop, stopManualReorderDrag]);
+
+  useEffect(() => {
+    return () => {
+      if (reorderFrameRef.current !== null) {
+        cancelAnimationFrame(reorderFrameRef.current);
+      }
+    };
+  }, []);
 
 
   useEffect(() => {
-    setUserCustomSections(normalizeUserCustomSections(safeReadJsonArray<UserCustomSectionDefinition>(USER_CUSTOM_SECTIONS_STORAGE_KEY)));
-    setUserCustomSectionTags(normalizeUserCustomSectionTags(safeReadJsonArray<UserCustomSectionTagDefinition>(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY)));
+    const localSections = normalizeUserCustomSections(safeReadJsonArray<UserCustomSectionDefinition>(USER_CUSTOM_SECTIONS_STORAGE_KEY));
+    const localTags = normalizeUserCustomSectionTags(safeReadJsonArray<UserCustomSectionTagDefinition>(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY));
+    setUserCustomSections(localSections);
+    setUserCustomSectionTags(localTags);
+    userCustomSectionsRef.current = localSections;
+    userCustomSectionTagsRef.current = localTags;
+  }, []);
+
+  useEffect(() => {
+    savedStructuresRef.current = savedStructures;
+  }, [savedStructures]);
+
+  useEffect(() => {
+    userCustomSectionsRef.current = userCustomSections;
+  }, [userCustomSections]);
+
+  useEffect(() => {
+    userCustomSectionTagsRef.current = userCustomSectionTags;
+  }, [userCustomSectionTags]);
+
+  const markCustomBackupDirty = useCallback(() => {
+    customBackupDirtyRef.current = true;
   }, []);
 
   const persistUserCustomSections = useCallback((next: UserCustomSectionDefinition[]) => {
     const normalized = normalizeUserCustomSections(next).slice(0, 40);
     setUserCustomSections(normalized);
+    userCustomSectionsRef.current = normalized;
     writeJsonArray(USER_CUSTOM_SECTIONS_STORAGE_KEY, normalized);
-
-    if (user) {
-      setDoc(getUserStructureDocRef(user.uid), sanitizeForFirestore({
-        customSections: normalized,
-        customSectionTags: userCustomSectionTags,
-        customDataSyncVersion: USER_CUSTOM_DATA_SYNC_VERSION,
-        customDataUpdatedAt: Date.now(),
-      }), { merge: true }).catch((error) => {
-        console.error('Failed to sync custom sections to Firestore:', error);
-      });
-    }
-  }, [user, userCustomSectionTags]);
+    markCustomBackupDirty();
+  }, [markCustomBackupDirty]);
 
   const persistUserCustomSectionTags = useCallback((next: UserCustomSectionTagDefinition[]) => {
     const normalized = normalizeUserCustomSectionTags(next).slice(0, 120);
     setUserCustomSectionTags(normalized);
+    userCustomSectionTagsRef.current = normalized;
     writeJsonArray(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY, normalized);
+    markCustomBackupDirty();
+  }, [markCustomBackupDirty]);
 
-    if (user) {
-      setDoc(getUserStructureDocRef(user.uid), sanitizeForFirestore({
-        customSections: userCustomSections,
-        customSectionTags: normalized,
-        customDataSyncVersion: USER_CUSTOM_DATA_SYNC_VERSION,
-        customDataUpdatedAt: Date.now(),
-      }), { merge: true }).catch((error) => {
-        console.error('Failed to sync custom section tags to Firestore:', error);
-      });
+  const flushCustomBackupIfDirty = useCallback(async () => {
+    if (!user || !customBackupDirtyRef.current || customBackupSavingRef.current) return;
+
+    customBackupDirtyRef.current = false;
+    customBackupSavingRef.current = true;
+
+    const payload = {
+      structures: savedStructuresRef.current
+        .map((item) => normalizeSavedStructurePreset(item))
+        .filter((item): item is SavedStructurePreset => item !== null)
+        .slice(0, 20),
+      customSections: normalizeUserCustomSections(userCustomSectionsRef.current).slice(0, 40),
+      customSectionTags: normalizeUserCustomSectionTags(userCustomSectionTagsRef.current).slice(0, 120),
+      customDataSyncVersion: 2,
+      customDataUpdatedAt: Date.now(),
+    };
+
+    try {
+      const ref = doc(db, 'user_structures', user.uid);
+      await setDoc(ref, sanitizeForFirestore(payload), { merge: true });
+    } catch (error) {
+      customBackupDirtyRef.current = true;
+      console.error('Failed to save custom backup to Firestore:', error);
+    } finally {
+      customBackupSavingRef.current = false;
     }
-  }, [user, userCustomSections]);
+  }, [user]);
+
+  const ensureCustomBackupLoaded = useCallback(async () => {
+    if (!user || customBackupLoadedRef.current || customBackupLoadingRef.current) return;
+
+    customBackupLoadingRef.current = true;
+    const storageKey = getSavedStructuresStorageKey(user.uid);
+
+    try {
+      const ref = doc(db, 'user_structures', user.uid);
+      const snap = await getDoc(ref);
+      const localStructures = safeReadJsonArray<SavedStructurePreset>(storageKey)
+        .map((item) => normalizeSavedStructurePreset(item))
+        .filter((item): item is SavedStructurePreset => item !== null);
+      const localSections = normalizeUserCustomSections(safeReadJsonArray<UserCustomSectionDefinition>(USER_CUSTOM_SECTIONS_STORAGE_KEY));
+      const localTags = normalizeUserCustomSectionTags(safeReadJsonArray<UserCustomSectionTagDefinition>(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY));
+
+      if (!snap.exists()) {
+        if (localStructures.length > 0 || localSections.length > 0 || localTags.length > 0) {
+          customBackupDirtyRef.current = true;
+        }
+        return;
+      }
+
+      const data = snap.data();
+      const hasStructures = Object.prototype.hasOwnProperty.call(data, 'structures') || Object.prototype.hasOwnProperty.call(data, 'savedStructures') || Object.prototype.hasOwnProperty.call(data, 'presets');
+      const hasCustomSections = Object.prototype.hasOwnProperty.call(data, 'customSections');
+      const hasCustomTags = Object.prototype.hasOwnProperty.call(data, 'customSectionTags');
+
+      if (hasStructures) {
+        const normalizedStructures = readSavedStructurePresets(data);
+        setSavedStructures(normalizedStructures);
+        savedStructuresRef.current = normalizedStructures;
+        writeJsonArray(storageKey, normalizedStructures);
+      } else if (localStructures.length > 0) {
+        customBackupDirtyRef.current = true;
+      }
+
+      if (hasCustomSections) {
+        const normalizedSections = normalizeUserCustomSections(data.customSections);
+        setUserCustomSections(normalizedSections);
+        userCustomSectionsRef.current = normalizedSections;
+        writeJsonArray(USER_CUSTOM_SECTIONS_STORAGE_KEY, normalizedSections);
+      } else if (localSections.length > 0) {
+        customBackupDirtyRef.current = true;
+      }
+
+      if (hasCustomTags) {
+        const normalizedTags = normalizeUserCustomSectionTags(data.customSectionTags);
+        setUserCustomSectionTags(normalizedTags);
+        userCustomSectionTagsRef.current = normalizedTags;
+        writeJsonArray(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY, normalizedTags);
+      } else if (localTags.length > 0) {
+        customBackupDirtyRef.current = true;
+      }
+    } catch (error) {
+      console.error('Failed to load custom backup from Firestore:', error);
+    } finally {
+      customBackupLoadedRef.current = true;
+      customBackupLoadingRef.current = false;
+    }
+  }, [user]);
+
 
   const customSectionMap = useMemo(() => new Map(userCustomSections.map((item) => [item.label, item])), [userCustomSections]);
   const allStructureSections = useMemo(() => {
@@ -8901,10 +9372,10 @@ function SongStructureIntegratedControl({
     return [...builtIns, ...customItems];
   }, [userCustomSections, sectionLibraryFilter]);
 
-  const resetCustomSectionDraft = () => {
+  const resetCustomSectionDraft = useCallback(() => {
     setEditingCustomSectionId(null);
     setCustomSectionDraft({ labelKo: '', labelEn: '' });
-  };
+  }, []);
 
   const closeCustomSectionEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && customSectionEditorHistoryPushedRef.current) {
@@ -8914,9 +9385,9 @@ function SongStructureIntegratedControl({
     setIsCustomSectionEditorOpen(false);
     customSectionEditorHistoryPushedRef.current = false;
     resetCustomSectionDraft();
-  }, []);
+  }, [resetCustomSectionDraft]);
 
-  const openCustomSectionEditor = (section?: UserCustomSectionDefinition) => {
+  const openCustomSectionEditor = useCallback((section?: UserCustomSectionDefinition) => {
     if (section) {
       setEditingCustomSectionId(section.id);
       setCustomSectionDraft({
@@ -8931,7 +9402,7 @@ function SongStructureIntegratedControl({
       window.history.pushState({ modal: 'custom-section-editor' }, '');
       customSectionEditorHistoryPushedRef.current = true;
     }
-  };
+  }, [resetCustomSectionDraft]);
 
   const saveCustomSectionDefinition = async () => {
     const rawKo = sanitizeCustomLabel(customSectionDraft.labelKo);
@@ -8981,12 +9452,14 @@ function SongStructureIntegratedControl({
       setIsCustomSectionConverting(false);
     }
   };
-  const deleteCustomSectionDefinition = (id: string) => {
+
+  const deleteCustomSectionDefinition = useCallback((id: string) => {
     const target = userCustomSections.find((item) => item.id === id);
     if (!target) return;
     persistUserCustomSections(userCustomSections.filter((item) => item.id !== id));
     persistUserCustomSectionTags(userCustomSectionTags.filter((item) => item.section !== target.label));
-  };
+  }, [persistUserCustomSections, persistUserCustomSectionTags, userCustomSectionTags, userCustomSections]);
+
 
   const lyricsOptions = [
     { id: 'very-short', label: 'Very Short', labelKo: '더짧게', description: '매우 간결하고 함축적인 가사 (트로트)' },
@@ -8997,93 +9470,39 @@ function SongStructureIntegratedControl({
 
 
   useEffect(() => {
+    customBackupLoadedRef.current = false;
+    customBackupLoadingRef.current = false;
+    customBackupDirtyRef.current = false;
+    customBackupSavingRef.current = false;
+
     if (!user) {
-      setSavedStructures([]);
-      setUserCustomSections(normalizeUserCustomSections(safeReadJsonArray<UserCustomSectionDefinition>(USER_CUSTOM_SECTIONS_STORAGE_KEY)));
-      setUserCustomSectionTags(normalizeUserCustomSectionTags(safeReadJsonArray<UserCustomSectionTagDefinition>(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY)));
+      const localGuestStructures = safeReadJsonArray<SavedStructurePreset>(getSavedStructuresStorageKey(null))
+        .map((item) => normalizeSavedStructurePreset(item))
+        .filter((item): item is SavedStructurePreset => item !== null);
+      setSavedStructures(localGuestStructures);
+      savedStructuresRef.current = localGuestStructures;
       return;
     }
 
-    const uploadLocalCustomDataIfNeeded = async (ref: ReturnType<typeof doc>, data: any = {}) => {
-      const hasServerSections = Array.isArray(data?.customSections);
-      const hasServerTags = Array.isArray(data?.customSectionTags);
-      if (hasServerSections && hasServerTags) return;
-
-      const localSections = normalizeUserCustomSections(
-        safeReadJsonArray<UserCustomSectionDefinition>(USER_CUSTOM_SECTIONS_STORAGE_KEY)
-      ).slice(0, 40);
-      const localTags = normalizeUserCustomSectionTags(
-        safeReadJsonArray<UserCustomSectionTagDefinition>(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY)
-      ).slice(0, 120);
-
-      if (localSections.length === 0 && localTags.length === 0) return;
-
-      setUserCustomSections(localSections);
-      setUserCustomSectionTags(localTags);
-
-      try {
-        await setDoc(ref, sanitizeForFirestore({
-          customSections: localSections,
-          customSectionTags: localTags,
-          customDataSyncVersion: USER_CUSTOM_DATA_SYNC_VERSION,
-          customDataUpdatedAt: Date.now(),
-        }), { merge: true });
-      } catch (error) {
-        console.error('Failed to upload local custom structure data:', error);
-      }
-    };
-
-    const loadStructures = () => {
-      try {
-        const ref = getUserStructureDocRef(user.uid);
-        return onSnapshot(ref, (snap) => {
-          if (!snap.exists()) {
-            setSavedStructures([]);
-            uploadLocalCustomDataIfNeeded(ref);
-            return;
-          }
-
-          const data = snap.data();
-          const normalized = readSavedStructurePresets(data);
-          setSavedStructures(normalized);
-
-          if (Array.isArray(data.customSections)) {
-            const normalizedSections = normalizeUserCustomSections(data.customSections).slice(0, 40);
-            setUserCustomSections(normalizedSections);
-            writeJsonArray(USER_CUSTOM_SECTIONS_STORAGE_KEY, normalizedSections);
-          }
-
-          if (Array.isArray(data.customSectionTags)) {
-            const normalizedTags = normalizeUserCustomSectionTags(data.customSectionTags).slice(0, 120);
-            setUserCustomSectionTags(normalizedTags);
-            writeJsonArray(USER_CUSTOM_SECTION_TAGS_STORAGE_KEY, normalizedTags);
-          }
-
-          uploadLocalCustomDataIfNeeded(ref, data);
-        }, (error) => {
-          console.error('Failed to sync saved song structures:', error);
-          setSavedStructures([]);
-        });
-      } catch (error) {
-        console.error('Failed to set up song structures listener:', error);
-        setSavedStructures([]);
-      }
-    };
-
-    const unsubscribe = loadStructures();
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    const storageKey = getSavedStructuresStorageKey(user.uid);
+    const localBackup = safeReadJsonArray<SavedStructurePreset>(storageKey)
+      .map((item) => normalizeSavedStructurePreset(item))
+      .filter((item): item is SavedStructurePreset => item !== null);
+    setSavedStructures(localBackup);
+    savedStructuresRef.current = localBackup;
   }, [user]);
+
 
   const closeCustomModal = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && customModalHistoryPushedRef.current) {
+      void flushCustomBackupIfDirty();
       window.history.back();
       return;
     }
+    void flushCustomBackupIfDirty();
     setIsCustomModalOpen(false);
     customModalHistoryPushedRef.current = false;
-  }, []);
+  }, [flushCustomBackupIfDirty]);
 
   const resetDraftStructure = useCallback(() => {
     setDraftStructure([]);
@@ -9092,6 +9511,7 @@ function SongStructureIntegratedControl({
     setStructureSearch('');
     setStructureFilter('all');
     setDeleteConfirmPresetId(null);
+    setClearedStructureTagSnapshot(null);
   }, []);
 
   const closeSaveStructureModal = useCallback((source: 'ui' | 'history' = 'ui') => {
@@ -9137,6 +9557,7 @@ function SongStructureIntegratedControl({
 
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (isDocumentFullscreenActive()) return;
         if (isSavedSectionsModalOpen) {
           closeSavedSectionsModal();
         } else if (isSaveStructureModalOpen) {
@@ -9171,7 +9592,10 @@ function SongStructureIntegratedControl({
   useEffect(() => {
     if (!isCustomSectionEditorOpen) return;
     const handleKeydown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeCustomSectionEditor();
+      if (e.key === 'Escape') {
+        if (isDocumentFullscreenActive()) return;
+        closeCustomSectionEditor();
+      }
     };
     const handlePopState = () => {
       closeCustomSectionEditor('history');
@@ -9187,7 +9611,10 @@ function SongStructureIntegratedControl({
   useEffect(() => {
     if (!isSaveStructureModalOpen) return;
     const handleKeydown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeSaveStructureModal();
+      if (e.key === 'Escape') {
+        if (isDocumentFullscreenActive()) return;
+        closeSaveStructureModal();
+      }
     };
     const handlePopState = () => {
       closeSaveStructureModal('history');
@@ -9204,7 +9631,10 @@ function SongStructureIntegratedControl({
   useEffect(() => {
     if (!isSavedSectionsModalOpen) return;
     const handleKeydown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeSavedSectionsModal();
+      if (e.key === 'Escape') {
+        if (isDocumentFullscreenActive()) return;
+        closeSavedSectionsModal();
+      }
     };
     const handlePopState = () => {
       closeSavedSectionsModal('history');
@@ -9218,65 +9648,85 @@ function SongStructureIntegratedControl({
   }, [isSavedSectionsModalOpen, closeSavedSectionsModal]);
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!isCustomModalOpen && !isSavedSectionsModalOpen && !isSaveStructureModalOpen && editingSectionIndex === null && !isCustomSectionEditorOpen) return;
-      // Fullscreen mode can disrupt the stacked history entries on some mobile/desktop browsers.
-      // Close custom-structure overlays directly so X, ESC, and Back remain responsive after fullscreen changes.
-      setIsSavedSectionsModalOpen(false);
-      savedSectionsModalHistoryPushedRef.current = false;
-      setIsSaveStructureModalOpen(false);
-      saveStructureModalHistoryPushedRef.current = false;
-      setIsCustomSectionEditorOpen(false);
-      customSectionEditorHistoryPushedRef.current = false;
-      setEditingSectionIndex(null);
-      setIsCustomModalOpen(false);
-      customModalHistoryPushedRef.current = false;
+    const resetTransientPointerState = () => {
+      customSectionEditorBackdropMouseDownRef.current = false;
+      customModalBackdropMouseDownRef.current = false;
+      saveStructureModalBackdropMouseDownRef.current = false;
+      savedSectionsModalBackdropMouseDownRef.current = false;
+      stopManualReorderDrag();
     };
+
+    const handleFullscreenChange = () => {
+      // Studio/browser fullscreen toggles can interrupt pointer capture and leave a stale
+      // mouse-down flag behind. Do not close the custom modal here; only clear transient
+      // drag/click guards so the parent Studio UI keeps receiving mouse/keyboard input.
+      resetTransientPointerState();
+    };
+
+    const handleWindowBlur = () => {
+      resetTransientPointerState();
+    };
+
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('pointerup', resetTransientPointerState);
+    window.addEventListener('pointercancel', resetTransientPointerState);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('pointerup', resetTransientPointerState);
+      window.removeEventListener('pointercancel', resetTransientPointerState);
     };
-  }, [isCustomModalOpen, isSavedSectionsModalOpen, isSaveStructureModalOpen, editingSectionIndex, isCustomSectionEditorOpen]);
+  }, [stopManualReorderDrag]);
 
-  const persistSavedStructures = async (next: SavedStructurePreset[]) => {
-    if (!user) return;
+  const persistSavedStructures = (next: SavedStructurePreset[]) => {
+    const sanitized = next
+      .map((item) => normalizeSavedStructurePreset(item))
+      .filter((item): item is SavedStructurePreset => item !== null)
+      .slice(0, 20);
 
-    try {
-      const ref = getUserStructureDocRef(user.uid);
-      const sanitized = next
-        .map((item) => normalizeSavedStructurePreset(item))
-        .filter((item): item is SavedStructurePreset => item !== null)
-        .slice(0, 20);
-
-      await setDoc(ref, sanitizeForFirestore({ structures: sanitized }), { merge: true });
-    } catch (error) {
-      console.error('Failed to save song structures to Firestore:', error);
-    }
+    setSavedStructures(sanitized);
+    savedStructuresRef.current = sanitized;
+    writeJsonArray(getSavedStructuresStorageKey(user?.uid), sanitized);
+    markCustomBackupDirty();
   };
 
+
   const openCustomModal = () => {
+    void ensureCustomBackupLoaded();
     setDraftStructure(normalizeCustomStructure(customStructure));
     setSelectedInsertIndex(null);
     setPresetName('');
     setEditingSavedStructureId(null);
+    setClearedStructureTagSnapshot(null);
     setIsCustomModalOpen(true);
     window.history.pushState({ modal: 'custom-structure' }, '');
     customModalHistoryPushedRef.current = true;
   };
 
   const vocalLabelMapForStructure = useMemo(() => Object.fromEntries(vocalSectionTags.map((item) => [item.tag, item.displayLabel] as const)), [vocalSectionTags]);
+  const currentVocalActualLabelsForStructure = useMemo(() => vocalSectionTags
+    .map((item) => {
+      const raw = String(item.tag || '').trim();
+      if (!raw.startsWith('VOCAL::')) return '';
+      return (raw.split('::')[1] || '').replace(/\s{2,}/g, ' ').trim();
+    })
+    .filter(Boolean), [vocalSectionTags]);
   const customTagLabelMapForStructure = useMemo(() => Object.fromEntries(userCustomSectionTags.map((item) => [item.label, item.labelKo || item.label] as const)), [userCustomSectionTags]);
   const parseVocalTagFallbackForStructure = useCallback((tag: string) => {
     const raw = String(tag || '').trim();
     if (raw.startsWith('VOCAL_ALL::')) return '전체보컬';
     if (raw.startsWith('VOCAL::')) {
       const parts = raw.split('::');
-      return (parts[1] || 'Vocal').replace(/\s{2,}/g, ' ').trim();
+      const label = (parts[1] || 'Vocal').replace(/\s{2,}/g, ' ').trim();
+      const noGender = label.replace(/\b(?:Male|Female)\s+/gi, '').replace(/\s{2,}/g, ' ').trim().toLowerCase();
+      const liveGenderedLabel = currentVocalActualLabelsForStructure.find((item) => item.replace(/\b(?:Male|Female)\s+/gi, '').replace(/\s{2,}/g, ' ').trim().toLowerCase() === noGender);
+      return liveGenderedLabel || label;
     }
     return '';
-  }, []);
+  }, [currentVocalActualLabelsForStructure]);
   const getStructureTagDisplay = useCallback((tag: string) => {
     const raw = String(tag || '').trim();
     return vocalLabelMapForStructure[raw] || parseVocalTagFallbackForStructure(raw) || customTagLabelMapForStructure[raw] || pointSoundTagLabels[raw] || raw;
@@ -9302,37 +9752,35 @@ function SongStructureIntegratedControl({
 
 
   const structureOptions = [
-    { id: '1', label: '기본', description: '감정선과 스토리에 맞춰 곡 구조를 자유롭게 구성합니다.' },
-    { id: '2', label: '1', description: '일반적인 기본 구조. 추천 2~4분' },
-    { id: '3', label: '2', description: '브릿지와 반복이 확장된 구조. 추천 4~6분' },
-    { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
+    { id: '1', label: '기본', description: '감정선과 스토리에 맞춰 섹션을 자유롭게 구성합니다.' },
+    { id: '2', label: '1', description: '일반적인 기본 섹션 구성. 추천 2~4분' },
+    { id: '3', label: '2', description: '브릿지와 반복이 확장된 섹션 구성. 추천 4~6분' },
+    { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
   ] as const;
 
   const handleSelectStructure = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
       '1': '짧고 간결한 구조 · 추천 길이 1~2분',
-      '2': '가장 일반적인 기본 구조 · 추천 길이 2~4분',
-      '3': '브릿지와 반복이 확장된 구조 · 추천 길이 4~6분',
-      'custom': (customStructure ?? []).length > 0 ? `직접 지정한 구조 적용 · ${formatStructureText(customStructure)}` : '직접 구조를 지정하는 모드 · Pro부터 사용할 수 있습니다.',
+      '2': '가장 일반적인 기본 섹션 구성 · 추천 길이 2~4분',
+      '3': '브릿지와 반복이 확장된 섹션 구성 · 추천 길이 4~6분',
+      'custom': (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · Pro부터 사용할 수 있습니다.',
     };
 
     if (optionId === 'custom' && userTier === 'free') {
       onHover({
         id: 'song-structure-custom-locked',
-        label: '구조 커스텀',
-        description: '커스텀 구조는 Pro부터 사용할 수 있습니다.',
+        label: '섹션 커스텀',
+        description: '섹션 커스텀은 Pro부터 사용할 수 있습니다.',
         _ts: Date.now(),
       });
-      alert('커스텀 구조는 Pro부터 사용할 수 있습니다.');
+      alert('섹션 커스텀은 Pro부터 사용할 수 있습니다.');
       return;
     }
-
-    onSongStructureChange(optionId);
 
     if (optionId === 'custom') {
       onHover({
         id: 'song-structure-custom',
-        label: '구조 커스텀',
+        label: '섹션 커스텀',
         description: optionDescriptions.custom,
         _ts: Date.now(),
       });
@@ -9340,9 +9788,11 @@ function SongStructureIntegratedControl({
       return;
     }
 
+    onSongStructureChange(optionId);
+
     onHover({
       id: `song-structure-${optionId}`,
-      label: `구조 ${optionId}`,
+      label: `섹션 ${optionId}`,
       description: optionDescriptions[optionId],
       _ts: Date.now(),
     });
@@ -9375,14 +9825,41 @@ function SongStructureIntegratedControl({
     });
   };
 
+  const hasDraftStructureTags = useMemo(() => (draftStructure ?? []).some((item) => (item.tags ?? []).length > 0), [draftStructure]);
+  const canToggleDraftStructureTags = hasDraftStructureTags || Boolean(clearedStructureTagSnapshot?.length);
+  const isDraftStructureTagsCleared = !hasDraftStructureTags && Boolean(clearedStructureTagSnapshot?.length);
+
+  const toggleClearDraftStructureTags = useCallback(() => {
+    if (isDraftStructureTagsCleared && clearedStructureTagSnapshot?.length) {
+      const snapshotById = new Map(clearedStructureTagSnapshot.map((item) => [item.id, item.tags] as const));
+      setDraftStructure((prev) => (prev ?? []).map((item) => ({
+        ...item,
+        tags: snapshotById.get(item.id) ?? item.tags ?? []
+      })));
+      setClearedStructureTagSnapshot(null);
+      return;
+    }
+
+    if (!hasDraftStructureTags) return;
+
+    const snapshot = (draftStructure ?? [])
+      .filter((item) => (item.tags ?? []).length > 0)
+      .map((item) => ({ id: item.id, tags: [...(item.tags ?? [])] }));
+
+    setClearedStructureTagSnapshot(snapshot);
+    setDraftStructure((prev) => (prev ?? []).map((item) => ({ ...item, tags: [] })));
+    setSelectedInsertIndex(null);
+  }, [clearedStructureTagSnapshot, draftStructure, hasDraftStructureTags, isDraftStructureTagsCleared]);
+
   const handleApplyCustomStructure = () => {
     if ((draftStructure ?? []).length === 0) return;
     onCustomStructureChange(draftStructure);
     onSongStructureChange('custom');
+    setClearedStructureTagSnapshot(null);
     closeCustomModal();
     onHover({
       id: 'song-structure-custom-applied',
-      label: '커스텀 구조 적용',
+      label: '커스텀 섹션 적용',
       description: formatStructureText(draftStructure),
       _ts: Date.now(),
     });
@@ -9420,8 +9897,14 @@ function SongStructureIntegratedControl({
   };
 
   const handleLoadPreset = (preset: SavedStructurePreset) => {
-    setDraftStructure(normalizeCustomStructure(preset.sections));
+    const loadedSections = normalizeCustomStructure(preset.sections).map((item, index) => ({
+      ...item,
+      id: item.id || `${preset.id}-${index}-${Date.now()}`,
+      tags: Array.isArray(item.tags) ? [...item.tags] : [],
+    }));
+    setDraftStructure(loadedSections);
     setSelectedInsertIndex(null);
+    setClearedStructureTagSnapshot(null);
     setPresetName(preset.name);
     setEditingSavedStructureId(preset.id);
     setDeleteConfirmPresetId(null);
@@ -9506,7 +9989,7 @@ function SongStructureIntegratedControl({
               type="text"
               value={structureSearch}
               onChange={(e) => setStructureSearch(e.target.value)}
-              placeholder="구조 이름 또는 내용 검색..."
+              placeholder="섹션 이름 또는 내용 검색..."
               className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40 shadow-inner"
             />
             {structureSearch && (
@@ -9670,12 +10153,12 @@ function SongStructureIntegratedControl({
             className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
           >
             <span className="w-1.5 h-5 bg-brand-orange rounded-full" />
-            곡 구조
+            섹션
           </h3>
           <div className="flex items-center gap-2">
             <button
               onClick={onClear}
-              onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '곡 구조 설정을 초기화합니다.' })}
+              onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '섹션 설정을 초기화합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2 rounded-lg transition-all border shadow-btn",
@@ -9744,9 +10227,9 @@ function SongStructureIntegratedControl({
                 <div className="w-1/2 h-[1px] bg-btn-border/50" />
               </div>
 
-              {/* 3. 섹션 구조 */}
+              {/* 3. 섹션 */}
               <div className="space-y-2">
-                <p className="text-[13px] font-bold text-brand-orange uppercase tracking-wider">│섹션 구조</p>
+                <p className="text-[13px] font-bold text-brand-orange uppercase tracking-wider">│섹션</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -9754,12 +10237,12 @@ function SongStructureIntegratedControl({
                       <button
                         key={opt.id}
                         onClick={() => handleSelectStructure(opt.id as SongStructure)}
-                        onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: isCustomLocked ? '커스텀 구조는 Pro부터 사용할 수 있습니다.' : opt.description })}
+                        onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onMouseLeave={() => {
                           onHover(null);
                           onLongPressEnd();
                         }}
-                        onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `구조 ${opt.label}`, description: isCustomLocked ? '커스텀 구조는 Pro부터 사용할 수 있습니다.' : opt.description })}
+                        onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
                           "py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
@@ -9780,14 +10263,14 @@ function SongStructureIntegratedControl({
                 {/* Structure Guide - Always Visible */}
                 <div className="mt-2 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3 bg-brand-orange/5">
                   <p className="text-[10px] font-bold text-brand-orange mb-1 uppercase tracking-tight">
-                    {songStructure === 'custom' ? '현재 커스텀 구조' : songStructure === '1' ? '기본 구조 상세 가이드' : `구조 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
+                    {songStructure === 'custom' ? '현재 커스텀 섹션' : songStructure === '1' ? '기본 섹션 상세 가이드' : `섹션 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
                     {songStructure === '1' && "감정선과 스토리에 맞춰 자유롭게 구성합니다. 고정된 번호형 벌스 구조를 강제하지 않고, 필요한 곳에 Hook, Rap Section, Drop, Bridge 등을 배치합니다."}
                     {songStructure === '2' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
                     {songStructure === '3' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (
-                      (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '직접 구조를 지정하는 모드입니다.'
+                      (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '직접 섹션을 지정하는 모드입니다.'
                     )}
                   </p>
                 </div>
@@ -9824,7 +10307,7 @@ function SongStructureIntegratedControl({
               <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
                 <div>
                   <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">섹션 커스텀</h3>
-                  <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 곡 구조를 만드세요.</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 섹션 구성을 만드세요.</p>
                 </div>
                 <button
                   onClick={() => closeCustomModal()}
@@ -10016,6 +10499,29 @@ function SongStructureIntegratedControl({
                         <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">현재 구조</p>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
+                            onClick={toggleClearDraftStructureTags}
+                            disabled={!canToggleDraftStructureTags}
+                            title={isDraftStructureTagsCleared ? '태그 되돌리기' : '적용된 태그 전체삭제'}
+                            aria-label={isDraftStructureTagsCleared ? '태그 되돌리기' : '적용된 태그 전체삭제'}
+                            className={cn(
+                              "relative w-9 h-9 rounded-xl border transition-all shadow-btn flex items-center justify-center",
+                              canToggleDraftStructureTags
+                                ? isDraftStructureTagsCleared
+                                  ? "bg-brand-orange/10 border-brand-orange/45 text-brand-orange hover:bg-brand-orange/15"
+                                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-red-300 hover:border-red-500/45 hover:bg-red-500/10"
+                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/35 cursor-not-allowed"
+                            )}
+                          >
+                            <Tag className="w-4 h-4" />
+                            {isDraftStructureTagsCleared ? (
+                              <RotateCcw className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-brand-orange p-[1px]" />
+                            ) : (
+                              <X className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-red-300 p-[1px]" />
+                            )}
+                          </button>
+                          <div className="h-7 w-px bg-[var(--border-color)] mx-1" aria-hidden="true" />
+                          <button
                             onClick={resetDraftStructure}
                             className={cn(
                               "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
@@ -10042,16 +10548,12 @@ function SongStructureIntegratedControl({
                         </div>
                       </div>
 
-                      <Reorder.Group 
-                        axis="y" 
-                        values={draftStructure ?? []} 
-                        onReorder={(next) => {
-                          setDraftStructure(next);
-                          setSelectedInsertIndex(null);
-                        }}
+                      <div
                         ref={currentStructureScrollRef}
-                        className="flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 space-y-2 overflow-y-auto custom-scrollbar"
-                        as="div"
+                        className={cn(
+                          "flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 overflow-y-auto custom-scrollbar flex flex-col gap-2 overscroll-contain",
+                          isReorderDragging && "cursor-grabbing select-none"
+                        )}
                       >
                         {(draftStructure ?? []).length === 0 ? (
                           <div className="h-full min-h-[150px] flex items-center justify-center text-center text-[12px] text-[var(--text-secondary)]">
@@ -10067,14 +10569,16 @@ function SongStructureIntegratedControl({
                               onRemove={removeSectionAt}
                               onHover={onHover}
                               onSelect={setSelectedInsertIndex}
-                              onDragActiveChange={setIsReorderDragging}
+                              onDragStart={handleSectionReorderPointerDown}
+                              isReorderDragging={isReorderDragging}
+                              isDraggingItem={draggingSectionId === item.id}
                               isInsertionTarget={selectedInsertIndex === index}
                               sectionDisplayLabel={customSectionMap.get(String(item.section))?.label || String(item.section)}
                               tagDisplayLabel={getStructureTagDisplay}
                             />
                           ))
                         )}
-                      </Reorder.Group>
+                      </div>
                     </div>
 
                     <div className="hidden xl:block min-w-0 overflow-hidden h-[520px]">
@@ -10093,7 +10597,7 @@ function SongStructureIntegratedControl({
                               type="text"
                               value={structureSearch}
                               onChange={(e) => setStructureSearch(e.target.value)}
-                              placeholder="구조 이름 또는 내용 검색..."
+                              placeholder="섹션 이름 또는 내용 검색..."
                               className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40 shadow-inner"
                             />
                             {structureSearch && (
@@ -10284,7 +10788,7 @@ function SongStructureIntegratedControl({
               <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between gap-3 shrink-0">
                 <div>
                   <p className="text-sm font-black text-brand-orange">Keep 섹션</p>
-                  <p className="text-[11px] text-[var(--text-secondary)]">저장된 섹션 구조를 불러오거나 편집합니다.</p>
+                  <p className="text-[11px] text-[var(--text-secondary)]">저장된 섹션 구성을 불러오거나 편집합니다.</p>
                 </div>
                 <button
                   type="button"
@@ -10640,7 +11144,7 @@ function TagEditModal({
     return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || SECTION_TAG_DESCRIPTIONS_LOCAL[tag] || '';
   };
 
-  const maxSelectable = isInstrumental ? 1 : 2;
+  const maxSelectable = isInstrumental ? 1 : 3;
 
   const closeCustomTagEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && customTagEditorHistoryPushedRef.current) {
@@ -11173,6 +11677,7 @@ interface VocalControlProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
+  onModalStateChange?: (isOpen: boolean) => void;
 }
 
 function VocalControl({ 
@@ -11195,6 +11700,7 @@ function VocalControl({
   onHover, 
   onLongPressStart, 
   onLongPressEnd,
+  onModalStateChange,
 }: VocalControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
@@ -11313,11 +11819,7 @@ function VocalControl({
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
-  useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, isKoreanEnglishMix, englishMixRatio]);
+  useStableContentHeight(contentRef, setContentHeight, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, isKoreanEnglishMix, englishMixRatio]);
 
   const handleModeClick = (mode: VocalMode) => {
     const nextMode = mode === 'duo' ? 'group' : mode;
@@ -11442,6 +11944,52 @@ function VocalControl({
     ? vocalMembers.findIndex((member) => member.id === editingVocalMemberId)
     : -1;
   const editingVocalMember = editingVocalMemberIndex >= 0 ? vocalMembers[editingVocalMemberIndex] : null;
+  const vocalCharacterBackdropPointerDownRef = useRef(false);
+  const vocalCharacterCloseFromHistoryRef = useRef(false);
+
+  useEffect(() => {
+    onModalStateChange?.(!!editingVocalMember);
+  }, [editingVocalMember, onModalStateChange]);
+
+  const closeVocalCharacterEditor = useCallback(() => {
+    if (window.history.state?.vocalCharacterEditor && !vocalCharacterCloseFromHistoryRef.current) {
+      vocalCharacterCloseFromHistoryRef.current = true;
+      window.history.back();
+      return;
+    }
+    setEditingVocalMemberId(null);
+  }, []);
+
+  useEffect(() => {
+    if (!editingVocalMember) return;
+    vocalCharacterCloseFromHistoryRef.current = false;
+
+    try {
+      window.history.pushState({ ...(window.history.state || {}), vocalCharacterEditor: true }, '');
+    } catch {
+      // ignore history errors in embedded preview environments
+    }
+
+    const handlePopState = () => {
+      vocalCharacterCloseFromHistoryRef.current = true;
+      setEditingVocalMemberId(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeVocalCharacterEditor();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editingVocalMember, closeVocalCharacterEditor]);
 
   const filteredTones = vocalTones.filter(t => {
     const target = t.genderTarget as string;
@@ -11907,17 +12455,28 @@ function VocalControl({
         {editingVocalMember && (
           <Portal>
             <motion.div
-              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setEditingVocalMemberId(null)}
+              onPointerDown={(e) => {
+                vocalCharacterBackdropPointerDownRef.current = e.target === e.currentTarget;
+              }}
+              onPointerUp={(e) => {
+                if (vocalCharacterBackdropPointerDownRef.current && e.target === e.currentTarget) {
+                  closeVocalCharacterEditor();
+                }
+                vocalCharacterBackdropPointerDownRef.current = false;
+              }}
+              onPointerCancel={() => { vocalCharacterBackdropPointerDownRef.current = false; }}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.96, y: 16 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 16 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[var(--border-color)] bg-[#111] shadow-2xl shadow-black/70"
               >
@@ -11936,7 +12495,7 @@ function VocalControl({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setEditingVocalMemberId(null)}
+                    onClick={closeVocalCharacterEditor}
                     className="rounded-full border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-brand-orange/40 hover:text-brand-orange"
                   >
                     <X className="h-5 w-5" />
@@ -12060,7 +12619,7 @@ function VocalControl({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditingVocalMemberId(null)}
+                    onClick={closeVocalCharacterEditor}
                     className="rounded-xl bg-brand-orange px-5 py-2 text-xs font-black text-white shadow-lg shadow-brand-orange/20 transition-all hover:bg-brand-orange/90"
                   >
                     완료

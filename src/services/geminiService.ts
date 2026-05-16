@@ -3209,7 +3209,7 @@ function normalizeLyricStructureTextForGeneration(structureText: string): string
 }
 
 
-type DefaultStructureFamily = "rap" | "dance" | "ballad" | "rock" | "citypop" | "lofi" | "pop";
+type DefaultStructureFamily = "rap" | "dance" | "ballad" | "rock" | "citypop" | "jpop" | "lofi" | "pop";
 
 function structureGenreText(params?: GenerateSongParams): string {
   if (!params) return "";
@@ -3228,6 +3228,7 @@ function defaultStructureFamilyForGenre(params?: GenerateSongParams): DefaultStr
   if (/\b(ballad|r\s*&\s*b\s*ballad|acoustic\s*ballad|slow\s*jam)\b/i.test(text)) return "ballad";
   if (/\b(rock|band|punk|metal|indie\s*rock|alternative)\b/i.test(text)) return "rock";
   if (/\b(city\s*pop|nu[-\s]?disco|disco|funk|synthwave|dreamwave|retro)\b/i.test(text)) return "citypop";
+  if (/\b(j[-\s]?pop|utaite|anisong|anime\s*song|vocaloid)\b/i.test(text)) return "jpop";
   if (/\b(lo[-\s]?fi|ambient|chill|study|library|focus)\b/i.test(text)) return "lofi";
   return "pop";
 }
@@ -3236,48 +3237,42 @@ function pickArrayItem<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)] ?? items[0];
 }
 
+function hasExplicitRapSectionNeed(params?: GenerateSongParams): boolean {
+  if (!params) return false;
+  const text = structureGenreText(params);
+  const members = params.vocal?.members ?? [];
+  const hasRapMember = members.some((member) =>
+    (member.roles ?? []).some((role) => /rapper|rap|래퍼|랩/i.test(String(role || "")))
+  );
+  return Boolean(
+    params.vocal?.rap ||
+    hasRapMember ||
+    /\b(?:hip[-\s]?hop|rap|trap|drill|boom\s*bap|lofi\s*hip|phonk|grime|rap\s*fusion|hip[-\s]?hop\s*fusion)\b/i.test(text)
+  );
+}
+
 function buildGenreAdaptiveDefaultStructure(params?: GenerateSongParams): string {
   const family = defaultStructureFamilyForGenre(params);
-  const pools: Record<DefaultStructureFamily, string[]> = {
-    citypop: [
-      "Intro → Verse → Pre-Chorus → Chorus → Break → Rap Section → Chorus → Instrumental → Bridge → Final Chorus → Outro",
-      "Intro → Rap Section → Stop → Pre-Chorus → Chorus → Break → Rap Section → Chorus → Instrumental → Final Chorus → Outro",
-      "Instrumental Opening → Verse → Chorus → Bass Break → Rap Section → Bridge → Chorus → Synth Solo → Final Chorus → Outro",
-      "Intro → Verse → Pre-Chorus → Soft Chorus → Break → Rap Section → Dance Chorus → Instrumental → Bridge → Final Chorus → Outro",
-    ],
-    rap: [
-      "Intro → Rap Section → Hook → Rap Section → Break → Pre-Hook → Hook → Bridge → Rap Section → Final Hook → Outro",
-      "Rap Intro → Rap Section → Stop → Hook → Rap Section → Break → Bridge → Hook → Rap Section → Final Hook → Outro",
-      "Intro → Rap Section → Hook → Rap Section → Ad-lib Break → Rap Section → Hook → Breakdown → Final Hook → Outro",
-      "Intro → Rap Section → Break → Pre-Hook → Hook → Rap Section → Stop → Bridge → Rap Section → Final Hook → Outro",
-    ],
-    dance: [
-      "Intro → Verse → Build-up → Drop → Break → Verse → Pre-Chorus → Chorus → Build-up → Final Drop → Outro",
-      "Intro → Hook → Verse → Build-up → Drop → Breakdown → Chorus → Instrumental → Final Drop → Outro",
-      "Intro → Verse → Pre-Drop → Drop → Break → Rap Section → Build-up → Drop → Final Chorus → Outro",
-    ],
-    ballad: [
-      "Intro → Verse → Pre-Chorus → Chorus → Verse → Bridge → Final Chorus → Outro",
-      "Intro → Verse → Chorus → Instrumental → Verse → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro",
-      "Intro → Verse → Pre-Chorus → Chorus → Break → Bridge → Final Chorus → Soft Outro",
-    ],
-    rock: [
-      "Intro → Verse → Pre-Chorus → Chorus → Guitar Break → Verse → Chorus → Bridge → Final Chorus → Outro",
-      "Intro → Verse → Chorus → Break → Verse → Pre-Chorus → Chorus → Solo → Final Chorus → Outro",
-      "Band Intro → Verse → Pre-Chorus → Chorus → Breakdown → Bridge → Final Chorus → Outro",
-    ],
-    lofi: [
-      "Intro → Verse → Hook → Instrumental → Verse → Hook → Bridge → Outro",
-      "Intro → Main Theme → Verse → Break → Hook → Instrumental → Final Hook → Outro",
-      "Intro → Verse → Soft Hook → Break → Verse → Instrumental → Outro",
-    ],
-    pop: [
-      "Intro → Verse → Pre-Chorus → Chorus → Break → Verse → Chorus → Bridge → Final Chorus → Outro",
-      "Intro → Verse → Hook → Verse → Pre-Chorus → Chorus → Bridge → Final Hook → Outro",
-      "Intro → Verse → Pre-Chorus → Chorus → Instrumental → Bridge → Chorus → Final Chorus → Outro",
-    ],
+  const allowRapSections = family === "rap" || hasExplicitRapSectionNeed(params);
+
+  // Default mode should feel like the most representative structure for the detected genre,
+  // not a free-form dialogue template. Keep this intentionally stable and genre-shaped.
+  const representativeStructures: Record<DefaultStructureFamily, string> = {
+    citypop: allowRapSections
+      ? "Intro → Verse → Pre-Chorus → Chorus → Break → Rap Section → Chorus → Instrumental → Bridge → Final Chorus → Outro"
+      : "Intro → Verse → Pre-Chorus → Chorus → Break → Verse 2 → Chorus → Instrumental → Bridge → Final Chorus → Outro",
+    jpop: allowRapSections
+      ? "Intro → Verse → Pre-Chorus → Chorus → Rap Section → Chorus → Bridge → Final Chorus → Outro"
+      : "Intro → Verse → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro",
+    rap: "Intro → Rap Section → Hook → Rap Section → Break → Pre-Hook → Hook → Bridge → Rap Section → Final Hook → Outro",
+    dance: "Intro → Verse → Build-up → Drop → Break → Verse 2 → Pre-Chorus → Chorus → Build-up → Final Drop → Outro",
+    ballad: "Intro → Verse → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus → Outro",
+    rock: "Intro → Verse → Pre-Chorus → Chorus → Guitar Break → Verse 2 → Chorus → Bridge → Final Chorus → Outro",
+    lofi: "Intro → Verse → Hook → Instrumental → Verse 2 → Hook → Bridge → Outro",
+    pop: "Intro → Verse → Pre-Chorus → Chorus → Break → Verse 2 → Chorus → Bridge → Final Chorus → Outro",
   };
-  return normalizeLyricStructureTextForGeneration(pickArrayItem(pools[family]));
+
+  return normalizeLyricStructureTextForGeneration(representativeStructures[family]);
 }
 
 function buildStructureText(
@@ -11052,11 +11047,11 @@ ${exactStructureText}
       : (params.songStructure ?? "1") === "1"
         ? `SONG STRUCTURE (DEFAULT / GENRE-ADAPTIVE):
 - Default mode must NOT be a generic free structure and must NOT repeatedly start with Verse A / Verse B.
-- Use this genre-adaptive recommended spine as the primary structure for this generation:
+- Use this representative genre-adaptive spine as the primary structure for this generation:
 ${exactStructureText}
-- Keep the section names musical and genre-shaped. Do not substitute a plain dialogue template unless the recommended spine itself contains that shape.
-- The spine is selected from a genre-specific pool, so the same genre can vary between generations while still staying stylistically correct.
-- Use about 9-12 major sections. Rap/Hip-Hop structures may be denser with more short Rap Section/Hook/Break/Stop movement; Ballad structures may be smoother and simpler; Dance/EDM may use Build-up/Drop; City Pop/Nu-Disco should allow Instrumental, Break, Bridge, and Final Chorus movement.
+- Follow the recommended spine as the section order. Do not freely expand it into Verse A / Verse B / Verse C, Bridge A / Bridge B, or a dialogue template unless the spine itself explicitly contains that shape.
+- Keep section names musical and genre-shaped. Situation can change ownership and emotion inside the spine, but it must not replace the spine.
+- Use the section count implied by the recommended spine. Rap/Hip-Hop structures may be denser with more short Rap Section/Hook/Break/Stop movement; Ballad structures may be smoother and simpler; Dance/EDM may use Build-up/Drop; City Pop/Nu-Disco should remain melodic/groove-led with Instrumental, Break, Bridge, and Final Chorus movement.
 - Situation mode changes vocal ownership, tension, and lyric perspective inside this genre-led structure; it should not force Verse A/Verse B unless two consecutive viewpoint sections truly require it.
 - Chorus/Hook should have ONE main owner per occurrence unless call-response is explicitly selected. The owner may change between Chorus and Final Hook/Final Chorus to create a story turn.
 - Repetition is allowed only when it has a musical purpose: Hook/Chorus may return, Rap Section may return in rap-led songs, and Instrumental/Break may appear when energy changes.

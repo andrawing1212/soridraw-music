@@ -7344,7 +7344,10 @@ function buildSpecificAtmosphereCombination(params: GenerateSongParams, layers: 
   if (has(/짝사랑|crush|one-sided/) && has(/도시|city|urban|street|거리|골목/) && has(/추억|회상|memory|reminiscence/)) {
     return cleanupPromptTail(`a nostalgic one-sided love scene in a calm urban memory${suffix}`);
   }
-  if (has(/회사|직장|office|work|퇴근|야근/) && has(/위로|healing|comfort|치유/)) {
+  if (has(/퇴근|야근|회사|직장|office|work|after[-\s]?work/) && has(/소확행|small happiness|escape|위로|healing|comfort|치유|휴식|relief/) && has(/서늘|공허|차분|calm|empty|hollow|melanchol|tired|피곤|지친/)) {
+    return cleanupPromptTail(`a tired after-work escape scene where small happiness cuts through calm emptiness${suffix}`);
+  }
+  if (has(/회사|직장|office|work|퇴근|야근/) && has(/위로|healing|comfort|치유|relief/)) {
     return cleanupPromptTail(`a quiet office after-hours recovery scene${suffix}`);
   }
   if (has(/고백|confession/) && has(/회상|추억|memory|reminiscence/) && has(/자아|self|identity/)) {
@@ -7465,6 +7468,13 @@ function buildUserTextCoreScene(params: GenerateSongParams): { scene: string; de
     return {
       scene: "a small message mistake growing into a confession",
       detail: "trembling fingers, a delayed reply, a too-quiet room, one changed word",
+    };
+  }
+
+  if (/(연인|사랑|좋아|romance|love)/i.test(note) && /(친구|friend)/i.test(note) && /(대학생|캠퍼스|college|campus|youth|풋풋|young)/i.test(note)) {
+    return {
+      scene: "a tender campus almost-love scene between friendship and romance",
+      detail: "dawn street air, a half-joking smile, unsaid feelings, a friendship line that keeps moving",
     };
   }
 
@@ -7651,6 +7661,9 @@ function deriveIntentEmotion(params: GenerateSongParams): Pick<PromptIntentSnaps
     calm: hasIntentText(text, /담담|calm|restrained|stoic/),
     endurance: hasIntentText(text, /버팀|endure|endurance|holding its ground|버티/),
     traditional: hasIntentText(text, /전통|traditional|국악|gugak|장구|janggu|가야금|gayageum|거문고|geomungo/),
+    campus: hasIntentText(text, /대학생|캠퍼스|college|campus|청춘|youth|풋풋/),
+    friendship: hasIntentText(text, /친구|friendship|friend/),
+    romanceLine: hasIntentText(text, /연인|사랑|romance|love|짝사랑|crush/),
   };
   const hitCount = Object.values(hits).filter(Boolean).length;
   const emotionalStrength: PromptIntentSnapshot['emotionalStrength'] = hitCount >= 5 ? 'strong' : hitCount >= 3 ? 'medium' : 'light';
@@ -7662,6 +7675,16 @@ function deriveIntentEmotion(params: GenerateSongParams): Pick<PromptIntentSnaps
       contrast: hits.dark ? 'moody heart brightened by small hope' : 'small happiness opening into hopeful wonder',
       atmosphereTone: joinIntentPhrase([hits.smallHappiness ? 'small happiness' : '', hits.growth ? 'quiet growth' : '', hits.fantasy ? 'tender fantasy color' : '', hits.dark ? 'moody warmth' : '', hits.bright ? 'cautious hope' : ''], 'and', 4),
       vocalDelivery: 'tender hopeful delivery with airy mystical softness',
+    };
+  }
+
+  if (hits.campus && hits.friendship && hits.romanceLine) {
+    return {
+      emotionalCore: 'youthful almost-love confusion between friendship and romance',
+      emotionalStrength,
+      contrast: 'warm campus sweetness with a wistful aftertaste',
+      atmosphereTone: joinIntentPhrase([hits.warmth ? 'warm confusion' : 'soft confusion', hits.sorrow ? 'wistful sweetness' : '', hits.urban || hits.dawn ? 'dawn-city air' : '', hits.comic || hits.bright ? 'cute brightness' : ''], 'and', 4),
+      vocalDelivery: 'youthful pleading warmth',
     };
   }
 
@@ -7802,6 +7825,7 @@ function deriveIntentScene(params: GenerateSongParams): string {
   const text = getIntentKeywordText(params);
   const has = (pattern: RegExp) => hasIntentText(text, pattern);
 
+  if (has(/연인|사랑|romance|love/) && has(/친구|friend/) && has(/대학생|캠퍼스|college|campus|청춘|youth|풋풋/)) return 'a tender campus almost-love scene between friendship and romance';
   if (has(/소확행|small happiness/) && has(/성장|growth/) && has(/판타지|fantasy|동화|magical|애틋|tender/)) return 'a tender fantasy-tinged growth scene where small happiness brightens a moody heart';
   if (has(/고백|confession|사랑|love/) && (has(/버팀|endure|버티/) || has(/담담|calm|restrained/) || has(/비통|sorrow|슬픔|sad/)) && (has(/엔카|enka/) || has(/장구|janggu|가야금|gayageum|거문고|geomungo|전통|traditional/))) return 'a restrained confession scene where lingering sadness holds its ground with quiet groove';
   if (has(/가족|family/) && has(/화해|reconcile|reconciliation/)) return 'a quiet family reconciliation scene where anger softens into warm but hollow intimacy';
@@ -7819,7 +7843,8 @@ function deriveIntentScene(params: GenerateSongParams): string {
   if (has(/저항|resistance|rebel/) && has(/레게|reggae/)) return 'a moody reggae resistance scene';
   if (has(/저항|resistance|rebel/)) return 'a restless resistance scene';
   if (has(/짝사랑|crush|one-sided/) && has(/도시|city|urban|street|거리|골목/)) return 'a quiet urban one-sided love scene';
-  if (has(/회사|office|work|퇴근|야근/) && has(/위로|comfort|healing|치유/)) return 'a quiet office after-hours recovery scene';
+  if (has(/퇴근|야근|회사|office|work|after[-\s]?work/) && has(/소확행|small happiness|escape|위로|comfort|healing|치유|relief/) && has(/서늘|공허|차분|calm|empty|hollow|melanchol|tired|피곤|지친/)) return 'a tired after-work escape scene where small happiness cuts through calm emptiness';
+  if (has(/회사|office|work|퇴근|야근/) && has(/위로|comfort|healing|치유|relief/)) return 'a quiet office after-hours recovery scene';
   if (has(/여행|travel/) && has(/어린시절|childhood/) && has(/추억|memory|회상/)) return 'a healing childhood travel memory';
   if (has(/밤|night/) && has(/혼자밥|혼자\s*밥|solo meal|eating alone/)) return 'a tense late-night solitude scene';
 
@@ -7851,6 +7876,8 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
     if (/장구|janggu|가야금|gayageum|거문고|geomungo|전통|traditional/.test(text)) add('restrained traditional pulse');
     if (/담담|버팀|calm|restrained|endure|비통|sorrow/.test(text)) add('janggu-weighted pauses');
     if (/고백|confession/.test(text)) add('gradual confession lift');
+    if (/연인|사랑|romance|love|친구|friend|대학생|캠퍼스|college|campus|풋풋|청춘/.test(text)) add('youthful almost-love lift');
+    if (/새벽|dawn|거리|street|도시|city|urban|따라\s*부르는|singalong|후렴/.test(text)) add('dawn-street singalong chorus');
     if (/room|intimate|공항|방송|echo|잔향/.test(text)) add('intimate room echoes');
   } else if (/emo[-_\s]?rap|이모\s*랩/.test(genreText)) {
     add(/nu[-_\s]?disco|뉴\s*디스코|disco/.test(genreText) ? 'nu-disco emo-rap pulse' : 'guitar-led emo-rap groove');
@@ -7860,6 +7887,14 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
     if (/바다|seaside|sea|ocean|주말|weekend|치유|healing|드리미|dreamy|에어리|airy/.test(text)) add('moody seaside healing turn');
     if (/카페|cafe|혼자밥|solo meal|도시|urban|장난|playful|설렘|flutter/.test(text)) add('playful city-cafe hook');
     if (/이별|breakup|달콤쌉쌀|bittersweet/.test(text)) add('bittersweet phrase-led hook');
+  } else if (/country|컨트리/.test(genreText) || (/rock|록/.test(genreText) && /steel guitar|fiddle|acoustic guitar|컨트리|steel|fiddle/.test(text))) {
+    add(/rock|록/.test(genreText) ? 'acoustic country-rock groove' : 'steady country storytelling groove');
+    if (/steel guitar|스틸\s*기타/.test(text)) add('steel-guitar lift');
+    if (/fiddle|피들/.test(text)) add('fiddle turns');
+    if (/electric guitar|일렉|rock|록/.test(text + ' ' + genreText)) add('soft rock release');
+    if (/퇴근|야근|회사|work|office|after[-\s]?work|피곤|지친/.test(text)) add('tired after-work release');
+    if (/소확행|small happiness|위로|healing|relief|escape/.test(text)) add('small-happiness final hook');
+    if (/서늘|공허|차분|melanchol|empty|hollow|calm/.test(text)) add('restrained melancholy turn');
   } else if (/future[-_\s]?bass|퓨처\s*베이스/.test(genreText)) {
     add('sidechained future-bass lift');
     if (/drill|드릴/.test(genreText)) add('drill-influenced low-end movement');
@@ -7965,7 +8000,8 @@ function applyIntentToAtmosphereLine(line: string, params: GenerateSongParams): 
       (/tipsy one-sided love scene|strange refuge/i.test(intent.sceneCore) && !/tipsy|drinking|술자리|refuge|안식처/i.test(cleaned)) ||
       (/cold breakup aftermath scene/i.test(intent.sceneCore) && !/cold|서늘|bittersweet|comic pain/i.test(cleaned)) ||
       (/seaside weekend after a breakup/i.test(intent.sceneCore) && !/weekend|healing|dreamy air|quiet healing/i.test(cleaned)) ||
-      (/city-cafe/i.test(intent.sceneCore) && !/cafe|city-cafe|lonely dining|fluttering mistake/i.test(cleaned))
+      (/city-cafe/i.test(intent.sceneCore) && !/cafe|city-cafe|lonely dining|fluttering mistake/i.test(cleaned)) ||
+      (/campus almost-love|friendship and romance/i.test(intent.sceneCore) && !/campus|friendship|romance|almost-love|풋풋/i.test(cleaned))
     )
   );
 
@@ -8007,6 +8043,7 @@ function applyIntentToVocalLine(line: string, params: GenerateSongParams): strin
     .replace(/\bVulnerable\s+sing-rapping\s*,\s*Raw\s+tone\s+with\s+dreamy\s+spacious\s+feeling\s*,?\s*groove-aware\s+delivery\s+and\s+dreamy\s+phrasing\b/gi, 'vulnerable sing-rapping with raw airy tone, dreamy spacious phrasing, and groove-aware delivery')
     .replace(/\bVulnerable\s+sing-rapping\s*,\s*Raw\s+tone\s+with\s+smooth\s+and\s+bittersweet\s+feeling\b/gi, 'vulnerable sing-rapping with raw smooth bittersweet phrasing')
     .replace(/\bVulnerable\s+sing-rapping\s*,\s*Raw\s+tone\b/gi, 'vulnerable sing-rapping with raw emotional phrasing')
+    .replace(/\bTwangy\s*,\s*Sincere\s+storytelling\s+style\b/gi, 'twangy sincere storytelling')
     .replace(/\bdreamy\s+spacious\s+feeling\b/gi, 'dreamy spacious phrasing')
     .replace(/\bsmooth\s+and\s+bittersweet\s+feeling\b/gi, 'smooth bittersweet tension')
     .replace(/\bPowerful\s+vintage\s+rock\s*,\s*Nostalgic\s+with\s+minimal\s+and\s+warm\s+feeling\b/gi, 'nostalgic warmth with restrained vintage-rock edge')
@@ -8033,6 +8070,12 @@ function applyIntentToVocalLine(line: string, params: GenerateSongParams): strin
       cleaned = cleaned.replace(/\s+and\s+story-aware\s+expression/i, `, ${intent.vocalDelivery}, and story-aware expression`);
     }
   }
+
+  if (/traditional[-\s]?trot|trot|트로트/i.test(cleaned) && /youthful pleading warmth/i.test(intent.vocalDelivery)) {
+    const formation = /Natural\s+female/i.test(cleaned) ? 'Natural female traditional-trot vocal' : /Natural\s+male/i.test(cleaned) ? 'Natural male traditional-trot vocal' : 'Natural solo traditional-trot vocal';
+    cleaned = `${formation} with rounded vibrato, clear diction, youthful pleading warmth, and story-aware expression`;
+  }
+
 
 
   return cleanupPromptTail(
@@ -8076,6 +8119,14 @@ function applyIntentToArrangementLine(line: string, params: GenerateSongParams):
     .replace(/\bcontrolled\s+verse\s+and\s+contradictory\s+hook\b/gi, intent.arrangementMotion || 'controlled verse-to-hook tension')
     .replace(/,\s*,/g, ',')
     .replace(/\s+,/g, ',');
+
+  const meaningfulParts = cleaned.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
+  const nonTempoMeaningfulParts = meaningfulParts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+  const looksTooThin = nonTempoMeaningfulParts.length <= 1 || /^(?:\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM,\s*)?(?:intimate room echoes|spatial echoes|urban reflections)$/i.test(cleaned);
+  if (looksTooThin && intent.arrangementMotion) {
+    const expanded = dedupePromptParts([...meaningfulParts, ...intent.arrangementMotion.split(/,|\band\b/).map((part) => cleanupPromptTail(part)).filter(Boolean)], 16);
+    cleaned = mergeHookArrangementParts(expanded).join(', ');
+  }
 
   return cleanupPromptTail(cleaned);
 }

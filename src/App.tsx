@@ -3960,6 +3960,25 @@ const toggleCycleVariantSelection = (
     window.scrollTo(0, 0);
   }, []);
 
+  // SORIDRAW_RANDOM_GENRE_LEAF_ONLY_RESTORE_FIX: 랜덤/복원에서 중분류 폴더가 실제 장르처럼 선택되지 않도록 leaf 장르만 후보로 사용
+  const hierarchyLeafGenreItems = useMemo(() => {
+    return GENRE_HIERARCHY.flatMap((group: any) =>
+      (group.children || []).flatMap((main: any) =>
+        Array.isArray(main.children) && main.children.length > 0 ? main.children : [main]
+      )
+    );
+  }, []);
+
+  const hierarchyLeafGenreIdSet = useMemo(() => {
+    return new Set(hierarchyLeafGenreItems.map((item: any) => item.id));
+  }, [hierarchyLeafGenreItems]);
+
+  const pickRandomLeafGenreId = useCallback((): string | null => {
+    if (hierarchyLeafGenreItems.length === 0) return null;
+    const randomItem = hierarchyLeafGenreItems[Math.floor(Math.random() * hierarchyLeafGenreItems.length)];
+    return randomItem?.id ?? null;
+  }, [hierarchyLeafGenreItems]);
+
   const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
@@ -3969,9 +3988,7 @@ const toggleCycleVariantSelection = (
       .trim()
       .toLowerCase();
 
-    const allSelectableGenres = GENRE_HIERARCHY.flatMap((group) =>
-      group.children.flatMap((main) => [main, ...(main.children || [])])
-    );
+    const allSelectableGenres = hierarchyLeafGenreItems;
 
     const resolveSelectableGenreId = (value: unknown): string | null => {
       const raw = String(value || '').trim();
@@ -4053,7 +4070,54 @@ const toggleCycleVariantSelection = (
       setSituation(createEmptySituation());
     }
     const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
-    const instrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
+    const rawInstrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
+
+    // SORIDRAW_RECOMMENDED_SOUND_COMBO_NEXT_APPLY_FIX: 다음곡 적용 시 추천조합으로 자동 선택된 실제 악기들을 UI 강조 상태까지 복원
+    const restoreRecommendedSoundComboFromAppliedKeywords = (ids: string[]) => {
+      const ordered: string[] = [];
+      const restoredAppliedMap: Record<string, string[]> = {};
+      const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+      const idSet = new Set(uniqueIds);
+
+      const recommendationVariants = SOUND_TEXTURE_CYCLES
+        .flatMap((cycle) => cycle.variants as readonly any[])
+        .filter((variant) => isSelectableKeywordItem(variant) && Array.isArray((variant as any).applyPools));
+
+      uniqueIds.forEach((id) => {
+        const recommendation = recommendationVariants.find((variant) => variant.id === id);
+
+        if (!recommendation) {
+          ordered.push(id);
+          return;
+        }
+
+        const pools = ((recommendation as any).applyPools as string[][] | undefined) ?? [];
+        const poolFlat = Array.from(new Set(pools.flat().filter(Boolean)));
+        const savedChildren = poolFlat.filter((poolId) => idSet.has(poolId));
+
+        let restoredChildren = savedChildren;
+        if (restoredChildren.length === 0 && pools.length > 0) {
+          // 과거 저장본처럼 추천조합 ID만 남아있는 경우에는 랜덤 재선택 대신 첫 후보를 사용한다.
+          restoredChildren = (pools[0] ?? []).filter(Boolean);
+        }
+
+        const expandedIds = Array.from(new Set([id, ...restoredChildren].filter(Boolean)));
+        restoredAppliedMap[id] = expandedIds;
+        ordered.push(...expandedIds);
+      });
+
+      return {
+        restoredSelection: Array.from(new Set(ordered)),
+        restoredAppliedMap,
+      };
+    };
+
+    const {
+      restoredSelection: instrumentSoundIds,
+      restoredAppliedMap: restoredRecommendedSoundComboAppliedIds,
+    } = restoreRecommendedSoundComboFromAppliedKeywords(rawInstrumentSoundIds);
+    recommendedSoundComboAppliedIdsRef.current = restoredRecommendedSoundComboAppliedIds;
+
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (restoredGenreIds.includes('kpop') ? 1 : 0);
     const resolvedMixedLyrics = appliedKeywords.isKoreanEnglishMix ?? (appliedKeywords.kpopMode === 2);
 
@@ -4122,7 +4186,7 @@ const toggleCycleVariantSelection = (
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
+  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -4193,7 +4257,8 @@ const toggleCycleVariantSelection = (
       setSelectedStyles(final);
       setIsStyleRandomized(true);
     } else if (category === 'sound') {
-      setSelectedInstrumentSounds(final);
+      const finalSoundSelection = expandRecommendedSoundComboSelection(final, { syncRef: true });
+      setSelectedInstrumentSounds(finalSoundSelection);
       setIsSoundTextureRandomized(true);
     }
   };
@@ -4206,6 +4271,37 @@ const toggleCycleVariantSelection = (
       .flatMap((cycle) => cycle.variants as readonly any[])
       .find((variant) => isSelectableKeywordItem(variant) && variant.id === variantId && Array.isArray((variant as any).applyPools));
   }, []);
+
+  const expandRecommendedSoundComboSelection = useCallback((ids: string[], options?: { syncRef?: boolean }) => {
+    const expanded: string[] = [];
+    const nextAppliedMap: Record<string, string[]> = {};
+
+    ids.forEach((id) => {
+      const recommendation = getRecommendedSoundComboVariant(id);
+
+      if (!recommendation) {
+        expanded.push(id);
+        return;
+      }
+
+      const pools = ((recommendation as any).applyPools as string[][] | undefined) ?? [];
+      const existingApplied = recommendedSoundComboAppliedIdsRef.current[id]?.filter(Boolean) ?? [];
+      const existingPool = existingApplied.filter((appliedId) => appliedId !== id);
+      const pickedPool = existingPool.length > 0
+        ? existingPool
+        : (pools[Math.floor(Math.random() * pools.length)] ?? []);
+      const expandedIds = Array.from(new Set([id, ...pickedPool].filter(Boolean)));
+
+      nextAppliedMap[id] = expandedIds;
+      expanded.push(...expandedIds);
+    });
+
+    if (options?.syncRef) {
+      recommendedSoundComboAppliedIdsRef.current = nextAppliedMap;
+    }
+
+    return Array.from(new Set(expanded));
+  }, [getRecommendedSoundComboVariant]);
 
   const applyRecommendedSoundCombo = useCallback((variantId: string) => {
     const recommendation = getRecommendedSoundComboVariant(variantId);
@@ -4278,10 +4374,9 @@ const toggleCycleVariantSelection = (
   };
 
   const randomizeSingleGenre = () => {
-    const allSubGenres = GENRE_GROUPS.flatMap(group => group.children);
-    const random = allSubGenres[Math.floor(Math.random() * allSubGenres.length)];
-    if (!random) return;
-    handleGenreSelect(random.id);
+    const randomLeafGenreId = pickRandomLeafGenreId();
+    if (!randomLeafGenreId) return;
+    handleGenreSelect(randomLeafGenreId);
     setIsGenreRandomized(true);
   };
 
@@ -4845,15 +4940,11 @@ const toggleCycleVariantSelection = (
       return result;
     };
 
-    // 1. Genre Selection (1 Main + 1 Sub from Hierarchy)
-    const allMainGenres = GENRE_HIERARCHY.flatMap((g) => g.children);
-    const randomMain = allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
-    const randomSub = randomMain && randomMain.children.length > 0
-      ? randomMain.children[Math.floor(Math.random() * randomMain.children.length)]
-      : null;
-
-    let g = randomMain ? [randomMain.id] : [];
-    let sg = randomSub ? [randomSub.id] : [];
+    // 1. Genre Selection: pick only one real leaf genre.
+    // Middle-folder genres such as K-Pop / Acoustic-Folk must not be selected together with their child genre.
+    const randomLeafGenreId = pickRandomLeafGenreId();
+    let g: string[] = [];
+    let sg: string[] = randomLeafGenreId ? [randomLeafGenreId] : [];
 
     // 2. Other categories with their limits
     // Limits: Style 3, Sound 3, Mood 5, Theme 4
@@ -4872,12 +4963,14 @@ const toggleCycleVariantSelection = (
       else break;
     }
 
+    const expandedRandomSoundSelection = expandRecommendedSoundComboSelection(snd, { syncRef: true });
+
     setSelectedGenres(g);
     setSubGenre(sg);
     setSelectedMoods(m);
     setSelectedThemes(t);
     setSelectedStyles(s);
-    setSelectedInstrumentSounds(snd);
+    setSelectedInstrumentSounds(expandedRandomSoundSelection);
 
     setIsGenreRandomized(true);
     setIsMoodRandomized(true);
@@ -4995,7 +5088,9 @@ const saveRecentSong = async (newSong: any) => {
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
       let finalStyles = filterSelectableIds([...selectedStyles]);
-      let finalInstrumentSounds = filterSelectableIds([...selectedInstrumentSounds]);
+      let finalInstrumentSounds = filterSelectableIds(
+        expandRecommendedSoundComboSelection([...selectedInstrumentSounds], { syncRef: false })
+      );
       let randomKeywords: string[] = [];
 
       const hasGenre = finalGenres.length > 0 || subGenre.length > 0;
@@ -5031,6 +5126,9 @@ const saveRecentSong = async (newSong: any) => {
           randomKeywords.push(p.label);
         });
         finalGenres = limitFusionGenreIds(finalGenres);
+        finalInstrumentSounds = filterSelectableIds(
+          expandRecommendedSoundComboSelection(finalInstrumentSounds, { syncRef: false })
+        );
       }
 
       let currentMinBPM = minBPM;
@@ -6204,8 +6302,13 @@ ${normalizePromptForDisplay(result.prompt)}
                     )
                   );
 
-                  if (mainId) nextIds.push(mainId);
-                  if (subId) nextIds.push(subId);
+                  // Only store the final selectable leaf genre.
+                  // If a sub genre exists, the parent/middle genre is only a navigation folder and must not be saved.
+                  if (subId) {
+                    nextIds.push(subId);
+                  } else if (mainId && hierarchyLeafGenreIdSet.has(mainId)) {
+                    nextIds.push(mainId);
+                  }
 
                   setSelectedGenres([]);
                   setSubGenre(limitFusionGenreIds(nextIds));
@@ -6217,13 +6320,10 @@ ${normalizePromptForDisplay(result.prompt)}
                   setIsGenreRandomized(false);
                 }}
                 onRandom={() => {
-                  const allSelectableGenres = GENRE_HIERARCHY.flatMap((g) =>
-                    g.children.flatMap((main) => [main, ...(main.children || [])])
-                  );
-                  const randomItem = allSelectableGenres[Math.floor(Math.random() * allSelectableGenres.length)];
-                  if (!randomItem) return;
+                  const randomLeafGenreId = pickRandomLeafGenreId();
+                  if (!randomLeafGenreId) return;
                   setSelectedGenres([]);
-                  setSubGenre([randomItem.id]);
+                  setSubGenre([randomLeafGenreId]);
                   setIsGenreRandomized(true);
                 }}
                 onHover={setHoveredItem}

@@ -185,6 +185,8 @@ interface GenerateSongParams {
   englishMixRatio?: number;
   moods: string[];
   themes?: string[];
+  customMoodInput?: string;
+  customThemeInput?: string;
   situation?: SituationConfig;
   styles?: string[];
   instrumentSounds?: string[];
@@ -6242,9 +6244,9 @@ function buildFiveLineArrangementValue(
 ): string {
   const situationActive = hasSituation(params.situation);
   const reinterpretationLayer = buildGenreReinterpretationLayer(params, params.userInput || "");
-  // Keep BPM in [Arrangement]. If the UI did not pass an explicit/random tempo,
-  // use a compact genre-based fallback so the final prompt does not lose tempo guidance.
-  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
+  // Keep BPM in [Arrangement] only when the UI explicitly sends manual/random tempo.
+  // Do not inject a genre fallback such as 80–110 BPM, because it makes free tempo feel fixed.
+  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params));
   const genreDNA = getGenreArrangementDNA(params);
   const directDirectorArrangement = isFreeTextPrimaryMode(params)
     ? buildFreeTextDirectorProfile(params.userInput || "").arrangement
@@ -6586,7 +6588,7 @@ type ThemeMoodInterpretation = {
 };
 
 function selectedThemeText(params: GenerateSongParams): string {
-  return (params.themes ?? [])
+  return [params.customThemeInput, ...(params.themes ?? [])]
     .map((theme) => stripRemainingKoreanForProductionPrompt(theme || ""))
     .filter(Boolean)
     .join(" ")
@@ -6636,6 +6638,8 @@ function buildUserTextCoreScene(params: GenerateSongParams): { scene: string; de
   const note = [
     params.userInput,
     params.lyricDraft,
+    params.customThemeInput,
+    params.customMoodInput,
     ...(params.themes ?? []),
   ]
     .filter(Boolean)
@@ -6799,7 +6803,10 @@ function hasMoodTransitionCue(params: GenerateSongParams): boolean {
 
 function rawUserMoodSceneText(params: GenerateSongParams): string {
   return [
+    params.customMoodInput || '',
+    params.customThemeInput || '',
     ...(params.moods ?? []),
+    ...(params.themes ?? []),
     params.userInput || '',
     params.lyricDraft || '',
   ]
@@ -9176,6 +9183,11 @@ function translateKoreanStageCueParentheses(line: string): string {
   if (!match) return line;
   const raw = match[1].trim();
   const normalized = raw.replace(/\s+/g, " ");
+
+  // Do not auto-convert Korean breath/pause commands into fixed ad-lib syllables.
+  // They should be prevented by generation instructions, not replaced with a repeated template.
+  // Keeping them unchanged here lets the model avoid inventing mandatory ad-libs for every song.
+
   const map: Array<[RegExp, string]> = [
     [/희미한\s*도시.*소음|도시.*소음/g, "faint city ambience"],
     [/규칙적인\s*발걸음|발걸음\s*소리/g, "steady footsteps"],
@@ -9185,10 +9197,6 @@ function translateKoreanStageCueParentheses(line: string): string {
     [/비\s*소리|빗소리/g, "rain ambience"],
     [/바람\s*소리/g, "wind ambience"],
     [/문\s*닫히는\s*소리/g, "door closing sound"],
-    [/숨\s*소리/g, "breath sound"],
-    [/한숨\s*소리|한숨/g, "sigh"],
-    [/웃음\s*소리/g, "soft laugh"],
-    [/흐느낌/g, "quiet sob"],
     [/비트\s*드롭|드롭/g, "beat drop"],
     [/악기\s*간주|간주/g, "instrumental break"],
   ];
@@ -10826,6 +10834,10 @@ export async function generateSong(
 - Write lyrics.korean in Korean only.
 - Do NOT include English words, English sentences, romanized Korean, or English ad-libs.
 - Parentheses are allowed only for Korean inner thoughts, Korean ad-libs, or Korean sound expressions.
+- Do NOT write Korean direction/command words in parentheses such as "(숨)", "(깊은 숨)", "(숨소리)", "(한숨)", "(멈춤)", or "(정적)". Suno may sing them literally.
+- Do NOT treat breath, hesitation, sigh, or pause marks as mandatory lyric ingredients. Most songs should have no parenthetical ad-libs unless the section truly needs one.
+- If a vocal gesture is musically necessary, use a fresh pronounceable sung reaction sparingly and vary it by context; never repeat a fixed set of ad-libs across sections or songs.
+- Prefer showing hesitation through real lyric lines, broken phrasing, short pauses in section tags, or silence/stop tags instead of parenthetical breath words.
 - Do NOT add lines such as "(Stay)", "(I miss you)", "Oh baby", "tonight", or any English hook phrase unless the user explicitly asks for English.`
       : "";
 
@@ -11266,7 +11278,7 @@ ${lyricGuidancePrompt}
 - Solo songs: do NOT repeat the vocalist identity in section tags. Remove labels such as [Main Vocal], [Lead Vocal], [Airy Male Vocal], [Female Vocal], [Male Vocal], [Whisper Vocal] from every section when the prompt already defines the vocal identity. Use only emotion/performance cues like [Verse: whispery numb], [Chorus: clear hook], [Bridge: hollow]. Keep a rap label only for actual Rap Section tags.
 - Solo section tags must include short performance/emotion tags, e.g. [Verse: low, intimate], [Chorus: clear hook, aching].
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
-- Use parentheses only for short vocal gestures/ad-libs such as (sigh), (soft breath), (short laugh), (whisper), or brief sung English ad-libs. Environmental SFX, instrument textures, ambience, noise, and point sounds must go inside the [Section: ...] tag instead of parentheses.
+- Parentheses are optional and must be rare. Do not place ad-libs in every section. Never use command words as lyrics: bad (숨), (깊은 숨), (숨소리), (한숨), (멈춤), (정적). If a vocal reaction is genuinely needed, make it a context-specific pronounceable sung reaction, but avoid fixed repeated templates. Environmental SFX, instrument textures, ambience, noise, and point sounds must go inside the [Section: ...] tag instead of parentheses.
 - Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
 - Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
 - Duo/group vocal + two targets: use composite Suno tags for sung sections: [Section: acoustic voice tag, short cue]. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use physical sound labels such as [Verse: Tired Male Rap, dry nagging] or [Chorus: Airy Female Vocal, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.
@@ -11749,6 +11761,39 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   if (!params.isNoLyrics) {
     result.lyrics.korean = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.korean, params);
     result.lyrics.english = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.english, params);
+  }
+
+  // Ensure every language selected in the generation modal actually has a displayed lyric.
+  // The model sometimes returns only lyrics.korean even when Korean + English is selected.
+  // In that case, create the missing selected language from the available lyric instead of
+  // leaving the right-side language card in the "add language" empty state.
+  if (!params.isNoLyrics) {
+    const selectedNonKoreanLanguage = requestedLyricLanguages.find((lang) => lang !== "ko") || null;
+    const selectedNonKoreanApiLanguage = selectedNonKoreanLanguage
+      ? (languageNameMap[selectedNonKoreanLanguage] || "English").toLowerCase()
+      : "english";
+
+    if (requestedLyricLanguages.includes("ko") && !result.lyrics.korean?.trim() && result.lyrics.english?.trim()) {
+      try {
+        result.lyrics.korean = sanitizeGeneratedLyricTagsAndFragments(
+          (await translateLyrics(result.lyrics.english, "korean")).trim(),
+          params,
+        );
+      } catch (error) {
+        console.warn("Failed to backfill missing Korean lyrics:", error);
+      }
+    }
+
+    if (selectedNonKoreanLanguage && !result.lyrics.english?.trim() && result.lyrics.korean?.trim()) {
+      try {
+        result.lyrics.english = sanitizeGeneratedLyricTagsAndFragments(
+          (await translateLyrics(result.lyrics.korean, selectedNonKoreanApiLanguage)).trim(),
+          params,
+        );
+      } catch (error) {
+        console.warn("Failed to backfill missing selected non-Korean lyrics:", error);
+      }
+    }
   }
 
   result.prompt = finalPrompt;

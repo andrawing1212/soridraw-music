@@ -899,7 +899,7 @@ const SituationChoicePicker = ({
                   onClick={clearChoices}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-btn-bg border border-btn-border text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-all"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                   지우기
                 </button>
               )}
@@ -1113,7 +1113,7 @@ const SituationVersionPicker = ({ value, onChange }: SituationVersionPickerProps
                   onClick={clearValue}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-btn-bg border border-btn-border text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-all"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                   지우기
                 </button>
               )}
@@ -1232,6 +1232,41 @@ const buildSituationSummary = (situation?: SituationConfig | null) => {
   return parts.length ? parts.join(' / ') : String(situation?.summary || situation?.description || 'Situation').slice(0, 60);
 };
 
+
+const SECTION_SHORT_DESCRIPTION: Record<string, string> = {
+  'Intro': '시작 분위기 설정',
+  'Break': '짧은 전환',
+  'Stop': '순간 정지',
+  'Verse': '이야기 전개',
+  'Verse 1': '첫 이야기 전개',
+  'Verse 2': '두 번째 전개',
+  'Verse A': '첫 이야기 전개',
+  'Verse B': '두 번째 전개',
+  'Pre-Chorus': '후렴 전 고조',
+  'Chorus': '핵심 후렴',
+  'Hook': '반복 훅 구간',
+  'Drop': '비트 폭발 구간',
+  'Bridge': '흐름 전환 구간',
+  'Breakdown': '에너지 낮춤',
+  'Instrumental': '악기 연주 구간',
+  'Solo': '악기 독주 구간',
+  'Rap Verse': '랩 전개 구간',
+  'Final Chorus': '마지막 후렴',
+  'Outro': '마무리 구간',
+  'Theme A': '첫 번째 테마',
+  'Theme B': '두 번째 테마',
+  'Build-up': '에너지 고조',
+  'Main Theme': '핵심 테마 연주',
+  'Climax': '최고조 구간',
+};
+
+const getSectionShortDescription = (section: string, fallback?: string) => {
+  const normalized = String(section || '').trim();
+  return SECTION_SHORT_DESCRIPTION[normalized]
+    || SECTION_SHORT_DESCRIPTION[normalized.replace(/\s+\d+$/g, '').trim()]
+    || (fallback ? '직접 추가 섹션' : '섹션 설명');
+};
+
 const ReorderableSectionItem = ({ 
   item, 
   index, 
@@ -1292,11 +1327,9 @@ const ReorderableSectionItem = ({
       
       <div className="flex-1 min-w-0">
         <span className="text-sm font-bold text-[var(--text-primary)] block">{sectionDisplayLabel || item.section}</span>
-        {SECTION_META[item.section]?.descriptionKo && (
-          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed line-clamp-2 md:line-clamp-none break-keep">
-            {SECTION_META[item.section].descriptionKo}
-          </p>
-        )}
+        <p className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed break-keep">
+          {getSectionShortDescription(String(item.section), sectionDisplayLabel)}
+        </p>
         {(item.tags ?? []).length > 0 && (
           <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate">
             {(item.tags ?? [])
@@ -3828,7 +3861,21 @@ const toggleCycleVariantSelection = (
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
     try {
-      await updateDoc(doc(db, 'favorites', id), sanitizeForFirestore(updates));
+      const sanitizedUpdates = sanitizeForFirestore(updates);
+      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
+      setFavorites((prev) => prev.map((favorite) => {
+        if (favorite.id !== id) return favorite;
+        return {
+          ...favorite,
+          ...sanitizedUpdates,
+          lyrics: sanitizedUpdates.lyrics
+            ? { ...(favorite.lyrics || {}), ...(sanitizedUpdates.lyrics || {}) }
+            : favorite.lyrics,
+          appliedKeywords: sanitizedUpdates.appliedKeywords
+            ? { ...(favorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
+            : favorite.appliedKeywords,
+        };
+      }));
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
       } else {
@@ -6870,7 +6917,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               }}
                         className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-4 h-4" />
                       </button>
                     </span>
                   );
@@ -9712,10 +9759,20 @@ function SongStructureIntegratedControl({
     };
 
     const handleFullscreenChange = () => {
-      // Studio/browser fullscreen toggles can interrupt pointer capture and leave a stale
-      // mouse-down flag behind. Do not close the custom modal here; only clear transient
-      // drag/click guards so the parent Studio UI keeps receiving mouse/keyboard input.
+      // Studio/browser fullscreen can move the active fullscreen root outside normal
+      // portal stacking. Leaving the section custom modal/backdrops mounted can create
+      // an invisible fixed layer that steals mouse input. Close only the section-custom
+      // modal stack and clear transient guards whenever fullscreen state changes.
       resetTransientPointerState();
+      setEditingSectionIndex(null);
+      setIsCustomSectionEditorOpen(false);
+      setIsSaveStructureModalOpen(false);
+      setIsSavedSectionsModalOpen(false);
+      setIsCustomModalOpen(false);
+      customSectionEditorHistoryPushedRef.current = false;
+      saveStructureModalHistoryPushedRef.current = false;
+      savedSectionsModalHistoryPushedRef.current = false;
+      customModalHistoryPushedRef.current = false;
     };
 
     const handleWindowBlur = () => {
@@ -10430,7 +10487,9 @@ function SongStructureIntegratedControl({
                             labelKo: custom?.labelKo || displaySection, 
                             description: isLocked 
                               ? `${sectionTier === 'pro' ? 'Pro' : 'Basic'} 플랜 전용 섹션입니다.` 
-                                : (SECTION_META[section]?.descriptionKo || custom?.labelKo || custom?.description || custom?.promptFull || '')
+                              : custom
+                                ? (custom.labelKo || custom.description || custom.promptFull || custom.tagCue || custom.label || getSectionShortDescription(section))
+                                : getSectionShortDescription(section)
                             })
                           }
                           onMouseLeave={() => onHover(null)}
@@ -10574,15 +10633,15 @@ function SongStructureIntegratedControl({
                               canToggleDraftStructureTags
                                 ? isDraftStructureTagsCleared
                                   ? "bg-brand-orange/10 border-brand-orange/45 text-brand-orange hover:bg-brand-orange/15"
-                                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-red-300 hover:border-red-500/45 hover:bg-red-500/10"
+                                  : "bg-red-500/5 border-red-400/45 text-[var(--text-secondary)] hover:border-red-300/70 hover:bg-red-500/10"
                                 : "bg-white/5 border-white/10 text-[var(--text-secondary)]/35 cursor-not-allowed"
                             )}
                           >
-                            <Tag className="w-4 h-4" />
+                            <Tag className={cn("w-4 h-4", canToggleDraftStructureTags && !isDraftStructureTagsCleared && "text-[var(--text-secondary)]")} />
                             {isDraftStructureTagsCleared ? (
                               <RotateCcw className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-brand-orange p-[1px]" />
                             ) : (
-                              <X className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-red-300 p-[1px]" />
+                              <X className={cn("absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] p-[1px]", canToggleDraftStructureTags ? "text-red-300 ring-1 ring-red-400/35" : "text-[var(--text-secondary)]/35")} />
                             )}
                           </button>
                           <div className="h-7 w-px bg-[var(--border-color)] mx-1" aria-hidden="true" />
@@ -11141,23 +11200,15 @@ function TagEditModal({
   }, [sectionTags, pointSoundTagLabels, vocalSectionTagMap, localCustomTagsForSection]);
 
   const allowedTags = useMemo(() => {
-    // 1. Get all tags from Firestore for this section
-    const fsTagsForSection = sectionTags.filter(t => Array.isArray(t.sections) && t.sections.includes(section));
-    const fsLabels = new Set(fsTagsForSection.map(t => t.label));
-
-    // 2. Get fallback tags from constants that are NOT in Firestore yet
-    const fallbackSource = isInstrumental
+    // 기본 섹션 태그는 Firestore의 예전 데이터가 섞이지 않도록 constants.ts의 최신 큐레이션 목록을 우선 사용한다.
+    // Firestore는 관리자/백업용으로 남겨두되, 사용자에게 보이는 기본 태그 수는 섹션별 12~15개 안에서 고정한다.
+    const baseSectionTags = isInstrumental
       ? [...INSTRUMENTAL_SOLO_TAGS]
       : [
           ...((ALLOWED_TAGS_BY_SECTION[section as keyof typeof ALLOWED_TAGS_BY_SECTION] ||
             SECTION_TAG_FALLBACKS[section] ||
             []) as string[]),
         ];
-    
-    const missingFromFs = fallbackSource.filter(label => !fsLabels.has(label));
-
-    // 3. Only include ACTIVE tags from Firestore
-    const activeFsLabels = fsTagsForSection.filter(t => t.isActive).map(t => t.label);
 
     const pointSoundAllowedSections = new Set(['Intro', 'Bridge', 'Breakdown', 'Break', 'Instrumental', 'Solo', 'Outro']);
     const pointSoundFallbacks = pointSoundAllowedSections.has(section)
@@ -11170,10 +11221,10 @@ function TagEditModal({
 
     const localCustomTagLabels = localCustomTagsForSection.map((item) => item.label);
 
-    // 4. Merge: Active Firestore tags + Constants not yet in Firestore + local custom tags + selected point-sound cues + vocal placement tags
-    const merged = [...activeFsLabels, ...missingFromFs, ...localCustomTagLabels, ...pointSoundFallbacks, ...vocalPlacementFallbacks];
+    // MY 태그 표시 방식은 유지하고, 기본 태그는 최신 constants 기준으로만 노출한다.
+    const merged = [...baseSectionTags, ...localCustomTagLabels, ...pointSoundFallbacks, ...vocalPlacementFallbacks];
     return Array.from(new Set(merged));
-  }, [section, isInstrumental, sectionTags, pointSoundTags, vocalSectionTags, localCustomTagsForSection]);
+  }, [section, isInstrumental, pointSoundTags, vocalSectionTags, localCustomTagsForSection]);
 
   const visibleTags = useMemo(() => {
     if (tagLibraryFilter === 'my') return allowedTags.filter((tag) => localCustomTagSet.has(tag));
@@ -11191,11 +11242,10 @@ function TagEditModal({
   };
 
   const getTagDescription = (tag: string) => {
-    const fsTag = sectionTags.find(t => t.label === tag);
-    if (fsTag) return fsTag.description || '';
-
     const localCustomTag = localCustomTagsForSection.find((item) => item.label === tag);
     if (localCustomTag) return localCustomTag.labelKo || localCustomTag.description || '사용자가 직접 추가한 섹션 태그입니다.';
+
+    const fsTag = sectionTags.find(t => t.label === tag);
 
     if (vocalSectionTagSet.has(tag)) {
       return vocalSectionTagMap.get(tag)?.description || '보컬 캐릭터를 이 섹션에 직접 배치합니다.';
@@ -11204,9 +11254,9 @@ function TagEditModal({
       return '포인트모드에서 선택한 사운드입니다. 실제 프롬프트는 영어 태그로 유지되며, 해당 섹션의 짧은 효과음/질감 지문으로만 사용됩니다.';
     }
     if (isInstrumental) {
-      return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || '';
+      return INSTRUMENT_TAG_DESCRIPTIONS[tag as keyof typeof INSTRUMENT_TAG_DESCRIPTIONS] || fsTag?.description || '';
     }
-    return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || SECTION_TAG_DESCRIPTIONS_LOCAL[tag] || '';
+    return TAG_DESCRIPTIONS[tag as keyof typeof TAG_DESCRIPTIONS] || SECTION_TAG_DESCRIPTIONS_LOCAL[tag] || fsTag?.description || '';
   };
 
   const maxSelectable = isInstrumental ? 1 : 3;
@@ -11784,15 +11834,19 @@ function VocalControl({
     const rect = target?.getBoundingClientRect();
     if (!rect) return;
 
-    // Portal로 body에 렌더링하되 fixed가 아니라 absolute 좌표를 사용한다.
-    // 이렇게 해야 페이지 스크롤 시 드롭다운이 화면에 고정되어 따라오지 않고,
-    // 원래 버튼 위치에 붙어 있는 일반 펼침창처럼 자연스럽게 움직인다.
+    // 멤버 카드/스크롤 부모 아래에 묶이지 않도록 Portal + fixed 좌표로 최상단 레이어에서 띄운다.
+    // 버튼이 역할 버튼 라인으로 이동했기 때문에, 버튼 폭이 아니라 드롭다운에 필요한 최소 폭을 보장한다.
     const viewportPadding = 12;
-    const width = Math.max(260, Math.min(rect.width, window.innerWidth - viewportPadding * 2));
-    const viewportLeft = Math.min(Math.max(rect.left, viewportPadding), window.innerWidth - width - viewportPadding);
-    const left = viewportLeft + window.scrollX;
-    const top = rect.bottom + window.scrollY + 6;
-    const maxHeight = Math.max(160, Math.min(300, window.innerHeight - rect.bottom - viewportPadding));
+    const width = Math.max(280, Math.min(340, window.innerWidth - viewportPadding * 2));
+    const left = Math.min(
+      Math.max(rect.right - width, viewportPadding),
+      window.innerWidth - width - viewportPadding
+    );
+    const bottomSpace = window.innerHeight - rect.bottom - viewportPadding;
+    const topSpace = rect.top - viewportPadding;
+    const shouldOpenAbove = bottomSpace < 190 && topSpace > bottomSpace;
+    const maxHeight = Math.max(170, Math.min(320, shouldOpenAbove ? topSpace - 6 : bottomSpace));
+    const top = shouldOpenAbove ? Math.max(viewportPadding, rect.top - maxHeight - 6) : rect.bottom + 6;
 
     setVocalTonePopupPos({ top, left, width, maxHeight });
   }, [activeVocalTonePopup]);
@@ -11852,12 +11906,14 @@ function VocalControl({
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('scroll', handleWindowChange, true);
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('touchstart', handlePointerDown);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('scroll', handleWindowChange, true);
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('touchstart', handlePointerDown);
     };
@@ -12088,6 +12144,42 @@ function VocalControl({
         </div>
 
         <div className="flex items-center gap-2">
+          <AnimatePresence initial={false}>
+            {isKoreanEnglishMix && (
+              <motion.div
+                key="english-mix-ratio-panel"
+                initial={{ opacity: 0, x: 12, scaleX: 0.92 }}
+                animate={{ opacity: 1, x: 0, scaleX: 1 }}
+                exit={{ opacity: 0, x: 12, scaleX: 0.92 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="origin-right overflow-hidden"
+              >
+                <div className="flex items-center gap-1 rounded-full border border-brand-orange/25 bg-brand-orange/5 px-1.5 py-1">
+                  {[5, 10, 20, 30].map((ratio) => (
+                    <button
+                      key={ratio}
+                      type="button"
+                      onClick={() => onEnglishMixRatioChange(ratio)}
+                      onMouseEnter={() => onHover({
+                        id: `english-mix-ratio-${ratio}`,
+                        label: '영어 비중',
+                        description: `한/영 혼합 가사에서 영어를 약 ${ratio}% 정도만 사용합니다.`,
+                      })}
+                      onMouseLeave={() => onHover(null)}
+                      className={cn(
+                        "px-2 py-1 rounded-full text-[10px] font-bold transition-all",
+                        englishMixRatio === ratio
+                          ? "bg-brand-orange text-white"
+                          : "text-brand-orange/80 hover:bg-brand-orange/10"
+                      )}
+                    >
+                      {ratio}%
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button
             onClick={onToggleKoreanEnglishMix}
             onMouseEnter={() => onHover({
@@ -12099,7 +12191,7 @@ function VocalControl({
             })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border shadow-sm",
+              "flex h-[31px] w-[124px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2 text-[9px] sm:text-[10px] font-bold transition-all shadow-sm whitespace-nowrap overflow-hidden",
               isKoreanEnglishMix 
                 ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
                 : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
@@ -12108,37 +12200,12 @@ function VocalControl({
             <Languages className={cn("w-3 h-3", isKoreanEnglishMix ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
             한/영 혼합 {isKoreanEnglishMix ? 'ON' : 'OFF'}
           </button>
-          {isKoreanEnglishMix && (
-            <div className="flex items-center gap-1 rounded-full border border-brand-orange/25 bg-brand-orange/5 px-1.5 py-1">
-              {[5, 10, 20, 30].map((ratio) => (
-                <button
-                  key={ratio}
-                  type="button"
-                  onClick={() => onEnglishMixRatioChange(ratio)}
-                  onMouseEnter={() => onHover({
-                    id: `english-mix-ratio-${ratio}`,
-                    label: '영어 비중',
-                    description: `한/영 혼합 가사에서 영어를 약 ${ratio}% 정도만 사용합니다.`,
-                  })}
-                  onMouseLeave={() => onHover(null)}
-                  className={cn(
-                    "px-2 py-1 rounded-full text-[10px] font-bold transition-all",
-                    englishMixRatio === ratio
-                      ? "bg-brand-orange text-white"
-                      : "text-brand-orange/80 hover:bg-brand-orange/10"
-                  )}
-                >
-                  {ratio}%
-                </button>
-              ))}
-            </div>
-          )}
           <button
             onClick={() => onRapChange(!rapEnabled)}
             onMouseEnter={() => onHover({ id: 'rap', label: 'Rap', labelKo: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border shadow-sm",
+              "flex h-[31px] w-[78px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2 text-[9px] sm:text-[10px] font-bold transition-all shadow-sm whitespace-nowrap overflow-hidden",
               rapEnabled 
                 ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
                 : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
@@ -12288,71 +12355,99 @@ function VocalControl({
           {vocalMembers.length > 0 && (
             <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-color)]">
               <div className="flex items-center justify-between px-1">
-                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버별 설정 ({vocalMembers.length}/7)</p>
-                <span className="text-[9px] text-[var(--text-secondary)] opacity-50">창법 · 목소리 · 성격 개별 설정</span>
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버 ({vocalMembers.length}/7)</p>
+                <span className="text-[9px] text-[var(--text-secondary)] opacity-50">창법 · 목소리 · 성격</span>
               </div>
               <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
-                {vocalMembers.map((member, idx) => (
+                {vocalMembers.map((member, idx) => {
+                  const sameGenderIndex = vocalMembers
+                    .slice(0, idx + 1)
+                    .filter(item => item.gender === member.gender).length - 1;
+                  const memberLetter = String.fromCharCode(97 + sameGenderIndex);
+                  const memberDisplayName = `${member.gender === 'male' ? '남자보컬' : '여자보컬'}${memberLetter}`;
+                  const roleLabels: Record<VocalRole, { label: string, labelKo: string, description: string }> = {
+                    main: { label: 'Main Vocal', labelKo: '메인', description: '곡의 중심이 되는 메인 보컬 역할을 수행합니다.' },
+                    lead: { label: 'Lead Vocal', labelKo: '리드', description: '메인 보컬을 보조하며 곡의 흐름을 이끄는 역할을 수행합니다.' },
+                    sub: { label: 'Sub Vocal', labelKo: '서브', description: '곡의 풍성함을 더해주는 서브 보컬 역할을 수행합니다.' },
+                    rapper: { label: 'Rapper', labelKo: '래퍼', description: '곡의 랩 파트를 담당하는 래퍼 역할을 수행합니다.' }
+                  };
+
+                  return (
                   <div key={member.id} className="bg-btn-bg rounded-xl p-2 border border-btn-border relative group/member shadow-sm">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
                         <span className={cn(
-                          "w-2 h-2 rounded-full",
+                          "w-2 h-2 rounded-full shrink-0",
                           member.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
                         )} />
-                        <span className="text-[11px] font-bold text-[var(--text-primary)]">
-                          {member.gender === 'male' ? '남성' : '여성'} {idx + 1}
+                        <span className="shrink-0 text-xs font-bold text-[var(--text-primary)]">
+                          {memberDisplayName}
                         </span>
+                        <span className="h-4 w-px shrink-0 bg-[var(--border-color)]" />
+                        <div className="flex min-w-0 flex-wrap items-center gap-1">
+                          {(['main', 'lead', 'sub', 'rapper'] as VocalRole[]).map(role => {
+                            const isActive = member.roles.includes(role);
+                            const isRoleLimitReached = member.roles.length >= 2;
+                            const info = roleLabels[role];
+                            
+                            return (
+                              <button
+                                key={role}
+                                onClick={() => {
+                                  if (isActive) {
+                                    handleUpdateMember(idx, { roles: member.roles.filter(r => r !== role) });
+                                    return;
+                                  }
+                                  if (isRoleLimitReached) return;
+                                  handleUpdateMember(idx, { roles: [...member.roles, role] });
+                                }}
+                                onMouseEnter={() => onHover({ id: `role-${role}`, ...info })}
+                                onMouseLeave={() => onHover(null)}
+                                className={cn(
+                                  "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all border",
+                                  isActive
+                                    ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
+                                    : isRoleLimitReached
+                                      ? "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
+                                      : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                                )}
+                              >
+                                {info.labelKo}
+                              </button>
+                            );
+                          })}
+                          <span className="mx-1 hidden h-4 w-px shrink-0 bg-[var(--border-color)] sm:block" />
+                          <button
+                            type="button"
+                            data-tone-trigger={member.id}
+                            onClick={(e) => handleVocalToneClick(e, member.id)}
+                            className={cn(
+                              "flex max-w-[160px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-bold transition-all sm:max-w-[190px]",
+                              member.toneId
+                                ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
+                                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                            )}
+                          >
+                            <Settings className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{member.toneId ? getVocalToneDisplayLabel(member.toneId, vocalTones) : "목소리(기본)"}</span>
+                            <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", activeVocalTonePopup === member.id && "rotate-180")} />
+                          </button>
+                        </div>
                       </div>
                       
-                      {vocalMode === 'group' && (
+                      {(vocalMode === 'group' || vocalMode === 'solo') && (
                         <button
                           onClick={() => handleRemoveMember(idx)}
-                          onMouseEnter={() => onHover({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
+                          onMouseEnter={() => onHover({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: vocalMode === 'solo' ? '선택한 솔로 보컬을 해제합니다.' : '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
                           onMouseLeave={() => onHover(null)}
-                          className="p-1 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover/member:opacity-100"
+                          className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover/member:opacity-100"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <X className="w-4 h-4" />
                         </button>
                       )}
                     </div>
 
                     <div className="space-y-1.5">
-                      <div className="flex flex-wrap gap-1">
-                        {(['main', 'lead', 'sub', 'rapper'] as VocalRole[]).map(role => {
-                          const isActive = member.roles.includes(role);
-                          const roleLabels: Record<VocalRole, { label: string, labelKo: string, description: string }> = {
-                            main: { label: 'Main Vocal', labelKo: '메인보컬', description: '곡의 중심이 되는 메인 보컬 역할을 수행합니다.' },
-                            lead: { label: 'Lead Vocal', labelKo: '리드보컬', description: '메인 보컬을 보조하며 곡의 흐름을 이끄는 역할을 수행합니다.' },
-                            sub: { label: 'Sub Vocal', labelKo: '서브보컬', description: '곡의 풍성함을 더해주는 서브 보컬 역할을 수행합니다.' },
-                            rapper: { label: 'Rapper', labelKo: '래퍼', description: '곡의 랩 파트를 담당하는 래퍼 역할을 수행합니다.' }
-                          };
-                          const info = roleLabels[role];
-                          
-                          return (
-                            <button
-                              key={role}
-                              onClick={() => {
-                                const newRoles = isActive 
-                                  ? member.roles.filter(r => r !== role)
-                                  : [...member.roles, role];
-                                handleUpdateMember(idx, { roles: newRoles });
-                              }}
-                              onMouseEnter={() => onHover({ id: `role-${role}`, ...info })}
-                              onMouseLeave={() => onHover(null)}
-                              className={cn(
-                                "px-2 py-0.5 rounded-md text-[9px] font-bold transition-all border",
-                                isActive
-                                  ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
-                                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                              )}
-                            >
-                              {info.labelKo}
-                            </button>
-                          );
-                        })}
-                      </div>
-
                       <button
                         type="button"
                         onClick={() => setEditingVocalMemberId(member.id)}
@@ -12362,38 +12457,16 @@ function VocalControl({
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-black text-brand-orange tracking-tight">보컬 캐릭터 만들기</span>
-                              <span className="rounded-full bg-btn-bg border border-btn-border px-2 py-0.5 text-[8px] font-bold text-[var(--text-secondary)]">팝업</span>
                             </div>
                             <p className="mt-1 text-[10px] font-bold text-[var(--text-primary)] truncate">
                               {getVocalCharacterSummary(member)}
                             </p>
-                            <p className="mt-0.5 text-[9px] text-[var(--text-secondary)]">
-                              창법 · 목소리 · 성격을 넓은 화면에서 따로 설정합니다.
-                            </p>
                           </div>
-                          <div className="shrink-0 rounded-xl bg-brand-orange/10 border border-brand-orange/30 p-2 text-brand-orange group-hover/character:bg-brand-orange group-hover/character:text-white transition-all">
-                            <Edit2 className="w-3.5 h-3.5" />
+                          <div className="shrink-0 p-1 text-[var(--text-secondary)] group-hover/character:text-brand-orange transition-colors">
+                            <Edit2 className="w-4 h-4" />
                           </div>
                         </div>
                       </button>
-
-                          <div className="relative">
-                            <button
-                              data-tone-trigger={member.id}
-                              onClick={(e) => handleVocalToneClick(e, member.id)}
-                          className={cn(
-                            "w-full py-1 px-2 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-between",
-                            member.toneId
-                              ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
-                              : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                          )}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <Settings className="w-2.5 h-2.5" />
-                            <span>{member.toneId ? getVocalToneDisplayLabel(member.toneId, vocalTones) : "톤 선택 (기본)"}</span>
-                          </div>
-                          <ChevronDown className={cn("w-2.5 h-2.5 transition-transform", activeVocalTonePopup === member.id && "rotate-180")} />
-                        </button>
 
                       <AnimatePresence>
                         {activeVocalTonePopup === member.id && (
@@ -12404,7 +12477,7 @@ function VocalControl({
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -6 }}
                               transition={{ duration: 0.14, ease: 'easeOut' }}
-                              className="absolute z-[9999] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[#050505] shadow-2xl shadow-black/60"
+                              className="fixed z-[10050] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[#050505] shadow-2xl shadow-black/60"
                               style={{
                                 top: vocalTonePopupPos.top,
                                 left: vocalTonePopupPos.left,
@@ -12504,10 +12577,10 @@ function VocalControl({
                           </Portal>
                         )}
                       </AnimatePresence>
-                    </div>
                   </div>
                 </div>
-              ))}
+                  );
+                })}
             </div>
           </div>
         )}

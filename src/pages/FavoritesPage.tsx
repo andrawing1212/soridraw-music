@@ -451,6 +451,7 @@ export default function FavoritesPage({
   const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
   const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean; activeEditSection: 'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null; foreignTargetLanguage?: string }>>({});
+  const favoriteDraftCommitRef = useRef(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -800,20 +801,20 @@ export default function FavoritesPage({
     }
   }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, editedPrompt, isEditing, activeEditSection, foreignTargetLanguage, selectedSong]);
 
-  const handleSave = async () => {
-    if (!selectedSong) return;
-    
+  const buildFavoriteDraftPayload = async () => {
+    if (!selectedSong) return null;
+
     let finalKorean = editedKoreanLyrics;
     let finalEnglish = editedEnglishLyrics;
 
     if (isSyncEnabled) {
       setIsTranslating(true);
       try {
-        const koreanChanged = editedKoreanLyrics !== selectedSong.lyrics.korean;
-        const englishChanged = editedEnglishLyrics !== selectedSong.lyrics.english;
+        const koreanChanged = editedKoreanLyrics !== originalLyricsKo;
+        const englishChanged = editedEnglishLyrics !== originalLyricsEn;
 
         const targetLanguage = buildLyricContentOnlyTranslationTarget(
-          foreignTargetLanguage || inferForeignLyricTargetLanguage(selectedSong.lyrics.english)
+          foreignTargetLanguage || inferForeignLyricTargetLanguage(originalLyricsEn || selectedSong.lyrics?.english || '')
         );
         const koreanTargetLanguage = buildLyricContentOnlyTranslationTarget('Korean');
 
@@ -822,7 +823,6 @@ export default function FavoritesPage({
         } else if (englishChanged && !koreanChanged) {
           finalKorean = await translateLyrics(editedEnglishLyrics, koreanTargetLanguage);
         } else if (koreanChanged && englishChanged) {
-          // Both changed, prioritize Korean for translation into the selected foreign lyric language.
           finalEnglish = await translateLyrics(editedKoreanLyrics, targetLanguage);
         }
       } catch (error) {
@@ -832,36 +832,95 @@ export default function FavoritesPage({
       }
     }
 
-    await updateFavorite(selectedSong.id, {
-      title: editedTitle,
-      prompt: editedPrompt,
-      lyrics: {
-        ...selectedSong.lyrics,
-        korean: finalKorean,
-        english: finalEnglish
-      }
-    });
-    
-    // Clear draft after successful save
-    setDrafts(prev => {
-      const newDrafts = { ...prev };
-      delete newDrafts[selectedSong.id];
-      return newDrafts;
-    });
+    const parsedEditedTitles = parseLegacyTitles({ title: editedTitle });
+    const fallbackTitlePart = cleanTitlePart(editedTitle);
+    const nextKoreanTitle = parsedEditedTitles.korean || (/[가-힣]/.test(fallbackTitlePart) ? fallbackTitlePart : '');
+    const nextEnglishTitle = parsedEditedTitles.english || (!/[가-힣]/.test(fallbackTitlePart) ? fallbackTitlePart : '');
 
-    setSelectedSong({
+    const nextSong = {
       ...selectedSong,
       title: editedTitle,
+      koreanTitle: nextKoreanTitle,
+      englishTitle: nextEnglishTitle,
       prompt: editedPrompt,
       lyrics: {
-        ...selectedSong.lyrics,
+        ...(selectedSong.lyrics || {}),
         korean: finalKorean,
-        english: finalEnglish
-      }
-    });
+        english: finalEnglish,
+      },
+    };
+
+    const updates: Partial<any> = {};
+
+    if (editedTitle !== originalTitle) {
+      updates.title = editedTitle;
+      updates.koreanTitle = nextKoreanTitle;
+      updates.englishTitle = nextEnglishTitle;
+    }
+
+    if (editedPrompt !== originalPrompt) {
+      updates.prompt = editedPrompt;
+    }
+
+    if (finalKorean !== originalLyricsKo || finalEnglish !== originalLyricsEn) {
+      updates.lyrics = {
+        ...(selectedSong.lyrics || {}),
+        korean: finalKorean,
+        english: finalEnglish,
+      };
+    }
+
+    return {
+      updates,
+      nextSong,
+      finalKorean,
+      finalEnglish,
+      hasChanges: Object.keys(updates).length > 0,
+    };
+  };
+
+  const applyFavoriteDraftLocally = async () => {
+    if (!selectedSong) return;
+    const payload = await buildFavoriteDraftPayload();
+    if (!payload) return;
+
+    setEditedKoreanLyrics(payload.finalKorean);
+    setEditedEnglishLyrics(payload.finalEnglish);
+    setSelectedSong(payload.nextSong);
     setIsEditing(false);
     setActiveEditSection(null);
     setIsSyncEnabled(false);
+  };
+
+  const commitFavoriteDraftIfNeeded = async () => {
+    if (!selectedSong || favoriteDraftCommitRef.current) return;
+
+    const payload = await buildFavoriteDraftPayload();
+    if (!payload?.hasChanges) return;
+
+    favoriteDraftCommitRef.current = true;
+    try {
+      await updateFavorite(selectedSong.id, payload.updates);
+
+      setSelectedSong(payload.nextSong);
+      setOriginalTitle(payload.nextSong.title);
+      setOriginalLyricsKo(payload.nextSong.lyrics?.korean || '');
+      setOriginalLyricsEn(payload.nextSong.lyrics?.english || '');
+      setOriginalPrompt(payload.nextSong.prompt || '');
+      setEditedKoreanLyrics(payload.finalKorean);
+      setEditedEnglishLyrics(payload.finalEnglish);
+      setDrafts(prev => {
+        const next = { ...prev };
+        delete next[selectedSong.id];
+        return next;
+      });
+    } finally {
+      favoriteDraftCommitRef.current = false;
+    }
+  };
+
+  const handleSave = async () => {
+    await applyFavoriteDraftLocally();
   };
 
   const handleRestoreOriginal = () => {
@@ -1081,13 +1140,18 @@ export default function FavoritesPage({
     return () => document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
   }, [isSelectionMode]);
 
-  const closeSelectedSong = (source: 'ui' | 'history' = 'ui') => {
+  const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
+
+    await commitFavoriteDraftIfNeeded();
 
     setSelectedSong(null);
     detailHistoryPushedRef.current = false;
     setConfirmDeleteSong(false);
     setConfirmToggleLock(false);
+    setIsEditing(false);
+    setActiveEditSection(null);
+    setIsSyncEnabled(false);
 
     if (shouldPopOverlayHistory) {
       try {

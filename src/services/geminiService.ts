@@ -3295,6 +3295,8 @@ function cleanPromptValue(value: string | null | undefined): string {
 
 function cleanupPromptTail(value: string): string {
   return cleanPromptValue(value)
+    .replace(/\bwhere\s+(?:words|feelings|memories|promises|silence)\s+that\s+never\s*$/i, "where unresolved feelings stay present")
+    .replace(/\bwhere\s+[^,]{1,48}\s+(?:that|who|which|when|while|with|in|and|or|to|of|for|from|through|around)\s*$/i, "")
     .replace(/\bwhere\s+the\s+story\s+moves\s+through\s*$/i, "where the story turns through a concrete detail")
     .replace(/\bwhere\s+the\s+story\s*$/i, "where the story turns through a concrete detail")
     .replace(/\bwhere\s+a\s+recurring\s*$/i, "with a recurring hook motif")
@@ -5699,6 +5701,235 @@ function interpretMoodGenreModifier(params: GenerateSongParams): string {
   ];
   return candidates.find((item) => item.hit)?.modifier || '';
 }
+
+
+type GenreMoodConceptHit = {
+  playful: boolean;
+  cute: boolean;
+  warm: boolean;
+  bright: boolean;
+  hopeful: boolean;
+  dark: boolean;
+  melancholic: boolean;
+  wistful: boolean;
+  dreamy: boolean;
+  magical: boolean;
+  cool: boolean;
+  spatial: boolean;
+  tense: boolean;
+  calm: boolean;
+  smooth: boolean;
+  vintage: boolean;
+  urban: boolean;
+  youthful: boolean;
+  moody: boolean;
+  romantic: boolean;
+  swelling: boolean;
+};
+
+function getGenreMoodConceptHit(params: GenerateSongParams): GenreMoodConceptHit {
+  const raw = [
+    rawMoodAndDirectInputText(params),
+    selectedThemeText(params),
+    selectedStyleText(params, { excludeEraTexture: false }),
+  ].join(' ').toLowerCase();
+
+  return {
+    playful: /(장난|코믹|웃픈|엉뚱|능청|유쾌|병맛|comic|playful|quirky|funny|awkward)/.test(raw),
+    cute: /(귀여|풋풋|몽글|달콤|flutter|cute|sweet|youthful|campus|대학생|친구|짝사랑|설렘|썸)/.test(raw),
+    warm: /(따뜻|포근|다정|위로|안식|cozy|warm|comfort|intimate|몽글)/.test(raw),
+    bright: /(밝|희망|쾌활|상큼|산뜻|오픈|hope|bright|fresh|upbeat|cheerful)/.test(raw),
+    hopeful: /(희망|기대|성장|변화|hope|hopeful|growth|change)/.test(raw),
+    dark: /(어두|비통|불안|서늘|차가|위태|긴장|dark|cold|shadow|anxious|tragic|sorrow)/.test(raw),
+    melancholic: /(아련|미련|그리움|공허|외로|쓸쓸|우울|melanchol|wistful|empty|lonely|nostalgic)/.test(raw),
+    wistful: /(아련|애틋|미련|그리움|회상|추억|wistful|tender|memory|nostalgic|aftertaste)/.test(raw),
+    dreamy: /(몽환|흐릿|나른|꿈|dreamy|floating|blurred|haze|airy)/.test(raw),
+    magical: /(판타지|동화|마법|신비|비현실|fantasy|magical|fairy|mystic|surreal)/.test(raw),
+    cool: /(시원|서늘|새벽|밤|드라이브|바다|cool|night|drive|dawn|ocean)/.test(raw),
+    spatial: /(공간|우주|넓은|웅장|영화|시네마|잔향|space|wide|cinematic|echo|reverb)/.test(raw),
+    tense: /(긴장|불안|위태|집착|압박|tense|anxious|pressure|obsessive)/.test(raw),
+    calm: /(차분|담담|릴렉스|평온|calm|relaxed|quiet|soft)/.test(raw),
+    smooth: /(스무스|부드러운|매끈|smooth|soft|silky)/.test(raw),
+    vintage: /(빈티지|빛바랜|아날로그|레트로|lp|바이닐|vintage|analog|retro)/.test(raw),
+    urban: /(도시|도시적|카페|정류장|골목|편의점|방|회사|퇴근|야근|city|urban|cafe|street|room|station)/.test(raw),
+    youthful: /(풋풋|대학생|청춘|어린|첫사랑|친구|campus|youth|young|teen|school)/.test(raw),
+    moody: /(무디|먹먹|그늘|shadow|moody|moodiness)/.test(raw),
+    romantic: /(사랑|연인|고백|짝사랑|썸|romance|romantic|love|crush|confession)/.test(raw),
+    swelling: /(벅찬|북받|차오르|감정\s*고조|빌드업|overwhelmed|swelling|choked\s*up|emotional\s*build)/.test(raw),
+  };
+}
+
+function deriveGenreMoodConceptTag(params: GenerateSongParams): string {
+  const hit = getGenreMoodConceptHit(params);
+
+  // Priority is intentionally musical: strong contrast first, then scene color,
+  // then single mood. The result is the short "what kind of genre" prefix.
+  if (hit.urban && hit.romantic && (hit.moody || hit.melancholic || hit.dark)) return 'Moody urban romantic';
+  if (hit.urban && hit.romantic && hit.swelling) return 'Swelling urban romantic';
+  if (hit.urban && hit.romantic) return 'Urban romantic';
+  if (hit.swelling && hit.romantic) return 'Swelling romantic';
+  if (hit.moody && hit.urban) return 'Moody urban';
+  if (hit.moody && hit.romantic) return 'Moody romantic';
+  if (hit.playful && (hit.dark || hit.tense)) return 'Playful dark';
+  if (hit.playful && (hit.cute || hit.bright)) return 'Playful bright';
+  if (hit.cute && hit.wistful) return 'Youthful bittersweet';
+  if (hit.youthful && (hit.warm || hit.cute)) return 'Warm youthful';
+  if (hit.magical && (hit.dark || hit.tense)) return 'Dark magical';
+  if (hit.magical && (hit.warm || hit.bright)) return 'Soft magical';
+  if (hit.cool && (hit.melancholic || hit.dark)) return 'Cool melancholic';
+  if (hit.cool && hit.dreamy) return 'Cool dreamy';
+  if (hit.dreamy && hit.melancholic) return 'Dreamy melancholic';
+  if (hit.warm && hit.melancholic) return 'Warm melancholic';
+  if (hit.wistful && hit.warm) return 'Wistful tender';
+  if (hit.spatial && (hit.dark || hit.melancholic)) return 'Cinematic melancholic';
+  if (hit.spatial && hit.bright) return 'Cinematic hopeful';
+  if (hit.vintage && hit.warm) return 'Warm vintage';
+  if (hit.urban && hit.melancholic) return 'Urban melancholic';
+  if (hit.urban && hit.bright) return 'Bright urban';
+  if (hit.moody) return 'Moody';
+  if (hit.romantic) return 'Romantic';
+  if (hit.swelling) return 'Swelling emotional';
+  if (hit.dark) return 'Dark emotional';
+  if (hit.melancholic || hit.wistful) return 'Wistful emotional';
+  if (hit.warm) return 'Warm intimate';
+  if (hit.bright || hit.hopeful) return 'Bright hopeful';
+  if (hit.dreamy) return 'Dreamy';
+  if (hit.playful) return 'Playful';
+  if (hit.calm || hit.smooth) return 'Smooth calm';
+  return '';
+}
+
+function normalizeGenreFusionAccentToken(token: string, base = ''): string {
+  let value = stripNonGenrePerformancePhrases(genreStyleTokenToNatural(token || ''))
+    .replace(/\bbright\s+pop\s+color\b/gi, '')
+    .replace(/\bdark\s+emotional\s+edge\b/gi, '')
+    .replace(/\bmelancholic\s+color\b/gi, '')
+    .replace(/\bwarm\s+intimate\s+color\b/gi, '')
+    .replace(/\bdreamy\s+floating\s+color\b/gi, '')
+    .replace(/\bsoft\s+magical\s+color\b/gi, '')
+    .replace(/\bplayful\s+comic\s+edge\b/gi, '')
+    .replace(/\bcinematic\s+spatial\s+color\b/gi, '')
+    .replace(/\btraditional\s+classic\s+color\b/gi, '')
+    .replace(/\btraditional\s+classic\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!value) return '';
+
+  const lower = value.toLowerCase();
+  const baseLower = base.toLowerCase();
+
+  if (/melodic\s+rap/.test(lower)) value = 'Melodic Rap flow';
+  else if (/ballad/.test(lower)) value = 'Ballad warmth';
+  else if (/r&b|rnb/.test(lower)) value = /\b\d{2,4}s\b|y2k/.test(lower) ? value : 'R&B harmony';
+  else if (/nu[-\s]?disco/.test(lower)) value = 'Nu-Disco groove';
+  else if (/j[-\s]?rock|k[-\s]?band|band\s+pop\s+rock|pop\s+rock/.test(lower)) value = value.replace(/\s+edge$/i, '') + ' edge';
+  else if (/punk/.test(lower)) value = 'Punk Rock edge';
+  else if (/house/.test(lower)) value = 'House pulse';
+  else if (/out[-\s]?run/.test(lower)) value = 'Outrun drive';
+  else if (/synthwave/.test(lower)) value = 'Synthwave glow';
+  else if (/dreamwave/.test(lower)) value = 'Dreamwave haze';
+  else if (/jazz[-\s]?funk|fusion\s+jazz/.test(lower)) value = 'Jazz-funk movement';
+  else if (/lo[-\s]?fi/.test(lower)) value = 'lo-fi texture';
+
+  const cleaned = compactGenreToken(value).replace(/\s{2,}/g, ' ').trim();
+  if (!cleaned) return '';
+  if (baseLower && isSameGenreFamily(base, cleaned)) return '';
+  return cleaned;
+}
+
+function genreAccentFamilyKey(token: string): string {
+  return String(token || '')
+    .toLowerCase()
+    .replace(/\b(soft|warm|bright|dark|cool|dreamy|cinematic|emotional|color|edge|glow|warmth|harmony|flow|groove|pulse|drive|texture|movement|polish|energy|lift)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function collectGenreFusionAccentTokens(params: GenerateSongParams, mainLabels: string[], base: string): string[] {
+  const styleGenreTokens = getStyleGenreInfluenceLabels(params, mainLabels);
+  const secondaryMainGenres = mainLabels.slice(1).map(genreStyleTokenToNatural).filter(Boolean);
+  const eraAccents = getEraTextureGenreAccents(params);
+  const vocalGenreAccents = getVocalGenreAccentTokens(params);
+  const raw = [
+    ...secondaryMainGenres,
+    ...styleGenreTokens,
+    ...vocalGenreAccents,
+    ...eraAccents,
+  ];
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  raw.forEach((token) => {
+    const normalized = normalizeGenreFusionAccentToken(token, base);
+    if (!normalized) return;
+    const key = genreAccentFamilyKey(normalized) || normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(normalized);
+  });
+  return result.slice(0, 4);
+}
+
+function prefixGenreMoodConcept(concept: string, base: string): string {
+  const cleanBase = stripNonGenrePerformancePhrases(base || '').replace(/\s{2,}/g, ' ').trim() || 'Pop';
+  const cleanConcept = cleanupPromptTail(concept || '').replace(/\s{2,}/g, ' ').trim();
+  if (!cleanConcept) return cleanBase;
+  const lowerBase = cleanBase.toLowerCase();
+  const conceptWords = cleanConcept.toLowerCase().split(/\s+/).filter(Boolean);
+  if (conceptWords.some((word) => word.length > 3 && lowerBase.includes(word))) return cleanBase;
+  return `${cleanConcept} ${cleanBase}`.replace(/\s{2,}/g, ' ').trim();
+}
+
+function renderMoodFusionGenreValue(base: string, accents: string[], concept: string): string {
+  const head = prefixGenreMoodConcept(concept, base);
+  const cleanAccents = dedupeGenreAccentTokens(
+    accents.map((accent) => normalizeGenreFusionAccentToken(accent, head)).filter(Boolean),
+  ).slice(0, 4);
+
+  // Case table for genre keywords:
+  // 1 = mood + main genre.
+  // 2 = mood + main genre with one sub-color.
+  // 3 = mood + main genre fusion with two role accents.
+  // 4 = mood + main genre fusion with three role accents.
+  // 5+ = mood + main genre multi-fusion with four compact role accents.
+  if (cleanAccents.length === 0) return cleanupPromptTail(head);
+  if (cleanAccents.length === 1) return cleanupPromptTail(`${head} with ${cleanAccents[0]}`);
+
+  const isFusionBase = /\bfusion\b/i.test(head);
+  const fusionWord = isFusionBase ? 'with' : cleanAccents.length >= 4 ? 'multi-fusion with' : 'fusion with';
+  return cleanupPromptTail(`${head} ${fusionWord} ${joinPromptPhrase(cleanAccents, 'and')}`);
+}
+function reinforceRepeatedGenreMoodIntent(genreValue: string, base: string, params: GenerateSongParams): string {
+  const raw = [
+    rawMoodAndDirectInputText(params),
+    selectedThemeText(params),
+    selectedStyleText(params, { excludeEraTexture: false }),
+    selectedSoundText(params),
+  ].join(' ').toLowerCase();
+  const baseText = `${base || ''} ${genreValue || ''}`.toLowerCase();
+  const has = (pattern: RegExp) => pattern.test(raw);
+  const hasBase = (pattern: RegExp) => pattern.test(baseText);
+
+  // If mood/theme repeats the genre identity, emphasize that intent instead of
+  // removing it as a duplicate. This is a final Genre-only render pass.
+  if (hasBase(/romantic\s*rock|로맨틱\s*록/) && has(/사랑|연인|고백|짝사랑|love|romance|romantic|confession|crush|비|rain|릴렉스|relax|편안/)) {
+    if (has(/비|rain|rainy/)) return 'Rain-soaked Romantic Rock with tender love color';
+    if (has(/릴렉스|relax|편안|calm|차분/)) return 'Relaxed Romantic Rock with tender love color';
+    return 'Deep Romantic Rock with tender love color';
+  }
+  if (hasBase(/opera|오페라/) && has(/후회|분노|어두|dark|regret|anger|ethereal|에테리얼|네오\s*레트로|neo[-\s]?retro/)) {
+    const suffix = has(/네오\s*레트로|neo[-\s]?retro|ethereal|에테리얼/) ? ' with ethereal neo-retro color' : '';
+    return `Dark regretful Opera${suffix}`;
+  }
+  if (hasBase(/j[-\s]?ballad|j\s*발라드/) && has(/후회|퇴근|기묘|strange|after[-\s]?work|regret|wide\s*reverb|넓은\s*리버브/)) {
+    return 'Wistful J-Ballad with strange after-work melancholy';
+  }
+  if (hasBase(/emo\s*rap|이모랩/) && has(/바다|희망|코믹|comic|seaside|hope|2000/)) {
+    return /2000/.test(raw) ? 'Playful dark Emo Rap with 2000s glossy pop polish' : genreValue;
+  }
+  return genreValue;
+}
+
 function mergeCompactCue(base: string, additions: string[], max = 3): string {
   const parts = dedupePromptParts([
     ...String(base || '').split(',').map((part) => cleanupPromptTail(part.trim())).filter(Boolean),
@@ -5941,6 +6172,11 @@ function getSpecificGenreArrangementCue(params: GenerateSongParams): string {
   if (/uk[-_\s]?garage[-_\s]?r&b|uk[-_\s]?garage[-_\s]?rnb/.test(raw)) return 'syncopated garage-R&B groove, shuffled section movement, focused hook';
   if (/alternative[-_\s]?r&b|alternative[-_\s]?rnb|pb[-_\s]?r&b|pb[-_\s]?rnb/.test(raw)) return 'alternative R&B pocket, dark texture shifts, restrained hook lift';
   if (/neo[-_\s]?soul/.test(raw)) return 'deep-pocket groove, intimate verse space, warm harmonic lift, relaxed chorus release';
+  if (/j[-_\s]?indie|j\s*indie|인디팝|indie\s*pop/.test(raw)) return 'gentle J-indie band build, intimate verse motion, gradual emotional lift, scene-led hook';
+  if (/string\s*ensemble|현악\s*합주|스트링\s*앙상블/.test(raw)) return 'string-led cinematic build, measured rhythmic lift, quiet emotional turn, hopeful chorus bloom';
+  if (/mystery\s*bgm|미스터리\s*bgm/.test(raw)) return 'mystery-BGM suspense flow, subtle pulse tension, unresolved scene turn';
+  if (/italian\s*pop|이탈리아\s*팝/.test(raw)) return 'melodic Italian-pop flow, bright refrain lift, playful street-scene bounce';
+  if (/sarod|사로드/.test(raw)) return 'sarod-led classical flow, tabla rhythmic cycle, tanpura drone space';
   return '';
 }
 
@@ -5967,25 +6203,29 @@ function getGenreIdentityDNA(params: GenerateSongParams, mainLabels: string[], s
 
 function buildFiveLineGenreValue(params: GenerateSongParams): string {
   if (isFreeTextPrimaryMode(params)) {
-    return compactGenreToken(buildFreeTextDirectorProfile(params.userInput || "").genre || "Pop");
+    const freeGenre = compactGenreToken(buildFreeTextDirectorProfile(params.userInput || "").genre || "Pop");
+    return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(freeGenre));
   }
 
   const selectedGenres = getSelectedFusionGenres(params);
   const mainLabels = selectedGenres.map((genre) => compactGenreToken(genre.label)).filter(NON_EMPTY);
-  const styleGenreTokens = getStyleGenreInfluenceLabels(params, mainLabels);
-  const secondaryMainGenres = mainLabels.slice(1).map(genreStyleTokenToNatural).filter(Boolean).slice(0, 2);
-  const eraAccents = getEraTextureGenreAccents(params);
-  const moodGenreModifier = interpretMoodGenreModifier(params);
+  const base = getSpecificSelectedGenreBase(params, mainLabels);
+  const concept = deriveGenreMoodConceptTag(params);
+  const accents = collectGenreFusionAccentTokens(params, mainLabels, base);
 
-  const vocalGenreAccents = getVocalGenreAccentTokens(params);
-  const identity = getGenreIdentityDNA(params, mainLabels, [
-    ...styleGenreTokens,
-    ...secondaryMainGenres,
-    ...vocalGenreAccents,
-    ...eraAccents,
-    moodGenreModifier,
-  ].filter(Boolean));
-  return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(identity || 'Pop'));
+  let genreValue = renderMoodFusionGenreValue(base || 'Pop', accents, concept);
+
+  // Keep a couple of highly specific single-genre scene readings, but express
+  // them as a mooded genre declaration rather than plain genre names.
+  const intentText = getIntentKeywordText(params).toLowerCase();
+  if (/^Synthwave$/i.test(stripNonGenrePerformancePhrases(base || '')) && /drive|드라이브|night|밤|방|room|비통|sorrow|시원|cool/.test(intentText)) {
+    genreValue = renderMoodFusionGenreValue('Synthwave', accents, concept || 'Cool emotional night-drive');
+  } else if (/^J[-\s]?Electro$/i.test(stripNonGenrePerformancePhrases(base || '')) && /수중|submerged|underwater|먹먹|muffled|digital|디지털/.test(intentText)) {
+    genreValue = renderMoodFusionGenreValue('J-Electro', accents, concept || 'Submerged digital');
+  }
+
+  genreValue = reinforceRepeatedGenreMoodIntent(genreValue, base || mainLabels[0] || '', params);
+  return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(genreValue || 'Pop'));
 }
 
 function lookupGenreInstrumentProfile(id: string) {
@@ -6277,6 +6517,7 @@ function normalizeAtmospherePromptLine(value: string): string {
     .trim();
 
   line = dedupeAtmosphereRepeatedMoods(line);
+  line = finalizeAtmosphereSentence(line);
 
   if (!line) return "balanced emotional air";
   return cleanupPromptTail(line);
@@ -6572,6 +6813,8 @@ function getGenreArrangementDNA(params: GenerateSongParams): string {
   if (map[key]) return map[key];
 
   const text = [key, params.genre || '', ...(params.subGenre ?? []), selectedStyleText(params, { excludeEraTexture: true })].join(' ').toLowerCase();
+  if (/j[-_\s]?indie|j\s*indie|인디팝|indie\s*pop/.test(text)) return 'gentle J-indie band build, intimate verse motion, gradual emotional lift, scene-led hook';
+  if (/string\s*ensemble|현악\s*합주|스트링\s*앙상블/.test(text)) return 'string-led cinematic build, measured rhythmic lift, quiet emotional turn, hopeful chorus bloom';
   if (/glitch/.test(text)) return 'glitch-pop stutter groove, sharp hook cuts, digital stop-start contrast, focused chorus impact';
   if (/reggae/.test(text)) {
     if (/resistance|저항|anxious|불안|sorrow|비통|space|우주|echo|잔향/.test(motionText + ' ' + text)) {
@@ -7850,6 +8093,9 @@ function deriveIntentScene(params: GenerateSongParams): string {
   if (has(/가족|family/) && has(/화해|reconcile|reconciliation/)) return 'a quiet family reconciliation scene where anger softens into warm but hollow intimacy';
   if (has(/지하실|basement|습기|damp/) && (has(/바다|sea|seaside|ocean/) || has(/구급차|siren|ambulance/))) return 'a damp basement-to-seaside scene with lonely warmth and distant siren tension';
   if (has(/도시|urban|city|거리|street/) && has(/설렘|flutter|자아|self|달콤쌉쌀|mistake|지하실|basement/)) return has(/새벽|dawn/) ? 'a dawn-city self-discovery scene around a small bittersweet mistake' : 'an urban self-discovery scene around a small bittersweet mistake';
+  if (has(/방|room/) && has(/드라이브|drive|driving/) && has(/신스웨이브|synthwave|neon|네온/)) return 'a cool room-to-night-drive scene with fluttering tension and sorrowful afterglow';
+  if (has(/j[-_\s]?electro|제이\s*일렉|일렉트로|electro/) && has(/수중|submerged|underwater|먹먹|muffled|digital|디지털/)) return 'a submerged digital confession scene with compressed tension and soft intimacy';
+  if (has(/정류장|station|stop/) && has(/회상|memory|기억|사랑|love/) && has(/동화|fairy|magical|마법/)) return 'a magical late-night stop memory scene';
 
   if (has(/방황|wander|wandering/) && has(/선물|gift/) && has(/동화|fairy|magical|마법|아늑|cozy|능청|wry|playful/)) return 'a cozy wandering scene around a strange gift';
   if (has(/술자리|drinking|bar|tipsy/) && has(/짝사랑|crush|one-sided|사랑|love/) && has(/집착|obsess|안식처|shelter|refuge|엉뚱|quirky|애틋|비통/)) return 'a tipsy one-sided love scene where obsessive affection hides inside a strange refuge';
@@ -7883,7 +8129,23 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
     if (cleaned && !parts.some((part) => part.toLowerCase() === cleaned.toLowerCase())) parts.push(cleaned);
   };
 
-  if (/indian|인도/.test(genreText)) {
+  if (/k[-_\s]?trap|케이\s*트랩|트랩/.test(genreText)) {
+    add('K-trap bounce');
+    if (/melodic\s*rap|멜로딕\s*랩|랩|rap/.test(text + ' ' + genreText)) add('melodic-rap hook flow');
+    if (/2020s|hyper|digital|하이퍼|디지털|glitch|글리치/.test(text)) add('hyper-digital stop-start contrast');
+    if (/추억|회상|memory|familiar|익숙|편의점|방|장소|place/.test(text)) add('familiar-place memory turn');
+  } else if (/chiptune|칩튠|8[-\s]?bit|8비트/.test(genreText)) {
+    add('playful chiptune pulse');
+    if (/square|pulse|noise|8[-\s]?bit|게임|pixel/.test(text + ' ' + genreText)) add('8-bit section flips');
+    if (/귀여움에서\s*광기|cute-to-madness|광기|집착|obsess/.test(text)) add('cute-to-madness switch');
+    if (/불안|anxious|warm|따뜻|어둡|dark|웃픈|comic/.test(text)) add('anxious warm hook');
+  } else if (/neo\s*soul|네오\s*소울/.test(genreText)) {
+    add('deep-pocket neo-soul groove');
+    if (/90s|리듬\s*팝|bounce|바운스/.test(text)) add('90s R&B bounce lift');
+    if (/2010s|polished|glossy|아이돌|pop energy/.test(text)) add('polished pop chorus rise');
+    if (/전통|국악|가야금|해금|장구|traditional|gayageum|haegeum|janggu/.test(text)) add('traditional-color bridge turn');
+    if (/재회|reunion|가족|family|희망|hope|불안|동화|fairy|comic|코믹/.test(text)) add('reunion hope hook');
+  } else if (/indian|인도/.test(genreText)) {
     add('tabla-driven Indian-fusion pulse');
     if (/post[-\s]?rock|포스트\s*록/.test(genreText)) add('post-rock crescendo build');
     if (/sitar|시타르|bansuri|반수리|tabla|타블라/.test(text)) add('ornamental melodic turns');
@@ -7905,23 +8167,44 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
     else if (playfulOrBright) add('angular post-punk groove');
     else add('restrained post-punk groove');
     if (/funk\s*guitar|펑키\s*기타|funky\s*guitar/.test(text)) {
-      add(darkOrRestrained ? 'muted funk-guitar tension' : playfulOrBright ? 'playful funk-guitar bounce' : 'funk-guitar pulses');
+      add(darkOrRestrained ? 'muted guitar tension' : playfulOrBright ? 'playful guitar-led bounce' : 'guitar-led pulses');
     }
     if (/double\s*drums|더블\s*드럼/.test(text)) {
-      add(darkOrRestrained ? 'heavy double-drum drive' : playfulOrBright ? 'double-drum lift' : 'double-drum emotional lift');
+      add(darkOrRestrained ? 'heavier rhythmic drive' : playfulOrBright ? 'rhythmic lift' : 'emotional rhythmic lift');
     }
     if (/dreamy\s*synth|몽환\s*신스|dreamy|몽환|synth/.test(text)) {
-      add(darkOrRestrained ? 'dreamy synth haze' : playfulOrBright ? 'dreamy synth breaks' : 'dreamy synth space');
+      add(darkOrRestrained ? 'dreamy haze breaks' : playfulOrBright ? 'dreamy break sections' : 'dreamy transition space');
     }
     if (/고백|confession/.test(text) && /따라\s*부르는|singalong|후렴|chorus/.test(text)) add('singalong confession chorus');
     else if (/따라\s*부르는|singalong|후렴|chorus/.test(text)) add(darkOrRestrained ? 'restrained singalong hook' : 'singalong chorus lift');
+  } else if (/eurobeat|유로비트/.test(genreText)) {
+    add('high-speed eurobeat drive');
+    if (/j[-\s]?rock|j[-_\s]?록|rock|록|band|밴드/.test(genreText + ' ' + text)) add('J-rock chorus lift');
+    if (/friend|우정|친구|자유|free|playful|장난|쾌활|cheerful/.test(text)) add('playful friendship hook');
+    if (/synth brass|신스\s*브라스|fast synth|digital synth|drive|driving bass/.test(text)) add('fast synth-pop break');
+  } else if (/fantasy|판타지|dark fantasy|다크 판타지/.test(genreText)) {
+    add(/dark|어두|다크|ominous|으스스|비/.test(text + ' ' + genreText) ? 'dark fantasy tension' : 'fantasy scene build');
+    if (/nu[-_\s]?disco|뉴\s*디스코|disco/.test(genreText + ' ' + text)) add('nu-disco groove pulse');
+    if (/rain|비|rainy|everyday|일상/.test(text)) add('rainy scene turn');
+    if (/cute|귀여|ambien|앰비언트|공간|spacious|dark|어두/.test(text)) add('eerie chorus lift');
+  } else if (/j[-_\s]?electro|j\s*electro|제이\s*일렉|일렉트로/.test(genreText)) {
+    add('tight J-electro pulse');
+    if (/drill|드릴|hi[-\s]?hat|하이햇/.test(text)) add('drill-hihat tension');
+    if (/digital\s*compression|compressed|디지털\s*압축/.test(text)) add('compressed digital break');
+    if (/guitar\s*solo|기타\s*솔로/.test(text)) add('guitar-solo lift');
+    if (/수중|submerged|underwater|먹먹|muffled/.test(text)) add('submerged transition space');
+    if (/고백|confession|기다림|waiting|짝사랑|crush/.test(text)) add('subtle confession hook');
+  } else if (/synthwave|신스웨이브/.test(genreText)) {
+    add('retro synth pulse');
+    if (/drive|driving|드라이브|night|밤|새벽/.test(text)) add('cool night-drive rhythm');
+    if (/감정적인\s*빌드업|emotional build|build[-\s]?up|브레이크다운|breakdown/.test(text)) add('emotional build-up turn');
+    if (/cinematic|bridge|브릿지|시네마틱/.test(text)) add('cinematic bridge turn');
+    if (/비통|sorrow|설렘|flutter|시원|cool/.test(text)) add('bittersweet neon hook');
   } else if (/dubstep|덥스텝/.test(genreText)) {
-    // Dubstep must never collapse into a generic "section contrast" cue.
-    // Its Arrangement identity is the drop structure, low-end pressure, and rhythmic hit design.
-    add(/half[-\s]?time|하프타임/.test(text) ? 'half-time dubstep drop' : 'half-time dubstep drop');
-    add('wobble-bass pressure');
-    if (/808|sub bass|low[-\s]?end|베이스|저음/.test(text)) add('808 low-end hits');
-    if (/punchy drums|hard snare|하드\s*스네어|펀치|drums|드럼/.test(text)) add('punchy drum hits');
+    // Arrangement should describe song movement, not detailed instrument performance.
+    add('half-time dubstep drop');
+    add('heavy low-end drop contrast');
+    if (/verse|벌스|section|contrast|전환|드롭|drop|breakdown|브레이크다운/.test(text)) add('sharp verse-to-drop contrast');
     if (/k[-\s]?band|band\s*pop\s*rock|pop\s*rock|밴드\s*팝|팝록|rock|록/.test(genreText + ' ' + text)) add('K-band chorus lift');
     if (/2010s|polished|폴리시|glossy|pop energy/.test(text)) add('polished pop-rise bridge');
     if (/정류장|station|stop|회상|memory|사랑|love|동화|fairy|magical|마법/.test(text)) add('magical late-night memory hook');
@@ -7998,9 +8281,9 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
   const playfulOrBrightGlobal = /장난|playful|comic|cute|귀여|밝|bright|upbeat|자유|free/.test(text);
   const darkOrRestrainedGlobal = /어두|dark|moody|무디|서늘|cold|restrained|차분|calm/.test(text);
   if (!/post[-_\s]?punk|포스트\s*펑크|postpunk/.test(genreText)) {
-    if (/funk\s*guitar|펑키\s*기타|funky\s*guitar/.test(text)) add(darkOrRestrainedGlobal ? 'muted funk-guitar tension' : playfulOrBrightGlobal ? 'playful funk-guitar bounce' : 'funk-guitar pulses');
-    if (/double\s*drums|더블\s*드럼/.test(text)) add(darkOrRestrainedGlobal ? 'heavy double-drum drive' : playfulOrBrightGlobal ? 'double-drum lift' : 'double-drum emotional lift');
-    if (/dreamy\s*synth|몽환\s*신스/.test(text)) add(darkOrRestrainedGlobal ? 'dreamy synth haze' : playfulOrBrightGlobal ? 'dreamy synth breaks' : 'dreamy synth space');
+    if (/funk\s*guitar|펑키\s*기타|funky\s*guitar/.test(text)) add(darkOrRestrainedGlobal ? 'muted guitar tension' : playfulOrBrightGlobal ? 'playful guitar-led bounce' : 'guitar-led pulses');
+    if (/double\s*drums|더블\s*드럼/.test(text)) add(darkOrRestrainedGlobal ? 'heavier rhythmic drive' : playfulOrBrightGlobal ? 'rhythmic lift' : 'emotional rhythmic lift');
+    if (/dreamy\s*synth|몽환\s*신스/.test(text)) add(darkOrRestrainedGlobal ? 'dreamy haze breaks' : playfulOrBrightGlobal ? 'dreamy break sections' : 'dreamy transition space');
   }
   if (/bass|베이스/.test(text) && /driving|드라이빙|drive/.test(text)) add('driving bass movement');
   if (/angular\s*guitar|각진\s*기타/.test(text)) add('angular guitar stabs');
@@ -8078,7 +8361,9 @@ function applyIntentToAtmosphereLine(line: string, params: GenerateSongParams): 
     }
   }
 
-  return cleanupPromptTail(
+  cleaned = finalizeAtmosphereSentence(cleaned);
+
+  return finalizeAtmosphereSentence(cleanupPromptTail(
     cleaned
       .replace(/\bwith\s+(.+?)\s+and\s+with\s+/gi, 'with $1 and ')
       .replace(/\bwith\s+([^,]+?)\s+with\s+/gi, 'with $1 and ')
@@ -8087,7 +8372,7 @@ function applyIntentToAtmosphereLine(line: string, params: GenerateSongParams): 
       .replace(/\b(a\s+[^,]+? scene)\s+in\s+\1\b/gi, '$1')
       .replace(/,\s*,/g, ',')
       .replace(/\s+,/g, ',')
-  );
+  ));
 }
 
 function applyIntentToVocalLine(line: string, params: GenerateSongParams): string {
@@ -8150,60 +8435,574 @@ function applyIntentToVocalLine(line: string, params: GenerateSongParams): strin
   );
 }
 
-function applyIntentToArrangementLine(line: string, params: GenerateSongParams): string {
-  const intent = buildPromptIntent(params);
-  let cleaned = cleanupPromptTail(String(line || ''));
-  const lower = cleaned.toLowerCase();
-  const intentParts = intent.arrangementMotion
-    .split(/,|\band\b/)
+
+
+function buildArrangementSceneHook(params: GenerateSongParams): string {
+  const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), selectedStyleText(params, { excludeEraTexture: false })]
+    .join(' ')
+    .toLowerCase();
+
+  if (/정류장|stop|station/.test(text) && /회상|추억|memory|사랑|love|애틋|wistful|동화|fairy|magical/.test(text)) return 'late-night memory hook';
+  if (/회사|office|퇴근|야근|after[-\s]?work/.test(text) && /희망|hope|성장|growth|사랑|love|고향|hometown|자유|free/.test(text)) return 'hopeful office-life hook';
+  if (/지하철|subway|metro/.test(text) && /꿈|dream|비통|sorrow|미니멀|minimal|어두|dark/.test(text)) return 'subway-dream tension hook';
+  if (/방|room/.test(text) && /드라이브|drive|night|밤|새벽/.test(text)) return 'room-to-night-drive hook';
+  if (/산책|walk|골목|alley|neighborhood|street/.test(text)) return /마법|동화|fantasy|magical/.test(text) ? 'magical neighborhood-walk hook' : 'neighborhood-walk hook';
+  if (/카페|cafe|혼자밥|solo meal|도시|urban/.test(text)) return 'city-cafe scene hook';
+  if (/퇴근|야근|after[-\s]?work|office|회사/.test(text)) return 'after-work release hook';
+  if (/바다|seaside|ocean|sea/.test(text) && /이별|breakup|치유|healing|주말|weekend/.test(text)) return 'seaside healing hook';
+  if (/고백|confession|짝사랑|crush|설렘|flutter|썸/.test(text)) return /장난|comic|playful|귀여|cute|웃픈/.test(text) ? 'playful confession hook' : 'confession lift hook';
+  if (/우정|friendship|친구/.test(text)) return 'friendship hook';
+  if (/가족|family|화해|reconciliation/.test(text)) return 'reconciliation hook';
+  if (/변화|성장|change|growth/.test(text)) return 'change-and-growth hook';
+  if (/기다림|waiting|기대/.test(text)) return 'waiting hook';
+  return '';
+}
+
+function buildArrangementStabilizerParts(params: GenerateSongParams): string[] {
+  const text = [
+    getIntentKeywordText(params),
+    selectedThemeText(params),
+    selectedStyleText(params, { excludeEraTexture: false }),
+    selectedSoundText(params),
+    rawMoodAndDirectInputText(params),
+  ].join(' ').toLowerCase();
+  const genreText = getSelectedFusionGenres(params).map((genre) => `${genre.id} ${genre.label}`).join(' ').toLowerCase();
+  const parts: string[] = [];
+  const add = (value: string) => {
+    const cleaned = cleanupPromptTail(value);
+    if (cleaned && !parts.some((part) => part.toLowerCase() === cleaned.toLowerCase())) parts.push(cleaned);
+  };
+
+  // Arrangement is the song movement plan, not an instrument-performance list.
+  // Keep it stable as: main genre movement + fusion/style movement + section turn + situation hook.
+  if (/mystery\s*bgm|미스터리\s*bgm/.test(genreText)) {
+    add('mystery-BGM suspense flow');
+    if (/footstep|발걸음|shuffle|셔플|pulse|펄스|eerie|오묘|저항|resistance|바다|sea|회사|office/.test(text)) add('subtle pulse tension');
+    if (/piano\s*band|피아노\s*밴드|session|세션|drum|드럼/.test(text)) add('small-band scene movement');
+    if (/저항|resistance|mystery|미스터리|불안|anxious|오묘|eerie/.test(text)) add('unresolved resistance hook');
+    else add('unresolved mystery hook');
+  } else if (/epic\s*trailer|에픽\s*트레일러/.test(genreText)) {
+    add('epic-trailer tension build');
+    if (/uk\s*garage|uk\s*개러지|garage|개러지/.test(text + ' ' + genreText)) add('UK-garage rhythmic push');
+    if (/choir|콰이어|합창|brass|브라스|strings|스트링|rising|상승/.test(text)) add('choir-led trailer rise');
+    if (/정류장|stop|station|운명|destiny|comic|코믹|오묘|mysterious/.test(text)) add('comic late-night stop hook');
+    else add('heroic trailer hook');
+  } else if (/opera|오페라/.test(genreText)) {
+    add('operatic dramatic build');
+    if (/neo[-\s]?retro|네오\s*레트로|walking\s*bass|워킹\s*베이스|hard\s*snare|하드\s*스네어/.test(text + ' ' + genreText)) add('neo-retro tension pulse');
+    if (/후회|regret|분노|anger|어두|dark|에테리얼|ethereal/.test(text)) add('dark regret aria turn');
+    if (/confession|고백|사랑|love|꿈|dreamy|몽환/.test(text)) add('dramatic aria release');
+  } else if (/j[-_\s]?ballad|j\s*발라드/.test(genreText)) {
+    add('slow J-ballad emotional build');
+    if (/piano|피아노|reverb|리버브|strings|스트링/.test(text)) add('wide reverb piano space');
+    if (/퇴근|after[-\s]?work|후회|regret|기묘|strange|tired|피곤/.test(text)) add('strange after-work release turn');
+    if (/고백|confession|사랑|love|이별|breakup/.test(text)) add('restrained ballad hook');
+  } else if (/romantic\s*rock|로맨틱\s*록/.test(genreText)) {
+    add('romantic rock band build');
+    if (/비|rain|rainy|태평소|taepyeongso/.test(text)) add('rain-soaked guitar lift');
+    if (/사랑|연인|고백|짝사랑|love|romantic|confession/.test(text)) add('tender love chorus release');
+    if (/릴렉스|relax|차분|calm|spatial|잔향/.test(text)) add('relaxed live-band flow');
+  } else if (/emo\s*rap|이모랩/.test(genreText)) {
+    add('guitar-led emo-rap groove');
+    if (/2000|glossy|polish|후반|y2k/.test(text + ' ' + genreText)) add('2000s pop-polish lift');
+    if (/바다|seaside|ocean|hope|희망|치유|healing/.test(text)) add('moody seaside healing turn');
+    if (/사랑|고백|confession|crush|짝사랑|comic|코믹/.test(text)) add('melodic confession hook');
+  } else if (/cafe\s*bgm|카페\s*bgm/.test(genreText)) {
+    add('soft cafe-BGM flow');
+    if (/retro|레트로|electro|일렉|synth|신스/.test(text + ' ' + genreText)) add('retro-electro texture');
+    if (/lo[-_\s]?fi|로파이|tape|테이프|noise|노이즈|static/.test(text)) add('lo-fi tape-noise warmth');
+    if (/drive|드라이브|family|가족|reunion|화해|자유|free/.test(text)) add('family-drive scene hook');
+    else add('gentle background scene hook');
+  } else if (/background\s*music|bgm|테마|theme/.test(genreText)) {
+    add('theme-BGM scene flow');
+    if (/mystery|미스터리|eerie|오묘|suspense|긴장/.test(text + ' ' + genreText)) add('suspense motif return');
+    if (/lo[-_\s]?fi|로파이|radio|라디오|tape|테이프|noise|노이즈/.test(text)) add('textured background pulse');
+    const scene = buildArrangementSceneHook(params);
+    if (scene) add(scene.replace(/^city-cafe scene hook$/i, 'background scene hook'));
+    else add('scene-led BGM hook');
+  } else if (/deep\s*house|딥\s*하우스/.test(genreText)) {
+    add('deep-house pocket groove');
+    if (/lo[-_\s]?fi|로파이|퇴근|after[-\s]?work|office|회사|dream|꿈/.test(text)) add('lo-fi after-work flow');
+    if (/gospel|가스펠|choir|콰이어|합창/.test(text)) add('gospel-choir lift');
+    if (/운명|fate|dream|꿈|powerful|파워풀|groovy|그루비/.test(text)) add('dreamy fate-release hook');
+  } else if (/baroque|바로크/.test(genreText)) {
+    add('baroque chamber build');
+    if (/cello|첼로|strings|스트링|string|현악|harpsichord|하프시코드|oboe|오보에/.test(text)) add('ornate chamber rise');
+    if (/고백|confession|짝사랑|crush|love|사랑/.test(text)) add('restrained confession turn');
+    if (/희망|hope|cautious|조심|cinematic|시네마틱/.test(text)) add('hopeful orchestral release');
+  } else if (/full\s*orchestra|풀\s*오케스트라|orchestra|오케스트라/.test(genreText)) {
+    add('orchestral swell build');
+    if (/r&b|rnb|컨템퍼러리|알앤비|smooth|keys|키/.test(text + ' ' + genreText)) add('R&B harmonic lift');
+    if (/trap|트랩|drum|드럼|808/.test(text)) add('rhythmic contrast turn');
+    if (/고백|confession|comic|코믹|애틋|wistful|시원|cool/.test(text)) add('comic bittersweet confession hook');
+  } else if (/modern\s*folk|모던\s*포크|folk|포크/.test(genreText)) {
+    add('modern-folk acoustic motion');
+    if (/k[-_\s]?band|밴드|rock|록|guitar|기타/.test(text + ' ' + genreText)) add('K-band lift');
+    if (/골목|street|neighborhood|고향|hometown|warm|따뜻|room/.test(text)) add('warm street-corner build');
+    if (/고백|confession|사랑|love|미련|wistful/.test(text)) add('neighborhood confession hook');
+  } else if (/k[-_\s]?band\s*pop|k[-_\s]?밴드\s*팝|band\s*pop|밴드팝/.test(genreText)) {
+    add('K-band emotional build');
+    if (/uk\s*garage|uk\s*개러지|garage|개러지/.test(text + ' ' + genreText)) add('UK-garage rhythmic undercurrent');
+    if (/post[-_\s]?rock|포스트\s*록/.test(text + ' ' + genreText)) add('post-rock final lift');
+    if (/이별|breakup|담담|calm|감성|emotional|책|page/.test(text)) add('bittersweet breakup hook');
+  } else if (/italian\s*pop|이탈리아\s*팝/.test(genreText)) {
+    add('melodic Italian-pop flow');
+    if (/subway|지하철|street|도시|city|ride|캐치|catchy|playful|능청|장난/.test(text)) add('subway-scene bounce');
+    if (/808|trap|트랩|hi[-\s]?hat|하이햇|snare|스네어|dark\s*synth|어두운\s*신스|glitch|글리치/.test(text)) add('trap-pop rhythm lift');
+    if (/저항|resistance|자유|free|오묘|mysterious/.test(text)) add('playful resistance hook');
+    else add('bright Italian-pop refrain');
+  } else if (/sarod|사로드/.test(genreText)) {
+    add('sarod-led classical flow');
+    if (/tabla|타블라|drum|드럼|rhythm|리듬/.test(text)) add('tabla rhythmic cycle');
+    if (/tanpura|탄푸라|drone|드론|bansuri|반수리|인도|indian/.test(text)) add('tanpura drone space');
+    if (/재회|reunion|거리|distance|고향|home|귀여|cute|주말|weekend/.test(text)) add('reunion-after-distance hook');
+    else add('classical world-fusion hook');
+  } else if (/acoustic\s*jazz|어쿠스틱\s*재즈/.test(genreText)) {
+    add('acoustic-jazz pocket');
+    if (/punk|펑크|rock|록/.test(text + ' ' + genreText)) add('punk-rock contrast lift');
+    if (/dream|몽환|dreamy|synth|신스/.test(text)) add('dreamy synth break');
+    if (/회사|office|희망|hope|성장|growth|사랑|love/.test(text)) add('hopeful office-life hook');
+  } else if (/phonk|퐁크/.test(genreText)) {
+    add('phonk cowbell groove');
+    if (/drill|드릴|build|빌드|hi[-\s]?hat|하이햇/.test(text + ' ' + genreText)) add('drill rhythm push');
+    if (/urban|도시|그리움|dream|꿈|몽환|따뜻|warm/.test(text)) add('gritty urban tension');
+    if (/설렘|flutter|cute|귀여|playful|warm|따뜻/.test(text)) add('playful fluttering hook');
+  } else if (/g[-\s]?funk|g\s*펑크|지\s*펑크/.test(genreText)) {
+    add('laid-back G-funk groove');
+    if (/sine|사인|whiny|신스|synth|kalimba|칼림바|celesta|첼레스타/.test(text)) add('whiny synth lead');
+    if (/밤|night|계절|season|밝|bright|파워풀|powerful/.test(text)) add('bright seasonal lift');
+    if (/사랑|love|몰입|immersion|affection/.test(text)) add('powerful love hook');
+  } else if (/ballad[-\s]?trot|발라드\s*트로트|korean\s*ballad\s*trot/.test(genreText)) {
+    add('ballad-trot rhythm');
+    if (/80s|80년대|synth|신스|analog|아날로그/.test(text + ' ' + genreText)) add('80s synth color');
+    if (/지하철|subway|꿈|dream|비통|sorrow|어두|dark/.test(text)) add('subway-dream tension');
+    if (/미니멀|minimal|hope|희망|고향|home/.test(text)) add('bittersweet minimal hook');
+
+  } else if (/k[-_\s]?trap|케이\s*트랩|트랩/.test(genreText)) {
+    add('K-trap bounce');
+    if (/melodic\s*rap|멜로딕\s*랩|랩|rap/.test(text + ' ' + genreText)) add('melodic-rap hook flow');
+    if (/2020s|hyper|digital|하이퍼|디지털|glitch|글리치/.test(text)) add('hyper-digital stop-start contrast');
+    if (/추억|회상|memory|familiar|익숙|편의점|방|장소|place/.test(text)) add('familiar-place memory turn');
+    if (/기다림|waiting|방황|wander|오묘|mysterious/.test(text)) add('restless late-night trap turn');
+  } else if (/chiptune|칩튠|8[-\s]?bit|8비트/.test(genreText)) {
+    add('playful chiptune pulse');
+    if (/8[-\s]?bit|square|pulse|noise|칩튠|게임|pixel/.test(text + ' ' + genreText)) add('8-bit section flips');
+    if (/귀여움에서\s*광기|cute-to-madness|광기|obsess|집착|불안|anxious/.test(text)) add('cute-to-madness switch');
+    if (/꿈|dream|fantasy|판타지|명상|relax|릴렉스/.test(text)) add('dreamlike game-world turn');
+    if (/어둡|dark|웃픈|comic|warm|따뜻|불안|anxious/.test(text)) add('anxious warm hook');
+  } else if (/neo\s*soul|네오\s*소울/.test(genreText)) {
+    add('deep-pocket neo-soul groove');
+    if (/90s|리듬\s*팝|bounce|바운스/.test(text)) add('90s R&B bounce lift');
+    if (/2010s|polished|glossy|폴리시|아이돌|pop energy/.test(text)) add('polished pop chorus rise');
+    if (/전통|국악|가야금|해금|장구|traditional|gayageum|haegeum|janggu/.test(text)) add('traditional-color bridge turn');
+    if (/재회|reunion|가족|family|불안|희망|hope|동화|fairy|comic|코믹/.test(text)) add('reunion hope hook');
+  } else if (/celtic|켈틱/.test(genreText)) {
+    add('Celtic folk-band motion');
+    if (/acoustic|어쿠스틱|band|밴드/.test(text + ' ' + genreText)) add('acoustic travel groove');
+    if (/여행|travel|moving|place|장소|코믹|comic|playful|dark|어두|아련|wistful/.test(text)) add('playful-dark verse turn');
+    if (/따뜻|warm|아늑|cozy|미련|unresolved|위태|불안|anxious/.test(text)) add('warm unresolved hook');
+  } else if (/nu\s*metal|뉴\s*메탈|뉴메탈/.test(genreText)) {
+    add('heavy nu-metal section contrast');
+    if (/rap[-\s]?sing|랩싱|랩|rap|turntable|턴테이블/.test(text)) add('rap-sung verse pressure');
+    if (/방|room|오해|misunderstanding|미련|기다림|waiting|private/.test(text)) add('private-room conflict turn');
+    if (/웃픈|comic|playful|dark|어두|위태|불안/.test(text)) add('comic dark hook');
+  } else if (/j[-_\s]?indie|j\s*indie|인디팝|indie\s*pop/.test(genreText)) {
+    add('gentle J-indie band build');
+    if (/도시|도시적|city|urban|카페|cafe/.test(text) && /사랑|고백|연인|love|romantic|confession|affection/.test(text)) add('urban everyday-love hook');
+    else if (/도시|도시적|city|urban|카페|cafe/.test(text)) add('urban everyday scene hook');
+    if (/벅찬|overwhelmed|swelling|감정\s*고조|빌드업/.test(text)) add('heart-swelling emotional lift');
+    else if (/사랑|고백|연인|love|romantic|confession|affection/.test(text)) add('romantic emotional lift');
+  } else if (/string\s*ensemble|현악\s*합주|스트링\s*앙상블/.test(genreText)) {
+    add('string-led cinematic build');
+    if (/retro|disco|디스코/.test(text + ' ' + genreText)) add('retro-disco rhythmic bounce');
+    if (/성장|hope|희망|cautious|조심/.test(text)) add('quiet growth turn');
+    if (/고백|love|confession|사랑/.test(text)) add('hopeful confession hook');
+  } else if (/dream\s*pop|드림팝/.test(genreText)) {
+    add('dream-pop haze flow');
+    if (/anime|애니|opening|오프닝|j[-_\s]?pop/.test(text)) add('anime-opening lift');
+    if (/breakbeat|브레이크비트/.test(text)) add('breakbeat section turn');
+    if (/90s|r&b|리듬\s*팝|rhythm\s*pop|바운스|bounce/.test(text)) add('smooth R&B pre-chorus lift');
+  } else if (/bedroom\s*pop|베드룸\s*팝/.test(genreText)) {
+    add('intimate bedroom-pop groove');
+    if (/70s|disco|디스코/.test(text + ' ' + genreText)) add('soft disco bounce');
+    if (/90s|r&b|리듬\s*팝|warm studio|바운스/.test(text)) add('warm 90s-R&B lift');
+  } else if (/eurobeat|유로비트/.test(genreText)) {
+    add('high-speed eurobeat drive');
+    if (/j[-_\s]?rock|j[-_\s]?록|rock|록|band|밴드/.test(text + ' ' + genreText)) add('J-rock chorus lift');
+    if (/synth|신스|brass|브라스|driving|drive|베이스/.test(text)) add('fast synth-pop break');
+  } else if (/fantasy|판타지|dark fantasy|다크 판타지/.test(genreText)) {
+    add(/dark|어두|다크|ominous|으스스|비|rain/.test(text + ' ' + genreText) ? 'dark fantasy tension' : 'fantasy scene build');
+    if (/nu[-_\s]?disco|뉴\s*디스코|disco|디스코/.test(text + ' ' + genreText)) add('nu-disco groove pulse');
+    if (/rain|비|rainy|일상|everyday/.test(text)) add('rainy scene turn');
+  } else if (/j[-_\s]?electro|j\s*electro|제이\s*일렉|일렉트로/.test(genreText)) {
+    add('tight J-electro pulse');
+    if (/drill|드릴|hi[-\s]?hat|하이햇/.test(text)) add('drill-hihat tension');
+    if (/digital\s*compression|compressed|디지털\s*압축/.test(text)) add('compressed digital break');
+    if (/guitar\s*solo|기타\s*솔로/.test(text)) add('guitar-solo lift');
+    if (/수중|submerged|underwater|먹먹|muffled/.test(text)) add('submerged digital turn');
+  } else if (/synthwave|신스웨이브/.test(genreText)) {
+    add('retro synth pulse');
+    if (/drive|driving|드라이브|night|밤|새벽|방|room/.test(text)) add('room-to-night-drive motion');
+    if (/감정적인\s*빌드업|emotional build|build[-\s]?up|브레이크다운|breakdown/.test(text)) add('emotional build-up turn');
+    if (/시원|cool|비통|sorrow|설렘|flutter/.test(text)) add('bittersweet neon hook');
+  } else if (/dubstep|덥스텝/.test(genreText)) {
+    add('half-time dubstep drop');
+    add('sharp verse-to-drop contrast');
+    if (/k[-\s]?band|band\s*pop\s*rock|pop\s*rock|밴드|rock|록/.test(text + ' ' + genreText)) add('K-band chorus lift');
+    if (/2010s|polished|폴리시|glossy|pop energy/.test(text)) add('polished pop-rise bridge');
+  } else if (/k[-_\s]?ballad|발라드/.test(genreText)) {
+    add('emotional ballad build');
+    if (/punk|펑크|rock|록/.test(text + ' ' + genreText)) add('punk-rock lift');
+    if (/shout|비고|외침|hook|후렴/.test(text)) add('shoutable final hook');
+  } else if (/k[-_\s]?r&b|r&b|알앤비/.test(genreText)) {
+    add('slow pocket groove');
+    add('close vocal space');
+    if (/punk|펑크|rock|록/.test(text + ' ' + genreText)) add('subtle band-edge lift');
+    if (/late[-\s]?night|밤|새벽|city|도시|고향|안식|위로/.test(text)) add('smooth late-night transition');
+  } else if (/p[-\s]?funk|피\s*펑크|funk\s*jazz|펑크\s*재즈/.test(genreText)) {
+    add('P-funk jazz groove');
+    if (/record\s*scratch|scratch|스크래치|turntable|턴테이블/.test(text)) add('scratch-led breaks');
+    if (/horn|brass|혼|브라스|stab|스탭/.test(text)) add('horn-stab accents');
+    if (/late[-\s]?night|night|stop|정류장|밤|새벽/.test(text)) add('late-night stop tension');
+    else add('syncopated funk-jazz hook');
+  } else if (/cool\s*jazz|jazz|재즈/.test(genreText)) {
+    add('flexible jazz groove');
+    if (/p[-\s]?funk|피\s*펑크|funk|펑크/.test(text + ' ' + genreText)) add('P-funk jazz pocket');
+    if (/record\s*scratch|scratch|스크래치|turntable|턴테이블/.test(text)) add('scratch-led breaks');
+    if (/horn|brass|혼|브라스|stab|스탭/.test(text)) add('horn-stab accents');
+    if (/late[-\s]?night|night|stop|정류장|밤|새벽/.test(text)) add('late-night stop tension');
+    if (/outrun|아웃런/.test(text + ' ' + genreText)) add('outrun drive contrast');
+    if (/low[-\s]?end|저음|beat|비트/.test(text)) add('soft rhythmic pocket');
+  } else if (/blues\s*rock|블루스\s*록/.test(genreText)) {
+    add('band-driven blues-rock build');
+    if (/house|하우스/.test(text + ' ' + genreText)) add('house pulse contrast');
+    if (/guitar|기타|solo|솔로/.test(text)) add('guitar-led chorus release');
+  } else if (/trot|트로트/.test(genreText)) {
+    add('steady traditional-trot rhythm');
+    add('rounded vibrato space');
+    if (/melodic\s*rap|멜로딕\s*랩/.test(text + ' ' + genreText)) add('melodic-rap bridge turn');
+  } else if (/post[-_\s]?punk|포스트\s*펑크|postpunk/.test(genreText)) {
+    add('angular post-punk groove');
+    if (/singalong|따라\s*부르는|후렴/.test(text)) add('singalong chorus turn');
+  }
+
+  const sceneHook = buildArrangementSceneHook(params);
+  if (sceneHook) add(sceneHook);
+
+  return parts.slice(0, 5);
+}
+
+
+function removeIncompleteAtmosphereEnding(value: string): string {
+  let cleaned = cleanupPromptTail(value);
+  cleaned = cleaned
+    .replace(/\bwhere\s+words\s+that\s+never(?:\s+\w+){0,4}\s*$/i, 'where unsaid words stay unresolved')
+    .replace(/\bwhere\s+(?:the\s+)?(?:words|feelings|memories|promises|silence)\s+that\s+never(?:\s+\w+){0,4}\s*$/i, 'where unresolved feelings stay present')
+    .replace(/\bwhere\s+[^,]{1,52}\s+(?:that|who|which|when|while|with|in|and|or|to|of|for|from|through|around)\s*$/i, '')
+    .replace(/\b(?:where|that|with|in|and|or|while|as|through|around|into|from|to|of|for)\s*$/i, '')
+    .replace(/,\s*,/g, ',')
+    .replace(/\s+,/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleanupPromptTail(cleaned);
+}
+
+function finalizeAtmosphereSentence(value: string): string {
+  let cleaned = cleanupPromptTail(value);
+  cleaned = cleaned
+    .replace(/\b(a|an)\s+([a-z][a-z\s-]+?)\s+scene\s+in\s+\2(?:\s+scene)?\s+in\b/gi, '$1 $2 scene in')
+    .replace(/\b(a|an)\s+([a-z][a-z\s-]+?)\s+scene\s+in\s+\2(?:\s+scene)?(?:\s*,|$)/gi, '$1 $2 scene')
+    .replace(/\b([a-z][a-z\s-]+?\s+scene)\s+in\s+\1\b/gi, '$1')
+    .replace(/\b(scene)\s+in\s+([^,]+?)\s+scene\s+in\b/gi, '$1 in')
+    .replace(/\b(an?\s+[^,]+?\s+scene)\s+in\s+an?\s+\1\b/gi, '$1')
+    .replace(/\b(unresolved misunderstanding scene)\s+in\s+unresolved misunderstanding\b/gi, '$1')
+    .replace(/\b(tender affection scene)\s+in\s+tender affection\b/gi, '$1')
+    .replace(/\b(quiet tender affection scene)\s+in\s+quiet tender affection\b/gi, '$1')
+    .replace(/\b(anxious unresolved misunderstanding scene)\s+in\s+anxious unresolved misunderstanding\b/gi, '$1')
+    .replace(/\bwhere\s+words\s+that\s+never(?:\s+\w+){0,4}\s*$/i, 'where unsaid words stay unresolved')
+    .replace(/\bwhere\s+(?:the\s+)?(?:words|feelings|memories|promises|silence)\s+that\s+never(?:\s+\w+){0,4}\s*$/i, 'where unresolved feelings stay present')
+    .replace(/\s{2,}/g, ' ');
+
+  cleaned = removeRepeatedAtmosphereFragments(cleaned);
+  cleaned = removeIncompleteAtmosphereEnding(cleaned);
+  return cleanupPromptTail(cleaned);
+}
+
+function splitArrangementParts(value: string): string[] {
+  return String(value || '')
+    .split(',')
     .map((part) => cleanupPromptTail(part))
     .filter(Boolean);
+}
 
-  if (intentParts.length) {
-    const shouldAppendIntent =
-      /controlled verse and contradictory hook|focused hook$|spatial echoes$/i.test(cleaned) ||
-      intentParts.some((part) => !lower.includes(part.toLowerCase().replace(/^and\s+/, '')));
+function removeRepeatedAtmosphereFragments(value: string): string {
+  let cleaned = cleanupPromptTail(value);
+  cleaned = cleaned
+    .replace(/\b(a|an)\s+([a-z][a-z\s-]+?)\s+scene\s+in\s+\2(?:\s+scene)?\s+in\b/gi, '$1 $2 scene in')
+    .replace(/\b(a|an)\s+([a-z][a-z\s-]+?)\s+scene\s+in\s+\2(?:\s+scene)?(?:\s*,|$)/gi, '$1 $2 scene')
+    .replace(/\b(tender affection scene)\s+in\s+tender affection\s+in\b/gi, '$1 in')
+    .replace(/\b(held-back confession scene)\s+in\s+held-back confession\s+in\b/gi, '$1 in')
+    .replace(/\b(lingering memory scene)\s+in\s+lingering memory\s+in\b/gi, '$1 in')
+    .replace(/\b(quiet change scene)\s+in\s+quiet change\s+in\b/gi, '$1 in')
+    .replace(/\b(a|an)\s+([a-z][a-z\s-]+?\s+scene)\s+in\s+\2\b/gi, '$1 $2')
+    .replace(/\bwith\s+([^,]+?)\s+with\s+\1\b/gi, 'with $1')
+    .replace(/\b([^,]+? tone)\s+and\s+\1\b/gi, '$1')
+    .replace(/\s{2,}/g, ' ');
+  return cleanupPromptTail(cleaned);
+}
 
-    if (shouldAppendIntent) {
-      const existingParts = cleaned.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
-      const merged = dedupePromptParts([...existingParts, ...intentParts], 16);
-      cleaned = mergeHookArrangementParts(merged).join(', ');
+function isGenericArrangementPart(part: string): boolean {
+  return /^(?:sharp section contrast|polished chorus lift|warm release|soft emotional release|focused hook|singalong chorus|phrase-led singalong chorus|contradictory hook with calm delivery|subtle lift|clean hook lift|clear sectional contrast|bouncy section flow|improvisational interplay|controlled emotional turn)$/i.test(cleanupPromptTail(part));
+}
+
+function isInstrumentPerformanceArrangementPart(part: string): boolean {
+  return /\b(?:wobble-bass pressure|808 low-end hits|punchy drum hits|funk-guitar bounce|funk-guitar pulses|muted funk-guitar tension|double-drum lift|double-drum drive|double-drum emotional lift|dreamy synth breaks|dreamy synth haze|dreamy synth space|driving bass movement|angular guitar stabs)\b/i.test(part);
+}
+
+function isThinArrangementParts(parts: string[]): boolean {
+  const nonTempo = parts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+  if (!nonTempo.length) return true;
+  if (nonTempo.length <= 1) return true;
+  const genericCount = nonTempo.filter(isGenericArrangementPart).length;
+  if (nonTempo.length <= 2 && genericCount >= 1) return true;
+  const text = nonTempo.join(' ').toLowerCase();
+  if (/^(?:muted guitar tension|urban reflections|spatial echoes|intimate room echoes|focused hook|soft emotional release|warm release)$/i.test(text.trim())) return true;
+  return false;
+}
+
+function buildArrangementRescueParts(lineParts: string[], intentParts: string[], params: GenerateSongParams): string[] {
+  const tempo = lineParts.find((part) => /\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part))
+    || normalizeTempoForArrangement(buildTempoPromptPhrase(params))
+    || getGenreDefaultTempoForArrangement(params);
+  const usefulIntent = intentParts
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .filter((part) => !isGenericArrangementPart(part))
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part));
+  const stabilizers = buildArrangementStabilizerParts(params)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part));
+  const rescued = dedupePromptParts([tempo, ...usefulIntent, ...stabilizers], 7);
+  return rescued.length > 1 ? rescued : lineParts;
+}
+
+function replaceGenericArrangementHooks(parts: string[], intentParts: string[]): string[] {
+  if (!intentParts.length) return parts;
+  const intentText = intentParts.join(' ').toLowerCase();
+  const specificHooks = intentParts.filter((part) => /\b(?:hook|chorus|lift|turn|bridge|release|drop|contrast|transition|break|pulse|groove|rhythm|build)\b/i.test(part));
+  const replacement = specificHooks.find((part) => !isGenericArrangementPart(part)) || intentParts.find((part) => !isGenericArrangementPart(part));
+  let usedReplacement = false;
+  const mapped = parts.flatMap((part) => {
+    if (!isGenericArrangementPart(part)) return [part];
+    if (!replacement) return [];
+    const lowerPart = part.toLowerCase();
+    // Keep a generic hook only when the intent has no better hook/chorus/turn information.
+    if (/focused hook|soft emotional release|warm release|polished chorus lift|subtle lift|singalong chorus|phrase-led singalong chorus/.test(lowerPart) && /hook|chorus|lift|turn|bridge|release|drop|contrast/.test(intentText)) {
+      if (usedReplacement) return [];
+      usedReplacement = true;
+      return [replacement];
+    }
+    return [part];
+  });
+  return mapped.length ? mapped : parts;
+}
+
+
+function arrangementSemanticFamily(part: string): string {
+  const value = cleanupPromptTail(part).toLowerCase();
+  if (/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*bpm\b/i.test(value)) return 'tempo';
+  if (/jazz.*(?:groove|pocket)|(?:groove|pocket).*jazz|syncopated turns|conversational phrasing|smooth instrumental breaks/.test(value)) return 'jazz-motion';
+  if (/punk.*(?:lift|contrast)|rock.*(?:lift|contrast)|sudden switch|switch-ups|clear sectional contrast/.test(value)) return 'contrast-lift';
+  if (/dreamy.*(?:break|section|space)|dream.*break|synth break/.test(value)) return 'dream-break';
+  if (/office|after-work|회사|urban love|everyday-love|city-cafe|neighborhood|subway|scene hook|walk hook|release hook|confession hook|waiting hook|reunion|memory|love hook|fluttering hook/.test(value)) return 'scene-hook';
+  if (/phonk|cowbell|drill rhythm|g-funk|funk groove|ballad-trot|trot rhythm|deep-house|house.*groove|techno|sarod|italian-pop|mystery-bgm|bgm/.test(value)) return 'main-motion';
+  if (/generic|focused hook|bouncy section flow|soft emotional release|controlled emotional turn|improvisational interplay/.test(value)) return 'generic';
+  return value.replace(/\b(?:and|with|the|a|an)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').slice(0, 3).join(' ');
+}
+
+function balanceNormalArrangementLength(line: string, stabilizerParts: string[], params: GenerateSongParams): string {
+  // Keep this only for normal prompt mode. Situation mode has a different structure
+  // and should not inherit normal-mode compression rules.
+  if (hasSituation(params.situation)) return cleanupPromptTail(line);
+
+  const currentParts = splitArrangementParts(line);
+  if (!currentParts.length) return cleanupPromptTail(line);
+
+  const tempo = currentParts.find((part) => /\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+  const nonTempo = currentParts.filter((part) => part !== tempo);
+  const hasTooManyParts = nonTempo.length > 5;
+  const hasGenericOnlyEnding = nonTempo.length <= 2 || nonTempo.some(isGenericArrangementPart);
+  const hasDuplicateFamilies = (() => {
+    const seen = new Set<string>();
+    for (const part of nonTempo) {
+      const family = arrangementSemanticFamily(part);
+      if (family && seen.has(family)) return true;
+      seen.add(family);
+    }
+    return false;
+  })();
+
+  if (!hasTooManyParts && !hasGenericOnlyEnding && !hasDuplicateFamilies) {
+    return cleanupPromptTail(line);
+  }
+
+  const candidates = dedupePromptParts([
+    ...(tempo ? [tempo] : []),
+    ...stabilizerParts,
+    ...nonTempo,
+  ], 18)
+    .map(cleanupPromptTail)
+    .filter(Boolean)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part))
+    .filter((part) => !isGenericArrangementPart(part));
+
+  const balanced: string[] = [];
+  const families = new Set<string>();
+  for (const part of candidates) {
+    const family = arrangementSemanticFamily(part);
+    if (family === 'tempo') {
+      if (!balanced.some((item) => arrangementSemanticFamily(item) === 'tempo')) balanced.push(part);
+      continue;
+    }
+    if (families.has(family)) continue;
+    families.add(family);
+    balanced.push(part);
+    const nonTempoCount = balanced.filter((item) => arrangementSemanticFamily(item) !== 'tempo').length;
+    if (nonTempoCount >= 4) break;
+  }
+
+  // If the source was too short, allow one more specific stabilizer cue, but never
+  // let the line grow back into a long list.
+  if (balanced.filter((item) => arrangementSemanticFamily(item) !== 'tempo').length < 3) {
+    for (const part of stabilizerParts) {
+      const family = arrangementSemanticFamily(part);
+      if (!families.has(family) && !isGenericArrangementPart(part)) {
+        families.add(family);
+        balanced.push(part);
+      }
+      if (balanced.filter((item) => arrangementSemanticFamily(item) !== 'tempo').length >= 3) break;
     }
   }
 
-  if (/half-time dubstep drop|wobble-bass pressure|K-band chorus lift/i.test(intent.arrangementMotion)) {
-    cleaned = cleaned
-      .replace(/\bsharp section contrast\s*,?\s*/gi, '')
-      .replace(/,\s*,/g, ',')
-      .replace(/^,\s*|,\s*$/g, '')
-      .trim();
+  return cleanupPromptTail(mergeHookArrangementParts(balanced.filter(Boolean)).join(', '));
+}
+
+function applyIntentToArrangementLine(line: string, params: GenerateSongParams): string {
+  const intent = buildPromptIntent(params);
+  let cleaned = cleanupPromptTail(String(line || ''));
+  const stabilizerParts = buildArrangementStabilizerParts(params);
+  const intentParts = dedupePromptParts([
+    ...splitArrangementParts(intent.arrangementMotion.replace(/\band\b/g, ',')),
+    ...stabilizerParts,
+  ], 10);
+
+  // Remove terms that belong in [Instruments] rather than [Arrangement].
+  let meaningfulParts = splitArrangementParts(cleaned)
+    .map((part) => cleanupPromptTail(part)
+      .replace(/\bStudy\s+Beats\s+fusion\b/gi, 'subtle study-beat pulse')
+      .replace(/\bbreath-led\s+verse\s+with\s+a\s+restrained\s+hook\b/gi, 'breath-blurred verse with a restrained hook')
+      .replace(/\bcontrolled\s+verse\s+and\s+contradictory\s+hook\b/gi, 'controlled verse-to-hook tension')
+      .replace(/\bcontrolled\s+emotional\s+turn\s+and\s+bouncy\s+section\s+flow\b/gi, 'controlled emotional turn')
+      .replace(/\buse\s+guitar-like\s+synth\s+lead\s+as\s+short\s+point\s+accents\s+in\s+key\s+transitions\b/gi, 'synth-lead transition accents')
+      .replace(/\bno\s+balanced\s+call-response\b/gi, 'one-sided monologue flow')
+      .replace(/\bone-sided\s+monologue\s+focus\s+with\s+single-owner\s+choruses\b/gi, 'one-sided monologue flow, single-owner choruses')
+      .replace(/\bspacey\s+echo\s+breaks\s*,\s*spatial\s+echoes\b/gi, 'spacey echo breaks')
+      .replace(/\bspatial\s+echoes\s*,\s*spacey\s+echo\s+breaks\b/gi, 'spacey echo breaks')
+    )
+    .filter(Boolean)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part));
+
+  meaningfulParts = replaceGenericArrangementHooks(meaningfulParts, intentParts);
+
+  const lower = meaningfulParts.join(' ').toLowerCase();
+  const nonTempoBeforeAppend = meaningfulParts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+  const stabilizerMissing = stabilizerParts.some((part) => !lower.includes(part.toLowerCase().replace(/^and\s+/, '')));
+  const shouldAppendIntent = Boolean(intentParts.length) && (
+    nonTempoBeforeAppend.length <= 3 ||
+    meaningfulParts.some(isGenericArrangementPart) ||
+    (Boolean(stabilizerParts.length) && stabilizerMissing) ||
+    intentParts.some((part) => !lower.includes(part.toLowerCase().replace(/^and\s+/, '')))
+  );
+
+  if (shouldAppendIntent) {
+    meaningfulParts = dedupePromptParts([...meaningfulParts, ...intentParts], 16)
+      .filter((part) => !isInstrumentPerformanceArrangementPart(part));
+    meaningfulParts = replaceGenericArrangementHooks(meaningfulParts, intentParts);
   }
 
-  cleaned = cleaned
-    .replace(/\bStudy\s+Beats\s+fusion\b/gi, 'subtle study-beat pulse')
-    .replace(/\bbreath-led\s+verse\s+with\s+a\s+restrained\s+hook\b/gi, 'breath-blurred verse with a restrained hook')
+  cleaned = mergeHookArrangementParts(meaningfulParts).join(', ')
+    .replace(/\bsharp section contrast\s*,\s*/gi, '')
     .replace(/\bspacey\s+echo\s+breaks\s*,\s*spatial\s+echoes\b/gi, 'spacey echo breaks')
     .replace(/\bspatial\s+echoes\s*,\s*spacey\s+echo\s+breaks\b/gi, 'spacey echo breaks')
-    .replace(/\bcontrolled\s+verse\s+and\s+contradictory\s+hook\b/gi, intent.arrangementMotion || 'controlled verse-to-hook tension')
     .replace(/,\s*,/g, ',')
-    .replace(/\s+,/g, ',');
+    .replace(/\s+,/g, ',')
+    .replace(/^,\s*|,\s*$/g, '')
+    .trim();
 
-  const meaningfulParts = cleaned.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
-  const nonTempoMeaningfulParts = meaningfulParts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
-  const genericArrangementPartCount = nonTempoMeaningfulParts.filter((part) =>
-    /^(?:sharp section contrast|polished chorus lift|warm release|soft emotional release|focused hook|singalong chorus|phrase-led singalong chorus|contradictory hook with calm delivery)$/i.test(part)
-  ).length;
+  const finalParts = splitArrangementParts(cleaned);
+  const nonTempoMeaningfulParts = finalParts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+  const genericArrangementPartCount = nonTempoMeaningfulParts.filter(isGenericArrangementPart).length;
   const looksTooThin =
+    isThinArrangementParts(finalParts) ||
     nonTempoMeaningfulParts.length <= 1 ||
-    (nonTempoMeaningfulParts.length <= 2 && genericArrangementPartCount === nonTempoMeaningfulParts.length) ||
+    (nonTempoMeaningfulParts.length <= 2 && genericArrangementPartCount >= 1) ||
     /^(?:\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM,\s*)?(?:intimate room echoes|spatial echoes|urban reflections)$/i.test(cleaned);
-  if (looksTooThin && intent.arrangementMotion) {
-    const expanded = dedupePromptParts([...meaningfulParts, ...intent.arrangementMotion.split(/,|\band\b/).map((part) => cleanupPromptTail(part)).filter(Boolean)], 16);
-    cleaned = mergeHookArrangementParts(expanded).join(', ');
+
+  const missingStableAfterMerge = stabilizerParts.length > 0 && stabilizerParts.every((part) => !cleaned.toLowerCase().includes(part.toLowerCase()));
+  if ((looksTooThin || missingStableAfterMerge) && intentParts.length) {
+    cleaned = mergeHookArrangementParts(buildArrangementRescueParts(finalParts, intentParts, params)).join(', ');
+  }
+
+  // Final safety: if a random combination still ends on a bare generic hook/flow,
+  // rebuild from stable song-movement cues rather than deleting the arrangement.
+  const postRescueParts = splitArrangementParts(cleaned);
+  const postNonTempo = postRescueParts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+  const stillWeak = postNonTempo.length <= 2 || postNonTempo.some(isGenericArrangementPart) || /\b(?:bouncy section flow|focused hook|soft emotional release|contradictory hook with calm delivery|clear sectional contrast|improvisational interplay)\b/i.test(cleaned);
+  if (stillWeak && stabilizerParts.length >= 2) {
+    const tempo = postRescueParts.find((part) => /\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part))
+      || normalizeTempoForArrangement(buildTempoPromptPhrase(params))
+      || getGenreDefaultTempoForArrangement(params);
+    cleaned = mergeHookArrangementParts(dedupePromptParts([tempo, ...stabilizerParts], 7)).join(', ');
+  }
+
+  // Final main-genre priority guard: the first real movement should come from the
+  // primary genre, while style/mood hooks stay behind it. This prevents random
+  // combinations from starting with generic emotion or only a secondary texture.
+  if (stabilizerParts.length) {
+    const partsAfterWeakFix = splitArrangementParts(cleaned);
+    const tempoPart = partsAfterWeakFix.find((part) => /\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
+    const nonTempoAfterWeakFix = partsAfterWeakFix.filter((part) => part !== tempoPart);
+    const primaryMove = stabilizerParts[0];
+    const hasPrimaryMove = nonTempoAfterWeakFix.some((part) => part.toLowerCase() === primaryMove.toLowerCase());
+    if (!hasPrimaryMove && nonTempoAfterWeakFix.length <= 5) {
+      cleaned = mergeHookArrangementParts(dedupePromptParts([tempoPart, primaryMove, ...nonTempoAfterWeakFix, ...stabilizerParts.slice(1)], 7).filter(Boolean)).join(', ');
+    }
+  }
+
+  cleaned = balanceNormalArrangementLength(cleaned, stabilizerParts, params);
+
+  const finalGuardParts = splitArrangementParts(cleaned);
+  const finalGuardTempo = finalGuardParts.find((part) => /\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part))
+    || normalizeTempoForArrangement(buildTempoPromptPhrase(params))
+    || getGenreDefaultTempoForArrangement(params);
+  const finalGuardNonTempo = finalGuardParts.filter((part) => part !== finalGuardTempo);
+  const needsMinimumMovementGuard =
+    !hasSituation(params.situation) &&
+    (finalGuardNonTempo.length <= 1 ||
+      finalGuardNonTempo.every(isGenericArrangementPart) ||
+      /^(?:\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM,\s*)?(?:focused hook|bouncy section flow|controlled emotional turn)$/i.test(cleaned));
+  if (needsMinimumMovementGuard) {
+    const minimumParts = dedupePromptParts([
+      finalGuardTempo,
+      ...stabilizerParts,
+      ...intentParts.filter((part) => !isInstrumentPerformanceArrangementPart(part)),
+      ...finalGuardNonTempo,
+    ], 8).filter(Boolean);
+    cleaned = mergeHookArrangementParts(minimumParts).join(', ');
+    cleaned = balanceNormalArrangementLength(cleaned, stabilizerParts, params);
   }
 
   if (getSelectedPrimaryGenreKey(params) === 'trot' && /youthful pleading warmth/i.test(intent.vocalDelivery)) {
-    const tempoMatch = cleaned.match(/\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM/i);
+    const tempoMatch = cleaned.match(/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i);
     const tempo = tempoMatch ? tempoMatch[0] : normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
     const forcedParts = [
       tempo,

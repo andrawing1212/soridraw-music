@@ -6118,6 +6118,9 @@ function dedupeInstrumentSemantic(items: string[]): string[] {
     if (/modern bass|warm bass|funk bass|groovy bass|jazz-funk bass|upright bass|synthetic bass|sub bass|clean bass|bass/.test(lower)) return 'bass';
     if (/off[-\s]?beat skank guitar|off[-\s]?beat guitar|skank/.test(lower)) return 'offbeat-skank-guitar';
     if (/hand claps|clapping|clap/.test(lower)) return 'hand-claps';
+    if (/brass section|brass/.test(lower)) return 'brass-section';
+    if (/accordion/.test(lower)) return 'accordion';
+    if (/trot rhythm/.test(lower)) return 'trot-rhythm';
     if (/cajon/.test(lower)) return 'cajon';
     if (/riser fx|glitch fx|fx|sfx|effect/.test(lower)) return 'fx';
     return lower.replace(/[^a-z0-9]+/g, ' ').trim();
@@ -8126,6 +8129,19 @@ function applyIntentToArrangementLine(line: string, params: GenerateSongParams):
   if (looksTooThin && intent.arrangementMotion) {
     const expanded = dedupePromptParts([...meaningfulParts, ...intent.arrangementMotion.split(/,|\band\b/).map((part) => cleanupPromptTail(part)).filter(Boolean)], 16);
     cleaned = mergeHookArrangementParts(expanded).join(', ');
+  }
+
+  if (getSelectedPrimaryGenreKey(params) === 'trot' && /youthful pleading warmth/i.test(intent.vocalDelivery)) {
+    const tempoMatch = cleaned.match(/\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM/i);
+    const tempo = tempoMatch ? tempoMatch[0] : normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
+    const forcedParts = [
+      tempo,
+      'steady traditional-trot rhythm',
+      'rounded vibrato space',
+      'youthful pleading lift',
+      'phrase-led singalong chorus',
+    ].filter(Boolean);
+    return cleanupPromptTail(dedupePromptParts(forcedParts, 8).join(', '));
   }
 
   return cleanupPromptTail(cleaned);

@@ -7898,6 +7898,33 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
     if (/연인|사랑|romance|love|친구|friend|대학생|캠퍼스|college|campus|풋풋|청춘/.test(text)) add('youthful almost-love lift');
     if (/새벽|dawn|거리|street|도시|city|urban|따라\s*부르는|singalong|후렴/.test(text)) add('dawn-street singalong chorus');
     if (/room|intimate|공항|방송|echo|잔향/.test(text)) add('intimate room echoes');
+  } else if (/post[-_\s]?punk|포스트\s*펑크|postpunk/.test(genreText)) {
+    const playfulOrBright = /장난|playful|comic|cute|귀여|밝|bright|upbeat|자유|free/.test(text);
+    const darkOrRestrained = /어두|dark|moody|무디|서늘|cold|restrained|차분|calm/.test(text);
+    if (darkOrRestrained) add('dark angular post-punk pulse');
+    else if (playfulOrBright) add('angular post-punk groove');
+    else add('restrained post-punk groove');
+    if (/funk\s*guitar|펑키\s*기타|funky\s*guitar/.test(text)) {
+      add(darkOrRestrained ? 'muted funk-guitar tension' : playfulOrBright ? 'playful funk-guitar bounce' : 'funk-guitar pulses');
+    }
+    if (/double\s*drums|더블\s*드럼/.test(text)) {
+      add(darkOrRestrained ? 'heavy double-drum drive' : playfulOrBright ? 'double-drum lift' : 'double-drum emotional lift');
+    }
+    if (/dreamy\s*synth|몽환\s*신스|dreamy|몽환|synth/.test(text)) {
+      add(darkOrRestrained ? 'dreamy synth haze' : playfulOrBright ? 'dreamy synth breaks' : 'dreamy synth space');
+    }
+    if (/고백|confession/.test(text) && /따라\s*부르는|singalong|후렴|chorus/.test(text)) add('singalong confession chorus');
+    else if (/따라\s*부르는|singalong|후렴|chorus/.test(text)) add(darkOrRestrained ? 'restrained singalong hook' : 'singalong chorus lift');
+  } else if (/dubstep|덥스텝/.test(genreText)) {
+    // Dubstep must never collapse into a generic "section contrast" cue.
+    // Its Arrangement identity is the drop structure, low-end pressure, and rhythmic hit design.
+    add(/half[-\s]?time|하프타임/.test(text) ? 'half-time dubstep drop' : 'half-time dubstep drop');
+    add('wobble-bass pressure');
+    if (/808|sub bass|low[-\s]?end|베이스|저음/.test(text)) add('808 low-end hits');
+    if (/punchy drums|hard snare|하드\s*스네어|펀치|drums|드럼/.test(text)) add('punchy drum hits');
+    if (/k[-\s]?band|band\s*pop\s*rock|pop\s*rock|밴드\s*팝|팝록|rock|록/.test(genreText + ' ' + text)) add('K-band chorus lift');
+    if (/2010s|polished|폴리시|glossy|pop energy/.test(text)) add('polished pop-rise bridge');
+    if (/정류장|station|stop|회상|memory|사랑|love|동화|fairy|magical|마법/.test(text)) add('magical late-night memory hook');
   } else if (/emo[-_\s]?rap|이모\s*랩/.test(genreText)) {
     add(/nu[-_\s]?disco|뉴\s*디스코|disco/.test(genreText) ? 'nu-disco emo-rap pulse' : 'guitar-led emo-rap groove');
     if (/guitar|기타|멜로딕\s*기타|melodic guitar/.test(text)) add('melodic guitar-loop motion');
@@ -7963,6 +7990,20 @@ function deriveIntentArrangement(params: GenerateSongParams): string {
     add('rising synth build');
     add('euphoric hook lift');
   }
+
+  // Final instrument-to-arrangement role mapping.
+  // Instruments should not only appear in [Instruments]; key selected instruments
+  // also need a compact performance role in [Arrangement]. This is deliberately
+  // generic so random combinations do not require one-off patching.
+  const playfulOrBrightGlobal = /장난|playful|comic|cute|귀여|밝|bright|upbeat|자유|free/.test(text);
+  const darkOrRestrainedGlobal = /어두|dark|moody|무디|서늘|cold|restrained|차분|calm/.test(text);
+  if (!/post[-_\s]?punk|포스트\s*펑크|postpunk/.test(genreText)) {
+    if (/funk\s*guitar|펑키\s*기타|funky\s*guitar/.test(text)) add(darkOrRestrainedGlobal ? 'muted funk-guitar tension' : playfulOrBrightGlobal ? 'playful funk-guitar bounce' : 'funk-guitar pulses');
+    if (/double\s*drums|더블\s*드럼/.test(text)) add(darkOrRestrainedGlobal ? 'heavy double-drum drive' : playfulOrBrightGlobal ? 'double-drum lift' : 'double-drum emotional lift');
+    if (/dreamy\s*synth|몽환\s*신스/.test(text)) add(darkOrRestrainedGlobal ? 'dreamy synth haze' : playfulOrBrightGlobal ? 'dreamy synth breaks' : 'dreamy synth space');
+  }
+  if (/bass|베이스/.test(text) && /driving|드라이빙|drive/.test(text)) add('driving bass movement');
+  if (/angular\s*guitar|각진\s*기타/.test(text)) add('angular guitar stabs');
 
   if (/cute[-\s]?to[-\s]?madness|귀여움.*광기|광기/.test(text)) add('cute-to-madness switch');
   if (/obsess|집착/.test(text) && /cute|귀여움|광기/.test(text)) add('obsessive undertow');
@@ -8130,6 +8171,14 @@ function applyIntentToArrangementLine(line: string, params: GenerateSongParams):
     }
   }
 
+  if (/half-time dubstep drop|wobble-bass pressure|K-band chorus lift/i.test(intent.arrangementMotion)) {
+    cleaned = cleaned
+      .replace(/\bsharp section contrast\s*,?\s*/gi, '')
+      .replace(/,\s*,/g, ',')
+      .replace(/^,\s*|,\s*$/g, '')
+      .trim();
+  }
+
   cleaned = cleaned
     .replace(/\bStudy\s+Beats\s+fusion\b/gi, 'subtle study-beat pulse')
     .replace(/\bbreath-led\s+verse\s+with\s+a\s+restrained\s+hook\b/gi, 'breath-blurred verse with a restrained hook')
@@ -8141,7 +8190,13 @@ function applyIntentToArrangementLine(line: string, params: GenerateSongParams):
 
   const meaningfulParts = cleaned.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
   const nonTempoMeaningfulParts = meaningfulParts.filter((part) => !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b/i.test(part));
-  const looksTooThin = nonTempoMeaningfulParts.length <= 1 || /^(?:\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM,\s*)?(?:intimate room echoes|spatial echoes|urban reflections)$/i.test(cleaned);
+  const genericArrangementPartCount = nonTempoMeaningfulParts.filter((part) =>
+    /^(?:sharp section contrast|polished chorus lift|warm release|soft emotional release|focused hook|singalong chorus|phrase-led singalong chorus|contradictory hook with calm delivery)$/i.test(part)
+  ).length;
+  const looksTooThin =
+    nonTempoMeaningfulParts.length <= 1 ||
+    (nonTempoMeaningfulParts.length <= 2 && genericArrangementPartCount === nonTempoMeaningfulParts.length) ||
+    /^(?:\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM,\s*)?(?:intimate room echoes|spatial echoes|urban reflections)$/i.test(cleaned);
   if (looksTooThin && intent.arrangementMotion) {
     const expanded = dedupePromptParts([...meaningfulParts, ...intent.arrangementMotion.split(/,|\band\b/).map((part) => cleanupPromptTail(part)).filter(Boolean)], 16);
     cleaned = mergeHookArrangementParts(expanded).join(', ');

@@ -6066,6 +6066,9 @@ function normalizeInstrumentPromptForGenre(value: string, params: GenerateSongPa
     .replace(/\bPiano\b/g, 'piano')
     .replace(/\bClapping\b/gi, 'hand claps')
     .replace(/\bCajon\b/g, 'cajon')
+    .replace(/^Accordion$/i, 'accordion')
+    .replace(/^Brass$/i, 'brass section')
+    .replace(/^Trot rhythm$/i, 'trot rhythm')
     .replace(/\bFrench horn\b/g, 'French horn')
     .replace(/\bSaw[-\s]?tooth leads?\b/gi, 'saw-tooth leads')
     .replace(/\bArpeggiated bass\b/gi, 'arpeggiated bass')
@@ -6118,7 +6121,7 @@ function dedupeInstrumentSemantic(items: string[]): string[] {
     if (/modern bass|warm bass|funk bass|groovy bass|jazz-funk bass|upright bass|synthetic bass|sub bass|clean bass|bass/.test(lower)) return 'bass';
     if (/off[-\s]?beat skank guitar|off[-\s]?beat guitar|skank/.test(lower)) return 'offbeat-skank-guitar';
     if (/hand claps|clapping|clap/.test(lower)) return 'hand-claps';
-    if (/brass section|brass/.test(lower)) return 'brass-section';
+    if (/brass section|(^|[^a-z])brass([^a-z]|$)/.test(lower)) return 'brass-section';
     if (/accordion/.test(lower)) return 'accordion';
     if (/trot rhythm/.test(lower)) return 'trot-rhythm';
     if (/cajon/.test(lower)) return 'cajon';
@@ -6127,7 +6130,20 @@ function dedupeInstrumentSemantic(items: string[]): string[] {
   };
   items.forEach((item) => {
     const key = semanticKey(item);
-    if (!key || seen.has(key)) return;
+    if (!key) return;
+    const existingIndex = result.findIndex((existing) => semanticKey(existing) === key);
+    if (existingIndex >= 0) {
+      const existing = result[existingIndex];
+      const existingLower = existing.toLowerCase();
+      const itemLower = item.toLowerCase();
+      const preferNew =
+        (key === 'brass-section' && /brass section/.test(itemLower) && !/brass section/.test(existingLower)) ||
+        item.length > existing.length + 8;
+      if (preferNew) result[existingIndex] = item;
+      seen.add(key);
+      return;
+    }
+    if (seen.has(key)) return;
     seen.add(key);
     result.push(item);
   });

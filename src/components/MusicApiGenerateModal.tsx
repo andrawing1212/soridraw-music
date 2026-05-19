@@ -53,6 +53,26 @@ const SUNO_MODEL_OPTIONS: { id: SunoModelVersion; label: string; subLabel: strin
   { id: 'V4_5', label: 'v4.5', subLabel: '안정 비교' },
 ];
 
+const SUNO_MODEL_STORAGE_KEY = 'soridraw_last_suno_model_version';
+
+const isSunoModelVersion = (value: unknown): value is SunoModelVersion =>
+  value === 'V5_5' || value === 'V5' || value === 'V4_5';
+
+const getStoredSunoModelVersion = (): SunoModelVersion => {
+  try {
+    const stored = localStorage.getItem(SUNO_MODEL_STORAGE_KEY);
+    return isSunoModelVersion(stored) ? stored : 'V5_5';
+  } catch {
+    return 'V5_5';
+  }
+};
+
+const rememberSunoModelVersion = (value: SunoModelVersion) => {
+  try {
+    localStorage.setItem(SUNO_MODEL_STORAGE_KEY, value);
+  } catch {}
+};
+
 const getSunoModelMeta = (id: SunoModelVersion) => SUNO_MODEL_OPTIONS.find((item) => item.id === id) || SUNO_MODEL_OPTIONS[0];
 
 export default function MusicApiGenerateModal({
@@ -95,7 +115,7 @@ export default function MusicApiGenerateModal({
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
-  const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>('V5_5');
+  const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => getStoredSunoModelVersion());
   const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
   const canUseBatchTargets = !isMain && musicApiTargets.length > 1;
   const [targetMode, setTargetMode] = useState<MusicApiTargetMode>('current');
@@ -168,6 +188,7 @@ export default function MusicApiGenerateModal({
 
   const handleConfirm = () => {
     if (!hasApiKey) return;
+    if (!isMain) rememberSunoModelVersion(sunoModelVersion);
     const langs = includeLyrics ? lyricLanguages.slice(0, maxCount) : [];
     const titleLanguage = langs.find((lang) => lang !== 'ko') || langs[0] || 'ko';
     onConfirm(titleLanguage, includeLyrics, langs, isMain ? generationCount : 1, {
@@ -232,6 +253,7 @@ export default function MusicApiGenerateModal({
                       type="button"
                       onClick={() => {
                         setSunoModelVersion(item.id);
+                        rememberSunoModelVersion(item.id);
                         setIsSunoModelOpen(false);
                       }}
                       className={`w-full px-3 py-2 text-left transition-all ${sunoModelVersion === item.id ? accentSelected : 'text-[var(--text-secondary)] hover:bg-white/5'}`}

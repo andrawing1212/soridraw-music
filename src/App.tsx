@@ -365,6 +365,33 @@ import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion } from './components/MusicApiGenerateModal';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
+
+const SUNO_MODEL_STORAGE_KEY = 'soridraw_last_suno_model_version';
+const MUSIC_API_LIBRARY_WATCH_SINCE_KEY = 'soridraw_music_api_library_watch_since';
+
+type MusicApiLibraryIndicator = 'generating' | 'completed' | null;
+
+const isSunoModelVersionValue = (value: unknown): value is SunoModelVersion =>
+  value === 'V5_5' || value === 'V5' || value === 'V4_5';
+
+const readLastSunoModelVersion = (): SunoModelVersion => {
+  try {
+    const stored = localStorage.getItem(SUNO_MODEL_STORAGE_KEY);
+    return isSunoModelVersionValue(stored) ? stored : 'V5_5';
+  } catch {
+    return 'V5_5';
+  }
+};
+
+const getFirestoreTimeMs = (value: any): number => {
+  if (!value) return 0;
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  if (typeof value === 'number') return value;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -2087,7 +2114,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>> }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin, musicApiLibraryIndicator, clearMusicApiLibraryIndicator }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; musicApiLibraryIndicator?: 'generating' | 'completed' | null; clearMusicApiLibraryIndicator?: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2095,6 +2122,17 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const renderMusicApiLibraryIndicator = () => {
+    if (!musicApiLibraryIndicator) return null;
+    const isGenerating = musicApiLibraryIndicator === 'generating';
+    return (
+      <span
+        className={`absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-[var(--card-bg)] ${isGenerating ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.75)]'}`}
+        title={isGenerating ? 'Music API 생성 중' : 'Music API 생성 완료'}
+      />
+    );
+  };
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -2357,13 +2395,15 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
               {/* Suno Library Icon */}
               <button 
                 onClick={() => {
+                  clearMusicApiLibraryIndicator?.();
                   navigate('/suno-library');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                   setIsExpanded(false);
                 }}
-                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
+                className="relative p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="Suno Library"
               >
+                {renderMusicApiLibraryIndicator()}
                 <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-[var(--text-primary)]">
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm opacity-80" />
                   <div className="w-[4px] h-[16px] md:h-[18px] border-[1.5px] border-current rounded-sm" />
@@ -2484,7 +2524,7 @@ function App() {
       const token = await user.getIdToken();
       const targetMode = options?.targetMode === 'batch' ? 'batch' : 'current';
       const targetSongs = targetMode === 'batch' ? getMusicApiBatchSongs() : [result];
-      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || 'V5_5';
+      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || readLastSunoModelVersion();
 
       if (targetSongs.length === 0) {
         showToast("Music API로 보낼 곡이 없습니다.");
@@ -2507,6 +2547,8 @@ function App() {
       const getMusicApiTitle = (song: SongResult, _selectedLanguage: LanguageCode | null) => {
         return formatUnifiedTitle(song);
       };
+
+      let successfulRequests = 0;
 
       for (let i = 0; i < targetSongs.length; i += 1) {
         const song = targetSongs[i];
@@ -2547,8 +2589,20 @@ function App() {
               includeLyrics,
               lyricLanguages: resolvedLyricLanguages,
               lyricLanguage: selectedLanguage || null,
+              // Keep every likely model key in sync.
+              // The Cloud Function/API must receive the exact Suno enum, or it can silently fall back to V5_5.
               model: sunoModelVersion,
               sunoVersion: sunoModelVersion,
+              sunoModelVersion,
+              modelVersion: sunoModelVersion,
+              mv: sunoModelVersion,
+              requestPayload: {
+                model: sunoModelVersion,
+                sunoVersion: sunoModelVersion,
+                sunoModelVersion,
+                modelVersion: sunoModelVersion,
+                mv: sunoModelVersion,
+              },
               generationIndex: i + 1,
               generationCount: targetSongs.length,
               sourceGenerationBatchId: (song.appliedKeywords as any)?.generationBatchId || null,
@@ -2563,6 +2617,17 @@ function App() {
           showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${targetSongs.length})\n${data.error || "알 수 없는 오류"}`);
           return;
         }
+
+        successfulRequests += 1;
+      }
+
+      if (successfulRequests > 0) {
+        const watchSince = Date.now();
+        try {
+          localStorage.setItem(MUSIC_API_LIBRARY_WATCH_SINCE_KEY, String(watchSince));
+          localStorage.setItem(SUNO_MODEL_STORAGE_KEY, sunoModelVersion);
+        } catch {}
+        setMusicApiLibraryIndicator('generating');
       }
 
       showToast(`Music API 생성 요청이 완료되었습니다.\n${targetSongs.length}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
@@ -2768,6 +2833,77 @@ function App() {
       return false;
     }
   });
+  const [musicApiLibraryIndicator, setMusicApiLibraryIndicator] = useState<MusicApiLibraryIndicator>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setMusicApiLibraryIndicator(null);
+      return;
+    }
+
+    let watchSince = 0;
+    try {
+      watchSince = Number(localStorage.getItem(MUSIC_API_LIBRARY_WATCH_SINCE_KEY) || 0);
+    } catch {}
+
+    if (!watchSince) {
+      setMusicApiLibraryIndicator(null);
+      return;
+    }
+
+    const recentTracksQuery = query(
+      collection(db, 'suno_tracks', user.uid, 'tracks'),
+      orderBy('createdAt', 'desc'),
+      limit(8)
+    );
+
+    const unsubscribe = onSnapshot(recentTracksQuery, (snapshot) => {
+      const recentTracks = snapshot.docs
+        .map((trackDoc) => ({ id: trackDoc.id, ...(trackDoc.data() as any) }))
+        .filter((track: any) => {
+          const createdAtMs = getFirestoreTimeMs(track.createdAt);
+          return !createdAtMs || createdAtMs >= watchSince - 30000;
+        });
+
+      if (recentTracks.length === 0) {
+        setMusicApiLibraryIndicator(Date.now() - watchSince < 20 * 60 * 1000 ? 'generating' : null);
+        return;
+      }
+
+      const hasGenerating = recentTracks.some((track: any) => {
+        const status = String(track.status || '').toLowerCase();
+        return ['generating', 'processing', 'submitted', 'pending'].includes(status) || (!status && !track.audioUrl && !track.streamAudioUrl);
+      });
+      const hasCompleted = recentTracks.some((track: any) => {
+        const status = String(track.status || '').toLowerCase();
+        return ['completed', 'success'].includes(status) || !!track.audioUrl || !!track.streamAudioUrl;
+      });
+
+      setMusicApiLibraryIndicator(hasGenerating ? 'generating' : hasCompleted ? 'completed' : null);
+    }, () => {
+      setMusicApiLibraryIndicator(null);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const clearMusicApiLibraryIndicator = () => {
+    try {
+      localStorage.removeItem(MUSIC_API_LIBRARY_WATCH_SINCE_KEY);
+    } catch {}
+    setMusicApiLibraryIndicator(null);
+  };
+
+  const renderMusicApiLibraryIndicator = () => {
+    if (!musicApiLibraryIndicator) return null;
+    const isGenerating = musicApiLibraryIndicator === 'generating';
+    return (
+      <span
+        className={`absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-[var(--card-bg)] ${isGenerating ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.75)]'}`}
+        title={isGenerating ? 'Music API 생성 중' : 'Music API 생성 완료'}
+      />
+    );
+  };
 
   // 2. CORE FUNCTIONS NEXT (BEFORE ANY USEEFFECT)
   const handleLogout = async () => {
@@ -6175,7 +6311,7 @@ ${normalizePromptForDisplay(result.prompt)}
         </Portal>
       )}
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} musicApiLibraryIndicator={musicApiLibraryIndicator} clearMusicApiLibraryIndicator={clearMusicApiLibraryIndicator} />
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (
@@ -7547,10 +7683,14 @@ ${normalizePromptForDisplay(result.prompt)}
                       {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
                     </button>
                     <button
-                      onClick={() => navigate('/suno-library')}
-                      className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
+                      onClick={() => {
+                        clearMusicApiLibraryIndicator();
+                        navigate('/suno-library');
+                      }}
+                      className="relative flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
                       title="라이브러리로 이동"
                     >
+                      {renderMusicApiLibraryIndicator()}
                       Library
                     </button>
                   </div>

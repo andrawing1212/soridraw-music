@@ -1434,6 +1434,16 @@ export default function SunoLibraryPage() {
     return item?.title || item?.name || group?.title || `Suno Track ${idx + 1}`;
   };
 
+  const getSunoModelVersionLabel = (item: any, group: any) => {
+    const raw = item?.sunoVersion || item?.model || item?.requestPayload?.sunoVersion || item?.requestPayload?.model || group?.sunoVersion || group?.model || group?.requestPayload?.sunoVersion || group?.requestPayload?.model;
+    if (!raw) return '';
+    const normalized = String(raw).trim().toUpperCase().replace(/-/g, '_').replace(/\./g, '_');
+    if (normalized === 'V5_5' || normalized === '5_5') return 'v5.5';
+    if (normalized === 'V5' || normalized === '5') return 'v5';
+    if (normalized === 'V4_5' || normalized === '4_5') return 'v4.5';
+    return String(raw).replace(/^v/i, 'v');
+  };
+
   const getImageUrl = (item: any, group: any) => {
     return item?.imageUrl || item?.image_url || group?.imageUrl || '';
   };
@@ -4529,6 +4539,7 @@ export default function SunoLibraryPage() {
                       const isFailed = group.status === 'failed';
                       const isCompleted = Boolean(audioUrl && (group.status === 'completed' || group.status === 'success' || hasValidDuration));
                       const isPending = !isFailed && !audioUrl;
+                      const sunoVersionLabel = getSunoModelVersionLabel(item, group);
                       
                       const isCurrent = isCurrentWorkspaceItem(group, item, idx);
                       const selection = buildWorkspaceSelection(group, item, idx);
@@ -4623,6 +4634,14 @@ export default function SunoLibraryPage() {
                                 {getTitle(item, group, idx)}
                               </span>
                             </h4>
+                            {sunoVersionLabel && (
+                              <span
+                                className="shrink-0 rounded-full border border-purple-400/25 bg-purple-500/10 px-2 py-0.5 text-[10px] font-black text-purple-200"
+                                title={`Suno ${sunoVersionLabel}로 생성`}
+                              >
+                                {sunoVersionLabel}
+                              </span>
+                            )}
                             {isFailed ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
                                 <AlertCircle className="w-3.5 h-3.5 text-red-500" />

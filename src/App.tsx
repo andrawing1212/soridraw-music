@@ -362,7 +362,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion } from './components/MusicApiGenerateModal';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
@@ -2463,7 +2463,7 @@ function App() {
     includeLyrics: boolean = true,
     lyricLanguages: LanguageCode[] = ['ko'],
     _generationCount: number = 1,
-    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode> }
+    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode>; sunoModelVersion?: SunoModelVersion }
   ) => {
     if (isMusicApiGenerating) return;
 
@@ -2484,6 +2484,7 @@ function App() {
       const token = await user.getIdToken();
       const targetMode = options?.targetMode === 'batch' ? 'batch' : 'current';
       const targetSongs = targetMode === 'batch' ? getMusicApiBatchSongs() : [result];
+      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || 'V5_5';
 
       if (targetSongs.length === 0) {
         showToast("Music API로 보낼 곡이 없습니다.");
@@ -2546,6 +2547,8 @@ function App() {
               includeLyrics,
               lyricLanguages: resolvedLyricLanguages,
               lyricLanguage: selectedLanguage || null,
+              model: sunoModelVersion,
+              sunoVersion: sunoModelVersion,
               generationIndex: i + 1,
               generationCount: targetSongs.length,
               sourceGenerationBatchId: (song.appliedKeywords as any)?.generationBatchId || null,

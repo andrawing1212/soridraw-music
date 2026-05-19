@@ -418,6 +418,8 @@ export interface SunoAccessSettings {
   updatedBy?: string;
 }
 
+export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
+
 export interface SunoApiKeyStatus {
   hasSunoApiKey: boolean;
   provider: "sunoapi.org";
@@ -439,6 +441,9 @@ export interface SunoTrack {
   lyrics?: string;
   style?: string;
   appliedKeywords?: any;
+  model?: SunoModelVersion | string;
+  sunoVersion?: SunoModelVersion | string;
+  requestPayload?: any;
   source: "suno-api";
   isFavorite?: boolean;
   createdAt?: number;
@@ -461,6 +466,9 @@ export interface SunoShare {
   isPublic: boolean;
   shareOptions: SunoShareOptions;
   appliedKeywords?: any;
+  model?: SunoModelVersion | string;
+  sunoVersion?: SunoModelVersion | string;
+  requestPayload?: any;
   createdAt?: number;
   updatedAt?: number;
 }

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronLeft, Key, Languages, Music, X, ListMusic } from 'lucide-react';
+import { Check, ChevronLeft, ChevronDown, Key, Languages, Music, X, ListMusic } from 'lucide-react';
 
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
+export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
 
 type ModalVariant = 'main' | 'musicApi';
 type MusicApiTargetMode = 'current' | 'batch';
@@ -30,6 +31,7 @@ type MusicApiGenerateModalProps = {
     options?: {
       targetMode?: MusicApiTargetMode;
       perTargetLyricLanguages?: Record<string, LanguageCode>;
+      sunoModelVersion?: SunoModelVersion;
     }
   ) => void;
 };
@@ -44,6 +46,14 @@ const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; sho
 ];
 
 const getLanguageMeta = (id: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.id === id) || LANGUAGE_OPTIONS[0];
+
+const SUNO_MODEL_OPTIONS: { id: SunoModelVersion; label: string; subLabel: string }[] = [
+  { id: 'V5_5', label: 'v5.5', subLabel: '최신 기본' },
+  { id: 'V5', label: 'v5', subLabel: '빠른 표현' },
+  { id: 'V4_5', label: 'v4.5', subLabel: '안정 비교' },
+];
+
+const getSunoModelMeta = (id: SunoModelVersion) => SUNO_MODEL_OPTIONS.find((item) => item.id === id) || SUNO_MODEL_OPTIONS[0];
 
 export default function MusicApiGenerateModal({
   hasApiKey = true,
@@ -85,6 +95,8 @@ export default function MusicApiGenerateModal({
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
+  const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>('V5_5');
+  const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
   const canUseBatchTargets = !isMain && musicApiTargets.length > 1;
   const [targetMode, setTargetMode] = useState<MusicApiTargetMode>('current');
   const [perTargetLyricLanguages, setPerTargetLyricLanguages] = useState<Record<string, LanguageCode>>({});
@@ -161,6 +173,7 @@ export default function MusicApiGenerateModal({
     onConfirm(titleLanguage, includeLyrics, langs, isMain ? generationCount : 1, {
       targetMode: isMain ? 'current' : targetMode,
       perTargetLyricLanguages: includeLyrics && targetMode === 'batch' && !isMain ? perTargetLyricLanguages : undefined,
+      sunoModelVersion: isMain ? undefined : sunoModelVersion,
     });
   };
 
@@ -199,6 +212,38 @@ export default function MusicApiGenerateModal({
           >
             <X className="w-5 h-5" />
           </button>
+
+          {!isMain && (
+            <div className="absolute right-14 top-5 z-10">
+              <button
+                type="button"
+                onClick={() => setIsSunoModelOpen((prev) => !prev)}
+                className={`h-8 px-2.5 rounded-full border text-[11px] font-black flex items-center gap-1 transition-all ${accentSelected}`}
+                title="Suno 버전 선택"
+              >
+                {getSunoModelMeta(sunoModelVersion).label}
+                <ChevronDown className={`w-3 h-3 transition-transform ${isSunoModelOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isSunoModelOpen && (
+                <div className="absolute right-0 mt-2 w-28 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl overflow-hidden">
+                  {SUNO_MODEL_OPTIONS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setSunoModelVersion(item.id);
+                        setIsSunoModelOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left transition-all ${sunoModelVersion === item.id ? accentSelected : 'text-[var(--text-secondary)] hover:bg-white/5'}`}
+                    >
+                      <span className="block text-xs font-black">{item.label}</span>
+                      <span className="block text-[9px] opacity-70">{item.subLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col items-center text-center pt-4">
             <div className={`w-14 h-14 rounded-full border flex items-center justify-center mb-5 ${accentIcon}`}>
@@ -422,6 +467,12 @@ export default function MusicApiGenerateModal({
                       {selectedLyricLabel}
                     </span>
                   </div>
+                  {!isMain && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
+                      <span className="text-sm font-black text-[var(--text-secondary)]">Suno 버전</span>
+                      <span className={`text-sm font-black ${accentText}`}>{getSunoModelMeta(sunoModelVersion).label}</span>
+                    </div>
+                  )}
                   {!isMain && canUseBatchTargets && (
                     <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
                       <span className="text-sm font-black text-[var(--text-secondary)]">생성 대상</span>

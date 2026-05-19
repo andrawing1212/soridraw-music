@@ -3980,6 +3980,15 @@ const toggleCycleVariantSelection = (
   }, [hierarchyLeafGenreItems]);
 
   const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
+    // Mobile browsers can keep the tapped result-card tooltip hovered after applying keywords.
+    // Clear only that transient hint so the bottom generate bar does not look expanded/stuck.
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setHoveredItem(null);
+    setIsTooltipHovered(false);
+
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
       .replace(/^\[[^\]]+\]\s*/, '')

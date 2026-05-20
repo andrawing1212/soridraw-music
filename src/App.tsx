@@ -362,35 +362,8 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption } from './components/MusicApiGenerateModal';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
-
-
-const SUNO_MODEL_STORAGE_KEY = 'soridraw_last_suno_model_version';
-const MUSIC_API_LIBRARY_WATCH_SINCE_KEY = 'soridraw_music_api_library_watch_since';
-
-type MusicApiLibraryIndicator = 'generating' | 'completed' | null;
-
-const isSunoModelVersionValue = (value: unknown): value is SunoModelVersion =>
-  value === 'V5_5' || value === 'V5' || value === 'V4_5';
-
-const readLastSunoModelVersion = (): SunoModelVersion => {
-  try {
-    const stored = localStorage.getItem(SUNO_MODEL_STORAGE_KEY);
-    return isSunoModelVersionValue(stored) ? stored : 'V5_5';
-  } catch {
-    return 'V5_5';
-  }
-};
-
-const getFirestoreTimeMs = (value: any): number => {
-  if (!value) return 0;
-  if (typeof value.toDate === 'function') return value.toDate().getTime();
-  if (typeof value.seconds === 'number') return value.seconds * 1000;
-  if (typeof value === 'number') return value;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-};
 
 enum OperationType {
   CREATE = 'create',
@@ -2114,7 +2087,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin, musicApiLibraryIndicator, clearMusicApiLibraryIndicator }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; musicApiLibraryIndicator?: 'generating' | 'completed' | null; clearMusicApiLibraryIndicator?: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>> }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2122,17 +2095,6 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const renderMusicApiLibraryIndicator = () => {
-    if (!musicApiLibraryIndicator) return null;
-    const isGenerating = musicApiLibraryIndicator === 'generating';
-    return (
-      <span
-        className={`absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-[var(--card-bg)] ${isGenerating ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.75)]'}`}
-        title={isGenerating ? 'Music API 생성 중' : 'Music API 생성 완료'}
-      />
-    );
-  };
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -2395,15 +2357,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
               {/* Suno Library Icon */}
               <button 
                 onClick={() => {
-                  clearMusicApiLibraryIndicator?.();
                   navigate('/suno-library');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                   setIsExpanded(false);
                 }}
-                className="relative p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
+                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="Suno Library"
               >
-                {renderMusicApiLibraryIndicator()}
                 <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-[var(--text-primary)]">
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm opacity-80" />
                   <div className="w-[4px] h-[16px] md:h-[18px] border-[1.5px] border-current rounded-sm" />
@@ -2503,7 +2463,7 @@ function App() {
     includeLyrics: boolean = true,
     lyricLanguages: LanguageCode[] = ['ko'],
     _generationCount: number = 1,
-    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode>; sunoModelVersion?: SunoModelVersion }
+    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode> }
   ) => {
     if (isMusicApiGenerating) return;
 
@@ -2524,7 +2484,6 @@ function App() {
       const token = await user.getIdToken();
       const targetMode = options?.targetMode === 'batch' ? 'batch' : 'current';
       const targetSongs = targetMode === 'batch' ? getMusicApiBatchSongs() : [result];
-      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || readLastSunoModelVersion();
 
       if (targetSongs.length === 0) {
         showToast("Music API로 보낼 곡이 없습니다.");
@@ -2547,8 +2506,6 @@ function App() {
       const getMusicApiTitle = (song: SongResult, _selectedLanguage: LanguageCode | null) => {
         return formatUnifiedTitle(song);
       };
-
-      let successfulRequests = 0;
 
       for (let i = 0; i < targetSongs.length; i += 1) {
         const song = targetSongs[i];
@@ -2589,20 +2546,6 @@ function App() {
               includeLyrics,
               lyricLanguages: resolvedLyricLanguages,
               lyricLanguage: selectedLanguage || null,
-              // Keep every likely model key in sync.
-              // The Cloud Function/API must receive the exact Suno enum, or it can silently fall back to V5_5.
-              model: sunoModelVersion,
-              sunoVersion: sunoModelVersion,
-              sunoModelVersion,
-              modelVersion: sunoModelVersion,
-              mv: sunoModelVersion,
-              requestPayload: {
-                model: sunoModelVersion,
-                sunoVersion: sunoModelVersion,
-                sunoModelVersion,
-                modelVersion: sunoModelVersion,
-                mv: sunoModelVersion,
-              },
               generationIndex: i + 1,
               generationCount: targetSongs.length,
               sourceGenerationBatchId: (song.appliedKeywords as any)?.generationBatchId || null,
@@ -2617,17 +2560,6 @@ function App() {
           showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${targetSongs.length})\n${data.error || "알 수 없는 오류"}`);
           return;
         }
-
-        successfulRequests += 1;
-      }
-
-      if (successfulRequests > 0) {
-        const watchSince = Date.now();
-        try {
-          localStorage.setItem(MUSIC_API_LIBRARY_WATCH_SINCE_KEY, String(watchSince));
-          localStorage.setItem(SUNO_MODEL_STORAGE_KEY, sunoModelVersion);
-        } catch {}
-        setMusicApiLibraryIndicator('generating');
       }
 
       showToast(`Music API 생성 요청이 완료되었습니다.\n${targetSongs.length}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
@@ -2833,77 +2765,6 @@ function App() {
       return false;
     }
   });
-  const [musicApiLibraryIndicator, setMusicApiLibraryIndicator] = useState<MusicApiLibraryIndicator>(null);
-
-  useEffect(() => {
-    if (!user) {
-      setMusicApiLibraryIndicator(null);
-      return;
-    }
-
-    let watchSince = 0;
-    try {
-      watchSince = Number(localStorage.getItem(MUSIC_API_LIBRARY_WATCH_SINCE_KEY) || 0);
-    } catch {}
-
-    if (!watchSince) {
-      setMusicApiLibraryIndicator(null);
-      return;
-    }
-
-    const recentTracksQuery = query(
-      collection(db, 'suno_tracks', user.uid, 'tracks'),
-      orderBy('createdAt', 'desc'),
-      limit(8)
-    );
-
-    const unsubscribe = onSnapshot(recentTracksQuery, (snapshot) => {
-      const recentTracks = snapshot.docs
-        .map((trackDoc) => ({ id: trackDoc.id, ...(trackDoc.data() as any) }))
-        .filter((track: any) => {
-          const createdAtMs = getFirestoreTimeMs(track.createdAt);
-          return !createdAtMs || createdAtMs >= watchSince - 30000;
-        });
-
-      if (recentTracks.length === 0) {
-        setMusicApiLibraryIndicator(Date.now() - watchSince < 20 * 60 * 1000 ? 'generating' : null);
-        return;
-      }
-
-      const hasGenerating = recentTracks.some((track: any) => {
-        const status = String(track.status || '').toLowerCase();
-        return ['generating', 'processing', 'submitted', 'pending'].includes(status) || (!status && !track.audioUrl && !track.streamAudioUrl);
-      });
-      const hasCompleted = recentTracks.some((track: any) => {
-        const status = String(track.status || '').toLowerCase();
-        return ['completed', 'success'].includes(status) || !!track.audioUrl || !!track.streamAudioUrl;
-      });
-
-      setMusicApiLibraryIndicator(hasGenerating ? 'generating' : hasCompleted ? 'completed' : null);
-    }, () => {
-      setMusicApiLibraryIndicator(null);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
-  const clearMusicApiLibraryIndicator = () => {
-    try {
-      localStorage.removeItem(MUSIC_API_LIBRARY_WATCH_SINCE_KEY);
-    } catch {}
-    setMusicApiLibraryIndicator(null);
-  };
-
-  const renderMusicApiLibraryIndicator = () => {
-    if (!musicApiLibraryIndicator) return null;
-    const isGenerating = musicApiLibraryIndicator === 'generating';
-    return (
-      <span
-        className={`absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-[var(--card-bg)] ${isGenerating ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.75)]'}`}
-        title={isGenerating ? 'Music API 생성 중' : 'Music API 생성 완료'}
-      />
-    );
-  };
 
   // 2. CORE FUNCTIONS NEXT (BEFORE ANY USEEFFECT)
   const handleLogout = async () => {
@@ -3415,27 +3276,6 @@ function App() {
       longPressTimerRef.current = null;
     }
   };
-
-  const clearTransientInteractionHints = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    setHoveredItem(null);
-    setIsTooltipHovered(false);
-    try {
-      const activeElement = document.activeElement as HTMLElement | null;
-      activeElement?.blur?.();
-    } catch {
-      // ignore focus cleanup failures
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleClearHints = () => clearTransientInteractionHints();
-    window.addEventListener('soridraw:clear-interaction-hints', handleClearHints);
-    return () => window.removeEventListener('soridraw:clear-interaction-hints', handleClearHints);
-  }, [clearTransientInteractionHints]);
 
   const applyTemplate = (template: PromptTemplate) => {
     // Helper to filter valid IDs
@@ -4142,7 +3982,12 @@ const toggleCycleVariantSelection = (
   const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
     // Mobile browsers can keep the tapped result-card tooltip hovered after applying keywords.
     // Clear only that transient hint so the bottom generate bar does not look expanded/stuck.
-    clearTransientInteractionHints();
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setHoveredItem(null);
+    setIsTooltipHovered(false);
 
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
@@ -4349,15 +4194,8 @@ const toggleCycleVariantSelection = (
     }
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
-    // Favorites detail/modal routes can leave a tiny horizontal scroll offset on mobile.
-    // Reset both axes so the fixed bottom generation bar does not appear stretched sideways.
-    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: window.scrollY, left: 0, behavior: 'auto' });
-      document.documentElement.scrollLeft = 0;
-      document.body.scrollLeft = 0;
-    });
-  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast, clearTransientInteractionHints]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -6334,14 +6172,12 @@ ${normalizePromptForDisplay(result.prompt)}
         </Portal>
       )}
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} musicApiLibraryIndicator={musicApiLibraryIndicator} clearMusicApiLibraryIndicator={clearMusicApiLibraryIndicator} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} />
 
-      {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
-      {user && (
-        <div
-          className="fixed top-6 right-[max(1rem,env(safe-area-inset-right))] md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-[9999] max-w-[calc(100dvw-2rem)] overflow-visible pointer-events-auto"
-        >
-          <motion.div className="overflow-visible"
+      {/* Suno Icon at Top Right (same layer as the floating menu, hidden behind modal flows) */}
+      {user && !isAnyModalOpen && (
+        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
+          <motion.div
             animate={{ 
               y: [0, -5, 0],
               scale: [1, 1.05, 1]
@@ -7107,9 +6943,9 @@ ${normalizePromptForDisplay(result.prompt)}
                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                     exit={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
                     transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
-                    className="fixed bottom-5 md:bottom-7 inset-x-0 w-screen max-w-[100vw] z-[120] flex justify-center pointer-events-none px-4 md:px-8 overflow-x-clip"
+                    className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8"
                   >
-                    <div className="relative w-[calc(100vw-2rem)] md:w-full max-w-4xl min-w-0 pointer-events-auto">
+                    <div className="relative w-full max-w-4xl pointer-events-auto">
                       <motion.div
                         layoutId="action-buttons-floating-bar"
                         drag={isActionDragMobile ? "x" : false}
@@ -7128,7 +6964,7 @@ ${normalizePromptForDisplay(result.prompt)}
                         exit="exit"
                         style={{ transformOrigin: 'left center' }}
                         transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.9 }}
-                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100 overflow-hidden min-w-0 max-w-full"
+                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100 overflow-hidden"
                       >
                         <motion.button
                           layoutId="action-collapse-ghost-button"
@@ -7708,14 +7544,10 @@ ${normalizePromptForDisplay(result.prompt)}
                       {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
                     </button>
                     <button
-                      onClick={() => {
-                        clearMusicApiLibraryIndicator();
-                        navigate('/suno-library');
-                      }}
-                      className="relative flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
+                      onClick={() => navigate('/suno-library')}
+                      className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
                       title="라이브러리로 이동"
                     >
-                      {renderMusicApiLibraryIndicator()}
                       Library
                     </button>
                   </div>
@@ -7987,16 +7819,6 @@ ${normalizePromptForDisplay(result.prompt)}
 
 
       <style>{`
-        html, body, #root {
-          max-width: 100%;
-          overflow-x: hidden;
-        }
-        @supports (overflow: clip) {
-          html, body, #root {
-            overflow-x: clip;
-          }
-        }
-
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }
@@ -11550,8 +11372,11 @@ function TagEditModal({
 
   const closeCustomTagEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && customTagEditorHistoryPushedRef.current) {
-      window.history.back();
-      return;
+      try {
+        window.history.replaceState({ modal: 'section-tag-editor' }, '');
+      } catch {
+        // History state cleanup is best-effort only.
+      }
     }
     setShowCustomTagEditor(false);
     setEditingCustomTagId(null);
@@ -11564,10 +11389,18 @@ function TagEditModal({
       closeCustomTagEditor(source);
       return;
     }
+
+    // Mobile browsers can miss the popstate callback when a nested modal is closed
+    // from a touch/click handler. Close the tag modal immediately instead of
+    // depending on history.back(), then neutralize the temporary modal history state.
     if (source === 'ui' && tagModalHistoryPushedRef.current) {
-      window.history.back();
-      return;
+      try {
+        window.history.replaceState({ modal: 'custom-structure' }, '');
+      } catch {
+        // History state cleanup is best-effort only.
+      }
     }
+
     tagModalHistoryPushedRef.current = false;
     onClose();
   }, [showCustomTagEditor, closeCustomTagEditor, onClose]);
@@ -11730,11 +11563,16 @@ function TagEditModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-      onMouseDown={(e) => {
+      onPointerDown={(e) => {
         tagModalBackdropMouseDownRef.current = e.target === e.currentTarget;
       }}
-      onClick={(e) => {
-        if (tagModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeTagModal();
+      onPointerUp={(e) => {
+        if (tagModalBackdropMouseDownRef.current && e.target === e.currentTarget) {
+          closeTagModal();
+        }
+        tagModalBackdropMouseDownRef.current = false;
+      }}
+      onPointerCancel={() => {
         tagModalBackdropMouseDownRef.current = false;
       }}
     >
@@ -11745,6 +11583,8 @@ function TagEditModal({
         className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
+        onPointerUp={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
@@ -11759,7 +11599,9 @@ function TagEditModal({
             </p>
           </div>
           <button 
+            type="button"
             onClick={() => closeTagModal()} 
+            onTouchEnd={(e) => { e.preventDefault(); closeTagModal(); }}
             className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-secondary)]"
             onMouseEnter={() => onHover({ id: 'tag-modal-close', label: 'Close', labelKo: '닫기', description: '태그 편집 창을 닫습니다.' })}
             onMouseLeave={() => onHover(null)}
@@ -11868,16 +11710,19 @@ function TagEditModal({
           {showCustomTagEditor && (
             <div
               className="fixed inset-0 z-[185] flex items-center justify-center px-4 backdrop-blur-[1.5px]"
-              onMouseDown={(e) => { customTagEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
-              onClick={(e) => {
+              onPointerDown={(e) => { customTagEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
+              onPointerUp={(e) => {
                 if (customTagEditorBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomTagEditor();
                 customTagEditorBackdropMouseDownRef.current = false;
               }}
+              onPointerCancel={() => { customTagEditorBackdropMouseDownRef.current = false; }}
             >
               <div
                 className="w-[min(92vw,420px)] rounded-2xl border border-brand-orange/40 bg-[var(--card-bg)] shadow-2xl p-4 space-y-3"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>

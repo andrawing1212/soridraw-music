@@ -682,18 +682,18 @@ const handleForceLogout = async () => {
       }
     >
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 md:gap-2 mb-4">
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
+          className="bg-[var(--card-bg)] p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-[var(--border-color)] shadow-sm min-h-[70px] md:min-h-[82px] sm:w-[138px] md:w-[150px] lg:w-[160px]"
         >
-          <div className="flex items-center gap-2 mb-1 text-[var(--text-secondary)] text-xs font-bold">
-            <Users className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1.5 mb-1 text-[var(--text-secondary)] text-[10px] md:text-[11px] font-bold">
+            <Users className="w-3 h-3" />
             총 회원수
           </div>
-          <div className="text-2xl font-black text-[var(--text-primary)]">
-            {userStats.total}<span className="text-sm font-bold ml-1">명</span>
+          <div className="text-base md:text-lg font-black text-[var(--text-primary)]">
+            {userStats.total}<span className="text-[11px] md:text-xs font-bold ml-1">명</span>
           </div>
         </motion.div>
 
@@ -701,13 +701,13 @@ const handleForceLogout = async () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm border-emerald-500/20"
+          className="bg-[var(--card-bg)] p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-[var(--border-color)] shadow-sm border-emerald-500/20 min-h-[70px] md:min-h-[82px] sm:w-[138px] md:w-[150px] lg:w-[160px]"
         >
-          <div className="flex items-center gap-2 mb-1 text-emerald-500 text-xs font-bold">
-            <LogIn className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1.5 mb-1 text-emerald-500 text-[10px] md:text-[11px] font-bold">
+            <LogIn className="w-3 h-3" />
             로그인
           </div>
-          <div className="text-2xl font-black text-emerald-500">
+          <div className="text-lg md:text-xl font-black text-emerald-500">
             {userStats.loggedIn}<span className="text-xs font-bold ml-1">명</span>
           </div>
         </motion.div>
@@ -716,13 +716,13 @@ const handleForceLogout = async () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm border-red-500/20"
+          className="bg-[var(--card-bg)] p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-[var(--border-color)] shadow-sm border-red-500/20 min-h-[70px] md:min-h-[82px] sm:w-[138px] md:w-[150px] lg:w-[160px]"
         >
-          <div className="flex items-center gap-2 mb-1 text-red-500 text-xs font-bold">
-            <LogOut className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1.5 mb-1 text-red-500 text-[10px] md:text-[11px] font-bold">
+            <LogOut className="w-3 h-3" />
             로그아웃
           </div>
-          <div className="text-2xl font-black text-red-500">
+          <div className="text-lg md:text-xl font-black text-red-500">
             {userStats.loggedOut}<span className="text-xs font-bold ml-1">명</span>
           </div>
         </motion.div>
@@ -735,17 +735,17 @@ const handleForceLogout = async () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 + (idx * 0.05) }}
-              className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-sm"
+              className="bg-[var(--card-bg)] p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-[var(--border-color)] shadow-sm min-h-[70px] md:min-h-[82px] sm:w-[138px] md:w-[150px] lg:w-[160px]"
             >
               <div 
-                className="flex items-center gap-2 mb-1 text-[10px] font-black uppercase tracking-wider"
+                className="flex items-center gap-1.5 mb-1 text-[8px] md:text-[9px] font-black uppercase tracking-wider"
                 style={{ 
                   color: role === 'admin' ? '#f43f5e' : 
                         role === 'pro' ? '#FF8A00' : 
                         role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
                 }}
               >
-                <div className="w-1.5 h-1.5 rounded-full" style={{ 
+                <div className="w-1.5 h-1.5 md:w-1.5 md:h-1.5 rounded-full shrink-0" style={{ 
                   backgroundColor: role === 'admin' ? '#f43f5e' : 
                                   role === 'pro' ? '#FF8A00' :  
                                   role === 'basic' ? '#3b82f6' : 'var(--text-secondary)' 
@@ -753,8 +753,8 @@ const handleForceLogout = async () => {
                 {ROLE_LABELS[role]}
               </div>
               <div className="flex items-baseline justify-between gap-1">
-                <span className="text-xl font-black text-[var(--text-primary)]">{count}</span>
-                <span className="text-[10px] font-bold text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded-full">
+                <span className="text-base md:text-lg font-black text-[var(--text-primary)]">{count}</span>
+                <span className="text-[9px] font-bold text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-1 py-0.5 rounded-full">
                   명
                 </span>
               </div>
@@ -764,7 +764,7 @@ const handleForceLogout = async () => {
       </div>
 
       {/* Search & Filters */}
-      <div className="bg-[var(--card-bg)] p-4 rounded-3xl border border-[var(--border-color)] shadow-[var(--shadow-md)] space-y-4">
+      <div className="bg-[var(--card-bg)] p-3 md:p-3.5 rounded-2xl border border-[var(--border-color)] shadow-[var(--shadow-md)] space-y-4">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
@@ -847,7 +847,7 @@ const handleForceLogout = async () => {
                 key={user.uid}
                 onClick={() => handleOpenDetail(user)}
                 className={cn(
-                  "bg-[var(--card-bg)] p-4 rounded-3xl border transition-all cursor-pointer group shadow-sm flex items-center gap-4",
+                  "bg-[var(--card-bg)] p-3 md:p-3.5 rounded-2xl border transition-all cursor-pointer group shadow-sm flex items-center gap-4",
                   user.accountStatus === 'banned' 
                     ? "border-red-500/50 bg-red-500/5 hover:bg-red-500/10" 
                     : "border-[var(--border-color)] hover:border-brand-orange/30"
@@ -947,7 +947,7 @@ const handleForceLogout = async () => {
               <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-secondary)]/30">
                 <div className="flex items-center gap-3">
                   <User className="w-5 h-5 text-brand-orange" />
-                  <h2 className="text-xl font-black text-[var(--text-primary)]">회원 상세 정보</h2>
+                  <h2 className="text-base md:text-lg font-black text-[var(--text-primary)]">회원 상세 정보</h2>
                   <button 
                     onClick={() => fetchUserDetail(selectedUser.uid)}
                     disabled={isRefreshingDetail}
@@ -1146,7 +1146,7 @@ const handleForceLogout = async () => {
                             "border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           )}
                         >
-                          {isForceLoggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                          {isForceLoggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3 h-3" />}
                           강제 로그아웃 실행
                         </button>
                       </div>

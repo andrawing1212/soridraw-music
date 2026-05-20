@@ -5017,7 +5017,7 @@ const saveRecentSong = async (newSong: any) => {
   }, []);
   */
 
-  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[]; generationCount?: number }) => {
+  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[]; generationCount?: number; isKoreanEnglishMix?: boolean; englishMixRatio?: number; rapEnabled?: boolean }) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -5045,6 +5045,11 @@ const saveRecentSong = async (newSong: any) => {
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko']).filter(Boolean))).slice(0, 2) as LanguageCode[]
       : [];
     const requestedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions?.generationCount) || 1)));
+    const requestedKoreanEnglishMix = requestedIncludeLyrics ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
+    const requestedEnglishMixRatio = requestedKoreanEnglishMix
+      ? Math.min(90, Math.max(5, Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10))
+      : 10;
+    const requestedRapEnabled = requestedIncludeLyrics ? Boolean(generationOptions?.rapEnabled ?? rapEnabled) : false;
 
     const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
 
@@ -5394,7 +5399,7 @@ const saveRecentSong = async (newSong: any) => {
         vocal: {
           male: maleCount,
           female: femaleCount,
-          rap: rapEnabled,
+          rap: requestedRapEnabled,
           mode: vocalMode,
           members: vocalMembers,
         },
@@ -5403,8 +5408,8 @@ const saveRecentSong = async (newSong: any) => {
         tempoSource,
         specialPrompt,
         kpopMode,
-        isKoreanEnglishMix,
-        englishMixRatio,
+        isKoreanEnglishMix: requestedKoreanEnglishMix,
+        englishMixRatio: requestedEnglishMixRatio,
         customStructure,
         isNoLyrics: !requestedIncludeLyrics,
         includeLyrics: requestedIncludeLyrics,
@@ -5446,14 +5451,14 @@ const saveRecentSong = async (newSong: any) => {
             customMoodInput,
             customThemeInput,
             vocalType: formation || 'Default',
-            rapEnabled: rapEnabled,
+            rapEnabled: requestedRapEnabled,
             isNoLyrics: !requestedIncludeLyrics,
             lyricLanguages: requestedLyricLanguages,
             generationCount: requestedGenerationCount,
             generationIndex: i + 1,
             generationBatchId,
-            isKoreanEnglishMix: isKoreanEnglishMix,
-            englishMixRatio,
+            isKoreanEnglishMix: requestedKoreanEnglishMix,
+            englishMixRatio: requestedEnglishMixRatio,
             kpopMode,
             isBallad: hasBalladStyle,
             userInput: userInput,
@@ -7664,10 +7669,19 @@ ${normalizePromptForDisplay(result.prompt)}
             hasApiKey={true}
             isNoLyrics={false}
             maxLyricLanguages={2}
+            isKoreanEnglishMix={isKoreanEnglishMix}
+            englishMixRatio={englishMixRatio}
+            rapEnabled={rapEnabled}
             onClose={() => setShowMainGenerationModal(false)}
-            onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount) => {
+            onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
+              const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix) : false;
+              const nextRatio = nextMix ? Math.min(90, Math.max(5, Number(options?.englishMixRatio) || 10)) : 10;
+              const nextRap = includeLyrics ? Boolean(options?.rapEnabled) : false;
+              setIsKoreanEnglishMix(nextMix);
+              setEnglishMixRatio(nextRatio);
+              setRapEnabled(nextRap);
               setShowMainGenerationModal(false);
-              handleGenerate({ includeLyrics, lyricLanguages, generationCount });
+              handleGenerate({ includeLyrics, lyricLanguages, generationCount, isKoreanEnglishMix: nextMix, englishMixRatio: nextRatio, rapEnabled: nextRap });
             }}
           />
         )}
@@ -12246,83 +12260,13 @@ function VocalControl({
         </div>
 
         <div className="flex items-center gap-2">
-          <AnimatePresence initial={false}>
-            {isKoreanEnglishMix && (
-              <motion.div
-                key="english-mix-ratio-panel"
-                initial={{ opacity: 0, x: 12, scaleX: 0.92 }}
-                animate={{ opacity: 1, x: 0, scaleX: 1 }}
-                exit={{ opacity: 0, x: 12, scaleX: 0.92 }}
-                transition={{ duration: 0.16, ease: 'easeOut' }}
-                className="origin-right overflow-hidden"
-              >
-                <div className="flex items-center gap-1 rounded-full border border-brand-orange/25 bg-brand-orange/5 px-1.5 py-1">
-                  {[5, 10, 20, 30].map((ratio) => (
-                    <button
-                      key={ratio}
-                      type="button"
-                      onClick={() => onEnglishMixRatioChange(ratio)}
-                      onMouseEnter={() => onHover({
-                        id: `english-mix-ratio-${ratio}`,
-                        label: '영어 비중',
-                        description: `한/영 혼합 가사에서 영어를 약 ${ratio}% 정도만 사용합니다.`,
-                      })}
-                      onMouseLeave={() => onHover(null)}
-                      className={cn(
-                        "px-2 py-1 rounded-full text-[10px] font-bold transition-all",
-                        englishMixRatio === ratio
-                          ? "bg-brand-orange text-white"
-                          : "text-brand-orange/80 hover:bg-brand-orange/10"
-                      )}
-                    >
-                      {ratio}%
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button
-            onClick={onToggleKoreanEnglishMix}
-            onMouseEnter={() => onHover({
-              id: 'lyrics-mix',
-              label: '한/영 혼합',
-              description: isKoreanEnglishMix
-                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
-            })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "flex h-[31px] w-[124px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2 text-[9px] sm:text-[10px] font-bold transition-all shadow-sm whitespace-nowrap overflow-hidden",
-              isKoreanEnglishMix 
-                ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
-            )}
-          >
-            <Languages className={cn("w-3 h-3", isKoreanEnglishMix ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
-            한/영 혼합 {isKoreanEnglishMix ? 'ON' : 'OFF'}
-          </button>
-          <button
-            onClick={() => onRapChange(!rapEnabled)}
-            onMouseEnter={() => onHover({ id: 'rap', label: 'Rap', labelKo: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
-            onMouseLeave={() => onHover(null)}
-            className={cn(
-              "flex h-[31px] w-[78px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2 text-[9px] sm:text-[10px] font-bold transition-all shadow-sm whitespace-nowrap overflow-hidden",
-              rapEnabled 
-                ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
-            )}
-          >
-            <Mic2 className={cn("w-3 h-3", rapEnabled ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
-            랩 {rapEnabled ? 'ON' : 'OFF'}
-          </button>
           <button
             onClick={onClear}
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border shadow-btn",
-              (maleCount > 0 || femaleCount > 0 || rapEnabled || isKoreanEnglishMix || englishMixRatio !== 10)
+              (maleCount > 0 || femaleCount > 0)
                 ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}

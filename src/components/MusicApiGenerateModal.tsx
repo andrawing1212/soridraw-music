@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronLeft, ChevronDown, Key, Languages, Music, X, ListMusic } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronUp, Key, Languages, Mic2, Music, X, ListMusic } from 'lucide-react';
 
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
-export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
 
 type ModalVariant = 'main' | 'musicApi';
 type MusicApiTargetMode = 'current' | 'batch';
@@ -22,6 +21,9 @@ type MusicApiGenerateModalProps = {
   availableLyricLanguages?: LanguageCode[];
   maxLyricLanguages?: number;
   musicApiTargets?: MusicApiTargetOption[];
+  isKoreanEnglishMix?: boolean;
+  englishMixRatio?: number;
+  rapEnabled?: boolean;
   onClose: () => void;
   onConfirm: (
     titleLanguage: LanguageCode,
@@ -31,7 +33,9 @@ type MusicApiGenerateModalProps = {
     options?: {
       targetMode?: MusicApiTargetMode;
       perTargetLyricLanguages?: Record<string, LanguageCode>;
-      sunoModelVersion?: SunoModelVersion;
+      isKoreanEnglishMix?: boolean;
+      englishMixRatio?: number;
+      rapEnabled?: boolean;
     }
   ) => void;
 };
@@ -47,34 +51,6 @@ const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; sho
 
 const getLanguageMeta = (id: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.id === id) || LANGUAGE_OPTIONS[0];
 
-const SUNO_MODEL_OPTIONS: { id: SunoModelVersion; label: string; subLabel: string }[] = [
-  { id: 'V5_5', label: 'v5.5', subLabel: '최신 기본' },
-  { id: 'V5', label: 'v5', subLabel: '빠른 표현' },
-  { id: 'V4_5', label: 'v4.5', subLabel: '안정 비교' },
-];
-
-const SUNO_MODEL_STORAGE_KEY = 'soridraw_last_suno_model_version';
-
-const isSunoModelVersion = (value: unknown): value is SunoModelVersion =>
-  value === 'V5_5' || value === 'V5' || value === 'V4_5';
-
-const getStoredSunoModelVersion = (): SunoModelVersion => {
-  try {
-    const stored = localStorage.getItem(SUNO_MODEL_STORAGE_KEY);
-    return isSunoModelVersion(stored) ? stored : 'V5_5';
-  } catch {
-    return 'V5_5';
-  }
-};
-
-const rememberSunoModelVersion = (value: SunoModelVersion) => {
-  try {
-    localStorage.setItem(SUNO_MODEL_STORAGE_KEY, value);
-  } catch {}
-};
-
-const getSunoModelMeta = (id: SunoModelVersion) => SUNO_MODEL_OPTIONS.find((item) => item.id === id) || SUNO_MODEL_OPTIONS[0];
-
 export default function MusicApiGenerateModal({
   hasApiKey = true,
   isNoLyrics = false,
@@ -82,6 +58,9 @@ export default function MusicApiGenerateModal({
   availableLyricLanguages,
   maxLyricLanguages,
   musicApiTargets = [],
+  isKoreanEnglishMix = false,
+  englishMixRatio = 10,
+  rapEnabled = false,
   onClose,
   onConfirm,
 }: MusicApiGenerateModalProps) {
@@ -111,15 +90,37 @@ export default function MusicApiGenerateModal({
     return filteredLanguages[0] ? [filteredLanguages[0].id] : ([] as LanguageCode[]);
   }, [filteredLanguages, isNoLyrics]);
 
+  const primaryLanguageOptions = useMemo(() => {
+    if (!isMain) return filteredLanguages;
+    const priority: LanguageCode[] = ['ko', 'en'];
+    const primary = priority
+      .map((lang) => filteredLanguages.find((item) => item.id === lang))
+      .filter(Boolean) as typeof filteredLanguages;
+    return primary.length > 0 ? primary : filteredLanguages.slice(0, 2);
+  }, [filteredLanguages, isMain]);
+
+  const extraLanguageOptions = useMemo(() => {
+    if (!isMain) return [] as typeof filteredLanguages;
+    const primaryIds = new Set(primaryLanguageOptions.map((item) => item.id));
+    return filteredLanguages.filter((item) => !primaryIds.has(item.id));
+  }, [filteredLanguages, isMain, primaryLanguageOptions]);
+
+  const [showMoreLanguages, setShowMoreLanguages] = useState(false);
+
+  const visibleLanguageOptions = isMain
+    ? [...primaryLanguageOptions, ...(showMoreLanguages ? extraLanguageOptions : [])]
+    : filteredLanguages;
+
   const [step, setStep] = useState<1 | 2>(1);
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
-  const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => getStoredSunoModelVersion());
-  const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
   const canUseBatchTargets = !isMain && musicApiTargets.length > 1;
   const [targetMode, setTargetMode] = useState<MusicApiTargetMode>('current');
   const [perTargetLyricLanguages, setPerTargetLyricLanguages] = useState<Record<string, LanguageCode>>({});
+  const [localKoreanEnglishMix, setLocalKoreanEnglishMix] = useState<boolean>(isKoreanEnglishMix);
+  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.min(90, Math.max(5, Number(englishMixRatio) || 10)));
+  const [localRapEnabled, setLocalRapEnabled] = useState<boolean>(rapEnabled);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -188,13 +189,14 @@ export default function MusicApiGenerateModal({
 
   const handleConfirm = () => {
     if (!hasApiKey) return;
-    if (!isMain) rememberSunoModelVersion(sunoModelVersion);
     const langs = includeLyrics ? lyricLanguages.slice(0, maxCount) : [];
     const titleLanguage = langs.find((lang) => lang !== 'ko') || langs[0] || 'ko';
     onConfirm(titleLanguage, includeLyrics, langs, isMain ? generationCount : 1, {
       targetMode: isMain ? 'current' : targetMode,
       perTargetLyricLanguages: includeLyrics && targetMode === 'batch' && !isMain ? perTargetLyricLanguages : undefined,
-      sunoModelVersion: isMain ? undefined : sunoModelVersion,
+      isKoreanEnglishMix: includeLyrics && isMain ? localKoreanEnglishMix : false,
+      englishMixRatio: includeLyrics && isMain && localKoreanEnglishMix ? localEnglishMixRatio : 10,
+      rapEnabled: includeLyrics && isMain ? localRapEnabled : false,
     });
   };
 
@@ -213,7 +215,7 @@ export default function MusicApiGenerateModal({
         initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 12 }}
-        className="w-full max-w-md rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+        className="w-full max-w-md max-h-[92vh] rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="relative px-6 pt-6 pb-4">
@@ -233,39 +235,6 @@ export default function MusicApiGenerateModal({
           >
             <X className="w-5 h-5" />
           </button>
-
-          {!isMain && (
-            <div className="absolute right-14 top-5 z-10">
-              <button
-                type="button"
-                onClick={() => setIsSunoModelOpen((prev) => !prev)}
-                className={`h-8 px-2.5 rounded-full border text-[11px] font-black flex items-center gap-1 transition-all ${accentSelected}`}
-                title="Suno 버전 선택"
-              >
-                {getSunoModelMeta(sunoModelVersion).label}
-                <ChevronDown className={`w-3 h-3 transition-transform ${isSunoModelOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {isSunoModelOpen && (
-                <div className="absolute right-0 mt-2 w-28 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl overflow-hidden">
-                  {SUNO_MODEL_OPTIONS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setSunoModelVersion(item.id);
-                        rememberSunoModelVersion(item.id);
-                        setIsSunoModelOpen(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left transition-all ${sunoModelVersion === item.id ? accentSelected : 'text-[var(--text-secondary)] hover:bg-white/5'}`}
-                    >
-                      <span className="block text-xs font-black">{item.label}</span>
-                      <span className="block text-[9px] opacity-70">{item.subLabel}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="flex flex-col items-center text-center pt-4">
             <div className={`w-14 h-14 rounded-full border flex items-center justify-center mb-5 ${accentIcon}`}>
@@ -288,7 +257,7 @@ export default function MusicApiGenerateModal({
           </div>
         )}
 
-        <div className="px-6 pb-6">
+        <div className="px-6 pb-6 overflow-y-auto">
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div
@@ -406,7 +375,7 @@ export default function MusicApiGenerateModal({
                             <p className={`text-[10px] font-bold ${accentText}`}>최대 {maxCount}개</p>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            {filteredLanguages.map((item) => {
+                            {visibleLanguageOptions.map((item) => {
                               const selected = lyricLanguages.includes(item.id);
                               const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
                               return (
@@ -430,6 +399,66 @@ export default function MusicApiGenerateModal({
                               );
                             })}
                           </div>
+                          {isMain && extraLanguageOptions.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowMoreLanguages((prev) => !prev)}
+                              className="mt-2 w-full rounded-xl border border-[var(--border-color)] bg-black/10 px-3 py-2.5 text-xs font-black text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5"
+                            >
+                              {showMoreLanguages ? '언어 접기' : '언어 더보기'}
+                              {showMoreLanguages ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                          {isMain && (
+                            <div className="mt-4 rounded-2xl border border-[var(--border-color)] bg-black/10 p-3 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-black text-[var(--text-secondary)]">가사 옵션</p>
+                                <p className={`text-[10px] font-bold ${accentText}`}>가사 포함 시 적용</p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setLocalKoreanEnglishMix((prev) => !prev)}
+                                  className={`rounded-xl px-3 py-2.5 border text-left transition-all ${
+                                    localKoreanEnglishMix
+                                      ? accentSelected
+                                      : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                                  }`}
+                                >
+                                  <p className="text-xs font-black flex items-center gap-1.5"><Languages className="w-3.5 h-3.5" /> 한/영 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}</p>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setLocalRapEnabled((prev) => !prev)}
+                                  className={`rounded-xl px-3 py-2.5 border text-left transition-all ${
+                                    localRapEnabled
+                                      ? accentSelected
+                                      : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                                  }`}
+                                >
+                                  <p className="text-xs font-black flex items-center gap-1.5"><Mic2 className="w-3.5 h-3.5" /> 랩 {localRapEnabled ? 'ON' : 'OFF'}</p>
+                                </button>
+                              </div>
+                              {localKoreanEnglishMix && (
+                                <div className="flex flex-wrap gap-1.5 rounded-xl border border-brand-orange/20 bg-brand-orange/5 p-2">
+                                  {[5, 10, 20, 30, 50, 70, 90].map((ratio) => (
+                                    <button
+                                      key={ratio}
+                                      type="button"
+                                      onClick={() => setLocalEnglishMixRatio(ratio)}
+                                      className={`px-2.5 py-1.5 rounded-full text-[10px] font-black transition-all ${
+                                        localEnglishMixRatio === ratio
+                                          ? 'bg-brand-orange text-white'
+                                          : 'text-brand-orange/85 hover:bg-brand-orange/10'
+                                      }`}
+                                    >
+                                      {ratio}%
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -489,20 +518,22 @@ export default function MusicApiGenerateModal({
                       {selectedLyricLabel}
                     </span>
                   </div>
-                  {!isMain && (
-                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
-                      <span className="text-sm font-black text-[var(--text-secondary)]">Suno 버전</span>
-                      <span className={`text-sm font-black ${accentText}`}>{getSunoModelMeta(sunoModelVersion).label}</span>
-                    </div>
-                  )}
                   {!isMain && canUseBatchTargets && (
                     <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
                       <span className="text-sm font-black text-[var(--text-secondary)]">생성 대상</span>
                       <span className={`text-sm font-black ${accentText}`}>{targetMode === 'batch' ? `최근 묶음 ${musicApiTargets.length}곡` : '현재 곡 1곡'}</span>
                     </div>
                   )}
+                  {isMain && includeLyrics && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
+                      <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
+                      <span className={`text-sm font-black ${accentText} text-right`}>
+                        {[localKoreanEnglishMix ? `한/영 ${localEnglishMixRatio}%` : '', localRapEnabled ? '랩 ON' : ''].filter(Boolean).join(' · ') || '기본'}
+                      </span>
+                    </div>
+                  )}
                   {isMain && (
-                    <div className="flex items-center justify-between px-5 py-4">
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
                       <span className="text-sm font-black text-[var(--text-secondary)]">생성 개수</span>
                       <span className={`text-sm font-black ${accentText}`}>{generationCount}곡</span>
                     </div>

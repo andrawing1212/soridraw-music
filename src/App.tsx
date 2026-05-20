@@ -2281,28 +2281,6 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
                               <Users className="w-3 h-3" />
                               회원 관리
                             </button>
-                            <button 
-                              onClick={() => {
-                                navigate('/admin/vocals');
-                                setIsProfileOpen(false);
-                                setIsExpanded(false);
-                              }}
-                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                            >
-                              <Settings className="w-3 h-3" />
-                              보컬 관리
-                            </button>
-                            <button 
-                              onClick={() => {
-                                navigate('/admin/tags');
-                                setIsProfileOpen(false);
-                                setIsExpanded(false);
-                              }}
-                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                            >
-                              <Tag className="w-3 h-3" />
-                              태그 관리
-                            </button>
                           </>
                         )}
                         <div className="h-px bg-[var(--border-color)]/30 mx-2 my-1" />
@@ -7612,16 +7590,8 @@ ${normalizePromptForDisplay(result.prompt)}
                 <AdminUserManagementPageLazy isAdmin={isAdminUser} />
               </Suspense>
             } />
-            <Route path="/admin/vocals" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminVocalTonesPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/tags" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminSectionTagsPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
+            <Route path="/admin/vocals" element={<Navigate to="/admin/users" replace />} />
+            <Route path="/admin/tags" element={<Navigate to="/admin/users" replace />} />
             <Route path="/admin/suno-api" element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <AdminSunoApiPageLazy />

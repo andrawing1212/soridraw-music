@@ -3416,6 +3416,27 @@ function App() {
     }
   };
 
+  const clearTransientInteractionHints = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setHoveredItem(null);
+    setIsTooltipHovered(false);
+    try {
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.blur?.();
+    } catch {
+      // ignore focus cleanup failures
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleClearHints = () => clearTransientInteractionHints();
+    window.addEventListener('soridraw:clear-interaction-hints', handleClearHints);
+    return () => window.removeEventListener('soridraw:clear-interaction-hints', handleClearHints);
+  }, [clearTransientInteractionHints]);
+
   const applyTemplate = (template: PromptTemplate) => {
     // Helper to filter valid IDs
     const filterValid = (ids: string[] | undefined, validList: { id: string }[]) => {
@@ -4121,12 +4142,7 @@ const toggleCycleVariantSelection = (
   const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
     // Mobile browsers can keep the tapped result-card tooltip hovered after applying keywords.
     // Clear only that transient hint so the bottom generate bar does not look expanded/stuck.
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    setHoveredItem(null);
-    setIsTooltipHovered(false);
+    clearTransientInteractionHints();
 
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
@@ -4334,7 +4350,7 @@ const toggleCycleVariantSelection = (
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
+  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast, clearTransientInteractionHints]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);

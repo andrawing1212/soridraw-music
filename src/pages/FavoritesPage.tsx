@@ -1426,6 +1426,16 @@ ${song.prompt}
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
 
   const applyKeywordsToNext = (song: any) => {
+    onHover(null);
+    onLongPressEnd();
+    try {
+      window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
+      const activeElement = document.activeElement as HTMLElement | null;
+      activeElement?.blur?.();
+    } catch {
+      // ignore transient UI cleanup failures
+    }
+
     const pendingKeywords = {
       ...song.appliedKeywords,
       genre: getSongGenreValues(song),
@@ -1452,8 +1462,16 @@ ${song.prompt}
       isLyricMode: song.appliedKeywords.isLyricMode ?? false,
       lyricMode: song.appliedKeywords.lyricMode ?? 'assist',
     };
-    sessionStorage.setItem('pendingAppliedKeywords', JSON.stringify(pendingKeywords));
-    navigate('/');
+    const serialized = JSON.stringify(pendingKeywords);
+    sessionStorage.setItem('pendingAppliedKeywords', serialized);
+    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
+    setSelectedSong(null);
+    setActiveFavoriteMenuId(null);
+
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
+      navigate(`/?applyPending=1&t=${Date.now()}`);
+    });
   };
 
 

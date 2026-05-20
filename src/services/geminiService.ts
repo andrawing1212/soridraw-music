@@ -6671,6 +6671,116 @@ function getAtmosphereSpaceCues(params: GenerateSongParams): string[] {
     .slice(0, 3);
 }
 
+
+type InternalScenePlan = {
+  hasDirectorNote: boolean;
+  hasLyricDraft: boolean;
+  scene: string;
+  detail: string;
+  emotion: string;
+  conflict: string;
+  chorusCore: string;
+  atmosphereCue: string;
+  arrangementCues: string[];
+  lyricDirection: string;
+};
+
+function cleanScenePlanPhrase(value: string, max = 120): string {
+  return cleanupPromptTail(
+    stripRemainingKoreanForProductionPrompt(String(value || ''))
+      .replace(/\b(?:theme|mood|style|sound)\s*:\s*/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim(),
+  ).slice(0, max).trim();
+}
+
+function buildScenePlanConflictCue(params: GenerateSongParams, scene: string): string {
+  const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), scene].join(' ').toLowerCase();
+  if (/운명|destiny|fate|coincidence|우연|필연/.test(text)) return 'trying to deny coincidence while feeling pulled by fate';
+  if (/고백|confession|crush|짝사랑|설렘|flutter/.test(text)) return 'wanting to speak first but hiding the most important line';
+  if (/이별|breakup|farewell|goodbye|그리움|longing/.test(text)) return 'pretending to move on while one small object keeps the feeling alive';
+  if (/우정|friendship|친구/.test(text)) return 'acting comfortable while noticing that the distance has quietly changed';
+  if (/가족|family|화해|reconcile/.test(text)) return 'swallowing old anger while trying to sound ordinary';
+  if (/퇴근|야근|회사|office|work/.test(text)) return 'turning tired routine into a small private escape';
+  if (/저항|resistance|rebel|반항/.test(text)) return 'staying calm on the surface while resisting from underneath';
+  return 'one unsaid feeling pushing against an ordinary moment';
+}
+
+function buildScenePlanChorusCore(params: GenerateSongParams, conflict: string): string {
+  const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), conflict].join(' ').toLowerCase();
+  if (/운명|destiny|fate|우연|필연/.test(text)) return 'the more I avoid it, the closer it pulls me';
+  if (/고백|confession|crush|짝사랑|설렘|flutter/.test(text)) return 'I almost say it, then hide it again';
+  if (/이별|breakup|farewell|goodbye/.test(text)) return 'I say I am fine while the details prove otherwise';
+  if (/우정|friendship|친구/.test(text)) return 'we are still close, but not in the same way';
+  if (/성장|growth|change|변화/.test(text)) return 'I am changing even if I sound the same';
+  if (/자유|free|freedom|escape|탈출/.test(text)) return 'I want a small freedom that feels like mine';
+  return cleanupPromptTail(conflict || 'the hidden feeling keeps returning');
+}
+
+function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): InternalScenePlan {
+  const hasDirectorNote = Boolean((params.userInput || '').trim());
+  const hasLyricDraft = Boolean(params.isLyricMode && (params.lyricDraft || '').trim());
+  const themeCore = buildThemeCoreScene(params);
+  const derivedScene = cleanScenePlanPhrase(deriveIntentScene(params), 130);
+  const rawScene = derivedScene || cleanScenePlanPhrase(themeCore.scene, 130) || 'a concrete everyday scene';
+  const scene = rawScene
+    .replace(/^a\s+small\s+fluttering\s+mistake$/i, 'a small everyday mistake turning into fluttering tension')
+    .replace(/^a\s+private\s+room\s+scene$/i, 'a private room scene where a hidden feeling becomes harder to ignore');
+  const detail = cleanScenePlanPhrase(themeCore.detail || '', 150) || 'one visible object, one small action, one unsaid feeling';
+  const emotion = cleanScenePlanPhrase(buildCompactMoodAngle(params) || buildPromptIntent(params).atmosphereTone || buildPromptIntent(params).emotionalCore || 'balanced emotional temperature', 72);
+  const spaceCues = getAtmosphereSpaceCues(params).slice(0, 2).map((item) => cleanScenePlanPhrase(item, 52)).filter(Boolean);
+  const conflict = buildScenePlanConflictCue(params, scene);
+  const chorusCore = buildScenePlanChorusCore(params, conflict);
+  const airParts = dedupePromptParts([emotion, ...spaceCues], 4).filter(Boolean);
+  const atmosphereCue = cleanupPromptTail([
+    scene,
+    airParts.length ? `with ${joinPromptPhrase(airParts, 'and')}` : '',
+    conflict && !/unsaid feeling/i.test(scene) ? `where ${conflict}` : '',
+  ].filter(Boolean).join(' '));
+
+  const movementCandidates = dedupePromptParts([
+    ...splitArrangementParts(deriveIntentArrangement(params).replace(/\band\b/g, ',')),
+    ...buildArrangementStabilizerParts(params),
+  ], 12)
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part))
+    .filter((part) => !isGenericArrangementPart(part));
+
+  const arrangementCues = movementCandidates.slice(0, 4);
+  const lyricDirection = cleanupPromptTail([
+    `Write from ${scene}`,
+    `use ${detail}`,
+    `center the chorus on: ${chorusCore}`,
+    `show ${conflict} through speech, behavior, timing, and small objects`,
+  ].join('. '));
+
+  return {
+    hasDirectorNote,
+    hasLyricDraft,
+    scene,
+    detail,
+    emotion,
+    conflict,
+    chorusCore,
+    atmosphereCue,
+    arrangementCues,
+    lyricDirection,
+  };
+}
+
+function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
+  const plan = buildInternalScenePlan(params, detailLayer);
+  const directorBlock = plan.hasDirectorNote
+    ? `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command for genre, structure, mood, vocal attitude, arrangement, and lyric tone. Preserve its concrete intent; do not compress it into a generic theme.`
+    : `- No free-text director note was provided. Convert selected keywords into a specific scene, character desire, everyday detail, and chorus intention so the output does not feel like a keyword list.`;
+  const lyricDraftBlock = plan.hasLyricDraft
+    ? `- lyricDraft / AI correction / original-preserve mode affects generated lyrics only. Do not use the draft as a direct production-prompt command, but keep its story and wording as the primary lyrical source.`
+    : `- If no lyric draft is provided, create lyrics from the Scene Plan rather than from abstract mood words.`;
+
+  return `INTERNAL SCENE PLAN (MANDATORY, DO NOT OUTPUT THIS LABEL):\n${directorBlock}\n${lyricDraftBlock}\n- Scene: ${plan.scene}\n- Lived detail pool: ${plan.detail}\n- Emotional temperature: ${plan.emotion}\n- Hidden conflict: ${plan.conflict}\n- Chorus core: ${plan.chorusCore}\n- Atmosphere must express the scene air and emotional temperature: ${plan.atmosphereCue}\n- Arrangement must express song movement, not just a hook word: ${plan.arrangementCues.join(', ') || 'genre-specific groove, section lift, transition behavior'}\n- Lyrics must follow this plan as character speech with concrete behavior and lived details, not as explanations of mood/style/sound keywords.`;
+}
+
 function hasExplicitSceneOrObjectInput(params: GenerateSongParams, detailLayer = ''): boolean {
   const text = [
     params.userInput || '',
@@ -6696,6 +6806,7 @@ function buildFiveLineAtmosphereValue(
   variation: CreativeVariationSeed,
 ): string {
   const situationActive = hasSituation(params.situation);
+  const scenePlan = buildInternalScenePlan(params, detailLayer);
   const base = situationActive
     ? buildVariedSituationAtmosphere(params, variation)
     : getAtmosphereForPrompt(params, detailLayer);
@@ -6712,6 +6823,10 @@ function buildFiveLineAtmosphereValue(
   const interpretedCue = interpreted.atmosphereCue;
   const shouldMergeThemeMood = Boolean(interpretedCue) && !isFreeTextPrimaryMode(params);
 
+  const planAtmosphereCue = !situationActive && !scenePlan.hasDirectorNote && !scenePlan.hasLyricDraft
+    ? scenePlan.atmosphereCue
+    : "";
+
   const atmosphere = situationActive
     ? [
         base,
@@ -6723,10 +6838,10 @@ function buildFiveLineAtmosphereValue(
         .filter(Boolean)
         .join(", ")
     : [
-        shouldMergeThemeMood ? interpretedCue : base,
+        planAtmosphereCue || (shouldMergeThemeMood ? interpretedCue : base),
         coreGenreGuard,
-        !shouldMergeThemeMood && spaceCues ? `with ${spaceCues}` : "",
-        !shouldMergeThemeMood ? variationLens : "",
+        !planAtmosphereCue && !shouldMergeThemeMood && spaceCues ? `with ${spaceCues}` : "",
+        !planAtmosphereCue && !shouldMergeThemeMood ? variationLens : "",
       ]
         .filter(Boolean)
         .join(", ");
@@ -7192,6 +7307,7 @@ function buildFiveLineArrangementValue(
   variation: CreativeVariationSeed,
 ): string {
   const situationActive = hasSituation(params.situation);
+  const scenePlan = buildInternalScenePlan(params, params.userInput || "");
   const reinterpretationLayer = buildGenreReinterpretationLayer(params, params.userInput || "");
   // Keep BPM in [Arrangement]. If the UI did not pass an explicit/random tempo,
   // use a compact genre-based fallback so the final prompt does not lose tempo guidance.
@@ -7224,6 +7340,7 @@ function buildFiveLineArrangementValue(
     directDirectorArrangement,
     genreDNA,
     styleArrangement,
+    !situationActive && !scenePlan.hasLyricDraft ? scenePlan.arrangementCues.join(', ') : '',
     reinterpretationLayer.arrangementLens,
     interpretedArrangement,
     variationMeaning,
@@ -13423,6 +13540,7 @@ export async function generateSong(
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
+  const scenePlanInstruction = buildScenePlanInstruction(params, detailLayer);
 
   const requestedLanguageInstruction = effectiveNoLyrics
     ? ""
@@ -13677,6 +13795,8 @@ ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
 
 VOCAL EXPRESSION STYLE LAYER (VOICE EMOTION / ATTITUDE / PHRASING):
 ${buildSelectedVocalExpressionInstruction(params)}
+
+${scenePlanInstruction}
 
 ${
   hasSituation(params.situation)

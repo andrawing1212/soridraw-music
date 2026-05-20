@@ -2281,6 +2281,28 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
                               <Users className="w-3 h-3" />
                               회원 관리
                             </button>
+                            <button 
+                              onClick={() => {
+                                navigate('/admin/vocals');
+                                setIsProfileOpen(false);
+                                setIsExpanded(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                            >
+                              <Settings className="w-3 h-3" />
+                              보컬 관리
+                            </button>
+                            <button 
+                              onClick={() => {
+                                navigate('/admin/tags');
+                                setIsProfileOpen(false);
+                                setIsExpanded(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                            >
+                              <Tag className="w-3 h-3" />
+                              태그 관리
+                            </button>
                           </>
                         )}
                         <div className="h-px bg-[var(--border-color)]/30 mx-2 my-1" />
@@ -4120,7 +4142,7 @@ const toggleCycleVariantSelection = (
     setIsPointSoundMode(pointSoundIds.length > 0);
     setKpopMode(restoredGenreIds.includes('kpop') ? resolvedKpopMode : 0);
     setIsKoreanEnglishMix(resolvedMixedLyrics);
-    setEnglishMixRatio(Math.max(0, Math.min(90, Number((appliedKeywords as any).englishMixRatio ?? 10) || 10)));
+    setEnglishMixRatio(Math.max(0, Math.min(30, Number((appliedKeywords as any).englishMixRatio ?? 10) || 10)));
     setCitypopMode(restoredGenreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -5017,7 +5039,7 @@ const saveRecentSong = async (newSong: any) => {
   }, []);
   */
 
-  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[]; generationCount?: number; isKoreanEnglishMix?: boolean; englishMixRatio?: number; rapEnabled?: boolean }) => {
+  const handleGenerate = async (generationOptions?: { includeLyrics: boolean; lyricLanguages: LanguageCode[]; generationCount?: number }) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -5045,11 +5067,6 @@ const saveRecentSong = async (newSong: any) => {
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko']).filter(Boolean))).slice(0, 2) as LanguageCode[]
       : [];
     const requestedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions?.generationCount) || 1)));
-    const requestedKoreanEnglishMix = requestedIncludeLyrics ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
-    const requestedEnglishMixRatio = requestedKoreanEnglishMix
-      ? Math.min(90, Math.max(5, Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10))
-      : 10;
-    const requestedRapEnabled = requestedIncludeLyrics ? Boolean(generationOptions?.rapEnabled ?? rapEnabled) : false;
 
     const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
 
@@ -5273,6 +5290,41 @@ const saveRecentSong = async (newSong: any) => {
         const selectedSoundFamilies = new Set(finalInstrumentSounds.map((id) => SOUND_TEXTURE_CYCLE_LOOKUP[id]?.id).filter(Boolean));
         const hasStyleId = (...ids: string[]) => ids.some((id) => selectedStyleIds.has(id));
         const hasSoundFamily = (...ids: string[]) => ids.some((id) => selectedSoundFamilies.has(id));
+        const structureSignalText = [
+          ...finalGenres,
+          ...subGenre,
+          ...effectiveStyleIds,
+          ...genreLabels,
+          ...subGenreLabels,
+          ...styleLabels,
+          ...themeLabels,
+          ...soundTextureLabels,
+        ].join(' ').toLowerCase();
+        const hasStructureSignal = (...terms: string[]) => terms.some((term) => structureSignalText.includes(term.toLowerCase()));
+        const buildAdaptiveDefaultStructureGuide = () => {
+          const hasRapFlow = rapEnabled || hasStructureSignal('rap', 'hip-hop', 'hiphop', 'drill', 'trap', 'boom bap', 'boombap', 'uk garage', 'garage r&b');
+          const hasDanceFlow = hasStructureSignal('edm', 'house', 'techno', 'disco', 'dance', 'club', 'garage', 'breakbeat', 'future bass', 'electro', 'funk') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style', 'classic-disco', 'funk');
+          const hasBandFlow = hasStructureSignal('rock', 'band', 'emo', 'punk', 'metal', 'j-rock', 'k-band', 'anime rock', 'anisong') || hasStyleId('rock-style', 'anime-style');
+          const hasCinematicFlow = hasStructureSignal('cinematic', 'score', 'opera', 'musical', 'orchestra', 'theme a', 'theme b', 'climax', 'ambient');
+          const hasBreathingFlow = hasBalladStyle || hasStructureSignal('ballad', 'jazz', 'r&b', 'rnb', 'dream pop', 'dreampop', 'city pop', 'citypop', 'lo-fi', 'lofi', 'folk', 'acoustic', 'soul') || finalMoods.some((id) => ['calm', 'peaceful', 'sad', 'lonely', 'nostalgic', 'dreamy', 'warm'].includes(id));
+
+          if (hasRapFlow) {
+            return 'Default adaptive structure: choose a polished rap/hook variation such as Intro → Rap Section → Hook → Rap Section → Break → Hook → Bridge → Final Hook → Outro; keep the Hook memorable, let Rap Sections carry denser detail, and close with a clear final payoff.';
+          }
+          if (hasDanceFlow) {
+            return 'Default adaptive structure: choose a polished hook/drop variation such as Intro → Hook → Verse A → Pre-Chorus → Chorus / Drop → Break → Verse B → Chorus / Drop → Bridge → Final Chorus / Drop → Outro; keep the flow popular and stable while using Break or Drop as a refined twist.';
+          }
+          if (hasBandFlow) {
+            return 'Default adaptive structure: choose a polished band-build variation such as Intro → Verse A → Build-up → Chorus → Verse B → Chorus → Bridge → Final Chorus → Outro; keep the chorus singable, let the build-up raise pressure, and use the Bridge as the emotional turn.';
+          }
+          if (hasCinematicFlow) {
+            return 'Default adaptive structure: choose a cinematic variation such as Intro → Theme A → Verse A → Theme B → Chorus → Instrumental → Bridge → Climax → Outro; keep it experimental but still finish with a clear climax and outro.';
+          }
+          if (hasBreathingFlow) {
+            return 'Default adaptive structure: choose a spacious emotional variation such as Intro → Verse A → Pre-Chorus → Chorus → Instrumental → Verse B → Bridge → Final Chorus → Outro; leave room for breath, image, and melodic payoff.';
+          }
+          return 'Default adaptive structure: choose one stable modern-pop variation with a small twist, using Hook, Break, Drop, Instrumental, or Bridge only where it supports the story; never end after Stop, Break, or Instrumental.';
+        };
 
         const bpm = tempoInfo
           ? tempoInfo
@@ -5358,7 +5410,9 @@ const saveRecentSong = async (newSong: any) => {
         const arrangement = [
           songStructure === 'custom'
             ? `Custom structure: ${formatStoredCustomStructureText(customStructure)}`
-            : `Base structure: ${songStructure === '1' ? '기본 자유 전개' : songStructure === '2' ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
+            : songStructure === '1'
+              ? buildAdaptiveDefaultStructureGuide()
+              : `Base structure: ${songStructure === '2' ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
@@ -5399,7 +5453,7 @@ const saveRecentSong = async (newSong: any) => {
         vocal: {
           male: maleCount,
           female: femaleCount,
-          rap: requestedRapEnabled,
+          rap: rapEnabled,
           mode: vocalMode,
           members: vocalMembers,
         },
@@ -5408,8 +5462,8 @@ const saveRecentSong = async (newSong: any) => {
         tempoSource,
         specialPrompt,
         kpopMode,
-        isKoreanEnglishMix: requestedKoreanEnglishMix,
-        englishMixRatio: requestedEnglishMixRatio,
+        isKoreanEnglishMix,
+        englishMixRatio,
         customStructure,
         isNoLyrics: !requestedIncludeLyrics,
         includeLyrics: requestedIncludeLyrics,
@@ -5451,14 +5505,14 @@ const saveRecentSong = async (newSong: any) => {
             customMoodInput,
             customThemeInput,
             vocalType: formation || 'Default',
-            rapEnabled: requestedRapEnabled,
+            rapEnabled: rapEnabled,
             isNoLyrics: !requestedIncludeLyrics,
             lyricLanguages: requestedLyricLanguages,
             generationCount: requestedGenerationCount,
             generationIndex: i + 1,
             generationBatchId,
-            isKoreanEnglishMix: requestedKoreanEnglishMix,
-            englishMixRatio: requestedEnglishMixRatio,
+            isKoreanEnglishMix: isKoreanEnglishMix,
+            englishMixRatio,
             kpopMode,
             isBallad: hasBalladStyle,
             userInput: userInput,
@@ -6157,8 +6211,8 @@ ${normalizePromptForDisplay(result.prompt)}
 
       <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} />
 
-      {/* Suno Icon at Top Right (same layer as the floating menu, hidden behind modal flows) */}
-      {user && !isAnyModalOpen && (
+      {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
+      {user && (
         <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
           <motion.div
             animate={{ 
@@ -7595,8 +7649,16 @@ ${normalizePromptForDisplay(result.prompt)}
                 <AdminUserManagementPageLazy isAdmin={isAdminUser} />
               </Suspense>
             } />
-            <Route path="/admin/vocals" element={<Navigate to="/admin/users" replace />} />
-            <Route path="/admin/tags" element={<Navigate to="/admin/users" replace />} />
+            <Route path="/admin/vocals" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <AdminVocalTonesPageLazy isAdmin={isAdminUser} />
+              </Suspense>
+            } />
+            <Route path="/admin/tags" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <AdminSectionTagsPageLazy isAdmin={isAdminUser} />
+              </Suspense>
+            } />
             <Route path="/admin/suno-api" element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <AdminSunoApiPageLazy />
@@ -7669,19 +7731,10 @@ ${normalizePromptForDisplay(result.prompt)}
             hasApiKey={true}
             isNoLyrics={false}
             maxLyricLanguages={2}
-            isKoreanEnglishMix={isKoreanEnglishMix}
-            englishMixRatio={englishMixRatio}
-            rapEnabled={rapEnabled}
             onClose={() => setShowMainGenerationModal(false)}
-            onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
-              const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix) : false;
-              const nextRatio = nextMix ? Math.min(90, Math.max(5, Number(options?.englishMixRatio) || 10)) : 10;
-              const nextRap = includeLyrics ? Boolean(options?.rapEnabled) : false;
-              setIsKoreanEnglishMix(nextMix);
-              setEnglishMixRatio(nextRatio);
-              setRapEnabled(nextRap);
+            onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount) => {
               setShowMainGenerationModal(false);
-              handleGenerate({ includeLyrics, lyricLanguages, generationCount, isKoreanEnglishMix: nextMix, englishMixRatio: nextRatio, rapEnabled: nextRap });
+              handleGenerate({ includeLyrics, lyricLanguages, generationCount });
             }}
           />
         )}
@@ -9957,7 +10010,7 @@ function SongStructureIntegratedControl({
 
 
   const structureOptions = [
-    { id: '1', label: '기본', description: '감정선과 스토리에 맞춰 섹션을 자유롭게 구성합니다.' },
+    { id: '1', label: '기본', description: '장르에 맞춰 Hook / Break / Drop / Instrumental을 안정적으로 섞는 세련된 랜덤 기본 구조입니다.' },
     { id: '2', label: '1', description: '일반적인 기본 섹션 구성. 추천 2~4분' },
     { id: '3', label: '2', description: '브릿지와 반복이 확장된 섹션 구성. 추천 4~6분' },
     { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
@@ -9965,7 +10018,7 @@ function SongStructureIntegratedControl({
 
   const handleSelectStructure = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
-      '1': '짧고 간결한 구조 · 추천 길이 1~2분',
+      '1': '장르별로 안정적인 기본 뼈대를 고르고 Hook / Break / Drop / Instrumental을 세련되게 섞는 기본 랜덤 구조',
       '2': '가장 일반적인 기본 섹션 구성 · 추천 길이 2~4분',
       '3': '브릿지와 반복이 확장된 섹션 구성 · 추천 길이 4~6분',
       'custom': (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · Pro부터 사용할 수 있습니다.',
@@ -10471,7 +10524,7 @@ function SongStructureIntegratedControl({
                     {songStructure === 'custom' ? '현재 커스텀 섹션' : songStructure === '1' ? '기본 섹션 상세 가이드' : `섹션 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "감정선과 스토리에 맞춰 자유롭게 구성합니다. 고정된 번호형 벌스 구조를 강제하지 않고, 필요한 곳에 Hook, Rap Section, Drop, Bridge 등을 배치합니다."}
+                    {songStructure === '1' && "장르에 따라 안정적인 기본 뼈대를 고른 뒤 Hook, Break, Drop, Instrumental, Bridge를 필요한 곳에만 섞습니다. 대중적인 흐름은 유지하고, 중간 전환만 세련되게 변주합니다."}
                     {songStructure === '2' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
                     {songStructure === '3' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (
@@ -11356,11 +11409,8 @@ function TagEditModal({
 
   const closeCustomTagEditor = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && customTagEditorHistoryPushedRef.current) {
-      try {
-        window.history.replaceState({ modal: 'section-tag-editor' }, '');
-      } catch {
-        // History state cleanup is best-effort only.
-      }
+      window.history.back();
+      return;
     }
     setShowCustomTagEditor(false);
     setEditingCustomTagId(null);
@@ -11373,18 +11423,10 @@ function TagEditModal({
       closeCustomTagEditor(source);
       return;
     }
-
-    // Mobile browsers can miss the popstate callback when a nested modal is closed
-    // from a touch/click handler. Close the tag modal immediately instead of
-    // depending on history.back(), then neutralize the temporary modal history state.
     if (source === 'ui' && tagModalHistoryPushedRef.current) {
-      try {
-        window.history.replaceState({ modal: 'custom-structure' }, '');
-      } catch {
-        // History state cleanup is best-effort only.
-      }
+      window.history.back();
+      return;
     }
-
     tagModalHistoryPushedRef.current = false;
     onClose();
   }, [showCustomTagEditor, closeCustomTagEditor, onClose]);
@@ -11547,16 +11589,11 @@ function TagEditModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
-      onPointerDown={(e) => {
+      onMouseDown={(e) => {
         tagModalBackdropMouseDownRef.current = e.target === e.currentTarget;
       }}
-      onPointerUp={(e) => {
-        if (tagModalBackdropMouseDownRef.current && e.target === e.currentTarget) {
-          closeTagModal();
-        }
-        tagModalBackdropMouseDownRef.current = false;
-      }}
-      onPointerCancel={() => {
+      onClick={(e) => {
+        if (tagModalBackdropMouseDownRef.current && e.target === e.currentTarget) closeTagModal();
         tagModalBackdropMouseDownRef.current = false;
       }}
     >
@@ -11567,8 +11604,6 @@ function TagEditModal({
         className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}
-        onPointerDown={e => e.stopPropagation()}
-        onPointerUp={e => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
@@ -11583,9 +11618,7 @@ function TagEditModal({
             </p>
           </div>
           <button 
-            type="button"
             onClick={() => closeTagModal()} 
-            onTouchEnd={(e) => { e.preventDefault(); closeTagModal(); }}
             className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-secondary)]"
             onMouseEnter={() => onHover({ id: 'tag-modal-close', label: 'Close', labelKo: '닫기', description: '태그 편집 창을 닫습니다.' })}
             onMouseLeave={() => onHover(null)}
@@ -11694,19 +11727,16 @@ function TagEditModal({
           {showCustomTagEditor && (
             <div
               className="fixed inset-0 z-[185] flex items-center justify-center px-4 backdrop-blur-[1.5px]"
-              onPointerDown={(e) => { customTagEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
-              onPointerUp={(e) => {
+              onMouseDown={(e) => { customTagEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
+              onClick={(e) => {
                 if (customTagEditorBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomTagEditor();
                 customTagEditorBackdropMouseDownRef.current = false;
               }}
-              onPointerCancel={() => { customTagEditorBackdropMouseDownRef.current = false; }}
             >
               <div
                 className="w-[min(92vw,420px)] rounded-2xl border border-brand-orange/40 bg-[var(--card-bg)] shadow-2xl p-4 space-y-3"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerUp={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -12260,13 +12290,83 @@ function VocalControl({
         </div>
 
         <div className="flex items-center gap-2">
+          <AnimatePresence initial={false}>
+            {isKoreanEnglishMix && (
+              <motion.div
+                key="english-mix-ratio-panel"
+                initial={{ opacity: 0, x: 12, scaleX: 0.92 }}
+                animate={{ opacity: 1, x: 0, scaleX: 1 }}
+                exit={{ opacity: 0, x: 12, scaleX: 0.92 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="origin-right overflow-hidden"
+              >
+                <div className="flex items-center gap-1 rounded-full border border-brand-orange/25 bg-brand-orange/5 px-1.5 py-1">
+                  {[5, 10, 20, 30].map((ratio) => (
+                    <button
+                      key={ratio}
+                      type="button"
+                      onClick={() => onEnglishMixRatioChange(ratio)}
+                      onMouseEnter={() => onHover({
+                        id: `english-mix-ratio-${ratio}`,
+                        label: '영어 비중',
+                        description: `한/영 혼합 가사에서 영어를 약 ${ratio}% 정도만 사용합니다.`,
+                      })}
+                      onMouseLeave={() => onHover(null)}
+                      className={cn(
+                        "px-2 py-1 rounded-full text-[10px] font-bold transition-all",
+                        englishMixRatio === ratio
+                          ? "bg-brand-orange text-white"
+                          : "text-brand-orange/80 hover:bg-brand-orange/10"
+                      )}
+                    >
+                      {ratio}%
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            onClick={onToggleKoreanEnglishMix}
+            onMouseEnter={() => onHover({
+              id: 'lyrics-mix',
+              label: '한/영 혼합',
+              description: isKoreanEnglishMix
+                ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
+                : '한/영 혼합을 켜면 모든 장르에서 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.',
+            })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "flex h-[31px] w-[124px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2 text-[9px] sm:text-[10px] font-bold transition-all shadow-sm whitespace-nowrap overflow-hidden",
+              isKoreanEnglishMix 
+                ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
+            )}
+          >
+            <Languages className={cn("w-3 h-3", isKoreanEnglishMix ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
+            한/영 혼합 {isKoreanEnglishMix ? 'ON' : 'OFF'}
+          </button>
+          <button
+            onClick={() => onRapChange(!rapEnabled)}
+            onMouseEnter={() => onHover({ id: 'rap', label: 'Rap', labelKo: '랩 사용', description: rapEnabled ? '랩 섹션을 제거합니다.' : '곡에 랩 섹션을 추가합니다.' })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "flex h-[31px] w-[78px] shrink-0 items-center justify-center gap-1.5 rounded-full border px-2 text-[9px] sm:text-[10px] font-bold transition-all shadow-sm whitespace-nowrap overflow-hidden",
+              rapEnabled 
+                ? "bg-brand-orange/10 border-brand-orange/40 text-brand-orange" 
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)]"
+            )}
+          >
+            <Mic2 className={cn("w-3 h-3", rapEnabled ? "text-brand-orange" : "text-[var(--text-secondary)]")} />
+            랩 {rapEnabled ? 'ON' : 'OFF'}
+          </button>
           <button
             onClick={onClear}
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
               "p-2 rounded-lg transition-all border shadow-btn",
-              (maleCount > 0 || femaleCount > 0)
+              (maleCount > 0 || femaleCount > 0 || rapEnabled || isKoreanEnglishMix || englishMixRatio !== 10)
                 ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}

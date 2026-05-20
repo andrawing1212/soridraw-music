@@ -6339,10 +6339,9 @@ ${normalizePromptForDisplay(result.prompt)}
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (
         <div
-          className="fixed top-6 right-[max(1rem,env(safe-area-inset-right))] md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50 max-w-[calc(100dvw-2rem)]"
-          style={{ contain: 'layout paint' }}
+          className="fixed top-6 right-[max(1rem,env(safe-area-inset-right))] md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-[9999] max-w-[calc(100dvw-2rem)] overflow-visible pointer-events-auto"
         >
-          <motion.div
+          <motion.div className="overflow-visible"
             animate={{ 
               y: [0, -5, 0],
               scale: [1, 1.05, 1]

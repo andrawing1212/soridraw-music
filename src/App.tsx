@@ -4349,7 +4349,14 @@ const toggleCycleVariantSelection = (
     }
 
     showToast('키워드가 다음 곡에 적용되었습니다.');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Favorites detail/modal routes can leave a tiny horizontal scroll offset on mobile.
+    // Reset both axes so the fixed bottom generation bar does not appear stretched sideways.
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: window.scrollY, left: 0, behavior: 'auto' });
+      document.documentElement.scrollLeft = 0;
+      document.body.scrollLeft = 0;
+    });
   }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast, clearTransientInteractionHints]);
 
 
@@ -7098,9 +7105,9 @@ ${normalizePromptForDisplay(result.prompt)}
                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                     exit={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
                     transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
-                    className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8"
+                    className="fixed bottom-5 md:bottom-7 inset-x-0 w-screen max-w-[100vw] z-[120] flex justify-center pointer-events-none px-4 md:px-8 overflow-x-clip"
                   >
-                    <div className="relative w-full max-w-4xl pointer-events-auto">
+                    <div className="relative w-[calc(100vw-2rem)] md:w-full max-w-4xl min-w-0 pointer-events-auto">
                       <motion.div
                         layoutId="action-buttons-floating-bar"
                         drag={isActionDragMobile ? "x" : false}
@@ -7119,7 +7126,7 @@ ${normalizePromptForDisplay(result.prompt)}
                         exit="exit"
                         style={{ transformOrigin: 'left center' }}
                         transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.9 }}
-                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100 overflow-hidden"
+                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100 overflow-hidden min-w-0 max-w-full"
                       >
                         <motion.button
                           layoutId="action-collapse-ghost-button"

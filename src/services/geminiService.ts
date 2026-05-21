@@ -13162,6 +13162,50 @@ function guardAtmosphereTextureNounBeforeWhere(value: string): string {
   return cleanupPromptTail(line);
 }
 
+
+function rescueBrokenDirectAtmosphereLine(value: string, params: GenerateSongParams): string {
+  const line = cleanupPromptTail(String(value || ''));
+  const isBroken = !line || /^a\s*$/i.test(line) || /^an\s*$/i.test(line) || /^the\s*$/i.test(line) || line.length < 12;
+  if (!isBroken) return line;
+
+  const profile = buildDirectStoryPromptProfile(params);
+  if (profile.strength !== 'none' && profile.scene) {
+    const textureParts = dedupePromptParts([
+      ...getAtmosphereSpaceCues(params),
+      buildDirectMoodAngle(params),
+      buildCompactMoodAngle(params),
+    ], 5)
+      .map((part) => cleanScenePlanPhrase(part, 42))
+      .filter(Boolean)
+      .filter((part) => !profile.scene.toLowerCase().includes(part.toLowerCase()))
+      .filter((part) => !String(profile.conflict || '').toLowerCase().includes(part.toLowerCase()))
+      .slice(0, 2);
+
+    const rescued = cleanupPromptTail([
+      cleanScenePlanPhrase(profile.scene, 95),
+      textureParts.length ? `with ${joinPromptPhrase(textureParts, 'and')}` : '',
+      profile.conflict ? `where ${cleanScenePlanPhrase(profile.conflict, 95)}` : '',
+    ].filter(Boolean).join(' '));
+
+    return normalizeAtmospherePromptLine(rescued) || rescued || 'balanced emotional air';
+  }
+
+  if (hasDirectThemeOrMoodInput(params)) {
+    const userScene = buildUserTextCoreScene(params);
+    const scene = cleanScenePlanPhrase(userScene?.scene || deriveIntentScene(params) || 'the user\'s direct scene', 95);
+    const mood = cleanScenePlanPhrase(buildDirectMoodAngle(params) || buildCompactMoodAngle(params) || '', 60);
+    const conflict = cleanScenePlanPhrase(directConflictFallback(params), 95);
+    const rescued = cleanupPromptTail([
+      scene,
+      mood ? `with ${mood}` : '',
+      conflict ? `where ${conflict}` : '',
+    ].filter(Boolean).join(' '));
+    return normalizeAtmospherePromptLine(rescued) || rescued || 'balanced emotional air';
+  }
+
+  return line || 'balanced emotional air';
+}
+
 function validateFinalAtmosphereLine(value: string, params: GenerateSongParams): string {
   let line = compressAtmosphereForFinalValidator(value, params)
     .replace(/\bwith\s+([^,]+?),\s*([^,]+?)\s+where\b/gi, 'with $1 and $2 where')
@@ -13178,7 +13222,8 @@ function validateFinalAtmosphereLine(value: string, params: GenerateSongParams):
     .replace(/\bwith\s+urban\s+and\s+suspenseful\s+where\b/gi, 'with urban suspense where')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  return stripUnsupportedDirectCueBankPhrases(line || 'balanced emotional air', params) || 'balanced emotional air';
+  const protectedLine = stripUnsupportedDirectCueBankPhrases(line || 'balanced emotional air', params) || 'balanced emotional air';
+  return rescueBrokenDirectAtmosphereLine(protectedLine, params);
 }
 
 function lowerCaseVocalCueWords(value: string): string {

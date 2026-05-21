@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Key, CheckCircle2, XCircle, AlertTriangle, Trash2 } from 'lucide-react';
+import { Home, Key, CheckCircle2, XCircle, AlertTriangle, Trash2, RefreshCw } from 'lucide-react';
 import { auth } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -16,6 +16,7 @@ export default function SunoApiSettingsPage() {
   const [apiKey, setApiKey] = useState('');
   const [statusText, setStatusText] = useState<'확인 중...' | '등록됨' | '미등록' | '확인 실패'>('확인 중...');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreditRefreshing, setIsCreditRefreshing] = useState(false);
   const [message, setMessage] = useState('');
   const [remainingCredits, setRemainingCredits] = useState<number | null>(() => {
     try {
@@ -40,17 +41,25 @@ export default function SunoApiSettingsPage() {
   const isRegistered = statusText === '등록됨';
 
   const cacheRemainingCredits = (credits: number | null, updatedAt?: string | null) => {
+    const resolvedUpdatedAt = credits === null ? null : (updatedAt || new Date().toISOString());
     setRemainingCredits(credits);
-    setRemainingCreditsUpdatedAt(updatedAt || null);
+    setRemainingCreditsUpdatedAt(resolvedUpdatedAt);
 
     try {
       if (credits === null) {
         localStorage.removeItem('soridraw_suno_remaining_credits');
         localStorage.removeItem('soridraw_suno_remaining_credits_updated_at');
+        window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
+          detail: { remainingCredits: null, updatedAt: null }
+        }));
       } else {
         localStorage.setItem('soridraw_suno_remaining_credits', String(credits));
-        const ms = updatedAt ? Date.parse(updatedAt) : Date.now();
-        localStorage.setItem('soridraw_suno_remaining_credits_updated_at', String(Number.isFinite(ms) ? ms : Date.now()));
+        const ms = resolvedUpdatedAt ? Date.parse(resolvedUpdatedAt) : Date.now();
+        const resolvedMs = Number.isFinite(ms) ? ms : Date.now();
+        localStorage.setItem('soridraw_suno_remaining_credits_updated_at', String(resolvedMs));
+        window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
+          detail: { remainingCredits: credits, updatedAt: resolvedMs }
+        }));
       }
     } catch {
       // localStorage may be unavailable.
@@ -200,6 +209,37 @@ export default function SunoApiSettingsPage() {
     }
   };
 
+  const refreshSunoRemainingCredits = async () => {
+    if (!user || !isRegistered) return;
+    setIsCreditRefreshing(true);
+    setMessage('');
+
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/getSunoRemainingCredits`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ source: 'settings-manual' })
+      });
+      const result = await res.json();
+
+      if (res.ok && result?.ok && typeof result.remainingCredits === 'number') {
+        cacheRemainingCredits(result.remainingCredits, result.checkedAt || new Date().toISOString());
+        setMessage('남은 크레딧을 새로 확인했습니다.');
+      } else {
+        setMessage(result?.error || '남은 크레딧 확인에 실패했습니다.');
+      }
+    } catch (e) {
+      console.error('Failed to refresh Suno remaining credits:', e);
+      setMessage('남은 크레딧 확인에 실패했습니다.');
+    } finally {
+      setIsCreditRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     loadSunoApiKeyStatus(false);
   }, [loadSunoApiKeyStatus]);
@@ -263,7 +303,7 @@ export default function SunoApiSettingsPage() {
           <ul className="list-disc list-inside space-y-1 ml-1">
             <li>API 생성 비용은 입력한 개인 API Key의 크레딧에서 차감됩니다.</li>
             <li>음원 파일은 앱 서버에 저장되지 않습니다.</li>
-            <li>남은 크레딧은 곡 생성이 실제 완료된 뒤 1회만 자동 확인됩니다.</li>
+            <li>남은 크레딧은 곡 생성 완료 뒤 1회 자동 확인되며, 이 화면에서만 수동 새로고침할 수 있습니다.</li>
           </ul>
         </motion.div>
 
@@ -290,20 +330,32 @@ export default function SunoApiSettingsPage() {
           </div>
 
           {/* Credit Status */}
-          <div className="flex items-center justify-between p-4 rounded-xl bg-purple-500/[0.06] border border-purple-500/15">
+          <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-purple-500/[0.06] border border-purple-500/15">
             <div>
               <div className="font-medium text-[var(--text-secondary)]">남은 크레딧</div>
-              <div className="text-xs text-white/35 mt-1">곡 생성 완료 후 1회 자동 확인</div>
+              <div className="text-xs text-white/35 mt-1">완료 후 자동 확인 · 이 화면에서만 수동 새로고침</div>
             </div>
-            <div className="text-right">
-              <div className="text-lg font-black text-purple-300">
-                {remainingCredits === null ? '-' : remainingCredits.toLocaleString()}
-              </div>
-              {remainingCreditsUpdatedAt && (
-                <div className="text-[11px] text-white/35 mt-1">
-                  {formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-lg font-black text-purple-300">
+                  {remainingCredits === null ? '-' : remainingCredits.toLocaleString()}
                 </div>
-              )}
+                {remainingCreditsUpdatedAt && (
+                  <div className="text-[11px] text-white/35 mt-1">
+                    {formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={refreshSunoRemainingCredits}
+                disabled={!isRegistered || isCreditRefreshing}
+                className="shrink-0 px-3 py-2 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 text-xs font-bold"
+                title="남은 크레딧 새로고침"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCreditRefreshing ? 'animate-spin' : ''}`} />
+                새로고침
+              </button>
             </div>
           </div>
 

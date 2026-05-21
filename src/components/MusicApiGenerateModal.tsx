@@ -28,6 +28,7 @@ type MusicApiGenerateModalProps = {
   availableLyricLanguages?: LanguageCode[];
   maxLyricLanguages?: number;
   musicApiTargets?: MusicApiTargetOption[];
+  remainingCredits?: number | null;
   onClose: () => void;
   onConfirm: (
     titleLanguage: LanguageCode,
@@ -108,6 +109,7 @@ export default function MusicApiGenerateModal({
   availableLyricLanguages,
   maxLyricLanguages,
   musicApiTargets = [],
+  remainingCredits = null,
   onClose,
   onConfirm,
   isKoreanEnglishMix = false,
@@ -283,6 +285,13 @@ export default function MusicApiGenerateModal({
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
+          {!isMain && typeof remainingCredits === 'number' && (
+            <div className="absolute left-14 top-5 h-8 px-2.5 rounded-full border border-purple-400/25 bg-purple-500/10 text-[10px] font-black text-purple-200 flex items-center gap-1.5" title="남은 크레딧">
+              <Key className="w-3 h-3 text-purple-300" />
+              <span>남은 크레딧 {remainingCredits.toLocaleString()}</span>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={onClose}

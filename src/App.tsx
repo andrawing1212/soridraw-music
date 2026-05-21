@@ -2636,6 +2636,10 @@ function App() {
           showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${targetSongs.length})\n${data.error || "알 수 없는 오류"}`);
           return;
         }
+
+        if (data.trackId) {
+          addPendingSunoCreditTrackId(String(data.trackId));
+        }
       }
 
       showToast(`Music API 생성 요청이 완료되었습니다.\n${targetSongs.length}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
@@ -2678,6 +2682,7 @@ function App() {
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
   const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
   const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
+  const SUNO_PENDING_CREDIT_TRACK_IDS_KEY = 'soridraw_suno_pending_credit_track_ids';
 
   const [sunoLibrarySignal, setSunoLibrarySignalState] = useState<'generating' | 'completed' | null>(() => {
     try {
@@ -2754,6 +2759,9 @@ function App() {
       if (credits === null) {
         localStorage.removeItem(SUNO_REMAINING_CREDITS_KEY);
         localStorage.removeItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY);
+        window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
+          detail: { remainingCredits: null, updatedAt: null }
+        }));
       } else {
         localStorage.setItem(SUNO_REMAINING_CREDITS_KEY, String(credits));
         localStorage.setItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY, String(updatedAt));
@@ -2765,6 +2773,63 @@ function App() {
       // localStorage may be unavailable in private browsing or restricted environments.
     }
   }, []);
+
+  useEffect(() => {
+    const readSunoRemainingCreditsCache = () => {
+      try {
+        const creditValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+        setSunoRemainingCredits(Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null);
+        const updatedValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+        setSunoRemainingCreditsUpdatedAt(Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null);
+      } catch {
+        setSunoRemainingCredits(null);
+        setSunoRemainingCreditsUpdatedAt(null);
+      }
+    };
+
+    const handleCreditsUpdate = () => readSunoRemainingCreditsCache();
+    window.addEventListener('storage', handleCreditsUpdate);
+    window.addEventListener('soridraw:suno-credits-updated', handleCreditsUpdate as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleCreditsUpdate);
+      window.removeEventListener('soridraw:suno-credits-updated', handleCreditsUpdate as EventListener);
+    };
+  }, []);
+
+  const getPendingSunoCreditTrackIds = useCallback((): string[] => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SUNO_PENDING_CREDIT_TRACK_IDS_KEY) || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return Array.from(new Set(parsed.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())));
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const savePendingSunoCreditTrackIds = useCallback((trackIds: string[]) => {
+    try {
+      const uniqueTrackIds = Array.from(new Set(trackIds.filter(Boolean)));
+      if (uniqueTrackIds.length === 0) {
+        localStorage.removeItem(SUNO_PENDING_CREDIT_TRACK_IDS_KEY);
+      } else {
+        localStorage.setItem(SUNO_PENDING_CREDIT_TRACK_IDS_KEY, JSON.stringify(uniqueTrackIds));
+      }
+    } catch {
+      // localStorage may be unavailable in private browsing or restricted environments.
+    }
+  }, []);
+
+  const addPendingSunoCreditTrackId = useCallback((trackId: string | null | undefined) => {
+    if (!trackId) return;
+    const next = Array.from(new Set([...getPendingSunoCreditTrackIds(), String(trackId)]));
+    savePendingSunoCreditTrackIds(next);
+  }, [getPendingSunoCreditTrackIds, savePendingSunoCreditTrackIds]);
+
+  const removePendingSunoCreditTrackId = useCallback((trackId: string | null | undefined) => {
+    if (!trackId) return;
+    const next = getPendingSunoCreditTrackIds().filter((id) => id !== String(trackId));
+    savePendingSunoCreditTrackIds(next);
+  }, [getPendingSunoCreditTrackIds, savePendingSunoCreditTrackIds]);
 
   const formatSunoRemainingCreditsTime = (value: number | null): string => {
     if (!value) return '';
@@ -2819,11 +2884,11 @@ function App() {
     return sunoData.every((item: any) => hasSunoAudioUrl(item));
   };
 
-  const checkSunoRemainingCreditsAfterCompletedTrack = useCallback(async (track: any) => {
-    if (!user || !track?.id || track?.creditCheckedAfterComplete === true) return;
+  const checkSunoRemainingCreditsAfterCompletedTrack = useCallback(async (track: any): Promise<boolean> => {
+    if (!user || !track?.id || track?.creditCheckedAfterComplete === true) return false;
 
     const trackId = String(track.id);
-    if (pendingSunoCreditCheckTrackIdsRef.current.has(trackId)) return;
+    if (pendingSunoCreditCheckTrackIdsRef.current.has(trackId)) return false;
 
     pendingSunoCreditCheckTrackIdsRef.current.add(trackId);
 
@@ -2844,6 +2909,7 @@ function App() {
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok && typeof data.remainingCredits === 'number') {
         updateSunoRemainingCreditsCache(data.remainingCredits, Date.now());
+        return true;
       } else if (!res.ok && res.status !== 409) {
         console.warn('Suno remaining credit check failed:', data);
       }
@@ -2852,6 +2918,7 @@ function App() {
     } finally {
       pendingSunoCreditCheckTrackIdsRef.current.delete(trackId);
     }
+    return false;
   }, [user, updateSunoRemainingCreditsCache]);
 
   useEffect(() => {
@@ -2861,29 +2928,44 @@ function App() {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!user || sunoLibrarySignal !== 'generating' || !sunoLibrarySignalStartedAt) return;
+    if (!user) return;
 
     const q = query(
       collection(db, 'suno_tracks', user.uid, 'tracks'),
       orderBy('createdAt', 'desc'),
-      limit(20)
+      limit(30)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const completedTrack = snapshot.docs
-        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-        .find((track) => isCompletedSunoLibraryTrack(track, sunoLibrarySignalStartedAt));
+      const tracks = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      const pendingTrackIds = new Set(getPendingSunoCreditTrackIds());
+
+      const completedPendingTrack = tracks.find((track) =>
+        pendingTrackIds.has(String((track as any).id)) &&
+        isCompletedSunoLibraryTrack(track, 0) &&
+        (track as any).creditCheckedAfterComplete !== true
+      );
+
+      const completedSignalTrack = sunoLibrarySignal === 'generating' && sunoLibrarySignalStartedAt
+        ? tracks.find((track) => isCompletedSunoLibraryTrack(track, sunoLibrarySignalStartedAt))
+        : null;
+
+      const completedTrack = completedPendingTrack || completedSignalTrack;
 
       if (completedTrack) {
         setSunoLibrarySignal('completed');
-        void checkSunoRemainingCreditsAfterCompletedTrack(completedTrack);
+        void checkSunoRemainingCreditsAfterCompletedTrack(completedTrack).then((didUpdate) => {
+          if (didUpdate) {
+            removePendingSunoCreditTrackId(String((completedTrack as any).id));
+          }
+        });
       }
     }, (error) => {
       console.error('Suno library completion signal listener failed:', error);
     });
 
     return () => unsubscribe();
-  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack]);
+  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
 
   const RECENT_SONGS_CACHE_TTL_MS = 10 * 60 * 1000;
   const getRecentSongsCacheKey = (uid: string) => `soridraw_recent_songs_cache_${uid}`;
@@ -7838,7 +7920,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
 
 
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
                 {!result.appliedKeywords.isNoLyrics && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {(() => {
@@ -7927,20 +8009,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     })()}
                   </div>
                 )}
-                  {typeof sunoRemainingCredits === 'number' && (
-                    <div className="mt-4 flex items-center justify-end">
-                      <div className="inline-flex items-center gap-2 rounded-xl border border-purple-500/25 bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-200">
-                        <Key className="w-3.5 h-3.5 text-purple-300" />
-                        <span>남은 크레딧 {sunoRemainingCredits.toLocaleString()}</span>
-                        {sunoRemainingCreditsUpdatedAt && (
-                          <span className="hidden sm:inline text-purple-200/50 font-medium">
-                            {formatSunoRemainingCreditsTime(sunoRemainingCreditsUpdatedAt)} 확인
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <div className="mt-4 flex items-center justify-between gap-2">
+                  <div className="mt-2 flex items-center justify-between gap-2">
                     <button
                       onClick={() => navigate('/suno-api-settings')}
                       className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5"
@@ -8150,6 +8219,7 @@ ${normalizePromptForDisplay(result.prompt)}
           <MusicApiGenerateModal
             variant="musicApi"
             hasApiKey={hasSunoApiKey}
+            remainingCredits={sunoRemainingCredits}
             isNoLyrics={(!result?.lyrics?.korean && !result?.lyrics?.english) || (result?.lyrics?.korean === "" && result?.lyrics?.english === "")}
             availableLyricLanguages={(() => {
               const langs: LanguageCode[] = [];

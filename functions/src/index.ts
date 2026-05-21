@@ -137,6 +137,60 @@ const isFailedStatus = (value: any): boolean => {
   return ["failed", "failure", "error"].includes(normalized);
 };
 
+const timestampToIso = (value: any): string | null => {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  return null;
+};
+
+const hasSunoTrackAudio = (track: any): boolean => {
+  if (!track || typeof track !== "object") return false;
+
+  if (pickFirstString(
+    track.audioUrl,
+    track.streamAudioUrl,
+    track.audio_url,
+    track.stream_audio_url,
+    track.sourceAudioUrl,
+    track.sourceStreamAudioUrl
+  )) return true;
+
+  if (Array.isArray(track.audioUrls) && track.audioUrls.some((url: any) => pickFirstString(url))) return true;
+
+  const sunoData = Array.isArray(track.sunoData) ? track.sunoData.filter(Boolean) : [];
+  return sunoData.some((item: any) => pickFirstString(
+    item?.audioUrl,
+    item?.streamAudioUrl,
+    item?.audio_url,
+    item?.stream_audio_url,
+    item?.sourceAudioUrl,
+    item?.sourceStreamAudioUrl
+  ));
+};
+
+const extractRemainingCredits = (payload: any): number | null => {
+  const candidates = [
+    payload?.data,
+    payload?.credits,
+    payload?.remainingCredits,
+    payload?.remaining_credits,
+    payload?.balance,
+    payload?.data?.credits,
+    payload?.data?.remainingCredits,
+    payload?.data?.remaining_credits,
+    payload?.data?.balance
+  ];
+
+  for (const value of candidates) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num >= 0) return num;
+  }
+
+  return null;
+};
+
 export const saveSunoApiKey = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -162,6 +216,10 @@ export const saveSunoApiKey = onRequest(
       sunoApiKey: apiKey.trim(),
       hasSunoApiKey: true,
       provider: 'sunoapi.org',
+      sunoRemainingCredits: admin.firestore.FieldValue.delete(),
+      sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.delete(),
+      sunoRemainingCreditsSourceTrackId: admin.firestore.FieldValue.delete(),
+      sunoRemainingCreditsSourceTaskId: admin.firestore.FieldValue.delete(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -218,8 +276,220 @@ export const getSunoApiKeyStatus = onRequest(
       ok: true,
       hasSunoApiKey: docData?.hasSunoApiKey || false,
       provider: docData?.provider || null,
-      updatedAt: docData?.updatedAt ? docData.updatedAt.toDate().toISOString() : null,
+      updatedAt: timestampToIso(docData?.updatedAt),
+      sunoRemainingCredits: typeof docData?.sunoRemainingCredits === "number" ? docData.sunoRemainingCredits : null,
+      sunoRemainingCreditsUpdatedAt: timestampToIso(docData?.sunoRemainingCreditsUpdatedAt),
+      sunoRemainingCreditsSourceTrackId: docData?.sunoRemainingCreditsSourceTrackId || null,
+      sunoRemainingCreditsSourceTaskId: docData?.sunoRemainingCreditsSourceTaskId || null,
     });
+  }
+);
+
+
+export const getSunoRemainingCredits = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    const db = admin.firestore();
+    const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
+    const apiKeyDoc = await apiKeyDocRef.get();
+
+    if (!apiKeyDoc.exists) {
+      res.status(400).json({ error: "Suno API Key not found for this user.", ok: false });
+      return;
+    }
+
+    const apiKeyData = apiKeyDoc.data() || {};
+    const sunoApiKey = apiKeyData.sunoApiKey;
+
+    if (!sunoApiKey) {
+      res.status(400).json({ error: "Suno API Key is empty.", ok: false });
+      return;
+    }
+
+    try {
+      const creditRes = await fetch("https://api.sunoapi.org/api/v1/generate/credit", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${sunoApiKey}`
+        }
+      });
+
+      if (!creditRes.ok) {
+        const errText = await creditRes.text();
+        console.error("Suno credit API HTTP Error:", errText);
+        res.status(500).json({ error: "Suno credit API HTTP Error", details: errText, ok: false });
+        return;
+      }
+
+      const creditData = await creditRes.json();
+      const remainingCredits = extractRemainingCredits(creditData);
+
+      if (remainingCredits === null) {
+        res.status(500).json({ error: "Unable to parse remaining credits", details: creditData, ok: false });
+        return;
+      }
+
+      await apiKeyDocRef.set({
+        sunoRemainingCredits: remainingCredits,
+        sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sunoRemainingCreditsSource: "settings-manual",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      res.json({
+        ok: true,
+        remainingCredits,
+        checkedAt: new Date().toISOString(),
+        source: "settings-manual",
+        apiResponse: creditData
+      });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch remaining credits", details: error.message, ok: false });
+    }
+  }
+);
+
+export const getSunoRemainingCreditsAfterComplete = onRequest(
+  { region: "us-central1" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed" });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    let body = req.body;
+    if (typeof body === "string") {
+      try { body = JSON.parse(body); } catch (e) {}
+    }
+    body = body || {};
+
+    const trackId = pickFirstString(body.trackId, body.data?.trackId);
+    const taskId = pickFirstString(body.taskId, body.data?.taskId);
+
+    if (!trackId) {
+      res.status(400).json({ error: "The trackId cannot be empty", ok: false });
+      return;
+    }
+
+    const db = admin.firestore();
+    const trackRef = db.collection("suno_tracks").doc(uid).collection("tracks").doc(trackId);
+    const trackSnap = await trackRef.get();
+
+    if (!trackSnap.exists) {
+      res.status(404).json({ error: "Track not found", ok: false });
+      return;
+    }
+
+    const trackData = trackSnap.data() || {};
+    if (taskId && trackData.taskId && trackData.taskId !== taskId) {
+      res.status(400).json({ error: "Task ID mismatch", ok: false });
+      return;
+    }
+
+    const status = String(trackData.status || "").toLowerCase();
+    const isCompleted = ["completed", "success", "complete", "succeeded"].includes(status);
+    if (!isCompleted || !hasSunoTrackAudio(trackData)) {
+      res.status(409).json({
+        ok: false,
+        error: "Track is not completed yet. Credits are checked only after completed audio is available.",
+        status: trackData.status || null
+      });
+      return;
+    }
+
+    const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
+    const apiKeyDoc = await apiKeyDocRef.get();
+
+    if (!apiKeyDoc.exists) {
+      res.status(400).json({ error: "Suno API Key not found for this user.", ok: false });
+      return;
+    }
+
+    const apiKeyData = apiKeyDoc.data() || {};
+    const sunoApiKey = apiKeyData.sunoApiKey;
+
+    if (!sunoApiKey) {
+      res.status(400).json({ error: "Suno API Key is empty.", ok: false });
+      return;
+    }
+
+    if (trackData.creditCheckedAfterComplete === true && typeof apiKeyData.sunoRemainingCredits === "number") {
+      res.json({
+        ok: true,
+        alreadyChecked: true,
+        remainingCredits: apiKeyData.sunoRemainingCredits,
+        checkedAt: timestampToIso(apiKeyData.sunoRemainingCreditsUpdatedAt),
+        sourceTrackId: apiKeyData.sunoRemainingCreditsSourceTrackId || trackId,
+        sourceTaskId: apiKeyData.sunoRemainingCreditsSourceTaskId || trackData.taskId || null
+      });
+      return;
+    }
+
+    try {
+      const creditRes = await fetch("https://api.sunoapi.org/api/v1/generate/credit", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${sunoApiKey}`
+        }
+      });
+
+      if (!creditRes.ok) {
+        const errText = await creditRes.text();
+        console.error("Suno credit API HTTP Error:", errText);
+        res.status(500).json({ error: "Suno credit API HTTP Error", details: errText, ok: false });
+        return;
+      }
+
+      const creditData = await creditRes.json();
+      const remainingCredits = extractRemainingCredits(creditData);
+
+      if (remainingCredits === null) {
+        res.status(500).json({ error: "Unable to parse remaining credits", details: creditData, ok: false });
+        return;
+      }
+
+      await apiKeyDocRef.set({
+        sunoRemainingCredits: remainingCredits,
+        sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sunoRemainingCreditsSourceTrackId: trackId,
+        sunoRemainingCreditsSourceTaskId: trackData.taskId || taskId || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      await trackRef.set({
+        creditCheckedAfterComplete: true,
+        creditCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+        remainingCreditsAfterComplete: remainingCredits,
+      }, { merge: true });
+
+      res.json({
+        ok: true,
+        alreadyChecked: false,
+        remainingCredits,
+        sourceTrackId: trackId,
+        sourceTaskId: trackData.taskId || taskId || null,
+        apiResponse: creditData
+      });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to fetch remaining credits", details: error.message, ok: false });
+    }
   }
 );
 

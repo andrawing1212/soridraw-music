@@ -476,6 +476,45 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
+function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
+  if (wasExpanded || typeof window === 'undefined') return;
+
+  const section = trigger.closest('[data-expand-section]') as HTMLElement | null;
+  if (!section) return;
+
+  const triggerRect = trigger.getBoundingClientRect();
+  const shouldAnchorTop = triggerRect.top < window.innerHeight * 0.48;
+
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      if (shouldAnchorTop) {
+        const sectionRect = section.getBoundingClientRect();
+        const topOffset = 88;
+        const targetTop = Math.max(0, window.scrollY + sectionRect.top - topOffset);
+        window.scrollTo({ top: targetTop, behavior: 'smooth' });
+        return;
+      }
+
+      const updatedTriggerRect = trigger.getBoundingClientRect();
+      const bottomSafeSpace = 104;
+      const overflowAmount = updatedTriggerRect.bottom + bottomSafeSpace - window.innerHeight;
+      if (overflowAmount > 0) {
+        window.scrollBy({ top: overflowAmount, behavior: 'smooth' });
+      }
+    }, 90);
+  });
+}
+
+function handleExpandableToggle(
+  event: React.MouseEvent<HTMLButtonElement>,
+  isExpanded: boolean,
+  onToggleExpand?: () => void
+) {
+  onToggleExpand?.();
+  keepExpandableSectionInView(event.currentTarget, isExpanded);
+}
+
 function useStableContentHeight(
   contentRef: React.RefObject<HTMLElement>,
   setHeight: (value: number | string | ((prev: number | string) => number | string)) => void,
@@ -2087,7 +2126,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>> }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2357,13 +2396,17 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
               {/* Suno Library Icon */}
               <button 
                 onClick={() => {
+                  clearSunoLibrarySignal();
                   navigate('/suno-library');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                   setIsExpanded(false);
                 }}
-                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
+                className="relative p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
                 title="Suno Library"
               >
+                {sunoLibrarySignal && (
+                  <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
+                )}
                 <div className="flex gap-[3px] items-end justify-center w-5 h-5 md:w-6 md:h-6 text-[var(--text-primary)]">
                   <div className="w-[4px] h-[14px] md:h-[16px] border-[1.5px] border-current rounded-sm opacity-80" />
                   <div className="w-[4px] h-[16px] md:h-[18px] border-[1.5px] border-current rounded-sm" />
@@ -2491,6 +2534,8 @@ function App() {
         return;
       }
 
+      setSunoLibrarySignal('generating');
+
       const lyricLanguageLabels: Record<LanguageCode, string> = {
         ko: 'Korean',
         en: 'English',
@@ -2523,6 +2568,7 @@ function App() {
           : '';
 
         if (includeLyrics && !resolvedLyrics) {
+          clearSunoLibrarySignal();
           showToast(`${i + 1}번 곡에 선택한 언어의 가사가 없습니다. 다른 언어를 선택하거나 가사 미포함으로 생성해주세요.`);
           return;
         }
@@ -2561,14 +2607,17 @@ function App() {
         console.log(`Music API 생성 결과 ${i + 1}/${targetSongs.length}:`, data);
 
         if (!res.ok || !data.ok) {
+          clearSunoLibrarySignal();
           showToast(`Music API 생성 요청에 실패했습니다. (${i + 1}/${targetSongs.length})\n${data.error || "알 수 없는 오류"}`);
           return;
         }
       }
 
+      setSunoLibrarySignal('completed');
       showToast(`Music API 생성 요청이 완료되었습니다.\n${targetSongs.length}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
     } catch (err) {
       console.error("생성 실패:", err);
+      clearSunoLibrarySignal();
       showToast("Music API 생성 요청 중 오류가 발생했습니다.");
     } finally {
       setIsMusicApiGenerating(false);
@@ -2601,6 +2650,36 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [latestGenerationBatchId, setLatestGenerationBatchId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
+  const [sunoLibrarySignal, setSunoLibrarySignalState] = useState<'generating' | 'completed' | null>(() => {
+    try {
+      const saved = localStorage.getItem('soridraw_suno_library_signal');
+      return saved === 'generating' || saved === 'completed' ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setSunoLibrarySignal = (value: 'generating' | 'completed' | null) => {
+    setSunoLibrarySignalState(value);
+    try {
+      if (value) localStorage.setItem('soridraw_suno_library_signal', value);
+      else localStorage.removeItem('soridraw_suno_library_signal');
+    } catch {
+      // localStorage may be unavailable in private browsing or restricted environments.
+    }
+  };
+
+  const clearSunoLibrarySignal = () => setSunoLibrarySignal(null);
+
+  const sunoLibrarySignalDotClass = sunoLibrarySignal === 'generating'
+    ? 'bg-pink-400 shadow-[0_0_10px_rgba(244,114,182,0.95)]'
+    : 'bg-brand-orange shadow-[0_0_10px_rgba(255,128,0,0.85)]';
+
+  useEffect(() => {
+    if (location.pathname === '/suno-library' && sunoLibrarySignal) {
+      clearSunoLibrarySignal();
+    }
+  }, [location.pathname]);
 
   const RECENT_SONGS_CACHE_TTL_MS = 10 * 60 * 1000;
   const getRecentSongsCacheKey = (uid: string) => `soridraw_recent_songs_cache_${uid}`;
@@ -6305,7 +6384,7 @@ ${normalizePromptForDisplay(result.prompt)}
         </Portal>
       )}
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (
@@ -7393,7 +7472,7 @@ ${normalizePromptForDisplay(result.prompt)}
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)]/80 shadow-[var(--shadow-md)] relative hover:border-brand-orange/10 transition-all duration-500">
+              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)]/80 shadow-[var(--shadow-md)] relative hover:border-brand-orange/10 transition-all duration-500">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-brand-orange" />
@@ -7521,9 +7600,12 @@ ${normalizePromptForDisplay(result.prompt)}
 
                 {/* Expand Button at Bottom Center */}
                 <button
-                  onClick={() => setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded)}
+                  onClick={(event) => {
+                    setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
+                    keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
+                  }}
                   className={cn(
-                    "absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
+                    "section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
                     isAppliedKeywordsExpanded 
                       ? "bg-brand-orange text-white border-brand-orange" 
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange hover:text-white hover:bg-brand-orange"
@@ -7674,10 +7756,16 @@ ${normalizePromptForDisplay(result.prompt)}
                       {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
                     </button>
                     <button
-                      onClick={() => navigate('/suno-library')}
-                      className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
+                      onClick={() => {
+                        clearSunoLibrarySignal();
+                        navigate('/suno-library');
+                      }}
+                      className="relative flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
                       title="라이브러리로 이동"
                     >
+                      {sunoLibrarySignal && (
+                        <span className={`absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
+                      )}
                       Library
                     </button>
                   </div>
@@ -8029,11 +8117,19 @@ ${normalizePromptForDisplay(result.prompt)}
           filter: brightness(0.94);
         }
 
+        [data-expand-section] {
+          overflow-anchor: none;
+        }
+
         .section-expand-button:not(:disabled):active {
           scale: 1;
           translate: 0 0;
           transform: translateX(-50%) translateY(2px) scale(0.965);
           filter: brightness(0.94);
+        }
+
+        .section-expand-button--half-y:not(:disabled):active {
+          transform: translateX(-50%) translateY(calc(50% + 2px)) scale(0.965);
         }
 
         button:disabled {
@@ -8180,11 +8276,11 @@ function GenreCategorySection({
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       {onToggleExpand && (
         <button
-          onClick={onToggleExpand}
-          className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
+          onClick={(event) => handleExpandableToggle(event, isExpanded, onToggleExpand)}
+          className="section-expand-button absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-[var(--card-bg)] border border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center"
         >
           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
         </button>
@@ -8540,7 +8636,7 @@ function CycleSection({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -8729,7 +8825,7 @@ function CycleSection({
 
       {onToggleExpand && (
         <button
-          onClick={onToggleExpand}
+          onClick={(event) => handleExpandableToggle(event, isExpanded, onToggleExpand)}
           className={cn(
             "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
             isExpanded
@@ -9176,7 +9272,7 @@ function CategorySection({
   };
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -9514,7 +9610,7 @@ function CategorySection({
 
       {onToggleExpand && (
         <button
-          onClick={onToggleExpand}
+          onClick={(event) => handleExpandableToggle(event, isExpanded, onToggleExpand)}
           onMouseEnter={() => onHover({ id: 'category-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
           onMouseLeave={() => onHover(null)}
           className={cn(

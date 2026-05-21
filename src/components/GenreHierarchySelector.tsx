@@ -22,6 +22,45 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
+function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
+  if (wasExpanded || typeof window === 'undefined') return;
+
+  const section = trigger.closest('[data-expand-section]') as HTMLElement | null;
+  if (!section) return;
+
+  const triggerRect = trigger.getBoundingClientRect();
+  const shouldAnchorTop = triggerRect.top < window.innerHeight * 0.48;
+
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      if (shouldAnchorTop) {
+        const sectionRect = section.getBoundingClientRect();
+        const topOffset = 88;
+        const targetTop = Math.max(0, window.scrollY + sectionRect.top - topOffset);
+        window.scrollTo({ top: targetTop, behavior: 'smooth' });
+        return;
+      }
+
+      const updatedTriggerRect = trigger.getBoundingClientRect();
+      const bottomSafeSpace = 104;
+      const overflowAmount = updatedTriggerRect.bottom + bottomSafeSpace - window.innerHeight;
+      if (overflowAmount > 0) {
+        window.scrollBy({ top: overflowAmount, behavior: 'smooth' });
+      }
+    }, 90);
+  });
+}
+
+function handleExpandableToggle(
+  event: React.MouseEvent<HTMLButtonElement>,
+  isExpanded: boolean,
+  onToggleExpand?: () => void
+) {
+  onToggleExpand?.();
+  keepExpandableSectionInView(event.currentTarget, isExpanded);
+}
+
 type ModalStep = "main" | "sub";
 
 type SubGenreItem = {
@@ -622,7 +661,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -793,9 +832,9 @@ export default function GenreHierarchySelector({
       </div>
 
       <button
-        onClick={onToggleExpand}
+        onClick={(event) => handleExpandableToggle(event, isExpanded, onToggleExpand)}
         className={cn(
-          "absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+          "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
           isExpanded
             ? "bg-brand-orange text-white border-brand-orange"
             : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white",

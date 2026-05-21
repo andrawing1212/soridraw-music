@@ -1444,6 +1444,20 @@ export default function SunoLibraryPage() {
     return String(raw).replace(/^v/i, 'v');
   };
 
+  const getSunoModelVersionBadgeClass = (label: string) => {
+    const normalized = label.trim().toLowerCase();
+    if (normalized === 'v5') {
+      return 'border-violet-400/35 bg-violet-500/12 text-violet-200 shadow-[0_0_10px_rgba(139,92,246,0.18)]';
+    }
+    if (normalized === 'v5.5') {
+      return 'border-pink-400/35 bg-pink-500/12 text-pink-100 shadow-[0_0_10px_rgba(236,72,153,0.18)]';
+    }
+    if (normalized === 'v4.5') {
+      return 'border-sky-400/30 bg-sky-500/10 text-sky-100 shadow-[0_0_10px_rgba(56,189,248,0.14)]';
+    }
+    return 'border-purple-400/25 bg-purple-500/10 text-purple-200';
+  };
+
   const getImageUrl = (item: any, group: any) => {
     return item?.imageUrl || item?.image_url || group?.imageUrl || '';
   };
@@ -4636,7 +4650,7 @@ export default function SunoLibraryPage() {
                             </h4>
                             {sunoVersionLabel && (
                               <span
-                                className="shrink-0 rounded-full border border-purple-400/25 bg-purple-500/10 px-2 py-0.5 text-[10px] font-black text-purple-200"
+                                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${getSunoModelVersionBadgeClass(sunoVersionLabel)}`}
                                 title={`Suno ${sunoVersionLabel}로 생성`}
                               >
                                 {sunoVersionLabel}

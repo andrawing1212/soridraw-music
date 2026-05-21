@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronDown, ChevronLeft, ChevronUp, Key, Languages, Mic2, Music, X, ListMusic } from 'lucide-react';
+import { Check, ChevronLeft, Key, Languages, Music, X, ListMusic, Mic2 } from 'lucide-react';
 
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
 
@@ -21,9 +21,6 @@ type MusicApiGenerateModalProps = {
   availableLyricLanguages?: LanguageCode[];
   maxLyricLanguages?: number;
   musicApiTargets?: MusicApiTargetOption[];
-  isKoreanEnglishMix?: boolean;
-  englishMixRatio?: number;
-  rapEnabled?: boolean;
   onClose: () => void;
   onConfirm: (
     titleLanguage: LanguageCode,
@@ -38,6 +35,9 @@ type MusicApiGenerateModalProps = {
       rapEnabled?: boolean;
     }
   ) => void;
+  isKoreanEnglishMix?: boolean;
+  englishMixRatio?: number;
+  rapEnabled?: boolean;
 };
 
 const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; short: string }[] = [
@@ -58,11 +58,11 @@ export default function MusicApiGenerateModal({
   availableLyricLanguages,
   maxLyricLanguages,
   musicApiTargets = [],
+  onClose,
+  onConfirm,
   isKoreanEnglishMix = false,
   englishMixRatio = 10,
   rapEnabled = false,
-  onClose,
-  onConfirm,
 }: MusicApiGenerateModalProps) {
   const isMain = variant === 'main';
   const maxCount = maxLyricLanguages ?? (isMain ? 2 : 1);
@@ -90,37 +90,23 @@ export default function MusicApiGenerateModal({
     return filteredLanguages[0] ? [filteredLanguages[0].id] : ([] as LanguageCode[]);
   }, [filteredLanguages, isNoLyrics]);
 
-  const primaryLanguageOptions = useMemo(() => {
-    if (!isMain) return filteredLanguages;
-    const priority: LanguageCode[] = ['ko', 'en'];
-    const primary = priority
-      .map((lang) => filteredLanguages.find((item) => item.id === lang))
-      .filter(Boolean) as typeof filteredLanguages;
-    return primary.length > 0 ? primary : filteredLanguages.slice(0, 2);
-  }, [filteredLanguages, isMain]);
-
-  const extraLanguageOptions = useMemo(() => {
-    if (!isMain) return [] as typeof filteredLanguages;
-    const primaryIds = new Set(primaryLanguageOptions.map((item) => item.id));
-    return filteredLanguages.filter((item) => !primaryIds.has(item.id));
-  }, [filteredLanguages, isMain, primaryLanguageOptions]);
-
-  const [showMoreLanguages, setShowMoreLanguages] = useState(false);
-
-  const visibleLanguageOptions = isMain
-    ? [...primaryLanguageOptions, ...(showMoreLanguages ? extraLanguageOptions : [])]
-    : filteredLanguages;
-
   const [step, setStep] = useState<1 | 2>(1);
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
+  const [localKoreanEnglishMix, setLocalKoreanEnglishMix] = useState<boolean>(() => Boolean(isKoreanEnglishMix));
+  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
+  const [localRapEnabled, setLocalRapEnabled] = useState<boolean>(() => Boolean(rapEnabled));
+  const [showMoreLanguages, setShowMoreLanguages] = useState(false);
+  const primaryLanguageIds: LanguageCode[] = ['ko', 'en'];
+  const primaryLanguages = filteredLanguages.filter((item) => primaryLanguageIds.includes(item.id));
+  const hiddenLanguages = filteredLanguages.filter((item) => !primaryLanguageIds.includes(item.id));
+  const visibleLanguages = showMoreLanguages || primaryLanguages.length === 0
+    ? filteredLanguages
+    : primaryLanguages;
   const canUseBatchTargets = !isMain && musicApiTargets.length > 1;
   const [targetMode, setTargetMode] = useState<MusicApiTargetMode>('current');
   const [perTargetLyricLanguages, setPerTargetLyricLanguages] = useState<Record<string, LanguageCode>>({});
-  const [localKoreanEnglishMix, setLocalKoreanEnglishMix] = useState<boolean>(isKoreanEnglishMix);
-  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.min(90, Math.max(5, Number(englishMixRatio) || 10)));
-  const [localRapEnabled, setLocalRapEnabled] = useState<boolean>(rapEnabled);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -129,6 +115,17 @@ export default function MusicApiGenerateModal({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isMain) return;
+    setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
+    setLocalEnglishMixRatio(Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
+    setLocalRapEnabled(Boolean(rapEnabled));
+  }, [englishMixRatio, isKoreanEnglishMix, isMain, rapEnabled]);
+
+  useEffect(() => {
+    if (!includeLyrics) setShowMoreLanguages(false);
+  }, [includeLyrics]);
 
   useEffect(() => {
     if (!includeLyrics) return;
@@ -194,15 +191,16 @@ export default function MusicApiGenerateModal({
     onConfirm(titleLanguage, includeLyrics, langs, isMain ? generationCount : 1, {
       targetMode: isMain ? 'current' : targetMode,
       perTargetLyricLanguages: includeLyrics && targetMode === 'batch' && !isMain ? perTargetLyricLanguages : undefined,
-      isKoreanEnglishMix: includeLyrics && isMain ? localKoreanEnglishMix : false,
-      englishMixRatio: includeLyrics && isMain && localKoreanEnglishMix ? localEnglishMixRatio : 10,
-      rapEnabled: includeLyrics && isMain ? localRapEnabled : false,
+      isKoreanEnglishMix: isMain && includeLyrics ? localKoreanEnglishMix : undefined,
+      englishMixRatio: isMain && includeLyrics ? localEnglishMixRatio : undefined,
+      rapEnabled: isMain && includeLyrics ? localRapEnabled : undefined,
     });
   };
 
   const subtitle = isMain
     ? (step === 1 ? '가사 포함 여부와 생성할 가사 언어를 선택합니다.' : '선택한 설정으로 곡 생성을 시작합니다.')
     : (step === 1 ? 'Music API로 보낼 대상과 가사를 선택합니다.' : '선택한 설정으로 생성을 요청합니다.');
+  const mixRatioOptions = [5, 10, 20, 30, 50, 70, 90];
 
   return (
     <div
@@ -215,7 +213,7 @@ export default function MusicApiGenerateModal({
         initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 12 }}
-        className="w-full max-w-md max-h-[92vh] rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-md rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="relative px-6 pt-6 pb-4">
@@ -257,7 +255,7 @@ export default function MusicApiGenerateModal({
           </div>
         )}
 
-        <div className="px-6 pb-6 overflow-y-auto">
+        <div className="px-6 pb-6">
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div
@@ -375,7 +373,7 @@ export default function MusicApiGenerateModal({
                             <p className={`text-[10px] font-bold ${accentText}`}>최대 {maxCount}개</p>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            {visibleLanguageOptions.map((item) => {
+                            {(hiddenLanguages.length > 0 ? primaryLanguages : filteredLanguages).map((item) => {
                               const selected = lyricLanguages.includes(item.id);
                               const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
                               return (
@@ -399,67 +397,130 @@ export default function MusicApiGenerateModal({
                               );
                             })}
                           </div>
-                          {isMain && extraLanguageOptions.length > 0 && (
+                          <AnimatePresence initial={false}>
+                            {showMoreLanguages && hiddenLanguages.length > 0 && (
+                              <motion.div
+                                key="more-languages"
+                                initial={{ height: 0, opacity: 0, y: -4 }}
+                                animate={{ height: 'auto', opacity: 1, y: 0 }}
+                                exit={{ height: 0, opacity: 0, y: -4 }}
+                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                className="overflow-hidden"
+                              >
+                                <div className="grid grid-cols-2 gap-2 pt-2">
+                                  {hiddenLanguages.map((item) => {
+                                    const selected = lyricLanguages.includes(item.id);
+                                    const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
+                                    return (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() => toggleLyricLanguage(item.id)}
+                                        className={`rounded-xl px-3 py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                          selected
+                                            ? accentSelected
+                                            : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                                        }`}
+                                      >
+                                        <p className="text-sm font-black flex items-center gap-1.5">
+                                          {selected && <Check className="w-3.5 h-3.5" />}
+                                          {item.label}
+                                        </p>
+                                        <p className="text-[10px] opacity-70 mt-0.5">제목도 {item.short} 기준</p>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          {hiddenLanguages.length > 0 && (
                             <button
                               type="button"
                               onClick={() => setShowMoreLanguages((prev) => !prev)}
-                              className="mt-2 w-full rounded-xl border border-[var(--border-color)] bg-black/10 px-3 py-2.5 text-xs font-black text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-1.5"
+                              className="mt-2 w-full rounded-xl border border-[var(--border-color)] bg-black/10 px-3 py-2.5 text-xs font-black text-[var(--text-secondary)] hover:bg-white/5 transition-all"
                             >
-                              {showMoreLanguages ? '언어 접기' : '언어 더보기'}
-                              {showMoreLanguages ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              {showMoreLanguages ? '언어 접기' : '+ 언어 더보기'}
                             </button>
                           )}
-                          {isMain && (
-                            <div className="mt-4 rounded-2xl border border-[var(--border-color)] bg-black/10 p-3 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-black text-[var(--text-secondary)]">가사 옵션</p>
-                                <p className={`text-[10px] font-bold ${accentText}`}>가사 포함 시 적용</p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setLocalKoreanEnglishMix((prev) => !prev)}
-                                  className={`rounded-xl px-3 py-2.5 border text-left transition-all ${
-                                    localKoreanEnglishMix
-                                      ? accentSelected
-                                      : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
-                                  }`}
-                                >
-                                  <p className="text-xs font-black flex items-center gap-1.5"><Languages className="w-3.5 h-3.5" /> 한/영 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}</p>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setLocalRapEnabled((prev) => !prev)}
-                                  className={`rounded-xl px-3 py-2.5 border text-left transition-all ${
-                                    localRapEnabled
-                                      ? accentSelected
-                                      : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
-                                  }`}
-                                >
-                                  <p className="text-xs font-black flex items-center gap-1.5"><Mic2 className="w-3.5 h-3.5" /> 랩 {localRapEnabled ? 'ON' : 'OFF'}</p>
-                                </button>
-                              </div>
-                              {localKoreanEnglishMix && (
-                                <div className="flex flex-wrap gap-1.5 rounded-xl border border-brand-orange/20 bg-brand-orange/5 p-2">
-                                  {[5, 10, 20, 30, 50, 70, 90].map((ratio) => (
-                                    <button
-                                      key={ratio}
-                                      type="button"
-                                      onClick={() => setLocalEnglishMixRatio(ratio)}
-                                      className={`px-2.5 py-1.5 rounded-full text-[10px] font-black transition-all ${
-                                        localEnglishMixRatio === ratio
-                                          ? 'bg-brand-orange text-white'
-                                          : 'text-brand-orange/85 hover:bg-brand-orange/10'
-                                      }`}
-                                    >
-                                      {ratio}%
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </>
+                      )}
+
+                      {isMain && (
+                        <div className="mt-4 pt-4 border-t border-[var(--border-color)] space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-black text-[var(--text-secondary)]">가사 옵션</p>
+                            <p className={`text-[10px] font-bold ${accentText}`}>가사 포함 시 적용</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setLocalKoreanEnglishMix((prev) => !prev)}
+                              className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                                localKoreanEnglishMix
+                                  ? accentSelected
+                                  : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                              }`}
+                            >
+                              <p className="text-sm font-black flex items-center gap-1.5">
+                                <Languages className="w-3.5 h-3.5" />
+                                한/영 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
+                              </p>
+                              <p className="text-[10px] opacity-70 mt-0.5">한국어 중심에 영어를 섞습니다</p>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setLocalRapEnabled((prev) => !prev)}
+                              className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                                localRapEnabled
+                                  ? accentSelected
+                                  : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
+                              }`}
+                            >
+                              <p className="text-sm font-black flex items-center gap-1.5">
+                                <Mic2 className="w-3.5 h-3.5" />
+                                랩 {localRapEnabled ? 'ON' : 'OFF'}
+                              </p>
+                              <p className="text-[10px] opacity-70 mt-0.5">랩 섹션과 리듬형 가사를 허용</p>
+                            </button>
+                          </div>
+                          <AnimatePresence initial={false}>
+                            {localKoreanEnglishMix && (
+                              <motion.div
+                                key="english-mix-ratio"
+                                initial={{ height: 0, opacity: 0, y: -4 }}
+                                animate={{ height: 'auto', opacity: 1, y: 0 }}
+                                exit={{ height: 0, opacity: 0, y: -4 }}
+                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                className="overflow-hidden"
+                              >
+                                <div className="rounded-xl border border-[var(--border-color)] bg-black/10 p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-[11px] font-black text-[var(--text-secondary)]">영어 비율</p>
+                                    <p className={`text-[11px] font-black ${accentText}`}>{localEnglishMixRatio}%</p>
+                                  </div>
+                                  <div className="grid grid-cols-7 gap-1.5">
+                                    {mixRatioOptions.map((ratio) => (
+                                      <button
+                                        key={ratio}
+                                        type="button"
+                                        onClick={() => setLocalEnglishMixRatio(ratio)}
+                                        className={`rounded-lg px-1.5 py-2 border text-[10px] font-black transition-all ${
+                                          localEnglishMixRatio === ratio
+                                            ? accentSelected
+                                            : 'border-[var(--border-color)] bg-white/5 text-[var(--text-secondary)] hover:bg-white/10'
+                                        }`}
+                                      >
+                                        {ratio}%
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       )}
                     </div>
                   )}
@@ -518,22 +579,22 @@ export default function MusicApiGenerateModal({
                       {selectedLyricLabel}
                     </span>
                   </div>
+                  {isMain && includeLyrics && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
+                      <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
+                      <span className={`text-sm font-black ${accentText} text-right`}>
+                        {localKoreanEnglishMix ? `한/영 ${localEnglishMixRatio}%` : '한/영 OFF'} · 랩 {localRapEnabled ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                  )}
                   {!isMain && canUseBatchTargets && (
                     <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
                       <span className="text-sm font-black text-[var(--text-secondary)]">생성 대상</span>
                       <span className={`text-sm font-black ${accentText}`}>{targetMode === 'batch' ? `최근 묶음 ${musicApiTargets.length}곡` : '현재 곡 1곡'}</span>
                     </div>
                   )}
-                  {isMain && includeLyrics && (
-                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
-                      <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
-                      <span className={`text-sm font-black ${accentText} text-right`}>
-                        {[localKoreanEnglishMix ? `한/영 ${localEnglishMixRatio}%` : '', localRapEnabled ? '랩 ON' : ''].filter(Boolean).join(' · ') || '기본'}
-                      </span>
-                    </div>
-                  )}
                   {isMain && (
-                    <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--border-color)]">
+                    <div className="flex items-center justify-between px-5 py-4">
                       <span className="text-sm font-black text-[var(--text-secondary)]">생성 개수</span>
                       <span className={`text-sm font-black ${accentText}`}>{generationCount}곡</span>
                     </div>

@@ -33,6 +33,8 @@ const fallbackSharedPlaylists: Playlist[] = [
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 const WORKSPACE_PAGE_SIZE = 10;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
+const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
+const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 
 const getSharedPlayedKeys = (item: any): string[] => {
   const rawKeys = [
@@ -207,6 +209,22 @@ export default function SunoLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+      return Number.isFinite(saved) && saved >= 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+      return Number.isFinite(saved) && saved > 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
   const [isSharedView, setIsSharedView] = useState(false);
   const [isSharedOwner, setIsSharedOwner] = useState(false);
   const [sharedTrackLoading, setSharedTrackLoading] = useState(false);
@@ -240,6 +258,38 @@ export default function SunoLibraryPage() {
   const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
   const [shareCreatorNameMap, setShareCreatorNameMap] = useState<Record<string, string>>({});
   const [sharedPlayedMap, setSharedPlayedMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const readCachedCredits = () => {
+      try {
+        const creditValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+        setRemainingCredits(Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null);
+        const updatedValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+        setRemainingCreditsUpdatedAt(Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null);
+      } catch {
+        setRemainingCredits(null);
+        setRemainingCreditsUpdatedAt(null);
+      }
+    };
+
+    const handleUpdate = () => readCachedCredits();
+    readCachedCredits();
+    window.addEventListener('storage', handleUpdate);
+    window.addEventListener('soridraw:suno-credits-updated', handleUpdate as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('soridraw:suno-credits-updated', handleUpdate as EventListener);
+    };
+  }, []);
+
+  const formatCreditCheckedAt = (value: number | null) => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1442,20 +1492,6 @@ export default function SunoLibraryPage() {
     if (normalized === 'V5' || normalized === '5') return 'v5';
     if (normalized === 'V4_5' || normalized === '4_5') return 'v4.5';
     return String(raw).replace(/^v/i, 'v');
-  };
-
-  const getSunoModelVersionBadgeClass = (label: string) => {
-    const normalized = label.trim().toLowerCase();
-    if (normalized === 'v5') {
-      return 'border-violet-400/35 bg-violet-500/12 text-violet-200 shadow-[0_0_10px_rgba(139,92,246,0.18)]';
-    }
-    if (normalized === 'v5.5') {
-      return 'border-pink-400/35 bg-pink-500/12 text-pink-100 shadow-[0_0_10px_rgba(236,72,153,0.18)]';
-    }
-    if (normalized === 'v4.5') {
-      return 'border-sky-400/30 bg-sky-500/10 text-sky-100 shadow-[0_0_10px_rgba(56,189,248,0.14)]';
-    }
-    return 'border-purple-400/25 bg-purple-500/10 text-purple-200';
   };
 
   const getImageUrl = (item: any, group: any) => {
@@ -4300,6 +4336,14 @@ export default function SunoLibraryPage() {
           <div className="flex gap-2 items-center self-end md:self-center">
           {!isSharedView && (
             <>
+              {typeof remainingCredits === 'number' && (
+                <div
+                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-purple-500/20 bg-purple-500/10 text-xs font-bold text-purple-200"
+                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+                >
+                  남은 크레딧 {remainingCredits.toLocaleString()}
+                </div>
+              )}
               <button
                 onClick={() => navigate('/suno-api-settings')}
                 className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all"
@@ -4330,6 +4374,14 @@ export default function SunoLibraryPage() {
           </button>
           {!isSharedView && (
             <div className="flex items-center gap-2">
+              {typeof remainingCredits === 'number' && (
+                <div
+                  className="h-12 flex items-center px-3 rounded-xl text-xs font-bold bg-purple-500/10 border border-purple-500/20 text-purple-200"
+                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+                >
+                  {remainingCredits.toLocaleString()} credit
+                </div>
+              )}
               <button
                 onClick={() => navigate('/suno-api-settings')}
                 className="h-12 flex items-center gap-2 px-4 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
@@ -4650,7 +4702,7 @@ export default function SunoLibraryPage() {
                             </h4>
                             {sunoVersionLabel && (
                               <span
-                                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${getSunoModelVersionBadgeClass(sunoVersionLabel)}`}
+                                className="shrink-0 rounded-full border border-purple-400/25 bg-purple-500/10 px-2 py-0.5 text-[10px] font-black text-purple-200"
                                 title={`Suno ${sunoVersionLabel}로 생성`}
                               >
                                 {sunoVersionLabel}

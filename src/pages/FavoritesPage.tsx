@@ -50,6 +50,31 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
+const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
+  const normalized = String(typeOrKey || '').toLowerCase();
+
+  if (normalized.includes('genre') || normalized === 'subgenre') {
+    return 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange shadow-[0_0_10px_rgba(242,125,38,0.08)]';
+  }
+  if (normalized.includes('style')) {
+    return 'border-violet-400/25 bg-violet-500/10 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.08)]';
+  }
+  if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
+    return 'border-cyan-400/25 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.08)]';
+  }
+  if (normalized.includes('mood') || normalized.includes('atmosphere')) {
+    return 'border-rose-400/25 bg-rose-500/10 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.08)]';
+  }
+  if (normalized.includes('theme') || normalized.includes('topic')) {
+    return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.08)]';
+  }
+  if (isRandom) {
+    return 'border-brand-orange/30 bg-brand-orange/16 text-brand-orange font-bold';
+  }
+  return 'border-white/10 bg-white/[0.04] text-white/72';
+};
+
 function getSongGenreValues(song: any): string[] {
   return song?.appliedKeywords?.genre ?? [];
 }
@@ -2624,13 +2649,7 @@ ${song.prompt}
                                         key={`${section.key}-${idx}`}
                                         className={cn(
                                           'rounded-full border px-3 py-1.5 text-[12px] font-medium',
-                                          section.accent === 'violet'
-                                            ? 'border-violet-400/20 bg-violet-500/10 text-violet-300'
-                                            : section.accent === 'sky'
-                                              ? 'border-sky-400/20 bg-sky-500/10 text-sky-300'
-                                              : item.isRandom
-                                                ? 'border-brand-orange/30 bg-brand-orange/16 text-brand-orange font-bold'
-                                                : 'border-white/10 bg-white/[0.04] text-white/72'
+                                          getAppliedKeywordChipClass(section.key || section.accent || '', item.isRandom)
                                         )}
                                       >
                                         {item.label}

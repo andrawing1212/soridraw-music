@@ -17,8 +17,52 @@ export default function SunoApiSettingsPage() {
   const [statusText, setStatusText] = useState<'확인 중...' | '등록됨' | '미등록' | '확인 실패'>('확인 중...');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem('soridraw_suno_remaining_credits') || '');
+      return Number.isFinite(saved) && saved >= 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('soridraw_suno_remaining_credits_updated_at');
+      if (!saved) return null;
+      const numeric = Number(saved);
+      if (Number.isFinite(numeric) && numeric > 0) return new Date(numeric).toISOString();
+      return saved;
+    } catch {
+      return null;
+    }
+  });
 
   const isRegistered = statusText === '등록됨';
+
+  const cacheRemainingCredits = (credits: number | null, updatedAt?: string | null) => {
+    setRemainingCredits(credits);
+    setRemainingCreditsUpdatedAt(updatedAt || null);
+
+    try {
+      if (credits === null) {
+        localStorage.removeItem('soridraw_suno_remaining_credits');
+        localStorage.removeItem('soridraw_suno_remaining_credits_updated_at');
+      } else {
+        localStorage.setItem('soridraw_suno_remaining_credits', String(credits));
+        const ms = updatedAt ? Date.parse(updatedAt) : Date.now();
+        localStorage.setItem('soridraw_suno_remaining_credits_updated_at', String(Number.isFinite(ms) ? ms : Date.now()));
+      }
+    } catch {
+      // localStorage may be unavailable.
+    }
+  };
+
+  const formatCreditCheckedAt = (value: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -54,9 +98,13 @@ export default function SunoApiSettingsPage() {
       if (res.ok && result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists)) {
         setStatusText('등록됨');
         localStorage.setItem('soridraw_suno_api_key_registered', 'true');
+        if (typeof result.sunoRemainingCredits === 'number') {
+          cacheRemainingCredits(result.sunoRemainingCredits, result.sunoRemainingCreditsUpdatedAt || null);
+        }
       } else if (res.ok) {
         setStatusText('미등록');
         localStorage.removeItem('soridraw_suno_api_key_registered');
+        cacheRemainingCredits(null);
       } else {
         if (isRetry) {
           console.warn('Failed to load API key status after save/delete (server error)');
@@ -103,6 +151,7 @@ export default function SunoApiSettingsPage() {
       if (res.ok && result.ok) {
         setStatusText('등록됨');
         localStorage.setItem('soridraw_suno_api_key_registered', 'true');
+        cacheRemainingCredits(null);
         setApiKey('');
         setMessage('API Key가 안전하게 등록되었습니다.');
         loadSunoApiKeyStatus(true);
@@ -137,6 +186,7 @@ export default function SunoApiSettingsPage() {
       if (res.ok && result.ok) {
         setStatusText('미등록');
         localStorage.removeItem('soridraw_suno_api_key_registered');
+        cacheRemainingCredits(null);
         setMessage('API Key가 삭제되었습니다.');
         loadSunoApiKeyStatus(true);
       } else {
@@ -213,7 +263,7 @@ export default function SunoApiSettingsPage() {
           <ul className="list-disc list-inside space-y-1 ml-1">
             <li>API 생성 비용은 입력한 개인 API Key의 크레딧에서 차감됩니다.</li>
             <li>음원 파일은 앱 서버에 저장되지 않습니다.</li>
-            <li>이번 단계에서는 실제 API 저장/호출은 준비 상태입니다.</li>
+            <li>남은 크레딧은 곡 생성이 실제 완료된 뒤 1회만 자동 확인됩니다.</li>
           </ul>
         </motion.div>
 
@@ -236,6 +286,24 @@ export default function SunoApiSettingsPage() {
               {statusText === '미등록' && <XCircle className="w-4 h-4" />}
               {(statusText === '확인 중...' || statusText === '확인 실패') && <AlertTriangle className="w-4 h-4" />}
               {statusText}
+            </div>
+          </div>
+
+          {/* Credit Status */}
+          <div className="flex items-center justify-between p-4 rounded-xl bg-purple-500/[0.06] border border-purple-500/15">
+            <div>
+              <div className="font-medium text-[var(--text-secondary)]">남은 크레딧</div>
+              <div className="text-xs text-white/35 mt-1">곡 생성 완료 후 1회 자동 확인</div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-black text-purple-300">
+                {remainingCredits === null ? '-' : remainingCredits.toLocaleString()}
+              </div>
+              {remainingCreditsUpdatedAt && (
+                <div className="text-[11px] text-white/35 mt-1">
+                  {formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인
+                </div>
+              )}
             </div>
           </div>
 

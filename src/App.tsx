@@ -477,6 +477,31 @@ function cn(...inputs: ClassValue[]) {
 }
 
 
+
+const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
+  const normalized = String(typeOrKey || '').toLowerCase();
+
+  if (normalized.includes('genre') || normalized === 'subgenre') {
+    return 'bg-brand-orange/10 border-brand-orange/25 text-brand-orange shadow-[0_0_10px_rgba(242,125,38,0.08)]';
+  }
+  if (normalized.includes('style')) {
+    return 'bg-violet-500/10 border-violet-400/25 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.08)]';
+  }
+  if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
+    return 'bg-cyan-500/10 border-cyan-400/25 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.08)]';
+  }
+  if (normalized.includes('mood') || normalized.includes('atmosphere')) {
+    return 'bg-rose-500/10 border-rose-400/25 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.08)]';
+  }
+  if (normalized.includes('theme') || normalized.includes('topic')) {
+    return 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.08)]';
+  }
+  if (isRandom) {
+    return 'bg-brand-orange/20 border-brand-orange/30 text-brand-orange font-bold shadow-[0_0_10px_rgba(242,125,38,0.1)]';
+  }
+  return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)]';
+};
+
 function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
   if (wasExpanded || typeof window === 'undefined') return;
 
@@ -2534,7 +2559,7 @@ function App() {
         return;
       }
 
-      setSunoLibrarySignal('generating');
+      setSunoLibrarySignal('generating', Date.now());
 
       const lyricLanguageLabels: Record<LanguageCode, string> = {
         ko: 'Korean',
@@ -2613,7 +2638,6 @@ function App() {
         }
       }
 
-      setSunoLibrarySignal('completed');
       showToast(`Music API 생성 요청이 완료되었습니다.\n${targetSongs.length}곡은 라이브러리에서 자동으로 상태가 갱신됩니다.`);
     } catch (err) {
       console.error("생성 실패:", err);
@@ -2650,20 +2674,67 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [latestGenerationBatchId, setLatestGenerationBatchId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
+  const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
+  const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
+  const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
+  const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
+
   const [sunoLibrarySignal, setSunoLibrarySignalState] = useState<'generating' | 'completed' | null>(() => {
     try {
-      const saved = localStorage.getItem('soridraw_suno_library_signal');
+      const saved = localStorage.getItem(SUNO_LIBRARY_SIGNAL_KEY);
       return saved === 'generating' || saved === 'completed' ? saved : null;
     } catch {
       return null;
     }
   });
 
-  const setSunoLibrarySignal = (value: 'generating' | 'completed' | null) => {
-    setSunoLibrarySignalState(value);
+  const [sunoLibrarySignalStartedAt, setSunoLibrarySignalStartedAt] = useState<number | null>(() => {
     try {
-      if (value) localStorage.setItem('soridraw_suno_library_signal', value);
-      else localStorage.removeItem('soridraw_suno_library_signal');
+      const saved = Number(localStorage.getItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY) || '');
+      return Number.isFinite(saved) && saved > 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [sunoRemainingCredits, setSunoRemainingCredits] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+      return Number.isFinite(saved) && saved >= 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [sunoRemainingCreditsUpdatedAt, setSunoRemainingCreditsUpdatedAt] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+      return Number.isFinite(saved) && saved > 0 ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const pendingSunoCreditCheckTrackIdsRef = useRef<Set<string>>(new Set());
+
+  const setSunoLibrarySignal = (value: 'generating' | 'completed' | null, startedAt?: number) => {
+    const resolvedStartedAt = value === 'generating'
+      ? (startedAt || Date.now())
+      : (value === 'completed' ? sunoLibrarySignalStartedAt : null);
+
+    setSunoLibrarySignalState(value);
+    setSunoLibrarySignalStartedAt(resolvedStartedAt);
+
+    try {
+      if (value) {
+        localStorage.setItem(SUNO_LIBRARY_SIGNAL_KEY, value);
+        if (resolvedStartedAt) {
+          localStorage.setItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY, String(resolvedStartedAt));
+        }
+      } else {
+        localStorage.removeItem(SUNO_LIBRARY_SIGNAL_KEY);
+        localStorage.removeItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY);
+      }
     } catch {
       // localStorage may be unavailable in private browsing or restricted environments.
     }
@@ -2675,11 +2746,144 @@ function App() {
     ? 'bg-pink-400 shadow-[0_0_10px_rgba(244,114,182,0.95)]'
     : 'bg-brand-orange shadow-[0_0_10px_rgba(255,128,0,0.85)]';
 
+  const updateSunoRemainingCreditsCache = useCallback((credits: number | null, updatedAt: number = Date.now()) => {
+    setSunoRemainingCredits(credits);
+    setSunoRemainingCreditsUpdatedAt(credits === null ? null : updatedAt);
+
+    try {
+      if (credits === null) {
+        localStorage.removeItem(SUNO_REMAINING_CREDITS_KEY);
+        localStorage.removeItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY);
+      } else {
+        localStorage.setItem(SUNO_REMAINING_CREDITS_KEY, String(credits));
+        localStorage.setItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY, String(updatedAt));
+        window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
+          detail: { remainingCredits: credits, updatedAt }
+        }));
+      }
+    } catch {
+      // localStorage may be unavailable in private browsing or restricted environments.
+    }
+  }, []);
+
+  const formatSunoRemainingCreditsTime = (value: number | null): string => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
+  const getSunoTrackTimeMs = (value: any): number => {
+    if (!value) return 0;
+    if (typeof value?.toMillis === 'function') return value.toMillis();
+    if (typeof value?.seconds === 'number') return value.seconds * 1000;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return value;
+    const parsed = Date.parse(String(value));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const hasSunoAudioUrl = (item: any): boolean => {
+    if (!item || typeof item !== 'object') return false;
+    return Boolean(
+      item.audioUrl ||
+      item.streamAudioUrl ||
+      item.audio_url ||
+      item.stream_audio_url ||
+      item.sourceAudioUrl ||
+      item.sourceStreamAudioUrl
+    );
+  };
+
+  const isCompletedSunoLibraryTrack = (track: any, startedAt: number): boolean => {
+    if (!track || typeof track !== 'object') return false;
+
+    const createdAtMs = getSunoTrackTimeMs(track.createdAt);
+    const updatedAtMs = getSunoTrackTimeMs(track.updatedAt);
+    const isRelevantTrack = Math.max(createdAtMs, updatedAtMs) >= startedAt - 30000;
+    if (!isRelevantTrack) return false;
+
+    const status = String(track.status || '').toLowerCase();
+    const isCompleteStatus = status === 'completed' || status === 'success' || status === 'complete';
+    if (!isCompleteStatus) return false;
+
+    if (hasSunoAudioUrl(track)) return true;
+
+    if (Array.isArray(track.audioUrls) && track.audioUrls.some(Boolean)) return true;
+
+    const sunoData = Array.isArray(track.sunoData) ? track.sunoData.filter(Boolean) : [];
+    if (sunoData.length === 0) return false;
+
+    return sunoData.every((item: any) => hasSunoAudioUrl(item));
+  };
+
+  const checkSunoRemainingCreditsAfterCompletedTrack = useCallback(async (track: any) => {
+    if (!user || !track?.id || track?.creditCheckedAfterComplete === true) return;
+
+    const trackId = String(track.id);
+    if (pendingSunoCreditCheckTrackIdsRef.current.has(trackId)) return;
+
+    pendingSunoCreditCheckTrackIdsRef.current.add(trackId);
+
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoRemainingCreditsAfterComplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          trackId,
+          taskId: track.taskId || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && typeof data.remainingCredits === 'number') {
+        updateSunoRemainingCreditsCache(data.remainingCredits, Date.now());
+      } else if (!res.ok && res.status !== 409) {
+        console.warn('Suno remaining credit check failed:', data);
+      }
+    } catch (error) {
+      console.warn('Suno remaining credit check failed:', error);
+    } finally {
+      pendingSunoCreditCheckTrackIdsRef.current.delete(trackId);
+    }
+  }, [user, updateSunoRemainingCreditsCache]);
+
   useEffect(() => {
     if (location.pathname === '/suno-library' && sunoLibrarySignal) {
       clearSunoLibrarySignal();
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user || sunoLibrarySignal !== 'generating' || !sunoLibrarySignalStartedAt) return;
+
+    const q = query(
+      collection(db, 'suno_tracks', user.uid, 'tracks'),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const completedTrack = snapshot.docs
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        .find((track) => isCompletedSunoLibraryTrack(track, sunoLibrarySignalStartedAt));
+
+      if (completedTrack) {
+        setSunoLibrarySignal('completed');
+        void checkSunoRemainingCreditsAfterCompletedTrack(completedTrack);
+      }
+    }, (error) => {
+      console.error('Suno library completion signal listener failed:', error);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack]);
 
   const RECENT_SONGS_CACHE_TTL_MS = 10 * 60 * 1000;
   const getRecentSongsCacheKey = (uid: string) => `soridraw_recent_songs_cache_${uid}`;
@@ -7208,15 +7412,12 @@ ${normalizePromptForDisplay(result.prompt)}
                 ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#한/영 혼합' }] : []),
                 ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
               ].map((item) => {
-                  const chipClassName = item.type === 'style'
-                    ? 'px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-400/20 text-violet-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                    : item.type === 'sound'
-                      ? 'px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/20 text-sky-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                      : item.type === 'point-sound'
-                        ? 'px-3 py-1.5 rounded-full bg-fuchsia-500/10 border border-fuchsia-400/20 text-fuchsia-300 text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                      : item.type === 'mix' || item.type === 'rap' || item.type === 'vocal-tone'
-                        ? 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm'
-                        : 'px-3 py-1.5 rounded-full bg-brand-orange/10 border border-brand-orange/20 text-brand-orange text-xs font-bold flex items-center gap-1.5 shadow-sm';
+                  const chipClassName = cn(
+                    'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                    item.type === 'mix' || item.type === 'rap' || item.type === 'vocal-tone'
+                      ? 'bg-brand-orange/10 border-brand-orange/20 text-brand-orange'
+                      : getAppliedKeywordChipClass(item.type)
+                  );
                   return (
                     <span
                       key={`${item.type}-${item.id}`}
@@ -7518,13 +7719,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               onMouseLeave={() => setHoveredItem(null)}
                               className={cn(
                                 "px-1.5 py-0.5 rounded-md text-[11px] transition-all cursor-help border",
-                                section.accent === 'violet'
-                                  ? "bg-violet-500/10 text-violet-300 border-violet-400/20"
-                                  : section.accent === 'sky'
-                                    ? "bg-sky-500/10 text-sky-300 border-sky-400/20"
-                                    : item.isRandom 
-                                      ? "bg-brand-orange/20 text-brand-orange font-bold border-brand-orange/30 shadow-[0_0_10px_rgba(242,125,38,0.1)]" 
-                                      : "bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--border-color)]"
+                                getAppliedKeywordChipClass(section.key || section.accent || '', item.isRandom)
                               )}
                             >
                               {item.label}
@@ -7732,6 +7927,19 @@ ${normalizePromptForDisplay(result.prompt)}
                     })()}
                   </div>
                 )}
+                  {typeof sunoRemainingCredits === 'number' && (
+                    <div className="mt-4 flex items-center justify-end">
+                      <div className="inline-flex items-center gap-2 rounded-xl border border-purple-500/25 bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-200">
+                        <Key className="w-3.5 h-3.5 text-purple-300" />
+                        <span>남은 크레딧 {sunoRemainingCredits.toLocaleString()}</span>
+                        {sunoRemainingCreditsUpdatedAt && (
+                          <span className="hidden sm:inline text-purple-200/50 font-medium">
+                            {formatSunoRemainingCreditsTime(sunoRemainingCreditsUpdatedAt)} 확인
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-4 flex items-center justify-between gap-2">
                     <button
                       onClick={() => navigate('/suno-api-settings')}
@@ -13492,19 +13700,6 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           <div className="flex items-center gap-2">
             <div className="md:hidden flex items-center gap-2">
               <button
-                onClick={onClear}
-                onMouseEnter={() => onHover({ id: 'tempo-clear-mobile', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
-                onMouseLeave={() => onHover(null)}
-                className={cn(
-                  "p-2 rounded-lg transition-all border shadow-btn",
-                  (!enabled || min !== 90 || max !== 110)
-                    ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
-                )}
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button
                 onClick={() => {
                   onEnabledChange(!enabled);
                   onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
@@ -13520,6 +13715,19 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               >
                 <Dices className={cn("w-4 h-4", enabled && "animate-pulse")} />
                 <span>랜덤</span>
+              </button>
+              <button
+                onClick={onClear}
+                onMouseEnter={() => onHover({ id: 'tempo-clear-mobile', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "p-2 rounded-lg transition-all border shadow-btn",
+                  (!enabled || min !== 90 || max !== 110)
+                    ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                )}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

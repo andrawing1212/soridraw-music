@@ -6565,7 +6565,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -6658,7 +6658,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     className={cn(
                       "p-2 rounded-xl border transition-all shadow-btn",
                       menuLocks.situation
-                        ? "bg-brand-orange text-white border-brand-orange"
+                        ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                         : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                     )}
                     title={menuLocks.situation ? '잠금 해제' : '메뉴 잠금'}
@@ -8029,6 +8029,13 @@ ${normalizePromptForDisplay(result.prompt)}
           filter: brightness(0.94);
         }
 
+        .section-expand-button:not(:disabled):active {
+          scale: 1;
+          translate: 0 0;
+          transform: translateX(-50%) translateY(2px) scale(0.965);
+          filter: brightness(0.94);
+        }
+
         button:disabled {
           scale: 1;
           translate: 0 0;
@@ -8577,7 +8584,7 @@ function CycleSection({
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
                   isLocked
-                    ? "bg-brand-orange text-white border-brand-orange"
+                    ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -8724,7 +8731,7 @@ function CycleSection({
         <button
           onClick={onToggleExpand}
           className={cn(
-            "absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+            "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
             isExpanded
               ? "bg-brand-orange text-white border-brand-orange"
               : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
@@ -9212,7 +9219,7 @@ function CategorySection({
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
                   isLocked
-                    ? "bg-brand-orange text-white border-brand-orange"
+                    ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -9511,13 +9518,13 @@ function CategorySection({
           onMouseEnter={() => onHover({ id: 'category-expand', label: isExpanded ? 'Collapse' : 'Expand', labelKo: isExpanded ? '접기' : '더보기', description: isExpanded ? '목록을 접습니다.' : '전체 목록을 확인합니다.' })}
           onMouseLeave={() => onHover(null)}
           className={cn(
-            "absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
+            "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
             isExpanded
               ? "bg-brand-orange text-white border-brand-orange"
               : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
           )}
         >
-          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
         </button>
       )}
     </div>
@@ -10692,7 +10699,7 @@ function SongStructureIntegratedControl({
                 className={cn(
                   "p-2 rounded-lg transition-all border shadow-btn",
                   isLocked
-                    ? "bg-brand-orange text-white border-brand-orange"
+                    ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -12589,7 +12596,7 @@ function VocalControl({
               className={cn(
                 "p-2 rounded-lg transition-all border shadow-btn",
                 isLocked
-                  ? "bg-brand-orange text-white border-brand-orange"
+                  ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
               title={isLocked ? '잠금 해제' : '메뉴 잠금'}

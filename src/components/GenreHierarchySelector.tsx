@@ -675,7 +675,7 @@ export default function GenreHierarchySelector({
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
                   isLocked
-                    ? "bg-brand-orange text-white border-brand-orange"
+                    ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
                 )}
                 title={isLocked ? "잠금 해제" : "메뉴 잠금"}

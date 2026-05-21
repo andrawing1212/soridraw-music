@@ -9003,7 +9003,7 @@ function CycleKeywordPopup({
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
-                {localSelected.length > 0 ? ` · ${localSelected.length}개 선택` : ''}
+                {localSelected.length > 0 ? ` (${localSelected.length})` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -9717,6 +9717,7 @@ function SongStructureIntegratedControl({
   ), []);
 
   const hasCustomStructureModalChanges = getDraftStructureSignature(draftStructure ?? []) !== getDraftStructureSignature(initialDraftStructureRef.current ?? []);
+  const hasDraftStructureSelection = (draftStructure ?? []).length > 0;
 
   useEffect(() => {
     onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen);
@@ -10969,7 +10970,7 @@ function SongStructureIntegratedControl({
                   <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 섹션 구성을 만드세요.</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {hasCustomStructureModalChanges && (
+                  {hasDraftStructureSelection && (
                     <button
                       type="button"
                       onClick={resetDraftStructure}
@@ -12652,6 +12653,11 @@ function VocalControl({
   }), []);
 
   const hasVocalCharacterChanges = getVocalCharacterSignature(localVocalCharacterDraft) !== getVocalCharacterSignature(initialVocalCharacterRef.current);
+  const hasVocalCharacterSelection = Boolean(
+    localVocalCharacterDraft.voiceToneId ||
+    localVocalCharacterDraft.personalityId ||
+    (localVocalCharacterDraft.techniqueIds || []).length > 0
+  );
 
   const closeVocalCharacterEditor = useCallback(() => {
     if (window.history.state?.vocalCharacterEditor && !vocalCharacterCloseFromHistoryRef.current) {
@@ -13201,7 +13207,7 @@ function VocalControl({
                     <p className="mt-1 truncate text-xs font-bold text-brand-orange">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {hasVocalCharacterChanges && (
+                    {hasVocalCharacterSelection && (
                       <button
                         type="button"
                         onClick={clearLocalVocalCharacter}

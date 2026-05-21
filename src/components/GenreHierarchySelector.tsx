@@ -443,7 +443,11 @@ export default function GenreHierarchySelector({
   };
 
   const closeModal = () => {
-    finalizeAndClose();
+    finalizeAndClose(false);
+  };
+
+  const applyModalChanges = () => {
+    finalizeAndClose(true);
   };
 
   const updateModalDirty = (
@@ -463,7 +467,7 @@ export default function GenreHierarchySelector({
       window.history.back();
       return;
     }
-    finalizeAndClose(true);
+    finalizeAndClose(false);
   };
 
   const handleMainClick = (main: MainGenreItem) => {
@@ -598,7 +602,7 @@ export default function GenreHierarchySelector({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        finalizeAndClose(true);
+        finalizeAndClose(false);
       }
     };
 
@@ -636,7 +640,7 @@ export default function GenreHierarchySelector({
 
       // If we landed on a state that doesn't belong to this modal, close it.
       if (!state || !state.genreModal) {
-        finalizeAndClose(true, true);
+        finalizeAndClose(false, true);
         return;
       }
 
@@ -882,22 +886,28 @@ export default function GenreHierarchySelector({
                     : activeMain?.labelKo || activeMain?.label}
                 </h3>
 
-                <button
-                  onClick={() => closeModal()}
-                  className={cn(
-                    "w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90",
-                    showConfirmButton
-                      ? "bg-brand-orange text-white border-brand-orange hover:bg-brand-orange/90"
-                      : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-brand-orange hover:border-brand-orange/50",
+                <div className="flex items-center gap-2 shrink-0">
+                  {showConfirmButton && (
+                    <button
+                      type="button"
+                      onClick={applyModalChanges}
+                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-brand-orange text-white border-brand-orange hover:bg-brand-orange/90"
+                      title="변경 적용"
+                      aria-label="변경 적용"
+                    >
+                      <Check className="w-5 h-5" />
+                    </button>
                   )}
-                  title={showConfirmButton ? "변경 적용" : "닫기"}
-                >
-                  {showConfirmButton ? (
-                    <Check className="w-5 h-5" />
-                  ) : (
+                  <button
+                    type="button"
+                    onClick={() => closeModal()}
+                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-brand-orange hover:border-brand-orange/50"
+                    title={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
+                    aria-label={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
+                  >
                     <X className="w-5 h-5" />
-                  )}
-                </button>
+                  </button>
+                </div>
               </div>
 
               {/* Selection Status Bar */}

@@ -8518,6 +8518,7 @@ function GenreSelectModal({
 }
 
 // SORIDRAW_SOUND_INSTRUMENT_SEPARATORS_V19: CycleKeywordPopup separator row support
+const EMPTY_KEYWORD_ID_LIST: string[] = [];
 interface CycleSectionProps {
   title: string;
   titleKo?: string;
@@ -8572,7 +8573,7 @@ function CycleSection({
   descriptionKo,
   cycles, 
   selected,
-  pointSelected = [],
+  pointSelected = EMPTY_KEYWORD_ID_LIST,
   isPointSelectionMode = false,
   extraHeaderControls,
   pointModeControl,
@@ -8845,7 +8846,7 @@ function CycleKeywordPopup({
   title,
   cycle,
   selected,
-  otherSelected = [],
+  otherSelected = EMPTY_KEYWORD_ID_LIST,
   highlightedVariantIds = [],
   isPointSelectionMode = false,
   pointModeControl,
@@ -9010,12 +9011,6 @@ function CycleKeywordPopup({
                 <button
                   type="button"
                   onClick={() => {
-                    localSelected.forEach((variantId) => onToggleVariant(variantId));
-                    if (onToggleOtherVariant) {
-                      localOtherSelected.forEach((variantId) => onToggleOtherVariant(variantId));
-                    }
-                    initialSelectedRef.current = [];
-                    initialOtherSelectedRef.current = [];
                     setLocalSelected([]);
                     setLocalOtherSelected([]);
                   }}
@@ -9025,17 +9020,27 @@ function CycleKeywordPopup({
                   전체 해제
                 </button>
               )}
+              {hasChanges && (
+                <button
+                  type="button"
+                  onClick={applyChangesAndClose}
+                  className={cn(
+                    "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
+                    isPointSelectionMode
+                      ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.28)] hover:bg-fuchsia-500"
+                      : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)] hover:bg-brand-orange/90"
+                  )}
+                  title="변경 적용"
+                  aria-label="변경 적용"
+                >
+                  <Check className="w-5 h-5" />
+                </button>
+              )}
               <button
                 onClick={closePopup}
-                className={cn(
-                  "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
-                  hasChanges
-                    ? isPointSelectionMode
-                      ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.28)]"
-                      : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
-                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
-                )}
-                title="닫기"
+                className="w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0 bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
+                title={hasChanges ? "변경 적용 없이 닫기" : "닫기"}
+                aria-label={hasChanges ? "변경 적용 없이 닫기" : "닫기"}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -9094,13 +9099,6 @@ function CycleKeywordPopup({
                         : [...localSelected.filter((id) => id !== variant.id), variant.id];
                       const nextOtherSelected = localOtherSelected.filter((id) => id !== variant.id);
 
-                      if (isOtherSelected && onToggleOtherVariant) {
-                        onToggleOtherVariant(variant.id);
-                      }
-                      onToggleVariant(variant.id);
-
-                      initialSelectedRef.current = nextSelected;
-                      initialOtherSelectedRef.current = nextOtherSelected;
                       setLocalSelected(nextSelected);
                       setLocalOtherSelected(nextOtherSelected);
                       onHover({ ...hoverItem, _ts: Date.now() } as CategoryItem);
@@ -9130,15 +9128,6 @@ function CycleKeywordPopup({
                           ? localOtherSelected.filter((id) => id !== variant.id)
                           : [...localOtherSelected.filter((id) => id !== variant.id), variant.id];
 
-                        if (isSelected) {
-                          onToggleVariant(variant.id);
-                        }
-                        if (onToggleOtherVariant) {
-                          onToggleOtherVariant(variant.id);
-                        }
-
-                        initialSelectedRef.current = nextSelected;
-                        initialOtherSelectedRef.current = nextOtherSelected;
                         setLocalSelected(nextSelected);
                         setLocalOtherSelected(nextOtherSelected);
                         onHover({ id: `point-${variant.id}`, label: 'Point Accent', labelKo: '포인트 선택', description: `${variant.labelKo || variant.label}을 곡 전체 악기가 아닌 특정 전환/섹션 포인트로 적용합니다.`, _ts: Date.now() } as CategoryItem);
@@ -9676,6 +9665,7 @@ function SongStructureIntegratedControl({
   const customModalHistoryPushedRef = useRef(false);
   const customModalBackdropMouseDownRef = useRef(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
+  const initialDraftStructureRef = useRef<CustomSectionItem[]>([]);
   const [selectedInsertIndex, setSelectedInsertIndex] = useState<number | null>(null);
   const currentStructureScrollRef = useRef<HTMLDivElement | null>(null);
   const [isReorderDragging, setIsReorderDragging] = useState(false);
@@ -9717,6 +9707,16 @@ function SongStructureIntegratedControl({
   const userCustomSectionTagsRef = useRef<UserCustomSectionTagDefinition[]>([]);
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
+
+  const getDraftStructureSignature = useCallback((items: CustomSectionItem[] = []) => JSON.stringify(
+    items.map((item) => ({
+      section: item.section,
+      customId: item.customId || '',
+      tags: [...(item.tags || [])].sort(),
+    }))
+  ), []);
+
+  const hasCustomStructureModalChanges = getDraftStructureSignature(draftStructure ?? []) !== getDraftStructureSignature(initialDraftStructureRef.current ?? []);
 
   useEffect(() => {
     onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen);
@@ -10326,7 +10326,9 @@ function SongStructureIntegratedControl({
 
   const openCustomModal = () => {
     void ensureCustomBackupLoaded();
-    setDraftStructure(normalizeCustomStructure(customStructure));
+    const initialDraft = normalizeCustomStructure(customStructure);
+    initialDraftStructureRef.current = initialDraft;
+    setDraftStructure(initialDraft);
     setSelectedInsertIndex(null);
     setPresetName('');
     setEditingSavedStructureId(null);
@@ -10966,13 +10968,43 @@ function SongStructureIntegratedControl({
                   <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">섹션 커스텀</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 섹션 구성을 만드세요.</p>
                 </div>
-                <button
-                  onClick={() => closeCustomModal()}
-                  className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand-orange/25 transition-all flex items-center justify-center shrink-0"
-                  aria-label="섹션 커스텀 닫기"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasCustomStructureModalChanges && (
+                    <button
+                      type="button"
+                      onClick={resetDraftStructure}
+                      className="h-10 px-3 rounded-xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all text-[11px] font-black whitespace-nowrap"
+                      title="섹션 전체 해제"
+                    >
+                      전체 해제
+                    </button>
+                  )}
+                  {hasCustomStructureModalChanges && (
+                    <button
+                      type="button"
+                      onClick={handleApplyCustomStructure}
+                      disabled={(draftStructure ?? []).length === 0}
+                      className={cn(
+                        "w-10 h-10 rounded-xl border flex items-center justify-center transition-all shrink-0",
+                        (draftStructure ?? []).length > 0
+                          ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)] hover:bg-brand-orange/90"
+                          : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                      )}
+                      title="변경 적용"
+                      aria-label="변경 적용"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => closeCustomModal()}
+                    className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand-orange/25 transition-all flex items-center justify-center shrink-0"
+                    aria-label={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "섹션 커스텀 닫기"}
+                    title={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "닫기"}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="p-5 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-h-0 space-y-5">
@@ -12604,12 +12636,22 @@ function VocalControl({
     ? vocalMembers.findIndex((member) => member.id === editingVocalMemberId)
     : -1;
   const editingVocalMember = editingVocalMemberIndex >= 0 ? vocalMembers[editingVocalMemberIndex] : null;
+  const [localVocalCharacterDraft, setLocalVocalCharacterDraft] = useState<NonNullable<VocalMember['character']>>({});
+  const initialVocalCharacterRef = useRef<NonNullable<VocalMember['character']>>({});
   const vocalCharacterBackdropPointerDownRef = useRef(false);
   const vocalCharacterCloseFromHistoryRef = useRef(false);
 
   useEffect(() => {
     onModalStateChange?.(!!editingVocalMember);
   }, [editingVocalMember, onModalStateChange]);
+
+  const getVocalCharacterSignature = useCallback((character?: VocalMember['character']) => JSON.stringify({
+    voiceToneId: character?.voiceToneId || '',
+    personalityId: character?.personalityId || '',
+    techniqueIds: [...(character?.techniqueIds || [])].sort(),
+  }), []);
+
+  const hasVocalCharacterChanges = getVocalCharacterSignature(localVocalCharacterDraft) !== getVocalCharacterSignature(initialVocalCharacterRef.current);
 
   const closeVocalCharacterEditor = useCallback(() => {
     if (window.history.state?.vocalCharacterEditor && !vocalCharacterCloseFromHistoryRef.current) {
@@ -12622,6 +12664,12 @@ function VocalControl({
 
   useEffect(() => {
     if (!editingVocalMember) return;
+    const initialCharacter = { ...(editingVocalMember.character || {}) };
+    if (initialCharacter.techniqueIds) {
+      initialCharacter.techniqueIds = [...initialCharacter.techniqueIds];
+    }
+    initialVocalCharacterRef.current = initialCharacter;
+    setLocalVocalCharacterDraft(initialCharacter);
     vocalCharacterCloseFromHistoryRef.current = false;
 
     try {
@@ -12650,6 +12698,40 @@ function VocalControl({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [editingVocalMember, closeVocalCharacterEditor]);
+
+  const updateLocalVocalCharacter = useCallback((updates: Partial<NonNullable<VocalMember['character']>>) => {
+    setLocalVocalCharacterDraft((current) => ({
+      ...current,
+      ...updates,
+    }));
+  }, []);
+
+  const toggleLocalVocalTechnique = useCallback((techniqueId: string) => {
+    setLocalVocalCharacterDraft((current) => {
+      const techniqueIds = current.techniqueIds || [];
+      const next = techniqueIds.includes(techniqueId)
+        ? techniqueIds.filter((id) => id !== techniqueId)
+        : [...techniqueIds, techniqueId];
+      return { ...current, techniqueIds: next };
+    });
+  }, []);
+
+  const clearLocalVocalCharacter = useCallback(() => {
+    setLocalVocalCharacterDraft({});
+  }, []);
+
+  const applyVocalCharacterAndClose = useCallback(() => {
+    if (!editingVocalMember || editingVocalMemberIndex < 0) return;
+    const normalizedCharacter: NonNullable<VocalMember['character']> = {
+      ...(localVocalCharacterDraft.voiceToneId ? { voiceToneId: localVocalCharacterDraft.voiceToneId } : {}),
+      ...(localVocalCharacterDraft.personalityId ? { personalityId: localVocalCharacterDraft.personalityId } : {}),
+      ...((localVocalCharacterDraft.techniqueIds || []).length > 0 ? { techniqueIds: localVocalCharacterDraft.techniqueIds } : {}),
+    };
+    handleUpdateMember(editingVocalMemberIndex, {
+      character: Object.keys(normalizedCharacter).length > 0 ? normalizedCharacter : undefined,
+    });
+    closeVocalCharacterEditor();
+  }, [closeVocalCharacterEditor, editingVocalMember, editingVocalMemberIndex, handleUpdateMember, localVocalCharacterDraft]);
 
   const filteredTones = vocalTones.filter(t => {
     const target = t.genderTarget as string;
@@ -13116,15 +13198,40 @@ function VocalControl({
                         {editingVocalMember.gender === 'male' ? '남성' : '여성'} {editingVocalMemberIndex + 1} 캐릭터
                       </h4>
                     </div>
-                    <p className="mt-1 truncate text-xs font-bold text-brand-orange">{getVocalCharacterSummary(editingVocalMember)}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-brand-orange">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeVocalCharacterEditor}
-                    className="rounded-full border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-brand-orange/40 hover:text-brand-orange"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasVocalCharacterChanges && (
+                      <button
+                        type="button"
+                        onClick={clearLocalVocalCharacter}
+                        className="h-10 px-3 rounded-xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all text-[11px] font-black whitespace-nowrap"
+                        title="캐릭터 전체 해제"
+                      >
+                        전체 해제
+                      </button>
+                    )}
+                    {hasVocalCharacterChanges && (
+                      <button
+                        type="button"
+                        onClick={applyVocalCharacterAndClose}
+                        className="w-10 h-10 rounded-xl border flex items-center justify-center transition-all shrink-0 bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)] hover:bg-brand-orange/90"
+                        title="변경 적용"
+                        aria-label="변경 적용"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeVocalCharacterEditor}
+                      className="rounded-full border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-brand-orange/40 hover:text-brand-orange"
+                      title={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
+                      aria-label={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4">
@@ -13143,12 +13250,12 @@ function VocalControl({
                           <p className="text-[10px] font-black text-[var(--text-secondary)]">{category === 'basic' ? '기본 창법' : '실험 창법'}</p>
                           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                             {VOCAL_TECHNIQUES.filter((item) => item.category === category).map((technique) => {
-                              const isActive = !!editingVocalMember.character?.techniqueIds?.includes(technique.id);
+                              const isActive = !!localVocalCharacterDraft.techniqueIds?.includes(technique.id);
                               return (
                                 <button
                                   key={technique.id}
                                   type="button"
-                                  onClick={() => toggleMemberTechnique(editingVocalMemberIndex, technique.id)}
+                                  onClick={() => toggleLocalVocalTechnique(technique.id)}
                                   className={cn(
                                     "rounded-2xl border p-3 text-left transition-all",
                                     isActive
@@ -13185,12 +13292,12 @@ function VocalControl({
                       </div>
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                         {VOCAL_VOICE_TONES.map((voiceTone) => {
-                          const isActive = editingVocalMember.character?.voiceToneId === voiceTone.id;
+                          const isActive = localVocalCharacterDraft.voiceToneId === voiceTone.id;
                           return (
                             <button
                               key={voiceTone.id}
                               type="button"
-                              onClick={() => updateMemberCharacter(editingVocalMemberIndex, { voiceToneId: isActive ? undefined : voiceTone.id })}
+                              onClick={() => updateLocalVocalCharacter({ voiceToneId: isActive ? undefined : voiceTone.id })}
                               className={cn(
                                 "rounded-2xl border px-3 py-3 text-left text-sm font-black transition-all",
                                 isActive
@@ -13212,12 +13319,12 @@ function VocalControl({
                       </div>
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                         {VOCAL_PERSONALITIES.map((personality) => {
-                          const isActive = editingVocalMember.character?.personalityId === personality.id;
+                          const isActive = localVocalCharacterDraft.personalityId === personality.id;
                           return (
                             <button
                               key={personality.id}
                               type="button"
-                              onClick={() => updateMemberCharacter(editingVocalMemberIndex, { personalityId: isActive ? undefined : personality.id })}
+                              onClick={() => updateLocalVocalCharacter({ personalityId: isActive ? undefined : personality.id })}
                               className={cn(
                                 "rounded-2xl border px-3 py-3 text-center text-sm font-black transition-all",
                                 isActive
@@ -13234,22 +13341,6 @@ function VocalControl({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 border-t border-[var(--border-color)] bg-[#151515] px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateMember(editingVocalMemberIndex, { character: undefined })}
-                    className="rounded-xl border border-btn-border bg-btn-bg px-4 py-2 text-xs font-bold text-[var(--text-secondary)] transition-all hover:border-red-400/40 hover:text-red-300"
-                  >
-                    캐릭터 초기화
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeVocalCharacterEditor}
-                    className="rounded-xl bg-brand-orange px-5 py-2 text-xs font-black text-white shadow-lg shadow-brand-orange/20 transition-all hover:bg-brand-orange/90"
-                  >
-                    완료
-                  </button>
-                </div>
               </motion.div>
             </motion.div>
           </Portal>

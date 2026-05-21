@@ -6782,7 +6782,8 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
   const intentSoundFocus = buildPromptIntent(params).soundFocus;
   if (intentSoundFocus) pushUniquePromptItem(items, intentSoundFocus, 10);
 
-  return cleanupPromptTail(dedupeInstrumentSemantic(items).slice(0, 8).join(', ')) || "focused drums, bass, and melodic core instruments";
+  const storyWeightedItems = applyDirectStoryToInstrumentItems(items, params);
+  return cleanupPromptTail(dedupeInstrumentSemantic(storyWeightedItems).slice(0, 8).join(', ')) || "focused drums, bass, and melodic core instruments";
 }
 
 
@@ -6986,6 +6987,7 @@ function cleanScenePlanPhrase(value: string, max = 120): string {
 
 function buildScenePlanConflictCue(params: GenerateSongParams, scene: string): string {
   const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), scene].join(' ').toLowerCase();
+  if (/(우주인|astronaut|cosmonaut|space traveler|우주를\s*떠도|지구|earth|신호|signal|transmission)/.test(text) && /(메시지|message|send|sending|던지|보내|전송|final)/.test(text)) return 'one final message drifts back toward Earth';
   if (/운명|destiny|fate|coincidence|우연|필연/.test(text)) return 'trying to deny coincidence while feeling pulled by fate';
   if (/고백|confession|crush|짝사랑|설렘|flutter/.test(text)) return 'wanting to speak first but hiding the most important line';
   if (/이별|breakup|farewell|goodbye|그리움|longing/.test(text)) return 'pretending to move on while one small object keeps the feeling alive';
@@ -6998,6 +7000,7 @@ function buildScenePlanConflictCue(params: GenerateSongParams, scene: string): s
 
 function buildScenePlanChorusCore(params: GenerateSongParams, conflict: string): string {
   const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), conflict].join(' ').toLowerCase();
+  if (/(우주인|astronaut|cosmonaut|space traveler|우주를\s*떠도|지구|earth|신호|signal|transmission)/.test(text) && /(메시지|message|send|sending|던지|보내|전송|final)/.test(text)) return 'a final message keeps drifting back to the blue Earth';
   if (/운명|destiny|fate|우연|필연/.test(text)) return 'the more I avoid it, the closer it pulls me';
   if (/고백|confession|crush|짝사랑|설렘|flutter/.test(text)) return 'I almost say it, then hide it again';
   if (/이별|breakup|farewell|goodbye/.test(text)) return 'I say I am fine while the details prove otherwise';
@@ -7007,12 +7010,152 @@ function buildScenePlanChorusCore(params: GenerateSongParams, conflict: string):
   return cleanupPromptTail(conflict || 'the hidden feeling keeps returning');
 }
 
+
+type DirectStoryPromptProfile = {
+  strength: "none" | "normal" | "strong";
+  scene: string;
+  conflict: string;
+  instrumentCues: string[];
+  arrangementCues: string[];
+  genreAccent: string;
+};
+
+function rawDirectStoryPriorityText(params: GenerateSongParams): string {
+  // This intentionally keeps raw Korean. selectedThemeText() strips unknown Korean
+  // fragments for the final English prompt, so it cannot be the only source for
+  // direct user story detection.
+  return [
+    params.userInput || "",
+    params.lyricDraft || "",
+    ...(params.themes ?? []),
+    params.situation?.relationship || "",
+    params.situation?.description || "",
+    params.situation?.detailCustom || "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildDirectStoryPromptProfile(params: GenerateSongParams): DirectStoryPromptProfile {
+  const raw = rawDirectStoryPriorityText(params);
+  if (!raw) return { strength: "none", scene: "", conflict: "", instrumentCues: [], arrangementCues: [], genreAccent: "" };
+  const text = raw.toLowerCase();
+
+  const has = (pattern: RegExp) => pattern.test(raw) || pattern.test(text);
+
+  // Strong direct-story examples. These must override generic cue-bank meanings such as
+  // bedroom-message / unsent-message when the same word (message) appears inside a larger story.
+  if (has(/우주인|우주복|astronaut|space traveler|cosmonaut|우주를\s*떠도|우주에서|지구|earth|cosmic|space/) && has(/메시지|message|발신|transmission|신호|signal|던지|보내|send|final/)) {
+    return {
+      strength: "strong",
+      scene: "a distant astronaut-message scene",
+      conflict: "one final message drifts back toward Earth",
+      instrumentCues: ["distant ambience", "radio-signal texture", "wide spatial reverb"],
+      arrangementCues: ["drifting space-ballad flow", "fading-signal hook", "soft spatial release"],
+      genreAccent: "wide spatial color",
+    };
+  }
+
+  if (has(/저승사자|저승|grim reaper|reaper|afterlife/) && has(/귀신|유령|ghost|spirit/)) {
+    return {
+      strength: "strong",
+      scene: "a midnight afterlife encounter scene",
+      conflict: "one side carries regret while the other must move them on",
+      instrumentCues: ["distant bell texture", "shadowy room reverb", "soft low pulse"],
+      arrangementCues: ["afterlife dialogue flow", "one-sided monologue tension", "late emotional turn"],
+      genreAccent: "afterlife story color",
+    };
+  }
+
+  if (has(/정류장|버스|지하철|station|bus stop|subway/) && has(/이별|떠나|그리움|breakup|farewell|goodbye|longing/)) {
+    return {
+      strength: "strong",
+      scene: "a late-night transit goodbye scene",
+      conflict: "passing lights carry a feeling that was never said",
+      instrumentCues: ["passing-window ambience", "soft transit noise"],
+      arrangementCues: ["transit-window memory cue", "delayed confession lift"],
+      genreAccent: "late-night transit mood",
+    };
+  }
+
+  if (has(/고향|hometown/) && has(/재회|다시\s*만|옛사랑|old love|reunion/)) {
+    return {
+      strength: "strong",
+      scene: "a hometown reunion scene",
+      conflict: "old feelings return through familiar streets",
+      instrumentCues: ["warm street ambience", "soft nostalgic keys"],
+      arrangementCues: ["hometown-memory lift", "slow reunion hook"],
+      genreAccent: "nostalgic hometown color",
+    };
+  }
+
+  if (has(/오타|실수|하트|문자|메시지|답장|읽음|전송|texting|message|reply|typing|sent/) && has(/설렘|떨림|좋아|고백|crush|flutter|confession|heart/)) {
+    return {
+      strength: "strong",
+      scene: "a small message-mistake confession scene",
+      conflict: "a tiny mistake exposes the feeling first",
+      instrumentCues: ["soft screen-light texture", "light pulse accents"],
+      arrangementCues: ["message-mistake tension", "fluttering confession hook"],
+      genreAccent: "bright message-pop color",
+    };
+  }
+
+  if (has(/차안|자동차|drive|driving|도로|road/) && has(/고백|사랑|오해|confession|love|misunderstanding/)) {
+    return {
+      strength: "strong",
+      scene: "a night-drive confession scene",
+      conflict: "passing roads hide words that should have been said",
+      instrumentCues: ["dashboard-light synth", "soft road ambience"],
+      arrangementCues: ["night-drive tension", "road-memory hook"],
+      genreAccent: "night-drive color",
+    };
+  }
+
+  // Normal direct text still deserves influence, but should not overpower a strong
+  // selected genre/sound palette. Use a compact generic story lift.
+  const userScene = buildUserTextCoreScene(params);
+  if (userScene) {
+    return {
+      strength: "normal",
+      scene: cleanScenePlanPhrase(userScene.scene, 80),
+      conflict: buildScenePlanConflictCue(params, userScene.scene),
+      instrumentCues: [],
+      arrangementCues: ["story-led section movement"],
+      genreAccent: "story-led color",
+    };
+  }
+
+  return { strength: "none", scene: "", conflict: "", instrumentCues: [], arrangementCues: [], genreAccent: "" };
+}
+
+function applyDirectStoryToInstrumentItems(items: string[], params: GenerateSongParams): string[] {
+  const profile = buildDirectStoryPromptProfile(params);
+  if (profile.strength === "none" || !profile.instrumentCues.length) return items;
+  const next = [...items];
+  profile.instrumentCues.slice(0, profile.strength === "strong" ? 3 : 2).forEach((cue) => pushUniquePromptItem(next, cue, 10));
+  return next;
+}
+
+function getDirectStoryArrangementCues(params: GenerateSongParams): string[] {
+  const profile = buildDirectStoryPromptProfile(params);
+  if (profile.strength === "none") return [];
+  return profile.arrangementCues.filter(Boolean).slice(0, profile.strength === "strong" ? 3 : 2);
+}
+
 function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): InternalScenePlan {
   const hasDirectorNote = Boolean((params.userInput || '').trim());
   const hasLyricDraft = Boolean(params.isLyricMode && (params.lyricDraft || '').trim());
+  const userTextScene = buildUserTextCoreScene(params);
   const themeCore = buildThemeCoreScene(params);
   const derivedScene = cleanScenePlanPhrase(deriveIntentScene(params), 130);
-  const rawScene = derivedScene || cleanScenePlanPhrase(themeCore.scene, 130) || 'a concrete everyday scene';
+  // Direct theme/user story text must be the primary scene source. Generic contextual cue-bank scenes
+  // such as bedroom-message hesitation should not override a user-written story like an astronaut
+  // sending a final message back to Earth.
+  const rawScene = userTextScene?.scene
+    ? cleanScenePlanPhrase(userTextScene.scene, 130)
+    : derivedScene || cleanScenePlanPhrase(themeCore.scene, 130) || 'a concrete everyday scene';
   const scene = rawScene
     .replace(/^a\s+small\s+fluttering\s+mistake$/i, 'a small everyday mistake turning into fluttering tension')
     .replace(/^a\s+private\s+room\s+scene$/i, 'a private room scene where a hidden feeling becomes harder to ignore');
@@ -7275,7 +7418,9 @@ function renderStableAtmosphereLine(
   scenePlan: InternalScenePlan,
 ): string {
   const raw = cleanupPromptTail(String(rawAtmosphere || '').replace(/\s+/g, ' '));
-  const contextualCue = buildContextualCueBundle(params);
+  const hasUserScene = Boolean(buildUserTextCoreScene(params));
+  const allowContextualCue = !hasSituation(params.situation) && !hasUserScene;
+  const contextualCue = allowContextualCue ? buildContextualCueBundle(params) : { atmosphereScene: '', arrangementHook: '' };
   const rawWhere = extractWhereConflictForAtmosphere(raw);
 
   const contextualScene = contextualCue.atmosphereScene || '';
@@ -7283,7 +7428,7 @@ function renderStableAtmosphereLine(
   const contextualBase = contextualScene ? normalizeAtmosphereRendererScene(contextualScene) : '';
 
   const sceneBase = normalizeAtmosphereRendererScene(
-    contextualBase || scenePlan.scene || deriveIntentScene(params) || raw || 'a concrete everyday scene',
+    scenePlan.scene || contextualBase || deriveIntentScene(params) || raw || 'a concrete everyday scene',
   );
 
   const conflict = normalizeAtmosphereRendererConflict(
@@ -7971,11 +8116,13 @@ function buildFiveLineArrangementValue(
       ? "custom section flow"
       : "";
   const interpretedArrangement = mergeCompactCue(buildThemeMoodInterpretation(params).arrangementCue, getEraTextureArrangementCues(params), 3);
+  const directStoryArrangement = getDirectStoryArrangementCues(params).join(', ');
 
   const parts = [
     tempo,
     pointSoundArrangement,
     situationArrangement,
+    directStoryArrangement,
     directDirectorArrangement,
     genreDNA,
     styleArrangement,
@@ -12826,14 +12973,16 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
     const specific = getSpecificGenreArrangementCue(params);
     const sceneHook = contextual.arrangementHook || buildArrangementSceneHook(params);
     const genreDNA = getGenreArrangementDNA(params);
-    [specific, genreDNA, sceneHook, 'focused hook release'].forEach((cue) => {
+    const directStoryCues = getDirectStoryArrangementCues(params).join(', ');
+    [directStoryCues, specific, genreDNA, sceneHook, 'focused hook release'].forEach((cue) => {
       cleanupPromptTail(cue).split(',').forEach((part) => {
         const clean = cleanupPromptTail(part);
         if (clean && !additions.some((item) => item.toLowerCase() === clean.toLowerCase())) additions.push(clean);
       });
     });
   }
-  if (additions.length) line = normalizeArrangementLine([line, ...additions]);
+  const directStoryAlways = getDirectStoryArrangementCues(params).filter((cue) => !line.toLowerCase().includes(cue.toLowerCase()));
+  if (additions.length || directStoryAlways.length) line = normalizeArrangementLine([line, ...additions, ...directStoryAlways]);
 
   const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
   if (tempo && !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b|\b\d{2,3}\s*BPM\b/i.test(line)) {
@@ -12862,6 +13011,15 @@ function dedupeFinalInstrumentLine(value: string): string {
   return finalizePromptOpenTail(out.slice(0, 8).join(', ')) || 'balanced band and synth texture';
 }
 
+function validateFinalInstrumentLine(value: string, params: GenerateSongParams): string {
+  const baseItems = dedupeFinalInstrumentLine(value || 'balanced band and synth texture')
+    .split(',')
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean);
+  const withStory = applyDirectStoryToInstrumentItems(baseItems, params);
+  return dedupeFinalInstrumentLine(withStory.join(', '));
+}
+
 function finalOutputPromptValidator(prompt: string, params: GenerateSongParams): string {
   const map: FinalPromptLineMap = { genre: '', instruments: '', atmosphere: '', vocals: '', arrangement: '' };
   String(prompt || '').split('\n').forEach((line) => {
@@ -12872,7 +13030,7 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
   });
 
   map.genre = validateFinalGenreLine(map.genre || 'Genre-led pop fusion', params);
-  map.instruments = dedupeFinalInstrumentLine(map.instruments || 'balanced band and synth texture');
+  map.instruments = validateFinalInstrumentLine(map.instruments || 'balanced band and synth texture', params);
   map.atmosphere = validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', params);
   map.vocals = validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', params);
   map.arrangement = validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', params);

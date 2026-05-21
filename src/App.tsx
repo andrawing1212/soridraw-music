@@ -362,7 +362,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion } from './components/MusicApiGenerateModal';
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
@@ -2463,7 +2463,7 @@ function App() {
     includeLyrics: boolean = true,
     lyricLanguages: LanguageCode[] = ['ko'],
     _generationCount: number = 1,
-    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode> }
+    options?: { targetMode?: 'current' | 'batch'; perTargetLyricLanguages?: Record<string, LanguageCode>; sunoModelVersion?: SunoModelVersion }
   ) => {
     if (isMusicApiGenerating) return;
 
@@ -2484,6 +2484,7 @@ function App() {
       const token = await user.getIdToken();
       const targetMode = options?.targetMode === 'batch' ? 'batch' : 'current';
       const targetSongs = targetMode === 'batch' ? getMusicApiBatchSongs() : [result];
+      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || 'V5_5';
 
       if (targetSongs.length === 0) {
         showToast("Music API로 보낼 곡이 없습니다.");
@@ -2546,6 +2547,9 @@ function App() {
               includeLyrics,
               lyricLanguages: resolvedLyricLanguages,
               lyricLanguage: selectedLanguage || null,
+              model: sunoModelVersion,
+              sunoVersion: sunoModelVersion,
+              sunoModelVersion,
               generationIndex: i + 1,
               generationCount: targetSongs.length,
               sourceGenerationBatchId: (song.appliedKeywords as any)?.generationBatchId || null,
@@ -2991,6 +2995,23 @@ function App() {
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [situation, setSituation] = useState<SituationConfig>(createEmptySituation);
+
+  type MenuLockKey = 'genre' | 'style' | 'sound' | 'mood' | 'theme' | 'situation' | 'vocal' | 'structure';
+  const [menuLocks, setMenuLocks] = useState<Record<MenuLockKey, boolean>>({
+    genre: false,
+    style: false,
+    sound: false,
+    mood: false,
+    theme: false,
+    situation: false,
+    vocal: false,
+    structure: false,
+  });
+  const toggleMenuLock = useCallback((key: MenuLockKey) => {
+    setMenuLocks((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+  const isMenuLocked = useCallback((key: MenuLockKey) => Boolean(menuLocks[key]), [menuLocks]);
+
 
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
@@ -4205,6 +4226,11 @@ const toggleCycleVariantSelection = (
   const [isSoundTextureRandomized, setIsSoundTextureRandomized] = useState(false);
 
   const randomizeCategory = (category: 'genre' | 'mood' | 'theme' | 'style' | 'sound') => {
+    if (isMenuLocked(category)) {
+      showToast(`${{ genre: '장르', mood: '분위기', theme: '주제', style: '스타일', sound: '사운드' }[category]} 메뉴가 잠겨 있습니다.`);
+      return;
+    }
+
     const limits = {
       genre: 2,
       style: Number.POSITIVE_INFINITY,
@@ -4268,6 +4294,8 @@ const toggleCycleVariantSelection = (
     } else if (category === 'sound') {
       const finalSoundSelection = expandRecommendedSoundComboSelection(final, { syncRef: true });
       setSelectedInstrumentSounds(finalSoundSelection);
+      setSelectedPointSounds([]);
+      setIsPointSoundMode(false);
       setIsSoundTextureRandomized(true);
     }
   };
@@ -4722,6 +4750,17 @@ const toggleCycleVariantSelection = (
   const clearAll = useCallback(async (options: ClearAllOptions = {}) => {
     const { preserveHistory = false, preservePinned = false } = options;
 
+    setMenuLocks({
+      genre: false,
+      style: false,
+      sound: false,
+      mood: false,
+      theme: false,
+      situation: false,
+      vocal: false,
+      structure: false,
+    });
+
     if (!preservePinned) {
       setPinnedGenres([]);
       setPinnedThemes([]);
@@ -4950,46 +4989,88 @@ const toggleCycleVariantSelection = (
     };
 
     // 1. Genre Selection: pick only one real leaf genre.
-    // Middle-folder genres such as K-Pop / Acoustic-Folk must not be selected together with their child genre.
+    // Locked menus keep their current values and are excluded from global random selection.
     const randomLeafGenreId = pickRandomLeafGenreId();
-    let g: string[] = [];
-    let sg: string[] = randomLeafGenreId ? [randomLeafGenreId] : [];
+    let g: string[] = isMenuLocked('genre') ? selectedGenres : [];
+    let sg: string[] = isMenuLocked('genre') ? subGenre : (randomLeafGenreId ? [randomLeafGenreId] : []);
 
     // 2. Other categories with their limits
     // Limits: Style 3, Sound 3, Mood 5, Theme 4
-    let s = getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3);
-    let snd = getRandomForCategory(INSTRUMENT_SOUNDS.filter(isSelectableKeywordItem), pinnedInstrumentSounds, 3);
-    let m = getRandomForCategory(MOODS, [], 5);
-    let t = getRandomForCategory(THEMES, [], 4);
+    let s = isMenuLocked('style') ? selectedStyles : getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3);
+    let snd = isMenuLocked('sound') ? selectedInstrumentSounds : getRandomForCategory(INSTRUMENT_SOUNDS.filter(isSelectableKeywordItem), pinnedInstrumentSounds, 3);
+    let m = isMenuLocked('mood') ? selectedMoods : getRandomForCategory(MOODS, [], 5);
+    let t = isMenuLocked('theme') ? selectedThemes : getRandomForCategory(THEMES, [], 4);
 
     // 3. Total Limit 15 Check and Priority Trimming
     // Priority: Genre > Style > Sound > Mood > Theme (Theme is first to be cut)
     while (g.length + s.length + snd.length + m.length + t.length > 15) {
-      if (t.length > 0) t.pop();
-      else if (m.length > 0) m.pop();
-      else if (snd.length > 0) snd.pop();
-      else if (s.length > 0) s.pop();
+      if (!isMenuLocked('theme') && t.length > 0) t.pop();
+      else if (!isMenuLocked('mood') && m.length > 0) m.pop();
+      else if (!isMenuLocked('sound') && snd.length > 0) snd.pop();
+      else if (!isMenuLocked('style') && s.length > 0) s.pop();
       else break;
     }
 
-    const expandedRandomSoundSelection = expandRecommendedSoundComboSelection(snd, { syncRef: true });
+    const expandedRandomSoundSelection = isMenuLocked('sound')
+      ? selectedInstrumentSounds
+      : expandRecommendedSoundComboSelection(snd, { syncRef: true });
 
-    setSelectedGenres(g);
-    setSubGenre(sg);
-    setSelectedMoods(m);
-    setSelectedThemes(t);
-    setSelectedStyles(s);
-    setSelectedInstrumentSounds(expandedRandomSoundSelection);
+    if (!isMenuLocked('genre')) {
+      setSelectedGenres(g);
+      setSubGenre(sg);
+      setKpopMode(0);
+      setCitypopMode(0);
+      setIsGenreRandomized(true);
+    }
+    if (!isMenuLocked('mood')) {
+      setSelectedMoods(m);
+      setIsMoodRandomized(true);
+    }
+    if (!isMenuLocked('theme')) {
+      setSelectedThemes(t);
+      setIsThemeRandomized(true);
+    }
+    if (!isMenuLocked('style')) {
+      setSelectedStyles(s);
+      setIsStyleRandomized(true);
+    }
+    if (!isMenuLocked('sound')) {
+      setSelectedInstrumentSounds(expandedRandomSoundSelection);
+      setSelectedPointSounds([]);
+      setIsPointSoundMode(false);
+      setIsSoundTextureRandomized(true);
+    }
 
-    setIsGenreRandomized(true);
-    setIsMoodRandomized(true);
-    setIsThemeRandomized(true);
-    setIsStyleRandomized(true);
-    setIsSoundTextureRandomized(true);
+    // These menus should not keep stale values during random selection unless explicitly locked.
+    // Generation modal options are always reset on global random so old popup choices do not leak into the next song.
+    setIsKoreanEnglishMix(false);
+    setEnglishMixRatio(10);
+    setRapEnabled(false);
+
+    if (!isMenuLocked('situation')) {
+      setSituation(createEmptySituation());
+      setIsSituationExpanded(false);
+    }
+    if (!isMenuLocked('vocal')) {
+      setVocalMode('solo');
+      setMaleCount(0);
+      setFemaleCount(0);
+      setSelectedVocalToneId(undefined);
+      setVocalMembers([]);
+      setRapEnabled(false);
+    }
+    if (!isMenuLocked('structure')) {
+      setLyricsLength('normal');
+      setSongStructure('1');
+      setCustomStructure([]);
+    }
 
     // Random tempo logic
     if (tempoEnabled) {
-      const { min, max } = calculateOptimalBPM(g, m, sg);
+      const tempoGenre = isMenuLocked('genre') ? selectedGenres : g;
+      const tempoSubGenre = isMenuLocked('genre') ? subGenre : sg;
+      const tempoMoods = isMenuLocked('mood') ? selectedMoods : m;
+      const { min, max } = calculateOptimalBPM(tempoGenre, tempoMoods, tempoSubGenre);
       setMinBPM(min);
       setMaxBPM(max);
     }
@@ -6032,7 +6113,8 @@ ${normalizePromptForDisplay(result.prompt)}
     isMoodRandomized ||
     isThemeRandomized ||
     isStyleRandomized ||
-    isSoundTextureRandomized;
+    isSoundTextureRandomized ||
+    Object.values(menuLocks).some(Boolean);
 
   // --- Genre Display Logic ---
   const resolveGenreChipLabel = (id: string): string => {
@@ -6087,7 +6169,7 @@ ${normalizePromptForDisplay(result.prompt)}
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[var(--text-primary)] transition-all border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[var(--text-primary)] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
           <span className="hidden md:block font-bold">랜덤 선택</span>
@@ -6111,7 +6193,7 @@ ${normalizePromptForDisplay(result.prompt)}
         onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
         onTouchEnd={handleLongPressEnd}
         className={cn(
-          "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all flex items-center justify-center gap-3 active:scale-[0.98]",
+          "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
           isGenerating 
             ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
             : "music-waves shadow-brand-orange/20 hover:brightness-110"
@@ -6136,7 +6218,7 @@ ${normalizePromptForDisplay(result.prompt)}
           onMouseEnter={() => setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
           onMouseLeave={() => clearActionButtonHint()}
           className={cn(
-            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all border flex items-center justify-center gap-2 shadow-btn",
+            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGlobalClearable
               ? "bg-[var(--card-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               : "bg-[var(--bg-primary)] border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
@@ -6368,12 +6450,18 @@ ${normalizePromptForDisplay(result.prompt)}
                   setIsGenreRandomized(false);
                 }}
                 onRandom={() => {
+                  if (menuLocks.genre) {
+                    showToast('장르 메뉴가 잠겨 있습니다.');
+                    return;
+                  }
                   const randomLeafGenreId = pickRandomLeafGenreId();
                   if (!randomLeafGenreId) return;
                   setSelectedGenres([]);
                   setSubGenre([randomLeafGenreId]);
                   setIsGenreRandomized(true);
                 }}
+                isLocked={menuLocks.genre}
+                onToggleLock={() => toggleMenuLock('genre')}
                 onHover={setHoveredItem}
                 isExpanded={isGenreExpanded}
                 onToggleExpand={() => toggleMainSections('genre')}
@@ -6395,6 +6483,8 @@ ${normalizePromptForDisplay(result.prompt)}
             }}
             onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
             onRandom={() => randomizeCategory('style')}
+            isLocked={menuLocks.style}
+            onToggleLock={() => toggleMenuLock('style')}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -6413,54 +6503,32 @@ ${normalizePromptForDisplay(result.prompt)}
             cycles={filteredSoundTextureCycles}
             selected={selectedInstrumentSounds}
             pointSelected={selectedPointSounds}
-            isPointSelectionMode={isPointSoundMode}
+            isPointSelectionMode={false}
             highlightedVariantIds={recommendedComboAppliedSoundIds}
-            extraHeaderControls={(
-              <button
-                type="button"
-                onClick={() => setIsPointSoundMode((prev) => !prev)}
-                onMouseEnter={() => setHoveredItem({ id: 'point-sound-mode', label: 'Point Mode', labelKo: '포인트모드', description: '켜면 선택한 사운드가 곡 전체 악기가 아니라 특정 전환/섹션 포인트로 적용됩니다.' })}
-                onMouseLeave={() => setHoveredItem(null)}
-                className={cn(
-                  "h-[42px] w-[42px] rounded-xl transition-all shadow-btn border flex items-center justify-center",
-                  isPointSoundMode
-                    ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.28)]"
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
-                )}
-                title="포인트 사운드 모드"
-                aria-label="포인트 사운드 모드"
-              >
-                <Zap className="w-4 h-4" />
-              </button>
-            )}
             onCycleToggle={(cycleId, variantId) => {
-              const activeSelected = isPointSoundMode ? selectedPointSounds : selectedInstrumentSounds;
-              const activeSetter = isPointSoundMode ? setSelectedPointSounds : setSelectedInstrumentSounds;
               if (variantId) {
                 const isRecommendedCombo = !!getRecommendedSoundComboVariant(variantId);
-                if (!isPointSoundMode && isRecommendedCombo) {
+                if (isRecommendedCombo) {
                   if (selectedInstrumentSounds.includes(variantId)) {
                     clearRecommendedSoundCombo(variantId);
                     return;
                   }
                   if (applyRecommendedSoundCombo(variantId)) return;
                 }
-                toggleCycleVariantSelection(variantId, activeSelected, activeSetter);
+                setSelectedPointSounds((prev) => prev.filter((id) => id !== variantId));
+                toggleCycleVariantSelection(variantId, selectedInstrumentSounds, setSelectedInstrumentSounds);
               }
-              else cycleFamilySelection(cycleId, activeSelected, activeSetter, SOUND_TEXTURE_CYCLES);
+              else cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
             }}
             onOtherModeVariantToggle={(variantId) => {
-              if (isPointSoundMode) {
-                setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId));
-                const combo = getRecommendedSoundComboVariant(variantId);
-                if (combo) {
-                  recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
-                    Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([, comboId]) => comboId !== variantId)
-                  );
-                }
-              } else {
-                setSelectedPointSounds((prev) => prev.filter((id) => id !== variantId));
+              setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId));
+              const combo = getRecommendedSoundComboVariant(variantId);
+              if (combo) {
+                recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
+                  Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([, comboId]) => comboId !== variantId)
+                );
               }
+              toggleCycleVariantSelection(variantId, selectedPointSounds, setSelectedPointSounds);
             }}
             onClear={() => {
               recommendedSoundComboAppliedIdsRef.current = {};
@@ -6470,6 +6538,8 @@ ${normalizePromptForDisplay(result.prompt)}
               setIsSoundTextureRandomized(false);
             }}
             onRandom={() => randomizeCategory('sound')}
+            isLocked={menuLocks.sound}
+            onToggleLock={() => toggleMenuLock('sound')}
             onHover={setHoveredItem}
             onLongPressStart={handleLongPressStart}
             onLongPressEnd={handleLongPressEnd}
@@ -6506,6 +6576,8 @@ ${normalizePromptForDisplay(result.prompt)}
               onToggle={(id) => toggleSelection(id, 'mood')}
               onClear={() => clearCategory('mood')}
               onRandom={() => randomizeCategory('mood')}
+              isLocked={menuLocks.mood}
+              onToggleLock={() => toggleMenuLock('mood')}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
@@ -6534,6 +6606,8 @@ ${normalizePromptForDisplay(result.prompt)}
               onToggle={(id) => toggleSelection(id, 'theme')}
               onClear={() => clearCategory('theme')}
               onRandom={() => randomizeCategory('theme')}
+              isLocked={menuLocks.theme}
+              onToggleLock={() => toggleMenuLock('theme')}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
@@ -6576,6 +6650,22 @@ ${normalizePromptForDisplay(result.prompt)}
                 </button>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => toggleMenuLock('situation')}
+                    onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock menu' : 'Lock menu', labelKo: menuLocks.situation ? '잠금 해제' : '메뉴 잠금', description: menuLocks.situation ? '상황 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 상황 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
+                    onMouseLeave={() => setHoveredItem(null)}
+                    className={cn(
+                      "p-2 rounded-xl border transition-all shadow-btn",
+                      menuLocks.situation
+                        ? "bg-brand-orange text-white border-brand-orange"
+                        : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                    )}
+                    title={menuLocks.situation ? '잠금 해제' : '메뉴 잠금'}
+                    aria-label={menuLocks.situation ? '상황 잠금 해제' : '상황 잠금'}
+                  >
+                    {menuLocks.situation ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
                   {hasActiveSituation(situation) && (
                     <button
                       type="button"
@@ -6746,6 +6836,8 @@ ${normalizePromptForDisplay(result.prompt)}
                   _ts: Date.now(),
                 });
               }}
+              isLocked={menuLocks.vocal}
+              onToggleLock={() => toggleMenuLock('vocal')}
               onClear={() => {
                 setMaleCount(0);
                 setFemaleCount(0);
@@ -6765,6 +6857,8 @@ ${normalizePromptForDisplay(result.prompt)}
               customStructure={customStructure}
               onSongStructureChange={setSongStructure}
               onCustomStructureChange={setCustomStructure}
+              isLocked={menuLocks.structure}
+              onToggleLock={() => toggleMenuLock('structure')}
               onModalStateChange={setIsStructureModalOpen}
               onClear={() => {
                 setLyricsLength('normal');
@@ -7916,6 +8010,29 @@ ${normalizePromptForDisplay(result.prompt)}
         .animate-marquee-right {
           animation: marquee-right 30s linear infinite;
         }
+
+        /* Global soft press feedback for app buttons and button-like links */
+        button:not(:disabled),
+        a[href],
+        [role="button"] {
+          transition-property: background-color, border-color, color, box-shadow, opacity, filter, scale, translate, transform;
+          transition-duration: 120ms;
+          transition-timing-function: ease-out;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        button:not(:disabled):active,
+        a[href]:active,
+        [role="button"]:active {
+          scale: 0.965;
+          translate: 0 2px;
+          filter: brightness(0.94);
+        }
+
+        button:disabled {
+          scale: 1;
+          translate: 0 0;
+        }
       `}</style>
     </div>
   );
@@ -8020,6 +8137,8 @@ interface GenreCategorySectionProps {
   onOpenGroup: (groupId: string) => void;
   onClear: () => void;
   onRandom: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
@@ -8036,6 +8155,8 @@ function GenreCategorySection({
   onOpenGroup,
   onClear,
   onRandom,
+  isLocked = false,
+  onToggleLock,
   onHover,
   onLongPressStart,
   onLongPressEnd,
@@ -8318,10 +8439,16 @@ interface CycleSectionProps {
   pointSelected?: string[];
   isPointSelectionMode?: boolean;
   extraHeaderControls?: React.ReactNode;
+  pointModeControl?: {
+    enabled: boolean;
+    onToggle: () => void;
+  };
   onCycleToggle: (cycleId: string, variantId?: string) => void;
   onOtherModeVariantToggle?: (variantId: string) => void;
   onClear: () => void;
   onRandom: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
@@ -8345,10 +8472,13 @@ function CycleSection({
   pointSelected = [],
   isPointSelectionMode = false,
   extraHeaderControls,
+  pointModeControl,
   onCycleToggle, 
   onOtherModeVariantToggle,
   onClear, 
-  onRandom, 
+  onRandom,
+  isLocked = false,
+  onToggleLock,
   onHover, 
   onLongPressStart, 
   onLongPressEnd, 
@@ -8436,6 +8566,26 @@ function CycleSection({
 
           <div className="flex items-center gap-2 shrink-0">
             {extraHeaderControls}
+            {onToggleLock && (
+              <button
+                type="button"
+                onClick={onToggleLock}
+                onMouseEnter={() => onHover({ id: `cycle-lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
+                onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                onTouchStart={() => onLongPressStart({ id: `cycle-lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
+                onTouchEnd={onLongPressEnd}
+                className={cn(
+                  "p-2.5 rounded-xl transition-all shadow-btn border",
+                  isLocked
+                    ? "bg-brand-orange text-white border-brand-orange"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                )}
+                title={isLocked ? '잠금 해제' : '메뉴 잠금'}
+                aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
+              >
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              </button>
+            )}
             <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? 'bg-brand-orange text-white border-brand-orange' : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
               <Dices className="w-4 h-4" />
             </button>
@@ -8557,10 +8707,10 @@ function CycleSection({
           <CycleKeywordPopup
             title={titleKo || title}
             cycle={activePopupCycle}
-            selected={activeSelected}
-            otherSelected={otherSelected}
-            highlightedVariantIds={isPointSelectionMode ? [] : highlightedVariantIds}
-            isPointSelectionMode={isPointSelectionMode}
+            selected={selected}
+            otherSelected={pointSelected}
+            highlightedVariantIds={highlightedVariantIds}
+            isPointSelectionMode={false}
             maxSelectableCount={maxSelectableCount}
             onClose={() => setKeywordPopupCycleId(null)}
             onToggleVariant={(variantId) => onCycleToggle(activePopupCycle.id, variantId)}
@@ -8595,6 +8745,7 @@ function CycleKeywordPopup({
   otherSelected = [],
   highlightedVariantIds = [],
   isPointSelectionMode = false,
+  pointModeControl,
   maxSelectableCount,
   onClose,
   onToggleVariant,
@@ -8621,6 +8772,10 @@ function CycleKeywordPopup({
   otherSelected?: string[];
   highlightedVariantIds?: string[];
   isPointSelectionMode?: boolean;
+  pointModeControl?: {
+    enabled: boolean;
+    onToggle: () => void;
+  };
   maxSelectableCount: number;
   onClose: () => void;
   onToggleVariant: (variantId: string) => void;
@@ -8697,6 +8852,15 @@ function CycleKeywordPopup({
     };
   }, [closePopup, onClose]);
 
+  useEffect(() => {
+    const nextSelected = selected.filter((id) => cycleVariantIds.includes(id));
+    const nextOtherSelected = otherSelected.filter((id) => cycleVariantIds.includes(id));
+    initialSelectedRef.current = nextSelected;
+    initialOtherSelectedRef.current = nextOtherSelected;
+    setLocalSelected(nextSelected);
+    setLocalOtherSelected(nextOtherSelected);
+  }, [isPointSelectionMode, cycleVariantIds, selected, otherSelected]);
+
   const selectedOutsideCycleCount = selected.filter((id) => !cycleVariantIds.includes(id)).length;
   const localTotalSelectedCount = selectedOutsideCycleCount + localSelected.length;
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
@@ -8713,7 +8877,7 @@ function CycleKeywordPopup({
         }}
         onPointerUp={(e) => {
           if (cyclePopupBackdropPointerDownRef.current && e.target === e.currentTarget) {
-            (hasChanges ? applyChangesAndClose : closePopup)();
+            closePopup();
           }
           cyclePopupBackdropPointerDownRef.current = false;
         }}
@@ -8739,10 +8903,19 @@ function CycleKeywordPopup({
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {localSelected.length > 0 && (
+              {(localSelected.length > 0 || localOtherSelected.length > 0) && (
                 <button
                   type="button"
-                  onClick={() => setLocalSelected([])}
+                  onClick={() => {
+                    localSelected.forEach((variantId) => onToggleVariant(variantId));
+                    if (onToggleOtherVariant) {
+                      localOtherSelected.forEach((variantId) => onToggleOtherVariant(variantId));
+                    }
+                    initialSelectedRef.current = [];
+                    initialOtherSelectedRef.current = [];
+                    setLocalSelected([]);
+                    setLocalOtherSelected([]);
+                  }}
                   className="h-11 px-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all text-[11px] font-black whitespace-nowrap"
                   title="이 폴더 선택 전체 해제"
                 >
@@ -8750,7 +8923,7 @@ function CycleKeywordPopup({
                 </button>
               )}
               <button
-                onClick={hasChanges ? applyChangesAndClose : closePopup}
+                onClick={closePopup}
                 className={cn(
                   "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
                   hasChanges
@@ -8759,9 +8932,9 @@ function CycleKeywordPopup({
                       : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)]"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
                 )}
-                title={hasChanges ? '변경 적용' : '닫기'}
+                title="닫기"
               >
-                {hasChanges ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+                <X className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -8784,6 +8957,7 @@ function CycleKeywordPopup({
               const isOtherSelected = localOtherSelected.includes(variant.id);
               const isHighlightedSelected = isSelected && highlightedVariantIdSet.has(variant.id);
               const disabled = !isSelected && !isOtherSelected && isAtLimit;
+              const canPointSelect = !!onToggleOtherVariant && cycle.id !== 'recommended-sound-combos' && !(variant.applyPools && variant.applyPools.length > 0);
               const hoverItem: CategoryItem = {
                 id: variant.id,
                 label: variant.label,
@@ -8791,47 +8965,96 @@ function CycleKeywordPopup({
                 description: variant.descriptionKo ?? variant.description,
               };
               return (
-                <button
+                <div
                   key={variant.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    if (disabled) return;
-                    if (!isSelected && isOtherSelected && onToggleOtherVariant) {
-                      setLocalOtherSelected((prev) => prev.filter((id) => id !== variant.id));
-                    } else {
-                      setLocalSelected((prev) =>
-                        prev.includes(variant.id)
-                          ? prev.filter((id) => id !== variant.id)
-                          : [...prev, variant.id]
-                      );
-                    }
-                    onHover({ ...hoverItem, _ts: Date.now() } as CategoryItem);
-                  }}
-                  onMouseEnter={() => onHover(hoverItem)}
-                  onMouseLeave={() => onHover(null)}
                   className={cn(
-                    "w-full rounded-2xl border px-4 py-3 text-left transition-all",
+                    "w-full rounded-2xl border transition-all flex items-stretch overflow-hidden",
                     isSelected
-                      ? isPointSelectionMode
-                        ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.24)]"
-                        : isHighlightedSelected
-                          ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.26)]"
-                          : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
+                      ? isHighlightedSelected
+                        ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.26)]"
+                        : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
                       : isOtherSelected
-                        ? isPointSelectionMode
-                          ? "bg-brand-orange/80 text-white border-brand-orange/80 shadow-[0_0_14px_rgba(255,132,0,0.16)]"
-                          : "bg-fuchsia-600/85 text-white border-fuchsia-500/85 shadow-[0_0_14px_rgba(217,70,239,0.16)]"
-                      : disabled
-                        ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
-                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover hover:border-brand-orange/40"
+                        ? "bg-fuchsia-600/85 text-white border-fuchsia-500/85 shadow-[0_0_14px_rgba(217,70,239,0.16)]"
+                        : disabled
+                          ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
+                          : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:border-brand-orange/40"
                   )}
                 >
-                  <div className="min-w-0">
-                    <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
-                    <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
-                  </div>
-                </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return;
+
+                      const nextSelected = isSelected
+                        ? localSelected.filter((id) => id !== variant.id)
+                        : [...localSelected.filter((id) => id !== variant.id), variant.id];
+                      const nextOtherSelected = localOtherSelected.filter((id) => id !== variant.id);
+
+                      if (isOtherSelected && onToggleOtherVariant) {
+                        onToggleOtherVariant(variant.id);
+                      }
+                      onToggleVariant(variant.id);
+
+                      initialSelectedRef.current = nextSelected;
+                      initialOtherSelectedRef.current = nextOtherSelected;
+                      setLocalSelected(nextSelected);
+                      setLocalOtherSelected(nextOtherSelected);
+                      onHover({ ...hoverItem, _ts: Date.now() } as CategoryItem);
+                    }}
+                    onMouseEnter={() => onHover(hoverItem)}
+                    onMouseLeave={() => onHover(null)}
+                    className={cn(
+                      "min-w-0 flex-1 px-4 py-3 text-left transition-all",
+                      disabled ? "cursor-not-allowed" : "hover:bg-white/5"
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
+                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
+                    </div>
+                  </button>
+                  {canPointSelect && (
+                    <button
+                      type="button"
+                      disabled={disabled && !isOtherSelected}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (disabled && !isOtherSelected) return;
+
+                        const nextSelected = localSelected.filter((id) => id !== variant.id);
+                        const nextOtherSelected = isOtherSelected
+                          ? localOtherSelected.filter((id) => id !== variant.id)
+                          : [...localOtherSelected.filter((id) => id !== variant.id), variant.id];
+
+                        if (isSelected) {
+                          onToggleVariant(variant.id);
+                        }
+                        if (onToggleOtherVariant) {
+                          onToggleOtherVariant(variant.id);
+                        }
+
+                        initialSelectedRef.current = nextSelected;
+                        initialOtherSelectedRef.current = nextOtherSelected;
+                        setLocalSelected(nextSelected);
+                        setLocalOtherSelected(nextOtherSelected);
+                        onHover({ id: `point-${variant.id}`, label: 'Point Accent', labelKo: '포인트 선택', description: `${variant.labelKo || variant.label}을 곡 전체 악기가 아닌 특정 전환/섹션 포인트로 적용합니다.`, _ts: Date.now() } as CategoryItem);
+                      }}
+                      onMouseEnter={() => onHover({ id: `point-${variant.id}`, label: 'Point Accent', labelKo: '포인트 선택', description: `${variant.labelKo || variant.label}을 곡 전체 악기가 아닌 특정 전환/섹션 포인트로 적용합니다.` })}
+                      onMouseLeave={() => onHover(null)}
+                      className={cn(
+                        "w-12 shrink-0 border-l flex items-center justify-center transition-all",
+                        isOtherSelected
+                          ? "bg-fuchsia-500 text-white border-fuchsia-300/70"
+                          : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/15 hover:text-fuchsia-300 hover:border-fuchsia-400/50"
+                      )}
+                      title={isOtherSelected ? '포인트 선택 해제' : '포인트 선택'}
+                      aria-label={`${variant.labelKo || variant.label} 포인트 선택`}
+                    >
+                      <Zap className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -8854,6 +9077,8 @@ interface CategorySectionProps {
   onClear: () => void;
   onUnpinAll?: () => void;
   onRandom: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
@@ -8888,6 +9113,8 @@ function CategorySection({
   onClear, 
   onUnpinAll,
   onRandom,
+  isLocked = false,
+  onToggleLock,
   onHover,
   onLongPressStart,
   onLongPressEnd,
@@ -8971,6 +9198,29 @@ function CategorySection({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onToggleLock && (
+              <button
+                type="button"
+                onClick={onToggleLock}
+                onMouseEnter={() => onHover({ id: `lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
+                onMouseLeave={() => {
+                  onHover(null);
+                  onLongPressEnd();
+                }}
+                onTouchStart={() => onLongPressStart({ id: `lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
+                onTouchEnd={onLongPressEnd}
+                className={cn(
+                  "p-2.5 rounded-xl transition-all shadow-btn border",
+                  isLocked
+                    ? "bg-brand-orange text-white border-brand-orange"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                )}
+                title={isLocked ? '잠금 해제' : '메뉴 잠금'}
+                aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
+              >
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              </button>
+            )}
             <button 
               onClick={onRandom}
               onMouseEnter={() => onHover({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
@@ -9282,6 +9532,8 @@ interface SongStructureIntegratedControlProps {
   onSongStructureChange: (val: SongStructure) => void;
   onCustomStructureChange: (val: CustomSectionItem[]) => void;
   onClear: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
@@ -9302,6 +9554,8 @@ function SongStructureIntegratedControl({
   onSongStructureChange,
   onCustomStructureChange,
   onClear,
+  isLocked = false,
+  onToggleLock,
   onHover,
   onLongPressStart,
   onLongPressEnd,
@@ -10429,6 +10683,24 @@ function SongStructureIntegratedControl({
             섹션구조
           </h3>
           <div className="flex items-center gap-2">
+            {onToggleLock && (
+              <button
+                type="button"
+                onClick={onToggleLock}
+                onMouseEnter={() => onHover({ id: 'song-structure-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '섹션 구조를 랜덤 선택에 다시 포함합니다.' : '현재 섹션 구조 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "p-2 rounded-lg transition-all border shadow-btn",
+                  isLocked
+                    ? "bg-brand-orange text-white border-brand-orange"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                )}
+                title={isLocked ? '잠금 해제' : '메뉴 잠금'}
+                aria-label={isLocked ? '섹션 구조 잠금 해제' : '섹션 구조 잠금'}
+              >
+                {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              </button>
+            )}
             <button
               onClick={onClear}
               onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '섹션 설정을 초기화합니다.' })}
@@ -11950,6 +12222,8 @@ interface VocalControlProps {
   onEnglishMixRatioChange: (ratio: number) => void;
   onToggleKoreanEnglishMix: () => void;
   onClear: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
@@ -11973,6 +12247,8 @@ function VocalControl({
   onMembersChange,
   onRapChange,
   onClear,
+  isLocked = false,
+  onToggleLock,
   onHover, 
   onLongPressStart, 
   onLongPressEnd,
@@ -12304,6 +12580,24 @@ function VocalControl({
         </div>
 
         <div className="flex items-center gap-2">
+          {onToggleLock && (
+            <button
+              type="button"
+              onClick={onToggleLock}
+              onMouseEnter={() => onHover({ id: 'vocal-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '보컬 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 보컬 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "p-2 rounded-lg transition-all border shadow-btn",
+                isLocked
+                  ? "bg-brand-orange text-white border-brand-orange"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+              )}
+              title={isLocked ? '잠금 해제' : '메뉴 잠금'}
+              aria-label={isLocked ? '보컬 잠금 해제' : '보컬 잠금'}
+            >
+              {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            </button>
+          )}
           <button
             onClick={onClear}
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}

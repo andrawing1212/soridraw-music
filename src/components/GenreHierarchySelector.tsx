@@ -11,6 +11,8 @@ import {
   ArrowLeft,
   ChevronRight,
   Info,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { clsx, type ClassValue } from "clsx";
@@ -55,6 +57,8 @@ interface Props {
   onSelectSubGenre: (id: string) => void;
   onClear: () => void;
   onRandom: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onCommitSelection?: (mainId: string | null, subId: string | null, meta?: { removeMainId?: string | null; removeSubId?: string | null }) => void;
   isExpanded: boolean;
@@ -172,6 +176,8 @@ export default function GenreHierarchySelector({
   onSelectSubGenre,
   onClear,
   onRandom,
+  isLocked = false,
+  onToggleLock,
   onHover,
   onCommitSelection,
   isExpanded,
@@ -652,6 +658,32 @@ export default function GenreHierarchySelector({
           </div>
 
           <div className="flex items-center gap-2">
+            {onToggleLock && (
+              <button
+                type="button"
+                onClick={onToggleLock}
+                onMouseEnter={() =>
+                  onHover({
+                    id: "genre-lock",
+                    label: isLocked ? "Unlock menu" : "Lock menu",
+                    labelKo: isLocked ? "잠금 해제" : "메뉴 잠금",
+                    description: isLocked ? "장르를 랜덤 선택에 다시 포함합니다." : "현재 장르 설정을 유지하고 랜덤 선택에서 제외합니다.",
+                    _ts: Date.now(),
+                  })
+                }
+                onMouseLeave={() => onHover(null)}
+                className={cn(
+                  "p-2.5 rounded-xl transition-all shadow-btn border",
+                  isLocked
+                    ? "bg-brand-orange text-white border-brand-orange"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                )}
+                title={isLocked ? "잠금 해제" : "메뉴 잠금"}
+                aria-label={isLocked ? "장르 잠금 해제" : "장르 잠금"}
+              >
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              </button>
+            )}
             <button
               onClick={onRandom}
               onMouseEnter={() =>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
-import MusicApiGenerateModal, { LanguageCode } from '../components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
 import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
@@ -1533,7 +1533,8 @@ ${song.prompt}
   const handleFavoriteMusicApiGenerate = async (
     _titleLanguage: LanguageCode = 'ko',
     includeLyrics: boolean = true,
-    lyricLanguages: LanguageCode[] = ['ko']
+    lyricLanguages: LanguageCode[] = ['ko'],
+    options?: { sunoModelVersion?: SunoModelVersion }
   ) => {
     if (!selectedSong || isFavoriteMusicApiGenerating) return;
 
@@ -1547,6 +1548,7 @@ ${song.prompt}
       }
 
       const token = await user.getIdToken();
+      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || 'V5_5';
       const selectedLanguage = includeLyrics
         ? (lyricLanguages || [])[0] || getFavoriteMusicApiAvailableLyricLanguages(selectedSong)[0]
         : null;
@@ -1582,6 +1584,9 @@ ${song.prompt}
             includeLyrics,
             lyricLanguages: includeLyrics && selectedLanguage ? [selectedLanguage] : [],
             lyricLanguage: selectedLanguage || null,
+            model: sunoModelVersion,
+            sunoVersion: sunoModelVersion,
+            sunoModelVersion,
             generationIndex: 1,
             generationCount: 1,
             sourceGenerationBatchId: (selectedSong.appliedKeywords as any)?.generationBatchId || null,
@@ -3027,9 +3032,9 @@ ${song.prompt}
             availableLyricLanguages={getFavoriteMusicApiAvailableLyricLanguages(selectedSong)}
             maxLyricLanguages={1}
             onClose={() => setShowFavoriteMusicApiModal(false)}
-            onConfirm={(titleLang, includeLyrics, lyricLanguages) => {
+            onConfirm={(titleLang, includeLyrics, lyricLanguages, _generationCount, options) => {
               setShowFavoriteMusicApiModal(false);
-              handleFavoriteMusicApiGenerate(titleLang, includeLyrics, lyricLanguages);
+              handleFavoriteMusicApiGenerate(titleLang, includeLyrics, lyricLanguages, options);
             }}
           />
         )}

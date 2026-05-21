@@ -65,6 +65,20 @@ const pickFirstPositiveNumber = (...values: any[]): number | null => {
   return null;
 };
 
+const ALLOWED_SUNO_MODELS = ["V5_5", "V5", "V4_5"] as const;
+type SunoModelVersion = typeof ALLOWED_SUNO_MODELS[number];
+
+const normalizeSunoModelVersion = (...values: any[]): SunoModelVersion => {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const normalized = value.trim().toUpperCase().replace(/[.\s-]/g, "_");
+    if ((ALLOWED_SUNO_MODELS as readonly string[]).includes(normalized)) {
+      return normalized as SunoModelVersion;
+    }
+  }
+  return "V5_5";
+};
+
 const normalizeSunoDataItem = (item: any): any => {
   if (!item || typeof item !== "object") return item;
 
@@ -237,6 +251,11 @@ export const createSunoTrack = onRequest(
     const stylePrompt = body.style || body.prompt || "";
     const appliedKeywords = body.appliedKeywords || null;
     const dryRun = body.dryRun === true || body.dryRun === "true";
+    const sunoModelVersion = normalizeSunoModelVersion(
+      body.sunoModelVersion,
+      body.sunoVersion,
+      body.model
+    );
 
     const db = admin.firestore();
     const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
@@ -259,7 +278,9 @@ export const createSunoTrack = onRequest(
           custom_mode: true,
           customMode: true,
           instrumental: typeof body.instrumental === "boolean" ? body.instrumental : false,
-          model: "V5_5",
+          model: sunoModelVersion,
+          sunoVersion: sunoModelVersion,
+          sunoModelVersion,
           title: title,
           prompt: lyricsText,
           style: stylePrompt,
@@ -284,6 +305,8 @@ export const createSunoTrack = onRequest(
           lyrics: lyricsText,
           status: 'completed',
           provider: 'dryRun',
+          model: sunoModelVersion,
+          sunoVersion: sunoModelVersion,
           audioUrl: '',
           imageUrl: '',
           appliedKeywords: appliedKeywords,
@@ -340,6 +363,8 @@ export const createSunoTrack = onRequest(
         lyrics: lyricsText,
         status: isFailed ? "failed" : "submitted",
         provider: "sunoapi.org",
+        model: sunoModelVersion,
+        sunoVersion: sunoModelVersion,
         appliedKeywords: appliedKeywords,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
@@ -351,7 +376,7 @@ export const createSunoTrack = onRequest(
          return;
       }
 
-      res.json({ ok: true, trackId: trackRef.id, taskId: taskId });
+      res.json({ ok: true, trackId: trackRef.id, taskId: taskId, model: sunoModelVersion, sunoVersion: sunoModelVersion });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Failed to create track", details: error.message });

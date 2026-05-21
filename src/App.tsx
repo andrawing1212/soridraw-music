@@ -9391,7 +9391,7 @@ function CategorySection({
             ref={contentRef}
             className={cn(
               uniformKeywordGrid
-                ? "grid grid-cols-3 lg:grid-cols-7 gap-2"
+                ? "grid grid-cols-4 lg:grid-cols-7 gap-2"
                 : "flex flex-wrap gap-2"
             )}
           >

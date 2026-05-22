@@ -10126,15 +10126,36 @@ function CycleKeywordPopup({
   const hasChanges = normalizeIds(localSelected) !== normalizeIds(initialSelectedRef.current) || normalizeIds(localOtherSelected) !== normalizeIds(initialOtherSelectedRef.current);
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const cyclePopupBackdropPointerDownRef = useRef(false);
+  const isClosingRef = useRef(false);
+
+  const popCycleKeywordHistoryEntry = useCallback(() => {
+    if (!window.history.state?.cycleKeywordPopup) return;
+
+    const suppressNextPopState = (event: PopStateEvent) => {
+      event.stopImmediatePropagation();
+      window.removeEventListener('popstate', suppressNextPopState, true);
+    };
+
+    window.addEventListener('popstate', suppressNextPopState, true);
+    window.setTimeout(() => {
+      try {
+        closeFromHistoryRef.current = true;
+        window.history.back();
+      } catch {
+        window.removeEventListener('popstate', suppressNextPopState, true);
+      }
+      window.setTimeout(() => {
+        window.removeEventListener('popstate', suppressNextPopState, true);
+      }, 500);
+    }, 0);
+  }, []);
 
   const closePopup = useCallback(() => {
-    if (window.history.state?.cycleKeywordPopup && !closeFromHistoryRef.current) {
-      closeFromHistoryRef.current = true;
-      window.history.back();
-      return;
-    }
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
     onClose();
-  }, [onClose]);
+    popCycleKeywordHistoryEntry();
+  }, [onClose, popCycleKeywordHistoryEntry]);
 
   const applyChangesAndClose = useCallback(() => {
     const before = new Set(initialSelectedRef.current);
@@ -10155,8 +10176,20 @@ function CycleKeywordPopup({
   }, [closePopup, cycleVariantIds, localOtherSelected, localSelected, onToggleOtherVariant, onToggleVariant]);
 
   useEffect(() => {
+    const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+    const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+    const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.overscrollBehavior = 'none';
 
     try {
       window.history.pushState({ ...(window.history.state || {}), cycleKeywordPopup: true }, '');
@@ -10164,7 +10197,10 @@ function CycleKeywordPopup({
       // ignore history errors in embedded preview environments
     }
 
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
+      event.stopImmediatePropagation();
+      if (isClosingRef.current) return;
+      isClosingRef.current = true;
       onClose();
     };
 
@@ -10175,12 +10211,18 @@ function CycleKeywordPopup({
       }
     };
 
-    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('popstate', handlePopState, true);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      window.removeEventListener('popstate', handlePopState);
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
+      document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
+      window.scrollTo(0, scrollY);
+      window.removeEventListener('popstate', handlePopState, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [closePopup, onClose]);

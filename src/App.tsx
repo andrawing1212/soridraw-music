@@ -7850,7 +7850,6 @@ ${normalizePromptForDisplay(result.prompt)}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18 }}
                     className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-sm px-3 py-5"
                     onPointerDown={(event) => {
                       storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
@@ -7868,10 +7867,10 @@ ${normalizePromptForDisplay(result.prompt)}
                     }}
                   >
                     <motion.div
-                      initial={{ opacity: 0, y: 18, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 18, scale: 0.96 }}
-                      transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                      transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
                       className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -10188,10 +10187,13 @@ function CycleKeywordPopup({
     const originalBodyTouchAction = document.body.style.touchAction;
 
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.body.style.touchAction = 'none';
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.overscrollBehavior = 'none';
-    document.body.style.touchAction = 'none';
 
     try {
       window.history.pushState({ ...(window.history.state || {}), cycleKeywordPopup: true }, '');
@@ -10247,11 +10249,10 @@ function CycleKeywordPopup({
   return (
     <Portal>
       <motion.div
-        initial={isMobileViewport ? { opacity: 1 } : { opacity: 0 }}
+        initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: isMobileViewport ? 0 : 0.12, ease: 'easeOut' }}
-        className="fixed inset-0 z-[300] bg-black/45 md:bg-black/40 md:backdrop-blur-sm flex items-center justify-center p-4"
+        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overscroll-none"
         style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
         onPointerDown={(e) => {
           cyclePopupBackdropPointerDownRef.current = e.target === e.currentTarget;
@@ -10267,10 +10268,10 @@ function CycleKeywordPopup({
         onPointerCancel={() => { cyclePopupBackdropPointerDownRef.current = false; }}
       >
         <motion.div
-          initial={isMobileViewport ? { scale: 1, opacity: 1, y: 0 } : { scale: 0.96, opacity: 0, y: 18 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={isMobileViewport ? { scale: 1, opacity: 0, y: 0 } : { scale: 0.96, opacity: 0, y: 18 }}
-          transition={{ duration: isMobileViewport ? 0.08 : 0.18, ease: 'easeOut' }}
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
           className="w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
@@ -12236,7 +12237,7 @@ function SongStructureIntegratedControl({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
+            className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 overscroll-none"
             onPointerDown={(e) => {
               customModalBackdropMouseDownRef.current = e.target === e.currentTarget;
             }}
@@ -12253,10 +12254,10 @@ function SongStructureIntegratedControl({
             }}
           >
             <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 24, scale: 0.96 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
               className="w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
@@ -14480,7 +14481,7 @@ function VocalControl({
         {editingVocalMember && (
           <Portal>
             <motion.div
-              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6 backdrop-blur-sm"
+              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6 backdrop-blur-sm overscroll-none"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -14498,10 +14499,10 @@ function VocalControl({
               onPointerCancel={() => { vocalCharacterBackdropPointerDownRef.current = false; }}
             >
               <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 16 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}

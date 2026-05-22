@@ -10173,6 +10173,7 @@ function CycleKeywordPopup({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const cyclePopupBackdropPointerDownRef = useRef(false);
   const isClosingRef = useRef(false);
+  const [isBackdropBlurReady, setIsBackdropBlurReady] = useState(false);
   const popCycleKeywordHistoryEntry = useCallback(() => {
     if (!window.history.state?.cycleKeywordPopup) return;
 
@@ -10271,6 +10272,16 @@ function CycleKeywordPopup({
   }, [closePopup, onClose]);
 
   useEffect(() => {
+    const blurFrame = window.requestAnimationFrame(() => {
+      setIsBackdropBlurReady(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(blurFrame);
+    };
+  }, []);
+
+  useEffect(() => {
     const nextSelected = selected.filter((id) => cycleVariantIds.includes(id));
     const nextOtherSelected = otherSelected.filter((id) => cycleVariantIds.includes(id));
     initialSelectedRef.current = nextSelected;
@@ -10287,7 +10298,10 @@ function CycleKeywordPopup({
     <Portal>
       <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none">
         <div
-          className="absolute inset-0 bg-black/45"
+          className={cn(
+            "absolute inset-0 bg-black/40 transition-[backdrop-filter,opacity] duration-150 ease-out",
+            isBackdropBlurReady ? "backdrop-blur-sm" : "backdrop-blur-0"
+          )}
           onPointerDown={() => {
             cyclePopupBackdropPointerDownRef.current = true;
           }}

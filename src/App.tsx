@@ -3733,6 +3733,7 @@ function App() {
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
 
   const openGenreModal = (groupId: string) => {
+    syncActionBarModalBlock(true);
     setActiveGenreGroupId(groupId);
     setIsGenreModalOpen(true);
     window.history.pushState({ modal: 'genre' }, '');
@@ -3760,6 +3761,7 @@ function App() {
 
   const openGlobalSearchModal = () => {
     if (isGlobalSearchOpen || isGlobalSearchOpening) return;
+    syncActionBarModalBlock(true);
     setIsGlobalSearchOpening(true);
     if (!globalSearchModalHistoryPushedRef.current) {
       window.history.pushState({ modal: 'global-search' }, '', window.location.href);
@@ -4131,7 +4133,40 @@ const toggleCycleVariantSelection = (
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isCycleKeywordPopupOpen, setIsCycleKeywordPopupOpen] = useState(false);
   const [isVocalCharacterModalOpen, setIsVocalCharacterModalOpen] = useState(false);
+  const [isActionBarBlockedByModal, setIsActionBarBlockedByModal] = useState(false);
+  const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
+  const shouldShowActionButtons = !isActionBarBlockedByModal;
+
+  const syncActionBarModalBlock = useCallback((isOpen: boolean) => {
+    if (actionBarModalReleaseTimerRef.current !== null) {
+      window.clearTimeout(actionBarModalReleaseTimerRef.current);
+      actionBarModalReleaseTimerRef.current = null;
+    }
+
+    if (isOpen) {
+      setIsActionBarBlockedByModal(true);
+      return;
+    }
+
+    actionBarModalReleaseTimerRef.current = window.setTimeout(() => {
+      setIsActionBarBlockedByModal(false);
+      actionBarModalReleaseTimerRef.current = null;
+    }, 140);
+  }, []);
+
+  useEffect(() => {
+    syncActionBarModalBlock(isAnyModalOpen);
+  }, [isAnyModalOpen, syncActionBarModalBlock]);
+
+  useEffect(() => {
+    return () => {
+      if (actionBarModalReleaseTimerRef.current !== null) {
+        window.clearTimeout(actionBarModalReleaseTimerRef.current);
+        actionBarModalReleaseTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const resetStudioModalsForFullscreen = () => {
@@ -4150,6 +4185,11 @@ const toggleCycleVariantSelection = (
       setIsStructureModalOpen(false);
       setIsCycleKeywordPopupOpen(false);
       setIsVocalCharacterModalOpen(false);
+      setIsActionBarBlockedByModal(false);
+      if (actionBarModalReleaseTimerRef.current !== null) {
+        window.clearTimeout(actionBarModalReleaseTimerRef.current);
+        actionBarModalReleaseTimerRef.current = null;
+      }
       setIsGlobalSearchOpen(false);
       setIsGlobalSearchOpening(false);
       if (globalSearchOpenTimerRef.current !== null) {
@@ -5370,6 +5410,7 @@ const toggleCycleVariantSelection = (
 
   const openStoryboardModal = () => {
     if (isSituationExpanded || isStoryboardOpening) return;
+    syncActionBarModalBlock(true);
     setDraftSituation(sanitizeStoryboardSituation(situation));
     setIsStoryboardOpening(true);
     if (!storyboardModalHistoryPushedRef.current) {
@@ -7503,7 +7544,10 @@ ${normalizePromptForDisplay(result.prompt)}
                         <span className="font-bold text-[10px] md:text-xs">통합 검색</span>
                       </button>
                       <button
-                        onClick={() => setIsGuideModalOpen(true)}
+                        onClick={() => {
+                          syncActionBarModalBlock(true);
+                          setIsGuideModalOpen(true);
+                        }}
                         className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
                       >
                         <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 group-hover:scale-110 transition-transform" />
@@ -7619,7 +7663,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
                 forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
-                onModalStateChange={setIsGenreHierarchyModalOpen}
+                onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
               />
           <CycleSection 
             title="Style" 
@@ -7644,7 +7688,7 @@ ${normalizePromptForDisplay(result.prompt)}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
             forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
-            onModalStateChange={setIsCycleKeywordPopupOpen}
+            onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -7699,7 +7743,7 @@ ${normalizePromptForDisplay(result.prompt)}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
             forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
-            onModalStateChange={setIsCycleKeywordPopupOpen}
+            onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
         </div>
 
@@ -8053,7 +8097,7 @@ ${normalizePromptForDisplay(result.prompt)}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              onModalStateChange={setIsVocalCharacterModalOpen}
+              onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
             />
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
@@ -8064,7 +8108,7 @@ ${normalizePromptForDisplay(result.prompt)}
               onCustomStructureChange={setCustomStructure}
               isLocked={menuLocks.structure}
               onToggleLock={() => toggleMenuLock('structure')}
-              onModalStateChange={setIsStructureModalOpen}
+              onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsStructureModalOpen(isOpen); }}
               onClear={() => {
                 setLyricsLength('normal');
                 setSongStructure('1');
@@ -8243,7 +8287,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
           {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence initial={false}>
-            {!isAnyModalOpen && (
+            {shouldShowActionButtons && (
               <Portal>
                 {isActionButtonsCollapsed ? (
                   <motion.button
@@ -8274,11 +8318,11 @@ ${normalizePromptForDisplay(result.prompt)}
                 ) : (
                   <motion.div
                     key="action-buttons-expanded-bar"
-                    initial={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    exit={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                    initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 18, scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
-                    className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8"
+                    className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
                   >
                     <div className="relative w-full max-w-4xl pointer-events-auto">
                       <motion.div
@@ -8992,7 +9036,7 @@ ${normalizePromptForDisplay(result.prompt)}
             className={cn(
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/' 
-                ? (!isActionButtonsCollapsed && !isAnyModalOpen
+                ? (!isActionButtonsCollapsed && shouldShowActionButtons
                     ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
                 : "bottom-10 max-w-[250px] md:max-w-[400px]"
@@ -9972,7 +10016,10 @@ function CycleSection({
               return (
                 <button
                   key={cycle.id}
-                  onClick={() => setKeywordPopupCycleId(cycle.id)}
+                  onClick={() => {
+                    onModalStateChange?.(true);
+                    setKeywordPopupCycleId(cycle.id);
+                  }}
                   onMouseEnter={() => onHover(hoverItem)}
                   onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                   onTouchStart={() => onLongPressStart(hoverItem)}
@@ -11292,6 +11339,7 @@ function SongStructureIntegratedControl({
   }, [resetCustomSectionDraft]);
 
   const openCustomSectionEditor = useCallback((section?: UserCustomSectionDefinition) => {
+    onModalStateChange?.(true);
     if (section) {
       setEditingCustomSectionId(section.id);
       setCustomSectionDraft({
@@ -11306,7 +11354,7 @@ function SongStructureIntegratedControl({
       window.history.pushState({ modal: 'custom-section-editor' }, '');
       customSectionEditorHistoryPushedRef.current = true;
     }
-  }, [resetCustomSectionDraft]);
+  }, [onModalStateChange, resetCustomSectionDraft]);
 
   const saveCustomSectionDefinition = async () => {
     const rawKo = sanitizeCustomLabel(customSectionDraft.labelKo);
@@ -11438,15 +11486,17 @@ function SongStructureIntegratedControl({
   }, []);
 
   const openSavedSectionsModal = useCallback(() => {
+    onModalStateChange?.(true);
     setIsSavedSectionsModalOpen(true);
     if (!savedSectionsModalHistoryPushedRef.current) {
       window.history.pushState({ modal: 'saved-sections' }, '');
       savedSectionsModalHistoryPushedRef.current = true;
     }
-  }, []);
+  }, [onModalStateChange]);
 
   const openSaveStructureModal = useCallback(() => {
     if ((draftStructure ?? []).length === 0) return;
+    onModalStateChange?.(true);
     setIsSaveStructureModalOpen(true);
     if (!saveStructureModalHistoryPushedRef.current) {
       window.history.pushState({ modal: 'save-structure' }, '');
@@ -11611,6 +11661,7 @@ function SongStructureIntegratedControl({
 
 
   const openCustomModal = () => {
+    onModalStateChange?.(true);
     void ensureCustomBackupLoaded();
     const initialDraft = normalizeCustomStructure(customStructure);
     initialDraftStructureRef.current = initialDraft;
@@ -14338,7 +14389,10 @@ function VocalControl({
                     <div className="space-y-1.5">
                       <button
                         type="button"
-                        onClick={() => setEditingVocalMemberId(member.id)}
+                        onClick={() => {
+                          onModalStateChange?.(true);
+                          setEditingVocalMemberId(member.id);
+                        }}
                         className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all hover:border-brand-orange/40 hover:bg-brand-orange/5 group/character"
                       >
                         <div className="flex items-center justify-between gap-3">

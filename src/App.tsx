@@ -3720,6 +3720,10 @@ function App() {
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);
   const storyboardModalBackdropMouseDownRef = useRef(false);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const globalSearchBackdropMouseDownRef = useRef(false);
+  const globalSearchModalHistoryPushedRef = useRef(false);
   const [activeGenreGroupId, setActiveGenreGroupId] = useState<string | null>(null);
 
   const openGenreModal = (groupId: string) => {
@@ -3747,6 +3751,69 @@ function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isGenreModalOpen]);
+
+  const openGlobalSearchModal = () => {
+    setIsGlobalSearchOpen(true);
+    if (!globalSearchModalHistoryPushedRef.current) {
+      window.history.pushState({ modal: 'global-search' }, '', window.location.href);
+      globalSearchModalHistoryPushedRef.current = true;
+    }
+  };
+
+  const closeGlobalSearchModal = (source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && globalSearchModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setIsGlobalSearchOpen(false);
+    globalSearchModalHistoryPushedRef.current = false;
+  };
+
+  useEffect(() => {
+    if (!isGlobalSearchOpen) return;
+
+    const scrollY = window.scrollY;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyPosition = document.body.style.position;
+    const originalBodyTop = document.body.style.top;
+    const originalBodyWidth = document.body.style.width;
+    const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+    const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.overscrollBehavior = 'none';
+
+    const handleGlobalSearchPopState = (event: PopStateEvent) => {
+      if (globalSearchModalHistoryPushedRef.current) {
+        event.stopImmediatePropagation();
+        closeGlobalSearchModal('history');
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeGlobalSearchModal();
+      }
+    };
+
+    window.addEventListener('popstate', handleGlobalSearchPopState, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('popstate', handleGlobalSearchPopState, true);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.position = originalBodyPosition;
+      document.body.style.top = originalBodyTop;
+      document.body.style.width = originalBodyWidth;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
+      document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isGlobalSearchOpen]);
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
@@ -6718,6 +6785,234 @@ ${normalizePromptForDisplay(result.prompt)}
     }));
 
 
+  type GlobalSearchType = 'genre' | 'style' | 'sound' | 'mood' | 'theme';
+
+  const normalizeGlobalSearchText = (value: unknown) =>
+    String(value ?? '')
+      .toLowerCase()
+      .replace(/[\s\-_/.,:;()[\]{}'"`~!@#$%^&*+=|\\?]+/g, ' ')
+      .trim();
+
+  const compactGlobalSearchText = (value: unknown) =>
+    String(value ?? '')
+      .toLowerCase()
+      .replace(/[\s\-_/.,:;()[\]{}'"`~!@#$%^&*+=|\\?]+/g, '')
+      .trim();
+
+  const globalSearchIndex = useMemo(() => {
+    const rows: Array<{
+      id: string;
+      type: GlobalSearchType;
+      categoryLabel: string;
+      groupLabel?: string;
+      label: string;
+      labelEn?: string;
+      description?: string;
+      searchText: string;
+      compactText: string;
+    }> = [];
+
+    const seen = new Set<string>();
+    const pushRow = (row: Omit<(typeof rows)[number], 'searchText' | 'compactText'>, extra: unknown[] = []) => {
+      const key = `${row.type}:${row.id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const textParts = [
+        row.id,
+        row.type,
+        row.categoryLabel,
+        row.groupLabel,
+        row.label,
+        row.labelEn,
+        row.description,
+        ...extra,
+      ];
+
+      rows.push({
+        ...row,
+        searchText: normalizeGlobalSearchText(textParts.join(' ')),
+        compactText: compactGlobalSearchText(textParts.join(' ')),
+      });
+    };
+
+    const walkGenreNode = (node: any, path: string[] = []) => {
+      const nextPath = [...path, node.labelKo || node.label || node.id].filter(Boolean);
+      const children = Array.isArray(node.children) ? node.children : [];
+      if (children.length > 0) {
+        children.forEach((child: any) => walkGenreNode(child, nextPath));
+        return;
+      }
+
+      pushRow({
+        id: node.id,
+        type: 'genre',
+        categoryLabel: '장르',
+        groupLabel: nextPath.slice(0, -1).join(' · '),
+        label: node.labelKo || node.label || node.id,
+        labelEn: node.label,
+        description: node.descriptionKo || node.description || '',
+      }, nextPath);
+    };
+
+    GENRE_HIERARCHY.forEach((group: any) => walkGenreNode(group));
+
+    STYLE_CYCLES.forEach((cycle: any) => {
+      (cycle.variants || []).forEach((variant: any) => {
+        if (!isSelectableKeywordItem(variant)) return;
+        pushRow({
+          id: variant.id,
+          type: 'style',
+          categoryLabel: '스타일',
+          groupLabel: cycle.titleKo || cycle.title,
+          label: variant.labelKo || variant.label || variant.id,
+          labelEn: variant.label,
+          description: variant.descriptionKo || variant.description || '',
+        }, [variant.promptCore, variant.style, variant.sound, variant.mood, cycle.id, cycle.title, cycle.titleKo]);
+      });
+    });
+
+    SOUND_TEXTURE_CYCLES.forEach((cycle: any) => {
+      (cycle.variants || []).forEach((variant: any) => {
+        if (!isSelectableKeywordItem(variant)) return;
+        pushRow({
+          id: variant.id,
+          type: 'sound',
+          categoryLabel: '사운드',
+          groupLabel: cycle.titleKo || cycle.title,
+          label: variant.labelKo || variant.label || variant.id,
+          labelEn: variant.label,
+          description: variant.descriptionKo || variant.description || '',
+        }, [variant.promptCore, cycle.id, cycle.title, cycle.titleKo]);
+      });
+    });
+
+    MOODS.forEach((item: any) => {
+      if (!isSelectableKeywordItem(item)) return;
+      pushRow({
+        id: item.id,
+        type: 'mood',
+        categoryLabel: '분위기',
+        label: item.labelKo || item.label || item.id,
+        labelEn: item.label,
+        description: item.descriptionKo || item.description || '',
+      }, [item.mood, item.arrangement]);
+    });
+
+    THEMES.forEach((item: any) => {
+      if (!isSelectableKeywordItem(item)) return;
+      pushRow({
+        id: item.id,
+        type: 'theme',
+        categoryLabel: '주제',
+        label: item.labelKo || item.label || item.id,
+        labelEn: item.label,
+        description: item.descriptionKo || item.description || '',
+      }, [item.theme, item.story, item.mood]);
+    });
+
+    return rows;
+  }, []);
+
+  const globalSearchResults = useMemo(() => {
+    const normalizedQuery = normalizeGlobalSearchText(globalSearchQuery);
+    const compactQuery = compactGlobalSearchText(globalSearchQuery);
+    if (!normalizedQuery && !compactQuery) return [];
+
+    const tokens = normalizedQuery.split(' ').filter(Boolean);
+    return globalSearchIndex
+      .map((item) => {
+        let score = 0;
+        if (compactQuery && item.compactText.includes(compactQuery)) score += 4;
+        tokens.forEach((token) => {
+          if (item.searchText.includes(token)) score += 2;
+          if (item.label.toLowerCase().includes(token)) score += 4;
+          if ((item.labelEn || '').toLowerCase().includes(token)) score += 3;
+          if (item.id.toLowerCase().includes(token)) score += 2;
+        });
+        if (score <= 0) return null;
+        return { ...item, score };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.score - a.score || a.categoryLabel.localeCompare(b.categoryLabel))
+      .slice(0, 60) as Array<(typeof globalSearchIndex)[number] & { score: number }>;
+  }, [globalSearchIndex, globalSearchQuery]);
+
+  const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.length > 0 || selectedInstrumentSounds.length > 0 || selectedMoods.length > 0 || selectedThemes.length > 0;
+
+  const clearGlobalSearchSelections = () => {
+    setSelectedGenres([]);
+    setSubGenre([]);
+    setSelectedStyles([]);
+    setSelectedInstrumentSounds([]);
+    setSelectedMoods([]);
+    setSelectedThemes([]);
+    setIsGenreRandomized(false);
+    setIsStyleRandomized(false);
+    setIsSoundTextureRandomized(false);
+    setIsMoodRandomized(false);
+    setIsThemeRandomized(false);
+  };
+
+  const isGlobalSearchItemSelected = (item: { id: string; type: GlobalSearchType }) => {
+    if (item.type === 'genre') return selectedGenres.includes(item.id) || subGenre.includes(item.id);
+    if (item.type === 'style') return selectedStyles.includes(item.id);
+    if (item.type === 'sound') return selectedInstrumentSounds.includes(item.id) || selectedPointSounds.includes(item.id);
+    if (item.type === 'mood') return selectedMoods.includes(item.id);
+    if (item.type === 'theme') return selectedThemes.includes(item.id);
+    return false;
+  };
+
+  const handleGlobalSearchItemToggle = (item: { id: string; type: GlobalSearchType; label: string; categoryLabel?: string; description?: string }) => {
+    if (isMenuLocked(item.type === 'sound' ? 'sound' : item.type)) {
+      showToast(`${item.categoryLabel || '해당'} 메뉴가 잠겨 있습니다.`);
+      return;
+    }
+
+    if (item.type === 'genre') {
+      setSelectedGenres([]);
+      setSubGenre((prev) => limitFusionGenreIds(prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]));
+      setIsGenreRandomized(false);
+    } else if (item.type === 'style') {
+      toggleCycleVariantSelection(item.id, selectedStyles, setSelectedStyles);
+      setIsStyleRandomized(false);
+    } else if (item.type === 'sound') {
+      const isRecommendedCombo = !!getRecommendedSoundComboVariant(item.id);
+      if (isRecommendedCombo) {
+        if (selectedInstrumentSounds.includes(item.id)) {
+          clearRecommendedSoundCombo(item.id);
+        } else {
+          applyRecommendedSoundCombo(item.id);
+        }
+      } else {
+        setSelectedPointSounds((prev) => prev.filter((id) => id !== item.id));
+        toggleCycleVariantSelection(item.id, selectedInstrumentSounds, setSelectedInstrumentSounds);
+      }
+      setIsSoundTextureRandomized(false);
+    } else if (item.type === 'mood') {
+      toggleSelection(item.id, 'mood');
+    } else if (item.type === 'theme') {
+      toggleSelection(item.id, 'theme');
+    }
+
+    setHoveredItem({
+      id: item.id,
+      label: item.label,
+      labelKo: item.label,
+      description: item.description || '',
+      _ts: Date.now(),
+    });
+  };
+
+  const getGlobalSearchCategoryClass = (type: GlobalSearchType) => {
+    if (type === 'genre') return 'text-brand-orange border-brand-orange/30 bg-brand-orange/10';
+    if (type === 'style') return 'text-violet-300 border-violet-400/30 bg-violet-500/10';
+    if (type === 'sound') return 'text-sky-300 border-sky-400/30 bg-sky-500/10';
+    if (type === 'mood') return 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10';
+    return 'text-fuchsia-300 border-fuchsia-400/30 bg-fuchsia-500/10';
+  };
+
+
   const floatingActionBarVariants = {
     initial: { opacity: 0, y: 18, scale: 0.98, filter: 'blur(6px)' },
     animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
@@ -6887,6 +7182,169 @@ ${normalizePromptForDisplay(result.prompt)}
         </Portal>
       )}
 
+      {isGlobalSearchOpen && (
+        <Portal>
+          <motion.div
+            className="fixed inset-0 z-[10000] flex items-start justify-center overflow-hidden overscroll-none bg-black/35 backdrop-blur-[1px] px-3 pb-5 pt-10 sm:pt-14"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onPointerDown={(event) => {
+              globalSearchBackdropMouseDownRef.current = event.target === event.currentTarget;
+            }}
+            onPointerUp={(event) => {
+              if (globalSearchBackdropMouseDownRef.current && event.target === event.currentTarget) {
+                closeGlobalSearchModal();
+              }
+              globalSearchBackdropMouseDownRef.current = false;
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] px-5 py-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Search className="h-5 w-5 text-brand-orange" />
+                    <h2 className="text-lg font-black text-[var(--text-primary)]">통합 검색</h2>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">장르, 스타일, 사운드, 분위기, 주제를 한 번에 찾아요.</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearGlobalSearchSelections}
+                    disabled={!isGlobalSearchSelectionClearable}
+                    className={cn(
+                      "rounded-2xl border px-3 py-2 text-[11px] font-black transition-all active:scale-95",
+                      isGlobalSearchSelectionClearable
+                        ? "border-brand-orange/40 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20"
+                        : "border-btn-border bg-btn-bg text-[var(--text-secondary)]/40"
+                    )}
+                  >
+                    전체 해제
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => closeGlobalSearchModal()}
+                    className="rounded-2xl bg-brand-orange px-3 py-2 text-[11px] font-black text-white transition-all hover:brightness-110 active:scale-95"
+                    aria-label="통합 검색 확인"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => closeGlobalSearchModal()}
+                    className="rounded-2xl border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-btn-hover hover:text-[var(--text-primary)] active:scale-95"
+                    aria-label="통합 검색 닫기"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-b border-[var(--border-color)] px-5 py-4">
+                <div className="flex items-center gap-3 rounded-2xl border border-btn-border bg-[var(--bg-primary)] px-4 py-3 shadow-inner">
+                  <Search className="h-5 w-5 text-brand-orange" />
+                  <input
+                    autoFocus
+                    value={globalSearchQuery}
+                    onChange={(event) => setGlobalSearchQuery(event.target.value)}
+                    placeholder="예: 시티팝, 후렴, lead, 합창, 차가운"
+                    className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]/60"
+                  />
+                  {globalSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setGlobalSearchQuery('')}
+                      className="rounded-full p-1 text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                      aria-label="검색어 지우기"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+                {!globalSearchQuery.trim() ? (
+                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)]/60 px-6 text-center">
+                    <Search className="mb-3 h-8 w-8 text-brand-orange/70" />
+                    <p className="text-sm font-black text-[var(--text-primary)]">찾고 싶은 키워드를 입력해줘.</p>
+                    <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">한글, 영어, 설명, 내부 프롬프트까지 같이 검색해요.</p>
+                  </div>
+                ) : globalSearchResults.length === 0 ? (
+                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)]/60 px-6 text-center">
+                    <p className="text-sm font-black text-[var(--text-primary)]">검색 결과가 없어요.</p>
+                    <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">비슷한 단어나 영어 키워드로 다시 찾아봐.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {globalSearchResults.map((item) => {
+                      const isSelected = isGlobalSearchItemSelected(item);
+                      return (
+                        <button
+                          key={`${item.type}-${item.id}`}
+                          type="button"
+                          onClick={() => handleGlobalSearchItemToggle(item)}
+                          onMouseEnter={() => setHoveredItem({ id: item.id, label: item.labelEn || item.label, labelKo: item.label, description: item.description || '', _ts: Date.now() })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                          className={cn(
+                            "w-full rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.99]",
+                            isSelected
+                              ? "border-brand-orange bg-brand-orange/15 shadow-lg shadow-brand-orange/10"
+                              : "border-btn-border bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex flex-wrap items-center gap-2">
+                                <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-black", getGlobalSearchCategoryClass(item.type))}>
+                                  {item.categoryLabel}
+                                </span>
+                                {item.groupLabel && (
+                                  <span className="truncate text-[10px] font-bold text-[var(--text-secondary)]">
+                                    {item.groupLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <span className="text-sm font-black text-[var(--text-primary)]">{item.label}</span>
+                                {item.labelEn && item.labelEn !== item.label && (
+                                  <span className="text-[11px] font-bold text-[var(--text-secondary)]">{item.labelEn}</span>
+                                )}
+                              </div>
+                              {item.description && (
+                                <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-4 text-[var(--text-secondary)]">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                            <span className={cn(
+                              "mt-1 shrink-0 rounded-full px-2 py-1 text-[10px] font-black",
+                              isSelected ? "bg-brand-orange text-white" : "bg-[var(--hover-bg)] text-[var(--text-secondary)]"
+                            )}>
+                              {isSelected ? '선택됨' : '선택'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        </Portal>
+      )}
+
+
       <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
@@ -6928,14 +7386,22 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="pt-16 pb-16 border-b border-[var(--border-color)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+              <header className="pt-16 pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
                 <div className="max-w-6xl mx-auto px-6 relative">
-                  {/* Guide Button inside Home Header - Aligned with "Sound" card right edge */}
+                  {/* Guide/Search Buttons inside Home Header - Aligned above genre menu */}
                   {user && (
-                    <div className="absolute -bottom-[50px] right-6 z-20">
+                    <div className="absolute -bottom-[50px] right-6 z-20 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={openGlobalSearchModal}
+                        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
+                      >
+                        <Search className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-orange group-hover:scale-110 transition-transform" />
+                        <span className="font-bold text-[10px] md:text-xs">통합 검색</span>
+                      </button>
                       <button
                         onClick={() => setIsGuideModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
+                        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
                       >
                         <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 group-hover:scale-110 transition-transform" />
                         <span className="font-bold text-[10px] md:text-xs">가이드</span>
@@ -7208,7 +7674,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-hidden relative z-[20]">
+            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--home-card-border)] shadow-card overflow-hidden relative z-[20]">
               <div className="p-4 md:p-5 flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -7289,7 +7755,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     onPointerUp={(event) => {
                       if (storyboardModalBackdropMouseDownRef.current && event.target === event.currentTarget) {
                         storyboardModalBackdropMouseDownRef.current = false;
-                        closeStoryboardModal();
+                        applyStoryboardModal();
                         return;
                       }
                       storyboardModalBackdropMouseDownRef.current = false;
@@ -8611,6 +9077,13 @@ ${normalizePromptForDisplay(result.prompt)}
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
+        :root {
+          --home-card-border: rgba(24, 24, 27, 0.14);
+        }
+        .dark {
+          --home-card-border: rgba(255, 255, 255, 0.075);
+        }
+
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: rgba(255, 255, 255, 0.1);
           border-radius: 10px;
@@ -8906,7 +9379,7 @@ function GenreCategorySection({
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -9274,7 +9747,7 @@ function CycleSection({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -9620,7 +10093,9 @@ function CycleKeywordPopup({
         }}
         onPointerUp={(e) => {
           if (cyclePopupBackdropPointerDownRef.current && e.target === e.currentTarget) {
-            closePopup();
+            cyclePopupBackdropPointerDownRef.current = false;
+            applyChangesAndClose();
+            return;
           }
           cyclePopupBackdropPointerDownRef.current = false;
         }}
@@ -9900,7 +10375,7 @@ function CategorySection({
   };
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -11435,7 +11910,7 @@ function SongStructureIntegratedControl({
 
   return (
     <>
-      <div className="bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12 overflow-visible">
+      <div className="bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12 overflow-visible">
         <div className="relative mb-4 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
@@ -11601,7 +12076,7 @@ function SongStructureIntegratedControl({
             onPointerUp={(e) => {
               if (customModalBackdropMouseDownRef.current && e.target === e.currentTarget) {
                 customModalBackdropMouseDownRef.current = false;
-                closeCustomModal();
+                handleApplyCustomStructure();
                 return;
               }
               customModalBackdropMouseDownRef.current = false;
@@ -11757,7 +12232,9 @@ function SongStructureIntegratedControl({
                       className="fixed inset-0 z-[185] flex items-center justify-center px-4 backdrop-blur-[1.5px]"
                       onMouseDown={(e) => { customSectionEditorBackdropMouseDownRef.current = e.target === e.currentTarget; }}
                       onClick={(e) => {
-                        if (customSectionEditorBackdropMouseDownRef.current && e.target === e.currentTarget) closeCustomSectionEditor();
+                        if (customSectionEditorBackdropMouseDownRef.current && e.target === e.currentTarget) {
+                          void saveCustomSectionDefinition();
+                        }
                         customSectionEditorBackdropMouseDownRef.current = false;
                       }}
                     >
@@ -13414,7 +13891,7 @@ function VocalControl({
   });
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl pt-3 px-5 pb-10 border border-[var(--border-color)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
+    <div className="bg-[var(--card-bg)] rounded-3xl pt-3 px-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
       <div className="relative mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 
@@ -13834,7 +14311,9 @@ function VocalControl({
               }}
               onPointerUp={(e) => {
                 if (vocalCharacterBackdropPointerDownRef.current && e.target === e.currentTarget) {
-                  closeVocalCharacterEditor();
+                  vocalCharacterBackdropPointerDownRef.current = false;
+                  applyVocalCharacterAndClose();
+                  return;
                 }
                 vocalCharacterBackdropPointerDownRef.current = false;
               }}
@@ -14089,7 +14568,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   return (
     <div className={cn(
-      "bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--border-color)] transition-all shadow-[var(--shadow-md)]"
+      "bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all shadow-[var(--shadow-md)]"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">

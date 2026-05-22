@@ -665,7 +665,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -836,12 +836,13 @@ export default function GenreHierarchySelector({
       </div>
 
       <button
+        data-expanded={isExpanded ? "true" : "false"}
         onClick={(event) => handleExpandableToggle(event, isExpanded, onToggleExpand)}
         className={cn(
           "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
           isExpanded
             ? "bg-brand-orange text-white border-brand-orange"
-            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white",
+            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange",
         )}
         title={isExpanded ? "접기" : "펼치기"}
       >
@@ -860,7 +861,7 @@ export default function GenreHierarchySelector({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={closeModal}
+              onClick={applyModalChanges}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}

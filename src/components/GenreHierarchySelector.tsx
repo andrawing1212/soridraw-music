@@ -22,6 +22,8 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
+
 
 function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
   if (wasExpanded || typeof window === 'undefined') return;
@@ -254,6 +256,21 @@ export default function GenreHierarchySelector({
   useEffect(() => {
     onModalStateChange?.(!!activeGroup);
   }, [activeGroup, onModalStateChange]);
+
+  useEffect(() => {
+    const handleCloseStudioModals = () => {
+      setActiveGroup(null);
+      setActiveMain(null);
+      setModalStep('main');
+      setHoveredModalItem(null);
+      setHasChangedInModal(false);
+      modalHistoryDepthRef.current = 0;
+      document.body.style.pointerEvents = '';
+      document.documentElement.style.pointerEvents = '';
+    };
+    window.addEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleCloseStudioModals);
+    return () => window.removeEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleCloseStudioModals);
+  }, []);
 
   const groups = useMemo<GroupItem[]>(() => {
     const genreDescMap = new Map(GENRES.map((g) => [g.id, g.description]));
@@ -810,7 +827,7 @@ export default function GenreHierarchySelector({
                     "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center shadow-btn",
                     hasSelectedMain
                       ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                      : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover",
+                      : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                   )}
                 >
                   <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">

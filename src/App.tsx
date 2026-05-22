@@ -81,6 +81,8 @@ const isDocumentFullscreenActive = () => {
   return Boolean(document.fullscreenElement || webkitFullscreenElement);
 };
 
+const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
+
 const CUSTOM_MOOD_PREFIX = '__custom_mood__:';
 const CUSTOM_THEME_PREFIX = '__custom_theme__:';
 
@@ -3720,7 +3722,11 @@ function App() {
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);
   const storyboardModalBackdropMouseDownRef = useRef(false);
+  const storyboardOpenTimerRef = useRef<number | null>(null);
+  const [isStoryboardOpening, setIsStoryboardOpening] = useState(false);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [isGlobalSearchOpening, setIsGlobalSearchOpening] = useState(false);
+  const globalSearchOpenTimerRef = useRef<number | null>(null);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const globalSearchBackdropMouseDownRef = useRef(false);
   const globalSearchModalHistoryPushedRef = useRef(false);
@@ -3753,14 +3759,28 @@ function App() {
   }, [isGenreModalOpen]);
 
   const openGlobalSearchModal = () => {
-    setIsGlobalSearchOpen(true);
+    if (isGlobalSearchOpen || isGlobalSearchOpening) return;
+    setIsGlobalSearchOpening(true);
     if (!globalSearchModalHistoryPushedRef.current) {
       window.history.pushState({ modal: 'global-search' }, '', window.location.href);
       globalSearchModalHistoryPushedRef.current = true;
     }
+    if (globalSearchOpenTimerRef.current !== null) {
+      window.clearTimeout(globalSearchOpenTimerRef.current);
+    }
+    globalSearchOpenTimerRef.current = window.setTimeout(() => {
+      setIsGlobalSearchOpen(true);
+      setIsGlobalSearchOpening(false);
+      globalSearchOpenTimerRef.current = null;
+    }, 120);
   };
 
   const closeGlobalSearchModal = (source: 'ui' | 'history' = 'ui') => {
+    if (globalSearchOpenTimerRef.current !== null) {
+      window.clearTimeout(globalSearchOpenTimerRef.current);
+      globalSearchOpenTimerRef.current = null;
+    }
+    setIsGlobalSearchOpening(false);
     if (source === 'ui' && globalSearchModalHistoryPushedRef.current) {
       window.history.back();
       return;
@@ -3814,6 +3834,20 @@ function App() {
       window.scrollTo(0, scrollY);
     };
   }, [isGlobalSearchOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (globalSearchOpenTimerRef.current !== null) {
+        window.clearTimeout(globalSearchOpenTimerRef.current);
+        globalSearchOpenTimerRef.current = null;
+      }
+      if (storyboardOpenTimerRef.current !== null) {
+        window.clearTimeout(storyboardOpenTimerRef.current);
+        storyboardOpenTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const [tempoEnabled, setTempoEnabled] = useState(true);
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
@@ -4097,7 +4131,52 @@ const toggleCycleVariantSelection = (
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isCycleKeywordPopupOpen, setIsCycleKeywordPopupOpen] = useState(false);
   const [isVocalCharacterModalOpen, setIsVocalCharacterModalOpen] = useState(false);
-  const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen;
+  const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
+
+  useEffect(() => {
+    const resetStudioModalsForFullscreen = () => {
+      // Fullscreen transitions can detach the active fullscreen root from normal
+      // fixed/portal layers. Close every studio popup and clear backdrop guards so
+      // no invisible modal layer keeps stealing click/drag input.
+      setIsGenreModalOpen(false);
+      setIsGenreHierarchyModalOpen(false);
+      setIsGuideModalOpen(false);
+      setIsSituationExpanded(false);
+      setIsStoryboardOpening(false);
+      if (storyboardOpenTimerRef.current !== null) {
+        window.clearTimeout(storyboardOpenTimerRef.current);
+        storyboardOpenTimerRef.current = null;
+      }
+      setIsStructureModalOpen(false);
+      setIsCycleKeywordPopupOpen(false);
+      setIsVocalCharacterModalOpen(false);
+      setIsGlobalSearchOpen(false);
+      setIsGlobalSearchOpening(false);
+      if (globalSearchOpenTimerRef.current !== null) {
+        window.clearTimeout(globalSearchOpenTimerRef.current);
+        globalSearchOpenTimerRef.current = null;
+      }
+      setGlobalSearchQuery('');
+      setActiveGenreGroupId(null);
+      genreModalHistoryPushedRef.current = false;
+      globalSearchModalHistoryPushedRef.current = false;
+      storyboardModalHistoryPushedRef.current = false;
+      globalSearchBackdropMouseDownRef.current = false;
+      storyboardModalBackdropMouseDownRef.current = false;
+      window.dispatchEvent(new CustomEvent(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT));
+      window.requestAnimationFrame(() => {
+        document.body.style.pointerEvents = '';
+        document.documentElement.style.pointerEvents = '';
+      });
+    };
+
+    document.addEventListener('fullscreenchange', resetStudioModalsForFullscreen);
+    document.addEventListener('webkitfullscreenchange', resetStudioModalsForFullscreen as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', resetStudioModalsForFullscreen);
+      document.removeEventListener('webkitfullscreenchange', resetStudioModalsForFullscreen as EventListener);
+    };
+  }, []);
   
   const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
   const effectiveUserTier: TagTier = useMemo(() => {
@@ -5290,15 +5369,29 @@ const toggleCycleVariantSelection = (
   };
 
   const openStoryboardModal = () => {
+    if (isSituationExpanded || isStoryboardOpening) return;
     setDraftSituation(sanitizeStoryboardSituation(situation));
-    setIsSituationExpanded(true);
+    setIsStoryboardOpening(true);
     if (!storyboardModalHistoryPushedRef.current) {
       window.history.pushState({ modal: 'storyboard' }, '', window.location.href);
       storyboardModalHistoryPushedRef.current = true;
     }
+    if (storyboardOpenTimerRef.current !== null) {
+      window.clearTimeout(storyboardOpenTimerRef.current);
+    }
+    storyboardOpenTimerRef.current = window.setTimeout(() => {
+      setIsSituationExpanded(true);
+      setIsStoryboardOpening(false);
+      storyboardOpenTimerRef.current = null;
+    }, 120);
   };
 
   const closeStoryboardModal = (source: 'ui' | 'history' = 'ui') => {
+    if (storyboardOpenTimerRef.current !== null) {
+      window.clearTimeout(storyboardOpenTimerRef.current);
+      storyboardOpenTimerRef.current = null;
+    }
+    setIsStoryboardOpening(false);
     if (source === 'ui' && storyboardModalHistoryPushedRef.current) {
       window.history.back();
       return;
@@ -5320,6 +5413,11 @@ const toggleCycleVariantSelection = (
   };
 
   const applyStoryboardModal = () => {
+    if (storyboardOpenTimerRef.current !== null) {
+      window.clearTimeout(storyboardOpenTimerRef.current);
+      storyboardOpenTimerRef.current = null;
+    }
+    setIsStoryboardOpening(false);
     const normalized = sanitizeStoryboardSituation(draftSituation);
     setSituation(normalized);
     if (storyboardModalHistoryPushedRef.current) {
@@ -7233,10 +7331,15 @@ ${normalizePromptForDisplay(result.prompt)}
                   <button
                     type="button"
                     onClick={() => closeGlobalSearchModal()}
-                    className="rounded-2xl bg-brand-orange px-3 py-2 text-[11px] font-black text-white transition-all hover:brightness-110 active:scale-95"
+                    className={cn(
+                      "rounded-2xl border p-2 transition-all active:scale-95",
+                      isGlobalSearchSelectionClearable
+                        ? "border-brand-orange bg-brand-orange text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange/90"
+                        : "border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                    )}
                     aria-label="통합 검색 확인"
                   >
-                    ✓
+                    <Check className="h-5 w-5" />
                   </button>
                   <button
                     type="button"
@@ -9079,9 +9182,11 @@ ${normalizePromptForDisplay(result.prompt)}
         }
         :root {
           --home-card-border: rgba(24, 24, 27, 0.14);
+          --keyword-button-border: rgba(24, 24, 27, 0.12);
         }
         .dark {
           --home-card-border: rgba(255, 255, 255, 0.075);
+          --keyword-button-border: rgba(255, 255, 255, 0.07);
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -9500,7 +9605,7 @@ function GenreCategorySection({
                   "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[44px]",
                   isSelectedGroup
                     ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                    : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                    : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover"
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -9716,6 +9821,14 @@ function CycleSection({
   useEffect(() => {
     onModalStateChange?.(keywordPopupCycleId !== null);
   }, [keywordPopupCycleId, onModalStateChange]);
+
+  useEffect(() => {
+    const handleCloseStudioModals = () => {
+      setKeywordPopupCycleId(null);
+    };
+    window.addEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleCloseStudioModals);
+    return () => window.removeEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleCloseStudioModals);
+  }, []);
 
   const activeSelected = isPointSelectionMode ? pointSelected : selected;
   const otherSelected = isPointSelectionMode ? selected : pointSelected;
@@ -10602,7 +10715,7 @@ function CategorySection({
                       ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
                       : isSecondaryMood
                         ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover",
+                        : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                     isKpop && kpopMode > 0 ? kpopStyle : "",
                     isCitypop && citypopMode > 0 ? citypopStyle : ""
                   )}
@@ -11417,12 +11530,14 @@ function SongStructureIntegratedControl({
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    window.addEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleFullscreenChange);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('pointerup', resetTransientPointerState);
     window.addEventListener('pointercancel', resetTransientPointerState);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+      window.removeEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleFullscreenChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('pointerup', resetTransientPointerState);
       window.removeEventListener('pointercancel', resetTransientPointerState);
@@ -13251,7 +13366,7 @@ function TagEditModal({
                           ? "bg-white/5 border-sky-400/80 text-[var(--text-primary)] hover:bg-sky-500/10 shadow-[0_0_0_1px_rgba(125,211,252,0.25)]"
                           : isPointSoundTag
                             ? "bg-white/5 border-pink-400/80 text-[var(--text-primary)] hover:bg-pink-500/10 shadow-[0_0_0_1px_rgba(244,114,182,0.25)]"
-                            : "bg-white/5 border-white/10 text-[var(--text-primary)] hover:bg-white/10"
+                            : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
                   {displayLabel}
@@ -13779,6 +13894,17 @@ function VocalControl({
   useEffect(() => {
     onModalStateChange?.(!!editingVocalMember);
   }, [editingVocalMember, onModalStateChange]);
+
+  useEffect(() => {
+    const handleCloseStudioModals = () => {
+      setEditingVocalMemberId(null);
+      setActiveVocalTonePopup(null);
+      vocalCharacterBackdropPointerDownRef.current = false;
+      vocalCharacterCloseFromHistoryRef.current = false;
+    };
+    window.addEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleCloseStudioModals);
+    return () => window.removeEventListener(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT, handleCloseStudioModals);
+  }, []);
 
   const getVocalCharacterSignature = useCallback((character?: VocalMember['character']) => JSON.stringify({
     voiceToneId: character?.voiceToneId || '',
@@ -14327,9 +14453,9 @@ function VocalControl({
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
-                className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[var(--border-color)] bg-[#111] shadow-2xl shadow-black/70"
+                className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#2b2b2b] bg-[#111] shadow-2xl shadow-black/70"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] bg-[#151515] px-5 py-4">
+                <div className="flex items-center justify-between gap-3 border-b border-[#242424] bg-[#151515] px-5 py-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className={cn(
@@ -14347,7 +14473,7 @@ function VocalControl({
                       <button
                         type="button"
                         onClick={clearLocalVocalCharacter}
-                        className="h-10 px-3 rounded-xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all text-[11px] font-black whitespace-nowrap"
+                        className="h-10 px-3 rounded-xl border border-brand-orange/22 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/18 transition-all text-[11px] font-black whitespace-nowrap"
                         title="캐릭터 전체 해제"
                       >
                         전체 해제
@@ -14367,7 +14493,7 @@ function VocalControl({
                     <button
                       type="button"
                       onClick={closeVocalCharacterEditor}
-                      className="rounded-full border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-brand-orange/40 hover:text-brand-orange"
+                      className="rounded-full border border-[#303030] bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-brand-orange/30 hover:text-brand-orange"
                       title={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
                       aria-label={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
                     >
@@ -14403,8 +14529,8 @@ function VocalControl({
                                     isActive
                                       ? "border-brand-orange bg-brand-orange/15 shadow-lg shadow-brand-orange/10"
                                       : category === 'experimental'
-                                        ? "border-purple-400/20 bg-purple-500/5 hover:border-purple-300/40 hover:bg-purple-500/10"
-                                        : "border-[var(--border-color)] bg-[#1a1a1a] hover:border-brand-orange/35 hover:bg-brand-orange/5"
+                                        ? "border-purple-400/14 bg-purple-500/5 hover:border-purple-300/28 hover:bg-purple-500/10"
+                                        : "border-[#2e2e2e] bg-[#1a1a1a] hover:border-brand-orange/25 hover:bg-brand-orange/5"
                                   )}
                                 >
                                   <div className="flex items-center justify-between gap-2">
@@ -14414,7 +14540,7 @@ function VocalControl({
                                   <p className="mt-1 text-[11px] leading-snug text-[var(--text-secondary)]">{technique.descriptionKo}</p>
                                   <div className="mt-2 flex flex-wrap gap-1">
                                     {technique.usageKo.map((usage) => (
-                                      <span key={usage} className="rounded-full border border-btn-border bg-btn-bg px-2 py-0.5 text-[9px] font-bold text-[var(--text-secondary)]">
+                                      <span key={usage} className="rounded-full border border-[#303030] bg-btn-bg px-2 py-0.5 text-[9px] font-bold text-[var(--text-secondary)]">
                                         {usage}
                                       </span>
                                     ))}
@@ -14444,7 +14570,7 @@ function VocalControl({
                                 "rounded-2xl border px-3 py-3 text-left text-sm font-black transition-all",
                                 isActive
                                   ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
-                                  : "border-[var(--border-color)] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/35 hover:bg-brand-orange/5"
+                                  : "border-[#2e2e2e] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/25 hover:bg-brand-orange/5"
                               )}
                             >
                               {voiceTone.labelKo}
@@ -14471,7 +14597,7 @@ function VocalControl({
                                 "rounded-2xl border px-3 py-3 text-center text-sm font-black transition-all",
                                 isActive
                                   ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
-                                  : "border-[var(--border-color)] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/35 hover:bg-brand-orange/5"
+                                  : "border-[#2e2e2e] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/25 hover:bg-brand-orange/5"
                               )}
                             >
                               {personality.labelKo}

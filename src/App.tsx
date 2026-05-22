@@ -5268,6 +5268,21 @@ const toggleCycleVariantSelection = (
   useEffect(() => {
     if (!isSituationExpanded) return;
 
+    const scrollY = window.scrollY;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyPosition = document.body.style.position;
+    const originalBodyTop = document.body.style.top;
+    const originalBodyWidth = document.body.style.width;
+    const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+    const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.overscrollBehavior = 'none';
+
     const handleStoryboardModalPopState = (event: PopStateEvent) => {
       if (storyboardModalHistoryPushedRef.current) {
         event.stopImmediatePropagation();
@@ -5287,6 +5302,13 @@ const toggleCycleVariantSelection = (
     return () => {
       window.removeEventListener('popstate', handleStoryboardModalPopState, true);
       window.removeEventListener('keydown', handleStoryboardModalKeyDown);
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.position = originalBodyPosition;
+      document.body.style.top = originalBodyTop;
+      document.body.style.width = originalBodyWidth;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
+      document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
+      window.scrollTo(0, scrollY);
     };
   }, [isSituationExpanded, situation]);
 
@@ -7260,7 +7282,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm px-3 py-5"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-sm px-3 py-5"
                     onPointerDown={(event) => {
                       storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
                     }}
@@ -7281,7 +7303,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 18, scale: 0.96 }}
                       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl"
+                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -7329,7 +7351,7 @@ ${normalizePromptForDisplay(result.prompt)}
                         </div>
                       </div>
 
-                      <div className="max-h-[calc(88vh-76px)] overflow-y-auto p-4 md:p-5 space-y-5">
+                      <div className="max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain p-4 md:p-5 space-y-5">
                         <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-3">
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

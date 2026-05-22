@@ -10127,6 +10127,7 @@ function CycleKeywordPopup({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const cyclePopupBackdropPointerDownRef = useRef(false);
   const isClosingRef = useRef(false);
+  const isMobileViewport = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches;
 
   const popCycleKeywordHistoryEntry = useCallback(() => {
     if (!window.history.state?.cycleKeywordPopup) return;
@@ -10181,15 +10182,16 @@ function CycleKeywordPopup({
     const originalPosition = document.body.style.position;
     const originalTop = document.body.style.top;
     const originalWidth = document.body.style.width;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
     const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
     const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+    const originalBodyTouchAction = document.body.style.touchAction;
 
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+    document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.overscrollBehavior = 'none';
+    document.body.style.touchAction = 'none';
 
     try {
       window.history.pushState({ ...(window.history.state || {}), cycleKeywordPopup: true }, '');
@@ -10219,8 +10221,10 @@ function CycleKeywordPopup({
       document.body.style.position = originalPosition;
       document.body.style.top = originalTop;
       document.body.style.width = originalWidth;
+      document.documentElement.style.overflow = originalHtmlOverflow;
       document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
       document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
+      document.body.style.touchAction = originalBodyTouchAction;
       window.scrollTo(0, scrollY);
       window.removeEventListener('popstate', handlePopState, true);
       window.removeEventListener('keydown', handleKeyDown);
@@ -10243,10 +10247,11 @@ function CycleKeywordPopup({
   return (
     <Portal>
       <motion.div
-        initial={{ opacity: 0 }}
+        initial={isMobileViewport ? { opacity: 1 } : { opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[300] bg-black/45 md:bg-black/40 md:backdrop-blur-sm flex items-center justify-center p-4 motion-safe:transition-opacity motion-safe:duration-150"
+        transition={{ duration: isMobileViewport ? 0 : 0.12, ease: 'easeOut' }}
+        className="fixed inset-0 z-[300] bg-black/45 md:bg-black/40 md:backdrop-blur-sm flex items-center justify-center p-4"
         style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
         onPointerDown={(e) => {
           cyclePopupBackdropPointerDownRef.current = e.target === e.currentTarget;
@@ -10262,10 +10267,10 @@ function CycleKeywordPopup({
         onPointerCancel={() => { cyclePopupBackdropPointerDownRef.current = false; }}
       >
         <motion.div
-          initial={{ scale: 0.96, opacity: 0, y: 18 }}
+          initial={isMobileViewport ? { scale: 1, opacity: 1, y: 0 } : { scale: 0.96, opacity: 0, y: 18 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.96, opacity: 0, y: 18 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
+          exit={isMobileViewport ? { scale: 1, opacity: 0, y: 0 } : { scale: 0.96, opacity: 0, y: 18 }}
+          transition={{ duration: isMobileViewport ? 0.08 : 0.18, ease: 'easeOut' }}
           className="w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}

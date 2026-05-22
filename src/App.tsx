@@ -4136,7 +4136,7 @@ const toggleCycleVariantSelection = (
   const [isActionBarBlockedByModal, setIsActionBarBlockedByModal] = useState(false);
   const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
-  const shouldShowActionButtons = !isActionBarBlockedByModal;
+  const shouldShowActionButtons = !isActionBarBlockedByModal && !isAnyModalOpen;
 
   const syncActionBarModalBlock = useCallback((isOpen: boolean) => {
     if (actionBarModalReleaseTimerRef.current !== null) {

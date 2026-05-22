@@ -7302,11 +7302,11 @@ ${normalizePromptForDisplay(result.prompt)}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.14, ease: "easeOut" }}
-              className="flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
+              className="flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--modal-soft-border)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
               onPointerDown={(event) => event.stopPropagation()}
               onPointerUp={(event) => event.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--border-color)] px-5 py-4">
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--modal-soft-border)] px-5 py-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <Search className="h-5 w-5 text-brand-orange" />
@@ -7323,7 +7323,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       "rounded-2xl border px-3 py-2 text-[11px] font-black transition-all active:scale-95",
                       isGlobalSearchSelectionClearable
                         ? "border-brand-orange/40 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20"
-                        : "border-btn-border bg-btn-bg text-[var(--text-secondary)]/40"
+                        : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)]/40"
                     )}
                   >
                     전체 해제
@@ -7335,7 +7335,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       "rounded-2xl border p-2 transition-all active:scale-95",
                       isGlobalSearchSelectionClearable
                         ? "border-brand-orange bg-brand-orange text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange/90"
-                        : "border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                        : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
                     )}
                     aria-label="통합 검색 확인"
                   >
@@ -7344,7 +7344,7 @@ ${normalizePromptForDisplay(result.prompt)}
                   <button
                     type="button"
                     onClick={() => closeGlobalSearchModal()}
-                    className="rounded-2xl border border-btn-border bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-btn-hover hover:text-[var(--text-primary)] active:scale-95"
+                    className="rounded-2xl border border-[var(--modal-button-border)] bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-btn-hover hover:text-[var(--text-primary)] active:scale-95"
                     aria-label="통합 검색 닫기"
                   >
                     <X className="h-5 w-5" />
@@ -7352,8 +7352,8 @@ ${normalizePromptForDisplay(result.prompt)}
                 </div>
               </div>
 
-              <div className="border-b border-[var(--border-color)] px-5 py-4">
-                <div className="flex items-center gap-3 rounded-2xl border border-btn-border bg-[var(--bg-primary)] px-4 py-3 shadow-inner">
+              <div className="border-b border-[var(--modal-soft-border)] px-5 py-4">
+                <div className="flex items-center gap-3 rounded-2xl border border-[var(--modal-button-border)] bg-[var(--bg-primary)] px-4 py-3 shadow-inner">
                   <Search className="h-5 w-5 text-brand-orange" />
                   <input
                     autoFocus
@@ -7377,13 +7377,13 @@ ${normalizePromptForDisplay(result.prompt)}
 
               <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
                 {!globalSearchQuery.trim() ? (
-                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)]/60 px-6 text-center">
+                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--modal-soft-border)] bg-[var(--bg-primary)]/60 px-6 text-center">
                     <Search className="mb-3 h-8 w-8 text-brand-orange/70" />
                     <p className="text-sm font-black text-[var(--text-primary)]">찾고 싶은 키워드를 입력해줘.</p>
                     <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">한글, 영어, 설명, 내부 프롬프트까지 같이 검색해요.</p>
                   </div>
                 ) : globalSearchResults.length === 0 ? (
-                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--border-color)] bg-[var(--bg-primary)]/60 px-6 text-center">
+                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--modal-soft-border)] bg-[var(--bg-primary)]/60 px-6 text-center">
                     <p className="text-sm font-black text-[var(--text-primary)]">검색 결과가 없어요.</p>
                     <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">비슷한 단어나 영어 키워드로 다시 찾아봐.</p>
                   </div>
@@ -7402,7 +7402,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             "w-full rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.99]",
                             isSelected
                               ? "border-brand-orange bg-brand-orange/15 shadow-lg shadow-brand-orange/10"
-                              : "border-btn-border bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
+                              : "border-[var(--modal-button-border)] bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
                           )}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -7872,13 +7872,13 @@ ${normalizePromptForDisplay(result.prompt)}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 18, scale: 0.96 }}
                       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl"
+                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onPointerUp={(e) => e.stopPropagation()}
                     >
-                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 border-b border-[var(--border-color)] bg-[var(--card-bg)]/95 backdrop-blur-xl">
+                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 border-b border-[var(--modal-soft-border)] bg-[var(--card-bg)]/95 backdrop-blur-xl">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <Users className="w-5 h-5 text-brand-orange" />
@@ -7892,7 +7892,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             <button
                               type="button"
                               onClick={clearDraftSituation}
-                              className="px-3 py-2 rounded-xl bg-btn-bg border border-btn-border text-[11px] font-black text-[var(--text-secondary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                              className="px-3 py-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[11px] font-black text-[var(--text-secondary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
                             >
                               전체 해제
                             </button>
@@ -7911,7 +7911,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           <button
                             type="button"
                             onClick={closeStoryboardModal}
-                            className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                            className="p-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
                             title="닫기"
                             aria-label="스토리보드 닫기"
                           >
@@ -7920,8 +7920,8 @@ ${normalizePromptForDisplay(result.prompt)}
                         </div>
                       </div>
 
-                      <div className="max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain p-4 md:p-5 space-y-5">
-                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-3">
+                      <div className="max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
+                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-3">
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
@@ -7930,7 +7930,7 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.targetA || ''}
                                 onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
                                 placeholder="예: 저승사자, 엄마, 상사"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
                               />
                             </div>
                             <div>
@@ -7939,16 +7939,16 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
                                 placeholder="예: 귀신, 아들, 직원"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
                               />
                             </div>
                           </div>
                         </section>
 
-                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-4">
+                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-4">
                           <StoryboardSectionTitle title="캐릭터 포지션" description="원하는 스타일로 게이지를 맞춰보세요" />
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--border-color)] p-3 space-y-3">
+                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--modal-soft-border)] p-3 space-y-3">
                               <div className="flex items-center gap-2 pl-2">
                                 <p className="text-xs font-black text-brand-orange truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
@@ -7959,11 +7959,11 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.speakerAExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
                               />
                             </div>
 
-                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--border-color)] p-3 space-y-3">
+                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--modal-soft-border)] p-3 space-y-3">
                               <div className="flex items-center gap-2 pl-2">
                                 <p className="text-xs font-black text-brand-orange truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
@@ -7974,20 +7974,20 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.speakerBExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 공손하지만 안 물러남"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
                               />
                             </div>
                           </div>
                         </section>
 
-                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-3">
+                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-3">
                           <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
                           <textarea
                             value={draftSituation.description || ''}
                             onChange={(e) => updateDraftSituationField('description', e.target.value)}
                             placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
                             rows={4}
-                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
+                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
                           />
                           <input
                             value={draftSituation.detailCustom || draftSituation.details || ''}
@@ -7996,11 +7996,11 @@ ${normalizePromptForDisplay(result.prompt)}
                               updateDraftSituationField('detailPresets', []);
                             }}
                             placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
                           />
                         </section>
 
-                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-4">
+                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-4">
                           <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <StoryboardSlider label="대화" left="티키타카" right="솔플" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["티키타카", "반반", "솔플"]} />
@@ -9183,10 +9183,14 @@ ${normalizePromptForDisplay(result.prompt)}
         :root {
           --home-card-border: rgba(24, 24, 27, 0.14);
           --keyword-button-border: rgba(24, 24, 27, 0.12);
+          --modal-soft-border: rgba(24, 24, 27, 0.13);
+          --modal-button-border: rgba(24, 24, 27, 0.11);
         }
         .dark {
           --home-card-border: rgba(255, 255, 255, 0.075);
           --keyword-button-border: rgba(255, 255, 255, 0.07);
+          --modal-soft-border: rgba(255, 255, 255, 0.075);
+          --modal-button-border: rgba(255, 255, 255, 0.07);
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -12205,13 +12209,13 @@ function SongStructureIntegratedControl({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-              className="w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
+              className="w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
+              <div className="px-5 py-4 border-b border-[var(--modal-soft-border)] flex items-start justify-between gap-4 shrink-0">
                 <div>
                   <h3 className="text-lg md:text-xl font-bold text-[var(--text-primary)]">섹션 커스텀</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">섹션을 직접 추가하고 순서를 바꿔 원하는 섹션 구성을 만드세요.</p>
@@ -12236,7 +12240,7 @@ function SongStructureIntegratedControl({
                         "w-10 h-10 rounded-xl border flex items-center justify-center transition-all shrink-0",
                         canApplyCustomStructureDraft
                           ? "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)] hover:bg-brand-orange/90"
-                          : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                          : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                       )}
                       title="변경 적용"
                       aria-label="변경 적용"
@@ -12246,7 +12250,7 @@ function SongStructureIntegratedControl({
                   )}
                   <button
                     onClick={() => closeCustomModal()}
-                    className="w-10 h-10 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand-orange/25 transition-all flex items-center justify-center shrink-0"
+                    className="w-10 h-10 rounded-xl border border-[var(--modal-button-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-brand-orange/25 transition-all flex items-center justify-center shrink-0"
                     aria-label={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "섹션 커스텀 닫기"}
                     title={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "닫기"}
                   >
@@ -12259,7 +12263,7 @@ function SongStructureIntegratedControl({
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <p className="text-xs font-bold text-brand-orange uppercase tracking-wider">섹션 추가</p>
-                    <div className="flex gap-1 rounded-xl bg-black/10 border border-btn-border p-1">
+                    <div className="flex gap-1 rounded-xl bg-black/10 border border-[var(--modal-button-border)] p-1">
                       {(['all', 'basic', 'my'] as const).map((filter) => (
                         <button
                           key={filter}
@@ -12312,8 +12316,8 @@ function SongStructureIntegratedControl({
                           className={cn(
                             "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5 shadow-btn",
                             isLocked 
-                              ? "bg-white/5 border-white/10 text-[var(--text-secondary)]/40 cursor-not-allowed"
-                              : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                              ? "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/40 cursor-not-allowed"
+                              : "bg-btn-bg border-[var(--modal-button-border)] text-[var(--text-primary)] hover:bg-btn-hover"
                           )}
                         >
                           {displaySection}
@@ -12336,7 +12340,7 @@ function SongStructureIntegratedControl({
                     <button
                       type="button"
                       onClick={() => openCustomSectionEditor()}
-                      className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
+                      className="px-3.5 py-2 rounded-xl border border-[var(--modal-button-border)] bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
                     >
                       <Plus className="w-3.5 h-3.5" /> 섹션 추가
                     </button>
@@ -12365,20 +12369,20 @@ function SongStructureIntegratedControl({
                               {editingCustomSectionId ? '한글은 설명용, 영어는 실제 가사 태그용입니다.' : '한글 섹션명만 입력하면 영어 태그명은 자동 생성됩니다.'}
                             </p>
                           </div>
-                          <button type="button" onClick={() => closeCustomSectionEditor()} className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => closeCustomSectionEditor()} className="p-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
                         </div>
                         <input
                           value={customSectionDraft.labelKo}
                           onChange={(e) => setCustomSectionDraft((prev) => ({ ...prev, labelKo: e.target.value }))}
                           placeholder="한글 섹션명: 예: 속삭이는 랩"
-                          className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                          className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
                         />
                         {editingCustomSectionId && (
                           <input
                             value={customSectionDraft.labelEn}
                             onChange={(e) => setCustomSectionDraft((prev) => ({ ...prev, labelEn: e.target.value }))}
                             placeholder="영어 태그명: 예: Whisper Rap"
-                            className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
+                            className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-brand-orange/40"
                           />
                         )}
                         <div className={cn("grid gap-2", editingCustomSectionId ? "grid-cols-3" : "grid-cols-2")}>
@@ -12391,7 +12395,7 @@ function SongStructureIntegratedControl({
                               삭제
                             </button>
                           )}
-                          <button type="button" onClick={() => closeCustomSectionEditor()} className="py-2.5 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)]">취소</button>
+                          <button type="button" onClick={() => closeCustomSectionEditor()} className="py-2.5 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-sm font-bold text-[var(--text-primary)]">취소</button>
                           <button type="button" onClick={saveCustomSectionDefinition} disabled={isCustomSectionConverting} className="py-2.5 rounded-xl bg-brand-orange border border-orange-400 text-sm font-bold text-white disabled:opacity-60">{isCustomSectionConverting ? '자동 변환 중...' : '저장'}</button>
                         </div>
                       </div>
@@ -12425,7 +12429,7 @@ function SongStructureIntegratedControl({
                           "px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all font-bold text-xs sm:text-sm shadow-btn",
                           (draftStructure ?? []).length > 0
                             ? "bg-btn-bg text-brand-orange border-brand-orange/40 hover:bg-brand-orange/10"
-                            : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                            : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
                         disabled={(draftStructure ?? []).length === 0}
                       >
@@ -12452,7 +12456,7 @@ function SongStructureIntegratedControl({
                                 ? isDraftStructureTagsCleared
                                   ? "bg-brand-orange/10 border-brand-orange/45 text-brand-orange hover:bg-brand-orange/15"
                                   : "bg-red-500/5 border-red-400/45 text-[var(--text-secondary)] hover:border-red-300/70 hover:bg-red-500/10"
-                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/35 cursor-not-allowed"
+                                : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/35 cursor-not-allowed"
                             )}
                           >
                             <Tag className={cn("w-4 h-4", canToggleDraftStructureTags && !isDraftStructureTagsCleared && "text-[var(--text-secondary)]")} />
@@ -12468,8 +12472,8 @@ function SongStructureIntegratedControl({
                             className={cn(
                               "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
                               (draftStructure ?? []).length > 0 || editingSavedStructureId
-                                ? "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
-                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                                ? "bg-btn-bg border-[var(--modal-button-border)] text-[var(--text-primary)] hover:bg-btn-hover"
+                                : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                             )}
                             disabled={(draftStructure ?? []).length === 0 && !editingSavedStructureId}
                           >
@@ -12482,7 +12486,7 @@ function SongStructureIntegratedControl({
                               "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
                               canApplyCustomStructureDraft
                                 ? "bg-brand-orange text-white border-orange-400 hover:brightness-110"
-                                : "bg-white/5 border-white/10 text-[var(--text-secondary)]/50 cursor-not-allowed"
+                                : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                             )}
                           >
                             적용
@@ -12540,7 +12544,7 @@ function SongStructureIntegratedControl({
                               value={structureSearch}
                               onChange={(e) => setStructureSearch(e.target.value)}
                               placeholder="섹션 이름 또는 내용 검색..."
-                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40 shadow-inner"
+                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-brand-orange/40 shadow-inner"
                             />
                             {structureSearch && (
                               <button 
@@ -12561,7 +12565,7 @@ function SongStructureIntegratedControl({
                                   "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-btn",
                                   structureFilter === f
                                     ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange"
-                                    : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                                    : "bg-btn-bg border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:bg-btn-hover"
                                 )}
                               >
                                 {f === 'all' && '전체'}
@@ -12575,7 +12579,7 @@ function SongStructureIntegratedControl({
 
                       <div className="space-y-2 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2">
                         {filteredSavedStructures.length === 0 ? (
-                          <div className="rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-6 text-center">
+                          <div className="rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-6 text-center">
                             <Search className="w-6 h-6 text-[var(--text-secondary)]/30 mx-auto mb-2" />
                             <p className="text-[12px] text-[var(--text-secondary)]">
                               {structureSearch || structureFilter !== 'all' ? '검색 결과가 없습니다.' : 'Keep 섹션이 없습니다.'}
@@ -12583,7 +12587,7 @@ function SongStructureIntegratedControl({
                           </div>
                         ) : (
                           filteredSavedStructures.map((preset) => (
-                            <div key={preset.id} className="relative rounded-2xl bg-[var(--bg-secondary)] border border-btn-border p-3 min-h-[132px] hover:border-brand-orange/30 transition-all group shadow-sm overflow-hidden min-w-0">
+                            <div key={preset.id} className="relative rounded-2xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] p-3 min-h-[132px] hover:border-brand-orange/30 transition-all group shadow-sm overflow-hidden min-w-0">
                               <div className="absolute right-3 top-2 z-10 flex items-center gap-1.5">
                                 {editingPresetTitleId === preset.id ? (
                                   <button
@@ -12596,7 +12600,7 @@ function SongStructureIntegratedControl({
                                 ) : (
                                   <button
                                     onClick={() => startEditPresetTitle(preset)}
-                                    className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 transition-all flex items-center justify-center"
+                                    className="w-7 h-7 rounded-lg border bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/40 hover:bg-brand-orange/10 transition-all flex items-center justify-center"
                                     aria-label="Keep 섹션 이름 편집"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
@@ -12644,7 +12648,7 @@ function SongStructureIntegratedControl({
                                   {preset.reaction && editingPresetTitleId !== preset.id && (
                                     <span className={cn(
                                       "shrink-0 p-1 rounded-md",
-                                      preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
+                                      preset.reaction === 'like' ? "bg-brand-orange/20 text-brand-orange" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-[var(--modal-button-border)]"
                                     )}>
                                       {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
                                     </span>
@@ -12652,7 +12656,7 @@ function SongStructureIntegratedControl({
                                 </div>
                               </div>
                               <div
-                                className="mt-2 h-9 w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-xl border border-btn-border bg-black/10 px-3 flex items-center saved-structure-scroll cursor-grab active:cursor-grabbing overscroll-x-contain"
+                                className="mt-2 h-9 w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded-xl border border-[var(--modal-button-border)] bg-black/10 px-3 flex items-center saved-structure-scroll cursor-grab active:cursor-grabbing overscroll-x-contain"
                                 title={formatStructureText(preset.sections)}
                               >
                                 <span className="inline-block whitespace-nowrap text-[11px] text-[var(--text-secondary)] leading-none">
@@ -12661,7 +12665,7 @@ function SongStructureIntegratedControl({
                               </div>
                               
                               <div className="mt-3 flex gap-2 min-w-0">
-                                <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5">
+                                <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-[var(--modal-button-border)]">
                                   <button
                                     onClick={() => handleToggleReaction(preset.id, 'like')}
                                     className={cn(
@@ -12687,7 +12691,7 @@ function SongStructureIntegratedControl({
                                 </div>
                                 <button
                                   onClick={() => handleLoadPreset(preset)}
-                                  className="flex-1 py-1.5 rounded-xl bg-white/10 border border-white/15 text-[11px] font-bold text-[var(--text-primary)] hover:bg-white/15 transition-all"
+                                  className="flex-1 py-1.5 rounded-xl bg-white/10 border border-[var(--modal-button-border)] text-[11px] font-bold text-[var(--text-primary)] hover:bg-white/15 transition-all"
                                 >
                                   불러오기
                                 </button>
@@ -12723,11 +12727,11 @@ function SongStructureIntegratedControl({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 18, scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-              className="w-[min(94vw,440px)] h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
+              className="w-[min(94vw,440px)] h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl overflow-hidden flex flex-col"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between gap-3 shrink-0">
+              <div className="px-4 py-3 border-b border-[var(--modal-soft-border)] flex items-center justify-between gap-3 shrink-0">
                 <div>
                   <p className="text-sm font-black text-brand-orange">Keep 섹션</p>
                   <p className="text-[11px] text-[var(--text-secondary)]">저장된 섹션 구성을 불러오거나 편집합니다.</p>
@@ -12735,7 +12739,7 @@ function SongStructureIntegratedControl({
                 <button
                   type="button"
                   onClick={() => closeSavedSectionsModal()}
-                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                  className="w-9 h-9 rounded-xl border border-[var(--modal-soft-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -12767,18 +12771,18 @@ function SongStructureIntegratedControl({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.98 }}
               transition={{ duration: 0.16 }}
-              className="w-full max-w-md rounded-2xl bg-[var(--card-bg)] border border-brand-orange/50 shadow-2xl overflow-hidden"
+              className="w-full max-w-md rounded-2xl bg-[var(--card-bg)] border border-brand-orange/35 shadow-2xl overflow-hidden"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-3">
+              <div className="px-5 py-4 border-b border-[var(--modal-soft-border)] flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold text-brand-orange">저장</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">현재 구조를 저장할 제목을 입력합니다.</p>
                 </div>
                 <button
                   onClick={() => closeSaveStructureModal()}
-                  className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
+                  className="w-9 h-9 rounded-xl border border-[var(--modal-button-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -12793,13 +12797,13 @@ function SongStructureIntegratedControl({
                     if (e.key === 'Enter' && (draftStructure ?? []).length > 0) handleSavePreset();
                   }}
                   placeholder="예: 감성 발라드형"
-                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 shadow-inner"
+                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 shadow-inner"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => closeSaveStructureModal()}
-                    className="py-3 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)] hover:bg-btn-hover transition-all"
+                    className="py-3 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-sm font-bold text-[var(--text-primary)] hover:bg-btn-hover transition-all"
                   >
                     취소
                   </button>

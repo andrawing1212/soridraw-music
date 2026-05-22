@@ -1837,7 +1837,7 @@ const VOCAL_CHARACTER_SCALE_PROMPTS: VocalCharacterScaleConfig[] = [
     'dreamy enigmatic vocal charm',
   ] },
   { key: 'ornamentLevel', defaultValue: 8, steps: [
-    'no vocal ornament',
+    'intentional strong nasal resonance technique',
     'clean connected phrasing',
     'clear precise articulation',
     'muted consonant-heavy articulation',

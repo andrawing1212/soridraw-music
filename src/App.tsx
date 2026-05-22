@@ -14021,17 +14021,17 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
     minLabelKo: '가성',
     maxLabelKo: '랩형',
     steps: [
-      { labelKo: '공기 가성', prompt: 'airy falsetto delivery', hintKo: '공기 섞인 얇은 가성' },
-      { labelKo: '얇은 가성', prompt: 'thin falsetto delivery', hintKo: '얇고 선명한 가성' },
-      { labelKo: '부드러운 가성', prompt: 'soft falsetto delivery', hintKo: '부드럽고 여린 가성' },
-      { labelKo: '가성 섞임', prompt: 'falsetto-leaning mixed delivery', hintKo: '가성 쪽으로 기운 연결' },
-      { labelKo: '믹스보이스', prompt: 'connected mixed voice', hintKo: '진성과 가성의 연결' },
+      { labelKo: '공기 가성', prompt: 'airy falsetto delivery', hintKo: '공기 섞인 얇은 가성 (가성)' },
+      { labelKo: '얇은 가성', prompt: 'thin falsetto delivery', hintKo: '얇고 선명한 가성 (가성)' },
+      { labelKo: '부드러운 가성', prompt: 'soft falsetto delivery', hintKo: '부드럽고 여린 가성 (가성)' },
+      { labelKo: '가성 섞임', prompt: 'falsetto-leaning mixed delivery', hintKo: '가성 쪽으로 기운 연결 (가성)' },
+      { labelKo: '믹스보이스', prompt: 'connected mixed voice', hintKo: '진성과 가성의 연결 (믹스보이스)' },
       { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
-      { labelKo: '자연 진성', prompt: 'natural chest voice', hintKo: '자연스러운 진성' },
-      { labelKo: '힘 있는 진성', prompt: 'powerful chest voice', hintKo: '단단하게 밀어냄' },
-      { labelKo: '말하듯 부름', prompt: 'speech-like singing delivery', hintKo: '노래와 말 사이' },
-      { labelKo: '대사형', prompt: 'spoken theatrical delivery', hintKo: '대사처럼 전달' },
-      { labelKo: '랩형', prompt: 'rap-like vocal delivery', hintKo: '리듬과 말맛 중심' },
+      { labelKo: '자연 진성', prompt: 'natural chest voice', hintKo: '자연스러운 진성 (진성)' },
+      { labelKo: '힘 있는 진성', prompt: 'powerful chest voice', hintKo: '단단하게 밀어냄 (진성)' },
+      { labelKo: '말하듯 부름', prompt: 'speech-like singing delivery', hintKo: '노래와 말 사이 (스프레히슈티메)' },
+      { labelKo: '대사형', prompt: 'spoken theatrical delivery', hintKo: '대사처럼 전달 (대사형)' },
+      { labelKo: '랩형', prompt: 'rap-like vocal delivery', hintKo: '리듬과 말맛 중심 (랩형)' },
     ],
   },
   {
@@ -14085,10 +14085,10 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
     maxLabelKo: '몽환',
     steps: [
       { labelKo: '극건조', prompt: 'very dry vocal tone', hintKo: '수분 없이 바짝 마름' },
-      { labelKo: '보컬프라이', prompt: 'low vocal fry texture', hintKo: '낮게 지글거리는 결' },
-      { labelKo: '크리키', prompt: 'creaky vocal texture', hintKo: '성대가 살짝 갈라짐' },
-      { labelKo: '그로울링', prompt: 'low growling vocal edge', hintKo: '목 안쪽의 거친 울림' },
-      { labelKo: '비음 섞임', prompt: 'slightly nasal vocal tone', hintKo: '코끝 울림이 살짝 섞임' },
+      { labelKo: '보컬프라이', prompt: 'low vocal fry texture', hintKo: '낮게 지글거리는 결 (보컬 프라이)' },
+      { labelKo: '크리키', prompt: 'creaky vocal texture', hintKo: '성대가 살짝 갈라짐 (크리키)' },
+      { labelKo: '그로울링', prompt: 'low growling vocal edge', hintKo: '목 안쪽의 거친 울림 (그로울링)' },
+      { labelKo: '비음 섞임', prompt: 'slightly nasal vocal tone', hintKo: '코끝 울림이 살짝 섞임 (비성)' },
       { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '따뜻함', prompt: 'warm vocal tone', hintKo: '온기 있는 목소리' },
       { labelKo: '부드러움', prompt: 'soft vocal texture', hintKo: '부드럽게 감김' },
@@ -14102,7 +14102,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
     titleKo: '보컬 매력',
     subtitleKo: '소울풀, 귀여움, 매혹감 같은 보컬의 매력 포인트를 정합니다.',
     defaultValue: 6,
-    minLabelKo: '담백함',
+    minLabelKo: '강한비성',
     maxLabelKo: '신비로움',
     steps: [
       { labelKo: '무채색', prompt: 'neutral colorless vocal charm', hintKo: '매력을 드러내지 않음' },
@@ -14126,21 +14126,21 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
     minLabelKo: '담백함',
     maxLabelKo: '실험',
     steps: [
-      { labelKo: '무기교', prompt: 'no vocal ornament', hintKo: '꾸밈 없이 직선적' },
+      { labelKo: '강한비성', prompt: 'intentional strong nasal resonance technique', hintKo: '코끝 울림을 강하게 섞음 (강한 비성)' },
       { labelKo: '담백연결', prompt: 'clean connected phrasing', hintKo: '담백하게 이어 부름' },
-      { labelKo: '또박발음', prompt: 'clear precise articulation', hintKo: '또박또박 선명함' },
-      { labelKo: '뮤트발음', prompt: 'muted consonant-heavy articulation', hintKo: '받침을 눌러 삼킴' },
-      { labelKo: '숨섞임', prompt: 'breathy phrasing', hintKo: '숨을 섞어 부름' },
-      { labelKo: '하프에어', prompt: 'breathy half-air stops', hintKo: '숨으로 살짝 막고 품' },
-      { labelKo: '더블브레스', prompt: 'double-breath phrasing', hintKo: '숨을 한 번 더 꺾어 넣음' },
+      { labelKo: '또박발음', prompt: 'clear precise articulation', hintKo: '또박또박 선명함 (또박발음)' },
+      { labelKo: '뮤트발음', prompt: 'muted consonant-heavy articulation', hintKo: '받침을 눌러 삼킴 (뮤트발음)' },
+      { labelKo: '숨섞임', prompt: 'breathy phrasing', hintKo: '숨을 섞어 부름 (브레시)' },
+      { labelKo: '하프에어', prompt: 'breathy half-air stops', hintKo: '숨으로 살짝 막고 품 (하프 에어 스톱)' },
+      { labelKo: '더블브레스', prompt: 'double-breath phrasing', hintKo: '숨을 한 번 더 꺾어 넣음 (더블 브레스)' },
       { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
-      { labelKo: '고스트노트', prompt: 'soft ghost-note vocal touches', hintKo: '들릴 듯 말 듯 스침' },
-      { labelKo: '데토네이션', prompt: 'slightly detuned vocal delivery', hintKo: '음정이 살짝 낮게 흔들림' },
-      { labelKo: '클리산도', prompt: 'smooth vocal glissando slides', hintKo: '음을 미끄러지듯 연결' },
-      { labelKo: '트릴', prompt: 'vocal trills and quick ornaments', hintKo: '빠른 장식음' },
-      { labelKo: '깊은비브라토', prompt: 'deep emotional vibrato', hintKo: '깊고 넓은 떨림' },
-      { labelKo: '벤딩슬러', prompt: 'vocal bends, slurred slides, and unique turns', hintKo: '음을 꺾고 미끄러뜨림' },
-      { labelKo: '실험창법', prompt: 'context-aware experimental vocal technique such as sprechgesang, yodel-like flips, glitchy phrasing, whisper-noise texture, cracked distorted edges, or unstable pitch texture', hintKo: '장르와 상황에 맞는 특수 창법' },
+      { labelKo: '고스트노트', prompt: 'soft ghost-note vocal touches', hintKo: '들릴 듯 말 듯 스침 (고스트 노트)' },
+      { labelKo: '데토네이션', prompt: 'slightly detuned vocal delivery', hintKo: '음정이 살짝 낮게 흔들림 (데토네이션)' },
+      { labelKo: '클리산도', prompt: 'smooth vocal glissando slides', hintKo: '음을 미끄러지듯 연결 (클리산도)' },
+      { labelKo: '트릴', prompt: 'vocal trills and quick ornaments', hintKo: '빠른 장식음 (트릴)' },
+      { labelKo: '깊은비브라토', prompt: 'deep emotional vibrato', hintKo: '깊고 넓은 떨림 (비브라토)' },
+      { labelKo: '벤딩슬러', prompt: 'vocal bends, slurred slides, and unique turns', hintKo: '음을 꺾고 미끄러뜨림 (벤딩/슬러)' },
+      { labelKo: '실험창법', prompt: 'context-aware experimental vocal technique such as sprechgesang, yodel-like flips, glitchy phrasing, whisper-noise texture, cracked distorted edges, or unstable pitch texture', hintKo: '장르와 상황에 맞는 특수 창법 (실험창법)' },
     ],
   },
 ];
@@ -14488,7 +14488,7 @@ function VocalControl({
         if (!isVocalCharacterScaleDefaultLevel(config, level)) labels.push(getVocalCharacterScaleStep(config.key, level)?.labelKo || '');
         if (isVocalCharacterOrnamentConfig(config)) {
           const secondaryLevel = getVocalCharacterOrnamentSecondaryLevel(character, config);
-          if (!isVocalCharacterScaleDefaultLevel(config, secondaryLevel)) labels.push(`보조 ${config.steps[secondaryLevel - 1]?.labelKo || ''}`);
+          if (!isVocalCharacterScaleDefaultLevel(config, secondaryLevel)) labels.push(`${config.steps[secondaryLevel - 1]?.labelKo || ''}`);
         }
         return labels.filter(Boolean);
       })
@@ -15220,7 +15220,7 @@ function VocalControl({
                                     <h6 className="text-base font-black text-brand-orange">{config.titleKo}</h6>
                                     <span className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-black", isDefault ? "border-transparent bg-btn-bg text-[var(--text-secondary)]" : "border-brand-orange/25 bg-transparent text-brand-orange")}>{step.labelKo}</span>
                                     {isOrnament && !isSecondaryDefault && (
-                                      <span className="rounded-full border border-brand-orange/20 bg-transparent px-2.5 py-0.5 text-[11px] font-black text-brand-orange">보조 {secondaryStep.labelKo}</span>
+                                      <span className="rounded-full border border-brand-orange/20 bg-transparent px-2.5 py-0.5 text-[11px] font-black text-brand-orange">{secondaryStep.labelKo}</span>
                                     )}
                                   </div>
                                   <p className="mt-1.5 text-xs leading-snug text-[var(--text-secondary)]">{config.subtitleKo}</p>
@@ -15271,7 +15271,7 @@ function VocalControl({
 
                               <div className="mt-3 flex items-center justify-between gap-2 text-[11px] font-bold text-[var(--text-secondary)]">
                                 <span>{config.minLabelKo}</span>
-                                <span className="truncate text-center text-[var(--text-secondary)]">{isOrnament && !isSecondaryDefault ? `${step.hintKo} + 보조 ${secondaryStep.hintKo}` : step.hintKo}</span>
+                                <span className="truncate text-center text-[var(--text-secondary)]">{isOrnament && !isSecondaryDefault ? `${step.hintKo} + ${secondaryStep.hintKo}` : step.hintKo}</span>
                                 <span>{config.maxLabelKo}</span>
                               </div>
                             </div>

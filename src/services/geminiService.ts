@@ -1734,9 +1734,175 @@ function getGenreDefaultVocalPhrase(params?: GenerateSongParams): string {
   return map[key] || '';
 }
 
+
+type VocalCharacterScaleKey = 'ageLevel' | 'rangeLevel' | 'deliveryLevel' | 'rhythmLevel' | 'emotionLevel' | 'textureLevel' | 'charmLevel' | 'ornamentLevel';
+
+type VocalCharacterScaleConfig = {
+  key: VocalCharacterScaleKey;
+  defaultValue: number;
+  defaultValues?: number[];
+  steps: string[];
+};
+
+const VOCAL_CHARACTER_SCALE_PROMPTS: VocalCharacterScaleConfig[] = [
+  { key: 'ageLevel', defaultValue: 6, steps: [
+    'childlike youthful vocal color',
+    'teen-like vocal color',
+    'young adult vocal color',
+    'fresh early-adult vocal color',
+    'clear young adult vocal color',
+    '',
+    'mature adult vocal color',
+    'middle-aged seasoned vocal color',
+    'aged seasoned vocal color',
+    'veteran mature vocal color',
+    'deep veteran vocal authority',
+  ] },
+  { key: 'rangeLevel', defaultValue: 6, steps: [
+    'very deep low vocal range',
+    'very low vocal range',
+    'low vocal range',
+    'low-mid vocal range',
+    'slightly low natural vocal range',
+    '',
+    'slightly high natural vocal range',
+    'upper-mid vocal range',
+    'high vocal range',
+    'thin very high vocal range',
+    'extremely high thin vocal range',
+  ] },
+  { key: 'deliveryLevel', defaultValue: 6, steps: [
+    'airy falsetto delivery',
+    'thin falsetto delivery',
+    'soft falsetto delivery',
+    'falsetto-leaning mixed delivery',
+    'connected mixed voice',
+    '',
+    'natural chest voice',
+    'powerful chest voice',
+    'speech-like singing delivery',
+    'spoken theatrical delivery',
+    'rap-like vocal delivery',
+  ] },
+  { key: 'rhythmLevel', defaultValue: 6, steps: [
+    'strongly ahead-of-the-beat phrasing',
+    'ahead-of-the-beat phrasing',
+    'quick responsive phrasing',
+    'slightly anticipated phrasing',
+    'near-steady slightly anticipated phrasing',
+    '',
+    'slightly behind-the-beat phrasing',
+    'behind-the-beat phrasing',
+    'loose behind-the-beat phrasing',
+    'unstable off-beat phrasing',
+    'free unstable timing',
+  ] },
+  { key: 'emotionLevel', defaultValue: 6, steps: [
+    'emotionless delivery',
+    'cold restrained emotion',
+    'restrained emotion',
+    'calm understated emotion',
+    'subtle gentle emotion',
+    '',
+    'expressive emotion',
+    'strong expressive emotion',
+    'dramatic emotion',
+    'exaggerated theatrical emotion',
+    'explosive emotional delivery',
+  ] },
+  { key: 'textureLevel', defaultValue: 6, steps: [
+    'very dry vocal tone',
+    'low vocal fry texture',
+    'creaky vocal texture',
+    'low growling vocal edge',
+    'slightly nasal vocal tone',
+    '',
+    'warm vocal tone',
+    'soft vocal texture',
+    'airy vocal texture',
+    'dreamy airy vocal texture',
+    'glassy ethereal vocal texture',
+  ] },
+  { key: 'charmLevel', defaultValue: 6, steps: [
+    'neutral colorless vocal charm',
+    'pure innocent vocal charm',
+    'cute playful vocal charm',
+    'friendly approachable vocal charm',
+    'warm comforting vocal charm',
+    '',
+    'soulful vocal character',
+    'seductive magnetic vocal charm',
+    'cool aloof vocal charm',
+    'mysterious vocal aura',
+    'dreamy enigmatic vocal charm',
+  ] },
+  { key: 'ornamentLevel', defaultValue: 8, steps: [
+    'no vocal ornament',
+    'clean connected phrasing',
+    'clear precise articulation',
+    'muted consonant-heavy articulation',
+    'breathy phrasing',
+    'breathy half-air stops',
+    'double-breath phrasing',
+    '',
+    'soft ghost-note vocal touches',
+    'slightly detuned vocal delivery',
+    'smooth vocal glissando slides',
+    'vocal trills and quick ornaments',
+    'deep emotional vibrato',
+    'vocal bends, slurred slides, and unique turns',
+    'context-aware experimental vocal technique such as sprechgesang, yodel-like flips, glitchy phrasing, whisper-noise texture, cracked distorted edges, or unstable pitch texture',
+  ] },
+];
+
+function getVocalCharacterScalePhrase(character: any, config: VocalCharacterScaleConfig): string {
+  const value = Number(character?.[config.key]);
+  if (!Number.isFinite(value)) return '';
+  const safe = Math.min(config.steps.length, Math.max(1, Math.round(value)));
+  if (safe === config.defaultValue) return '';
+  return config.steps[safe - 1] || '';
+}
+
+function getVocalCharacterScalePhrases(character: any): string[] {
+  const parts = VOCAL_CHARACTER_SCALE_PROMPTS
+    .map((config) => getVocalCharacterScalePhrase(character, config))
+    .filter(Boolean);
+
+  const ornamentConfig = VOCAL_CHARACTER_SCALE_PROMPTS.find((config) => config.key === 'ornamentLevel');
+  if (ornamentConfig) {
+    const mainValue = Number(character?.ornamentLevel);
+    const mainSafe = Number.isFinite(mainValue) ? Math.min(ornamentConfig.steps.length, Math.max(1, Math.round(mainValue))) : ornamentConfig.defaultValue;
+    const secondaryValue = Number(character?.ornamentSecondaryLevel);
+    const secondarySafe = Number.isFinite(secondaryValue) ? Math.min(ornamentConfig.steps.length, Math.max(1, Math.round(secondaryValue))) : ornamentConfig.defaultValue;
+
+    if (Number.isFinite(secondaryValue) && secondarySafe !== ornamentConfig.defaultValue) {
+      const secondaryPhrase = ornamentConfig.steps[secondarySafe - 1] || '';
+      if (secondaryPhrase) parts.push(`secondary technique: ${secondaryPhrase}`);
+    } else if (Number.isFinite(mainValue) && mainSafe !== ornamentConfig.defaultValue) {
+      parts.push('optional compatible secondary vocal habit chosen from a nearby or musically related technique, only if it fits the genre, mood, and character');
+    }
+  }
+
+  return parts;
+}
+
+function hasNonDefaultVocalCharacterScale(character: any): boolean {
+  return VOCAL_CHARACTER_SCALE_PROMPTS.some((config) => {
+    const value = Number(character?.[config.key]);
+    const safe = Math.min(config.steps.length, Math.max(1, Math.round(value)));
+    const hasMain = Number.isFinite(value) && safe !== config.defaultValue;
+    if (config.key !== 'ornamentLevel') return hasMain;
+    const secondaryValue = Number(character?.ornamentSecondaryLevel);
+    const secondarySafe = Math.min(config.steps.length, Math.max(1, Math.round(secondaryValue)));
+    const hasSecondary = Number.isFinite(secondaryValue) && secondarySafe !== config.defaultValue;
+    return hasMain || hasSecondary;
+  });
+}
+
 function hasVocalCharacterSelection(member: any): boolean {
   const character = member?.character || {};
   return Boolean(
+    hasNonDefaultVocalCharacterScale(character) ||
     (Array.isArray(character.techniqueIds) && character.techniqueIds.length) ||
     character.customTechnique ||
     character.voiceToneId ||
@@ -1981,9 +2147,25 @@ function selectCoreTechniqueIntents(intents: VocalTechniqueIntent[]): { core: Vo
 function buildVocalIntentResult(member: any, params?: GenerateSongParams, includeGenreDNA = true): VocalIntentResult {
   if (!hasVocalCharacterSelection(member)) return { phrase: '', extraTechniques: [], genreDNA: getGenreVocalDNAPhrase(params) };
   const character = member?.character || {};
+  const scaleTechniquePhrases = getVocalCharacterScalePhrases(character);
   const intents = Array.isArray(character.techniqueIds)
     ? character.techniqueIds.map(buildTechniqueIntent).filter(Boolean) as VocalTechniqueIntent[]
     : [];
+  scaleTechniquePhrases.forEach((phrase) => {
+    const lower = phrase.toLowerCase();
+    const slot: VocalTechniqueSlot = /experimental|glitch|spre|yodel|whisper-noise|cracked|unstable pitch/.test(lower)
+      ? 'experimental'
+      : /range|voice|falsetto|chest|mixed|spoken|rap-like/.test(lower)
+        ? 'register'
+        : /beat|phrasing|timing|anticipated/.test(lower)
+          ? 'rhythm'
+          : /tone|texture|dry|rough|husky|warm|soft|airy|age|adult|teen|seasoned|childlike/.test(lower)
+            ? 'texture'
+            : /vibrato|trill|bend|slurred|ornament|ghost|muted|half-air/.test(lower)
+              ? 'melody'
+              : 'custom';
+    intents.push({ id: phrase, phrase, slot, isExperimental: slot === 'experimental' });
+  });
   if (character.customTechnique) {
     intents.push({ id: String(character.customTechnique).trim(), phrase: String(character.customTechnique).trim(), slot: "custom", isExperimental: false });
   }
@@ -3838,14 +4020,27 @@ function buildSituationSummary(situation?: SituationConfig): string {
 
 
 
+const STORYBOARD_SLIDER_DEFAULT_VALUE = 50;
+const STORYBOARD_SLIDER_STOP_VALUES = [0, 17, 33, 50, 67, 83, 100] as const;
+
+function snapStoryboardAxisValue(value: number): number {
+  return STORYBOARD_SLIDER_STOP_VALUES.reduce((closest, stop) => (
+    Math.abs(stop - value) < Math.abs(closest - value) ? stop : closest
+  ), STORYBOARD_SLIDER_DEFAULT_VALUE);
+}
+
 function describeStoryboardAxis(value: unknown, left: string, right: string): string {
   const n = Number(value);
-  if (!Number.isFinite(n) || n === 50) return "";
-  if (n <= 18) return `${left} dominant`;
-  if (n < 42) return `${left}-leaning`;
-  if (n >= 82) return `${right} dominant`;
-  if (n > 58) return `${right}-leaning`;
-  return "balanced";
+  if (!Number.isFinite(n)) return "";
+  const snapped = snapStoryboardAxisValue(n);
+  const stage = STORYBOARD_SLIDER_STOP_VALUES.findIndex((stop) => stop === snapped);
+  if (stage === 0) return `${left} strongly dominant`;
+  if (stage === 1) return `${left} dominant`;
+  if (stage === 2) return `slightly ${left}`;
+  if (stage === 4) return `slightly ${right}`;
+  if (stage === 5) return `${right} dominant`;
+  if (stage === 6) return `${right} strongly dominant`;
+  return "";
 }
 
 function buildStoryboardPositionCue(situation?: SituationConfig, roleIndex: 0 | 1 = 0): string {
@@ -6104,6 +6299,26 @@ function getEraTextureGenreAccents(params: GenerateSongParams): string[] {
 function getEraTextureInstrumentCues(params: GenerateSongParams): string[] {
   return getSelectedEraTextureLayerProfiles(params).flatMap((profile) => profile.instrumentCue).map(cleanPromptValue).filter(NON_EMPTY).slice(0, 3);
 }
+
+function getSelectedStyleSoundTextureCues(params: GenerateSongParams): string[] {
+  // Style can carry real sound/space texture cues (ex: room reverb, wide reverb, rain ambience).
+  // These must be visible to the Gemini instrument assembly even when they are not selected
+  // from the dedicated Sound menu. Vocal-only style effects stay in the vocal layer.
+  const seen = new Set<string>();
+  return filterPromptSelectionIds(params.styles ?? [])
+    .map((value) => resolveStyleItem(value))
+    .filter((item): item is ResolvedStyleItem => Boolean(item && !isSeparatorLikeItem(item)))
+    .filter((item) => STYLE_ROLE_BY_VARIANT_ID[item.id] !== 'vocals')
+    .map((item) => cleanPromptValue(String((item as any).sound || '').trim()))
+    .filter(NON_EMPTY)
+    .filter((cue) => {
+      const key = cue.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4);
+}
 function getEraTextureVocalCues(params: GenerateSongParams): string[] {
   return getSelectedEraTextureLayerProfiles(params).filter((profile) => !profile.mediaTexture).map((profile) => profile.vocalCue).filter(NON_EMPTY).slice(0, 1);
 }
@@ -6876,6 +7091,7 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
 
   getSelectedGenrePromptSoundCues(params).forEach((item) => pushUniquePromptItem(items, item, 10));
   getEraTextureInstrumentCues(params).forEach((item) => pushUniquePromptItem(items, item, 10));
+  getSelectedStyleSoundTextureCues(params).forEach((item) => pushUniquePromptItem(items, item, 10));
 
   const addProfileInstruments = (profile: any, limit: number) => {
     (profile?.instruments || [])
@@ -15761,6 +15977,8 @@ export async function generateSong(
   const instrumentSoundPromptCores = getInstrumentSoundPromptCores(
     params.instrumentSounds ?? [],
   );
+  const selectedSoundAnchorCues = compactSoundPromptsByCategory(params.instrumentSounds ?? []);
+  const styleSoundTextureCues = getSelectedStyleSoundTextureCues(params);
   const themePrompt = buildThemePrompt(params.themes ?? []);
   const themeSentence = buildThemeSentence(params.themes ?? []);
   const themeMoodLyricInstruction = buildThemeMoodLyricInstruction(params);
@@ -16066,7 +16284,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format is locked to this 5-line structure plus the fixed quality line:
   [Genre] {short natural genre identity: core genre + main groove/era/texture, not a raw comma list}
-  [Instruments] {main genre instruments + fusion genre instruments + selected core sound}
+  [Instruments] {Gemini-composed instrument, texture, and playing-style cues from genre + mood + theme/situation + selected core sound}
   [Atmosphere] {scene, air, emotional temperature, and selected spatial texture}
   [Vocals] {sentence-style acoustic vocal direction with emotion, breath, and phrasing; no artist names}
   [Arrangement] {tempo only when selected, genre-specific rhythm/groove, emotional development, section movement, and transition behavior}
@@ -16099,6 +16317,23 @@ ${genrePromptCore || (detailLayer ? "Infer the root genre from the USER FREE-TEX
 
 INSTRUMENT / SOUND LAYERS:
 ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- ${s}`).join("\n") : "- No extra instrument/sound layer selected."}
+
+USER-SELECTED SOUND ANCHORS (LOCKED IF PRESENT):
+${selectedSoundAnchorCues.length ? selectedSoundAnchorCues.map((s) => `- ${s}`).join("\n") : "- No user-selected sound anchor."}
+
+STYLE SOUND / SPACE TEXTURE LAYERS:
+${styleSoundTextureCues.length ? styleSoundTextureCues.map((s) => `- ${s}`).join("\n") : "- No extra style sound or space texture selected."}
+
+INSTRUMENTS ASSEMBLY DIRECTION (MANDATORY):
+- Let Gemini actively compose the final [Instruments] line from the selected Genre, fusion genre, Mood, Theme, active Situation, and direct user note. Do not treat the locked skeleton's instrument list as the final answer when the mood or scene suggests a better palette.
+- Genre decides the core instrument family. Mood decides the playing style, texture, intensity, touch, and space of each instrument. Theme/Situation/direct note adds scene-specific sound details.
+- USER-SELECTED SOUND ANCHORS are protected anchors. Keep them exactly or semantically intact in [Instruments]. They do NOT force the whole line to use the old local sound assembly.
+- For every non-user-selected instrument, reinterpret or replace the default genre/style instrument through the selected Mood, Theme, Situation, and direct note. If the mood is lonely/dreamy/cold/warm/bright/dark/etc., the non-selected drums, bass, harmony instruments, pads, textures, and space must change their playing feel accordingly.
+- If a user-selected sound overlaps with a default genre instrument, keep the user-selected sound cue and remove or replace the duplicated default with a missing complementary role such as drums, bass, harmonic instrument, texture, or space.
+- The [Instruments] line should bind instrument + texture + playing method inside the same cue, so the sound is understood as one instruction. Good cue shape: soft DX7-style electric piano chords, brushed slow-jam drums, warm sub bass, airy late-night synth pad.
+- Do not separate playing method into [Arrangement] when it belongs to a specific instrument. [Arrangement] is for song movement and section flow; [Instruments] owns the instrument color and how that instrument should be played.
+- Also preserve STYLE SOUND / SPACE TEXTURE LAYERS as real instrument/texture cues when they are musically relevant. Do not hide space textures only inside [Atmosphere]; cues like wide reverb, room reflections, rain ambience, stage ambience, or distant ambience belong in [Instruments] when selected.
+- It may be more expressive than a plain comma list, but it must still read as instrument/texture cues, not a full mix-description paragraph. Avoid generic mix sentences such as intimate warm natural mix unless they are attached to a concrete sound texture.
 
 MOOD LAYER (EMOTIONAL COLOR ONLY, NOT LYRIC TOPIC):
 ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
@@ -16177,6 +16412,9 @@ FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
   [Arrangement]
   [Audio quality improved to masterpiece]
 - Build productionPrompt after deciding the lyric concept. It must follow the active Situation, user's direct theme, direct mood, USER FREE-TEXT DIRECTOR NOTE, selected keywords, vocal setup, and section flow.
+- Build [Instruments] after deciding the same concept. Recompose the instrument palette so genre + mood + situation/theme feel connected, while preserving any user-selected sound layers and selected style sound/space texture layers.
+- Do not copy the local skeleton's [Instruments] line verbatim just because one Sound item is selected. Use the selected Sound item as a protected anchor only. Then reinterpret every other non-selected instrument through the selected mood/theme/situation/direct note, replace duplicated defaults, and add missing companion roles so the final line feels Gemini-composed from genre + mood.
+- Directly selected sounds must survive; non-selected default instruments should adapt their playing method and texture to the mood. Example logic: selected saxophone stays, while piano/drums/bass/pad become lonely, dreamy, warm, cold, sparse, brushed, muted, airy, bright, dark, or room-based depending on the selected mood and scene.
 - Use LOCKED FINAL PRODUCTION PROMPT only as a musical skeleton for genre, sound, vocal delivery, and arrangement. Do not copy weak or generic Atmosphere wording if the active Situation, user's direct input, or lyrics clearly define a better scene.
 - If a Situation is active, [Atmosphere] must summarize the situation's relationship/conflict/setting/tone as a natural scene sentence, and [Arrangement] must summarize the situation's development, dialogue ownership, speech contrast, and emotional turn through the selected section flow. Do not leave the Situation only in [Vocals].
 - For an active Situation, [Atmosphere] should be understandable even if [Vocals] is hidden: the listener should still know what kind of scene/conflict is happening.

@@ -85,6 +85,15 @@ export interface VocalCharacterSelection {
   techniqueIds?: string[];
   voiceToneId?: string;
   personalityId?: string;
+  rangeLevel?: number;
+  deliveryLevel?: number;
+  rhythmLevel?: number;
+  emotionLevel?: number;
+  textureLevel?: number;
+  charmLevel?: number;
+  ornamentLevel?: number;
+  ornamentSecondaryLevel?: number;
+  ageLevel?: number;
   customTechnique?: string;
   customVoiceTone?: string;
   customPersonality?: string;

@@ -604,6 +604,11 @@ const createEmptySituation = (): SituationConfig => ({ enabled: false });
 
 
 const STORYBOARD_SLIDER_DEFAULT = 50;
+const STORYBOARD_SLIDER_STOPS = [0, 17, 33, 50, 67, 83, 100] as const;
+const snapStoryboardSliderValue = (value: number) => STORYBOARD_SLIDER_STOPS.reduce((closest, stop) => (
+  Math.abs(stop - value) < Math.abs(closest - value) ? stop : closest
+), STORYBOARD_SLIDER_DEFAULT);
+const getStoryboardSliderStage = (value: number) => STORYBOARD_SLIDER_STOPS.findIndex((stop) => stop === snapStoryboardSliderValue(value));
 const STORYBOARD_SLIDER_FIELDS = [
   'characterAPoliteness',
   'characterAIntensity',
@@ -630,7 +635,7 @@ const sanitizeStoryboardSituation = (value?: SituationConfig | null): SituationC
     if (raw === undefined || raw === null || raw === '' || Number(raw) === STORYBOARD_SLIDER_DEFAULT) {
       delete base[field];
     } else {
-      base[field] = Math.max(0, Math.min(100, Number(raw)));
+      base[field] = snapStoryboardSliderValue(Math.max(0, Math.min(100, Number(raw))));
     }
   });
   const active = hasActiveSituation({ ...base, enabled: false } as SituationConfig);
@@ -641,14 +646,17 @@ const serializeStoryboardSituation = (value?: SituationConfig | null) => JSON.st
 
 const getStoryboardSliderValue = (value: SituationConfig | null | undefined, field: StoryboardSliderField) => {
   const raw = (value as any)?.[field];
-  return typeof raw === 'number' ? raw : STORYBOARD_SLIDER_DEFAULT;
+  return typeof raw === 'number' ? snapStoryboardSliderValue(raw) : STORYBOARD_SLIDER_DEFAULT;
 };
 
 const storyboardAxisSummary = (value: number, left: string, right: string) => {
-  if (value <= 18) return `${left} 강함`;
-  if (value < 42) return `${left} 쪽`;
-  if (value >= 82) return `${right} 강함`;
-  if (value > 58) return `${right} 쪽`;
+  const stage = getStoryboardSliderStage(value);
+  if (stage === 0) return `${left} 강함`;
+  if (stage === 1) return `${left} 중심`;
+  if (stage === 2) return `살짝 ${left}`;
+  if (stage === 4) return `살짝 ${right}`;
+  if (stage === 5) return `${right} 중심`;
+  if (stage === 6) return `${right} 강함`;
   return '중간';
 };
 
@@ -657,9 +665,9 @@ const buildStoryboardSummary = (situation?: SituationConfig | null) => {
   const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(' vs ');
   const world = String(situation?.description || situation?.summary || '').trim();
   const storyBits = [
-    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyDialogueBalance'), '티키타카', '솔플'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyDialogueBalance'), '티키타카', '독백'),
     storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyRealityScale'), '리얼리즘', '드라마틱'),
-    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyPlayfulSincere'), '위트', '진심모드'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyPlayfulSincere'), '위트', '진심'),
   ].filter((item) => item !== '중간');
   const parts = [relation, world ? world.slice(0, 28) : '', ...storyBits.slice(0, 2)]
     .map((item) => String(item || '').trim())
@@ -1341,48 +1349,75 @@ type StoryboardSliderProps = {
 };
 
 const getStoryboardSliderStatus = (value: number, labels?: [string, string, string]) => {
-  const [leftLabel, centerLabel, rightLabel] = labels || [`${value <= 35 ? '왼쪽' : value >= 65 ? '오른쪽' : '균형'}`, '균형', '균형'];
-  if (value <= 35) return leftLabel;
-  if (value >= 65) return rightLabel;
-  return centerLabel;
+  const [leftLabel, , rightLabel] = labels || ['왼쪽', '균형', '오른쪽'];
+  const stage = getStoryboardSliderStage(value);
+  if (stage === 0) return `${leftLabel} 강함`;
+  if (stage === 1) return `${leftLabel} 중심`;
+  if (stage === 2) return `살짝 ${leftLabel}`;
+  if (stage === 4) return `살짝 ${rightLabel}`;
+  if (stage === 5) return `${rightLabel} 중심`;
+  if (stage === 6) return `${rightLabel} 강함`;
+  return '기본값';
+};
+
+const getStoryboardSliderHint = (value: number, left: string, right: string, labels?: [string, string, string]) => {
+  const [leftLabel, , rightLabel] = labels || [left, '균형', right];
+  const stage = getStoryboardSliderStage(value);
+  if (stage === 0) return `${leftLabel}을 강하게 적용`;
+  if (stage === 1) return `${leftLabel} 중심으로 적용`;
+  if (stage === 2) return `${leftLabel}을 살짝 적용`;
+  if (stage === 4) return `${rightLabel}을 살짝 적용`;
+  if (stage === 5) return `${rightLabel} 중심으로 적용`;
+  if (stage === 6) return `${rightLabel}을 강하게 적용`;
+  return '기본';
 };
 
 const StoryboardSectionTitle = ({ title, description }: { title: string; description?: string }) => (
   <div className="flex items-start gap-3">
     <span className="mt-1 h-6 w-1.5 rounded-full bg-brand-orange shadow-[0_0_12px_rgba(255,132,0,0.45)] shrink-0" />
     <div className="min-w-0">
-      <p className="text-base md:text-lg font-black text-[var(--text-primary)] tracking-tight">{title}</p>
-      {description && <p className="mt-1 text-xs md:text-[13px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
+      <p className="text-lg md:text-xl font-black text-brand-orange tracking-tight">{title}</p>
+      {description && <p className="mt-1.5 text-sm md:text-[15px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
     </div>
   </div>
 );
 
 const StoryboardSlider = ({ label, left, right, value, onChange, description, statusLabels }: StoryboardSliderProps) => {
   const status = getStoryboardSliderStatus(value, statusLabels);
-  const leftLabelClass = left.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-sm md:text-[15px]';
-  const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-sm md:text-[15px]';
+  const sliderHint = getStoryboardSliderHint(value, left, right, statusLabels);
+  const leftLabelClass = left.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
+  const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
   return (
-    <div className="rounded-2xl bg-btn-bg/60 border border-btn-border p-3.5 space-y-3">
+    <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm md:text-[15px] font-black text-brand-orange">{label}</p>
-        <span className="rounded-full border border-brand-orange/35 bg-brand-orange/10 px-2.5 py-1 text-[11px] font-black text-brand-orange shrink-0">{status}</span>
+        <p className="inline-flex items-center gap-2 text-base md:text-[17px] font-black text-brand-orange">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-orange shadow-[0_0_8px_rgba(255,132,0,0.45)] shrink-0" />
+          <span>{label}</span>
+        </p>
+        <span className="rounded-full border border-brand-orange/25 bg-transparent px-3 py-1 text-xs font-black text-brand-orange shrink-0">{status}</span>
       </div>
-      {description && <p className="text-[11px] md:text-xs leading-relaxed text-[var(--text-secondary)]">{description}</p>}
-      <div className="space-y-2">
+      {description && <p className="text-xs md:text-[13px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-3">
           <span className={`${leftLabelClass} font-black text-[var(--text-primary)] text-left`}>{left}</span>
           <span className={`${rightLabelClass} font-black text-[var(--text-primary)] text-right`}>{right}</span>
         </div>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={5}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="storyboard-slider w-full"
-          aria-label={`${left}에서 ${right} 사이 ${label}`}
-        />
+        <div className="relative px-[1px] pt-1 pb-7">
+          <div className="storyboard-slider-center-marker" />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={snapStoryboardSliderValue(value)}
+            onChange={(e) => onChange(snapStoryboardSliderValue(Number(e.target.value))) }
+            className="storyboard-slider w-full"
+            aria-label={`${left}에서 ${right} 사이 ${label}`}
+          />
+          <div className="pointer-events-none absolute bottom-0 left-1/2 max-w-[190px] -translate-x-1/2 truncate text-center text-[10px] font-black text-white/90 md:text-[11px]">
+            {sliderHint}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2071,6 +2106,7 @@ function inferVocalActualLabel(member: VocalMember) {
   const phrase = [
     VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore,
     VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore,
+    ...getVocalCharacterScalePromptParts(char),
     ...(char.techniqueIds || []).map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.promptCore),
     char.customVoiceTone,
     char.customPersonality,
@@ -2145,6 +2181,7 @@ function buildCompactVocalCue(member: VocalMember) {
 
   const selectedToneText = VOCAL_VOICE_TONES.find((item) => item.id === char.voiceToneId)?.promptCore || char.customVoiceTone || '';
   const selectedPersonalityText = VOCAL_PERSONALITIES.find((item) => item.id === char.personalityId)?.promptCore || char.customPersonality || '';
+  const scalePromptTexts = getVocalCharacterScalePromptParts(char);
   const customTechniqueText = char.customTechnique || '';
 
   const cues: string[] = [];
@@ -2154,7 +2191,8 @@ function buildCompactVocalCue(member: VocalMember) {
     if (!cues.some((item) => item.toLowerCase() === clean.toLowerCase())) cues.push(clean);
   };
 
-  // 창법이 보컬 캐릭터의 핵심이므로 technique을 가장 먼저 압축한다.
+  // 게이지 기반 캐릭터 cue를 우선 압축하고, 기존 선택형 창법은 보조로 유지한다.
+  scalePromptTexts.forEach((text) => pushCue(compactVocalLyricCueText(text, isRap)));
   selectedTechniqueTexts.forEach((text) => pushCue(compactVocalLyricCueText(text, isRap)));
   if (customTechniqueText) pushCue(compactVocalLyricCueText(customTechniqueText, isRap));
 
@@ -7051,6 +7089,14 @@ ${normalizePromptForDisplay(result.prompt)}
     return rows;
   }, []);
 
+  const globalSearchTypePriority: Record<GlobalSearchType, number> = {
+    genre: 0,
+    style: 1,
+    sound: 2,
+    mood: 3,
+    theme: 4,
+  };
+
   const globalSearchResults = useMemo(() => {
     const normalizedQuery = normalizeGlobalSearchText(globalSearchQuery);
     const compactQuery = compactGlobalSearchText(globalSearchQuery);
@@ -7071,7 +7117,12 @@ ${normalizePromptForDisplay(result.prompt)}
         return { ...item, score };
       })
       .filter(Boolean)
-      .sort((a: any, b: any) => b.score - a.score || a.categoryLabel.localeCompare(b.categoryLabel))
+      .sort((a: any, b: any) =>
+        globalSearchTypePriority[a.type as GlobalSearchType] - globalSearchTypePriority[b.type as GlobalSearchType] ||
+        b.score - a.score ||
+        a.label.localeCompare(b.label, 'ko') ||
+        a.id.localeCompare(b.id)
+      )
       .slice(0, 60) as Array<(typeof globalSearchIndex)[number] & { score: number }>;
   }, [globalSearchIndex, globalSearchQuery]);
 
@@ -7140,6 +7191,12 @@ ${normalizePromptForDisplay(result.prompt)}
       _ts: Date.now(),
     });
   };
+
+  const getGlobalSearchBreadcrumbParts = (groupLabel?: string) =>
+    String(groupLabel || '')
+      .split(' · ')
+      .map(part => part.trim())
+      .filter(Boolean);
 
   const getGlobalSearchCategoryClass = (type: GlobalSearchType) => {
     if (type === 'genre') return 'text-brand-orange border-brand-orange/30 bg-brand-orange/10';
@@ -7451,8 +7508,13 @@ ${normalizePromptForDisplay(result.prompt)}
                                   {item.categoryLabel}
                                 </span>
                                 {item.groupLabel && (
-                                  <span className="truncate text-[10px] font-bold text-[var(--text-secondary)]">
-                                    {item.groupLabel}
+                                  <span className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] font-bold text-[var(--text-secondary)]">
+                                    {getGlobalSearchBreadcrumbParts(item.groupLabel).map((part) => (
+                                      <span key={`${item.type}-${item.id}-${part}`} className="inline-flex min-w-0 items-center gap-1">
+                                        <span className="text-[var(--text-tertiary)]">&gt;</span>
+                                        <span className="max-w-[9rem] truncate">{part}</span>
+                                      </span>
+                                    ))}
                                   </span>
                                 )}
                               </div>
@@ -7962,11 +8024,11 @@ ${normalizePromptForDisplay(result.prompt)}
                       </div>
 
                       <div className="max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
-                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-3">
+                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-4">
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-[11px] font-black text-brand-orange mb-1.5">캐릭터 A</label>
+                              <label className="block text-xs font-black text-brand-orange mb-2">캐릭터 A</label>
                               <input
                                 value={draftSituation.targetA || ''}
                                 onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
@@ -7975,7 +8037,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               />
                             </div>
                             <div>
-                              <label className="block text-[11px] font-black text-brand-orange mb-1.5">캐릭터 B</label>
+                              <label className="block text-xs font-black text-brand-orange mb-2">캐릭터 B</label>
                               <input
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
@@ -7986,12 +8048,12 @@ ${normalizePromptForDisplay(result.prompt)}
                           </div>
                         </section>
 
-                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-4">
+                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-5">
                           <StoryboardSectionTitle title="캐릭터 포지션" description="원하는 스타일로 게이지를 맞춰보세요" />
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--modal-soft-border)] p-3 space-y-3">
+                            <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-xs font-black text-brand-orange truncate">{draftSituation.targetA || '캐릭터 A'}</p>
+                                <p className="text-sm font-black text-brand-orange truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
                               <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} />
@@ -8004,9 +8066,9 @@ ${normalizePromptForDisplay(result.prompt)}
                               />
                             </div>
 
-                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--modal-soft-border)] p-3 space-y-3">
+                            <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-xs font-black text-brand-orange truncate">{draftSituation.targetB || '캐릭터 B'}</p>
+                                <p className="text-sm font-black text-brand-orange truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
                               <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} />
@@ -8021,7 +8083,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           </div>
                         </section>
 
-                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-3">
+                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-4">
                           <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
                           <textarea
                             value={draftSituation.description || ''}
@@ -8041,12 +8103,12 @@ ${normalizePromptForDisplay(result.prompt)}
                           />
                         </section>
 
-                        <section className="rounded-3xl border border-[var(--modal-soft-border)] bg-btn-bg/35 p-4 space-y-4">
+                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-5">
                           <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <StoryboardSlider label="대화" left="티키타카" right="솔플" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["티키타카", "반반", "솔플"]} />
+                            <StoryboardSlider label="대화" left="티키타카" right="독백" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["티키타카", "반반", "독백"]} />
                             <StoryboardSlider label="전개" left="리얼리즘" right="드라마틱" value={getStoryboardSliderValue(draftSituation, 'storyRealityScale')} onChange={(v) => updateDraftSituationField('storyRealityScale', v)} description="현실과 비현실의 비중을 조절해요." statusLabels={["리얼리즘", "시트콤", "드라마틱"]} />
-                            <StoryboardSlider label="감정" left="위트" right="진심모드" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["위트", "츤데레", "진심모드"]} />
+                            <StoryboardSlider label="감정" left="위트" right="진심" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["위트", "츤데레", "진심"]} />
                           </div>
                         </section>
                       </div>
@@ -9272,25 +9334,27 @@ ${normalizePromptForDisplay(result.prompt)}
           -webkit-appearance: none;
           height: 6px;
           border-radius: 999px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.26), rgba(255,255,255,0.12));
+          background: rgba(255,255,255,0.18);
           outline: none;
         }
         .storyboard-slider::-webkit-slider-runnable-track {
           height: 6px;
           border-radius: 999px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.26), rgba(255,255,255,0.12));
+          background: rgba(255,255,255,0.18);
         }
         .storyboard-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
-          width: 18px;
-          height: 18px;
-          margin-top: -6px;
+          width: 22px;
+          height: 22px;
+          margin-top: -8px;
           border-radius: 999px;
           background: rgb(255, 130, 0);
           border: 3px solid rgba(255,255,255,0.86);
           box-shadow: none;
           cursor: grab;
+          position: relative;
+          z-index: 2;
         }
         .storyboard-slider:active::-webkit-slider-thumb {
           cursor: grabbing;
@@ -9299,19 +9363,155 @@ ${normalizePromptForDisplay(result.prompt)}
         .storyboard-slider::-moz-range-track {
           height: 6px;
           border-radius: 999px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.26), rgba(255,255,255,0.12));
+          background: rgba(255,255,255,0.18);
         }
         .storyboard-slider::-moz-range-progress {
           background: transparent;
         }
         .storyboard-slider::-moz-range-thumb {
-          width: 18px;
-          height: 18px;
+          width: 22px;
+          height: 22px;
           border-radius: 999px;
           background: rgb(255, 130, 0);
           border: 3px solid rgba(255,255,255,0.86);
           box-shadow: none;
           cursor: grab;
+        }
+        .storyboard-slider-center-marker {
+          position: absolute;
+          top: 17px;
+          left: 50%;
+          width: 12px;
+          height: 12px;
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          border: 2px solid rgba(255,255,255,0.9);
+          background: rgba(10,10,10,0.98);
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        .vocal-character-slider {
+          appearance: none;
+          -webkit-appearance: none;
+          height: 7px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.20);
+          outline: none;
+        }
+        .vocal-character-slider::-webkit-slider-runnable-track {
+          height: 7px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.20);
+        }
+        .vocal-character-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 24px;
+          height: 24px;
+          margin-top: -8.5px;
+          border-radius: 999px;
+          background: rgb(255, 130, 0);
+          border: 4px solid rgba(255,255,255,0.90);
+          box-shadow: none;
+          cursor: grab;
+          position: relative;
+          z-index: 2;
+        }
+        .vocal-character-slider-female::-webkit-slider-thumb {
+          background: rgb(244, 114, 182);
+        }
+        .vocal-character-slider-male::-webkit-slider-thumb {
+          background: rgb(96, 165, 250);
+        }
+        .vocal-character-slider:active::-webkit-slider-thumb {
+          cursor: grabbing;
+          transform: scale(1.04);
+        }
+        .vocal-character-slider::-moz-range-track {
+          height: 7px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.20);
+        }
+        .vocal-character-slider::-moz-range-progress {
+          background: transparent;
+        }
+        .vocal-character-slider::-moz-range-thumb {
+          width: 24px;
+          height: 24px;
+          border-radius: 999px;
+          background: rgb(255, 130, 0);
+          border: 4px solid rgba(255,255,255,0.90);
+          box-shadow: none;
+          cursor: grab;
+        }
+        .vocal-character-slider-female::-moz-range-thumb {
+          background: rgb(244, 114, 182);
+        }
+        .vocal-character-slider-male::-moz-range-thumb {
+          background: rgb(96, 165, 250);
+        }
+        .vocal-character-slider-center-marker {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 14px;
+          height: 14px;
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          border: 2px solid rgba(255,255,255,0.86);
+          background: rgba(17,17,17,0.96);
+          pointer-events: none;
+          z-index: 1;
+        }
+        .vocal-character-dual-track {
+          position: relative;
+          width: 100%;
+          height: 34px;
+          border-radius: 999px;
+          background: transparent;
+          touch-action: none;
+        }
+        .vocal-character-dual-track::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          height: 7px;
+          transform: translateY(-50%);
+          border-radius: 999px;
+          background: rgba(255,255,255,0.20);
+        }
+        .vocal-character-dual-handle {
+          position: absolute;
+          top: 50%;
+          width: 24px;
+          height: 24px;
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          border: 4px solid rgba(255,255,255,0.90);
+          box-shadow: none;
+          cursor: grab;
+          touch-action: none;
+          transition: transform 120ms ease, filter 120ms ease;
+        }
+        .vocal-character-dual-handle:active {
+          cursor: grabbing;
+          transform: translate(-50%, -50%) scale(1.04);
+        }
+        .vocal-character-dual-handle-main {
+          z-index: 3;
+        }
+        .vocal-character-dual-handle-secondary {
+          z-index: 2;
+          background: rgb(255, 130, 0);
+        }
+        .vocal-character-dual-handle-female {
+          background: rgb(244, 114, 182);
+        }
+        .vocal-character-dual-handle-male {
+          background: rgb(96, 165, 250);
         }
         @keyframes marquee-right {
           0% { transform: translateX(-50%); }
@@ -11000,6 +11200,11 @@ function SongStructureIntegratedControl({
   const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
   const draggingSectionIdRef = useRef<string | null>(null);
   const dragPointerYRef = useRef<number | null>(null);
+  const dragStartPointerYRef = useRef<number | null>(null);
+  const hasReorderDragStartedRef = useRef(false);
+  const activeReorderPointerIdRef = useRef<number | null>(null);
+  const activeReorderHandleRef = useRef<HTMLButtonElement | null>(null);
+  const reorderDragCleanupRef = useRef<(() => void) | null>(null);
   const reorderFrameRef = useRef<number | null>(null);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [savedStructures, setSavedStructures] = useState<SavedStructurePreset[]>([]);
@@ -11073,7 +11278,7 @@ function SongStructureIntegratedControl({
     const dragId = draggingSectionIdRef.current;
     const pointerY = dragPointerYRef.current;
     const container = currentStructureScrollRef.current;
-    if (!dragId || pointerY == null || !container) return;
+    if (!hasReorderDragStartedRef.current || !dragId || pointerY == null || !container) return;
 
     const containerRect = container.getBoundingClientRect();
     const edgeSize = 74;
@@ -11108,12 +11313,35 @@ function SongStructureIntegratedControl({
   }, [moveDraftSectionById]);
 
   const stopManualReorderDrag = useCallback(() => {
+    if (reorderDragCleanupRef.current) {
+      const cleanup = reorderDragCleanupRef.current;
+      reorderDragCleanupRef.current = null;
+      cleanup();
+    }
+
     if (reorderFrameRef.current !== null) {
       cancelAnimationFrame(reorderFrameRef.current);
       reorderFrameRef.current = null;
     }
+
+    const activeHandle = activeReorderHandleRef.current;
+    const activePointerId = activeReorderPointerIdRef.current;
+    if (activeHandle && activePointerId !== null) {
+      try {
+        if (activeHandle.hasPointerCapture?.(activePointerId)) {
+          activeHandle.releasePointerCapture(activePointerId);
+        }
+      } catch {
+        // Pointer capture cleanup is best-effort only.
+      }
+    }
+
+    activeReorderHandleRef.current = null;
+    activeReorderPointerIdRef.current = null;
     draggingSectionIdRef.current = null;
     dragPointerYRef.current = null;
+    dragStartPointerYRef.current = null;
+    hasReorderDragStartedRef.current = false;
     setDraggingSectionId(null);
     setIsReorderDragging(false);
   }, []);
@@ -11138,46 +11366,68 @@ function SongStructureIntegratedControl({
     event.preventDefault();
     event.stopPropagation();
 
+    activeReorderPointerIdRef.current = event.pointerId;
+    activeReorderHandleRef.current = event.currentTarget;
     draggingSectionIdRef.current = targetItem.id;
     dragPointerYRef.current = event.clientY;
-    setDraggingSectionId(targetItem.id);
-    setIsReorderDragging(true);
+    dragStartPointerYRef.current = event.clientY;
+    hasReorderDragStartedRef.current = false;
+    setDraggingSectionId(null);
+    setIsReorderDragging(false);
     setSelectedInsertIndex(null);
 
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture is best-effort only.
-    }
+    // Do not use pointer capture here. On mobile, the dragged row can be
+    // reordered while the pointer is still down, and moving the handle in the
+    // DOM may fire lostpointercapture, which makes the drag feel forcibly
+    // released. Document-level capture listeners below keep the drag alive
+    // until the actual pointerup/cancel event.
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (activeReorderPointerIdRef.current !== null && moveEvent.pointerId !== activeReorderPointerIdRef.current) return;
       moveEvent.preventDefault();
+      moveEvent.stopPropagation();
       dragPointerYRef.current = moveEvent.clientY;
+
+      const startY = dragStartPointerYRef.current;
+      if (!hasReorderDragStartedRef.current) {
+        if (startY == null || Math.abs(moveEvent.clientY - startY) < 12) return;
+        hasReorderDragStartedRef.current = true;
+        setDraggingSectionId(draggingSectionIdRef.current);
+        setIsReorderDragging(true);
+        startManualReorderLoop();
+      }
     };
 
-    const handlePointerUp = () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
-      window.removeEventListener('blur', handlePointerUp);
+    const handlePointerEnd = (endEvent?: PointerEvent | MouseEvent | TouchEvent | Event) => {
+      if (endEvent && 'pointerId' in endEvent && activeReorderPointerIdRef.current !== null && endEvent.pointerId !== activeReorderPointerIdRef.current) return;
       stopManualReorderDrag();
     };
 
-    window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp, { once: true });
-    window.addEventListener('pointercancel', handlePointerUp, { once: true });
-    window.addEventListener('blur', handlePointerUp, { once: true });
+    const cleanupReorderListeners = () => {
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      document.removeEventListener('pointerup', handlePointerEnd, true);
+      document.removeEventListener('pointercancel', handlePointerEnd, true);
+      document.removeEventListener('mouseup', handlePointerEnd, true);
+      document.removeEventListener('touchend', handlePointerEnd, true);
+      document.removeEventListener('touchcancel', handlePointerEnd, true);
+      window.removeEventListener('blur', handlePointerEnd, true);
+    };
 
-    startManualReorderLoop();
+    document.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
+    document.addEventListener('pointerup', handlePointerEnd, { capture: true });
+    document.addEventListener('pointercancel', handlePointerEnd, { capture: true });
+    document.addEventListener('mouseup', handlePointerEnd, { capture: true });
+    document.addEventListener('touchend', handlePointerEnd, { capture: true });
+    document.addEventListener('touchcancel', handlePointerEnd, { capture: true });
+    window.addEventListener('blur', handlePointerEnd, { capture: true });
+    reorderDragCleanupRef.current = cleanupReorderListeners;
   }, [draftStructure, startManualReorderLoop, stopManualReorderDrag]);
 
   useEffect(() => {
     return () => {
-      if (reorderFrameRef.current !== null) {
-        cancelAnimationFrame(reorderFrameRef.current);
-      }
+      stopManualReorderDrag();
     };
-  }, []);
+  }, [stopManualReorderDrag]);
 
 
   useEffect(() => {
@@ -13693,6 +13943,262 @@ const SECTION_TAG_DESCRIPTIONS_LOCAL: Record<string, string> = {
   'Character Switch': '화자가 바뀌는 느낌을 분명하게 만들어 줍니다.',
 };
 
+type VocalCharacterScaleKey =
+  | 'ageLevel'
+  | 'rangeLevel'
+  | 'deliveryLevel'
+  | 'rhythmLevel'
+  | 'emotionLevel'
+  | 'textureLevel'
+  | 'charmLevel'
+  | 'ornamentLevel';
+
+type VocalCharacterScaleStep = {
+  labelKo: string;
+  prompt: string;
+  hintKo: string;
+};
+
+type VocalCharacterScaleConfig = {
+  key: VocalCharacterScaleKey;
+  titleKo: string;
+  subtitleKo: string;
+  defaultValue: number;
+  defaultValues?: number[];
+  minLabelKo: string;
+  maxLabelKo: string;
+  steps: VocalCharacterScaleStep[];
+};
+
+const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
+  {
+    key: 'ageLevel',
+    titleKo: '연령감',
+    subtitleKo: '목소리에서 느껴지는 나이대와 성숙도를 잡습니다.',
+    defaultValue: 6,
+    minLabelKo: '어림',
+    maxLabelKo: '원숙함',
+    steps: [
+      { labelKo: '어린 느낌', prompt: 'childlike youthful vocal color', hintKo: '작고 어린 결' },
+      { labelKo: '10대 느낌', prompt: 'teen-like vocal color', hintKo: '풋풋하고 가벼움' },
+      { labelKo: '20대 초반', prompt: 'young adult vocal color', hintKo: '젊고 선명함' },
+      { labelKo: '풋풋한 성인', prompt: 'fresh early-adult vocal color', hintKo: '성인이지만 풋풋함' },
+      { labelKo: '젊은 성인', prompt: 'clear young adult vocal color', hintKo: '젊고 안정적' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '성숙한 30대', prompt: 'mature adult vocal color', hintKo: '조금 더 안정적' },
+      { labelKo: '중년감', prompt: 'middle-aged seasoned vocal color', hintKo: '삶의 결이 있음' },
+      { labelKo: '노련함', prompt: 'aged seasoned vocal color', hintKo: '오래 부른 듯한 깊이' },
+      { labelKo: '원숙함', prompt: 'veteran mature vocal color', hintKo: '깊고 원숙한 결' },
+      { labelKo: '관록 있음', prompt: 'deep veteran vocal authority', hintKo: '관록 있는 무게감' },
+    ],
+  },
+  {
+    key: 'rangeLevel',
+    titleKo: '음역',
+    subtitleKo: '보컬의 기본 높낮이를 정합니다.',
+    defaultValue: 6,
+    minLabelKo: '낮음',
+    maxLabelKo: '높음',
+    steps: [
+      { labelKo: '극저음', prompt: 'very deep low vocal range', hintKo: '깊게 깔리는 저음' },
+      { labelKo: '매우 낮음', prompt: 'very low vocal range', hintKo: '낮고 무거움' },
+      { labelKo: '낮음', prompt: 'low vocal range', hintKo: '낮은 목소리' },
+      { labelKo: '중저음', prompt: 'low-mid vocal range', hintKo: '안정적인 중저음' },
+      { labelKo: '낮은 보통', prompt: 'slightly low natural vocal range', hintKo: '기본보다 살짝 낮음' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '높은 보통', prompt: 'slightly high natural vocal range', hintKo: '기본보다 살짝 높음' },
+      { labelKo: '중고음', prompt: 'upper-mid vocal range', hintKo: '밝게 올라감' },
+      { labelKo: '높음', prompt: 'high vocal range', hintKo: '높고 선명함' },
+      { labelKo: '매우 높음', prompt: 'thin very high vocal range', hintKo: '얇고 높은 고음' },
+      { labelKo: '초고음', prompt: 'extremely high thin vocal range', hintKo: '아주 얇은 초고음' },
+    ],
+  },
+  {
+    key: 'deliveryLevel',
+    titleKo: '창법/발성',
+    subtitleKo: '가성, 진성, 말하듯 부름의 방향을 정합니다.',
+    defaultValue: 6,
+    minLabelKo: '가성',
+    maxLabelKo: '랩형',
+    steps: [
+      { labelKo: '공기 가성', prompt: 'airy falsetto delivery', hintKo: '공기 섞인 얇은 가성' },
+      { labelKo: '얇은 가성', prompt: 'thin falsetto delivery', hintKo: '얇고 선명한 가성' },
+      { labelKo: '부드러운 가성', prompt: 'soft falsetto delivery', hintKo: '부드럽고 여린 가성' },
+      { labelKo: '가성 섞임', prompt: 'falsetto-leaning mixed delivery', hintKo: '가성 쪽으로 기운 연결' },
+      { labelKo: '믹스보이스', prompt: 'connected mixed voice', hintKo: '진성과 가성의 연결' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '자연 진성', prompt: 'natural chest voice', hintKo: '자연스러운 진성' },
+      { labelKo: '힘 있는 진성', prompt: 'powerful chest voice', hintKo: '단단하게 밀어냄' },
+      { labelKo: '말하듯 부름', prompt: 'speech-like singing delivery', hintKo: '노래와 말 사이' },
+      { labelKo: '대사형', prompt: 'spoken theatrical delivery', hintKo: '대사처럼 전달' },
+      { labelKo: '랩형', prompt: 'rap-like vocal delivery', hintKo: '리듬과 말맛 중심' },
+    ],
+  },
+  {
+    key: 'rhythmLevel',
+    titleKo: '박자감',
+    subtitleKo: '정박, 앞박, 뒤로 밀림, 불안정한 박자감을 정합니다.',
+    defaultValue: 6,
+    minLabelKo: '앞섬',
+    maxLabelKo: '자유박자',
+    steps: [
+      { labelKo: '크게 앞섬', prompt: 'strongly ahead-of-the-beat phrasing', hintKo: '박자보다 확실히 먼저 감' },
+      { labelKo: '앞서는 박자', prompt: 'ahead-of-the-beat phrasing', hintKo: '박자보다 먼저 들어감' },
+      { labelKo: '빠른 반응', prompt: 'quick responsive phrasing', hintKo: '반응이 빠름' },
+      { labelKo: '살짝 당김', prompt: 'slightly anticipated phrasing', hintKo: '살짝 앞박' },
+      { labelKo: '정박에 가까움', prompt: 'near-steady slightly anticipated phrasing', hintKo: '거의 정박, 살짝 당김' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '살짝 뒤로', prompt: 'slightly behind-the-beat phrasing', hintKo: '한 박자 늦는 느낌' },
+      { labelKo: '뒤로 밀림', prompt: 'behind-the-beat phrasing', hintKo: '뒤쪽에 기대어 부름' },
+      { labelKo: '느슨함', prompt: 'loose behind-the-beat phrasing', hintKo: '나른하게 뒤로 밀림' },
+      { labelKo: '불안정', prompt: 'unstable off-beat phrasing', hintKo: '일부러 흔들리는 박자' },
+      { labelKo: '자유박자', prompt: 'free unstable timing', hintKo: '박자 밖으로 자유롭게 흔들림' },
+    ],
+  },
+  {
+    key: 'emotionLevel',
+    titleKo: '감정 강도',
+    subtitleKo: '감정을 얼마나 드러내는지 정합니다.',
+    defaultValue: 6,
+    minLabelKo: '절제',
+    maxLabelKo: '폭발',
+    steps: [
+      { labelKo: '무감정', prompt: 'emotionless delivery', hintKo: '거의 감정을 보이지 않음' },
+      { labelKo: '차가운 절제', prompt: 'cold restrained emotion', hintKo: '차갑게 눌러 담음' },
+      { labelKo: '절제', prompt: 'restrained emotion', hintKo: '감정을 눌러 담음' },
+      { labelKo: '담담함', prompt: 'calm understated emotion', hintKo: '담담하게 표현' },
+      { labelKo: '은은함', prompt: 'subtle gentle emotion', hintKo: '감정이 살짝 비침' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '감정 있음', prompt: 'expressive emotion', hintKo: '감정이 드러남' },
+      { labelKo: '감정 진함', prompt: 'strong expressive emotion', hintKo: '감정선이 진함' },
+      { labelKo: '극적', prompt: 'dramatic emotion', hintKo: '드라마틱하게 표현' },
+      { labelKo: '과장', prompt: 'exaggerated theatrical emotion', hintKo: '캐릭터처럼 과장' },
+      { labelKo: '폭발', prompt: 'explosive emotional delivery', hintKo: '감정을 크게 터뜨림' },
+    ],
+  },
+  {
+    key: 'textureLevel',
+    titleKo: '목소리 질감',
+    subtitleKo: '목소리 표면의 결을 정합니다.',
+    defaultValue: 6,
+    minLabelKo: '건조함',
+    maxLabelKo: '몽환',
+    steps: [
+      { labelKo: '극건조', prompt: 'very dry vocal tone', hintKo: '수분 없이 바짝 마름' },
+      { labelKo: '보컬프라이', prompt: 'low vocal fry texture', hintKo: '낮게 지글거리는 결' },
+      { labelKo: '크리키', prompt: 'creaky vocal texture', hintKo: '성대가 살짝 갈라짐' },
+      { labelKo: '그로울링', prompt: 'low growling vocal edge', hintKo: '목 안쪽의 거친 울림' },
+      { labelKo: '비음 섞임', prompt: 'slightly nasal vocal tone', hintKo: '코끝 울림이 살짝 섞임' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '따뜻함', prompt: 'warm vocal tone', hintKo: '온기 있는 목소리' },
+      { labelKo: '부드러움', prompt: 'soft vocal texture', hintKo: '부드럽게 감김' },
+      { labelKo: '공기감', prompt: 'airy vocal texture', hintKo: '가볍게 퍼짐' },
+      { labelKo: '몽환공기', prompt: 'dreamy airy vocal texture', hintKo: '몽환적으로 퍼짐' },
+      { labelKo: '유리결', prompt: 'glassy ethereal vocal texture', hintKo: '투명하고 신비로움' },
+    ],
+  },
+  {
+    key: 'charmLevel',
+    titleKo: '보컬 매력',
+    subtitleKo: '소울풀, 귀여움, 매혹감 같은 보컬의 매력 포인트를 정합니다.',
+    defaultValue: 6,
+    minLabelKo: '담백함',
+    maxLabelKo: '신비로움',
+    steps: [
+      { labelKo: '무채색', prompt: 'neutral colorless vocal charm', hintKo: '매력을 드러내지 않음' },
+      { labelKo: '청순함', prompt: 'pure innocent vocal charm', hintKo: '맑고 순한 매력' },
+      { labelKo: '귀여움', prompt: 'cute playful vocal charm', hintKo: '귀엽고 발랄함' },
+      { labelKo: '친근함', prompt: 'friendly approachable vocal charm', hintKo: '가깝고 편안한 매력' },
+      { labelKo: '따뜻매력', prompt: 'warm comforting vocal charm', hintKo: '따뜻하게 감싸는 매력' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '소울풀', prompt: 'soulful vocal character', hintKo: '영혼이 느껴지는 결' },
+      { labelKo: '매혹적', prompt: 'seductive magnetic vocal charm', hintKo: '끌어당기는 매력' },
+      { labelKo: '도도함', prompt: 'cool aloof vocal charm', hintKo: '도도하고 차가움' },
+      { labelKo: '신비로움', prompt: 'mysterious vocal aura', hintKo: '알 수 없는 신비감' },
+      { labelKo: '몽환매력', prompt: 'dreamy enigmatic vocal charm', hintKo: '몽환적이고 알 수 없음' },
+    ],
+  },
+  {
+    key: 'ornamentLevel',
+    titleKo: '표현기교',
+    subtitleKo: '뮤트발음, 숨섞임, 트릴, 벤딩, 실험창법 같은 보컬 습관을 정합니다.',
+    defaultValue: 8,
+    minLabelKo: '담백함',
+    maxLabelKo: '실험',
+    steps: [
+      { labelKo: '무기교', prompt: 'no vocal ornament', hintKo: '꾸밈 없이 직선적' },
+      { labelKo: '담백연결', prompt: 'clean connected phrasing', hintKo: '담백하게 이어 부름' },
+      { labelKo: '또박발음', prompt: 'clear precise articulation', hintKo: '또박또박 선명함' },
+      { labelKo: '뮤트발음', prompt: 'muted consonant-heavy articulation', hintKo: '받침을 눌러 삼킴' },
+      { labelKo: '숨섞임', prompt: 'breathy phrasing', hintKo: '숨을 섞어 부름' },
+      { labelKo: '하프에어', prompt: 'breathy half-air stops', hintKo: '숨으로 살짝 막고 품' },
+      { labelKo: '더블브레스', prompt: 'double-breath phrasing', hintKo: '숨을 한 번 더 꺾어 넣음' },
+      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '고스트노트', prompt: 'soft ghost-note vocal touches', hintKo: '들릴 듯 말 듯 스침' },
+      { labelKo: '데토네이션', prompt: 'slightly detuned vocal delivery', hintKo: '음정이 살짝 낮게 흔들림' },
+      { labelKo: '클리산도', prompt: 'smooth vocal glissando slides', hintKo: '음을 미끄러지듯 연결' },
+      { labelKo: '트릴', prompt: 'vocal trills and quick ornaments', hintKo: '빠른 장식음' },
+      { labelKo: '깊은비브라토', prompt: 'deep emotional vibrato', hintKo: '깊고 넓은 떨림' },
+      { labelKo: '벤딩슬러', prompt: 'vocal bends, slurred slides, and unique turns', hintKo: '음을 꺾고 미끄러뜨림' },
+      { labelKo: '실험창법', prompt: 'context-aware experimental vocal technique such as sprechgesang, yodel-like flips, glitchy phrasing, whisper-noise texture, cracked distorted edges, or unstable pitch texture', hintKo: '장르와 상황에 맞는 특수 창법' },
+    ],
+  },
+];
+
+const isVocalCharacterScaleDefaultLevel = (config: VocalCharacterScaleConfig, level: number) => {
+  return level === config.defaultValue;
+};
+
+const isVocalCharacterOrnamentConfig = (config: VocalCharacterScaleConfig) => config.key === 'ornamentLevel';
+
+const getVocalCharacterOrnamentSecondaryLevel = (character: VocalMember['character'] | undefined, config: VocalCharacterScaleConfig) => {
+  const value = Number((character as any)?.ornamentSecondaryLevel);
+  return Number.isFinite(value) ? Math.min(config.steps.length, Math.max(1, Math.round(value))) : config.defaultValue;
+};
+
+const getVocalCharacterScaleStep = (key: VocalCharacterScaleKey, level?: number) => {
+  const config = VOCAL_CHARACTER_SCALE_CONFIGS.find((item) => item.key === key);
+  if (!config) return undefined;
+  const safeLevel = Math.min(config.steps.length, Math.max(1, Number(level || config.defaultValue)));
+  return config.steps[safeLevel - 1];
+};
+
+const getVocalCharacterScaleLevel = (character: VocalMember['character'] | undefined, config: VocalCharacterScaleConfig) => {
+  const value = Number(character?.[config.key]);
+  return Number.isFinite(value) ? Math.min(config.steps.length, Math.max(1, Math.round(value))) : config.defaultValue;
+};
+
+const getVocalCharacterScalePromptParts = (character?: VocalMember['character']) => {
+  if (!character) return [] as string[];
+  const parts = VOCAL_CHARACTER_SCALE_CONFIGS
+    .map((config) => {
+      const value = Number(character[config.key]);
+      if (!Number.isFinite(value)) return '';
+      const safeLevel = Math.min(config.steps.length, Math.max(1, Math.round(value)));
+      if (isVocalCharacterScaleDefaultLevel(config, safeLevel)) return '';
+      return config.steps[safeLevel - 1]?.prompt || '';
+    })
+    .filter(Boolean);
+
+  const ornamentConfig = VOCAL_CHARACTER_SCALE_CONFIGS.find((config) => isVocalCharacterOrnamentConfig(config));
+  if (ornamentConfig) {
+    const mainValue = Number(character.ornamentLevel);
+    const mainSafeValue = Number.isFinite(mainValue) ? Math.min(ornamentConfig.steps.length, Math.max(1, Math.round(mainValue))) : ornamentConfig.defaultValue;
+    const secondaryValue = Number((character as any).ornamentSecondaryLevel);
+    const secondarySafeValue = Number.isFinite(secondaryValue) ? Math.min(ornamentConfig.steps.length, Math.max(1, Math.round(secondaryValue))) : ornamentConfig.defaultValue;
+
+    if (Number.isFinite(secondaryValue) && !isVocalCharacterScaleDefaultLevel(ornamentConfig, secondarySafeValue)) {
+      const prompt = ornamentConfig.steps[secondarySafeValue - 1]?.prompt;
+      if (prompt) parts.push(`secondary technique: ${prompt}`);
+    } else if (Number.isFinite(mainValue) && !isVocalCharacterScaleDefaultLevel(ornamentConfig, mainSafeValue)) {
+      parts.push('optional compatible secondary vocal habit chosen from a nearby or musically related technique, only if it fits the genre, mood, and character');
+    }
+  }
+
+  return parts;
+};
+
+
 interface VocalControlProps {
   maleCount: number;
   femaleCount: number;
@@ -13975,14 +14481,27 @@ function VocalControl({
 
   const getVocalCharacterSummary = (member: VocalMember) => {
     const character = member.character || {};
+    const scaleParts = VOCAL_CHARACTER_SCALE_CONFIGS
+      .flatMap((config) => {
+        const level = getVocalCharacterScaleLevel(character, config);
+        const labels: string[] = [];
+        if (!isVocalCharacterScaleDefaultLevel(config, level)) labels.push(getVocalCharacterScaleStep(config.key, level)?.labelKo || '');
+        if (isVocalCharacterOrnamentConfig(config)) {
+          const secondaryLevel = getVocalCharacterOrnamentSecondaryLevel(character, config);
+          if (!isVocalCharacterScaleDefaultLevel(config, secondaryLevel)) labels.push(`보조 ${config.steps[secondaryLevel - 1]?.labelKo || ''}`);
+        }
+        return labels.filter(Boolean);
+      })
+      .filter(Boolean)
+      .slice(0, 4);
     const voice = VOCAL_VOICE_TONES.find((item) => item.id === character.voiceToneId)?.labelKo;
     const personality = VOCAL_PERSONALITIES.find((item) => item.id === character.personalityId)?.labelKo;
     const techniques = (character.techniqueIds || [])
       .map((id) => VOCAL_TECHNIQUES.find((item) => item.id === id)?.labelKo)
       .filter(Boolean)
-      .slice(0, 3);
-    const parts = [voice, personality, ...techniques].filter(Boolean);
-    return parts.length > 0 ? parts.join(' · ') : '창법 / 목소리 / 성격';
+      .slice(0, 2);
+    const parts = [...scaleParts, voice, personality, ...techniques].filter(Boolean);
+    return parts.length > 0 ? parts.join(' · ') : '연령 / 음역 / 창법 / 박자 / 감정 / 매력';
   };
 
   const editingVocalMemberIndex = editingVocalMemberId
@@ -14013,10 +14532,29 @@ function VocalControl({
     voiceToneId: character?.voiceToneId || '',
     personalityId: character?.personalityId || '',
     techniqueIds: [...(character?.techniqueIds || [])].sort(),
+    ageLevel: character?.ageLevel || '',
+    rangeLevel: character?.rangeLevel || '',
+    deliveryLevel: character?.deliveryLevel || '',
+    rhythmLevel: character?.rhythmLevel || '',
+    emotionLevel: character?.emotionLevel || '',
+    textureLevel: character?.textureLevel || '',
+    charmLevel: character?.charmLevel || '',
+    ornamentLevel: character?.ornamentLevel || '',
+    ornamentSecondaryLevel: (character as any)?.ornamentSecondaryLevel || '',
   }), []);
+
+  const hasNonDefaultVocalCharacterScale = VOCAL_CHARACTER_SCALE_CONFIGS.some((config) => {
+    const value = Number(localVocalCharacterDraft[config.key]);
+    const hasMain = Number.isFinite(value) && !isVocalCharacterScaleDefaultLevel(config, Math.min(config.steps.length, Math.max(1, Math.round(value))));
+    if (!isVocalCharacterOrnamentConfig(config)) return hasMain;
+    const secondaryValue = Number((localVocalCharacterDraft as any).ornamentSecondaryLevel);
+    const hasSecondary = Number.isFinite(secondaryValue) && !isVocalCharacterScaleDefaultLevel(config, Math.min(config.steps.length, Math.max(1, Math.round(secondaryValue))));
+    return hasMain || hasSecondary;
+  });
 
   const hasVocalCharacterChanges = getVocalCharacterSignature(localVocalCharacterDraft) !== getVocalCharacterSignature(initialVocalCharacterRef.current);
   const hasVocalCharacterSelection = Boolean(
+    hasNonDefaultVocalCharacterScale ||
     localVocalCharacterDraft.voiceToneId ||
     localVocalCharacterDraft.personalityId ||
     (localVocalCharacterDraft.techniqueIds || []).length > 0
@@ -14075,6 +14613,40 @@ function VocalControl({
     }));
   }, []);
 
+  const handleVocalCharacterDualSliderDragStart = useCallback((event: React.PointerEvent<HTMLButtonElement>, config: VocalCharacterScaleConfig, fieldKey: 'ornamentLevel' | 'ornamentSecondaryLevel') => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const track = event.currentTarget.closest('[data-vocal-character-dual-track]') as HTMLElement | null;
+    if (!track) return;
+
+    const updateFromClientX = (clientX: number) => {
+      const rect = track.getBoundingClientRect();
+      const ratio = rect.width > 0 ? Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) : 0;
+      const nextLevel = Math.round(ratio * (config.steps.length - 1)) + 1;
+      updateLocalVocalCharacter({ [fieldKey]: nextLevel } as Partial<NonNullable<VocalMember['character']>>);
+    };
+
+    updateFromClientX(event.clientX);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      updateFromClientX(moveEvent.clientX);
+    };
+
+    const handlePointerEnd = () => {
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      document.removeEventListener('pointerup', handlePointerEnd, true);
+      document.removeEventListener('pointercancel', handlePointerEnd, true);
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.userSelect = 'none';
+    document.addEventListener('pointermove', handlePointerMove, true);
+    document.addEventListener('pointerup', handlePointerEnd, true);
+    document.addEventListener('pointercancel', handlePointerEnd, true);
+  }, [updateLocalVocalCharacter]);
+
   const toggleLocalVocalTechnique = useCallback((techniqueId: string) => {
     setLocalVocalCharacterDraft((current) => {
       const techniqueIds = current.techniqueIds || [];
@@ -14096,6 +14668,20 @@ function VocalControl({
       ...(localVocalCharacterDraft.personalityId ? { personalityId: localVocalCharacterDraft.personalityId } : {}),
       ...((localVocalCharacterDraft.techniqueIds || []).length > 0 ? { techniqueIds: localVocalCharacterDraft.techniqueIds } : {}),
     };
+    VOCAL_CHARACTER_SCALE_CONFIGS.forEach((config) => {
+      const value = Number(localVocalCharacterDraft[config.key]);
+      const safeValue = Math.min(config.steps.length, Math.max(1, Math.round(value)));
+      if (Number.isFinite(value) && !isVocalCharacterScaleDefaultLevel(config, safeValue)) {
+        (normalizedCharacter as any)[config.key] = safeValue;
+      }
+      if (isVocalCharacterOrnamentConfig(config)) {
+        const secondaryValue = Number((localVocalCharacterDraft as any).ornamentSecondaryLevel);
+        const safeSecondaryValue = Math.min(config.steps.length, Math.max(1, Math.round(secondaryValue)));
+        if (Number.isFinite(secondaryValue) && !isVocalCharacterScaleDefaultLevel(config, safeSecondaryValue)) {
+          (normalizedCharacter as any).ornamentSecondaryLevel = safeSecondaryValue;
+        }
+      }
+    });
     handleUpdateMember(editingVocalMemberIndex, {
       character: Object.keys(normalizedCharacter).length > 0 ? normalizedCharacter : undefined,
     });
@@ -14294,7 +14880,7 @@ function VocalControl({
             <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-color)]">
               <div className="flex items-center justify-between px-1">
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버 ({vocalMembers.length}/7)</p>
-                <span className="text-[9px] text-[var(--text-secondary)] opacity-50">창법 · 목소리 · 성격</span>
+                <span className="text-[9px] text-[var(--text-secondary)] opacity-50">연령 · 음역 · 창법 · 기교</span>
               </div>
               <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
                 {vocalMembers.map((member, idx) => {
@@ -14354,22 +14940,8 @@ function VocalControl({
                               </button>
                             );
                           })}
-                          <span className="mx-1 hidden h-4 w-px shrink-0 bg-[var(--border-color)] sm:block" />
-                          <button
-                            type="button"
-                            data-tone-trigger={member.id}
-                            onClick={(e) => handleVocalToneClick(e, member.id)}
-                            className={cn(
-                              "flex max-w-[160px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-bold transition-all sm:max-w-[190px]",
-                              member.toneId
-                                ? "bg-brand-orange/10 border-brand-orange/30 text-brand-orange"
-                                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
-                            )}
-                          >
-                            <Settings className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{member.toneId ? getVocalToneDisplayLabel(member.toneId, vocalTones) : "목소리(기본)"}</span>
-                            <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", activeVocalTonePopup === member.id && "rotate-180")} />
-                          </button>
+                          {/* Legacy 목소리(기본) tone selector is hidden.
+                              If no member tone is selected, Gemini keeps using the existing genre-based recommended vocal tone. */}
                         </div>
                       </div>
                       
@@ -14610,104 +15182,99 @@ function VocalControl({
 
                 <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4">
                   <div className="space-y-5">
-                    <section className="space-y-3">
+                    <section className="space-y-4">
                       <div className="flex items-end justify-between gap-3">
                         <div>
-                          <h5 className="text-sm font-black text-[var(--text-primary)]">창법</h5>
-                          <p className="text-[11px] text-[var(--text-secondary)]">실제 창법명, 설명, 용도를 보고 선택합니다.</p>
+                          <h5 className="text-base font-black text-[var(--text-primary)]">보컬 캐릭터 게이지</h5>
+                          <p className="text-xs leading-relaxed text-[var(--text-secondary)]">가운데가 기본값입니다. 움직인 항목만 보컬 프롬프트에 반영됩니다.</p>
                         </div>
-                        <span className="text-[10px] font-bold text-brand-orange">기본 · 실험 창법</span>
+                        <span className="text-xs font-bold text-brand-orange">좌우 5단계 · 기교 좌우 7단계</span>
                       </div>
 
-                      {(['basic', 'experimental'] as const).map((category) => (
-                        <div key={category} className="space-y-2">
-                          <p className="text-[10px] font-black text-[var(--text-secondary)]">{category === 'basic' ? '기본 창법' : '실험 창법'}</p>
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                            {VOCAL_TECHNIQUES.filter((item) => item.category === category).map((technique) => {
-                              const isActive = !!localVocalCharacterDraft.techniqueIds?.includes(technique.id);
-                              return (
-                                <button
-                                  key={technique.id}
-                                  type="button"
-                                  onClick={() => toggleLocalVocalTechnique(technique.id)}
-                                  className={cn(
-                                    "rounded-2xl border p-3 text-left transition-all",
-                                    isActive
-                                      ? "border-brand-orange bg-brand-orange/15 shadow-lg shadow-brand-orange/10"
-                                      : category === 'experimental'
-                                        ? "border-purple-400/14 bg-purple-500/5 hover:border-purple-300/28 hover:bg-purple-500/10"
-                                        : "border-[#2e2e2e] bg-[#1a1a1a] hover:border-brand-orange/25 hover:bg-brand-orange/5"
-                                  )}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className={cn("text-sm font-black", isActive ? "text-brand-orange" : "text-[var(--text-primary)]")}>{technique.labelKo}</span>
-                                    {isActive && <Check className="h-4 w-4 text-brand-orange" />}
-                                  </div>
-                                  <p className="mt-1 text-[11px] leading-snug text-[var(--text-secondary)]">{technique.descriptionKo}</p>
-                                  <div className="mt-2 flex flex-wrap gap-1">
-                                    {technique.usageKo.map((usage) => (
-                                      <span key={usage} className="rounded-full border border-[#303030] bg-btn-bg px-2 py-0.5 text-[9px] font-bold text-[var(--text-secondary)]">
-                                        {usage}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </section>
-
-                    <section className="space-y-3">
-                      <div>
-                        <h5 className="text-sm font-black text-[var(--text-primary)]">목소리</h5>
-                        <p className="text-[11px] text-[var(--text-secondary)]">짧고 감각적인 톤을 하나 고릅니다.</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                        {VOCAL_VOICE_TONES.map((voiceTone) => {
-                          const isActive = localVocalCharacterDraft.voiceToneId === voiceTone.id;
+                      <div className="space-y-3">
+                        {VOCAL_CHARACTER_SCALE_CONFIGS.map((config) => {
+                          const value = getVocalCharacterScaleLevel(localVocalCharacterDraft, config);
+                          const step = config.steps[value - 1];
+                          const isOrnament = isVocalCharacterOrnamentConfig(config);
+                          const secondaryValue = isOrnament ? getVocalCharacterOrnamentSecondaryLevel(localVocalCharacterDraft, config) : config.defaultValue;
+                          const secondaryStep = config.steps[secondaryValue - 1];
+                          const isDefault = isVocalCharacterScaleDefaultLevel(config, value);
+                          const isSecondaryDefault = !isOrnament || isVocalCharacterScaleDefaultLevel(config, secondaryValue);
+                          const isCardActive = !isDefault || !isSecondaryDefault;
+                          const mainPercent = config.steps.length > 1 ? ((value - 1) / (config.steps.length - 1)) * 100 : 50;
+                          const secondaryPercent = config.steps.length > 1 ? ((secondaryValue - 1) / (config.steps.length - 1)) * 100 : 50;
+                          const mainHandleClass = editingVocalMember?.gender === 'female' ? 'vocal-character-dual-handle-female' : 'vocal-character-dual-handle-male';
                           return (
-                            <button
-                              key={voiceTone.id}
-                              type="button"
-                              onClick={() => updateLocalVocalCharacter({ voiceToneId: isActive ? undefined : voiceTone.id })}
+                            <div
+                              key={config.key}
                               className={cn(
-                                "rounded-2xl border px-3 py-3 text-left text-sm font-black transition-all",
-                                isActive
-                                  ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
-                                  : "border-[#2e2e2e] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/25 hover:bg-brand-orange/5"
+                                "rounded-2xl border p-4 transition-all",
+                                isCardActive
+                                  ? "border-[#d6a000] bg-[#1a1a1a] shadow-none"
+                                  : "border-[#2e2e2e] bg-[#1a1a1a]"
                               )}
                             >
-                              {voiceTone.labelKo}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </section>
+                              <div className="mb-3 flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2.5">
+                                    <h6 className="text-base font-black text-brand-orange">{config.titleKo}</h6>
+                                    <span className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-black", isDefault ? "border-transparent bg-btn-bg text-[var(--text-secondary)]" : "border-brand-orange/25 bg-transparent text-brand-orange")}>{step.labelKo}</span>
+                                    {isOrnament && !isSecondaryDefault && (
+                                      <span className="rounded-full border border-brand-orange/20 bg-transparent px-2.5 py-0.5 text-[11px] font-black text-brand-orange">보조 {secondaryStep.labelKo}</span>
+                                    )}
+                                  </div>
+                                  <p className="mt-1.5 text-xs leading-snug text-[var(--text-secondary)]">{config.subtitleKo}</p>
+                                </div>
+                                <span className="shrink-0 text-xs font-black text-brand-orange">{isOrnament ? `${value}/${config.steps.length}${!isSecondaryDefault ? ` · ${secondaryValue}/${config.steps.length}` : ''}` : `${value}/${config.steps.length}`}</span>
+                              </div>
 
-                    <section className="space-y-3">
-                      <div>
-                        <h5 className="text-sm font-black text-[var(--text-primary)]">성격</h5>
-                        <p className="text-[11px] text-[var(--text-secondary)]">보컬의 태도와 감정 방향을 짧게 잡습니다.</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                        {VOCAL_PERSONALITIES.map((personality) => {
-                          const isActive = localVocalCharacterDraft.personalityId === personality.id;
-                          return (
-                            <button
-                              key={personality.id}
-                              type="button"
-                              onClick={() => updateLocalVocalCharacter({ personalityId: isActive ? undefined : personality.id })}
-                              className={cn(
-                                "rounded-2xl border px-3 py-3 text-center text-sm font-black transition-all",
-                                isActive
-                                  ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
-                                  : "border-[#2e2e2e] bg-[#1a1a1a] text-[var(--text-primary)] hover:border-brand-orange/25 hover:bg-brand-orange/5"
+                              {isOrnament ? (
+                                <div className="relative px-[1px] py-3">
+                                  <div
+                                    data-vocal-character-dual-track
+                                    className="vocal-character-dual-track"
+                                  >
+                                    <div className="vocal-character-slider-center-marker" />
+                                    <button
+                                      type="button"
+                                      aria-label={`${config.titleKo} 보조 기교`}
+                                      title={isSecondaryDefault ? '보조기교: Gemini 자동 보정' : `보조기교: ${secondaryStep.labelKo}`}
+                                      onPointerDown={(event) => handleVocalCharacterDualSliderDragStart(event, config, 'ornamentSecondaryLevel')}
+                                      className="vocal-character-dual-handle vocal-character-dual-handle-secondary"
+                                      style={{ left: `${secondaryPercent}%` }}
+                                    />
+                                    <button
+                                      type="button"
+                                      aria-label={`${config.titleKo} 메인 기교`}
+                                      title={`메인기교: ${step.labelKo}`}
+                                      onPointerDown={(event) => handleVocalCharacterDualSliderDragStart(event, config, 'ornamentLevel')}
+                                      className={cn("vocal-character-dual-handle vocal-character-dual-handle-main", mainHandleClass)}
+                                      style={{ left: `${mainPercent}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="relative px-[1px] py-2">
+                                  <div className="vocal-character-slider-center-marker" />
+                                  <input
+                                    type="range"
+                                    min={1}
+                                    max={config.steps.length}
+                                    step={1}
+                                    value={value}
+                                    onChange={(event) => updateLocalVocalCharacter({ [config.key]: Number(event.currentTarget.value) } as Partial<NonNullable<VocalMember['character']>>)}
+                                    className={cn("vocal-character-slider w-full", editingVocalMember?.gender === 'female' ? 'vocal-character-slider-female' : 'vocal-character-slider-male')}
+                                    aria-label={config.titleKo}
+                                  />
+                                </div>
                               )}
-                            >
-                              {personality.labelKo}
-                            </button>
+
+                              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] font-bold text-[var(--text-secondary)]">
+                                <span>{config.minLabelKo}</span>
+                                <span className="truncate text-center text-[var(--text-secondary)]">{isOrnament && !isSecondaryDefault ? `${step.hintKo} + 보조 ${secondaryStep.hintKo}` : step.hintKo}</span>
+                                <span>{config.maxLabelKo}</span>
+                              </div>
+                            </div>
                           );
                         })}
                       </div>

@@ -10221,20 +10221,16 @@ function CycleKeywordPopup({
   }, [closePopup, cycleVariantIds, localOtherSelected, localSelected, onToggleOtherVariant, onToggleVariant]);
 
   useLayoutEffect(() => {
-    const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
-    const originalPosition = document.body.style.position;
-    const originalTop = document.body.style.top;
-    const originalWidth = document.body.style.width;
     const originalHtmlOverflow = document.documentElement.style.overflow;
     const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
     const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
     const originalBodyTouchAction = document.body.style.touchAction;
 
+    // Mobile Chrome can flash the page behind this popup when body is switched to
+    // position: fixed at the same frame as the portal/backdrop is mounted.
+    // Keep the page geometry stable and block scroll with overflow/overscroll only.
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
     document.body.style.touchAction = 'none';
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
@@ -10265,14 +10261,10 @@ function CycleKeywordPopup({
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      document.body.style.position = originalPosition;
-      document.body.style.top = originalTop;
-      document.body.style.width = originalWidth;
       document.documentElement.style.overflow = originalHtmlOverflow;
       document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
       document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
       document.body.style.touchAction = originalBodyTouchAction;
-      window.scrollTo(0, scrollY);
       window.removeEventListener('popstate', handlePopState, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -10294,11 +10286,8 @@ function CycleKeywordPopup({
   return (
     <Portal>
       <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        <div
+          className="absolute inset-0 bg-black/45"
           onPointerDown={() => {
             cyclePopupBackdropPointerDownRef.current = true;
           }}

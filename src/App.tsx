@@ -600,6 +600,72 @@ const getVocalTonePromptValue = (toneId: string | undefined, vocalTones: VocalTo
 
 const createEmptySituation = (): SituationConfig => ({ enabled: false });
 
+
+const STORYBOARD_SLIDER_DEFAULT = 50;
+const STORYBOARD_SLIDER_FIELDS = [
+  'characterAPoliteness',
+  'characterAIntensity',
+  'characterADelivery',
+  'characterBPoliteness',
+  'characterBIntensity',
+  'characterBDelivery',
+  'storyDialogueBalance',
+  'storyRealityScale',
+  'storyPlayfulSincere',
+] as const;
+
+type StoryboardSliderField = typeof STORYBOARD_SLIDER_FIELDS[number];
+
+const sanitizeStoryboardSituation = (value?: SituationConfig | null): SituationConfig => {
+  const base = { ...(value || {}) } as SituationConfig & Record<string, any>;
+  Object.keys(base).forEach((key) => {
+    const current = base[key];
+    if (typeof current === 'string' && !current.trim()) delete base[key];
+    if (Array.isArray(current) && current.length === 0) delete base[key];
+  });
+  STORYBOARD_SLIDER_FIELDS.forEach((field) => {
+    const raw = base[field];
+    if (raw === undefined || raw === null || raw === '' || Number(raw) === STORYBOARD_SLIDER_DEFAULT) {
+      delete base[field];
+    } else {
+      base[field] = Math.max(0, Math.min(100, Number(raw)));
+    }
+  });
+  const active = hasActiveSituation({ ...base, enabled: false } as SituationConfig);
+  return active ? ({ ...base, enabled: true } as SituationConfig) : createEmptySituation();
+};
+
+const serializeStoryboardSituation = (value?: SituationConfig | null) => JSON.stringify(sanitizeStoryboardSituation(value));
+
+const getStoryboardSliderValue = (value: SituationConfig | null | undefined, field: StoryboardSliderField) => {
+  const raw = (value as any)?.[field];
+  return typeof raw === 'number' ? raw : STORYBOARD_SLIDER_DEFAULT;
+};
+
+const storyboardAxisSummary = (value: number, left: string, right: string) => {
+  if (value <= 18) return `${left} 강함`;
+  if (value < 42) return `${left} 쪽`;
+  if (value >= 82) return `${right} 강함`;
+  if (value > 58) return `${right} 쪽`;
+  return '중간';
+};
+
+const buildStoryboardSummary = (situation?: SituationConfig | null) => {
+  if (!hasActiveSituation(situation)) return '캐릭터와 이야기 흐름을 정해요';
+  const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(' vs ');
+  const world = String(situation?.description || situation?.summary || '').trim();
+  const storyBits = [
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyDialogueBalance'), '티키타카', '솔플'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyRealityScale'), '리얼리즘', '드라마틱'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyPlayfulSincere'), '위트', '진심모드'),
+  ].filter((item) => item !== '중간');
+  const parts = [relation, world ? world.slice(0, 28) : '', ...storyBits.slice(0, 2)]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(' / ') : '스토리보드 설정됨';
+};
+
+
 const SITUATION_VERSION_OPTIONS = [
   { value: '', label: '연출 톤 선택' },
   { value: 'comic', label: '코믹형' },
@@ -1261,6 +1327,65 @@ const SituationDetailInput = ({
   );
 };
 
+
+type StoryboardSliderProps = {
+  label: string;
+  left: string;
+  right: string;
+  value: number;
+  onChange: (value: number) => void;
+  description?: string;
+  statusLabels?: [string, string, string];
+};
+
+const getStoryboardSliderStatus = (value: number, labels?: [string, string, string]) => {
+  const [leftLabel, centerLabel, rightLabel] = labels || [`${value <= 35 ? '왼쪽' : value >= 65 ? '오른쪽' : '균형'}`, '균형', '균형'];
+  if (value <= 35) return leftLabel;
+  if (value >= 65) return rightLabel;
+  return centerLabel;
+};
+
+const StoryboardSectionTitle = ({ title, description }: { title: string; description?: string }) => (
+  <div className="flex items-start gap-3">
+    <span className="mt-1 h-6 w-1.5 rounded-full bg-brand-orange shadow-[0_0_12px_rgba(255,132,0,0.45)] shrink-0" />
+    <div className="min-w-0">
+      <p className="text-base md:text-lg font-black text-[var(--text-primary)] tracking-tight">{title}</p>
+      {description && <p className="mt-1 text-xs md:text-[13px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
+    </div>
+  </div>
+);
+
+const StoryboardSlider = ({ label, left, right, value, onChange, description, statusLabels }: StoryboardSliderProps) => {
+  const status = getStoryboardSliderStatus(value, statusLabels);
+  const leftLabelClass = left.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-sm md:text-[15px]';
+  const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-sm md:text-[15px]';
+  return (
+    <div className="rounded-2xl bg-btn-bg/60 border border-btn-border p-3.5 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm md:text-[15px] font-black text-brand-orange">{label}</p>
+        <span className="rounded-full border border-brand-orange/35 bg-brand-orange/10 px-2.5 py-1 text-[11px] font-black text-brand-orange shrink-0">{status}</span>
+      </div>
+      {description && <p className="text-[11px] md:text-xs leading-relaxed text-[var(--text-secondary)]">{description}</p>}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <span className={`${leftLabelClass} font-black text-[var(--text-primary)] text-left`}>{left}</span>
+          <span className={`${rightLabelClass} font-black text-[var(--text-primary)] text-right`}>{right}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="storyboard-slider w-full"
+          aria-label={`${left}에서 ${right} 사이 ${label}`}
+        />
+      </div>
+    </div>
+  );
+};
+
 const hasActiveSituation = (situation?: SituationConfig | null) => {
   if (!situation) return false;
   return Boolean(
@@ -1277,6 +1402,12 @@ const hasActiveSituation = (situation?: SituationConfig | null) => {
     situation.speakerAAttitude ||
     situation.speakerBStyle ||
     situation.speakerBAttitude ||
+    situation.speakerAExtra ||
+    situation.speakerBExtra ||
+    STORYBOARD_SLIDER_FIELDS.some((field) => {
+      const raw = (situation as any)[field];
+      return raw !== undefined && raw !== null && raw !== '' && Number(raw) !== STORYBOARD_SLIDER_DEFAULT;
+    }) ||
     situation.details ||
     situation.detailCustom ||
     (situation.detailPresets && situation.detailPresets.length > 0) ||
@@ -1287,13 +1418,7 @@ const hasActiveSituation = (situation?: SituationConfig | null) => {
 
 const buildSituationSummary = (situation?: SituationConfig | null) => {
   if (!hasActiveSituation(situation)) return '';
-  const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(' vs ');
-  const version = situation?.versionLabel || situation?.version;
-  const development = situation?.developmentCustom || situation?.developmentPreset || situation?.development;
-  const parts = [relation, situation?.relationship, version, development]
-    .map((part) => String(part ?? '').trim())
-    .filter(Boolean);
-  return parts.length ? parts.join(' / ') : String(situation?.summary || situation?.description || 'Situation').slice(0, 60);
+  return buildStoryboardSummary(situation);
 };
 
 
@@ -3500,6 +3625,7 @@ function App() {
   const [isSongStructureExpanded, setIsSongStructureExpanded] = useState(true);
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isSituationExpanded, setIsSituationExpanded] = useState(false);
+  const [draftSituation, setDraftSituation] = useState<SituationConfig>(createEmptySituation);
   const [sectionTags, setSectionTags] = useState<SectionTag[]>([]);
 
   // Load section tags from Firestore
@@ -5087,13 +5213,42 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  const updateSituationField = (field: keyof SituationConfig, value: string | boolean | string[]) => {
+  const updateSituationField = (field: keyof SituationConfig, value: string | boolean | string[] | number) => {
     setSituation(prev => {
       const next = { ...prev, [field]: value } as SituationConfig;
-      const active = hasActiveSituation({ ...next, enabled: false });
-      return { ...next, enabled: active };
+      return sanitizeStoryboardSituation(next);
     });
   };
+
+  const openStoryboardModal = () => {
+    setDraftSituation(sanitizeStoryboardSituation(situation));
+    setIsSituationExpanded(true);
+  };
+
+  const closeStoryboardModal = () => {
+    setDraftSituation(sanitizeStoryboardSituation(situation));
+    setIsSituationExpanded(false);
+  };
+
+  const updateDraftSituationField = (field: keyof SituationConfig | StoryboardSliderField, value: string | boolean | string[] | number) => {
+    setDraftSituation(prev => {
+      const next = { ...prev, [field]: value } as SituationConfig;
+      return { ...next, enabled: hasActiveSituation({ ...next, enabled: false }) };
+    });
+  };
+
+  const clearDraftSituation = () => {
+    setDraftSituation(createEmptySituation());
+  };
+
+  const applyStoryboardModal = () => {
+    const normalized = sanitizeStoryboardSituation(draftSituation);
+    setSituation(normalized);
+    setIsSituationExpanded(false);
+  };
+
+  const isStoryboardDraftChanged = serializeStoryboardSituation(draftSituation) !== serializeStoryboardSituation(situation);
+  const hasDraftStoryboard = hasActiveSituation(draftSituation);
 
   const toggleSituationDetailPreset = (label: string) => {
     setSituation(prev => {
@@ -6991,24 +7146,24 @@ ${normalizePromptForDisplay(result.prompt)}
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-visible relative z-[20]">
+            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-card overflow-hidden relative z-[20]">
               <div className="p-4 md:p-5 flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsSituationExpanded(prev => !prev)}
+                  onClick={openStoryboardModal}
                   className="flex-1 min-w-0 text-left"
                 >
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-brand-orange shrink-0" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-brand-orange/10 border border-brand-orange/25 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-brand-orange" />
+                    </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm md:text-base font-black text-[var(--text-primary)]">Situation</h3>
-                        <span className="text-xs font-bold text-[var(--text-secondary)]">상황</span>
+                        <h3 className="text-sm md:text-base font-black text-[var(--text-primary)]">Storyboard</h3>
+                        <span className="text-xs font-bold text-[var(--text-secondary)]">스토리보드</span>
                       </div>
                       <p className="text-[11px] md:text-xs text-[var(--text-secondary)] truncate">
-                        {hasActiveSituation(situation)
-                          ? buildSituationSummary(situation)
-                          : '관계, 갈등, 장소, 전개 방식을 입력합니다.'}
+                        {buildStoryboardSummary(situation)}
                       </p>
                     </div>
                   </div>
@@ -7018,7 +7173,7 @@ ${normalizePromptForDisplay(result.prompt)}
                   <button
                     type="button"
                     onClick={() => toggleMenuLock('situation')}
-                    onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock menu' : 'Lock menu', labelKo: menuLocks.situation ? '잠금 해제' : '메뉴 잠금', description: menuLocks.situation ? '상황 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 상황 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
+                    onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock Storyboard' : 'Lock Storyboard', labelKo: menuLocks.situation ? '잠금 해제' : '스토리보드 잠금', description: menuLocks.situation ? '스토리보드를 랜덤 선택에 다시 포함합니다.' : '현재 스토리보드 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
                     onMouseLeave={() => setHoveredItem(null)}
                     className={cn(
                       "p-2 rounded-xl border transition-all shadow-btn",
@@ -7026,8 +7181,8 @@ ${normalizePromptForDisplay(result.prompt)}
                         ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
                         : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                     )}
-                    title={menuLocks.situation ? '잠금 해제' : '메뉴 잠금'}
-                    aria-label={menuLocks.situation ? '상황 잠금 해제' : '상황 잠금'}
+                    title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
+                    aria-label={menuLocks.situation ? '스토리보드 잠금 해제' : '스토리보드 잠금'}
                   >
                     {menuLocks.situation ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                   </button>
@@ -7042,137 +7197,189 @@ ${normalizePromptForDisplay(result.prompt)}
                   )}
                   <button
                     type="button"
-                    onClick={() => setIsSituationExpanded(prev => !prev)}
-                    className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
-                    aria-label="Situation 펼치기"
+                    onClick={openStoryboardModal}
+                    className="px-3 py-2 rounded-xl bg-brand-orange text-white text-xs font-black hover:bg-brand-orange/90 transition-all shadow-btn"
+                    aria-label="스토리보드 설정 열기"
                   >
-                    {isSituationExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    {hasActiveSituation(situation) ? '편집' : '설정'}
                   </button>
                 </div>
               </div>
-
-              <AnimatePresence initial={false}>
-                {isSituationExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-visible border-t border-[var(--border-color)]"
-                  >
-                    <div className="p-4 md:p-5 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="rounded-2xl bg-btn-bg/60 border border-btn-border p-3 space-y-3">
-                          <div>
-                            <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">대상 A</label>
-                            <input
-                              value={situation.targetA || ''}
-                              onChange={(e) => updateSituationField('targetA', e.target.value)}
-                              placeholder="예: 40대 엄마, 상사, 이별한 여자"
-                              className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
-                            />
-                          </div>
-                          <SituationChoicePicker
-                            label="대상 A 말투"
-                            value={situation.speakerAStyle || ''}
-                            onChange={(value) => updateSituationField('speakerAStyle', value)}
-                            placeholder="직접 입력: 예: 담담하게, 아무렇지 않은 척"
-                            options={SITUATION_SPEECH_STYLE_OPTIONS}
-                            summaryLabel="말투 선택"
-                          />
-                          <SituationChoicePicker
-                            label="대상 A 감정선"
-                            value={situation.speakerAAttitude || situation.attitudeA || ''}
-                            onChange={(value) => updateSituationField('speakerAAttitude', value)}
-                            placeholder="직접 입력: 예: 괜히 기분이 좋은, 아무것도 하기 싫은"
-                            options={SITUATION_ATTITUDE_OPTIONS}
-                            summaryLabel="감정선 선택"
-                          />
-                        </div>
-
-                        <div className="rounded-2xl bg-btn-bg/60 border border-btn-border p-3 space-y-3">
-                          <div>
-                            <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">대상 B</label>
-                            <input
-                              value={situation.targetB || ''}
-                              onChange={(e) => updateSituationField('targetB', e.target.value)}
-                              placeholder="예: 10대 아들, 직원, 끝난 사랑"
-                              className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
-                            />
-                          </div>
-                          <SituationChoicePicker
-                            label="대상 B 말투"
-                            value={situation.speakerBStyle || ''}
-                            onChange={(value) => updateSituationField('speakerBStyle', value)}
-                            placeholder="직접 입력: 예: 리드미컬하게, 비꼬듯"
-                            options={SITUATION_SPEECH_STYLE_OPTIONS}
-                            summaryLabel="말투 선택"
-                          />
-                          <SituationChoicePicker
-                            label="대상 B 감정선"
-                            value={situation.speakerBAttitude || situation.attitudeB || ''}
-                            onChange={(value) => updateSituationField('speakerBAttitude', value)}
-                            placeholder="직접 입력: 예: 좋은데 서운한, 쓸데없이 신경 쓰이는"
-                            options={SITUATION_ATTITUDE_OPTIONS}
-                            summaryLabel="감정선 선택"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">{situation.targetB?.trim() ? '관계' : '스토리 축'}</label>
-                          <input
-                            value={situation.relationship || ''}
-                            onChange={(e) => updateSituationField('relationship', e.target.value)}
-                            placeholder={situation.targetB?.trim() ? '예: 모자, 회사생활, 끝난 연인' : '예: 이승에 미련, 늦은 고백, 혼자 버티는 밤'}
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
-                          />
-                        </div>
-                        <SituationVersionPicker
-                          value={String(situation.version || '')}
-                          onChange={(value, label) => {
-                            updateSituationField('version', value);
-                            updateSituationField('versionLabel', label);
-                          }}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-[var(--text-secondary)] mb-1.5">상황 설명</label>
-                        <textarea
-                          value={situation.description || ''}
-                          onChange={(e) => updateSituationField('description', e.target.value)}
-                          placeholder="예: 걱정 많은 엄마와 제멋대로인 아들의 대화, 세대차이"
-                          rows={3}
-                          className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
-                        />
-                      </div>
-
-                      <SituationChoicePicker
-                        label="전개 방식"
-                        value={situation.developmentCustom || situation.developmentPreset || situation.development || ''}
-                        onChange={(value) => {
-                          updateSituationField('developmentCustom', value);
-                          updateSituationField('developmentPreset', SITUATION_DEVELOPMENT_OPTIONS.some(option => option.label === value) ? value : '');
-                        }}
-                        placeholder="직접 입력: 예: 후렴은 한쪽이 장악하고 상대는 애드립만 개입"
-                        options={SITUATION_DEVELOPMENT_OPTIONS}
-                        summaryLabel="전개 방식 선택"
-                      />
-
-                      <SituationDetailInput
-                        value={situation.detailCustom || situation.details || ''}
-                        onChange={(value) => {
-                          updateSituationField('detailCustom', value);
-                          updateSituationField('detailPresets', []);
-                        }}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
+
+            <AnimatePresence>
+              {isSituationExpanded && (
+                <Portal>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm px-3 py-5"
+                    onPointerDown={(event) => {
+                      storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
+                    }}
+                    onPointerUp={(event) => {
+                      if (storyboardModalBackdropMouseDownRef.current && event.target === event.currentTarget) {
+                        storyboardModalBackdropMouseDownRef.current = false;
+                        closeStoryboardModal();
+                        return;
+                      }
+                      storyboardModalBackdropMouseDownRef.current = false;
+                    }}
+                    onPointerCancel={() => {
+                      storyboardModalBackdropMouseDownRef.current = false;
+                    }}
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 18, scale: 0.96 }}
+                      transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                    >
+                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 border-b border-[var(--border-color)] bg-[var(--card-bg)]/95 backdrop-blur-xl">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-5 h-5 text-brand-orange" />
+                            <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
+                            <span className="text-[11px] font-bold text-[var(--text-tertiary)]">Storyboard</span>
+                          </div>
+                          <p className="mt-1 text-[11px] md:text-xs text-[var(--text-secondary)]">캐릭터와 이야기 흐름을 정해요</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {hasDraftStoryboard && (
+                            <button
+                              type="button"
+                              onClick={clearDraftSituation}
+                              className="px-3 py-2 rounded-xl bg-btn-bg border border-btn-border text-[11px] font-black text-[var(--text-secondary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                            >
+                              전체 해제
+                            </button>
+                          )}
+                          {isStoryboardDraftChanged && (
+                            <button
+                              type="button"
+                              onClick={applyStoryboardModal}
+                              className="p-2 rounded-xl bg-brand-orange text-white border border-brand-orange hover:bg-brand-orange/90 transition-all"
+                              title="적용"
+                              aria-label="스토리보드 적용"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={closeStoryboardModal}
+                            className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                            title="닫기"
+                            aria-label="스토리보드 닫기"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-[calc(88vh-76px)] overflow-y-auto p-4 md:p-5 space-y-5">
+                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-3">
+                          <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-black text-brand-orange mb-1.5">캐릭터 A</label>
+                              <input
+                                value={draftSituation.targetA || ''}
+                                onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
+                                placeholder="예: 저승사자, 엄마, 상사"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-black text-brand-orange mb-1.5">캐릭터 B</label>
+                              <input
+                                value={draftSituation.targetB || ''}
+                                onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
+                                placeholder="예: 귀신, 아들, 직원"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                              />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-4">
+                          <StoryboardSectionTitle title="캐릭터 포지션" />
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--border-color)] p-3 space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-black text-[var(--text-primary)]">A 포지션</p>
+                                <span className="text-[10px] font-black text-brand-orange truncate">{draftSituation.targetA || '캐릭터 A'}</span>
+                              </div>
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
+                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "빌드업", "폭발"]} />
+                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} />
+                              <input
+                                value={draftSituation.speakerAExtra || ''}
+                                onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
+                                placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                              />
+                            </div>
+
+                            <div className="rounded-3xl bg-[var(--bg-secondary)]/45 border border-[var(--border-color)] p-3 space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-black text-[var(--text-primary)]">B 포지션</p>
+                                <span className="text-[10px] font-black text-brand-orange truncate">{draftSituation.targetB || '캐릭터 B'}</span>
+                              </div>
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
+                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} statusLabels={["잔잔", "빌드업", "폭발"]} />
+                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} statusLabels={["직설", "혼합", "은유"]} />
+                              <input
+                                value={draftSituation.speakerBExtra || ''}
+                                onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
+                                placeholder="추가 말맛: 예: 공손하지만 안 물러남"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                              />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-3">
+                          <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
+                          <textarea
+                            value={draftSituation.description || ''}
+                            onChange={(e) => updateDraftSituationField('description', e.target.value)}
+                            placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
+                            rows={4}
+                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
+                          />
+                          <input
+                            value={draftSituation.detailCustom || draftSituation.details || ''}
+                            onChange={(e) => {
+                              updateDraftSituationField('detailCustom', e.target.value);
+                              updateDraftSituationField('detailPresets', []);
+                            }}
+                            placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                          />
+                        </section>
+
+                        <section className="rounded-3xl border border-btn-border bg-btn-bg/35 p-4 space-y-4">
+                          <StoryboardSectionTitle title="스토리 라인" />
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <StoryboardSlider label="대화" left="티키타카" right="솔플" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["티키타카", "반반", "솔플"]} />
+                            <StoryboardSlider label="전개" left="리얼리즘" right="드라마틱" value={getStoryboardSliderValue(draftSituation, 'storyRealityScale')} onChange={(v) => updateDraftSituationField('storyRealityScale', v)} description="현실과 비현실의 비중을 조절해요." statusLabels={["리얼리즘", "시트콤", "드라마틱"]} />
+                            <StoryboardSlider label="감정" left="위트" right="진심모드" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["위트", "츤데레", "진심모드"]} />
+                          </div>
+                        </section>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                </Portal>
+              )}
+            </AnimatePresence>
 
             <VocalControl 
               maleCount={maleCount}
@@ -8370,6 +8577,53 @@ ${normalizePromptForDisplay(result.prompt)}
         .saved-structure-scroll {
           scrollbar-width: thin;
           scrollbar-color: rgba(255,255,255,0.10) transparent;
+        }
+
+        .storyboard-slider {
+          appearance: none;
+          -webkit-appearance: none;
+          height: 6px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.26), rgba(255,255,255,0.12));
+          outline: none;
+        }
+        .storyboard-slider::-webkit-slider-runnable-track {
+          height: 6px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.26), rgba(255,255,255,0.12));
+        }
+        .storyboard-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          margin-top: -6px;
+          border-radius: 999px;
+          background: rgb(255, 130, 0);
+          border: 3px solid rgba(255,255,255,0.86);
+          box-shadow: none;
+          cursor: grab;
+        }
+        .storyboard-slider:active::-webkit-slider-thumb {
+          cursor: grabbing;
+          transform: scale(1.04);
+        }
+        .storyboard-slider::-moz-range-track {
+          height: 6px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.26), rgba(255,255,255,0.12));
+        }
+        .storyboard-slider::-moz-range-progress {
+          background: transparent;
+        }
+        .storyboard-slider::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          background: rgb(255, 130, 0);
+          border: 3px solid rgba(255,255,255,0.86);
+          box-shadow: none;
+          cursor: grab;
         }
         @keyframes marquee-right {
           0% { transform: translateX(-50%); }
@@ -9986,6 +10240,7 @@ function SongStructureIntegratedControl({
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const customModalHistoryPushedRef = useRef(false);
   const customModalBackdropMouseDownRef = useRef(false);
+  const storyboardModalBackdropMouseDownRef = useRef(false);
   const [draftStructure, setDraftStructure] = useState<CustomSectionItem[]>([]);
   const initialDraftStructureRef = useRef<CustomSectionItem[]>([]);
   const [selectedInsertIndex, setSelectedInsertIndex] = useState<number | null>(null);

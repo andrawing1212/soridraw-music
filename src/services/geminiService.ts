@@ -3662,6 +3662,14 @@ function translateKoreanPromptFragments(value: string): string {
     [/세종대왕|세종/g, "Joseon king"],
     [/퇴계이황|이황|퇴계/g, "Joseon scholar"],
     [/조선시대/g, "Joseon-era"],
+    [/저승길|저승/g, "afterlife"],
+    [/데리러\s*온|데리러|데려가|데려가는/g, "escort"],
+    [/미련/g, "lingering regret"],
+    [/살아\s*있을\s*때|살아있을\s*때/g, "when alive"],
+    [/하고\s*싶은\s*것|못\s*해서|못해서/g, "unfinished wishes"],
+    [/반말/g, "casual blunt speech"],
+    [/존댓말/g, "polite speech"],
+    [/사회\s*풍자형|사회풍자형|사회\s*풍자/g, "social satire"],
     [/회사생활|직장 생활|회사/g, "office life"],
     [/상하관계/g, "workplace hierarchy"],
     [/세대차이/g, "generational clash"],
@@ -3783,6 +3791,22 @@ function hasSituation(situation?: SituationConfig): boolean {
     situation.speakerAAttitude ||
     situation.speakerBStyle ||
     situation.speakerBAttitude ||
+    (situation as any).speakerAExtra ||
+    (situation as any).speakerBExtra ||
+    [
+      'characterAPoliteness',
+      'characterAIntensity',
+      'characterADelivery',
+      'characterBPoliteness',
+      'characterBIntensity',
+      'characterBDelivery',
+      'storyDialogueBalance',
+      'storyRealityScale',
+      'storyPlayfulSincere',
+    ].some((field) => {
+      const raw = (situation as any)[field];
+      return raw !== undefined && raw !== null && raw !== '' && Number(raw) !== 50;
+    }) ||
     situation.details ||
     situation.detailCustom ||
     (situation.detailPresets && situation.detailPresets.length > 0) ||
@@ -3810,6 +3834,126 @@ function buildSituationSummary(situation?: SituationConfig): string {
         situation?.description || situation?.summary || "Situation",
         60,
       );
+}
+
+
+
+function describeStoryboardAxis(value: unknown, left: string, right: string): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 50) return "";
+  if (n <= 18) return `${left} dominant`;
+  if (n < 42) return `${left}-leaning`;
+  if (n >= 82) return `${right} dominant`;
+  if (n > 58) return `${right}-leaning`;
+  return "balanced";
+}
+
+function buildStoryboardPositionCue(situation?: SituationConfig, roleIndex: 0 | 1 = 0): string {
+  const raw = situation as any;
+  if (!raw) return "";
+  const prefix = roleIndex === 0 ? "characterA" : "characterB";
+  const cues = [
+    describeStoryboardAxis(raw[`${prefix}Politeness`], "honorific/polite speech", "casual/blunt speech"),
+    describeStoryboardAxis(raw[`${prefix}Intensity`], "calm restrained emotion", "explosive emotion"),
+    describeStoryboardAxis(raw[`${prefix}Delivery`], "direct straight talk", "indirect ironic wordplay"),
+    String(raw[roleIndex === 0 ? "speakerAExtra" : "speakerBExtra"] || "").trim(),
+  ].filter(Boolean);
+  return cues.join(" / ");
+}
+
+function buildStoryboardLineCue(situation?: SituationConfig): string {
+  const raw = situation as any;
+  if (!raw) return "";
+  return [
+    describeStoryboardAxis(raw.storyDialogueBalance, "rapid back-and-forth dialogue", "solo-driven monologue"),
+    describeStoryboardAxis(raw.storyRealityScale, "realistic everyday scale", "dramatic heightened scale"),
+    describeStoryboardAxis(raw.storyPlayfulSincere, "witty playful mode", "sincere emotional mode"),
+  ].filter(Boolean).join(" / ");
+}
+
+function buildSituationRenderingContext(situation?: SituationConfig): string {
+  if (!hasSituation(situation)) return "";
+
+  const speakerA = situation?.speakers?.[0];
+  const speakerB = situation?.speakers?.[1];
+  const targetA = String(situation?.targetA || speakerA?.role || "").trim();
+  const targetB = String(situation?.targetB || speakerB?.role || "").trim();
+  const relation = String(situation?.relationship || "").trim();
+  const version = String(situation?.versionLabel || situation?.version || "").trim();
+  const development = String(
+    situation?.developmentCustom ||
+      situation?.developmentPreset ||
+      situation?.development ||
+      "",
+  ).trim();
+  const description = String(situation?.description || situation?.summary || "").trim();
+  const details = [
+    ...(situation?.detailPresets || []),
+    situation?.detailCustom || situation?.details || "",
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(", ");
+
+  const speakerALine = [
+    targetA ? `role=${targetA}` : "",
+    situation?.speakerAStyle || speakerA?.speechStyle || "",
+    situation?.speakerAAttitude || situation?.attitudeA || speakerA?.attitude || "",
+    buildStoryboardPositionCue(situation, 0),
+    speakerA?.characterTone || "",
+    speakerA?.vocalDirection || "",
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(" / ");
+
+  const speakerBLine = [
+    targetB ? `role=${targetB}` : "",
+    situation?.speakerBStyle || speakerB?.speechStyle || "",
+    situation?.speakerBAttitude || situation?.attitudeB || speakerB?.attitude || "",
+    buildStoryboardPositionCue(situation, 1),
+    speakerB?.characterTone || "",
+    speakerB?.vocalDirection || "",
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(" / ");
+
+  const englishCharacters = [targetA, targetB]
+    .filter(Boolean)
+    .map((role, index) => englishRoleLabel(role, `Character ${index + 1}`))
+    .join(" vs ");
+  const englishDescription = stripRemainingKoreanForProductionPrompt(description);
+  const englishDevelopment = stripRemainingKoreanForProductionPrompt(development);
+  const englishVersion = stripRemainingKoreanForProductionPrompt(version);
+  const englishDetails = stripRemainingKoreanForProductionPrompt(details);
+  const englishSpeechContrast = [speakerALine, speakerBLine]
+    .map((line) => stripRemainingKoreanForProductionPrompt(line))
+    .filter(Boolean)
+    .join(" / ");
+  const storyboardLineCue = buildStoryboardLineCue(situation);
+  const englishStoryboardLineCue = stripRemainingKoreanForProductionPrompt(storyboardLineCue);
+
+  const lines = [
+    [targetA, targetB].filter(Boolean).length ? `Characters: ${[targetA, targetB].filter(Boolean).join(" vs ")}` : "",
+    englishCharacters ? `English character anchors: ${englishCharacters}` : "",
+    relation ? `Relationship: ${relation}` : "",
+    description ? `Situation description: ${description}` : "",
+    englishDescription ? `English scene/conflict cue: ${englishDescription}` : "",
+    development ? `Development / dialogue flow: ${development}` : "",
+    englishDevelopment ? `English arrangement cue: ${englishDevelopment}` : "",
+    version ? `Version tone: ${version}` : "",
+    englishVersion ? `English tone cue: ${englishVersion}` : "",
+    speakerALine ? `Speaker A direction: ${speakerALine}` : "",
+    speakerBLine ? `Speaker B direction: ${speakerBLine}` : "",
+    englishSpeechContrast ? `English speech-contrast cue: ${englishSpeechContrast}` : "",
+    storyboardLineCue ? `Story line slider cue: ${storyboardLineCue}` : "",
+    englishStoryboardLineCue ? `English story-line cue: ${englishStoryboardLineCue}` : "",
+    details ? `Extra detail: ${details}` : "",
+    englishDetails ? `English detail cue: ${englishDetails}` : "",
+  ].filter(Boolean);
+
+  return lines.join("\n");
 }
 
 function joinNaturalKorean(items: string[]): string {
@@ -7077,108 +7221,30 @@ function stripUnsupportedDirectCueBankPhrases(value: string, params: GenerateSon
 }
 
 function directConflictFallback(params: GenerateSongParams): string {
-  const directRaw = rawDirectThemeMoodText(params);
-  if (directRaw && /못\s*찾|잃어|사라|없|모으지\s*못|missing|lost|cannot\s*find|can't\s*find/i.test(directRaw)) return "a missing piece creates pressure through concrete searching behavior";
-  if (hasDirectThemeOrMoodInput(params)) return "the user's exact situation stays central through concrete behavior";
-  return "one unsaid feeling pushing against an ordinary moment";
+  // Keep direct-input support principle-based. This fallback must not invent
+  // a specific story such as message/confession/commute/collector unless the
+  // model writes it from the user's actual text. It is only a neutral pressure cue.
+  if (hasDirectThemeOrMoodInput(params)) return "the user-written situation creates visible emotional pressure";
+  return "one clear emotional tension drives the scene";
 }
+
 function buildDirectStoryPromptProfile(params: GenerateSongParams): DirectStoryPromptProfile {
   const raw = rawDirectStoryPriorityText(params);
   if (!raw) return { strength: "none", scene: "", conflict: "", instrumentCues: [], arrangementCues: [], genreAccent: "" };
-  const text = raw.toLowerCase();
 
-  const has = (pattern: RegExp) => pattern.test(raw) || pattern.test(text);
-
-  // Strong direct-story examples. These must override generic cue-bank meanings such as
-  // bedroom-message / unsent-message when the same word (message) appears inside a larger story.
-  if (has(/우주인|우주복|astronaut|space traveler|cosmonaut|우주를\s*떠도|우주에서|지구|earth|cosmic|space/) && has(/메시지|message|발신|transmission|신호|signal|던지|보내|send|final/)) {
-    return {
-      strength: "strong",
-      scene: "a distant astronaut-message scene",
-      conflict: "one final message drifts back toward Earth",
-      instrumentCues: ["distant ambience", "radio-signal texture", "wide spatial reverb"],
-      arrangementCues: ["drifting space-ballad flow", "fading-signal hook", "soft spatial release"],
-      genreAccent: "wide spatial color",
-    };
-  }
-
-  if (has(/저승사자|저승|grim reaper|reaper|afterlife/) && has(/귀신|유령|ghost|spirit/)) {
-    return {
-      strength: "strong",
-      scene: "a midnight afterlife encounter scene",
-      conflict: "one side carries regret while the other must move them on",
-      instrumentCues: ["distant bell texture", "shadowy room reverb", "soft low pulse"],
-      arrangementCues: ["afterlife dialogue flow", "one-sided monologue tension", "late emotional turn"],
-      genreAccent: "afterlife story color",
-    };
-  }
-
-  if (has(/정류장|버스|지하철|station|bus stop|subway/) && has(/이별|떠나|그리움|breakup|farewell|goodbye|longing/)) {
-    return {
-      strength: "strong",
-      scene: "a late-night transit goodbye scene",
-      conflict: "passing lights carry a feeling that was never said",
-      instrumentCues: ["passing-window ambience", "soft transit noise"],
-      arrangementCues: ["transit-window memory cue", "delayed confession lift"],
-      genreAccent: "late-night transit mood",
-    };
-  }
-
-  if (has(/고향|hometown/) && has(/재회|다시\s*만|옛사랑|old love|reunion/)) {
-    return {
-      strength: "strong",
-      scene: "a hometown reunion scene",
-      conflict: "old feelings return through familiar streets",
-      instrumentCues: ["warm street ambience", "soft nostalgic keys"],
-      arrangementCues: ["hometown-memory lift", "slow reunion hook"],
-      genreAccent: "nostalgic hometown color",
-    };
-  }
-
-  if (has(/오타|실수|하트|문자|메시지|답장|읽음|전송|texting|message|reply|typing|sent/) && has(/설렘|떨림|좋아|고백|crush|flutter|confession|heart/)) {
-    return {
-      strength: "strong",
-      scene: "a small message-mistake confession scene",
-      conflict: "a tiny mistake exposes the feeling first",
-      instrumentCues: ["soft screen-light texture", "light pulse accents"],
-      arrangementCues: ["message-mistake tension", "fluttering confession hook"],
-      genreAccent: "bright message-pop color",
-    };
-  }
-
-  if (has(/차안|자동차|drive|driving|도로|road/) && has(/고백|사랑|오해|confession|love|misunderstanding/)) {
-    return {
-      strength: "strong",
-      scene: "a night-drive confession scene",
-      conflict: "passing roads hide words that should have been said",
-      instrumentCues: ["dashboard-light synth", "soft road ambience"],
-      arrangementCues: ["night-drive tension", "road-memory hook"],
-      genreAccent: "night-drive color",
-    };
-  }
-
-  if (has(/드래곤볼|dragon\s*ball|4성구|사성구|four[-\s]?star/) && has(/못\s*모|모으지\s*못|못\s*찾|없|missing|lost|cannot\s*find|can't\s*find|답답|frustrat/)) {
-    return {
-      strength: "strong",
-      scene: "a comic collector scene about the missing four-star Dragon Ball",
-      conflict: "one missing piece keeps the whole wish from becoming complete",
-      instrumentCues: ["playful tension hits", "dusty room ambience", "wide adventure echo"],
-      arrangementCues: ["comic search tension", "obsessive count-up hook", "late frustrated release"],
-      genreAccent: "comic adventure-story color",
-    };
-  }
-
-  // Normal direct text still deserves influence, but should not overpower a strong
-  // selected genre/sound palette. Use a compact generic story lift.
+  // Do not hard-code topic-specific fallback scenes here. Direct text can be
+  // personal, strange, tiny, or very specific, so the production prompt should
+  // be rendered by Gemini from the actual direct text in the same call. This
+  // local profile only gives the locked prompt a neutral story-aware scaffold.
   const userScene = buildUserTextCoreScene(params);
   if (userScene) {
     return {
       strength: "normal",
-      scene: cleanScenePlanPhrase(userScene.scene, 80),
+      scene: cleanScenePlanPhrase(userScene.scene, 90),
       conflict: directConflictFallback(params),
       instrumentCues: [],
-      arrangementCues: ["direct-story section movement"],
-      genreAccent: "story-led color",
+      arrangementCues: ["story-shaped section flow"],
+      genreAccent: "story-aware color",
     };
   }
 
@@ -8896,74 +8962,30 @@ function buildCompactMoodAngle(params: GenerateSongParams): string {
 
 
 function buildUserTextCoreScene(params: GenerateSongParams): { scene: string; detail: string } | null {
-  // Direct Theme input can carry the real story scene even when the free-text command box is empty.
-  // Use only free/direct text here so keyword-only songs keep the previous selected-card flow.
+  // Principle-based direct input handling: do not convert specific user text
+  // into fixed example scenes. The real direct text is passed to Gemini in the
+  // prompt; this function only supplies a neutral scaffold for local prompt
+  // assembly so keyword-only songs keep their existing flow.
   const directThemeText = getDirectThemeInputText(params);
-  const note = [
-    params.userInput,
-    params.lyricDraft,
-    directThemeText,
-  ]
+  const directMoodText = getDirectMoodInputText(params);
+  const note = [params.userInput, params.lyricDraft, directThemeText, directMoodText]
     .filter(Boolean)
     .join(" ")
+    .replace(/\s+/g, " ")
     .trim();
   if (!note) return null;
 
-  if (/(드래곤볼|dragon\s*ball|4성구|사성구|four[-\s]?star)/i.test(note) && /(못\s*모|모으지\s*못|못\s*찾|없|missing|lost|cannot\s*find|can't\s*find|답답|frustrat)/i.test(note)) {
-    return {
-      scene: "a comic collector searching for the missing four-star Dragon Ball",
-      detail: "opened drawers, a display box, scattered dust, repeated counting, one missing star, comic frustration",
-    };
-  }
+  const hasTheme = Boolean(directThemeText || String(params.userInput || '').trim() || String(params.lyricDraft || '').trim());
+  const hasMood = Boolean(directMoodText);
 
-  if (/(우주인|우주복|astronaut|space traveler|cosmonaut|우주를\s*떠도|우주에서|지구|earth)/i.test(note) && /(메시지|message|발신|transmission|신호|signal|던지|보내|send)/i.test(note)) {
-    return {
-      scene: "an astronaut drifting far from Earth while sending one last message to someone left behind",
-      detail: "a small blue Earth, a helmet view, a fading signal, a final unsent confession",
-    };
-  }
-
-  if (/(오타|실수|하트|문자|메시지|답장|읽음|전송|texting|message|reply|typing|sent)/i.test(note) && /(설렘|떨림|좋아|고백|crush|flutter|confession|heart)/i.test(note)) {
-    return {
-      scene: "a small message mistake growing into a confession",
-      detail: "trembling fingers, a delayed reply, a too-quiet room, one changed word",
-    };
-  }
-
-  if (/(연인|사랑|좋아|romance|love)/i.test(note) && /(친구|friend)/i.test(note) && /(대학생|캠퍼스|college|campus|youth|풋풋|young)/i.test(note)) {
-    return {
-      scene: "a tender campus almost-love scene between friendship and romance",
-      detail: "dawn street air, a half-joking smile, unsaid feelings, a friendship line that keeps moving",
-    };
-  }
-
-  if (/(고향|hometown)/i.test(note) && /(재회|다시\s*만|옛사랑|old love|reunion)/i.test(note)) {
-    return {
-      scene: "hometown reunion with an old love and unresolved feelings",
-      detail: "familiar streets, a small room, changed distance, unsaid words",
-    };
-  }
-
-  if (/(정류장|버스|지하철|station|subway)/i.test(note) && /(이별|떠나|그리움|breakup|goodbye|longing)/i.test(note)) {
-    return {
-      scene: "a goodbye carried through a late-night stop or station",
-      detail: "a dim station light, a paused step, a message not sent, passing windows",
-    };
-  }
-
-  if (directThemeText || String(params.userInput || "").trim()) {
-    const hasMissingObject = /(못\s*찾|잃어|사라|없|모으지\s*못|missing|lost|cannot\s*find|can't\s*find)/i.test(note);
-    return {
-      scene: hasMissingObject
-        ? "a direct user-specified search scene where a missing piece creates pressure"
-        : "a direct user-specified story scene centered on the exact topic the user wrote",
-      detail: hasMissingObject
-        ? "the exact missing object from the user input, repeated checking, small physical actions, growing frustration"
-        : "the exact object, place, relationship, conflict, and desire from the user's direct input",
-    };
-  }
-
-  return null;
+  return {
+    scene: hasTheme
+      ? "a concrete user-described scene shaped by the direct topic"
+      : "a scene colored by the user-described mood",
+    detail: hasMood
+      ? "direct mood, visible behavior, emotional pressure, and section flow"
+      : "direct topic, visible behavior, emotional pressure, and character-specific speech",
+  };
 }
 function buildThemeCoreScene(params: GenerateSongParams): { scene: string; detail: string } {
   const userTextScene = buildUserTextCoreScene(params);
@@ -9605,9 +9627,64 @@ function buildPromptIntent(params: GenerateSongParams): PromptIntentSnapshot {
   };
 }
 
+
+function stripFinalInternalProtectionLanguage(value: string): string {
+  // Safety filter only. Do not replace internal phrases with fixed story scenes.
+  return cleanupPromptTail(String(value || '')
+    .replace(/\bdirect\s+user[-\s]?specified(?:\s+\w+){0,4}\b/gi, '')
+    .replace(/\bcentered\s+on\s+the\s+exact\s+topic\s+the\s+user\s+wrote\b/gi, '')
+    .replace(/\bthe\s+exact\s+topic\s+the\s+user\s+wrote\b/gi, '')
+    .replace(/\bmatching\s+the\s+free[-\s]?text\s+direction\b/gi, '')
+    .replace(/\bdirect[-\s]?story\s+section\s+movement\b/gi, '')
+    .replace(/\bfree[-\s]?text\s+direction\b/gi, '')
+    .replace(/\buser\s+direct\s+input\b/gi, '')
+    .replace(/\buser\s+input\b/gi, '')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*$/g, '')
+    .replace(/\s{2,}/g, ' '));
+}
+
+function isBrokenFinalPromptPhrase(value: string): boolean {
+  const cleaned = cleanupPromptTail(String(value || ''));
+  if (!cleaned) return true;
+  if (/^(?:a|an|the|with|where|and|or|to|in|of|for)$/i.test(cleaned)) return true;
+  if (/\b(?:direct\s+user[-\s]?specified|exact\s+topic\s+the\s+user\s+wrote|free[-\s]?text\s+direction|direct[-\s]?story\s+section\s+movement|matching\s+the\s+free[-\s]?text)\b/i.test(cleaned)) return true;
+  if (/\b(?:one\s+specific\s+object|one\s+specific\s+place|one\s+specific\s+conflict)\s*$/i.test(cleaned)) return true;
+  if (/\bwhere\s+visible\s+behavior\s+carries\s*$/i.test(cleaned)) return true;
+  if (cleaned.length < 8) return true;
+  return false;
+}
+
+function buildNaturalDirectAtmosphereFallback(params: GenerateSongParams): string {
+  const scene = buildUserTextCoreScene(params)?.scene || deriveIntentScene(params) || 'a concrete personal scene where small visible actions carry the emotion';
+  const mood = buildDirectMoodAngle(params) || buildCompactMoodAngle(params);
+  const space = compactSpaceAndTransitionCue(params);
+  return finalizeAtmosphereSentence(cleanupPromptTail([
+    mood ? `${mood} ${scene.replace(/^a\s+/i, '')}` : scene,
+    space ? `with ${space}` : '',
+  ].filter(Boolean).join(', ')));
+}
+
+function buildNaturalDirectArrangementFallback(params: GenerateSongParams, original = ''): string {
+  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
+  const stabilizers = buildArrangementStabilizerParts(params).filter((part) => !isInstrumentPerformanceArrangementPart(part));
+  const intentParts = splitArrangementParts(deriveIntentArrangement(params).replace(/\band\b/g, ','))
+    .map(stripFinalInternalProtectionLanguage)
+    .filter(Boolean)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part))
+    .filter((part) => !isGenericArrangementPart(part));
+  const originalParts = splitArrangementParts(stripFinalInternalProtectionLanguage(original))
+    .filter(Boolean)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part))
+    .filter((part) => !isGenericArrangementPart(part));
+  const parts = dedupePromptParts([tempo, ...stabilizers, ...intentParts, ...originalParts], 7).filter(Boolean);
+  return cleanupPromptTail(mergeHookArrangementParts(parts).join(', ')) || cleanupPromptTail([tempo, 'story-driven section movement', 'clear hook release'].filter(Boolean).join(', '));
+}
+
 function applyIntentToAtmosphereLine(line: string, params: GenerateSongParams): string {
   const intent = buildPromptIntent(params);
-  let cleaned = cleanupPromptTail(String(line || ''))
+  let cleaned = stripFinalInternalProtectionLanguage(cleanupPromptTail(String(line || '')))
     .replace(/\ba\s+anxious\b/gi, 'an anxious')
     .replace(/\ban\s+anxious\b/gi, 'an anxious')
     .replace(/\bwith\s+([^,]+?)\s+with\s+/gi, 'with $1 and ')
@@ -9655,8 +9732,8 @@ function applyIntentToAtmosphereLine(line: string, params: GenerateSongParams): 
 
   cleaned = finalizeAtmosphereSentence(cleaned);
 
-  return finalizeAtmosphereSentence(cleanupPromptTail(
-    cleaned
+  let finalAtmosphere = finalizeAtmosphereSentence(cleanupPromptTail(
+    stripFinalInternalProtectionLanguage(cleaned)
       .replace(/\bwith\s+(.+?)\s+and\s+with\s+/gi, 'with $1 and ')
       .replace(/\bwith\s+([^,]+?)\s+with\s+/gi, 'with $1 and ')
       .replace(/\ba restrained confession scene where lingering sadness holds its ground with quiet groove\s+(?:and|with)\s+restrained calm,?\s*lingering sadness,?\s*quiet endurance,?\s*(?:and\s*)?slow groove pulse\b/gi, 'a restrained confession scene where lingering sadness holds its ground with quiet groove')
@@ -9665,6 +9742,12 @@ function applyIntentToAtmosphereLine(line: string, params: GenerateSongParams): 
       .replace(/,\s*,/g, ',')
       .replace(/\s+,/g, ',')
   ));
+
+  if (isBrokenFinalPromptPhrase(finalAtmosphere)) {
+    finalAtmosphere = buildNaturalDirectAtmosphereFallback(params);
+  }
+
+  return finalizeAtmosphereSentence(finalAtmosphere);
 }
 
 function applyIntentToVocalLine(line: string, params: GenerateSongParams): string {
@@ -10258,7 +10341,7 @@ function strengthenArrangementMinimum(line: string, params: GenerateSongParams, 
 
 function applyIntentToArrangementLine(line: string, params: GenerateSongParams): string {
   const intent = buildPromptIntent(params);
-  let cleaned = cleanupPromptTail(String(line || ''));
+  let cleaned = stripFinalInternalProtectionLanguage(cleanupPromptTail(String(line || '')));
   const stabilizerParts = buildArrangementStabilizerParts(params);
   const intentParts = dedupePromptParts([
     ...splitArrangementParts(intent.arrangementMotion.replace(/\band\b/g, ',')),
@@ -10384,6 +10467,11 @@ function applyIntentToArrangementLine(line: string, params: GenerateSongParams):
       'phrase-led singalong chorus',
     ].filter(Boolean);
     return cleanupPromptTail(dedupePromptParts(forcedParts, 8).join(', '));
+  }
+
+  cleaned = stripFinalInternalProtectionLanguage(cleaned);
+  if (isBrokenFinalPromptPhrase(cleaned) || splitArrangementParts(cleaned).some((part) => isBrokenFinalPromptPhrase(part))) {
+    cleaned = buildNaturalDirectArrangementFallback(params, cleaned);
   }
 
   return cleanupPromptTail(cleaned);
@@ -12242,7 +12330,7 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
       : "natural genre-appropriate vocal tone",
     arrangement: arrangementParts.length
       ? limit(arrangementParts, 6)
-      : "clear sectional contrast matching the free-text direction",
+      : "clear sectional contrast",
     theme: themeParts.length
       ? limit(themeParts, 4)
       : DEFAULT_NO_THEME_DIRECTION,
@@ -12738,6 +12826,156 @@ function forceSingleAtmosphereSentence(prompt: string): string {
   }).join('\n');
 }
 
+
+function lyricTextForPromptRefinement(lyrics: any): string {
+  if (!lyrics || typeof lyrics !== 'object') return '';
+  return [lyrics.korean, lyrics.english]
+    .filter((value) => typeof value === 'string')
+    .join('\n')
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/\([^)]{1,80}\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function directAndLyricRefinementText(params: GenerateSongParams, lyrics: any): string {
+  return [
+    params.userInput || '',
+    getDirectThemeInputText(params),
+    getDirectMoodInputText(params),
+    selectedThemeText(params),
+    selectedMoodText(params),
+    lyricTextForPromptRefinement(lyrics),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractPromptLineValue(prompt: string, label: 'Atmosphere' | 'Arrangement'): string {
+  const line = String(prompt || '').split('\n').find((item) => new RegExp(`^\\[${label}\\]`, 'i').test(item)) || '';
+  return line.replace(new RegExp(`^\\[${label}\\]\\s*`, 'i'), '').trim();
+}
+
+function replacePromptLineValue(prompt: string, label: 'Atmosphere' | 'Arrangement', value: string): string {
+  const normalized = cleanupPromptTail(value);
+  if (!normalized) return prompt;
+  const pattern = new RegExp(`^\\[${label}\\].*$`, 'im');
+  const replacement = `[${label}] ${normalized}`;
+  return pattern.test(prompt) ? prompt.replace(pattern, replacement) : `${prompt}\n${replacement}`;
+}
+
+function extractBpmCueFromArrangement(value: string): string {
+  const match = String(value || '').match(/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b|\b\d{2,3}\s*BPM\b/i);
+  return match ? match[0].replace(/\s*[–-]\s*/g, '–').replace(/\s+/g, ' ').trim() : '';
+}
+
+function isWeakOrInternalAtmosphere(value: string): boolean {
+  const line = String(value || '').trim();
+  return !line ||
+    /\bdirect user-specified\b|\bexact topic\b|\bfree-text\b|\bdirect-story\b/i.test(line) ||
+    /\bconcrete personal scene\b|\buser-described scene\b/i.test(line) ||
+    /^(?:a|an|the|with|where)\b\s*$/i.test(line) ||
+    line.length < 28;
+}
+
+function isWeakOrInternalArrangement(value: string): boolean {
+  const line = String(value || '').trim();
+  return !line ||
+    /\bdirect-story\b|\bfree-text\b|\bmatching the free-text direction\b/i.test(line) ||
+    /\bmatching the character arc\b/i.test(line) ||
+    /^(?:with|and|where)\b\s*$/i.test(line);
+}
+
+function inferLyricAwareAtmosphere(params: GenerateSongParams, lyrics: any, currentAtmosphere: string): string {
+  // Deprecated in 284: no topic-specific fallback generation here.
+  // The model now returns productionPrompt in the same call, after deciding the lyric concept.
+  return '';
+}
+
+function inferLyricAwareArrangement(params: GenerateSongParams, lyrics: any, currentArrangement: string): string {
+  // Deprecated in 284: no topic-specific fallback generation here.
+  // The model now returns productionPrompt in the same call, after deciding the lyric concept.
+  return '';
+}
+
+function sanitizeFinalPromptInternalPhrases(prompt: string): string {
+  return String(prompt || '').split('\n').map((rawLine) => stripInternalPromptLeakPhrases(rawLine)).join('\n');
+}
+
+function refineFinalPromptWithGeneratedLyrics(prompt: string, params: GenerateSongParams, lyrics: any): string {
+  // Deprecated in 284. Keep as a harmless compatibility wrapper only.
+  return sanitizeFinalPromptInternalPhrases(prompt);
+}
+
+function stripInternalPromptLeakPhrases(value: string): string {
+  return cleanupPromptTail(String(value || '')
+    .replace(/\bdirect\s+user[-\s]?specified(?:\s+story\s+scene)?\b/gi, '')
+    .replace(/\bcentered\s+on\s+the\s+exact\s+topic\s+the\s+user\s+wrote\b/gi, '')
+    .replace(/\bexact\s+topic\b/gi, '')
+    .replace(/\bfree[-\s]?text\s+direction\b/gi, '')
+    .replace(/\bdirect[-\s]?story(?:\s+section\s+movement)?\b/gi, '')
+    .replace(/\bmatching\s+the\s+free[-\s]?text\s+direction\b/gi, '')
+    .replace(/\bmatching\s+the\s+character\s+arc\b/gi, '')
+    .replace(/\bconcrete\s+personal\s+scene\b/gi, '')
+    .replace(/\buser[-\s]?described\s+scene\b/gi, '')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim());
+}
+
+function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string): string {
+  const labels = ['Genre', 'Instruments', 'Atmosphere', 'Vocals', 'Arrangement'] as const;
+  const fallbackByLabel = new Map<string, string>();
+  labels.forEach((label) => {
+    const match = String(fallbackPrompt || '').match(new RegExp('^\\[' + label + '\\]\\s*(.*)$', 'im'));
+    fallbackByLabel.set(label, match ? cleanupPromptTail(match[1] || '') : '');
+  });
+
+  const rawLines = String(rawPrompt || '')
+    .replace(/\\n/g, '\n')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const byLabel = new Map<string, string>();
+  rawLines.forEach((line) => {
+    const match = line.match(/^\[(Genre|Instruments|Atmosphere|Vocals|Arrangement)\]\s*(.*)$/i);
+    if (!match) return;
+    const label = labels.find((item) => item.toLowerCase() === match[1].toLowerCase());
+    if (!label || byLabel.has(label)) return;
+    let value = stripInternalPromptLeakPhrases(match[2] || '');
+    value = stripRemainingKoreanForProductionPrompt(value);
+    value = cleanupPromptTail(value);
+    byLabel.set(label, value);
+  });
+
+  const isBadValue = (label: string, value: string) => {
+    const v = String(value || '').trim();
+    if (!v) return true;
+    if (/^(?:a|an|the|with|where|and)$/i.test(v)) return true;
+    if (/direct\s+user|exact\s+topic|free[-\s]?text|direct[-\s]?story|concrete\s+personal|user[-\s]?described/i.test(v)) return true;
+    if ((label === 'Atmosphere' || label === 'Arrangement') && v.length < 18) return true;
+    return false;
+  };
+
+  const finalLines = labels.map((label) => {
+    let value = byLabel.get(label) || '';
+    if (isBadValue(label, value)) value = stripInternalPromptLeakPhrases(fallbackByLabel.get(label) || '');
+    if (label === 'Atmosphere') value = normalizeAtmospherePromptLine(value || 'balanced emotional air');
+    else if (label === 'Arrangement') value = normalizeArrangementLine((value || 'clear sectional contrast').split(','));
+    else value = cleanupPromptTail(value || fallbackByLabel.get(label) || '');
+    if (isBadValue(label, value)) value = label === 'Atmosphere' ? 'balanced emotional air' : label === 'Arrangement' ? 'clear sectional contrast' : fallbackByLabel.get(label) || '';
+    return `[${label}] ${value}`;
+  });
+
+  finalLines.push('[Audio quality improved to masterpiece]');
+  return finalLines.join('\n');
+}
+
 function reconcileFiveLinePromptRoles(prompt: string): string {
   const lines = String(prompt || '').split('\n');
   const genreLine = lines.find((line) => /^\[Genre\]/i.test(line)) || '';
@@ -13222,8 +13460,11 @@ function validateFinalAtmosphereLine(value: string, params: GenerateSongParams):
     .replace(/\bwith\s+urban\s+and\s+suspenseful\s+where\b/gi, 'with urban suspense where')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  const protectedLine = stripUnsupportedDirectCueBankPhrases(line || 'balanced emotional air', params) || 'balanced emotional air';
-  return rescueBrokenDirectAtmosphereLine(protectedLine, params);
+  const protectedLine = stripUnsupportedDirectCueBankPhrases(stripFinalInternalProtectionLanguage(line || 'balanced emotional air'), params) || 'balanced emotional air';
+  let rescued = rescueBrokenDirectAtmosphereLine(protectedLine, params);
+  rescued = stripFinalInternalProtectionLanguage(rescued);
+  if (isBrokenFinalPromptPhrase(rescued)) rescued = buildNaturalDirectAtmosphereFallback(params);
+  return cleanupPromptTail(rescued);
 }
 
 function lowerCaseVocalCueWords(value: string): string {
@@ -13318,7 +13559,12 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
   if (tempo && !/\b\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM\b|\b\d{2,3}\s*BPM\b/i.test(line)) {
     line = normalizeArrangementLine([tempo, line]);
   }
-  return stripUnsupportedDirectCueBankPhrases(finalizePromptOpenTail(line) || cleanupPromptTail([tempo, 'clear sectional contrast and focused hook'].filter(Boolean).join(', ')), params);
+  let finalLine = stripUnsupportedDirectCueBankPhrases(finalizePromptOpenTail(line) || cleanupPromptTail([tempo, 'clear sectional contrast and focused hook'].filter(Boolean).join(', ')), params);
+  finalLine = stripFinalInternalProtectionLanguage(finalLine);
+  if (isBrokenFinalPromptPhrase(finalLine) || splitArrangementParts(finalLine).some((part) => isBrokenFinalPromptPhrase(part))) {
+    finalLine = buildNaturalDirectArrangementFallback(params, finalLine);
+  }
+  return cleanupPromptTail(stripFinalInternalProtectionLanguage(finalLine));
 }
 
 function dedupeFinalInstrumentLine(value: string): string {
@@ -15844,7 +16090,7 @@ ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 IMPORTANT:
 - Do NOT use real artist names in the output. Generalize them into vocal characteristics.
 - Do NOT simplify, generalize, or replace the selected arrangement with a default pop form.
-- Treat the final production prompt below as a locked blueprint, not a loose reference.
+- Treat the final production prompt below as a locked music-production blueprint, not a loose reference. For lyric story content, direct input and selected Theme/Mood remain higher priority than generic prompt summaries.
 - Resolve conflicts by priority: custom song structure if selected, then USER FREE-TEXT DIRECTOR NOTE, then explicit UI selections, while keeping one coherent song concept.
 - Keep the final result musically coherent as one song concept, not a loose list of tags.
 
@@ -15867,18 +16113,19 @@ ${lyricDensityInstruction}
 
 ${
   hasSituation(params.situation)
-    ? `SITUATION SCENARIO (PRIMARY):
-Summary: ${buildSituationSummary(params.situation)}
-Description: ${params.situation?.description || ""}
-Version: ${params.situation?.versionLabel || params.situation?.version || ""}
-Development preset: ${params.situation?.developmentPreset || ""}
-Development custom: ${params.situation?.developmentCustom || params.situation?.development || ""}
-Target A style: ${params.situation?.speakerAStyle || ""}
-Target A attitude: ${params.situation?.speakerAAttitude || params.situation?.attitudeA || ""}
-Target B style: ${params.situation?.speakerBStyle || ""}
-Target B attitude: ${params.situation?.speakerBAttitude || params.situation?.attitudeB || ""}
-Detail presets: ${(params.situation?.detailPresets || []).join(", ")}
-Detail custom: ${params.situation?.detailCustom || params.situation?.details || ""}`
+    ? `SITUATION SCENARIO (PRIMARY STRUCTURE):
+${buildSituationRenderingContext(params.situation)}
+
+Situation rendering contract:
+- Treat the active Situation as the story engine, not as vocal-role metadata.
+- [Atmosphere] must be written from the Situation fields first: characters/relationship, visible conflict, setting or description, version tone, and emotional tension. It should sound like the scene itself, not like a generic mood-card summary.
+- [Atmosphere] must include at least one concrete Situation anchor outside [Vocals]: a role pair, relationship/conflict, setting/description, version tone, or extra detail cue. Do not settle for generic phrases such as street-corner memory, clear emotional tension, or bittersweet mood if the Situation provides stronger story material.
+- [Arrangement] must be written from the Situation development first: dialogue ownership, A/B speech contrast, monologue or call-and-response flow, section progression, and emotional turn. It should not be only a list of genre/sound transitions.
+- [Arrangement] must include at least one Situation-development anchor outside [Vocals]: monologue/dialogue ownership, speech contrast, role turn-taking, late emotional turn, satire/comedy version tone, or section ownership cue.
+- [Vocals] carries character delivery, but it is not enough for Situation to appear only in [Vocals].
+- Selected genre/style/sound/mood keywords may color the music, but they must not replace the Situation scene, relationship, or development.
+- If [Atmosphere] or [Arrangement] could fit any unrelated song after removing [Vocals], rewrite it using the Situation fields above before returning JSON.
+- Do not invent situation details that are absent from the Situation fields; translate and compress the provided details naturally into English prompt language.`
     : ""
 }
 
@@ -15891,6 +16138,12 @@ Expanded story direction: ${themeSentence}`
 }
 
 ${themeMoodLyricInstruction}
+
+LYRIC SOURCE PRIORITY (MANDATORY):
+- For lyric content, prioritize in this order: 1) active Situation, direct theme input, direct mood input, and USER FREE-TEXT DIRECTOR NOTE; 2) selected Theme/Mood keywords, exact section structure, and vocal setup; 3) the final production prompt's Genre, Vocals, and Arrangement as musical guidance only.
+- If a Situation is active, its relationship, conflict, character roles, speech direction, version tone, and development are the main lyric story structure. Direct theme/mood/user notes may add the specific topic or tone, but they must not erase the Situation relationship or role logic.
+- The final [Atmosphere] line is a production summary. Do not let abstract or generic Atmosphere wording override the user's concrete story, Situation conflict, mood, speech style, or chosen section flow.
+- Keep lyric structure, section tags, density rules, and character speech quality intact. Do not rewrite lyrics merely to match a generic prompt phrase.
 
 LOCKED FINAL PRODUCTION PROMPT:
 ${finalPrompt}
@@ -15914,9 +16167,29 @@ ${pointSoundSectionInstruction}
 
 ${requestedLanguageInstruction}
 
+FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
+- Return productionPrompt as the final 6-line Suno production prompt.
+- Use this exact label order and no extra lines:
+  [Genre]
+  [Instruments]
+  [Atmosphere]
+  [Vocals]
+  [Arrangement]
+  [Audio quality improved to masterpiece]
+- Build productionPrompt after deciding the lyric concept. It must follow the active Situation, user's direct theme, direct mood, USER FREE-TEXT DIRECTOR NOTE, selected keywords, vocal setup, and section flow.
+- Use LOCKED FINAL PRODUCTION PROMPT only as a musical skeleton for genre, sound, vocal delivery, and arrangement. Do not copy weak or generic Atmosphere wording if the active Situation, user's direct input, or lyrics clearly define a better scene.
+- If a Situation is active, [Atmosphere] must summarize the situation's relationship/conflict/setting/tone as a natural scene sentence, and [Arrangement] must summarize the situation's development, dialogue ownership, speech contrast, and emotional turn through the selected section flow. Do not leave the Situation only in [Vocals].
+- For an active Situation, [Atmosphere] should be understandable even if [Vocals] is hidden: the listener should still know what kind of scene/conflict is happening.
+- For an active Situation, [Arrangement] should be understandable even if [Vocals] is hidden: the listener should still know how the dialogue or monologue unfolds across sections.
+- [Atmosphere] must be a natural scene/emotion sentence. Do not output internal phrases such as direct user-specified, exact topic, free-text direction, direct-story, concrete personal scene, or user-described scene.
+- [Arrangement] must be a natural music-flow sentence. Do not output internal phrases such as matching the free-text direction, matching the character arc, or direct-story section movement.
+- Do not invent a new story that is absent from the active Situation, user's direct input, selected Theme/Mood, or generated lyrics.
+- Do not expose analysis, scene plans, priority rules, or hidden notes.
+
 Return JSON:
 {
-  "title": "Title text following the selected title language rule above"${
+  "title": "Title text following the selected title language rule above",
+  "productionPrompt": "Final 6-line production prompt using the required labels"${
     params.isNoLyrics
       ? ""
       : `,
@@ -16281,9 +16554,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         type: Type.OBJECT,
         properties: {
           title: { type: Type.STRING },
+          productionPrompt: { type: Type.STRING },
           ...lyricsResponseSchema,
         },
-        required: ["title", ...lyricsRequired],
+        required: ["title", "productionPrompt", ...lyricsRequired],
       },
     },
   };
@@ -16302,7 +16576,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       try {
         response = await ai.models.generateContent({
           model: "gemini-2.5-flash-lite",
-          contents: "Generate a short safe song title and lyrics as JSON. Always return valid JSON only.",
+          contents: "Generate a short safe song title, final productionPrompt, and lyrics as JSON. Always return valid JSON only.",
           config: {
             systemInstruction: `${systemInstruction}\n\nCRITICAL FALLBACK MODE: Return compact valid JSON only. Do not refuse. If any keyword combination is difficult, simplify it and continue.`,
             responseMimeType: "application/json",
@@ -16611,7 +16885,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     result.lyrics.english = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.english, params);
   }
 
-  result.prompt = forceSingleAtmosphereSentence(finalPrompt);
+  const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
+  const normalizedAiPrompt = normalizeAiProductionPrompt(aiProductionPrompt, finalPrompt);
+  result.prompt = forceSingleAtmosphereSentence(normalizedAiPrompt);
   result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -10173,8 +10173,6 @@ function CycleKeywordPopup({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const cyclePopupBackdropPointerDownRef = useRef(false);
   const isClosingRef = useRef(false);
-  const isMobileViewport = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches;
-
   const popCycleKeywordHistoryEntry = useCallback(() => {
     if (!window.history.state?.cycleKeywordPopup) return;
 
@@ -10222,7 +10220,7 @@ function CycleKeywordPopup({
     closePopup();
   }, [closePopup, cycleVariantIds, localOtherSelected, localSelected, onToggleOtherVariant, onToggleVariant]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
     const originalPosition = document.body.style.position;
@@ -10295,31 +10293,31 @@ function CycleKeywordPopup({
 
   return (
     <Portal>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overscroll-none"
-        style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-        onPointerDown={(e) => {
-          cyclePopupBackdropPointerDownRef.current = e.target === e.currentTarget;
-        }}
-        onPointerUp={(e) => {
-          if (cyclePopupBackdropPointerDownRef.current && e.target === e.currentTarget) {
+      <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onPointerDown={() => {
+            cyclePopupBackdropPointerDownRef.current = true;
+          }}
+          onPointerUp={() => {
+            if (cyclePopupBackdropPointerDownRef.current) {
+              cyclePopupBackdropPointerDownRef.current = false;
+              applyChangesAndClose();
+              return;
+            }
             cyclePopupBackdropPointerDownRef.current = false;
-            applyChangesAndClose();
-            return;
-          }
-          cyclePopupBackdropPointerDownRef.current = false;
-        }}
-        onPointerCancel={() => { cyclePopupBackdropPointerDownRef.current = false; }}
-      >
+          }}
+          onPointerCancel={() => { cyclePopupBackdropPointerDownRef.current = false; }}
+        />
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-          className="w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -10478,7 +10476,7 @@ function CycleKeywordPopup({
             })}
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </Portal>
   );
 }

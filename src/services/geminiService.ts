@@ -1785,17 +1785,17 @@ const VOCAL_CHARACTER_SCALE_PROMPTS: VocalCharacterScaleConfig[] = [
     'rap-like vocal delivery',
   ] },
   { key: 'rhythmLevel', defaultValue: 6, steps: [
-    'strongly ahead-of-the-beat phrasing',
-    'ahead-of-the-beat phrasing',
-    'quick responsive phrasing',
-    'slightly anticipated phrasing',
-    'near-steady slightly anticipated phrasing',
+    'extremely rushed vocal delivery, deliberately singing far ahead of the beat with urgent anticipatory phrasing',
+    'ahead-of-the-beat vocal phrasing',
+    'slightly anticipated vocal phrasing',
+    'quick responsive vocal phrasing',
+    'near-steady vocal phrasing with slight rhythmic pull',
     '',
-    'slightly behind-the-beat phrasing',
-    'behind-the-beat phrasing',
-    'loose behind-the-beat phrasing',
-    'unstable off-beat phrasing',
-    'free unstable timing',
+    'laid-back behind-the-beat vocal phrasing',
+    'loose rhythmic vocal delivery',
+    'intentionally uneven off-beat timing, slightly missing the beat',
+    'rubato, speech-like free-time vocal phrasing',
+    'speech-like free-time vocal delivery, intentionally drifting outside the beat grid',
   ] },
   { key: 'emotionLevel', defaultValue: 6, steps: [
     'emotionless delivery',
@@ -2080,7 +2080,7 @@ function summarizeVocalPsychology(personality?: string): string {
   return '';
 }
 
-function mergeVocalIntentPhrases(tone: string, techniques: VocalTechniqueIntent[], personality: string): string[] {
+function mergeVocalIntentPhrases(tone: string, techniques: VocalTechniqueIntent[], personality: string, maxParts = 6): string[] {
   let tonePhrase = tone;
   const has = (id: string) => techniques.some((item) => item.id === id);
   const removeIds = new Set<string>();
@@ -2117,10 +2117,10 @@ function mergeVocalIntentPhrases(tone: string, techniques: VocalTechniqueIntent[
   }
 
   const remaining = techniques.filter((item) => !removeIds.has(item.id)).map((item) => item.phrase);
-  return dedupePromptParts([tonePhrase, ...merged, ...remaining, personality].filter(Boolean), 12).slice(0, 6);
+  return dedupePromptParts([tonePhrase, ...merged, ...remaining, personality].filter(Boolean), 14).slice(0, Math.max(3, maxParts));
 }
 
-function selectCoreTechniqueIntents(intents: VocalTechniqueIntent[]): { core: VocalTechniqueIntent[]; extra: VocalTechniqueIntent[] } {
+function selectCoreTechniqueIntents(intents: VocalTechniqueIntent[], maxCore = 3): { core: VocalTechniqueIntent[]; extra: VocalTechniqueIntent[] } {
   const picked: VocalTechniqueIntent[] = [];
   const used = new Set<string>();
   const take = (slot: VocalTechniqueSlot) => {
@@ -2135,13 +2135,20 @@ function selectCoreTechniqueIntents(intents: VocalTechniqueIntent[]): { core: Vo
   if (picked.length < 2) take("breath");
   take("experimental");
 
-  for (const slot of ["melody", "rhythm", "breath", "texture", "register"] as VocalTechniqueSlot[]) {
-    if (picked.length >= 3) break;
+  for (const slot of ["melody", "rhythm", "breath", "texture", "register", "custom", "experimental"] as VocalTechniqueSlot[]) {
+    if (picked.length >= maxCore) break;
     take(slot);
   }
 
+  for (const item of intents) {
+    if (picked.length >= maxCore) break;
+    if (used.has(item.id)) continue;
+    picked.push(item);
+    used.add(item.id);
+  }
+
   const extra = intents.filter((intent) => !used.has(intent.id));
-  return { core: picked.slice(0, 3), extra };
+  return { core: picked.slice(0, maxCore), extra };
 }
 
 function buildVocalIntentResult(member: any, params?: GenerateSongParams, includeGenreDNA = true): VocalIntentResult {
@@ -2170,12 +2177,14 @@ function buildVocalIntentResult(member: any, params?: GenerateSongParams, includ
     intents.push({ id: String(character.customTechnique).trim(), phrase: String(character.customTechnique).trim(), slot: "custom", isExperimental: false });
   }
 
-  const { core, extra } = selectCoreTechniqueIntents(intents);
+  const isLargeGroup = params ? shouldApplyLargeGroupVocalCompression(params) : false;
+  const maxCore = isLargeGroup ? 3 : 12;
+  const { core, extra } = selectCoreTechniqueIntents(intents, maxCore);
   const voiceTone = resolveVocalVoiceToneCompact(character.voiceToneId) || character.customVoiceTone || '';
   const personalityRaw = resolveVocalPersonalityCompact(character.personalityId) || character.customPersonality || '';
   const personality = summarizeVocalPsychology(personalityRaw) || personalityRaw;
   const genreDNA = getGenreVocalDNAPhrase(params);
-  const parts = mergeVocalIntentPhrases(voiceTone, core, personality);
+  const parts = mergeVocalIntentPhrases(voiceTone, core, personality, isLargeGroup ? 6 : 12);
   const promptParts = includeGenreDNA && genreDNA ? [...parts, genreDNA] : parts;
 
   const phrase = joinReadable(promptParts)
@@ -2390,7 +2399,11 @@ VOCAL RULE (STRICT):
 - Formation: ${formation}
 - Gender: ${genderRule}${memberRolesRule}
 - ${rapRule}${toneRule}${auxiliaryVocalRule}
-- If Vocal Character exists, combine technique name + natural description as the singer's normal vocal habit in the final [Vocals] line. Do not wrap Style/Prompt vocal instructions in square brackets.
+- If Vocal Character exists, preserve the selected age/range/delivery/rhythm/emotion/texture/charm/ornament cues in the final [Vocals] line as primary vocal direction, not as optional flavor.
+- For solo or duo vocals, include at least 5 distinct Vocal Character cues per configured singer when available: age/range, delivery/register, timing/rhythm, emotion, texture/charm, and ornament/technique. The [Vocals] line may be longer so the character voice is clear.
+- Do not dump Vocal Character cues as a keyword chain. Rewrite them into one natural singer-direction sentence for each singer. Merge only truly similar cues into compact phrases, but do not silently drop distinct selected cues such as teen/high/chest voice/rushed timing/bright charm/ornament.
+- When Situation roles also exist, use Situation for role/attitude/speech context and Vocal Character for voice color, delivery, timing, texture, charm, and technique. Do not let one erase the other; combine them in the same singer sentence.
+- Apply hard compression only to 3+ member group vocals. For 1-2 characters, prefer clarity and emotional specificity over excessive brevity. Do not wrap Style/Prompt vocal instructions in square brackets.
 - Do NOT override these vocal rules under any circumstance.
 `.trim();
 }
@@ -2962,6 +2975,15 @@ function isCustomInstrumentalTag(tag: string): boolean {
   return /^(?:Instrumental|Instrumental Opening|Instrumental only|No vocals|No humming|No chant|Pure instrumental)$/i.test(raw);
 }
 
+function isInstrumentalOnlyLyricCue(value: string): boolean {
+  const raw = String(value || '').trim();
+  return /^(?:Instrumental\s+solo|Solo\s+instrumental|Instrumental\s+only|Pure\s+instrumental|No\s+vocals?|No\s+humming|No\s+chant)$/i.test(raw);
+}
+
+function hasInstrumentalOnlyLyricCue(parts: string[]): boolean {
+  return parts.some((part) => isInstrumentalOnlyLyricCue(part) || isCustomInstrumentalTag(part));
+}
+
 function isHumanVoiceCueText(value: string): boolean {
   const raw = String(value || '');
   return /\b(?:vocal|vocals|voice|rap|singer|singing|spoken|spoken\s+word|lead\s+vocal|main\s+vocal|sub\s+vocal|harmony\s+vocal|all\s+vocals|choir|chorus\s+vocal|ad[-\s]?lib|adlib|chant|chanting|humming|hum|whisper|breath|breathy|sigh|sob|cry|gasp|laugh|spoken\s+intro)\b|구음|허밍|목소리|보컬|랩|노래|가창|합창|애드립|숨소리|한숨|속삭임/i.test(raw);
@@ -3026,7 +3048,8 @@ function buildInstrumentalOnlyTag(section: string, cues: string[] = []): string 
   // [Intro: Instrumental, ...] because the section name itself is not an
   // instrumental cue.
   const sectionAlreadyInstrumental = /^(?:Instrumental|Instrumental Opening|Solo|Drop|Breakdown)$/i.test(cleanSection);
-  const bodyParts = sectionAlreadyInstrumental ? cleanCues : ['Instrumental', ...cleanCues];
+  const cueAlreadyDeclaresInstrumental = cleanCues.some((cue) => /^Instrumental\b|^Pure\s+instrumental\b|^No\s+vocals?\b/i.test(cue));
+  const bodyParts = (sectionAlreadyInstrumental || cueAlreadyDeclaresInstrumental) ? cleanCues : ['Instrumental', ...cleanCues];
   const body = bodyParts.filter(Boolean).join(', ');
   return `[${cleanSection}${body ? `: ${body}` : ''}]`;
 }
@@ -4964,11 +4987,19 @@ function buildCharacterVocalSplitItem(
   const expressionCue = rawStyleSource
     ? null
     : pickVocalExpressionCueForRole(params, getMemberRoleForPrompt(params, memberIndex), memberTone || fallbackTone, roleIndex);
+  const member = params.vocal?.members?.[memberIndex];
+  const characterPrompt = member ? buildVocalCharacterPrompt(member, params, false) : "";
+  const mergedDirection = cleanupPromptTail(
+    [
+      expressionCue
+        ? mergeVocalExpressionIntoEmotion(situationDirection, expressionCue)
+        : situationDirection,
+      characterPrompt ? `voice character: ${characterPrompt}` : "",
+    ].filter(Boolean).join(", ")
+  );
   const direction = limitText(
-    expressionCue
-      ? mergeVocalExpressionIntoEmotion(situationDirection, expressionCue)
-      : situationDirection,
-    128,
+    mergedDirection,
+    shouldApplyLargeGroupVocalCompression(params) ? 128 : 240,
   );
   const acousticLabel = buildSituationAcousticTagLabel(params, role, roleIndex, memberIndex);
   return `${acousticLabel} as ${roleName}, ${direction}`;
@@ -14880,12 +14911,16 @@ function removeLyricsFromForcedInstrumentalSections(lyrics: string, params: Gene
     if (parsed) {
       const composite = parseCompositeLyricTagInside(parsed.inside);
       const section = composite?.section || (isSectionOnlyLyricTagInside(parsed.inside) ? normalizeLyricSectionDisplayName(parsed.inside) : '');
-      currentForced = section ? isForcedInstrumentalLyricSection(section, params) : false;
+      const compositeParts = composite ? (() => {
+        const { label, cues } = splitLyricTagBody(composite.body);
+        return [label, ...cues];
+      })() : [];
+      const tagForcesInstrumental = composite ? hasInstrumentalOnlyLyricCue(compositeParts) : false;
+      currentForced = section ? (isForcedInstrumentalLyricSection(section, params) || tagForcesInstrumental) : false;
       if (currentForced) {
         const customCue = findNextCustomInstrumentalCue(section, instrumentalQueue, instrumentalCursor);
         if (composite) {
-          const { label, cues } = splitLyricTagBody(composite.body);
-          out.push(`${buildInstrumentalOnlyTag(section, [label, ...cues, ...(customCue?.cues || [])])}${parsed.rest || ''}`);
+          out.push(`${buildInstrumentalOnlyTag(section, [...compositeParts, ...(customCue?.cues || [])])}${parsed.rest || ''}`);
         } else {
           out.push(`${buildInstrumentalOnlyTag(section, customCue?.cues || [])}${parsed.rest || ''}`);
         }

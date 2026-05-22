@@ -5471,21 +5471,21 @@ const toggleCycleVariantSelection = (
   const isStoryboardDraftChanged = serializeStoryboardSituation(draftSituation) !== serializeStoryboardSituation(situation);
   const hasDraftStoryboard = hasActiveSituation(draftSituation);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isSituationExpanded) return;
 
-    const scrollY = window.scrollY;
     const originalBodyOverflow = document.body.style.overflow;
-    const originalBodyPosition = document.body.style.position;
-    const originalBodyTop = document.body.style.top;
-    const originalBodyWidth = document.body.style.width;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
     const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
     const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+    const originalBodyTouchAction = document.body.style.touchAction;
 
+    // Keep the page geometry stable while Storyboard is open.
+    // Using position: fixed here made the mobile floating action bar return with
+    // a different jump/reflow from the other modal popups.
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+    document.body.style.touchAction = 'none';
+    document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.overscrollBehavior = 'none';
 
@@ -5509,12 +5509,10 @@ const toggleCycleVariantSelection = (
       window.removeEventListener('popstate', handleStoryboardModalPopState, true);
       window.removeEventListener('keydown', handleStoryboardModalKeyDown);
       document.body.style.overflow = originalBodyOverflow;
-      document.body.style.position = originalBodyPosition;
-      document.body.style.top = originalBodyTop;
-      document.body.style.width = originalBodyWidth;
+      document.documentElement.style.overflow = originalHtmlOverflow;
       document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
       document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
-      window.scrollTo(0, scrollY);
+      document.body.style.touchAction = originalBodyTouchAction;
     };
   }, [isSituationExpanded, situation]);
 

@@ -10246,7 +10246,8 @@ function CycleKeywordPopup({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        className="fixed inset-0 z-[300] bg-black/45 md:bg-black/40 md:backdrop-blur-sm flex items-center justify-center p-4 motion-safe:transition-opacity motion-safe:duration-150"
+        style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
         onPointerDown={(e) => {
           cyclePopupBackdropPointerDownRef.current = e.target === e.currentTarget;
         }}

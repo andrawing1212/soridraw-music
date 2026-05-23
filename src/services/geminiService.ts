@@ -13843,20 +13843,105 @@ function validateFinalInstrumentLine(value: string, params: GenerateSongParams):
   return dedupeFinalInstrumentLine(withStory.join(', '));
 }
 
-function finalOutputPromptValidator(prompt: string, params: GenerateSongParams): string {
+function isBackgroundOnlyBgmGenre(params: GenerateSongParams): boolean {
+  const genreText = [
+    params.genre || '',
+    ...(params.subGenre || []),
+    ...getSelectedFusionGenres(params).map((genre) => `${genre.id || ''} ${genre.label || ''}`),
+  ].join(' ').toLowerCase();
+  return /(?:bgm|background\s*music|theme\s*music|score|ambience|ambient|lofi[_\s-]*study|lo[-\s]?fi\s+study|healing\s*piano|cafe\s*bgm|nature[_\s-]*ambience|nature\s+ambience|mystery\s*bgm|fantasy\s*bgm|dark\s*fantasy|horror\s*ambience|sf\s*score|video\s*game\s*music|로파이\s*스터디|자연\s*앰비언스|자연\/공간\s*배경음|테마\s*\/\s*bgm|카페\s*bgm|힐링\s*피아노|미스터리\s*bgm|판타지\s*bgm|다크\s*판타지|호러\s*앰비언스|sf\s*스코어|비디오\s*게임\s*음악)/i.test(genreText);
+}
+
+function parseFinalPromptLineMap(prompt: string): FinalPromptLineMap {
   const map: FinalPromptLineMap = { genre: '', instruments: '', atmosphere: '', vocals: '', arrangement: '' };
-  String(prompt || '').split('\n').forEach((line) => {
-    const match = line.match(/^\[(Genre|Instruments|Atmosphere|Vocals|Arrangement)\]\s*(.*)$/i);
-    if (!match) return;
-    const label = match[1].toLowerCase() as keyof FinalPromptLineMap;
-    map[label] = cleanupPromptTail(match[2]);
-  });
+  const source = String(prompt || '').replace(/\r\n?/g, '\n');
+  const labelPattern = /\[(Genre|Instruments|Atmosphere|Vocals|Arrangement)\]\s*/gi;
+  const matches = Array.from(source.matchAll(labelPattern));
+  for (let i = 0; i < matches.length; i += 1) {
+    const match = matches[i];
+    const label = String(match[1] || '').toLowerCase() as keyof FinalPromptLineMap;
+    const start = (match.index || 0) + match[0].length;
+    const end = i + 1 < matches.length ? (matches[i + 1].index || source.length) : source.length;
+    const value = cleanupPromptTail(source.slice(start, end).replace(/\[Audio quality improved to masterpiece\]/gi, ''));
+    if (value) map[label] = value;
+  }
+  return map;
+}
+
+function sanitizeBackgroundOnlyBgmVocalsLine(value: string, params: GenerateSongParams): string {
+  if (!isBackgroundOnlyBgmGenre(params)) return value;
+  return 'No vocals, no humming, no chanting, no choir, no spoken words, instrumental background music only';
+}
+
+function sanitizeBackgroundOnlyBgmAtmosphereLine(value: string, params: GenerateSongParams): string {
+  if (!isBackgroundOnlyBgmGenre(params)) return value;
+  const selectedText = [params.genre || '', ...(params.subGenre || [])].join(' ');
+  const cleaned = cleanupPromptTail(value)
+    .replace(/\bwhere\s+(?:the\s+)?(?:speaker|singer|vocalist|narrator|character|listener)\b.*$/gi, '')
+    .replace(/\b(?:speaker|singer|vocalist|narrator|character)\b/gi, 'space')
+    .replace(/\b(?:silent\s+phone|unsaid\s+line|softly\s+denies|longing\s+that\s+the\s+space\s+softly\s+denies|hesitation\s+scene|emotional\s+hook)\b/gi, 'quiet atmosphere')
+    .replace(/\s{2,}/g, ' ');
+  if (/nature|자연/i.test(selectedText)) return 'quiet natural space with gentle air, soft environmental motion, and calm background depth';
+  if (/cafe|카페/i.test(selectedText)) return 'quiet cafe background atmosphere with warm room tone and soft everyday ambience';
+  if (/piano|피아노/i.test(selectedText)) return 'calm healing room atmosphere with soft piano warmth and quiet background space';
+  if (/lo[-_\s]?fi|로파이|study|스터디/i.test(selectedText)) return 'quiet study background atmosphere with warm room tone and low distraction';
+  return cleaned || 'quiet instrumental background atmosphere with soft space and low distraction';
+}
+
+function sanitizeBackgroundOnlyBgmInstrumentsLine(value: string, params: GenerateSongParams): string {
+  if (!isBackgroundOnlyBgmGenre(params)) return value;
+  const selectedText = [params.genre || '', ...(params.subGenre || [])].join(' ');
+  const rawItems = splitCommaList(value)
+    .map((item) => cleanupPromptTail(item))
+    .filter(Boolean);
+  const bannedRhythmOrBandCue = /\b(?:drums?|boom[-\s]?bap\s+drums?|brushed\s+drums?|kick|snare|hi[-\s]?hat|hats|clap|percussion|wooden\s+percussion|808|sub[-\s]?bass|bassline|bass\s+groove|groovy\s+bass|mellow\s+jazz[-\s]?influenced\s+bass|jazz[-\s]?influenced\s+bass|bass|guitar|nylon\s+guitar|band|riff|lead\s+synth|hook\s+synth)\b/i;
+  const vocalCue = /\b(?:vocal|vocals|voice|female\s+solo|male\s+solo|humming|hum|choir|chant|breath|breathy|sigh)\b/i;
+  const kept = rawItems.filter((item) => !bannedRhythmOrBandCue.test(item) && !vocalCue.test(item));
+  const minimal = dedupeByNormalized(kept).slice(0, 4);
+  if (minimal.length >= 2) return cleanupPromptTail(minimal.join(', '));
+  if (/nature|자연/i.test(selectedText)) {
+    return 'natural ambience, gentle field texture, soft environmental pad';
+  }
+  if (/cafe|카페/i.test(selectedText)) {
+    return 'warm room tone, soft piano color, quiet cafe ambience';
+  }
+  if (/piano|피아노/i.test(selectedText)) {
+    return 'soft piano, gentle felt texture, quiet room resonance';
+  }
+  if (/lo[-_\s]?fi|로파이|study|스터디/i.test(selectedText)) {
+    return 'soft lo-fi texture, analog tape hiss, warm room keys';
+  }
+  return 'minimal ambient texture, soft pad, quiet background space';
+}
+
+function sanitizeBackgroundOnlyBgmArrangementLine(value: string, params: GenerateSongParams): string {
+  if (!isBackgroundOnlyBgmGenre(params)) return value;
+  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
+  const selectedText = [params.genre || '', ...(params.subGenre || [])].join(' ');
+  const fallback = /nature|자연/i.test(selectedText)
+    ? 'organic ambient loop, gentle scene swells, non-distracting background flow'
+    : /cafe|카페/i.test(selectedText)
+      ? 'soft cafe background loop, gentle transitions, non-distracting room flow'
+      : /piano|피아노/i.test(selectedText)
+        ? 'minimal piano background loop, soft pauses, non-distracting healing flow'
+        : /lo[-_\s]?fi|로파이|study|스터디/i.test(selectedText)
+          ? 'minimal lo-fi study loop, soft texture shifts, non-distracting background flow'
+          : 'steady background loop, soft transitions, non-distracting ambient flow';
+  return cleanupPromptTail(normalizeArrangementLine([
+    tempo,
+    'no drums, no kick, no snare, no hi-hats, no percussion, no 808, no vocal hook, no melodic hook',
+    fallback,
+  ].filter(Boolean)));
+}
+
+function finalOutputPromptValidator(prompt: string, params: GenerateSongParams): string {
+  const map = parseFinalPromptLineMap(prompt);
 
   map.genre = validateFinalGenreLine(map.genre || 'Genre-led pop fusion', params);
-  map.instruments = validateFinalInstrumentLine(map.instruments || 'balanced band and synth texture', params);
-  map.atmosphere = validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', params);
-  map.vocals = validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', params);
-  map.arrangement = validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', params);
+  map.instruments = sanitizeBackgroundOnlyBgmInstrumentsLine(validateFinalInstrumentLine(map.instruments || 'balanced band and synth texture', params), params);
+  map.atmosphere = sanitizeBackgroundOnlyBgmAtmosphereLine(validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', params), params);
+  map.vocals = sanitizeBackgroundOnlyBgmVocalsLine(validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', params), params);
+  map.arrangement = sanitizeBackgroundOnlyBgmArrangementLine(validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', params), params);
 
   return enforceEnglishProductionPrompt([
     `[Genre] ${map.genre}`,
@@ -16439,6 +16524,12 @@ ${requestedLanguageInstruction}
 
 FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
 - Return productionPrompt as the final 6-line Suno production prompt.
+- Never output two production prompts in one response. Do not write a one-line prompt containing multiple labels and then repeat the labels again below.
+- If the selected genre is Lo-Fi Study, Nature Ambience, Cafe BGM, Healing Piano, or another Theme/BGM/background-only ambience choice, keep it instrumental-only: [Vocals] must be exactly: No vocals, no humming, no chanting, no choir, no spoken words, instrumental background music only. Do not add female/male vocal, humming, wordless airy texture, breathy phrasing, sighs, chant, choir, or hook-vocal language.
+- For Theme/BGM/background-only ambience, keep [Instruments] extremely minimal: 2-4 quiet ambience/texture cues only. Force-remove drums, brushed drums, boom-bap drums, kick, snare, hi-hats, percussion, 808, bass, guitar riffs, band grooves, lead-hook instruments, vocal hooks, and melodic hooks unless the user explicitly writes that they want them.
+- For Nature Ambience, prefer environmental ambience and soft pads over musical drums or many instruments. For Lo-Fi Study, prefer tape hiss, room tone, soft keys, and gentle texture; do not add full lo-fi drums by default. For Cafe BGM and Healing Piano, prefer soft piano/room tone and avoid brushed drums by default.
+- For Theme/BGM/background-only ambience, [Atmosphere] must describe space, environment, time, room tone, or background air. Do not create a singer/speaker emotional story.
+- For Theme/BGM/background-only ambience, [Arrangement] must describe loopable background flow, ambient swells, soft transitions, and non-distracting texture, not hook release or sung phrasing.
 - Use this exact label order and no extra lines:
   [Genre]
   [Instruments]
@@ -17160,7 +17251,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
   const normalizedAiPrompt = normalizeAiProductionPrompt(aiProductionPrompt, finalPrompt);
-  result.prompt = forceSingleAtmosphereSentence(normalizedAiPrompt);
+  result.prompt = forceSingleAtmosphereSentence(finalOutputPromptValidator(normalizedAiPrompt, params));
   result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),

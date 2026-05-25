@@ -1185,7 +1185,7 @@ const DIRECT_ARTIST_REFERENCE_TRAITS: Array<{ pattern: RegExp; reference: string
   { pattern: /태연|Taeyeon/gi, reference: 'Taeyeon-inspired', traits: 'Korean soulful pop ballad with polished emotional lift', vocalTraits: 'clear soulful vocal with controlled belting, emotional nuance, and polished high-register lift', arrangementTraits: 'modern pop-ballad build, refined orchestral-pop support, emotional chorus expansion' },
   { pattern: /아리아나\s*그란데|Ariana\s+Grande/gi, reference: 'Ariana Grande-inspired', traits: 'glossy modern pop-R&B with silky diva color', vocalTraits: 'silky pop-R&B vocal runs, agile melisma, airy high notes, and polished diva texture', arrangementTraits: 'smooth R&B-pop production, glossy layered harmonies, rhythmic modern groove' },
   { pattern: /위켄드|The\s+Weeknd/gi, reference: 'The Weeknd-inspired', traits: 'dark nocturnal synth-pop R&B with cinematic groove', vocalTraits: 'smooth moody R&B vocal with falsetto color, nocturnal emotion, and restrained sensual tension', arrangementTraits: 'dark synthwave-R&B production, pulsing retro groove, cinematic night-drive atmosphere' },
-  { pattern: /버즈|\bBuzz\b/gi, reference: 'Buzz-style', traits: '2000s Korean emotional K-rock band ballad', vocalTraits: 'powerful male K-rock vocal with chest-dominant high belting, head-voice resonance, clear youthful timbre, emotional vibrato, and soaring chorus delivery', arrangementTraits: 'guitar-driven dramatic chorus lift and sentimental 2000s Korean band-ballad build' },
+  { pattern: /버즈|\bBuzz\b/gi, reference: 'Buzz-style', traits: '2000s Korean rock band emotional K-rock ballad', vocalTraits: 'restrained low-mid chest-and-falsetto blend in the verse, shifting to powerful chest-dominant rock belting with mixed head-and-chest resonance, emotional vibrato, and tearful high-note restraint in the chorus', arrangementTraits: 'guitar-driven dramatic chorus lift and sentimental 2000s Korean band-ballad build with Buzz-style soaring chorus energy' },
   { pattern: /엠씨더맥스|MC\s*the\s*Max|M\.C\s*the\s*Max/gi, reference: 'MC the Max-inspired', traits: 'Korean emotional rock ballad with explosive high-note drama', vocalTraits: 'explosive male high-note belting with intense vibrato, dramatic breath pressure, and aching rock-ballad emotion', arrangementTraits: 'dramatic string-and-band build with cathartic chorus lift and high-tension climax' },
   { pattern: /SG\s*워너비|SG\s*Wannabe/gi, reference: 'SG Wannabe-inspired', traits: '2000s Korean vocal-group ballad with rich harmony color', vocalTraits: 'rich male harmony blend, powerful emotional chorus delivery, and classic vocal-group ballad phrasing', arrangementTraits: 'sentimental mid-tempo classic K-ballad build, layered harmony moments, warm orchestral-pop support' },
   { pattern: /브라운\s*아이즈|Brown\s*Eyes/gi, reference: 'Brown Eyes-inspired', traits: 'Korean R&B ballad with soulful nostalgic groove', vocalTraits: 'smooth male R&B ballad vocal with soulful emotion, soft runs, and intimate warmth', arrangementTraits: 'mellow piano-and-rhythm color, nostalgic R&B groove, warm harmony-centered progression' },
@@ -1272,6 +1272,13 @@ function buildArtistReferenceGenreAccent(params?: GenerateSongParams): string {
   if (!refs.length) return '';
   const main = refs[0];
   const second = refs[1];
+  const isBuzzReference = /(?:버즈|\bBuzz\b)/i.test(`${main.raw} ${main.reference}`);
+  if (isBuzzReference) {
+    const secondaryColor = second && !/(?:버즈|\bBuzz\b)/i.test(`${second.raw} ${second.reference}`)
+      ? ` with ${second.reference} color`
+      : '';
+    return cleanupPromptTail(`2000s Korean rock band Buzz-style emotional K-rock ballad${secondaryColor}`);
+  }
   const referenceText = second ? `${main.reference} with ${second.reference} color` : main.reference;
   const traitText = [main.traits, second?.traits].filter(Boolean).join(', ');
   return cleanupPromptTail(`${referenceText}${traitText ? `, ${traitText}` : ''}`);
@@ -4689,12 +4696,21 @@ function inferSituationVocalTone(role: string, index: number): string {
 
 function getVocalModeInfo(vocal?: VocalConfig) {
   const v = vocal ?? { male: 0, female: 0, rap: false };
-  const male = v.male ?? 0;
-  const female = v.female ?? 0;
-  const total = male + female;
-  const formation = getVocalFormation(v);
+  const members = Array.isArray((v as any).members) ? (v as any).members : [];
+  const memberMale = members.filter((member: any) => member?.gender === "male").length;
+  const memberFemale = members.filter((member: any) => member?.gender === "female").length;
+  const rawMale = v.male ?? 0;
+  const rawFemale = v.female ?? 0;
+  // Use explicit member data as a safety source. In solo mode the visible UI can have
+  // exactly one member while older count fields are temporarily stale; that must never
+  // be interpreted as a group vocal by the final prompt validator.
+  const male = members.length ? memberMale : rawMale;
+  const female = members.length ? memberFemale : rawFemale;
+  const total = members.length || (male + female);
+  const formation = getVocalFormation({ ...(v as any), male, female } as VocalConfig);
+  const explicitMode = (v as any).mode;
   const mode =
-    v.mode ||
+    explicitMode ||
     (total === 1
       ? "solo"
       : total === 2
@@ -4702,8 +4718,8 @@ function getVocalModeInfo(vocal?: VocalConfig) {
         : total > 2
           ? "group"
           : undefined);
-  const isSolo = mode === "solo" || total === 1;
-  const isMulti = mode === "duo" || mode === "group" || total >= 2;
+  const isSolo = mode === "solo" || total === 1 || (members.length === 1 && explicitMode !== "group");
+  const isMulti = !isSolo && (mode === "duo" || mode === "group" || total >= 2);
   const gender =
     male > 0 && female > 0
       ? "mixed"
@@ -8199,6 +8215,7 @@ function shouldApplyLargeGroupVocalCompression(params: GenerateSongParams): bool
   ].join(' ');
   const explicitDuo = /\bduet\b|듀엣|2\s*인|two\s+(?:voices|vocalists|singers)|male\s*\+\s*female|남녀\s*2/i.test(directiveText);
   const explicitLargeGroup = /그룹|혼성\s*그룹|여자\s*그룹|남자\s*그룹|girl\s*group|boy\s*group|female\s*group|male\s*group|mixed\s*group|all\s+vocals|3\s*인|4\s*인|5\s*인|6\s*인|7\s*인|three\s+(?:voices|vocalists|singers)|four\s+(?:voices|vocalists|singers)/i.test(directiveText);
+  if (info.isSolo) return false;
   return info.total >= 3 || (explicitLargeGroup && !explicitDuo);
 }
 
@@ -13734,6 +13751,11 @@ function validateFinalGenreLine(value: string, params: GenerateSongParams): stri
     .replace(/\s+and\s*$/i, '')
     .trim();
 
+  const hasBuzzReference = getDirectArtistReferences(params).some((ref) => /(?:버즈|\bBuzz\b)/i.test(`${ref.raw} ${ref.reference}`));
+  if (hasBuzzReference) {
+    genre = genre.replace(/\bBuzz-inspired\b/gi, 'Buzz-style');
+  }
+
   const artistAccent = buildArtistReferenceGenreAccent(params);
   if (artistAccent && !genre.toLowerCase().includes(artistAccent.split(',')[0].toLowerCase())) {
     genre = sanitizePromptGenreArtifacts(`${artistAccent} ${genre}`);
@@ -13922,6 +13944,37 @@ function lowerCaseVocalCueWords(value: string): string {
     .replace(/\bwith\s+Sophisticated,\s*Smooth\s+delivery\b/gi, 'with smooth sophisticated delivery');
 }
 
+function enforceExplicitSoloVocalFormation(value: string, params: GenerateSongParams): string {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isSolo) return value;
+
+  const line = cleanupPromptTail(value);
+  // Solo mode is an explicit UI choice. Artist references such as Buzz-inspired, K-band,
+  // band ballad, or selected band styles may color the arrangement, but they must not
+  // turn the [Vocals] line into a group/duo/main-rap-harmony split.
+  const incorrectlySplit = /\b(?:group|duo|split|two[-\s]?voice|three[-\s]?voice|\d+[-\s]?voice|main\s+vocal|lead\s+vocal|sub\s+vocal|rap\s+vocal|harmony\s+vocal|main\s*,\s*rap|rap\s*,\s*harmony|harmony\s+roles?)\b/i.test(line);
+  const missingSoloIdentity = !/\bsolo\b/i.test(line) && /\b(?:male|female)\b/i.test(line);
+  if (!incorrectlySplit && !missingSoloIdentity) return line;
+
+  const soloMember = params.vocal?.members?.[0];
+  const memberGender = soloMember?.gender;
+  const gender = memberGender === "female" ? "female" : memberGender === "male" ? "male" : info.gender === "female" ? "female" : info.gender === "male" ? "male" : "solo";
+  const subject = gender === "female" ? "Natural female solo vocal" : gender === "male" ? "Natural male solo vocal" : "Natural solo vocal";
+  const characterPrompt = soloMember ? buildVocalCharacterPrompt(soloMember, params, false) : "";
+  const artistAccent = buildArtistReferenceVocalAccent(params);
+  const genreDefault = getGenreDefaultVocalPhrase(params);
+  const performance = buildSelectedVocalPerformancePhrase(params, 8);
+  const parts = dedupePromptParts([
+    characterPrompt,
+    artistAccent,
+    compactVocalCueAfterSubject(genreDefault),
+    performance,
+    "single lead vocal focus",
+  ], 8).filter(Boolean);
+
+  return cleanupPromptTail(`${subject}${parts.length ? ` with ${joinPromptPhrase(parts, 'and')}` : ' with natural emotional delivery'}`);
+}
+
 function validateFinalVocalsLine(value: string, params: GenerateSongParams): string {
   let line = lowerCaseVocalCueWords(normalizeVocalPromptEmotion(value, params));
   line = compactFiveLineVocalsValue(line, params);
@@ -13970,8 +14023,9 @@ function validateFinalVocalsLine(value: string, params: GenerateSongParams): str
     if (compactAccent) line = cleanupPromptTail(`${line}, ${compactAccent}`);
   }
 
-  const hardened = dedupeRepeatedVocalCuePhrases(hardenFinalVocalGrammar(line, params)) || 'Natural solo vocal with human breath';
-  return repairMalformedFinalVocalLine(hardened, params);
+  const soloSafeLine = enforceExplicitSoloVocalFormation(line, params);
+  const hardened = dedupeRepeatedVocalCuePhrases(hardenFinalVocalGrammar(soloSafeLine, params)) || 'Natural solo vocal with human breath';
+  return repairMalformedFinalVocalLine(enforceExplicitSoloVocalFormation(hardened, params), params);
 }
 
 function arrangementCueCountForValidator(value: string): number {
@@ -14067,28 +14121,24 @@ function validateFinalInstrumentLine(value: string, params: GenerateSongParams):
 
 function isBackgroundOnlyBgmGenre(params: GenerateSongParams): boolean {
   if (Boolean((params as any).instrumentalBgmMode)) return true;
+
   const selectedIds = [
     params.genre || '',
     ...(params.subGenre || []),
     ...getSelectedFusionGenres(params).map((genre) => String(genre.id || '')),
-  ];
-  if (selectedIds.some(isInstrumentalBgmId)) return true;
-  if (params.isNoLyrics && selectedIds.some((id) => /(?:lofi|lo[-_\s]?fi|ambient|bgm|piano|string|minimal)/i.test(id))) return true;
+  ].filter(Boolean);
+  const hasSelectedDedicatedBgm = selectedIds.some(isInstrumentalBgmId);
+  const hasSelectedNonBgm = selectedIds.some((id) => !isInstrumentalBgmId(id));
 
-  const genreText = [
-    params.genre || '',
-    ...(params.subGenre || []),
-    ...getSelectedFusionGenres(params).map((genre) => `${genre.id || ''} ${genre.label || ''}`),
-  ].join(' ').toLowerCase();
-  const directText = [params.userInput || '', params.songPrompt || '', getDirectThemeInputText(params), getDirectMoodInputText(params)]
+  // The visible/current genre selection is the source of truth.
+  // If a normal song genre is present, stale Instrumental BGM ids must not keep the prompt in BGM mode.
+  if (hasSelectedDedicatedBgm && !hasSelectedNonBgm) return true;
+
+  const directText = [params.userInput || '', getDirectThemeInputText(params), getDirectMoodInputText(params)]
     .join(' ')
     .toLowerCase();
-
-  // Hard no-vocal/no-drum cleanup is only for the dedicated Instrumental BGM lane
-  // or for direct requests that explicitly ask for BGM / instrumental / no vocals.
-  const selectedDedicatedBgm = /(?:instrumental[_\s-]*bgm|연주\s*bgm|lofi[_\s-]*study|lo[-\s]?fi\s+study|lofi[_\s-]*instrumental|healing\s*piano|cafe\s*bgm|nature[_\s-]*ambience|nature\s+ambience|ambient\b|minimalism|piano\s*solo|string\s*ensemble|로파이\s*스터디|자연\s*앰비언스|자연\/공간\s*배경음|카페\s*bgm|힐링\s*피아노|앰비언트|미니멀리즘|피아노\s*솔로|스트링\s*합주)/i.test(genreText);
   const directDedicatedBgm = /(?:\bbgm\b|background\s+music|instrumental\s+only|no\s+vocals?|무보컬|보컬\s*없|보컬없이|연주\s*bgm|연주곡|배경음악)/i.test(directText);
-  return selectedDedicatedBgm || directDedicatedBgm;
+  return directDedicatedBgm;
 }
 
 function parseFinalPromptLineMap(prompt: string): FinalPromptLineMap {
@@ -14376,7 +14426,9 @@ function shouldForceBackgroundOnlyBgmFromPrompt(prompt: string, map: FinalPrompt
 }
 
 function withBackgroundOnlyBgmMarker(params: GenerateSongParams, prompt: string, map: FinalPromptLineMap): GenerateSongParams {
-  if (!shouldForceBackgroundOnlyBgmFromPrompt(prompt, map) && !isBackgroundOnlyBgmGenre(params)) return params;
+  // The current selected genre state is the source of truth.
+  // Do not re-enter Instrumental BGM mode only because Gemini produced a BGM-like line.
+  if (!isBackgroundOnlyBgmGenre(params)) return params;
   return {
     ...params,
     subGenre: Array.from(new Set([...(params.subGenre || []), 'instrumental_bgm'])),
@@ -14386,11 +14438,36 @@ function withBackgroundOnlyBgmMarker(params: GenerateSongParams, prompt: string,
   } as GenerateSongParams;
 }
 
+function stripStaleInstrumentalBgmLanguage(value: string): string {
+  return cleanupPromptTail(
+    String(value || '')
+      .replace(/\bno\s+vocal\s+samples?\b/gi, '')
+      .replace(/\binstrumental\s+only\b/gi, '')
+      .replace(/\bno\s+vocals?\b/gi, '')
+      .replace(/\bno\s+humming\b/gi, '')
+      .replace(/\bno\s+chanting\b/gi, '')
+      .replace(/\bno\s+choir\b/gi, '')
+      .replace(/\bno\s+spoken\s+words\b/gi, '')
+      .replace(/\bdrumless\s+background\s+flow\b/gi, '')
+      .replace(/\bpercussion[-\s]*free\b/gi, '')
+      .replace(/\bno\s+drums?\b/gi, '')
+      .replace(/\bno\s+vocal\s+hook\b/gi, '')
+      .replace(/\bno\s+sung\s+hook\b/gi, '')
+      .replace(/,\s*,+/g, ',')
+      .replace(/^\s*,\s*|\s*,\s*$/g, ''),
+  );
+}
+
+function isStaleInstrumentalBgmVocalLine(value: string): boolean {
+  return /(?:instrumental\s+only|no\s+vocals?|no\s+humming|no\s+chanting|no\s+choir|no\s+spoken\s+words)/i.test(String(value || ''));
+}
+
 function finalOutputPromptValidator(prompt: string, params: GenerateSongParams): string {
   const map = parseFinalPromptLineMap(prompt);
   const validationParams = withBackgroundOnlyBgmMarker(params, prompt, map);
+  const isBgmValidation = isBackgroundOnlyBgmGenre(validationParams);
 
-  if (isBackgroundOnlyBgmGenre(validationParams)) {
+  if (isBgmValidation) {
     return buildDedicatedInstrumentalBgmPrompt(validationParams);
   }
 
@@ -14399,6 +14476,14 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
   map.atmosphere = sanitizeBackgroundOnlyBgmAtmosphereLine(validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', validationParams), validationParams);
   map.vocals = sanitizeBackgroundOnlyBgmVocalsLine(validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', validationParams), validationParams);
   map.arrangement = sanitizeBackgroundOnlyBgmArrangementLine(validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', validationParams), validationParams);
+
+  // Final guard: if the current selection is a normal song, stale Instrumental BGM language
+  // from a previous selection or Gemini retry must not survive into the visible prompt.
+  map.instruments = stripStaleInstrumentalBgmLanguage(map.instruments) || 'balanced band and synth texture';
+  map.arrangement = stripStaleInstrumentalBgmLanguage(map.arrangement) || 'clear sectional contrast';
+  if (isStaleInstrumentalBgmVocalLine(map.vocals)) {
+    map.vocals = cleanupPromptTail(buildFiveLineVocalsValue(validationParams, '')) || 'Natural solo vocal with human breath';
+  }
 
   return enforceEnglishProductionPrompt([
     `[Genre] ${map.genre}`,
@@ -16965,6 +17050,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - If multiple hook or chorus style keywords are selected, merge them into one natural phrase such as minimalist phrase-led hook or catchy singalong chorus; do not repeat hook/chorus words.
 - Arrangement must not be a generic function-word list. Avoid bare phrases like stable structure, warm structure, harmonic support, smooth, effortless, clear sectional contrast unless they are tied to a concrete genre movement. Write how the song moves: e.g. slow janggu pulse with weighted vocal pauses, danceable Nu-Disco groove with soft chorus lift, warm live-band groove with brass lifts.
 - Preserve vocal emotion and spatial texture: [Vocals] must include emotional delivery, not only technique; [Atmosphere] must include selected space/ambience cues when present.
+- If the vocal UI mode is solo or exactly one vocalist is selected, [Vocals] must stay a single solo vocalist. Band, K-band, Buzz-inspired, rock band, and band-ballad references may affect instruments/arrangement, but must NOT create group/duo/split/main-rap-harmony vocal roles.
 - LYRIC LINE BREAK RULE (MANDATORY): section tags must be standalone lines, then lyrics must start on the next line. Do not output paragraph-style lyric blocks. Split every long Korean line into short singable phrase lines so rhythm is visible.
 - LYRIC COMPLETION RULE (MANDATORY): Never end the lyric at [Stop], [Break], [Drop], or [Build-up]. A transition cut must be followed by a compact payoff such as [Bridge], [Final Chorus] or [Final Hook], and [Outro]. If the front half becomes dense, shorten earlier lines rather than dropping the final payoff.
 

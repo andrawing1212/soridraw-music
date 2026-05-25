@@ -380,6 +380,10 @@ const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
 
 const isInstrumentalBgmGenreId = (id?: string | null) => Boolean(id && INSTRUMENTAL_BGM_GENRE_IDS.has(id));
 const hasInstrumentalBgmGenreIds = (ids: Array<string | null | undefined>) => ids.some(isInstrumentalBgmGenreId);
+const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefined>) => {
+  const cleanIds = ids.filter((id): id is string => Boolean(id));
+  return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
+};
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
@@ -6085,7 +6089,7 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     const hasFreeTextDirectorNote = userInput.trim().length > 0;
-    const isInstrumentalBgmRequest = hasInstrumentalBgmGenreIds([...selectedGenres, ...subGenre]);
+    const isInstrumentalBgmRequest = isPureInstrumentalBgmGenreSelection(limitFusionGenreIds([...selectedGenres, ...subGenre]));
     const requestedIncludeLyrics = isInstrumentalBgmRequest ? false : (generationOptions?.includeLyrics ?? true);
     const requestedLyricLanguages = requestedIncludeLyrics
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko']).filter(Boolean))).slice(0, 2) as LanguageCode[]
@@ -6125,7 +6129,10 @@ const saveRecentSong = async (newSong: any) => {
         updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
       }
       let finalGenres = limitFusionGenreIds([...selectedGenres, ...subGenre]);
-      const isFinalInstrumentalBgm = hasInstrumentalBgmGenreIds(finalGenres);
+      const isFinalInstrumentalBgm = isPureInstrumentalBgmGenreSelection(finalGenres);
+      if (!isFinalInstrumentalBgm && hasInstrumentalBgmGenreIds(finalGenres)) {
+        finalGenres = finalGenres.filter((id) => !isInstrumentalBgmGenreId(id));
+      }
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
       let finalStyles = isFinalInstrumentalBgm ? [] : filterSelectableIds([...selectedStyles]);
@@ -6319,7 +6326,7 @@ const saveRecentSong = async (newSong: any) => {
         const themeStr = buildThemeSentence(themeLabels);
 
         if (isFinalInstrumentalBgm) {
-          const bgmIds = limitFusionGenreIds([...finalGenres, ...subGenre, ...selectedGenres]).filter(isInstrumentalBgmGenreId);
+          const bgmIds = limitFusionGenreIds(finalGenres).filter(isInstrumentalBgmGenreId);
           const bgmLabels = bgmIds.map((id) => {
             const matched = GENRE_HIERARCHY
               .flatMap((group) => group.children)
@@ -6517,8 +6524,8 @@ const saveRecentSong = async (newSong: any) => {
       const songPrompt = buildSongPrompt();
 
       const payload = {
-        genre: selectedGenres[0] ?? subGenre[0] ?? finalGenres[0] ?? null,
-        subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
+        genre: finalGenres[0] ?? selectedGenres[0] ?? subGenre[0] ?? null,
+        subGenre: finalGenres,
         isKpopSelected: ([...selectedGenres, ...subGenre] ?? []).includes('kpop'),
         moods: finalMoods.map(getMoodKeywordLabel),
         themes: themeLabels,
@@ -6578,12 +6585,12 @@ const saveRecentSong = async (newSong: any) => {
         const newResult: SongResult = {
           ...song,
           genre: finalGenres[0] ?? undefined,
-          subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
+          subGenre: finalGenres,
           prompt: song.prompt,
           appliedKeywords: {
             ...song.appliedKeywords,
             genre: [],
-            subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
+            subGenre: finalGenres,
             ...(hasActiveSituation(situation) ? { situation } : {}),
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
@@ -6592,8 +6599,8 @@ const saveRecentSong = async (newSong: any) => {
             customThemeInput,
             vocalType: formation || 'Default',
             rapEnabled: requestedRapEnabled,
-            isNoLyrics: !requestedIncludeLyrics,
-            lyricLanguages: requestedLyricLanguages,
+            isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
+            lyricLanguages: isFinalInstrumentalBgm ? [] : requestedLyricLanguages,
             generationCount: requestedGenerationCount,
             generationIndex: i + 1,
             generationBatchId,

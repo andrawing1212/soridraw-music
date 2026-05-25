@@ -30,6 +30,66 @@ import {
 
 let aiInstance: GoogleGenAI | null = null;
 
+
+const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
+  'instrumental_bgm',
+  'lofi_study',
+  'cafe_bgm',
+  'nature_ambience',
+  'healing_piano',
+  'ambient',
+  'minimalism',
+  'piano_solo',
+  'string_ensemble',
+]);
+
+const isInstrumentalBgmId = (value?: string | null) => Boolean(value && INSTRUMENTAL_BGM_GENRE_IDS.has(String(value)));
+
+type BgmBpmRange = { min: number; max: number };
+
+const INSTRUMENTAL_BGM_DEFAULT_BPM: Record<string, BgmBpmRange> = {
+  lofi_study: { min: 66, max: 88 },
+  cafe_bgm: { min: 74, max: 98 },
+  nature_ambience: { min: 38, max: 62 },
+  healing_piano: { min: 46, max: 74 },
+  ambient: { min: 42, max: 70 },
+  minimalism: { min: 60, max: 104 },
+  piano_solo: { min: 44, max: 78 },
+  string_ensemble: { min: 50, max: 84 },
+};
+
+const INSTRUMENTAL_BGM_SLOW_MOODS = new Set([
+  'calm', 'relaxing', 'zen', 'healing', 'peaceful', 'restrained',
+  'sad', 'sorrowful', 'melancholic', 'lonely', 'wistful', 'hollow',
+  'dark', 'moody', 'chilly', 'fragile_edge', 'soft_tender', 'tender',
+]);
+
+const INSTRUMENTAL_BGM_FAST_MOODS = new Set([
+  'bright', 'hopeful', 'cheerful', 'playful_mischief', 'cheeky_deadpan',
+  'comedic', 'quirky', 'cute_mood', 'upbeat', 'swelling', 'powerful',
+  'infectious', 'tense', 'uneasy', 'groovy',
+]);
+
+function getInstrumentalBgmMainId(params: Pick<GenerateSongParams, 'genre' | 'subGenre'>): string | null {
+  const ids = [...(params.subGenre || []), params.genre || ''].filter(Boolean);
+  return ids.find((id) => isInstrumentalBgmId(id)) || null;
+}
+
+function getInstrumentalBgmDefaultTempo(params: Pick<GenerateSongParams, 'genre' | 'subGenre' | 'moods'>): string {
+  const mainId = getInstrumentalBgmMainId(params);
+  if (!mainId) return '';
+  const base = INSTRUMENTAL_BGM_DEFAULT_BPM[mainId] || { min: 54, max: 88 };
+  const moods = params.moods || [];
+  const slowHits = moods.filter((id) => INSTRUMENTAL_BGM_SLOW_MOODS.has(id)).length;
+  const fastHits = moods.filter((id) => INSTRUMENTAL_BGM_FAST_MOODS.has(id)).length;
+  const shift = Math.max(-12, Math.min(12, (fastHits - slowHits) * 4));
+  let min = Math.max(20, Math.min(200, Math.round(base.min + shift)));
+  let max = Math.max(20, Math.min(200, Math.round(base.max + shift)));
+  if (['nature_ambience', 'ambient'].includes(mainId)) max = Math.min(max, 78);
+  if (['healing_piano', 'piano_solo', 'string_ensemble'].includes(mainId)) max = Math.min(max, 92);
+  return `${min}–${max} BPM`;
+}
+
 function getAI() {
   if (!aiInstance) {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -206,6 +266,7 @@ interface GenerateSongParams {
   customStructure?: CustomSectionItem[];
   isNoLyrics?: boolean;
   includeLyrics?: boolean;
+  instrumentalBgmMode?: boolean;
   lyricLanguages?: LanguageCode[];
 }
 
@@ -1100,8 +1161,134 @@ function sanitizeUserInput(input: string): string {
     sanitized = sanitized.replace(regex, replacement);
   });
 
+
   return sanitized;
 }
+
+type DirectArtistReference = {
+  raw: string;
+  reference: string;
+  traits: string;
+  vocalTraits?: string;
+  arrangementTraits?: string;
+};
+
+const DIRECT_ARTIST_REFERENCE_TRAITS: Array<{ pattern: RegExp; reference: string; traits: string; vocalTraits?: string; arrangementTraits?: string }> = [
+  { pattern: /블랙핑크|BLACKPINK/gi, reference: 'BLACKPINK-style', traits: 'dark girl-crush K-pop with bold hip-hop energy', vocalTraits: 'confident idol vocals with sharp rap-pop attitude and powerful performance edge', arrangementTraits: 'glossy EDM-pop production, punchy hip-hop groove, bold drop-ready chorus energy' },
+  { pattern: /뉴진스|NewJeans/gi, reference: 'NewJeans-inspired', traits: 'airy Y2K K-pop with minimal soft groove', vocalTraits: 'soft casual vocals with airy understated delivery and relaxed youthful tone', arrangementTraits: 'minimal groove, clean retro-modern texture, light rhythmic bounce, uncluttered pop flow' },
+  { pattern: /아이유|\bIU\b/gi, reference: 'IU-inspired', traits: 'Korean emotional pop ballad with delicate storytelling color', vocalTraits: 'intimate clear vocal with conversational phrasing, fragile emotion, and detailed storytelling tone', arrangementTraits: 'piano-led emotional build, restrained pop-ballad movement, lyrical scene-focused progression' },
+  { pattern: /방탄소년단|\bBTS\b/gi, reference: 'BTS-inspired', traits: 'polished global K-pop with emotional performance drive', vocalTraits: 'dynamic idol vocals with rap-pop contrast, expressive group energy, and polished emotional delivery', arrangementTraits: 'global pop production, hybrid hip-hop and pop lift, cinematic performance-driven chorus movement' },
+  { pattern: /트와이스|TWICE/gi, reference: 'TWICE-inspired', traits: 'bright catchy K-pop with playful idol charm', vocalTraits: 'bright youthful idol vocals with cute melodic energy and crisp hook-friendly delivery', arrangementTraits: 'catchy pop hook structure, sparkling synth-pop color, upbeat dance-pop bounce' },
+  { pattern: /아이브|\bIVE\b/gi, reference: 'IVE-inspired', traits: 'elegant confident idol pop with glossy luxury mood', vocalTraits: 'chic confident idol vocals with polished poise and sleek melodic phrasing', arrangementTraits: 'glossy modern pop production, elegant hook lift, refined luxury-toned arrangement color' },
+  { pattern: /르세라핌|LE\s*SSERAFIM/gi, reference: 'LE SSERAFIM-inspired', traits: 'confident athletic K-pop with bold modern energy', vocalTraits: 'assertive performance vocals with cool attitude, rhythmic punch, and confident group delivery', arrangementTraits: 'minimal bold pop production, athletic groove, sharp rhythmic accents, modern performance focus' },
+  { pattern: /에스파|aespa/gi, reference: 'aespa-inspired', traits: 'futuristic cyber K-pop with digital glossy intensity', vocalTraits: 'sleek idol vocals with futuristic edge, sharp tone, and polished high-energy delivery', arrangementTraits: 'cyber synth textures, metallic pop production, dramatic digital drops, high-contrast section shifts' },
+  { pattern: /태연|Taeyeon/gi, reference: 'Taeyeon-inspired', traits: 'Korean soulful pop ballad with polished emotional lift', vocalTraits: 'clear soulful vocal with controlled belting, emotional nuance, and polished high-register lift', arrangementTraits: 'modern pop-ballad build, refined orchestral-pop support, emotional chorus expansion' },
+  { pattern: /아리아나\s*그란데|Ariana\s+Grande/gi, reference: 'Ariana Grande-inspired', traits: 'glossy modern pop-R&B with silky diva color', vocalTraits: 'silky pop-R&B vocal runs, agile melisma, airy high notes, and polished diva texture', arrangementTraits: 'smooth R&B-pop production, glossy layered harmonies, rhythmic modern groove' },
+  { pattern: /위켄드|The\s+Weeknd/gi, reference: 'The Weeknd-inspired', traits: 'dark nocturnal synth-pop R&B with cinematic groove', vocalTraits: 'smooth moody R&B vocal with falsetto color, nocturnal emotion, and restrained sensual tension', arrangementTraits: 'dark synthwave-R&B production, pulsing retro groove, cinematic night-drive atmosphere' },
+  { pattern: /버즈|\bBuzz\b/gi, reference: 'Buzz-style', traits: '2000s Korean emotional K-rock band ballad', vocalTraits: 'powerful male K-rock vocal with chest-dominant high belting, head-voice resonance, clear youthful timbre, emotional vibrato, and soaring chorus delivery', arrangementTraits: 'guitar-driven dramatic chorus lift and sentimental 2000s Korean band-ballad build' },
+  { pattern: /엠씨더맥스|MC\s*the\s*Max|M\.C\s*the\s*Max/gi, reference: 'MC the Max-inspired', traits: 'Korean emotional rock ballad with explosive high-note drama', vocalTraits: 'explosive male high-note belting with intense vibrato, dramatic breath pressure, and aching rock-ballad emotion', arrangementTraits: 'dramatic string-and-band build with cathartic chorus lift and high-tension climax' },
+  { pattern: /SG\s*워너비|SG\s*Wannabe/gi, reference: 'SG Wannabe-inspired', traits: '2000s Korean vocal-group ballad with rich harmony color', vocalTraits: 'rich male harmony blend, powerful emotional chorus delivery, and classic vocal-group ballad phrasing', arrangementTraits: 'sentimental mid-tempo classic K-ballad build, layered harmony moments, warm orchestral-pop support' },
+  { pattern: /브라운\s*아이즈|Brown\s*Eyes/gi, reference: 'Brown Eyes-inspired', traits: 'Korean R&B ballad with soulful nostalgic groove', vocalTraits: 'smooth male R&B ballad vocal with soulful emotion, soft runs, and intimate warmth', arrangementTraits: 'mellow piano-and-rhythm color, nostalgic R&B groove, warm harmony-centered progression' },
+  { pattern: /박효신|Park\s*Hyo[-\s]?shin/gi, reference: 'Park Hyo-shin-inspired', traits: 'grand Korean emotional ballad with deep cinematic weight', vocalTraits: 'deep resonant Korean ballad vocal with controlled breath, rich low-mid tone, and powerful vibrato', arrangementTraits: 'cinematic emotional build with grand chorus lift, orchestral depth, and slow dramatic expansion' },
+  { pattern: /성시경|Sung\s*Si[-\s]?kyung/gi, reference: 'Sung Si-kyung-inspired', traits: 'soft romantic Korean ballad with warm intimate color', vocalTraits: 'smooth warm male vocal with gentle breath, intimate phrasing, and understated romantic emotion', arrangementTraits: 'gentle orchestral-pop color, soft piano-led flow, warm mid-tempo ballad progression' },
+  { pattern: /윤하|Younha/gi, reference: 'Younha-inspired', traits: 'sentimental Korean pop-rock with bright piano-driven lift', vocalTraits: 'clear emotional pop-rock vocal with bright high-register lift, clean intensity, and youthful dramatic tone', arrangementTraits: 'piano-driven intensity, band-pop build, soaring melodic chorus, sentimental pop-rock momentum' },
+];
+
+function getDirectArtistReferenceText(params?: GenerateSongParams): string {
+  if (!params) return '';
+  return [
+    params.userInput || '',
+    getDirectThemeInputText(params),
+    getDirectMoodInputText(params),
+  ].filter(Boolean).join(' ');
+}
+
+function normalizeArtistReferenceName(value: string): string {
+  return cleanupPromptTail(String(value || '')
+    .replace(/["'“”‘’]/g, ' ')
+    .replace(/^(?:like|similar to|in the vein of)\s+/i, '')
+    .replace(/^(?:그룹|가수|밴드|아티스트|보컬|싱어|아이돌)\s+/i, '')
+    .replace(/\s+(?:같은|처럼|느낌|풍|스타일|계열|감성|무드|inspired|style|vibe)$/i, '')
+    .replace(/\s*의$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim());
+}
+
+function getDirectArtistReferences(params?: GenerateSongParams): DirectArtistReference[] {
+  const text = getDirectArtistReferenceText(params);
+  if (!text) return [];
+  const refs: DirectArtistReference[] = [];
+  const add = (raw: string, reference: string, traits: string, vocalTraits?: string, arrangementTraits?: string) => {
+    const cleanRef = cleanupPromptTail(reference);
+    if (!cleanRef) return;
+    if (refs.some((item) => item.reference.toLowerCase() === cleanRef.toLowerCase())) return;
+    refs.push({
+      raw: cleanupPromptTail(raw),
+      reference: cleanRef,
+      traits: cleanupPromptTail(traits),
+      vocalTraits: cleanupPromptTail(vocalTraits || ''),
+      arrangementTraits: cleanupPromptTail(arrangementTraits || ''),
+    });
+  };
+
+  DIRECT_ARTIST_REFERENCE_TRAITS.forEach(({ pattern, reference, traits, vocalTraits, arrangementTraits }) => {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text))) add(match[0], reference, traits, vocalTraits, arrangementTraits);
+  });
+
+  const englishStylePattern = /\b([A-Z][A-Za-z0-9&.'’\-]*(?:\s+[A-Z][A-Za-z0-9&.'’\-]*){0,3})\s*(?:-style|-inspired|-like|\s+vibe|\s+style|\s+inspired)\b/g;
+  let englishMatch: RegExpExecArray | null;
+  while ((englishMatch = englishStylePattern.exec(text))) {
+    const name = normalizeArtistReferenceName(englishMatch[1]);
+    if (name && !/^(K|J|R|Pop|Rock|Jazz|Hip|Hop|EDM|Lo|Fi)$/i.test(name)) {
+      add(name, `${name}-style`, 'user-referenced artist direction translated into energy, vocal attitude, groove, production color, and emotional tone');
+    }
+  }
+
+  const koreanReferencePattern = /((?:그룹|가수|밴드|아티스트|아이돌)?\s*["'“”‘’]?[가-힣A-Za-z0-9&.'’\-\s]{2,28}["'“”‘’]?)\s*(?:같은|처럼|느낌|풍|스타일|계열|감성|무드)(?:의|으로|적인|처럼)?/g;
+  let koreanMatch: RegExpExecArray | null;
+  while ((koreanMatch = koreanReferencePattern.exec(text))) {
+    const name = normalizeArtistReferenceName(koreanMatch[1]);
+    if (!name) continue;
+    if (/^(따뜻|차가|밝|어두|슬픈|기쁜|몽환|귀여|강한|부드|잔잔|로파이|카페|피아노|자연|연주|보컬|장르|감성적인|파워풀한)$/i.test(name)) continue;
+    if (name.length > 24) continue;
+    const known = DIRECT_ARTIST_REFERENCE_TRAITS.find(({ pattern }) => {
+      pattern.lastIndex = 0;
+      return pattern.test(name);
+    });
+    if (known) {
+      add(name, known.reference, known.traits, known.vocalTraits, known.arrangementTraits);
+    } else if (!/[가-힣]/.test(name)) {
+      add(name, `${name}-style`, 'user-referenced artist direction translated into energy, vocal attitude, groove, production color, and emotional tone');
+    }
+  }
+
+  return refs.slice(0, 2);
+}
+
+function buildArtistReferenceGenreAccent(params?: GenerateSongParams): string {
+  const refs = getDirectArtistReferences(params);
+  if (!refs.length) return '';
+  const main = refs[0];
+  const second = refs[1];
+  const referenceText = second ? `${main.reference} with ${second.reference} color` : main.reference;
+  const traitText = [main.traits, second?.traits].filter(Boolean).join(', ');
+  return cleanupPromptTail(`${referenceText}${traitText ? `, ${traitText}` : ''}`);
+}
+
+function buildArtistReferenceVocalAccent(params?: GenerateSongParams): string {
+  const refs = getDirectArtistReferences(params);
+  const parts = refs.map((ref) => ref.vocalTraits).filter(Boolean) as string[];
+  return cleanupPromptTail(parts.join(', '));
+}
+
+function buildArtistReferenceArrangementAccent(params?: GenerateSongParams): string {
+  const refs = getDirectArtistReferences(params);
+  const parts = refs.map((ref) => ref.arrangementTraits).filter(Boolean) as string[];
+  return cleanupPromptTail(parts.join(', '));
+}
+
 /**
  * Handles Gemini API errors and provides user-friendly messages.
  */
@@ -2440,6 +2627,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       isNoLyrics: first.isNoLyrics ?? false,
       includeLyrics:
         (first as any).includeLyrics ?? !(first.isNoLyrics ?? false),
+      instrumentalBgmMode: Boolean((first as any).instrumentalBgmMode),
       lyricLanguages: ((first as any).lyricLanguages ?? ["ko"]) as LanguageCode[],
     };
   }
@@ -6936,6 +7124,10 @@ function buildFiveLineGenreValue(params: GenerateSongParams): string {
   }
 
   genreValue = reinforceRepeatedGenreMoodIntent(genreValue, base || mainLabels[0] || '', params);
+  const artistAccent = buildArtistReferenceGenreAccent(params);
+  if (artistAccent) {
+    genreValue = cleanupPromptTail(`${artistAccent} ${stripNonGenrePerformancePhrases(genreValue || 'Pop')}`);
+  }
   return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(genreValue || 'Pop'));
 }
 
@@ -8169,6 +8361,9 @@ function normalizeTempoForArrangement(tempoPhrase: string): string {
 
 
 function getGenreDefaultTempoForArrangement(params: GenerateSongParams): string {
+  const bgmTempo = getInstrumentalBgmDefaultTempo(params);
+  if (bgmTempo) return bgmTempo;
+
   const text = [
     getSelectedPrimaryGenreKey(params),
     params.genre || '',
@@ -13539,6 +13734,11 @@ function validateFinalGenreLine(value: string, params: GenerateSongParams): stri
     .replace(/\s+and\s*$/i, '')
     .trim();
 
+  const artistAccent = buildArtistReferenceGenreAccent(params);
+  if (artistAccent && !genre.toLowerCase().includes(artistAccent.split(',')[0].toLowerCase())) {
+    genre = sanitizePromptGenreArtifacts(`${artistAccent} ${genre}`);
+  }
+
   const keywordCount = finalValidatorKeywordSignalCount(params);
   const hasExpansion = /\b(?:with|fusion|edge|color|polish|haze|texture|warmth|mood|atmosphere|pulse)\b/i.test(genre);
   const tooPlain = genre.split(/\s+/).filter(Boolean).length <= 4 || !hasExpansion;
@@ -13758,6 +13958,18 @@ function validateFinalVocalsLine(value: string, params: GenerateSongParams): str
     line = cleanupPromptTail(`${head} ${joinPromptPhrase(picked, 'and')}`);
   }
 
+  const artistVocalAccent = buildArtistReferenceVocalAccent(params);
+  if (artistVocalAccent && !isBackgroundOnlyBgmGenre(params)) {
+    const lowerLine = line.toLowerCase();
+    const compactAccent = artistVocalAccent
+      .split(/,\s*/)
+      .map((part) => cleanupPromptTail(part))
+      .filter((part) => part && !lowerLine.includes(part.toLowerCase()))
+      .slice(0, shouldApplyLargeGroupVocalCompression(params) ? 1 : 2)
+      .join(', ');
+    if (compactAccent) line = cleanupPromptTail(`${line}, ${compactAccent}`);
+  }
+
   const hardened = dedupeRepeatedVocalCuePhrases(hardenFinalVocalGrammar(line, params)) || 'Natural solo vocal with human breath';
   return repairMalformedFinalVocalLine(hardened, params);
 }
@@ -13811,6 +14023,16 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
   if (isBrokenFinalPromptPhrase(finalLine) || splitArrangementParts(finalLine).some((part) => isBrokenFinalPromptPhrase(part))) {
     finalLine = buildNaturalDirectArrangementFallback(params, finalLine);
   }
+  const artistArrangementAccent = buildArtistReferenceArrangementAccent(params);
+  if (artistArrangementAccent && !isBackgroundOnlyBgmGenre(params)) {
+    const lowerLine = finalLine.toLowerCase();
+    const addParts = artistArrangementAccent
+      .split(/,\s*/)
+      .map((part) => cleanupPromptTail(part))
+      .filter((part) => part && !lowerLine.includes(part.toLowerCase()))
+      .slice(0, 2);
+    if (addParts.length) finalLine = normalizeArrangementLine([finalLine, ...addParts]);
+  }
   return cleanupPromptTail(stripFinalInternalProtectionLanguage(finalLine));
 }
 
@@ -13844,12 +14066,29 @@ function validateFinalInstrumentLine(value: string, params: GenerateSongParams):
 }
 
 function isBackgroundOnlyBgmGenre(params: GenerateSongParams): boolean {
+  if (Boolean((params as any).instrumentalBgmMode)) return true;
+  const selectedIds = [
+    params.genre || '',
+    ...(params.subGenre || []),
+    ...getSelectedFusionGenres(params).map((genre) => String(genre.id || '')),
+  ];
+  if (selectedIds.some(isInstrumentalBgmId)) return true;
+  if (params.isNoLyrics && selectedIds.some((id) => /(?:lofi|lo[-_\s]?fi|ambient|bgm|piano|string|minimal)/i.test(id))) return true;
+
   const genreText = [
     params.genre || '',
     ...(params.subGenre || []),
     ...getSelectedFusionGenres(params).map((genre) => `${genre.id || ''} ${genre.label || ''}`),
   ].join(' ').toLowerCase();
-  return /(?:bgm|background\s*music|theme\s*music|score|ambience|ambient|lofi[_\s-]*study|lo[-\s]?fi\s+study|healing\s*piano|cafe\s*bgm|nature[_\s-]*ambience|nature\s+ambience|mystery\s*bgm|fantasy\s*bgm|dark\s*fantasy|horror\s*ambience|sf\s*score|video\s*game\s*music|로파이\s*스터디|자연\s*앰비언스|자연\/공간\s*배경음|테마\s*\/\s*bgm|카페\s*bgm|힐링\s*피아노|미스터리\s*bgm|판타지\s*bgm|다크\s*판타지|호러\s*앰비언스|sf\s*스코어|비디오\s*게임\s*음악)/i.test(genreText);
+  const directText = [params.userInput || '', params.songPrompt || '', getDirectThemeInputText(params), getDirectMoodInputText(params)]
+    .join(' ')
+    .toLowerCase();
+
+  // Hard no-vocal/no-drum cleanup is only for the dedicated Instrumental BGM lane
+  // or for direct requests that explicitly ask for BGM / instrumental / no vocals.
+  const selectedDedicatedBgm = /(?:instrumental[_\s-]*bgm|연주\s*bgm|lofi[_\s-]*study|lo[-\s]?fi\s+study|lofi[_\s-]*instrumental|healing\s*piano|cafe\s*bgm|nature[_\s-]*ambience|nature\s+ambience|ambient\b|minimalism|piano\s*solo|string\s*ensemble|로파이\s*스터디|자연\s*앰비언스|자연\/공간\s*배경음|카페\s*bgm|힐링\s*피아노|앰비언트|미니멀리즘|피아노\s*솔로|스트링\s*합주)/i.test(genreText);
+  const directDedicatedBgm = /(?:\bbgm\b|background\s+music|instrumental\s+only|no\s+vocals?|무보컬|보컬\s*없|보컬없이|연주\s*bgm|연주곡|배경음악)/i.test(directText);
+  return selectedDedicatedBgm || directDedicatedBgm;
 }
 
 function parseFinalPromptLineMap(prompt: string): FinalPromptLineMap {
@@ -13870,78 +14109,296 @@ function parseFinalPromptLineMap(prompt: string): FinalPromptLineMap {
 
 function sanitizeBackgroundOnlyBgmVocalsLine(value: string, params: GenerateSongParams): string {
   if (!isBackgroundOnlyBgmGenre(params)) return value;
-  return 'No vocals, no humming, no chanting, no choir, no spoken words, instrumental background music only';
+  return 'Instrumental only, no vocals, no humming';
+}
+
+function getBgmSelectedText(params: GenerateSongParams, promptText: string = ''): string {
+  return [
+    params.genre || '',
+    ...(params.subGenre || []),
+    ...(params.moods || []),
+    ...(params.themes || []),
+    getDirectMoodInputText(params),
+    getDirectThemeInputText(params),
+    params.userInput || '',
+    promptText || '',
+  ].join(' ');
+}
+
+function getInstrumentalBgmProfileType(text: string): 'rhythmic' | 'nature' | 'drumless' | 'minimal' {
+  const value = String(text || '').toLowerCase();
+  if (/lo[-_\s]?fi|lofi|study|스터디|cafe|카페/.test(value)) return 'rhythmic';
+  if (/nature|자연|ambient|앰비언트/.test(value)) return 'nature';
+  if (/minimal|미니멀/.test(value)) return 'minimal';
+  return 'drumless';
+}
+
+function getInstrumentalBgmSelectedIdentities(params: GenerateSongParams): FusionGenreIdentity[] {
+  const selected = getSelectedFusionGenres(params)
+    .filter((genre) => String(genre.id || '') !== 'instrumental_bgm')
+    .filter((genre) => isInstrumentalBgmId(String(genre.id || '')) || /lo[-_\s]?fi|lofi|study|cafe|nature|ambience|ambient|healing|piano|minimal|string|로파이|스터디|카페|자연|앰비언트|힐링|피아노|미니멀|스트링/i.test(`${genre.id || ''} ${genre.label || ''}`));
+  if (selected.length) return selected.slice(0, 2);
+  const fallbackIds = (params.subGenre || []).filter((id) => String(id || '') !== 'instrumental_bgm');
+  const fallbackLabels = getSubGenreLabels(fallbackIds).slice(0, 2);
+  if (fallbackLabels.length) return fallbackLabels.map((label, index) => ({ id: fallbackIds[index] || label, label }));
+  return [{ id: params.genre || 'instrumental_bgm', label: params.genre ? (getGenreMeta(params.genre)?.label || sentenceCase(params.genre)) : 'Instrumental BGM' }];
+}
+
+
+interface InstrumentalBgmMoodProfile {
+  genreColor: string;
+  atmosphere: string[];
+  arrangement: string[];
+}
+
+function getInstrumentalBgmMoodSourceText(params: GenerateSongParams): string {
+  const moodValues = (params.moods || []).map((mood) => resolveMoodValue(String(mood || '')));
+  const themeValues = (params.themes || []).map((theme) => String(theme || ''));
+  return [
+    ...moodValues,
+    ...themeValues,
+    getDirectMoodInputText(params),
+    getDirectThemeInputText(params),
+    params.userInput || '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function buildInstrumentalBgmMoodProfile(params: GenerateSongParams): InstrumentalBgmMoodProfile {
+  const text = getInstrumentalBgmMoodSourceText(params).toLowerCase();
+  const atmosphere: string[] = [];
+  const arrangement: string[] = [];
+  const colors: string[] = [];
+  const add = (color: string, atm: string, arr: string) => {
+    if (color && !colors.includes(color)) colors.push(color);
+    if (atm && !atmosphere.includes(atm)) atmosphere.push(atm);
+    if (arr && !arrangement.includes(arr)) arrangement.push(arr);
+  };
+
+  if (/따뜻|포근|아늑|편안|잔잔|calm|cozy|warm|peaceful|comfort/.test(text)) {
+    add('warm calm', 'warm cozy air', 'gentle restrained movement');
+  }
+  if (/몽환|꿈|dream|dreamy|surreal|hazy|흐릿/.test(text)) {
+    add('dreamy mellow', 'soft dreamy haze', 'slow blurred texture drift');
+  }
+  if (/설렘|사랑|짝사랑|로맨|애틋|heart|love|romantic|tender|crush/.test(text)) {
+    add('tender romantic', 'soft romantic glow', 'gentle emotional swells without vocal hook');
+  }
+  if (/장난|귀여| playful|cute|cheeky|whimsical/.test(text)) {
+    add('light playful', 'small playful warmth', 'subtle playful motif changes');
+  }
+  if (/슬픈|우울|비통|아련|외로운|lonely|sad|melancholy|blue|sorrow/.test(text)) {
+    add('melancholic quiet', 'muted lonely shade', 'slow minor-color texture shifts');
+  }
+  if (/긴장|서스펜스|미스터리|불안|dark|tense|suspense|mystery|eerie/.test(text)) {
+    add('subtle tense', 'quiet shadowy tension', 'sparse suspenseful pulses and restrained swells');
+  }
+  if (/야간|밤|새벽|midnight|night|late[-\s]?night/.test(text)) {
+    add('late-night', 'late-night room stillness', 'soft nocturnal loop flow');
+  }
+  if (/골목|street|alley|도시|urban/.test(text)) {
+    add('urban intimate', 'quiet urban alley ambience', 'subtle city-room texture shifts');
+  }
+  if (/변화|전환|바뀌|change|evolving|transition/.test(text)) {
+    add('gently evolving', 'gentle sense of change in the background air', 'gradual tonal variation across the loop');
+  }
+  if (/자아|내면|reflection|introspective|self/.test(text)) {
+    add('introspective', 'introspective private space', 'quiet reflective progression');
+  }
+
+  if (!colors.length) {
+    colors.push('quiet focused');
+    atmosphere.push('calm low-distraction air');
+    arrangement.push('steady unobtrusive background movement');
+  }
+
+  return {
+    genreColor: colors.slice(0, 3).join(' and '),
+    atmosphere: atmosphere.slice(0, 4),
+    arrangement: arrangement.slice(0, 3),
+  };
+}
+
+
+function bgmGenreIdentityWords(profile: InstrumentalBgmMoodProfile): string[] {
+  const raw = String(profile.genreColor || '').toLowerCase();
+  const words: string[] = [];
+  const add = (value: string) => { if (value && !words.includes(value)) words.push(value); };
+  if (/warm|cozy|calm/.test(raw)) add('Warm');
+  if (/dreamy|mellow/.test(raw)) add('Dreamy');
+  if (/romantic|tender/.test(raw)) add('Romantic');
+  if (/playful|cute|light/.test(raw)) add('Playful');
+  if (/melancholic|lonely|quiet/.test(raw)) add('Melancholic');
+  if (/tense|mystery|dark|suspense/.test(raw)) add('Shadowy');
+  if (/late[-\s]?night|night/.test(raw)) add('Late-night');
+  if (/urban/.test(raw)) add('Urban');
+  if (/evolving/.test(raw)) add('Evolving');
+  if (/introspective/.test(raw)) add('Introspective');
+  if (!words.length) add('Quiet');
+  return words.slice(0, 2);
+}
+
+function renderNaturalInstrumentalBgmGenre(base: string, profile: InstrumentalBgmMoodProfile, secondaryLabel = ''): string {
+  const cleanBase = compactGenreToken(base || 'Instrumental BGM');
+  const identity = bgmGenreIdentityWords(profile).join(' ');
+  const withSecondary = secondaryLabel ? ` with ${compactGenreToken(secondaryLabel)} color` : '';
+  return cleanupPromptTail(`${identity ? `${identity} ` : ''}${cleanBase}${withSecondary}`);
+}
+
+function buildInstrumentalBgmGeminiReinterpretationRule(): string {
+  return [
+    'Do not simply append mood keywords to the genre name.',
+    'Musically reinterpret the selected genre, mood, theme, and direct input into a natural instrumental BGM prompt.',
+    'Keep [Genre] concise and genre-like, but include 1–2 core identity keywords when they define the song’s first impression.',
+    'Move detailed emotional and story-like words into [Atmosphere] and [Arrangement], not directly into [Genre].',
+  ].join(' ');
+}
+
+function splitCommaList(value: string): string[] {
+  return String(value || '')
+    .split(',')
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean);
+}
+
+function dedupeByNormalized(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const clean = cleanupPromptTail(item);
+    if (!clean) continue;
+    const key = clean
+      .toLowerCase()
+      .replace(/[^a-z0-9가-힣]+/g, ' ')
+      .replace(/\b(?:soft|gentle|quiet|warm|subtle|minimal|background)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+  }
+  return out;
+}
+
+function joinBgmCues(...groups: Array<string | string[] | undefined>): string {
+  const items = groups.flatMap((group) => Array.isArray(group) ? group : group ? [group] : [])
+    .map((item) => cleanupPromptTail(String(item || '')))
+    .filter(Boolean);
+  return dedupeByNormalized(items).join(', ');
 }
 
 function sanitizeBackgroundOnlyBgmAtmosphereLine(value: string, params: GenerateSongParams): string {
   if (!isBackgroundOnlyBgmGenre(params)) return value;
-  const selectedText = [params.genre || '', ...(params.subGenre || [])].join(' ');
-  const cleaned = cleanupPromptTail(value)
-    .replace(/\bwhere\s+(?:the\s+)?(?:speaker|singer|vocalist|narrator|character|listener)\b.*$/gi, '')
-    .replace(/\b(?:speaker|singer|vocalist|narrator|character)\b/gi, 'space')
-    .replace(/\b(?:silent\s+phone|unsaid\s+line|softly\s+denies|longing\s+that\s+the\s+space\s+softly\s+denies|hesitation\s+scene|emotional\s+hook)\b/gi, 'quiet atmosphere')
-    .replace(/\s{2,}/g, ' ');
-  if (/nature|자연/i.test(selectedText)) return 'quiet natural space with gentle air, soft environmental motion, and calm background depth';
-  if (/cafe|카페/i.test(selectedText)) return 'quiet cafe background atmosphere with warm room tone and soft everyday ambience';
-  if (/piano|피아노/i.test(selectedText)) return 'calm healing room atmosphere with soft piano warmth and quiet background space';
-  if (/lo[-_\s]?fi|로파이|study|스터디/i.test(selectedText)) return 'quiet study background atmosphere with warm room tone and low distraction';
-  return cleaned || 'quiet instrumental background atmosphere with soft space and low distraction';
+  const selectedText = getBgmSelectedText(params);
+  const baseMood = [
+    ...(params.moods || []),
+    getDirectMoodInputText(params),
+    getDirectThemeInputText(params),
+    params.userInput || '',
+  ].filter(Boolean).join(', ');
+  const moodTail = baseMood ? ` with ${cleanupPromptTail(baseMood).slice(0, 90)}` : '';
+  if (/nature|자연/i.test(selectedText)) return `quiet natural background space${moodTail}, gentle air, soft environmental motion`;
+  if (/cafe|카페/i.test(selectedText)) return `quiet cafe background space${moodTail}, warm room tone, low-distraction everyday ambience`;
+  if (/healing|piano|힐링|피아노/i.test(selectedText)) return `calm healing instrumental space${moodTail}, soft piano warmth, quiet room resonance`;
+  if (/lo[-_\s]?fi|lofi|로파이|study|스터디/i.test(selectedText)) return `quiet lo-fi study background${moodTail}, warm room tone, low-distraction focus`;
+  return `quiet instrumental background atmosphere${moodTail}, soft space, low distraction`;
 }
 
 function sanitizeBackgroundOnlyBgmInstrumentsLine(value: string, params: GenerateSongParams): string {
   if (!isBackgroundOnlyBgmGenre(params)) return value;
-  const selectedText = [params.genre || '', ...(params.subGenre || [])].join(' ');
+  const selectedText = getBgmSelectedText(params, value);
+  const profileType = getInstrumentalBgmProfileType(selectedText);
   const rawItems = splitCommaList(value)
     .map((item) => cleanupPromptTail(item))
     .filter(Boolean);
-  const bannedRhythmOrBandCue = /\b(?:drums?|boom[-\s]?bap\s+drums?|brushed\s+drums?|kick|snare|hi[-\s]?hat|hats|clap|percussion|wooden\s+percussion|808|sub[-\s]?bass|bassline|bass\s+groove|groovy\s+bass|mellow\s+jazz[-\s]?influenced\s+bass|jazz[-\s]?influenced\s+bass|bass|guitar|nylon\s+guitar|band|riff|lead\s+synth|hook\s+synth)\b/i;
-  const vocalCue = /\b(?:vocal|vocals|voice|female\s+solo|male\s+solo|humming|hum|choir|chant|breath|breathy|sigh)\b/i;
-  const kept = rawItems.filter((item) => !bannedRhythmOrBandCue.test(item) && !vocalCue.test(item));
-  const minimal = dedupeByNormalized(kept).slice(0, 4);
-  if (minimal.length >= 2) return cleanupPromptTail(minimal.join(', '));
-  if (/nature|자연/i.test(selectedText)) {
-    return 'natural ambience, gentle field texture, soft environmental pad';
+  const vocalBannedCue = /\b(?:vocal|vocals|voice|female\s+solo|male\s+solo|humming|hum|choir|chant|breath|breathy|sigh|spoken)\b/i;
+  const heavyRhythmCue = /\b(?:808|kick|snare|hi[-\s]?hat|hats|clap|full\s+drums?|heavy\s+drums?|band\s+groove|riff|lead\s+synth|hook\s+synth)\b/i;
+  const drumCue = /\b(?:drums?|drum\s*loop|boom[-\s]?bap|brushed\s+drums?|percussion|beat|beats|bass|guitar)\b/i;
+  const kept = rawItems.filter((item) => {
+    if (vocalBannedCue.test(item)) return false;
+    if (heavyRhythmCue.test(item)) return false;
+    if (profileType !== 'rhythmic' && drumCue.test(item)) return false;
+    return true;
+  });
+  const minimal = dedupeByNormalized(kept).slice(0, profileType === 'rhythmic' ? 4 : 3);
+  if (minimal.length >= 2) {
+    const tail = profileType === 'rhythmic' ? 'no vocal samples, rhythm kept extremely sparse' : 'no vocal samples, no drums';
+    return cleanupPromptTail([...minimal, tail].join(', '));
+  }
+  if (profileType === 'nature') {
+    return 'natural field ambience, gentle environmental texture, soft ambient pad, no vocal samples, no beat';
+  }
+  if (profileType === 'minimal') {
+    return 'minimal repeating motif, soft tonal pulse, quiet room texture, no vocal samples';
   }
   if (/cafe|카페/i.test(selectedText)) {
-    return 'warm room tone, soft piano color, quiet cafe ambience';
+    return 'soft piano color, warm room tone, quiet cafe ambience, optional very sparse brushed rhythm, no vocal samples';
   }
-  if (/piano|피아노/i.test(selectedText)) {
-    return 'soft piano, gentle felt texture, quiet room resonance';
+  if (/lo[-_\s]?fi|lofi|로파이|study|스터디/i.test(selectedText)) {
+    return 'warm muted Rhodes or soft lo-fi keys, analog tape hiss, vinyl crackle, gentle room ambience, very sparse brushed lo-fi drums, no vocal samples';
   }
-  if (/lo[-_\s]?fi|로파이|study|스터디/i.test(selectedText)) {
-    return 'soft lo-fi texture, analog tape hiss, warm room keys';
+  if (/string|스트링/i.test(selectedText)) {
+    return 'soft string ensemble, warm cello layer, gentle violin harmony, subtle hall reverb, no vocal samples, no drums';
   }
-  return 'minimal ambient texture, soft pad, quiet background space';
+  return 'intimate piano or soft instrumental texture, gentle room reverb, quiet background space, no vocal samples, no drums';
 }
 
 function sanitizeBackgroundOnlyBgmArrangementLine(value: string, params: GenerateSongParams): string {
   if (!isBackgroundOnlyBgmGenre(params)) return value;
   const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
-  const selectedText = [params.genre || '', ...(params.subGenre || [])].join(' ');
-  const fallback = /nature|자연/i.test(selectedText)
-    ? 'organic ambient loop, gentle scene swells, non-distracting background flow'
-    : /cafe|카페/i.test(selectedText)
-      ? 'soft cafe background loop, gentle transitions, non-distracting room flow'
-      : /piano|피아노/i.test(selectedText)
-        ? 'minimal piano background loop, soft pauses, non-distracting healing flow'
-        : /lo[-_\s]?fi|로파이|study|스터디/i.test(selectedText)
-          ? 'minimal lo-fi study loop, soft texture shifts, non-distracting background flow'
-          : 'steady background loop, soft transitions, non-distracting ambient flow';
+  const selectedText = getBgmSelectedText(params, value);
+  const profileType = getInstrumentalBgmProfileType(selectedText);
+  const fallback = profileType === 'nature'
+    ? 'slow ambient drift, long texture breathing, no beat, non-distracting environmental flow'
+    : profileType === 'minimal'
+      ? 'loopable minimal motif, subtle micro-variation, restrained background structure'
+      : profileType === 'rhythmic'
+        ? 'loopable low-distraction background groove, very restrained dynamics, optional sparse beat only, no vocal hook'
+        : /string|스트링/i.test(selectedText)
+          ? 'slow evolving string movement, gentle swells, loopable scene support, no vocal hook, no drums'
+          : 'slow instrumental flow, gentle rise and fall, soft transitions, no vocal hook, no drums';
+  const constraint = profileType === 'rhythmic'
+    ? 'instrumental only, no vocals, no humming, sparse background rhythm only'
+    : 'instrumental only, no vocals, no humming, drumless background flow';
   return cleanupPromptTail(normalizeArrangementLine([
     tempo,
-    'no drums, no kick, no snare, no hi-hats, no percussion, no 808, no vocal hook, no melodic hook',
+    constraint,
     fallback,
   ].filter(Boolean)));
 }
 
+function shouldForceBackgroundOnlyBgmFromPrompt(prompt: string, map: FinalPromptLineMap): boolean {
+  const text = [prompt || '', map.genre || '', map.instruments || '', map.atmosphere || '', map.vocals || '', map.arrangement || '']
+    .join(' ')
+    .toLowerCase();
+  return /(?:lo[-\s]?fi\s+study|lo[-\s]?fi\s+chill|lofi[_\s-]*study|lofi[_\s-]*instrumental|nature\s+ambience|cafe\s*bgm|healing\s+piano|piano\s+solo|string\s+ensemble|minimalism|minimalist\s+background|instrumental\s+background|background\s+music|연주\s*bgm|로파이\s*스터디|자연\s*앰비언스|카페\s*bgm|힐링\s*피아노|피아노\s*솔로|스트링\s*합주|배경음악)/i.test(text);
+}
+
+function withBackgroundOnlyBgmMarker(params: GenerateSongParams, prompt: string, map: FinalPromptLineMap): GenerateSongParams {
+  if (!shouldForceBackgroundOnlyBgmFromPrompt(prompt, map) && !isBackgroundOnlyBgmGenre(params)) return params;
+  return {
+    ...params,
+    subGenre: Array.from(new Set([...(params.subGenre || []), 'instrumental_bgm'])),
+    isNoLyrics: true,
+    includeLyrics: false,
+    instrumentalBgmMode: true,
+  } as GenerateSongParams;
+}
+
 function finalOutputPromptValidator(prompt: string, params: GenerateSongParams): string {
   const map = parseFinalPromptLineMap(prompt);
+  const validationParams = withBackgroundOnlyBgmMarker(params, prompt, map);
 
-  map.genre = validateFinalGenreLine(map.genre || 'Genre-led pop fusion', params);
-  map.instruments = sanitizeBackgroundOnlyBgmInstrumentsLine(validateFinalInstrumentLine(map.instruments || 'balanced band and synth texture', params), params);
-  map.atmosphere = sanitizeBackgroundOnlyBgmAtmosphereLine(validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', params), params);
-  map.vocals = sanitizeBackgroundOnlyBgmVocalsLine(validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', params), params);
-  map.arrangement = sanitizeBackgroundOnlyBgmArrangementLine(validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', params), params);
+  if (isBackgroundOnlyBgmGenre(validationParams)) {
+    return buildDedicatedInstrumentalBgmPrompt(validationParams);
+  }
+
+  map.genre = validateFinalGenreLine(map.genre || 'Genre-led pop fusion', validationParams);
+  map.instruments = sanitizeBackgroundOnlyBgmInstrumentsLine(validateFinalInstrumentLine(map.instruments || 'balanced band and synth texture', validationParams), validationParams);
+  map.atmosphere = sanitizeBackgroundOnlyBgmAtmosphereLine(validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', validationParams), validationParams);
+  map.vocals = sanitizeBackgroundOnlyBgmVocalsLine(validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', validationParams), validationParams);
+  map.arrangement = sanitizeBackgroundOnlyBgmArrangementLine(validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', validationParams), validationParams);
 
   return enforceEnglishProductionPrompt([
     `[Genre] ${map.genre}`,
@@ -13951,6 +14408,86 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
     `[Arrangement] ${map.arrangement}`,
     `[Audio quality improved to masterpiece]`,
   ].join('\n'));
+}
+
+
+
+function buildDedicatedInstrumentalBgmPrompt(params: GenerateSongParams): string {
+  const selected = getInstrumentalBgmSelectedIdentities(params);
+  const main = selected[0] || { id: 'instrumental_bgm', label: 'Instrumental BGM' };
+  const secondary = selected[1];
+  const selectedLabels = selected.map((item) => item.label).filter(Boolean);
+  const selectedText = getBgmSelectedText(params, selectedLabels.join(' '));
+  const mainText = `${main.id || ''} ${main.label || ''}`;
+  const profileType = getInstrumentalBgmProfileType(mainText || selectedText);
+
+  const moodProfile = buildInstrumentalBgmMoodProfile(params);
+  const moodTail = moodProfile.atmosphere.length ? ` with ${moodProfile.atmosphere.join(', ')}` : '';
+  const secondaryLabel = secondary?.label && secondary.label !== main.label && !/instrumental\s*bgm|연주\s*bgm/i.test(secondary.label) ? secondary.label : '';
+  const secondaryCue = secondaryLabel ? ` with ${compactGenreToken(secondaryLabel)} color` : '';
+
+  let genre = renderNaturalInstrumentalBgmGenre(main.label || 'Instrumental BGM', moodProfile, secondaryLabel);
+  let instruments = 'minimal instrumental texture, soft pad, quiet room tone, no vocal samples';
+  let atmosphere = `quiet instrumental background${moodTail}, soft space, low-distraction listening air`;
+  let arrangementCore = 'loopable background flow, soft transitions, gentle texture movement, non-distracting movement';
+  let arrangementConstraint = 'instrumental only, no vocals, no humming';
+
+  if (profileType === 'rhythmic') {
+    genre = /lo[-_\s]?fi|lofi|로파이|study|스터디/i.test(mainText)
+      ? renderNaturalInstrumentalBgmGenre('Lo-fi Study', moodProfile, secondaryLabel)
+      : renderNaturalInstrumentalBgmGenre(main.label || 'Cafe BGM', moodProfile, secondaryLabel);
+    instruments = /cafe|카페/i.test(mainText)
+      ? 'soft piano, warm room tone, quiet cafe ambience, optional very sparse brushed rhythm, no vocal samples'
+      : 'warm muted Rhodes piano, soft vinyl crackle, minimal tape-hiss, gentle room ambience, very sparse brushed lo-fi drums, no vocal samples';
+    atmosphere = /cafe|카페/i.test(mainText)
+      ? joinBgmCues(`warm quiet cafe background${moodTail}`, 'relaxed everyday space', 'cozy low-distraction comfort')
+      : joinBgmCues(`quiet lo-fi study background${moodTail}`, 'calm focus', 'peaceful solitude', 'low-distraction warmth');
+    arrangementConstraint = 'instrumental only, no vocals, no humming, sparse background rhythm only';
+    arrangementCore = joinBgmCues('minimal loop-based progression', 'steady hypnotic background groove', moodProfile.arrangement, 'very restrained dynamic shifts for continuous focus');
+  } else if (profileType === 'nature') {
+    genre = renderNaturalInstrumentalBgmGenre(/nature|자연/i.test(mainText) ? 'Nature Ambience' : (main.label || 'Ambient'), moodProfile, secondaryLabel);
+    instruments = 'natural field ambience, gentle environmental texture, soft ambient pad, airy space tone, no vocal samples, no beat';
+    atmosphere = joinBgmCues(`open natural background ambience${moodTail}`, 'gentle air', 'environmental calm', 'spacious low-distraction texture');
+    arrangementConstraint = 'instrumental only, no vocals, no humming, beatless ambient flow';
+    arrangementCore = joinBgmCues('slow ambient drift', 'long texture breathing', moodProfile.arrangement, 'gentle scene swells', 'continuous environmental flow');
+  } else if (profileType === 'minimal') {
+    genre = renderNaturalInstrumentalBgmGenre('Minimalism', moodProfile, secondaryLabel);
+    instruments = 'minimal repeating motif, soft tonal pulse, quiet room texture, no vocal samples';
+    atmosphere = joinBgmCues(`minimal background space${moodTail}`, 'clean negative space', 'restrained calm', 'focused low-distraction structure');
+    arrangementConstraint = 'instrumental only, no vocals, no humming';
+    arrangementCore = joinBgmCues('loopable minimal progression', 'subtle micro-variation', moodProfile.arrangement, 'restrained dynamic shape', 'no dramatic drop');
+  } else if (/string|스트링/i.test(mainText)) {
+    genre = renderNaturalInstrumentalBgmGenre('String Ensemble', moodProfile, secondaryLabel);
+    instruments = 'soft string ensemble, warm cello layer, gentle violin harmony, subtle hall reverb, no vocal samples, no drums';
+    atmosphere = joinBgmCues(`restrained cinematic string background${moodTail}`, 'warm sustained air', 'elegant instrumental space', 'no singer-centered story');
+    arrangementConstraint = 'instrumental only, no vocals, no humming, drumless background flow';
+    arrangementCore = joinBgmCues('slow evolving string movement', 'gentle swells', moodProfile.arrangement, 'loopable scene support', 'subtle harmonic motion');
+  } else {
+    genre = renderNaturalInstrumentalBgmGenre(/healing|힐링/i.test(mainText) ? 'Healing Piano' : /piano|피아노/i.test(mainText) ? 'Piano Solo' : (main.label || 'Instrumental BGM'), moodProfile, secondaryLabel);
+    instruments = /healing|힐링/i.test(mainText)
+      ? 'warm healing piano, soft room resonance, gentle reverb, airy pad support, no vocal samples, no drums'
+      : 'intimate solo piano, soft felt hammer texture, natural room reverb, no vocal samples, no drums';
+    atmosphere = joinBgmCues(`calm piano-led instrumental space${moodTail}`, 'warm stillness', 'quiet room resonance', 'gentle instrumental comfort');
+    arrangementConstraint = 'instrumental only, no vocals, no humming, drumless background flow';
+    arrangementCore = joinBgmCues('slow piano-led flow', 'gentle pauses', moodProfile.arrangement, 'soft rise and fall', 'peaceful loopable background movement');
+  }
+
+  const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
+  return enforceEnglishProductionPrompt([
+    `[Genre] ${cleanupPromptTail(genre)}`,
+    `[Instruments] ${cleanupPromptTail(instruments)}`,
+    `[Atmosphere] ${cleanupPromptTail(atmosphere)}`,
+    `[Vocals] Instrumental only, no vocals, no humming`,
+    `[Arrangement] ${cleanupPromptTail([tempo, arrangementConstraint, arrangementCore].filter(Boolean).join(', '))}`,
+    `[Audio quality improved to masterpiece]`,
+  ].join('\n'));
+}
+
+function hardEnforceInstrumentalBgmFinalPrompt(prompt: string, params: GenerateSongParams): string {
+  const map = parseFinalPromptLineMap(prompt);
+  const validationParams = withBackgroundOnlyBgmMarker(params, prompt, map);
+  if (!isBackgroundOnlyBgmGenre(validationParams)) return prompt;
+  return buildDedicatedInstrumentalBgmPrompt(validationParams);
 }
 
 function buildFinalPrompt(
@@ -13968,6 +14505,10 @@ function buildFinalPrompt(
       return fallback;
     }
   };
+
+  if (isBackgroundOnlyBgmGenre(params)) {
+    return buildDedicatedInstrumentalBgmPrompt(params);
+  }
 
   const genre = safeBuildLine('Genre', () => buildFiveLineGenreValue(params), 'Genre-led pop fusion');
   const instruments = safeBuildLine('Instruments', () => buildFiveLineInstrumentsValue(params, detailLayer), 'balanced band and synth texture');
@@ -16065,10 +16606,16 @@ export async function generateSong(
   const effectiveNoLyrics = Boolean(
     params.isNoLyrics ||
     params.includeLyrics === false ||
-    requestedLyricLanguages.length === 0,
+    requestedLyricLanguages.length === 0 ||
+    isBackgroundOnlyBgmGenre(params),
   );
   params.isNoLyrics = effectiveNoLyrics;
-  params.lyricLanguages = requestedLyricLanguages;
+  if (isBackgroundOnlyBgmGenre(params)) {
+    params.includeLyrics = false;
+    params.isNoLyrics = true;
+    (params as any).instrumentalBgmMode = true;
+  }
+  params.lyricLanguages = params.isNoLyrics ? [] : requestedLyricLanguages;
   const model: string = "gemini-3-flash-preview";
 
   const genresForDuration = params.genre ? [params.genre] : [];
@@ -16403,17 +16950,17 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Never put Korean story role labels inside brackets. Story roles may appear in lyric lines, but bracket tags must stay English acoustic/section tags only.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format is locked to this 5-line structure plus the fixed quality line:
-  [Genre] {short natural genre identity: core genre + main groove/era/texture, not a raw comma list}
+  [Genre] {short natural genre identity: core genre + 1–2 strongest identity keywords/groove/era/texture, not a raw comma list}
   [Instruments] {Gemini-composed instrument, texture, and playing-style cues from genre + mood + theme/situation + selected core sound}
   [Atmosphere] {scene, air, emotional temperature, and selected spatial texture}
-  [Vocals] {sentence-style acoustic vocal direction with emotion, breath, and phrasing; no artist names}
+  [Vocals] {sentence-style acoustic vocal direction with emotion, breath, and phrasing; no artist names, but include the referenced vocal traits when the user gave an artist/group reference}
   [Arrangement] {tempo only when selected, genre-specific rhythm/groove, emotional development, section movement, and transition behavior}
   [Audio quality improved to masterpiece]
 - Do not collapse this back into [Track] / [Production]. Keep [Genre], [Instruments], [Atmosphere], [Vocals], and [Arrangement] separated.
 - Never output any separator-* value. Separator rows are UI-only and must be ignored.
 - Genre line must be a short natural identity sentence, not a raw keyword dump. Keep the selected core genre clear, then add only the main groove/era/texture that explains how the genre should move. Do not use filler wording like influence/core/fused/based/rooted unless it is part of a meaningful genre identity such as Korean gugak-based Pansori fusion.
 - Era texture selections such as 2010s Idol Pop, 2010s EDM Pop, 90s R&B Warmth, 2000s Y2K Pop, 80s Retro Synth, and 2020s Hyperpop are secondary production colors only. They must not replace the main genre, must not force idol/EDM as the main style, and must not expand into group/idol-vocal instructions unless the vocal menu explicitly selected that.
-- Mood words such as lonely, relaxing, infectious, upbeat, bright, sad, warm, calm, dark, hopeful, tense belong in [Atmosphere] or [Arrangement], not [Genre].
+- Mood/theme words should not be dumped into [Genre] as a list. However, the 1–2 strongest identity keywords that define the song's first impression may be integrated into [Genre] as natural genre adjectives; put all detailed emotion/story words in [Atmosphere] or [Arrangement].
 - Groove/rhythm/pulse/hook/transition terms belong in [Arrangement], not [Instruments].
 - If multiple hook or chorus style keywords are selected, merge them into one natural phrase such as minimalist phrase-led hook or catchy singalong chorus; do not repeat hook/chorus words.
 - Arrangement must not be a generic function-word list. Avoid bare phrases like stable structure, warm structure, harmonic support, smooth, effortless, clear sectional contrast unless they are tied to a concrete genre movement. Write how the song moves: e.g. slow janggu pulse with weighted vocal pauses, danceable Nu-Disco groove with soft chorus lift, warm live-band groove with brass lifts.
@@ -16426,7 +16973,7 @@ ${buildUserPrimaryStoryLockInstruction(params)}
 ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 
 IMPORTANT:
-- Do NOT use real artist names in the output. Generalize them into vocal characteristics.
+- Do not use real artist names by default. Exception: if the user explicitly wrote an artist/group reference in direct input, preserve it only in [Genre] as “-style” or “-inspired” and also translate it into musical traits; do not place artist names in [Vocals] or lyrics.
 - Do NOT simplify, generalize, or replace the selected arrangement with a default pop form.
 - Treat the final production prompt below as a locked music-production blueprint, not a loose reference. For lyric story content, direct input and selected Theme/Mood remain higher priority than generic prompt summaries.
 - Resolve conflicts by priority: custom song structure if selected, then USER FREE-TEXT DIRECTOR NOTE, then explicit UI selections, while keeping one coherent song concept.
@@ -16525,11 +17072,14 @@ ${requestedLanguageInstruction}
 FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
 - Return productionPrompt as the final 6-line Suno production prompt.
 - Never output two production prompts in one response. Do not write a one-line prompt containing multiple labels and then repeat the labels again below.
-- If the selected genre is Lo-Fi Study, Nature Ambience, Cafe BGM, Healing Piano, or another Theme/BGM/background-only ambience choice, keep it instrumental-only: [Vocals] must be exactly: No vocals, no humming, no chanting, no choir, no spoken words, instrumental background music only. Do not add female/male vocal, humming, wordless airy texture, breathy phrasing, sighs, chant, choir, or hook-vocal language.
-- For Theme/BGM/background-only ambience, keep [Instruments] extremely minimal: 2-4 quiet ambience/texture cues only. Force-remove drums, brushed drums, boom-bap drums, kick, snare, hi-hats, percussion, 808, bass, guitar riffs, band grooves, lead-hook instruments, vocal hooks, and melodic hooks unless the user explicitly writes that they want them.
-- For Nature Ambience, prefer environmental ambience and soft pads over musical drums or many instruments. For Lo-Fi Study, prefer tape hiss, room tone, soft keys, and gentle texture; do not add full lo-fi drums by default. For Cafe BGM and Healing Piano, prefer soft piano/room tone and avoid brushed drums by default.
-- For Theme/BGM/background-only ambience, [Atmosphere] must describe space, environment, time, room tone, or background air. Do not create a singer/speaker emotional story.
-- For Theme/BGM/background-only ambience, [Arrangement] must describe loopable background flow, ambient swells, soft transitions, and non-distracting texture, not hook release or sung phrasing.
+- GENRE FIRST-IMPRESSION RULE: [Genre] is not just a plain genre name. Keep it concise and genre-like, but include 1–2 core identity keywords from the selected mood/theme/direct input when they define the song’s first impression. Do not turn [Genre] into a long keyword list. Move detailed emotional/story words into [Atmosphere] and movement/flow words into [Arrangement].
+- USER ARTIST/GROUP REFERENCE RULE: If the user directly mentions an artist or group in the direct input, preserve that reference in [Genre] as “-style” or “-inspired”, and also translate it into musical traits such as energy, vocal attitude, era, groove, arrangement color, emotional tone, and when relevant vocal technique. Do not remove the artist/group reference when it was explicitly written by the user. Do not rely on the name alone; include trait cues so less globally recognized Korean references still work.
+- INSTRUMENTAL BGM NATURAL REINTERPRETATION RULE: ${buildInstrumentalBgmGeminiReinterpretationRule()}
+- If the selected genre is Lo-Fi Study, Nature Ambience, Cafe BGM, Healing Piano, Ambient, Minimalism, Piano Solo, String Ensemble, or another dedicated Instrumental BGM/background-only choice, force instrumental-only mode. [Vocals] must be exactly: Instrumental only, no vocals, no humming. Do not add female/male vocal, humming, wordless airy texture, breathy phrasing, sighs, chant, choir, or hook-vocal language.
+- For dedicated Instrumental BGM/background-only choices, put the removal cue directly into the final prompt without overloading it: [Instruments] should include no vocal samples and a small number of quiet ambience/texture/instrument cues. Lo-Fi Study and Cafe BGM may use a very sparse muted/brushed rhythm if it supports background flow; Piano/Solo/String/Nature/Ambient BGM should be drumless/no beat. [Arrangement] should include instrumental only, no vocals, no humming, plus the correct BGM flow type.
+- For Nature Ambience, prefer environmental ambience and soft pads over musical drums or many instruments. For Lo-Fi Study, prefer tape hiss, room tone, soft keys, and optional very sparse brushed lo-fi drums. For Cafe BGM, allow very sparse brushed rhythm only when useful. For Healing Piano, Piano Solo, and String Ensemble, avoid drums/percussion by default.
+- For dedicated Instrumental BGM/background-only choices, [Atmosphere] must describe space, environment, time, room tone, or background air. Do not create a singer/speaker emotional story.
+- For dedicated Instrumental BGM/background-only choices, [Arrangement] must describe loopable background flow, ambient swells, soft transitions, and non-distracting texture, not hook release or sung phrasing. Use concise constraints like drumless and percussion-free instead of a long no-kick/no-snare/no-hihat list.
 - Use this exact label order and no extra lines:
   [Genre]
   [Instruments]
@@ -17062,8 +17612,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   };
 
   if (subGenreIds.length > 0) {
+    const firstSubLabel = getSubGenreLabels([subGenreIds[0]])[0];
     const subGenreMeta = GENRES.find((g) => g.id === subGenreIds[0]);
-    genreTag = subGenreMeta?.label ?? sentenceCase(subGenreIds[0]);
+    genreTag = firstSubLabel || subGenreMeta?.label || sentenceCase(subGenreIds[0]);
+    addVariations(genreTag);
     if (subGenreMeta) {
       addVariations(subGenreMeta.label);
       if (subGenreMeta.labelKo)
@@ -17206,7 +17758,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       typeof result.lyrics.korean === "string" ? result.lyrics.korean : "";
   }
 
-  if (params.isNoLyrics) {
+  if (params.isNoLyrics || isBackgroundOnlyBgmGenre(params)) {
     result.lyrics = { english: "", korean: "" };
   } else {
     const isMixedKoreanOnlyOutput =
@@ -17251,7 +17803,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
   const normalizedAiPrompt = normalizeAiProductionPrompt(aiProductionPrompt, finalPrompt);
-  result.prompt = forceSingleAtmosphereSentence(finalOutputPromptValidator(normalizedAiPrompt, params));
+  const validatedProductionPrompt = finalOutputPromptValidator(normalizedAiPrompt, params);
+  result.prompt = forceSingleAtmosphereSentence(hardEnforceInstrumentalBgmFinalPrompt(validatedProductionPrompt, params));
   result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
@@ -17271,6 +17824,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     titleLanguages: requestedLyricLanguages as any,
     secondaryLanguage: secondaryLanguage as any,
     isNoLyrics: params.isNoLyrics as any,
+    instrumentalBgmMode: Boolean((params as any).instrumentalBgmMode) as any,
   } as any;
 
   return result as SongResult;

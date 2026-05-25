@@ -365,6 +365,21 @@ import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion } from './components/MusicApiGenerateModal';
+
+const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
+  'instrumental_bgm',
+  'lofi_study',
+  'cafe_bgm',
+  'nature_ambience',
+  'healing_piano',
+  'ambient',
+  'minimalism',
+  'piano_solo',
+  'string_ensemble',
+]);
+
+const isInstrumentalBgmGenreId = (id?: string | null) => Boolean(id && INSTRUMENTAL_BGM_GENRE_IDS.has(id));
+const hasInstrumentalBgmGenreIds = (ids: Array<string | null | undefined>) => ids.some(isInstrumentalBgmGenreId);
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
 
 enum OperationType {
@@ -2237,7 +2252,63 @@ const TEMPO_MIN_BPM = 20;
 const TEMPO_MAX_BPM = 200;
 const TEMPO_MAX_ACTIVE_RANGE = 20;
 
+type BpmRange = { min: number; max: number };
+
+const INSTRUMENTAL_BGM_BASE_BPM: Record<string, BpmRange> = {
+  lofi_study: { min: 66, max: 88 },
+  cafe_bgm: { min: 74, max: 98 },
+  nature_ambience: { min: 38, max: 62 },
+  healing_piano: { min: 46, max: 74 },
+  ambient: { min: 42, max: 70 },
+  minimalism: { min: 60, max: 104 },
+  piano_solo: { min: 44, max: 78 },
+  string_ensemble: { min: 50, max: 84 },
+};
+
+const INSTRUMENTAL_BGM_SLOW_MOOD_IDS = new Set([
+  'calm', 'relaxing', 'zen', 'healing', 'peaceful', 'restrained',
+  'sad', 'sorrowful', 'melancholic', 'lonely', 'wistful', 'hollow',
+  'dark', 'moody', 'chilly', 'fragile_edge', 'soft_tender', 'tender',
+]);
+
+const INSTRUMENTAL_BGM_FAST_MOOD_IDS = new Set([
+  'bright', 'hopeful', 'cheerful', 'playful_mischief', 'cheeky_deadpan',
+  'comedic', 'quirky', 'cute_mood', 'upbeat', 'swelling', 'powerful',
+  'infectious', 'tense', 'uneasy', 'groovy',
+]);
+
+const clampBpm = (value: number) => Math.max(TEMPO_MIN_BPM, Math.min(TEMPO_MAX_BPM, Math.round(value)));
+
+const calculateInstrumentalBgmBPM = (genres: string[], moods: string[], subGenre: string[] = []): BpmRange | null => {
+  const mainBgmId = [...subGenre, ...genres].find((id) => isInstrumentalBgmGenreId(id));
+  if (!mainBgmId) return null;
+
+  const base = INSTRUMENTAL_BGM_BASE_BPM[mainBgmId] || { min: 54, max: 88 };
+  const slowHits = moods.filter((id) => INSTRUMENTAL_BGM_SLOW_MOOD_IDS.has(id)).length;
+  const fastHits = moods.filter((id) => INSTRUMENTAL_BGM_FAST_MOOD_IDS.has(id)).length;
+  const moodShift = Math.max(-12, Math.min(12, (fastHits - slowHits) * 4));
+
+  let adjustedMin = clampBpm(base.min + moodShift);
+  let adjustedMax = clampBpm(base.max + moodShift);
+
+  // Keep BGM ranges musical: calm/ambient genres should not jump into pop-song tempo territory.
+  if (['nature_ambience', 'ambient', 'healing_piano', 'piano_solo', 'string_ensemble'].includes(mainBgmId)) {
+    adjustedMax = Math.min(adjustedMax, mainBgmId === 'nature_ambience' || mainBgmId === 'ambient' ? 78 : 92);
+  }
+
+  const availableRange = Math.max(8, adjustedMax - adjustedMin);
+  const activeRange = Math.min(TEMPO_MAX_ACTIVE_RANGE, Math.max(10, Math.round(availableRange * 0.45)));
+  const startMax = Math.max(adjustedMin, adjustedMax - activeRange);
+  const min = clampBpm(adjustedMin + Math.floor(Math.random() * Math.max(1, startMax - adjustedMin + 1)));
+  const max = clampBpm(Math.min(adjustedMax, min + activeRange));
+
+  return { min, max };
+};
+
 const calculateOptimalBPM = (genres: string[], moods: string[], subGenre: string[] = []) => {
+  const instrumentalBgmBpm = calculateInstrumentalBgmBPM(genres, moods, subGenre);
+  if (instrumentalBgmBpm) return instrumentalBgmBpm;
+
   let sumMin = 0;
   let sumMax = 0;
   let count = 0;
@@ -3541,12 +3612,51 @@ function App() {
     setMenuLocks((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
   const isMenuLocked = useCallback((key: MenuLockKey) => Boolean(menuLocks[key]), [menuLocks]);
+  const bgmAutoLockedMenusRef = useRef<{ style: boolean; sound: boolean }>({ style: false, sound: false });
 
 
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedInstrumentSounds, setSelectedInstrumentSounds] = useState<string[]>([]);
   const [selectedPointSounds, setSelectedPointSounds] = useState<string[]>([]);
   const [isPointSoundMode, setIsPointSoundMode] = useState(false);
+  const hasSelectedInstrumentalBgm = useMemo(
+    () => hasInstrumentalBgmGenreIds([...selectedGenres, ...subGenre]),
+    [selectedGenres, subGenre]
+  );
+
+  useEffect(() => {
+    if (hasSelectedInstrumentalBgm) {
+      setSelectedStyles((prev) => (prev.length ? [] : prev));
+      setSelectedInstrumentSounds((prev) => (prev.length ? [] : prev));
+      setSelectedPointSounds((prev) => (prev.length ? [] : prev));
+      setIsPointSoundMode(false);
+      setMenuLocks((prev) => {
+        const auto = { ...bgmAutoLockedMenusRef.current };
+        const next = { ...prev };
+        if (!prev.style) {
+          next.style = true;
+          auto.style = true;
+        }
+        if (!prev.sound) {
+          next.sound = true;
+          auto.sound = true;
+        }
+        bgmAutoLockedMenusRef.current = auto;
+        return next;
+      });
+      return;
+    }
+
+    setMenuLocks((prev) => {
+      const auto = bgmAutoLockedMenusRef.current;
+      if (!auto.style && !auto.sound) return prev;
+      const next = { ...prev };
+      if (auto.style) next.style = false;
+      if (auto.sound) next.sound = false;
+      bgmAutoLockedMenusRef.current = { style: false, sound: false };
+      return next;
+    });
+  }, [hasSelectedInstrumentalBgm]);
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songStructure, setSongStructure] = useState<SongStructure>('1');
@@ -4712,8 +4822,9 @@ const toggleCycleVariantSelection = (
   }, [hierarchyLeafGenreItems]);
 
   const pickRandomLeafGenreId = useCallback((): string | null => {
-    if (hierarchyLeafGenreItems.length === 0) return null;
-    const randomItem = hierarchyLeafGenreItems[Math.floor(Math.random() * hierarchyLeafGenreItems.length)];
+    const randomPool = hierarchyLeafGenreItems.filter((item: any) => !isInstrumentalBgmGenreId(item?.id));
+    if (randomPool.length === 0) return null;
+    const randomItem = randomPool[Math.floor(Math.random() * randomPool.length)];
     return randomItem?.id ?? null;
   }, [hierarchyLeafGenreItems]);
 
@@ -5974,7 +6085,8 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     const hasFreeTextDirectorNote = userInput.trim().length > 0;
-    const requestedIncludeLyrics = generationOptions?.includeLyrics ?? true;
+    const isInstrumentalBgmRequest = hasInstrumentalBgmGenreIds([...selectedGenres, ...subGenre]);
+    const requestedIncludeLyrics = isInstrumentalBgmRequest ? false : (generationOptions?.includeLyrics ?? true);
     const requestedLyricLanguages = requestedIncludeLyrics
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko']).filter(Boolean))).slice(0, 2) as LanguageCode[]
       : [];
@@ -6013,12 +6125,15 @@ const saveRecentSong = async (newSong: any) => {
         updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
       }
       let finalGenres = limitFusionGenreIds([...selectedGenres, ...subGenre]);
+      const isFinalInstrumentalBgm = hasInstrumentalBgmGenreIds(finalGenres);
       let finalMoods = [...selectedMoods];
       let finalThemes = [...selectedThemes];
-      let finalStyles = filterSelectableIds([...selectedStyles]);
-      let finalInstrumentSounds = filterSelectableIds(
-        expandRecommendedSoundComboSelection([...selectedInstrumentSounds], { syncRef: false })
-      );
+      let finalStyles = isFinalInstrumentalBgm ? [] : filterSelectableIds([...selectedStyles]);
+      let finalInstrumentSounds = isFinalInstrumentalBgm
+        ? []
+        : filterSelectableIds(
+            expandRecommendedSoundComboSelection([...selectedInstrumentSounds], { syncRef: false })
+          );
       let randomKeywords: string[] = [];
 
       const hasGenre = finalGenres.length > 0 || subGenre.length > 0;
@@ -6035,7 +6150,7 @@ const saveRecentSong = async (newSong: any) => {
       // When the command box has text, let that text drive the whole prompt instead of injecting random keywords.
       if (selectedCount === 0 && !hasFreeTextDirectorNote) {
         const allItems = [
-          ...GENRES.filter(i => !TROT_GENRES.includes(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
+          ...GENRES.filter(i => !TROT_GENRES.includes(i.id) && !isInstrumentalBgmGenreId(i.id)).map(i => ({ ...i, cat: 'genre' as const })),
           ...MOODS.map(i => ({ ...i, cat: 'mood' as const })),
           ...THEMES.map(i => ({ ...i, cat: 'theme' as const })),
           ...SOUND_STYLES.filter(isSelectableKeywordItem).map(i => ({ ...i, cat: 'style' as const })),
@@ -6202,6 +6317,55 @@ const saveRecentSong = async (newSong: any) => {
             ? 'Mood should follow the free-text director note'
             : 'Emotional';
         const themeStr = buildThemeSentence(themeLabels);
+
+        if (isFinalInstrumentalBgm) {
+          const bgmIds = limitFusionGenreIds([...finalGenres, ...subGenre, ...selectedGenres]).filter(isInstrumentalBgmGenreId);
+          const bgmLabels = bgmIds.map((id) => {
+            const matched = GENRE_HIERARCHY
+              .flatMap((group) => group.children)
+              .flatMap((main) => main.children)
+              .find((item) => item.id === id);
+            return matched?.label || id;
+          }).filter(Boolean).slice(0, 2);
+          const mainBgmLabel = bgmLabels[0] || 'Instrumental BGM';
+          const secondaryBgmLabel = bgmLabels[1] && bgmLabels[1] !== mainBgmLabel ? bgmLabels[1] : '';
+          const bgmText = `${mainBgmLabel} ${secondaryBgmLabel} ${bgmIds.join(' ')}`.toLowerCase();
+          const moodThemeText = [moodStr, themeStr, userInput.trim()].filter(Boolean).join(', ');
+          const isRhythmBgm = /lo[-\s]?fi|lofi|study|스터디|cafe|카페/.test(bgmText);
+          const isNatureBgm = /nature|자연|ambient|앰비언트/.test(bgmText);
+          const isMinimalBgm = /minimal|미니멀/.test(bgmText);
+          const isStringBgm = /string|스트링/.test(bgmText);
+          const isPianoBgm = /piano|피아노|healing|힐링/.test(bgmText);
+          const fusionNote = secondaryBgmLabel ? ` with secondary ${secondaryBgmLabel} color` : '';
+          const instruments = isRhythmBgm
+            ? 'soft keys or Rhodes, warm room tone, vinyl/tape texture, very sparse muted or brushed rhythm allowed only as background'
+            : isNatureBgm
+              ? 'natural field ambience, soft environmental pad, airy space texture, no drums'
+              : isStringBgm
+                ? 'soft string ensemble, warm sustained cello/violin texture, gentle hall reverb, no drums'
+                : isPianoBgm
+                  ? 'intimate piano or felt piano, soft room resonance, gentle reverb, no drums'
+                  : isMinimalBgm
+                    ? 'minimal repeating motif, soft tonal pulse, quiet room texture'
+                    : 'minimal instrumental texture, soft pad, quiet room tone';
+          const atmosphere = moodThemeText
+            ? `${moodThemeText} interpreted as instrumental background atmosphere, space, temperature, listening environment, and emotional color`
+            : 'selected BGM genre defines the space, temperature, listening environment, and background air';
+          const arrangement = isRhythmBgm
+            ? 'loopable low-distraction background groove, restrained dynamics, no sung hook, no lyrics'
+            : isNatureBgm
+              ? 'slow ambient drift, long texture breathing, beatless environmental flow, no lyrics'
+              : isMinimalBgm
+                ? 'repeating motif, subtle micro-variation, restrained loopable background structure, no lyrics'
+                : 'slow instrumental flow, gentle rise and fall, soft transitions, no lyrics';
+
+          return `·MODE: dedicated instrumental BGM route
+·GENRE: ${mainBgmLabel}${fusionNote}
+·INSTRUMENTS: ${instruments}
+·ATMOSPHERE: ${atmosphere}
+·VOCALS: instrumental only, no vocals, no humming
+·ARRANGEMENT: ${arrangement}`.trim();
+        }
 
         const selectedStyleText = styleLabels.length > 0 ? styleLabels.join(', ') : 'Core style kept close to the root genre';
         const selectedSoundText = soundTextureLabels.length > 0 ? soundTextureLabels.join(', ') : 'Balanced mainstream arrangement with tasteful detail';
@@ -6384,9 +6548,10 @@ const saveRecentSong = async (newSong: any) => {
         isKoreanEnglishMix: requestedKoreanEnglishMix,
         englishMixRatio: requestedEnglishMixRatio,
         customStructure,
-        isNoLyrics: !requestedIncludeLyrics,
-        includeLyrics: requestedIncludeLyrics,
-        lyricLanguages: requestedLyricLanguages,
+        isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
+        includeLyrics: isFinalInstrumentalBgm ? false : requestedIncludeLyrics,
+        instrumentalBgmMode: isFinalInstrumentalBgm,
+        lyricLanguages: isFinalInstrumentalBgm ? [] : requestedLyricLanguages,
         lyricDraft: isLyricMode ? lyricDraft : undefined,
         isLyricMode,
         lyricMode: isLyricMode ? lyricMode : undefined,
@@ -6412,6 +6577,8 @@ const saveRecentSong = async (newSong: any) => {
 
         const newResult: SongResult = {
           ...song,
+          genre: finalGenres[0] ?? undefined,
+          subGenre: limitFusionGenreIds([...subGenre, ...selectedGenres]),
           prompt: song.prompt,
           appliedKeywords: {
             ...song.appliedKeywords,
@@ -7696,7 +7863,12 @@ ${normalizePromptForDisplay(result.prompt)}
                   }
 
                   setSelectedGenres([]);
-                  setSubGenre(limitFusionGenreIds(nextIds));
+                  setSubGenre(Array.from(new Set(nextIds)).slice(-MAX_FUSION_GENRES));
+                  setIsGenreRandomized(false);
+                }}
+                onCommitSelectionList={(subIds) => {
+                  setSelectedGenres([]);
+                  setSubGenre(limitFusionGenreIds(subIds.filter((id) => hierarchyLeafGenreIdSet.has(id))));
                   setIsGenreRandomized(false);
                 }}
                 onClear={() => {
@@ -9133,8 +9305,8 @@ ${normalizePromptForDisplay(result.prompt)}
           <MusicApiGenerateModal
             variant="main"
             hasApiKey={true}
-            isNoLyrics={false}
-            maxLyricLanguages={2}
+            isNoLyrics={hasSelectedInstrumentalBgm}
+            maxLyricLanguages={hasSelectedInstrumentalBgm ? 0 : 2}
             isKoreanEnglishMix={isKoreanEnglishMix}
             englishMixRatio={englishMixRatio}
             rapEnabled={rapEnabled}
@@ -9148,8 +9320,8 @@ ${normalizePromptForDisplay(result.prompt)}
               setRapEnabled(nextRap);
               setShowMainGenerationModal(false);
               handleGenerate({
-                includeLyrics,
-                lyricLanguages,
+                includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
+                lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
                 generationCount,
                 isKoreanEnglishMix: nextMix,
                 englishMixRatio: nextRatio,

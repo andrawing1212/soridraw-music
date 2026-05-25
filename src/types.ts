@@ -346,6 +346,8 @@ export interface AppliedKeywords {
   lyricMode?: 'assist' | 'preserve';
   instrumentTags?: string[];
   isNoLyrics?: boolean;
+  includeLyrics?: boolean;
+  instrumentalBgmMode?: boolean;
 }
 
 export interface GenerateSongParams {

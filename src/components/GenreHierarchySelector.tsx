@@ -25,6 +25,21 @@ function cn(...inputs: ClassValue[]) {
 const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
 
 
+const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
+  'instrumental_bgm',
+  'lofi_study',
+  'cafe_bgm',
+  'nature_ambience',
+  'healing_piano',
+  'ambient',
+  'minimalism',
+  'piano_solo',
+  'string_ensemble',
+]);
+
+const isInstrumentalBgmGenreId = (id?: string | null) => Boolean(id && INSTRUMENTAL_BGM_GENRE_IDS.has(id));
+
+
 function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
   if (wasExpanded || typeof window === 'undefined') return;
 
@@ -102,6 +117,7 @@ interface Props {
   onToggleLock?: () => void;
   onHover: (item: CategoryItem | null) => void;
   onCommitSelection?: (mainId: string | null, subId: string | null, meta?: { removeMainId?: string | null; removeSubId?: string | null }) => void;
+  onCommitSelectionList?: (subIds: string[]) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   isRandomized?: boolean;
@@ -221,6 +237,7 @@ export default function GenreHierarchySelector({
   onToggleLock,
   onHover,
   onCommitSelection,
+  onCommitSelectionList,
   isExpanded,
   onToggleExpand,
   isRandomized = false,
@@ -245,10 +262,14 @@ export default function GenreHierarchySelector({
   // committed selections from parent
   const committedGenre = selectedGenre ?? [];
   const committedSubGenre = selectedSubGenre ?? [];
+  const MAX_MODAL_SELECTIONS = 2;
+  const normalizeSelectionList = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(-MAX_MODAL_SELECTIONS);
 
   // pending selections inside modal
   const [pendingMainId, setPendingMainId] = useState<string | null>(null);
   const [pendingSubId, setPendingSubId] = useState<string | null>(null);
+  const [pendingRemoveSubId, setPendingRemoveSubId] = useState<string | null>(null);
+  const [pendingSubIds, setPendingSubIds] = useState<string[]>([]);
   const [hasChangedInModal, setHasChangedInModal] = useState(false);
   const initialModalMainIdRef = useRef<string | null>(null);
   const initialModalSubIdRef = useRef<string | null>(null);
@@ -347,6 +368,8 @@ export default function GenreHierarchySelector({
 
       setPendingMainId(foundMainBaseId);
       setPendingSubId(foundSubId);
+      setPendingSubIds(normalizeSelectionList(committedSubGenre));
+      setPendingRemoveSubId(null);
 
       // Sync modal view if open
       if (activeGroup && foundGroup && activeGroup.id !== foundGroup.id) {
@@ -437,6 +460,8 @@ export default function GenreHierarchySelector({
     setActiveMain(null);
     setPendingMainId(null);
     setPendingSubId(null);
+    setPendingSubIds([]);
+    setPendingRemoveSubId(null);
     setModalStep("main");
     setHasChangedInModal(false);
     initialModalMainIdRef.current = null;
@@ -451,6 +476,8 @@ export default function GenreHierarchySelector({
     setModalStep("main");
     setPendingMainId(null);
     setPendingSubId(null);
+    setPendingSubIds(normalizeSelectionList(committedSubGenre));
+    setPendingRemoveSubId(null);
     initialModalMainIdRef.current = null;
     initialModalSubIdRef.current = null;
     setHasChangedInModal(false);
@@ -467,16 +494,9 @@ export default function GenreHierarchySelector({
     finalizeAndClose(true);
   };
 
-  const updateModalDirty = (
-    nextMainId: string | null,
-    nextSubId: string | null,
-  ) => {
-    const initialMainId = initialModalMainIdRef.current;
-    const initialSubId = initialModalSubIdRef.current;
-
-    setHasChangedInModal(
-      nextMainId !== initialMainId || nextSubId !== initialSubId,
-    );
+  const updateModalDirty = (nextIds: string[]) => {
+    const normalize = (ids: string[]) => JSON.stringify(normalizeSelectionList(ids).sort());
+    setHasChangedInModal(normalize(nextIds) !== normalize(committedSubGenre));
   };
 
   const handleBack = () => {
@@ -493,18 +513,18 @@ export default function GenreHierarchySelector({
   };
 
   const handleOpenSub = (main: MainGenreItem) => {
-    // 중분류는 더 이상 선택값이 아니라 폴더/탭 역할만 한다.
-    // 실제 선택은 이 화면에서 main 자체를 포함한 항목 목록으로만 처리한다.
-    const currentBaseSelected = committedGenre.includes(main.id) || committedSubGenre.includes(main.id);
-    const currentSubId = main.children.find((sub) => committedSubGenre.includes(sub.id))?.id ?? null;
+    // 중분류는 선택값이 아니라 폴더/탭 역할만 한다.
+    // 소분류 화면에는 실제 leaf 장르만 표시하고, 중분류 자체는 첫 번째 선택 항목으로 넣지 않는다.
+    const legacyMainSelected = committedGenre.includes(main.id) || committedSubGenre.includes(main.id);
 
-    const nextMainId = currentBaseSelected ? main.id : null;
-    const nextSubId = currentBaseSelected ? null : currentSubId;
-
-    setPendingMainId(nextMainId);
-    setPendingSubId(nextSubId);
-    initialModalMainIdRef.current = nextMainId;
-    initialModalSubIdRef.current = nextSubId;
+    setPendingMainId(null);
+    setPendingSubId(null);
+    setPendingSubIds(normalizeSelectionList(committedSubGenre));
+    setPendingRemoveSubId(null);
+    // 기존 저장값에 중분류가 남아 있는 경우, 사용자가 leaf 장르를 새로 선택하면 함께 제거되도록만 기록한다.
+    // 같은 중분류 안에서도 leaf 장르를 2개까지 자유롭게 추가할 수 있게 기존 leaf 선택값은 자동 제거하지 않는다.
+    initialModalMainIdRef.current = legacyMainSelected ? main.id : null;
+    initialModalSubIdRef.current = null;
     setHasChangedInModal(false);
 
     setActiveMain(main);
@@ -518,35 +538,45 @@ export default function GenreHierarchySelector({
   const handleSubClick = (itemId: string) => {
     if (!activeMain) return;
 
-    const clickedItem =
-      itemId === activeMain.id
-        ? activeMain
-        : activeMain.children.find((item) => item.id === itemId);
+    const clickedItem = activeMain.children.find((item) => item.id === itemId);
     if (clickedItem) {
       setHoveredModalItem(buildModalTooltip(clickedItem));
     }
 
-    const isBaseMainItem = itemId === activeMain.id;
-    const nextMainId = isBaseMainItem
-      ? pendingMainId === activeMain.id && !pendingSubId
-        ? null
-        : activeMain.id
-      : null;
-    const nextSubId = isBaseMainItem ? null : pendingSubId === itemId ? null : itemId;
+    setPendingMainId(null);
+    setPendingSubId(null);
+    setPendingRemoveSubId(null);
+    setPendingSubIds((prev) => {
+      const isSelected = prev.includes(itemId);
+      const next = isSelected
+        ? prev.filter((id) => id !== itemId)
+        : normalizeSelectionList([...prev, itemId]);
+      updateModalDirty(next);
+      return next;
+    });
+  };
 
-    setPendingMainId(nextMainId);
-    setPendingSubId(nextSubId);
-    updateModalDirty(nextMainId, nextSubId);
+  const handleClearModalSelection = () => {
+    setPendingMainId(null);
+    setPendingSubId(null);
+    setPendingRemoveSubId(null);
+    setPendingSubIds([]);
+    updateModalDirty([]);
   };
 
   const commitSelection = (mainId: string | null, subId: string | null) => {
+    if (onCommitSelectionList) {
+      onCommitSelectionList(normalizeSelectionList(pendingSubIds));
+      return;
+    }
+
     const initialMainId = initialModalMainIdRef.current;
     const initialSubId = initialModalSubIdRef.current;
     const meta = {
       removeMainId:
         initialMainId && initialMainId !== mainId ? initialMainId : null,
       removeSubId:
-        initialSubId && initialSubId !== subId ? initialSubId : null,
+        pendingRemoveSubId ?? (initialSubId && initialSubId !== subId ? initialSubId : null),
     };
 
     if (onCommitSelection) {
@@ -563,6 +593,7 @@ export default function GenreHierarchySelector({
   const applyMain = () => {
     if (!hasChangedInModal) return;
     commitSelection(pendingMainId, null);
+    setPendingRemoveSubId(null);
     setHasChangedInModal(false);
     finalizeAndClose(false);
   };
@@ -575,19 +606,13 @@ export default function GenreHierarchySelector({
   };
 
   const handleRandom = () => {
-    const allMainGenres = groups.flatMap((group) => group.children);
-    if (allMainGenres.length === 0) return;
+    const randomLeafGenres = groups
+      .flatMap((group) => group.children)
+      .flatMap((main) => main.children || [])
+      .filter((item) => !isInstrumentalBgmGenreId(item.id));
+    if (randomLeafGenres.length === 0) return;
 
-    const randomMain =
-      allMainGenres[Math.floor(Math.random() * allMainGenres.length)];
-    const randomSub =
-      randomMain.children.length > 0
-        ? randomMain.children[
-            Math.floor(Math.random() * randomMain.children.length)
-          ]
-        : null;
-
-    onSelectGenre(randomMain.id);
+    const randomSub = randomLeafGenres[Math.floor(Math.random() * randomLeafGenres.length)];
     if (randomSub) {
       onSelectSubGenre(randomSub.id);
     }
@@ -647,7 +672,7 @@ export default function GenreHierarchySelector({
 
       window.scrollTo(0, modalScrollYRef.current);
     };
-  }, [activeGroup, hasChangedInModal, pendingMainId, pendingSubId]);
+  }, [activeGroup, hasChangedInModal, pendingMainId, pendingSubId, pendingRemoveSubId, pendingSubIds]);
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -905,6 +930,17 @@ export default function GenreHierarchySelector({
                 </h3>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {pendingSubIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearModalSelection}
+                      className="h-10 px-3 rounded-full border border-brand-orange/30 bg-brand-orange/10 text-brand-orange text-[11px] font-black hover:bg-brand-orange/15 transition-all active:scale-95"
+                      title="전체해제"
+                      aria-label="선택한 장르 전체해제"
+                    >
+                      전체해제
+                    </button>
+                  )}
                   {showConfirmButton && (
                     <button
                       type="button"
@@ -934,44 +970,12 @@ export default function GenreHierarchySelector({
                   Selection
                 </span>
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
-                  <span
-                    className={cn(
-                      pendingMainId
-                        ? "text-brand-orange"
-                        : "text-[var(--text-secondary)]",
-                    )}
-                  >
-                    {modalStep === "sub" && activeMain
-                      ? activeMain.labelKo || activeMain.label
-                      : pendingMainId
-                        ? activeGroup.children.find(
-                            (m) => m.id === pendingMainId,
-                          )?.labelKo ||
-                          activeGroup.children.find(
-                            (m) => m.id === pendingMainId,
-                          )?.label
-                        : "미선택"}
-                  </span>
-                  {modalStep === "sub" && activeMain && (
-                    <>
-                      <ChevronRight className="w-3 h-3 text-[var(--text-secondary)]" />
-                      <span
-                        className={cn(
-                          pendingSubId
-                            ? "text-brand-orange"
-                            : "text-[var(--text-secondary)]",
-                        )}
-                      >
-                        {pendingSubId
-                          ? activeMain.children.find(
-                              (s) => s.id === pendingSubId,
-                            )?.labelKo ||
-                            activeMain.children.find(
-                              (s) => s.id === pendingSubId,
-                            )?.label
-                          : "전체/기본"}
-                      </span>
-                    </>
+                  {pendingSubIds.length > 0 ? (
+                    <span className="text-brand-orange truncate">
+                      {pendingSubIds.map(resolveGenreDisplayLabel).join(" · ")}
+                    </span>
+                  ) : (
+                    <span className="text-[var(--text-secondary)]">미선택</span>
                   )}
                 </div>
               </div>
@@ -1040,20 +1044,8 @@ export default function GenreHierarchySelector({
 
                 {modalStep === "sub" && activeMain && (
                   <div className="grid grid-cols-2 gap-3">
-                    {[
-                      {
-                        id: activeMain.id,
-                        label: activeMain.label,
-                        labelKo: activeMain.labelKo,
-                        description: activeMain.description,
-                        descriptionKo: activeMain.descriptionKo,
-                        isBaseMain: true,
-                      },
-                      ...activeMain.children.map((sub) => ({ ...sub, isBaseMain: false })),
-                    ].map((item) => {
-                      const isActiveVisual = item.isBaseMain
-                        ? pendingMainId === activeMain.id && !pendingSubId
-                        : pendingSubId === item.id;
+                    {activeMain.children.map((item) => {
+                      const isActiveVisual = pendingSubIds.includes(item.id);
 
                       return (
                         <button
@@ -1065,7 +1057,7 @@ export default function GenreHierarchySelector({
                               description:
                                 item.descriptionKo ||
                                 item.description ||
-                                (item.isBaseMain ? DEFAULT_MAIN_DESCRIPTION : DEFAULT_SUB_DESCRIPTION),
+                                DEFAULT_SUB_DESCRIPTION,
                             })
                           }
                           onMouseLeave={() => setHoveredModalItem(null)}

@@ -176,6 +176,25 @@ export default function MusicApiGenerateModal({
   }, [onClose]);
 
   useEffect(() => {
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalBodyOverscroll = document.body.style.overscrollBehavior;
+    const originalHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+    document.documentElement.style.overscrollBehavior = 'none';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overscrollBehavior = originalBodyOverscroll;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscroll;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isMain) return;
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
     setLocalEnglishMixRatio(Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
@@ -264,7 +283,7 @@ export default function MusicApiGenerateModal({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/25 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black/25 backdrop-blur-sm px-3 sm:px-4 py-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -273,10 +292,12 @@ export default function MusicApiGenerateModal({
         initial={{ opacity: 0, scale: 0.94, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 12 }}
-        className="w-full max-w-md rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+        className="w-full max-w-md max-h-[calc(100dvh-32px)] rounded-[28px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden flex flex-col"
         onMouseDown={(event) => event.stopPropagation()}
+        onWheel={(event) => event.stopPropagation()}
+        onTouchMove={(event) => event.stopPropagation()}
       >
-        <div className="relative px-6 pt-6 pb-4">
+        <div className="relative shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <button
             type="button"
             onClick={step === 1 ? onClose : () => setStep(1)}
@@ -343,13 +364,13 @@ export default function MusicApiGenerateModal({
           )}
 
           <div className="flex flex-col items-center text-center pt-4">
-            <div className={`w-14 h-14 rounded-full border flex items-center justify-center mb-5 ${accentIcon}`}>
-              {step === 1 ? <Music className="w-7 h-7" /> : <Check className="w-7 h-7" />}
+            <div className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border flex items-center justify-center mb-3 sm:mb-5 ${accentIcon}`}>
+              {step === 1 ? <Music className="w-5 h-5 sm:w-7 sm:h-7" /> : <Check className="w-5 h-5 sm:w-7 sm:h-7" />}
             </div>
-            <h2 className="text-2xl font-black text-[var(--text-primary)] mb-2">
+            <h2 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] mb-1.5 sm:mb-2">
               {step === 1 ? '생성 옵션 선택' : '생성 준비 완료'}
             </h2>
-            <p className={`text-sm font-semibold ${accentText}/90`}>{subtitle}</p>
+            <p className={`text-xs sm:text-sm font-semibold ${accentText}/90`}>{subtitle}</p>
           </div>
         </div>
 
@@ -363,7 +384,7 @@ export default function MusicApiGenerateModal({
           </div>
         )}
 
-        <div className="px-6 pb-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 pb-5 sm:pb-6">
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div
@@ -371,17 +392,17 @@ export default function MusicApiGenerateModal({
                 initial={{ opacity: 0, x: 12 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
-                className="space-y-4"
+                className="space-y-3 sm:space-y-4"
               >
                 <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 overflow-hidden">
                   {!isMain && canUseBatchTargets && (
-                    <div className="p-4 border-b border-[var(--border-color)]">
+                    <div className="p-3 sm:p-4 border-b border-[var(--border-color)]">
                       <p className="text-xs font-black text-[var(--text-secondary)] mb-3">생성 대상</p>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setTargetMode('current')}
-                          className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                          className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
                             targetMode === 'current'
                               ? accentSelected
                               : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -393,7 +414,7 @@ export default function MusicApiGenerateModal({
                         <button
                           type="button"
                           onClick={() => setTargetMode('batch')}
-                          className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                          className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
                             targetMode === 'batch'
                               ? accentSelected
                               : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -406,13 +427,13 @@ export default function MusicApiGenerateModal({
                     </div>
                   )}
 
-                  <div className="p-4 border-b border-[var(--border-color)]">
+                  <div className="p-3 sm:p-4 border-b border-[var(--border-color)]">
                     <p className="text-xs font-black text-[var(--text-secondary)] mb-3">가사 포함 여부</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setIncludeLyrics(true)}
-                        className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                        className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
                           includeLyrics
                             ? accentSelected
                             : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -424,7 +445,7 @@ export default function MusicApiGenerateModal({
                       <button
                         type="button"
                         onClick={() => setIncludeLyrics(false)}
-                        className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                        className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
                           !includeLyrics
                             ? accentSelected
                             : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -437,7 +458,7 @@ export default function MusicApiGenerateModal({
                   </div>
 
                   {includeLyrics && (
-                    <div className="p-4">
+                    <div className="p-3 sm:p-4">
                       {targetMode === 'batch' && !isMain ? (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between mb-1">
@@ -490,7 +511,7 @@ export default function MusicApiGenerateModal({
                                   type="button"
                                   disabled={disabled}
                                   onClick={() => toggleLyricLanguage(item.id)}
-                                  className={`rounded-xl px-3 py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                  className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                     selected
                                       ? accentSelected
                                       : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -525,7 +546,7 @@ export default function MusicApiGenerateModal({
                                         type="button"
                                         disabled={disabled}
                                         onClick={() => toggleLyricLanguage(item.id)}
-                                        className={`rounded-xl px-3 py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                           selected
                                             ? accentSelected
                                             : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -565,7 +586,7 @@ export default function MusicApiGenerateModal({
                             <button
                               type="button"
                               onClick={() => setLocalKoreanEnglishMix((prev) => !prev)}
-                              className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                              className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
                                 localKoreanEnglishMix
                                   ? accentSelected
                                   : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -580,7 +601,7 @@ export default function MusicApiGenerateModal({
                             <button
                               type="button"
                               onClick={() => setLocalRapEnabled((prev) => !prev)}
-                              className={`rounded-xl px-3 py-3 border text-left transition-all ${
+                              className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
                                 localRapEnabled
                                   ? accentSelected
                                   : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -635,7 +656,7 @@ export default function MusicApiGenerateModal({
                 </div>
 
                 {isMain && (
-                  <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 p-4">
+                  <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 p-3 sm:p-4">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-xs font-black text-[var(--text-secondary)] flex items-center gap-1.5">
                         <ListMusic className="w-3.5 h-3.5" />
@@ -649,7 +670,7 @@ export default function MusicApiGenerateModal({
                           key={count}
                           type="button"
                           onClick={() => setGenerationCount(count)}
-                          className={`rounded-xl px-2 py-3 border text-center transition-all ${
+                          className={`rounded-xl px-2 py-2.5 sm:py-3 border text-center transition-all ${
                             generationCount === count
                               ? accentSelected
                               : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5'
@@ -666,7 +687,7 @@ export default function MusicApiGenerateModal({
                   type="button"
                   onClick={handleNext}
                   disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                  className={`w-full h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-black transition-all shadow-lg ${accentBg}`}
+                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-base sm:text-lg font-black transition-all shadow-lg ${accentBg}`}
                 >
                   다음
                 </button>
@@ -677,7 +698,7 @@ export default function MusicApiGenerateModal({
                 initial={{ opacity: 0, x: 12 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
-                className="space-y-5"
+                className="space-y-4 sm:space-y-5"
               >
                 <div className="rounded-2xl border border-[var(--border-color)] bg-white/5 overflow-hidden">
                   <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)]">
@@ -719,7 +740,7 @@ export default function MusicApiGenerateModal({
                   type="button"
                   onClick={handleConfirm}
                   disabled={!hasApiKey}
-                  className={`w-full h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-black transition-all shadow-lg ${accentBg}`}
+                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-base sm:text-lg font-black transition-all shadow-lg ${accentBg}`}
                 >
                   {isMain ? `${generationCount}곡 생성하기` : (targetMode === 'batch' ? `${musicApiTargets.length}곡 API 생성하기` : '1곡 API 생성하기')}
                 </button>

@@ -7739,7 +7739,7 @@ ${normalizePromptForDisplay(result.prompt)}
             "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
               ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-              : "music-waves shadow-brand-orange/20 hover:brightness-110"
+              : "bg-gradient-to-r from-[#ff8a00] via-[#ff9f1c] to-[#ff6a00] shadow-[0_8px_20px_rgba(255,130,0,0.22)] hover:brightness-105"
           )}
         >
           {isGenerating ? (
@@ -8815,9 +8815,13 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="fixed left-[-30px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-14 md:h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_3px_8px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.025)] flex items-center justify-end pr-2 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing"
+                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-orange-300/25 bg-gradient-to-br from-orange-400 via-brand-orange to-orange-600 text-white shadow-[0_8px_18px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-110"
                   >
-                    <ArrowRight className="w-5 h-5" />
+                    <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.14)_72%,rgba(255,255,255,0)_100%)] opacity-55" />
+                    <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
+                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
+                    </span>
+                    <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-white/35" />
                   </motion.button>
                 ) : (
                   <motion.div

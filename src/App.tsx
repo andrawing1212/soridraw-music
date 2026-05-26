@@ -36,9 +36,6 @@ import {
   Shuffle,
   Dices,
   Menu,
-  Sun,
-  Moon,
-  Monitor,
   Home as HomeIcon,
   Heart as HeartIcon,
   User as UserIcon,
@@ -63,7 +60,8 @@ import {
   ExternalLink,
   Zap,
   Key,
-  Bookmark
+  Bookmark,
+  Library
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
@@ -1817,6 +1815,7 @@ const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
 const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
 const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
+const MyPageLazy = lazy(() => import('./pages/MyPage'));
 const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
@@ -2391,7 +2390,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, toggleTheme, isAdminUser, rememberLogin, setRememberLogin, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; themeMode: 'light' | 'dark' | 'system'; toggleTheme: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2399,6 +2398,33 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isActivePath = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  };
+
+  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
+    if (!user) {
+      handleLogin();
+      return;
+    }
+    if (options?.clearSuno) clearSunoLibrarySignal();
+    if (location.pathname === path) {
+      scrollToTop();
+    } else {
+      navigate(path);
+    }
+    setIsExpanded(false);
+    setIsProfileOpen(false);
+  };
+
+  const topNavItems: Array<{ path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
+    { path: '/', label: '홈', icon: HomeIcon },
+    { path: '/history', label: '뮤직노트', icon: HeartIcon },
+    { path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
+    { path: '/my-page', label: '마이페이지', icon: UserIcon },
+  ];
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -2477,21 +2503,113 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
     setIsExpanded(false);
   };
 
-  const handleSunoClick = (e: React.MouseEvent) => {
-    if (!user) {
-      e.preventDefault();
-      handleLogin();
-    }
-    setIsExpanded(false);
-  };
-
 
   return (
     <>
+      {/* Desktop Top Navigation */}
+      <div className="absolute left-0 top-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:flex">
+        <button
+          type="button"
+          onClick={() => goToTopNav('/')}
+          className="flex min-w-[168px] items-center gap-2 rounded-xl px-2 py-1 text-left transition-all hover:bg-white/[0.04]"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-500/10 text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.08)]">
+            <Music className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[12px] font-black tracking-tight text-white">SORIDRAW</span>
+            <span className="block truncate text-[9px] font-bold uppercase tracking-[0.2em] text-white/40">Studio</span>
+          </span>
+        </button>
+
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-visible">
+          {topNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActivePath(item.path);
+            const signalActive = item.path === '/suno-library' && sunoLibrarySignal;
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
+                className={cn(
+                  "relative flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition-all whitespace-nowrap",
+                  active
+                    ? "border-sky-400/30 bg-sky-500/10 text-sky-200 shadow-[0_0_20px_rgba(56,189,248,0.1)]"
+                    : "border-transparent bg-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.05] hover:text-white"
+                )}
+              >
+                {signalActive && (
+                  <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/50 ${sunoLibrarySignalDotClass}`} />
+                )}
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+          {isAdminUser && (
+            <button
+              type="button"
+              onClick={() => goToTopNav('/admin/users')}
+              className={cn(
+                "flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[11px] font-black transition-all whitespace-nowrap",
+                isActivePath('/admin')
+                  ? "border-violet-400/30 bg-violet-500/10 text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.1)]"
+                  : "border-transparent bg-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.05] hover:text-white"
+              )}
+            >
+              <Shield className="h-4 w-4" />
+              관리자
+            </button>
+          )}
+        </div>
+
+        <div className="flex min-w-[168px] items-center justify-end gap-1.5">
+          {location.pathname === '/' && !user && (
+            <label className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.035] px-2.5 py-2 text-[10px] font-bold text-white/50">
+              <input
+                type="checkbox"
+                checked={rememberLogin}
+                onChange={(e) => setRememberLogin(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border border-white/20 accent-sky-500"
+              />
+              로그인 유지
+            </label>
+          )}
+          {user ? (
+            <>
+              <button
+                type="button"
+                onClick={() => goToTopNav('/my-page')}
+                className="flex h-8 max-w-[140px] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[12px] font-black text-white/75 hover:bg-white/[0.07] hover:text-white transition-all"
+              >
+                <img
+                  src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  alt="Profile"
+                  className="h-[22px] w-[22px] shrink-0 rounded-md object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <span className="truncate">{user.displayName || 'My'}</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={isLoggingIn}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-500/10 px-3 text-[12px] font-black text-sky-200 hover:bg-sky-500/20 disabled:opacity-50 transition-all"
+            >
+              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {isLoggingIn ? 'Logging in...' : 'Login'}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Floating Bar (Menu Folder) */}
       <div 
         ref={menuRef}
-        className="fixed top-6 left-4 md:left-8 2xl:left-[calc((100vw-1152px)/2-82px)] z-50 flex flex-col items-center gap-4"
+        className="fixed top-16 left-4 md:top-[72px] md:left-8 2xl:left-[calc((100vw-1320px)/2-82px)] z-50 flex flex-col items-center gap-4"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -2585,41 +2703,19 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
                               <Users className="w-3 h-3" />
                               회원 관리
                             </button>
-                            <button 
-                              onClick={() => {
-                                navigate('/admin/vocals');
-                                setIsProfileOpen(false);
-                                setIsExpanded(false);
-                              }}
-                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                            >
-                              <Settings className="w-3 h-3" />
-                              보컬 관리
-                            </button>
-                            <button 
-                              onClick={() => {
-                                navigate('/admin/tags');
-                                setIsProfileOpen(false);
-                                setIsExpanded(false);
-                              }}
-                              className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
-                            >
-                              <Tag className="w-3 h-3" />
-                              태그 관리
-                            </button>
                           </>
                         )}
                         <div className="h-px bg-[var(--border-color)]/30 mx-2 my-1" />
                         <button 
                           onClick={() => {
-                            navigate('/suno-api-settings');
+                            navigate('/my-page');
                             setIsProfileOpen(false);
                             setIsExpanded(false);
                           }}
-                          className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-brand-orange/10 hover:text-brand-orange transition-all flex items-center gap-2"
+                          className="w-full px-4 py-2 text-left text-[10px] md:text-[12px] text-[var(--text-primary)] hover:bg-sky-500/10 hover:text-sky-300 transition-all flex items-center gap-2"
                         >
-                          <Key className="w-3 h-3" />
-                          Music API
+                          <UserIcon className="w-3 h-3" />
+                          마이페이지
                         </button>
                         <div className="h-px bg-[var(--border-color)]/30 mx-2 my-1" />
                         <button 
@@ -2679,32 +2775,6 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
                 </div>
               </button>
 
-              {/* Theme Toggle Button */}
-              <button 
-                onClick={toggleTheme}
-                className="p-2.5 md:p-3 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--border-color)] backdrop-blur-md text-[var(--text-primary)] shadow-xl hover:bg-[var(--hover-bg)] transition-all"
-                title={
-                  themeMode === 'light' ? '다크 모드로 전환' : 
-                  themeMode === 'dark' ? '시스템 설정으로 전환' : 
-                  '라이트 모드로 전환'
-                }
-              >
-                {themeMode === 'light' ? <Sun className="w-5 h-5 md:w-6 md:h-6" /> : 
-                 themeMode === 'dark' ? <Moon className="w-5 h-5 md:w-6 md:h-6" /> : 
-                 <Monitor className="w-5 h-5 md:w-6 md:h-6" />}
-              </button>
-
-              {/* Suno Icon */}
-              <a 
-                href="https://suno.com/create" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                onClick={handleSunoClick}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[var(--text-primary)] flex items-center justify-center text-[var(--text-primary)] text-[9px] md:text-[11px] font-black tracking-tighter hover:scale-110 transition-all bg-transparent"
-                title="Suno Create"
-              >
-                SUNO
-              </a>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2712,7 +2782,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
 
       {/* Right Menu - Login (Only on Home Page) */}
       {location.pathname === '/' && !user && (
-        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2+12px)] z-50 flex items-center gap-2.5 rounded-2xl bg-[var(--card-bg)]/85 border border-[var(--border-color)] backdrop-blur-md px-2.5 py-2 shadow-xl">
+        <div className="fixed top-6 right-4 z-50 flex items-center gap-2.5 rounded-2xl md:hidden bg-[var(--card-bg)]/85 border border-[var(--border-color)] backdrop-blur-md px-2.5 py-2 shadow-xl">
           <label className="flex items-center gap-1.5 text-[10px] md:text-[11px] font-semibold text-[var(--text-secondary)] select-none cursor-pointer whitespace-nowrap">
             <input
               type="checkbox"
@@ -2739,6 +2809,37 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
     </>
   );
 }
+
+
+const GOOGLE_GEMINI_API_KEY_STORAGE_BASE = 'soridraw_google_gemini_api_key';
+const GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_google_gemini_api_key_registered';
+const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
+
+const getUserScopedStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
+
+const getStoredGoogleGeminiApiKey = (uid?: string | null): string => {
+  try {
+    return localStorage.getItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid)) || '';
+  } catch {
+    return '';
+  }
+};
+
+const hasStoredGoogleGeminiApiKey = (uid?: string | null): boolean => {
+  try {
+    return localStorage.getItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true' || !!getStoredGoogleGeminiApiKey(uid);
+  } catch {
+    return false;
+  }
+};
+
+const hasStoredSunoApiKey = (uid?: string | null): boolean => {
+  try {
+    return localStorage.getItem(getUserScopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 const GEMINI_MODEL_LABELS: Record<string, string> = {
   'gemini-3.5-flash': 'Gemini 3.5 Flash',
@@ -2937,9 +3038,10 @@ function App() {
   const [favorites, setFavorites] = useState<any[]>([]);
   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
-  const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
-  const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
-  const SUNO_PENDING_CREDIT_TRACK_IDS_KEY = 'soridraw_suno_pending_credit_track_ids';
+  const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
+  const SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE = 'soridraw_suno_remaining_credits_updated_at';
+  const SUNO_PENDING_CREDIT_TRACK_IDS_STORAGE_BASE = 'soridraw_suno_pending_credit_track_ids';
+  const getScopedAppStorageKey = (base: string) => getUserScopedStorageKey(base, user?.uid);
 
   const [sunoLibrarySignal, setSunoLibrarySignalState] = useState<'generating' | 'completed' | null>(() => {
     try {
@@ -2961,7 +3063,7 @@ function App() {
 
   const [sunoRemainingCredits, setSunoRemainingCredits] = useState<number | null>(() => {
     try {
-      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+      const saved = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE)) || '');
       return Number.isFinite(saved) && saved >= 0 ? saved : null;
     } catch {
       return null;
@@ -2970,7 +3072,7 @@ function App() {
 
   const [sunoRemainingCreditsUpdatedAt, setSunoRemainingCreditsUpdatedAt] = useState<number | null>(() => {
     try {
-      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+      const saved = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE)) || '');
       return Number.isFinite(saved) && saved > 0 ? saved : null;
     } catch {
       return null;
@@ -3018,14 +3120,14 @@ function App() {
 
     try {
       if (credits === null) {
-        localStorage.removeItem(SUNO_REMAINING_CREDITS_KEY);
-        localStorage.removeItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY);
+        localStorage.removeItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE));
+        localStorage.removeItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE));
         window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
           detail: { remainingCredits: null, updatedAt: null }
         }));
       } else {
-        localStorage.setItem(SUNO_REMAINING_CREDITS_KEY, String(credits));
-        localStorage.setItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY, String(updatedAt));
+        localStorage.setItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE), String(credits));
+        localStorage.setItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE), String(updatedAt));
         window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
           detail: { remainingCredits: credits, updatedAt }
         }));
@@ -3033,14 +3135,14 @@ function App() {
     } catch {
       // localStorage may be unavailable in private browsing or restricted environments.
     }
-  }, []);
+  }, [user?.uid]);
 
   useEffect(() => {
     const readSunoRemainingCreditsCache = () => {
       try {
-        const creditValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+        const creditValue = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE)) || '');
         setSunoRemainingCredits(Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null);
-        const updatedValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+        const updatedValue = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE)) || '');
         setSunoRemainingCreditsUpdatedAt(Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null);
       } catch {
         setSunoRemainingCredits(null);
@@ -3049,36 +3151,38 @@ function App() {
     };
 
     const handleCreditsUpdate = () => readSunoRemainingCreditsCache();
+    readSunoRemainingCreditsCache();
+    setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
     window.addEventListener('storage', handleCreditsUpdate);
     window.addEventListener('soridraw:suno-credits-updated', handleCreditsUpdate as EventListener);
     return () => {
       window.removeEventListener('storage', handleCreditsUpdate);
       window.removeEventListener('soridraw:suno-credits-updated', handleCreditsUpdate as EventListener);
     };
-  }, []);
+  }, [user?.uid]);
 
   const getPendingSunoCreditTrackIds = useCallback((): string[] => {
     try {
-      const parsed = JSON.parse(localStorage.getItem(SUNO_PENDING_CREDIT_TRACK_IDS_KEY) || '[]');
+      const parsed = JSON.parse(localStorage.getItem(getScopedAppStorageKey(SUNO_PENDING_CREDIT_TRACK_IDS_STORAGE_BASE)) || '[]');
       if (!Array.isArray(parsed)) return [];
       return Array.from(new Set(parsed.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())));
     } catch {
       return [];
     }
-  }, []);
+  }, [user?.uid]);
 
   const savePendingSunoCreditTrackIds = useCallback((trackIds: string[]) => {
     try {
       const uniqueTrackIds = Array.from(new Set(trackIds.filter(Boolean)));
       if (uniqueTrackIds.length === 0) {
-        localStorage.removeItem(SUNO_PENDING_CREDIT_TRACK_IDS_KEY);
+        localStorage.removeItem(getScopedAppStorageKey(SUNO_PENDING_CREDIT_TRACK_IDS_STORAGE_BASE));
       } else {
-        localStorage.setItem(SUNO_PENDING_CREDIT_TRACK_IDS_KEY, JSON.stringify(uniqueTrackIds));
+        localStorage.setItem(getScopedAppStorageKey(SUNO_PENDING_CREDIT_TRACK_IDS_STORAGE_BASE), JSON.stringify(uniqueTrackIds));
       }
     } catch {
       // localStorage may be unavailable in private browsing or restricted environments.
     }
-  }, []);
+  }, [user?.uid]);
 
   const addPendingSunoCreditTrackId = useCallback((trackId: string | null | undefined) => {
     if (!trackId) return;
@@ -3484,7 +3588,7 @@ function App() {
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
-      return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
+      return hasStoredSunoApiKey(auth.currentUser?.uid);
     } catch {
       return false;
     }
@@ -3660,55 +3764,10 @@ function App() {
     };
   }, [isLoggingIn]);
 
-  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
-    const saved = localStorage.getItem('themeMode') as 'light' | 'dark' | 'system';
-    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-    return 'system';
-  });
-
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const savedMode = localStorage.getItem('themeMode') || 'system';
-    if (savedMode === 'system') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return (savedMode === 'dark' ? 'dark' : 'light');
-  });
-
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const updateTheme = () => {
-      if (themeMode === 'system') {
-        setTheme(mediaQuery.matches ? 'dark' : 'light');
-      } else {
-        setTheme(themeMode as 'light' | 'dark');
-      }
-    };
-
-    updateTheme();
-
-    const handleChange = () => {
-      if (themeMode === 'system') {
-        setTheme(mediaQuery.matches ? 'dark' : 'light');
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [themeMode]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('themeMode', themeMode);
-  }, [theme, themeMode]);
-
-  const toggleTheme = () => {
-    setThemeMode(prev => {
-      if (prev === 'light') return 'dark';
-      if (prev === 'dark') return 'system';
-      return 'light';
-    });
-  };
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('themeMode', 'dark');
+  }, []);
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [subGenre, setSubGenre] = useState<string[]>([]);
@@ -4058,21 +4117,28 @@ function App() {
     globalSearchModalHistoryPushedRef.current = false;
   };
 
+  const unlockGlobalSearchScrollLock = useCallback(() => {
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.documentElement.style.overscrollBehavior = '';
+    document.body.style.overscrollBehavior = '';
+    document.body.style.pointerEvents = '';
+    document.documentElement.style.pointerEvents = '';
+  }, []);
+
   useEffect(() => {
     if (!isGlobalSearchOpen) return;
 
-    const scrollY = window.scrollY;
     const originalBodyOverflow = document.body.style.overflow;
-    const originalBodyPosition = document.body.style.position;
-    const originalBodyTop = document.body.style.top;
-    const originalBodyWidth = document.body.style.width;
     const originalHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
     const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior;
 
+    // Do not freeze the body with position: fixed. Browser fullscreen transitions can
+    // leave that fixed body state behind and make the mouse feel locked. The modal
+    // already owns its own scroll area, so overflow hidden is enough here.
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.overscrollBehavior = 'none';
 
@@ -4095,12 +4161,13 @@ function App() {
       window.removeEventListener('popstate', handleGlobalSearchPopState, true);
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = originalBodyOverflow;
-      document.body.style.position = originalBodyPosition;
-      document.body.style.top = originalBodyTop;
-      document.body.style.width = originalBodyWidth;
       document.documentElement.style.overscrollBehavior = originalHtmlOverscrollBehavior;
       document.body.style.overscrollBehavior = originalBodyOverscrollBehavior;
-      window.scrollTo(0, scrollY);
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.pointerEvents = '';
+      document.documentElement.style.pointerEvents = '';
     };
   }, [isGlobalSearchOpen]);
 
@@ -4470,10 +4537,10 @@ const toggleCycleVariantSelection = (
       storyboardModalHistoryPushedRef.current = false;
       globalSearchBackdropMouseDownRef.current = false;
       storyboardModalBackdropMouseDownRef.current = false;
+      unlockGlobalSearchScrollLock();
       window.dispatchEvent(new CustomEvent(SORIDRAW_CLOSE_STUDIO_MODALS_EVENT));
       window.requestAnimationFrame(() => {
-        document.body.style.pointerEvents = '';
-        document.documentElement.style.pointerEvents = '';
+        unlockGlobalSearchScrollLock();
       });
     };
 
@@ -4483,7 +4550,7 @@ const toggleCycleVariantSelection = (
       document.removeEventListener('fullscreenchange', resetStudioModalsForFullscreen);
       document.removeEventListener('webkitfullscreenchange', resetStudioModalsForFullscreen as EventListener);
     };
-  }, []);
+  }, [unlockGlobalSearchScrollLock]);
   
   const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
   const effectiveUserTier: TagTier = useMemo(() => {
@@ -6209,6 +6276,13 @@ const saveRecentSong = async (newSong: any) => {
       }
     }
 
+    const personalGeminiApiKey = getStoredGoogleGeminiApiKey(user.uid);
+    if (!personalGeminiApiKey) {
+      showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
+      navigate('/my-page');
+      return;
+    }
+
     const hasFreeTextDirectorNote = userInput.trim().length > 0;
     const isInstrumentalBgmRequest = isPureInstrumentalBgmGenreSelection(limitFusionGenreIds([...selectedGenres, ...subGenre]));
     const requestedIncludeLyrics = isInstrumentalBgmRequest ? false : (generationOptions?.includeLyrics ?? true);
@@ -6683,6 +6757,7 @@ const saveRecentSong = async (newSong: any) => {
         lyricDraft: isLyricMode ? lyricDraft : undefined,
         isLyricMode,
         lyricMode: isLyricMode ? lyricMode : undefined,
+        geminiApiKey: personalGeminiApiKey,
       };
 
       console.log("SELECTED GENRE:", selectedGenres);
@@ -6975,12 +7050,18 @@ ${normalizePromptForDisplay(result.prompt)}
     }
 
     try {
+      const personalGeminiApiKey = getStoredGoogleGeminiApiKey(user?.uid);
+      if (!personalGeminiApiKey) {
+        showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
+        navigate('/my-page');
+        return;
+      }
       setIsAddingLyricsLanguage(true);
       const currentHistoryIndex = historyIndexRef.current;
       const label = lyricLanguageLabels[targetLanguage];
-      const translatedLyrics = (await translateLyrics(sourceLyrics, label.api)).trim();
+      const translatedLyrics = (await translateLyrics(sourceLyrics, label.api, personalGeminiApiKey)).trim();
       const sourceTitle = (existingTitleMap[sourceLanguage] || result.koreanTitle || result.englishTitle || result.title || '').replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]|['"]$/g, '').trim();
-      const translatedTitle = (await translateLyrics(sourceTitle, label.api)).replace(/\n/g, ' ').replace(/^['"]|['"]$/g, '').trim();
+      const translatedTitle = (await translateLyrics(sourceTitle, label.api, personalGeminiApiKey)).replace(/\n/g, ' ').replace(/^['"]|['"]$/g, '').trim();
 
       const previousApplied = (result.appliedKeywords || {}) as any;
       const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];
@@ -7649,7 +7730,7 @@ ${normalizePromptForDisplay(result.prompt)}
       {/* Account Status Banner */}
       {user && userStatus !== 'active' && !isAdminUser && (
         <Portal>
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-48px)] max-w-lg">
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%_-_48px)] max-w-lg">
             <motion.div 
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -7851,11 +7932,11 @@ ${normalizePromptForDisplay(result.prompt)}
       )}
 
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} themeMode={themeMode} toggleTheme={toggleTheme} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       {/* Suno Icon at Top Right (Symmetrical to Floating Bar, moved 2cm right) - Always show after login */}
       {user && (
-        <div className="fixed top-6 right-4 md:right-8 2xl:right-[calc((100vw-1152px)/2-82px)] z-50">
+        <div className="fixed top-16 right-4 md:top-[72px] md:right-8 2xl:right-[calc((100vw-1320px)/2-82px)] z-50">
           <motion.div
             animate={{ 
               y: [0, -5, 0],
@@ -7892,8 +7973,8 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="pt-16 pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
-                <div className="max-w-6xl mx-auto px-6 relative">
+              <header className="pt-24 pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+                <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
                   {/* Guide/Search Buttons inside Home Header - Aligned above genre menu */}
                   {user && (
                     <div className="absolute -bottom-[50px] right-6 z-20 flex items-center gap-2">
@@ -7959,7 +8040,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 </div>
               </header>
 
-            <main className="max-w-6xl mx-auto px-6 py-6 space-y-6">
+            <main className="mx-auto w-full max-w-[1320px] px-4 md:px-6 py-6 space-y-6">
               {/* Selection Sections */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <GenreHierarchySelector
@@ -8678,7 +8759,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="fixed left-[-30px] md:left-[68px] 2xl:left-[calc((100vw-1152px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-14 md:h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_3px_8px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.025)] flex items-center justify-end pr-2 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing"
+                    className="fixed left-[-30px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-14 md:h-20 w-14 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] text-brand-orange hover:bg-[var(--card-bg)] hover:text-brand-orange shadow-[0_3px_8px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.025)] flex items-center justify-end pr-2 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing"
                   >
                     <ArrowRight className="w-5 h-5" />
                   </motion.button>
@@ -9269,15 +9350,15 @@ ${normalizePromptForDisplay(result.prompt)}
                 )}
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <button
-                      onClick={() => navigate('/suno-api-settings')}
+                      onClick={() => navigate('/my-page')}
                       className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5"
-                      title="Music API 설정"
+                      title="마이페이지에서 API 관리"
                     >
                       <Settings className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => {
-                        setHasSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
+                        setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
                         setShowMusicApiModal(true);
                       }}
                       disabled={isMusicApiGenerating}
@@ -9354,6 +9435,15 @@ ${normalizePromptForDisplay(result.prompt)}
           <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
             <SunoApiSettingsPageLazy />
           </Suspense>
+        } />
+        <Route path="/my-page" element={
+          user ? (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
+              <MyPageLazy />
+            </Suspense>
+          ) : (
+            <Navigate to="/" replace />
+          )
         } />
         
         {/* Admin Routes */}
@@ -11931,6 +12021,7 @@ function SongStructureIntegratedControl({
         description: '',
         kind: 'other',
         context: 'section',
+        geminiApiKey: getStoredGoogleGeminiApiKey(auth.currentUser?.uid),
       }) : null;
       const label = sanitizeCustomLabel(shouldAutoGenerate ? (autoMeta?.labelEn || rawEn || labelKo) : (rawEn || autoMeta?.labelEn || labelKo));
       const tagCue = sanitizeCustomLabel(autoMeta?.tagCue || prevItem?.tagCue || label);
@@ -13878,6 +13969,7 @@ function TagEditModal({
             labelKo,
             description: '',
             context: 'tag',
+            geminiApiKey: getStoredGoogleGeminiApiKey(auth.currentUser?.uid),
           })
         : null;
       const englishLabel = sanitizeCustomLabel(shouldAutoGenerate ? (autoMeta?.labelEn || rawEn || labelKo) : (rawEn || autoMeta?.labelEn || labelKo));

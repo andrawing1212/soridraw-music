@@ -252,6 +252,14 @@ export default function SunoLibraryPage() {
   const lastPlaylistServerColorMapRef = React.useRef<Record<string, string>>({});
   const pendingWorkspaceColorKeysRef = React.useRef<Set<string>>(new Set());
   const pendingPlaylistColorKeysRef = React.useRef<Set<string>>(new Set());
+  const workspaceLocalColorMapRef = React.useRef<Record<string, string>>({});
+  const playlistLocalColorMapRef = React.useRef<Record<string, string>>({});
+  const workspaceColorBaselineRef = React.useRef<string>('{}');
+  const playlistColorBaselineRef = React.useRef<string>('{}');
+  const workspaceColorDirtyRef = React.useRef(false);
+  const playlistColorDirtyRef = React.useRef(false);
+  const libraryColorsAutoSyncingRef = React.useRef(false);
+  const libraryUserRef = React.useRef(user);
   
   const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
   const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
@@ -324,12 +332,32 @@ export default function SunoLibraryPage() {
 
   useEffect(() => {
     try {
-      setWorkspaceLocalColorMap(readLocalColorMap('soridraw.library.workspaceColorTags'));
-      setPlaylistLocalColorMap(readLocalColorMap('soridraw.library.playlistColorTags'));
+      const loadedWorkspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
+      const loadedPlaylistMap = readLocalColorMap('soridraw.library.playlistColorTags');
+      setWorkspaceLocalColorMap(loadedWorkspaceMap);
+      setPlaylistLocalColorMap(loadedPlaylistMap);
+      workspaceLocalColorMapRef.current = loadedWorkspaceMap;
+      playlistLocalColorMapRef.current = loadedPlaylistMap;
+      workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);
+      playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
     } catch (error) {
       console.warn('load library color map failed:', error);
     }
   }, [user?.uid]);
+
+  useEffect(() => {
+    workspaceLocalColorMapRef.current = workspaceLocalColorMap;
+  }, [workspaceLocalColorMap]);
+
+  useEffect(() => {
+    playlistLocalColorMapRef.current = playlistLocalColorMap;
+  }, [playlistLocalColorMap]);
+
+  useEffect(() => {
+    libraryUserRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
@@ -369,6 +397,11 @@ export default function SunoLibraryPage() {
       return;
     }
 
+    if (workspaceColorDirtyRef.current) {
+      lastWorkspaceServerColorMapRef.current = serverMap;
+      return;
+    }
+
     let changed = false;
     setWorkspaceLocalColorMap((prev) => {
       const next = { ...prev };
@@ -397,6 +430,9 @@ export default function SunoLibraryPage() {
           }
         }
         writeLocalColorMap('soridraw.library.workspaceColorTags', merged);
+        workspaceLocalColorMapRef.current = merged;
+        workspaceColorBaselineRef.current = serializeColorMap(merged);
+        workspaceColorDirtyRef.current = false;
       } catch (error) {
         console.warn('workspace server color merge failed:', error);
       }
@@ -431,6 +467,11 @@ export default function SunoLibraryPage() {
       return;
     }
 
+    if (playlistColorDirtyRef.current) {
+      lastPlaylistServerColorMapRef.current = serverMap;
+      return;
+    }
+
     let changed = false;
     setPlaylistLocalColorMap((prev) => {
       const next = { ...prev };
@@ -459,6 +500,9 @@ export default function SunoLibraryPage() {
           }
         }
         writeLocalColorMap('soridraw.library.playlistColorTags', merged);
+        playlistLocalColorMapRef.current = merged;
+        playlistColorBaselineRef.current = serializeColorMap(merged);
+        playlistColorDirtyRef.current = false;
       } catch (error) {
         console.warn('playlist server color merge failed:', error);
       }
@@ -1159,6 +1203,7 @@ export default function SunoLibraryPage() {
   const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
   const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'anonymous'}`;
+  const serializeColorMap = (value: Record<string, string>) => JSON.stringify(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b)));
   const getColorSyncUsageStorageKey = () => getScopedColorStorageKey(COLOR_SYNC_USAGE_KEY);
   const getLibraryColorSyncCount = () => {
     try {
@@ -1196,9 +1241,9 @@ export default function SunoLibraryPage() {
       console.warn('library color map save failed:', error);
     }
   };
-  const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
-보관함과 라이브러리 색상이 함께 저장됩니다.
-오늘 남은 횟수: ${isLibraryAdminUser ? '무제한' : `${libraryColorSyncRemaining}회`}`;
+  const getUnifiedColorSyncDescription = () => `색상 변경사항은 이 페이지를 나갈 때 1회 자동 저장됩니다.
+페이지 안에서는 로컬 상태만 바뀌며, 변경이 없으면 저장하지 않습니다.
+필요하면 이 버튼으로 즉시 저장할 수 있습니다.`;
 
   const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
     if (!activePlaylistId || !item.id) return;
@@ -1209,6 +1254,8 @@ export default function SunoLibraryPage() {
     setPlaylistLocalColorMap(prev => {
       const next = { ...prev, [key]: nextColor };
       writeLocalColorMap('soridraw.library.playlistColorTags', next);
+      playlistLocalColorMapRef.current = next;
+      playlistColorDirtyRef.current = serializeColorMap(next) !== playlistColorBaselineRef.current;
       return next;
     });
     setPlaylistItems(prev => prev.map(row => row.id === item.id ? { ...row, colorTag: nextColor === 'gray' ? null : nextColor } : row));
@@ -1254,6 +1301,8 @@ export default function SunoLibraryPage() {
     setWorkspaceLocalColorMap(prev => {
       const next = { ...prev, [key]: nextColor };
       writeLocalColorMap('soridraw.library.workspaceColorTags', next);
+      workspaceLocalColorMapRef.current = next;
+      workspaceColorDirtyRef.current = serializeColorMap(next) !== workspaceColorBaselineRef.current;
       return next;
     });
     setTracks((prev) => prev.map((track) => {
@@ -1324,6 +1373,10 @@ export default function SunoLibraryPage() {
 
       pendingWorkspaceColorKeysRef.current.clear();
       pendingPlaylistColorKeysRef.current.clear();
+      workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current || {});
+      playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current || {});
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
       markLibraryColorSynced();
       showToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isLibraryAdminUser ? '무제한' : `${Math.max(0, 5 - getLibraryColorSyncCount())}회`}`);
     } catch (error) {
@@ -1331,6 +1384,67 @@ export default function SunoLibraryPage() {
       showToast('색상 동기화에 실패했습니다.');
     }
   };
+
+
+  const syncLibraryColorsOnExit = async (silent = true) => {
+    const currentUser = libraryUserRef.current;
+    if (!currentUser || libraryColorsAutoSyncingRef.current) return;
+
+    const workspaceMap = workspaceLocalColorMapRef.current || {};
+    const playlistMap = playlistLocalColorMapRef.current || {};
+    const workspaceSerialized = serializeColorMap(workspaceMap);
+    const playlistSerialized = serializeColorMap(playlistMap);
+    const workspaceChanged = workspaceSerialized !== workspaceColorBaselineRef.current;
+    const playlistChanged = playlistSerialized !== playlistColorBaselineRef.current;
+    if (!workspaceChanged && !playlistChanged) return;
+
+    const workspaceEntries = workspaceChanged ? Object.entries(workspaceMap) : [];
+    const playlistEntries = playlistChanged ? Object.entries(playlistMap) : [];
+    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
+      return;
+    }
+
+    libraryColorsAutoSyncingRef.current = true;
+    try {
+      for (const [key, color] of workspaceEntries) {
+        const [, colorField, trackId, idx] = key.split(':');
+        if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
+        await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), {
+          [`${colorField}.${idx}`]: color === 'gray' ? null : color,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      for (const [key, color] of playlistEntries) {
+        const [, playlistId, itemId] = key.split(':');
+        if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
+        await updatePlaylistItemColor(currentUser.uid, playlistId, itemId, color === 'gray' ? null : color);
+      }
+
+      pendingWorkspaceColorKeysRef.current.clear();
+      pendingPlaylistColorKeysRef.current.clear();
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
+      if (!silent) showToast('색상 변경사항을 저장했습니다.');
+    } catch (error) {
+      console.error('library color exit sync failed:', error);
+      if (!silent) showToast('색상 변경사항 저장에 실패했습니다.');
+    } finally {
+      libraryColorsAutoSyncingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      void syncLibraryColorsOnExit(true);
+    };
+  }, [user?.uid]);
 
   const handleToggleWorkspaceFavorite = async (group: any, nextValue?: boolean) => {
     if (!user) {
@@ -4316,7 +4430,7 @@ export default function SunoLibraryPage() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-5">
+      <div className="mx-auto w-full max-w-[1320px] space-y-4 md:space-y-5">
         
         {/* Header Block */}
         <motion.div

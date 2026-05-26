@@ -29,6 +29,7 @@ import {
 } from "../types";
 
 let aiInstance: GoogleGenAI | null = null;
+let aiInstanceKey: string | null = null;
 
 
 const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
@@ -90,17 +91,18 @@ function getInstrumentalBgmDefaultTempo(params: Pick<GenerateSongParams, 'genre'
   return `${min}–${max} BPM`;
 }
 
-function getAI() {
-  if (!aiInstance) {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+function getAI(apiKeyOverride?: string | null) {
+  const apiKey = String(apiKeyOverride || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
 
-    if (!apiKey) {
-      throw new Error(
-        "Gemini API key is not defined. Please set VITE_GEMINI_API_KEY in your environment variables.",
-      );
-    }
+  if (!apiKey) {
+    throw new Error(
+      "Google Gemini API Key가 등록되어 있지 않습니다. 마이페이지에서 개인 Google Gemini API Key를 등록해주세요.",
+    );
+  }
 
+  if (!aiInstance || aiInstanceKey !== apiKey) {
     aiInstance = new GoogleGenAI({ apiKey });
+    aiInstanceKey = apiKey;
   }
 
   return aiInstance;
@@ -237,6 +239,7 @@ export interface CustomSectionAutoMetadataInput {
   description?: string;
   kind?: CustomSectionKind;
   context?: "section" | "tag";
+  geminiApiKey?: string;
 }
 
 export interface CustomSectionAutoMetadata {
@@ -316,7 +319,7 @@ export async function generateCustomSectionMetadata(input: CustomSectionAutoMeta
   const labelKo = String(input.labelKo || '').trim();
   if (!labelKo) return fallback;
   try {
-    const ai = getAI();
+    const ai = getAI(input.geminiApiKey);
     const prompt = `You are converting a Korean user-created Suno song section/tag into compact English metadata for a music app.\nReturn ONLY JSON.\nRules:\n- labelEn: short English section/tag name, Title Case, max 4 words.\n- tagCue: short lyric-tag cue, max 8 words, no brackets.\n- promptFull: fuller internal prompt, max 18 words, comma-separated, no brackets.\n- kind: one of vocal, rap, instrumental, transition, build, theme, other.\n- allowVocal false for instrumental/transition.\n- isInstrumental true only when it must contain no voice/humming/chant.\nUser Korean label: ${labelKo}\nDescription: ${input.description || ''}\nPreferred kind: ${input.kind || ''}\nContext: ${input.context || 'section'}`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-lite',
@@ -393,6 +396,7 @@ interface GenerateSongParams {
   includeLyrics?: boolean;
   instrumentalBgmMode?: boolean;
   lyricLanguages?: LanguageCode[];
+  geminiApiKey?: string;
 }
 
 type GenerateSongInput =
@@ -2777,6 +2781,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
         (first as any).includeLyrics ?? !(first.isNoLyrics ?? false),
       instrumentalBgmMode: Boolean((first as any).instrumentalBgmMode),
       lyricLanguages: ((first as any).lyricLanguages ?? ["ko"]) as LanguageCode[],
+      geminiApiKey: String((first as any).geminiApiKey || '').trim(),
     };
   }
 
@@ -17694,7 +17699,7 @@ Write like:
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 `.trim();
 
-  const ai = getAI();
+  const ai = getAI(params.geminiApiKey);
   let response;
 
   const generateParams = {
@@ -18086,6 +18091,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 export async function translateLyrics(
   lyrics: string,
   targetLanguage: "korean" | "english" | string,
+  geminiApiKey?: string,
 ): Promise<string> {
   const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
 
@@ -18098,7 +18104,7 @@ Translate the provided text into ${targetLanguage}.
 - Return only the translated text.
 `.trim();
 
-  const ai = getAI();
+  const ai = getAI(geminiApiKey);
   let response;
 
   const generateParams = {

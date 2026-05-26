@@ -489,6 +489,12 @@ export default function FavoritesPage({
   const [, setFavoriteColorSyncTick] = useState(0);
   const [isFavoriteAdminUser, setIsFavoriteAdminUser] = useState(false);
   const lastFavoriteServerColorMapRef = useRef<Record<string, string>>({});
+  const favoriteColorMapRef = useRef<Record<string, string>>({});
+  const favoriteColorBaselineRef = useRef<string>('{}');
+  const favoriteColorDirtyRef = useRef(false);
+  const favoriteColorsAutoSyncingRef = useRef(false);
+  const favoritesRef = useRef<any[]>(favorites || []);
+  const favoriteUserRef = useRef<User | null>(user);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -556,6 +562,7 @@ export default function FavoritesPage({
   const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
   const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'anonymous'}`;
+  const serializeColorMap = (value: Record<string, string>) => JSON.stringify(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b)));
   const getColorSyncUsageStorageKey = () => getScopedColorStorageKey(COLOR_SYNC_USAGE_KEY);
   const getFavoriteColorSyncCount = () => {
     try {
@@ -593,9 +600,9 @@ export default function FavoritesPage({
       console.warn('color map save failed', error);
     }
   };
-  const getUnifiedColorSyncDescription = () => `지정된 색상을 동기화 합니다.
-보관함과 라이브러리 색상이 함께 저장됩니다.
-오늘 남은 횟수: ${isFavoriteAdminUser ? '무제한' : `${favoriteColorSyncRemaining}회`}`;
+  const getUnifiedColorSyncDescription = () => `색상 변경사항은 이 페이지를 나갈 때 1회 자동 저장됩니다.
+페이지 안에서는 로컬 상태만 바뀌며, 변경이 없으면 저장하지 않습니다.
+필요하면 이 버튼으로 즉시 저장할 수 있습니다.`;
 
   const handleSyncFavoriteColors = async () => {
     if (!user) {
@@ -648,6 +655,43 @@ export default function FavoritesPage({
     }
   };
 
+
+  const syncFavoriteColorsOnExit = async (silent = true) => {
+    const currentUser = favoriteUserRef.current;
+    if (!currentUser || favoriteColorsAutoSyncingRef.current) return;
+
+    const currentMap = favoriteColorMapRef.current || {};
+    const currentSerialized = serializeColorMap(currentMap);
+    if (currentSerialized === favoriteColorBaselineRef.current) return;
+
+    const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));
+    const entries = Object.entries(currentMap).filter(([id]) => existingIds.has(id));
+    if (entries.length === 0) {
+      favoriteColorBaselineRef.current = currentSerialized;
+      favoriteColorDirtyRef.current = false;
+      return;
+    }
+
+    favoriteColorsAutoSyncingRef.current = true;
+    try {
+      await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
+      favoriteColorBaselineRef.current = currentSerialized;
+      favoriteColorDirtyRef.current = false;
+      if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');
+    } catch (error) {
+      console.error('favorite color exit sync failed', error);
+      if (!silent) showFavoriteToast('색상 변경사항 저장에 실패했습니다.');
+    } finally {
+      favoriteColorsAutoSyncingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      void syncFavoriteColorsOnExit(true);
+    };
+  }, [user?.uid]);
+
   useEffect(() => {
     return () => {
       if (favoriteToastTimerRef.current) {
@@ -660,10 +704,25 @@ export default function FavoritesPage({
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, []);
 
+  useEffect(() => {
+    favoriteColorMapRef.current = favoriteColorMap;
+  }, [favoriteColorMap]);
+
+  useEffect(() => {
+    favoritesRef.current = favorites || [];
+  }, [favorites]);
+
+  useEffect(() => {
+    favoriteUserRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     try {
-      setFavoriteColorMap(readLocalColorMap('soridraw.favoriteColorTags'));
+      const loaded = readLocalColorMap('soridraw.favoriteColorTags');
+      setFavoriteColorMap(loaded);
+      favoriteColorMapRef.current = loaded;
+      favoriteColorBaselineRef.current = serializeColorMap(loaded);
+      favoriteColorDirtyRef.current = false;
     } catch (error) {
       console.warn('favorite color map load failed', error);
     }
@@ -684,6 +743,11 @@ export default function FavoritesPage({
     const previous = lastFavoriteServerColorMapRef.current || {};
     const allIds = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
     if (allIds.size === 0) {
+      lastFavoriteServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    if (favoriteColorDirtyRef.current) {
       lastFavoriteServerColorMapRef.current = serverMap;
       return;
     }
@@ -715,6 +779,9 @@ export default function FavoritesPage({
           }
         }
         writeLocalColorMap('soridraw.favoriteColorTags', merged);
+        favoriteColorMapRef.current = merged;
+        favoriteColorBaselineRef.current = serializeColorMap(merged);
+        favoriteColorDirtyRef.current = false;
       } catch (error) {
         console.warn('favorite server color merge failed', error);
       }
@@ -1659,6 +1726,8 @@ ${song.prompt}
       const next = { ...prev };
       targetIds.forEach(id => { next[id] = color; });
       writeLocalColorMap('soridraw.favoriteColorTags', next);
+      favoriteColorMapRef.current = next;
+      favoriteColorDirtyRef.current = serializeColorMap(next) !== favoriteColorBaselineRef.current;
       return next;
     });
 
@@ -1914,7 +1983,7 @@ ${song.prompt}
 
   return (
     <div 
-      className="max-w-6xl mx-auto px-6 pt-24 pb-12 font-sans relative"
+      className="mx-auto w-full max-w-[1320px] px-0 pt-28 pb-12 font-sans relative"
       onClickCapture={(e) => {
         if (!isSelectionMode) return;
         const target = e.target as HTMLElement;

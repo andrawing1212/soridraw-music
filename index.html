@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SORIDRAW's Studio</title>
     <!-- VERIFICATION COMMENT: IF YOU SEE THIS IN SOURCE, THIS FILE IS BEING SERVED -->
-    <meta name="theme-color" content="#ff8200" />
+    <meta name="theme-color" content="#0f0f0f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SORIDRAW" />
@@ -18,18 +18,19 @@
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
     <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
 
+    <style>
+      html,
+      body,
+      #root {
+        background: #0f0f0f;
+        color: #f8f9fa;
+      }
+    </style>
+
     <script>
       (function() {
-        const themeMode = localStorage.getItem('themeMode') || 'system';
-        let theme = themeMode;
-        if (themeMode === 'system') {
-          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('themeMode', 'dark');
       })();
     </script>
 

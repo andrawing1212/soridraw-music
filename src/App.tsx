@@ -2653,11 +2653,16 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               href="https://suno.com/create"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex h-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] px-2 text-[10px] font-black tracking-tighter text-amber-400 transition-all hover:border-amber-400/25 hover:bg-amber-500/10 hover:text-amber-300 sm:px-3"
+              className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
               title="Suno Create"
               aria-label="Suno Create"
             >
-              SUNO
+              <img
+                src="/suno-icon.webp"
+                alt="Suno"
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
             </a>
           )}
           {location.pathname === '/' && !user && (

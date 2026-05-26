@@ -69,6 +69,27 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const volumeRef = useRef(1);
   const isMutedRef = useRef(false);
   const wasClearedRef = useRef(false);
+  const lastPlaybackErrorAtRef = useRef(0);
+
+  const notifyPlaybackUnavailable = useCallback((track: Track | null, error?: any) => {
+    const now = Date.now();
+    if (now - lastPlaybackErrorAtRef.current < 1200) return;
+    lastPlaybackErrorAtRef.current = now;
+
+    try {
+      window.dispatchEvent(new CustomEvent('soridraw:audio-playback-unavailable', {
+        detail: {
+          trackId: track?.parent?.id || track?.parent?.trackId || (track as any)?.id || '',
+          title: track?.title || track?.parent?.title || 'Untitled',
+          url: track?.url || '',
+          message: '외부 Music API의 음원 URL이 만료되었거나 현재 연결할 수 없습니다. 가사/프롬프트/설정값은 보존되어 있으며, 중요한 음원은 생성 직후 다운로드해 보관해주세요.',
+          rawError: error?.message || String(error || ''),
+        },
+      }));
+    } catch {
+      // Ignore event dispatch issues.
+    }
+  }, []);
 
   // Media Session handlers are registered once. These refs keep their implementation fresh.
   const mediaPlayRef = useRef<() => void>(() => {});
@@ -177,6 +198,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
           console.error('Audio play failed:', err);
           setIsPlaying(false);
           isPlayingRef.current = false;
+          notifyPlaybackUnavailable(track, err);
           updateMediaSession(track, 'paused');
         });
       }
@@ -187,9 +209,10 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       console.error('Audio play failed:', error);
       setIsPlaying(false);
       isPlayingRef.current = false;
+      notifyPlaybackUnavailable(track, error);
       updateMediaSession(track, 'paused');
     }
-  }, [updateMediaSession]);
+  }, [notifyPlaybackUnavailable, updateMediaSession]);
 
   const findCurrentIndex = useCallback((current: Track | null, list: Track[]) => {
     if (!current || list.length === 0) return -1;
@@ -280,10 +303,13 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
         isPlayingRef.current = true;
       }).catch((err) => {
         console.error('Play failed:', err);
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        notifyPlaybackUnavailable(track, err);
         updateMediaSession(track, 'paused');
       });
     }
-  }, [updateMediaSession]);
+  }, [notifyPlaybackUnavailable, updateMediaSession]);
 
   const seek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -308,6 +334,9 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
         })
         .catch((err) => {
           console.error('MediaSession play failed:', err);
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          notifyPlaybackUnavailable(track, err);
           updateMediaSession(track, 'paused');
         });
     };
@@ -329,7 +358,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     mediaSeekRef.current = (time: number) => {
       seek(time);
     };
-  }, [playNext, playPrev, seek, updateMediaSession]);
+  }, [notifyPlaybackUnavailable, playNext, playPrev, seek, updateMediaSession]);
 
   const handleVolumeChange = useCallback((v: number) => {
     const nextVolume = Math.max(0, Math.min(1, v));
@@ -431,6 +460,13 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     const onTimeUpdate = () => handleTimeUpdate();
     const onLoadedMetadata = () => handleTimeUpdate();
     const onDurationChange = () => handleTimeUpdate();
+    const onError = () => {
+      const track = currentTrackRef.current;
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      notifyPlaybackUnavailable(track, audio.error || new Error('audio element error'));
+      updateMediaSession(track, 'paused');
+    };
 
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
@@ -438,6 +474,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('error', onError);
 
     return () => {
       audio.removeEventListener('play', onPlay);
@@ -446,8 +483,9 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('error', onError);
     };
-  }, [handleEnded, handleTimeUpdate, updateMediaSession]);
+  }, [handleEnded, handleTimeUpdate, notifyPlaybackUnavailable, updateMediaSession]);
 
   // Media Session action handlers for lock-screen controls.
   // Register these once only; each handler delegates to refs above.

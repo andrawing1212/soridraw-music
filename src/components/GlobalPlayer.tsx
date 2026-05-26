@@ -206,6 +206,8 @@ export default function GlobalPlayer() {
   const [lyricAutoScrollResumeTick, setLyricAutoScrollResumeTick] = useState(0);
   const mobileExpandedHistoryPushedRef = useRef(false);
   const [localFavoriteActive, setLocalFavoriteActive] = useState(false);
+  const [playbackWarning, setPlaybackWarning] = useState<string | null>(null);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -217,7 +219,27 @@ export default function GlobalPlayer() {
 
   useEffect(() => {
     setShowLyrics(false);
+    setImageLoadFailed(false);
+    setPlaybackWarning(null);
   }, [currentTrack?.url, currentTrack?.title]);
+
+  useEffect(() => {
+    const handlePlaybackUnavailable = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail || {};
+      const eventUrl = String(detail.url || '');
+      if (currentTrack?.url && eventUrl && eventUrl !== currentTrack.url) return;
+      setPlaybackWarning(detail.message || '외부 Music API의 음원 URL이 만료되었거나 현재 연결할 수 없습니다.');
+    };
+
+    window.addEventListener('soridraw:audio-playback-unavailable', handlePlaybackUnavailable as EventListener);
+    return () => window.removeEventListener('soridraw:audio-playback-unavailable', handlePlaybackUnavailable as EventListener);
+  }, [currentTrack?.url]);
+
+  useEffect(() => {
+    if (!playbackWarning) return;
+    const timer = window.setTimeout(() => setPlaybackWarning(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [playbackWarning]);
 
   useEffect(() => {
     if (!isMobile || mode !== 'expanded' || !currentTrack) return;
@@ -835,6 +857,8 @@ export default function GlobalPlayer() {
 
   if (!currentTrack) return null;
 
+  const shouldUseCoverImage = Boolean(currentTrack.imageUrl && !imageLoadFailed);
+
   return (
     <>
       <style>{`
@@ -843,6 +867,28 @@ export default function GlobalPlayer() {
           100% { transform: translateX(-50%); }
         }
       `}</style>
+
+      <AnimatePresence>
+        {playbackWarning && mode !== 'expanded' && (
+          <motion.div
+            key="audio-url-warning"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed left-1/2 top-16 z-[140] w-[calc(100vw-28px)] max-w-[460px] -translate-x-1/2 rounded-2xl border border-amber-300/20 bg-[#1c1509]/95 px-4 py-3 text-[12px] leading-relaxed text-amber-100/85 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-black text-amber-200">재생할 수 없습니다</div>
+                <div className="mt-0.5">{playbackWarning}</div>
+              </div>
+              <button type="button" onClick={() => setPlaybackWarning(null)} className="shrink-0 rounded-full p-1 text-amber-100/50 hover:bg-white/10 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {isMobile && mode === 'expanded' && (
         <motion.div
@@ -871,8 +917,8 @@ export default function GlobalPlayer() {
         className={`fixed z-[100] flex flex-col ${
           mode === 'expanded'
             ? isMobile
-              ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]'
-              : 'top-[88px] right-6 w-[400px] max-w-[calc(100vw-32px)]'
+              ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
+              : 'top-[88px] right-6 w-[370px] max-w-[calc(100vw-40px)]'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
             : 'top-2 left-[168px] w-[205px] items-start'
@@ -901,10 +947,19 @@ export default function GlobalPlayer() {
                   title="대형 플레이어 열기"
                   aria-label="대형 플레이어 열기"
                 >
-                  {currentTrack.imageUrl ? (
-                    <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`h-full w-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
+                  {shouldUseCoverImage ? (
+                    <img
+                      src={currentTrack.imageUrl}
+                      alt={currentTrack.title}
+                      draggable={false}
+                      onDragStart={(e) => e.preventDefault()}
+                      onError={() => setImageLoadFailed(true)}
+                      className={`h-full w-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}
+                    />
                   ) : (
-                    <Music className="h-4 w-4 text-white/35" />
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]">
+                      <Music className="h-4 w-4 text-white/35" />
+                    </div>
                   )}
                 </button>
                 <button
@@ -932,7 +987,7 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full md:w-[400px] max-h-[86vh] overflow-y-auto overscroll-contain bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-6 pb-8 px-6 relative scrollbar-hide"
+              className="w-full md:w-[370px] max-h-[82vh] overflow-y-auto overscroll-contain bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-5 pb-6 px-5 relative scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'contain' }}
             >
               <style>{`
@@ -940,7 +995,7 @@ export default function GlobalPlayer() {
                   display: none;
                 }
               `}</style>
-              {currentTrack.imageUrl ? (
+              {shouldUseCoverImage ? (
                 <div 
                   className="absolute inset-0 bg-cover bg-center opacity-[0.06] saturate-150 pointer-events-none"
                   style={{ backgroundImage: `url(${currentTrack.imageUrl})` }}
@@ -1026,19 +1081,23 @@ export default function GlobalPlayer() {
               <button
                 type="button"
                 onClick={() => setShowLyrics((v) => !v)}
-                className="w-full aspect-square mt-8 mb-6 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/25 border border-white/5 flex items-center justify-center relative z-10 text-left group focus:outline-none focus:ring-2 focus:ring-brand-orange/50"
+                className="w-full aspect-square mt-6 mb-5 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/25 border border-white/5 flex items-center justify-center relative z-10 text-left group focus:outline-none focus:ring-2 focus:ring-brand-orange/50"
                 aria-label={showLyrics ? '가사 닫기' : '가사 보기'}
               >
-                 {currentTrack.imageUrl ? (
+                 {shouldUseCoverImage ? (
                     <img
                       src={currentTrack.imageUrl}
                       alt={currentTrack.title}
                       draggable={false}
                       onDragStart={(e) => e.preventDefault()}
+                      onError={() => setImageLoadFailed(true)}
                       className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${showLyrics ? 'opacity-75' : 'opacity-100'}`}
                     />
                  ) : (
-                    <Music className={`w-20 h-20 text-white/20 transition-opacity ${showLyrics ? 'opacity-20' : 'opacity-100'}`} />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]">
+                      <Music className={`w-20 h-20 text-white/20 transition-opacity ${showLyrics ? 'opacity-20' : 'opacity-100'}`} />
+                      {!showLyrics && <span className="mt-3 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] font-bold text-white/45">커버 없음</span>}
+                    </div>
                  )}
 
                  {showLyrics && (
@@ -1105,9 +1164,16 @@ export default function GlobalPlayer() {
                      </button>
                    )}
                 </div>
-                <p className="text-sm opacity-60 mb-6 truncate">{artistDisplay}</p>
+                <p className="text-sm opacity-60 mb-4 truncate">{artistDisplay}</p>
 
-                <div className="w-full mb-6 group cursor-pointer">
+                {playbackWarning && (
+                  <div className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-amber-100/90">
+                    <div className="font-black text-amber-200">재생할 수 없습니다</div>
+                    <div className="mt-0.5 text-amber-100/75">{playbackWarning}</div>
+                  </div>
+                )}
+
+                <div className="w-full mb-5 group cursor-pointer">
                   <input 
                     type="range"
                     min={0}
@@ -1125,20 +1191,20 @@ export default function GlobalPlayer() {
                   </div>
                 </div>
 
-                <div className="w-full flex items-center justify-between gap-2 mb-6">
+                <div className="w-full flex items-center justify-between gap-2 mb-5">
                    <button onClick={() => setIsShuffle(!isShuffle)} className={`p-2 transition-all ${isShuffle ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}>
                       <Shuffle className="w-5 h-5" />
                    </button>
                    <button onClick={playPrev} className="p-2 text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95">
-                      <SkipBack className="w-7 h-7 fill-current" />
+                      <SkipBack className="w-6 h-6 fill-current" />
                    </button>
 
-                   <button onClick={togglePlayPause} className="w-16 h-16 bg-brand-orange text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-orange/20 shrink-0">
-                      {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 fill-current ml-1" />}
+                   <button onClick={togglePlayPause} className="w-14 h-14 bg-brand-orange text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-orange/20 shrink-0">
+                      {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
                    </button>
 
                    <button onClick={playNext} className="p-2 text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95">
-                      <SkipForward className="w-7 h-7 fill-current" />
+                      <SkipForward className="w-6 h-6 fill-current" />
                    </button>
                    <button 
                     onClick={() => setRepeatMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')} 
@@ -1148,7 +1214,7 @@ export default function GlobalPlayer() {
                    </button>
                 </div>
 
-                <div className="w-full pt-4 border-t border-white/10 flex items-center gap-3 group">
+                <div className="w-full pt-3 border-t border-white/10 flex items-center gap-3 group">
                    <button onClick={toggleMute} className="text-white/50 hover:text-white">
                       {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                    </button>

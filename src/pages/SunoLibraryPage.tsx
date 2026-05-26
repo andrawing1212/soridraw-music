@@ -140,6 +140,13 @@ function AnimatedTrackPlayButton({
   unavailable?: boolean;
 }) {
   const isNowPlaying = isActive && isPlaying;
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageLoadFailed(false);
+  }, [imageUrl]);
+
+  const shouldUseImage = Boolean(imageUrl && !imageLoadFailed);
 
   return (
     <button
@@ -156,16 +163,16 @@ function AnimatedTrackPlayButton({
       }`}
       title={durationLabel || undefined}
     >
-      {imageUrl ? (
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]" />
+      {shouldUseImage ? (
         <img
-          src={imageUrl}
+          src={imageUrl || ''}
           alt=""
           className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
+          onError={() => setImageLoadFailed(true)}
         />
-      ) : (
-        <div className="absolute inset-0 bg-white/5" />
-      )}
+      ) : null}
 
       {isNowPlaying && <div className="pointer-events-none absolute inset-0 rounded-full suno-playing-ring" />}
       {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-brand-orange/20 shadow-[0_0_18px_rgba(249,115,22,0.20)]" />}
@@ -4250,6 +4257,13 @@ export default function SunoLibraryPage() {
         .suno-mobile-title-strip:active { cursor: grabbing; }
         .suno-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
+      <div className="mx-auto mb-4 flex w-full max-w-[1320px] items-start gap-3 rounded-2xl border border-sky-400/15 bg-sky-500/10 px-4 py-3 text-xs leading-relaxed text-sky-100/75">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-300/80" />
+        <div>
+          <span className="font-black text-sky-100">외부 URL 안내</span>
+          <span className="ml-2">Music API 음원/커버 URL은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</span>
+        </div>
+      </div>
       <AnimatePresence>
         {renameModalArgs && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"

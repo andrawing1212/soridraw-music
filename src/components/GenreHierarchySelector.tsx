@@ -22,6 +22,16 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+
+const genreAccent = {
+  bar: 'bg-amber-400/80',
+  text: 'text-amber-300',
+  softText: 'text-amber-300/55',
+  selected: 'bg-amber-500/38 border-amber-300/38 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.12)]',
+  selectedSoft: 'bg-amber-500/14 border-amber-300/25 text-amber-300 hover:bg-amber-500/20',
+  selectedBorder: 'border-amber-300/35',
+};
+
 const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
 
 
@@ -720,7 +730,7 @@ export default function GenreHierarchySelector({
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
               >
-                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className={cn("w-1.5 h-6 rounded-full shrink-0", genreAccent.bar)} />
                 <span className="truncate">장르</span>
                 <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
                   ({selectedCount}/{totalCount})
@@ -732,7 +742,7 @@ export default function GenreHierarchySelector({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", genreAccent.selectedBorder)}
                   >
                     <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
                       곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류를
@@ -763,7 +773,7 @@ export default function GenreHierarchySelector({
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
                   isLocked
-                    ? "bg-btn-bg text-brand-orange border-btn-border hover:bg-btn-hover"
+                    ? "bg-btn-bg text-amber-300 border-btn-border hover:bg-btn-hover"
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
                 )}
                 title={isLocked ? "잠금 해제" : "메뉴 잠금"}
@@ -787,7 +797,7 @@ export default function GenreHierarchySelector({
               className={cn(
                 "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                 isRandomized
-                  ? "bg-brand-orange text-white border-brand-orange"
+                  ? genreAccent.selected
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover",
               )}
               title="랜덤 선택"
@@ -809,7 +819,7 @@ export default function GenreHierarchySelector({
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 selectedCount > 0 || isRandomized
-                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30"
+                  ? genreAccent.selectedSoft
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
               )}
               title="초기화"
@@ -854,7 +864,7 @@ export default function GenreHierarchySelector({
                   className={cn(
                     "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center shadow-btn",
                     hasSelectedMain
-                      ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                      ? genreAccent.selected
                       : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                   )}
                 >
@@ -870,11 +880,11 @@ export default function GenreHierarchySelector({
 
       <div className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden">
         {selectedDisplayLabels.length > 0 ? (
-          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
+          <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
             {selectedDisplayLabels.join(" · ")}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis">
+          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.softText)}>
             장르를 선택하세요.
           </p>
         )}
@@ -886,8 +896,8 @@ export default function GenreHierarchySelector({
         className={cn(
           "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
           isExpanded
-            ? "bg-brand-orange text-white border-brand-orange"
-            : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange",
+            ? "bg-[#4a2a0e] text-amber-300 border-amber-500/40"
+            : "bg-[var(--card-bg)] border-amber-500/30 text-amber-300",
         )}
         title={isExpanded ? "접기" : "펼치기"}
       >
@@ -920,7 +930,7 @@ export default function GenreHierarchySelector({
               <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]">
                 <button
                   onClick={handleBack}
-                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-brand-orange hover:border-brand-orange/50 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
+                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-amber-300 hover:border-amber-300/35 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
                   title="뒤로가기"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -937,7 +947,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={handleClearModalSelection}
-                      className="h-10 px-3 rounded-full border border-brand-orange/30 bg-brand-orange/10 text-brand-orange text-[11px] font-black hover:bg-brand-orange/15 transition-all active:scale-95"
+                      className="h-10 px-3 rounded-full border border-amber-300/25 bg-amber-500/10 text-amber-300 text-[11px] font-black hover:bg-amber-500/15 transition-all active:scale-95"
                       title="전체해제"
                       aria-label="선택한 장르 전체해제"
                     >
@@ -948,7 +958,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={applyModalChanges}
-                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-brand-orange text-white border-brand-orange hover:bg-brand-orange/90"
+                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-amber-500/45 text-amber-50 border-amber-300/40 hover:bg-amber-500/55"
                       title="변경 적용"
                       aria-label="변경 적용"
                     >
@@ -958,7 +968,7 @@ export default function GenreHierarchySelector({
                   <button
                     type="button"
                     onClick={() => closeModal()}
-                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-brand-orange hover:border-brand-orange/50"
+                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-amber-300 hover:border-amber-300/35"
                     title={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
                     aria-label={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
                   >
@@ -968,13 +978,13 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-brand-orange/5 border-b border-brand-orange/10 flex items-center justify-center gap-2 overflow-hidden">
-                <span className="text-[10px] font-black text-brand-orange uppercase tracking-widest shrink-0">
+              <div className="px-6 py-2.5 bg-amber-500/5 border-b border-amber-300/10 flex items-center justify-center gap-2 overflow-hidden">
+                <span className="text-[10px] font-black text-amber-300 uppercase tracking-widest shrink-0">
                   Selection
                 </span>
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   {pendingSubIds.length > 0 ? (
-                    <span className="text-brand-orange truncate">
+                    <span className="text-amber-300 truncate">
                       {pendingSubIds.map(resolveGenreDisplayLabel).join(" · ")}
                     </span>
                   ) : (
@@ -1016,8 +1026,8 @@ export default function GenreHierarchySelector({
                             className={cn(
                               "w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.02] active:scale-[0.98]",
                               isActiveVisual
-                                ? "bg-brand-orange border-transparent text-white shadow-lg shadow-brand-orange/30"
-                                : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 text-[var(--text-primary)] shadow-btn",
+                                ? genreAccent.selected
+                                : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-amber-300/25 text-[var(--text-primary)] shadow-btn",
                             )}
                             title="세부 장르 열기"
                           >
@@ -1067,8 +1077,8 @@ export default function GenreHierarchySelector({
                           className={cn(
                             "px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep",
                             isActiveVisual
-                              ? "bg-brand-orange text-white border-transparent shadow-lg shadow-brand-orange/30"
-                              : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-brand-orange/30 shadow-btn",
+                              ? genreAccent.selected
+                              : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-amber-300/25 shadow-btn",
                           )}
                         >
                           {item.labelKo || item.label}
@@ -1081,7 +1091,7 @@ export default function GenreHierarchySelector({
 
               {/* Bottom Info Area */}
               <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
-                <div className="p-2.5 rounded-xl bg-brand-orange/10 text-brand-orange shrink-0 shadow-inner hidden md:flex">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-300 shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1 text-center">

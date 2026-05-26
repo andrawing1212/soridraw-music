@@ -497,26 +497,106 @@ function cn(...inputs: ClassValue[]) {
 
 
 
+type StudioSectionAccent = {
+  bar: string;
+  text: string;
+  softText: string;
+  selected: string;
+  selectedSoft: string;
+  selectedBorder: string;
+  badge: string;
+  pointSelected: string;
+  pointBadge: string;
+};
+
+const getStudioSectionAccent = (section?: string): StudioSectionAccent => {
+  const key = String(section || '').toLowerCase();
+  if (key.includes('style') || key.includes('스타일')) {
+    return {
+      bar: 'bg-rose-400/80',
+      text: 'text-rose-300',
+      softText: 'text-rose-300/55',
+      selected: 'bg-rose-500/35 border-rose-300/35 text-rose-50 shadow-[0_0_14px_rgba(244,63,94,0.12)]',
+      selectedSoft: 'bg-rose-500/14 border-rose-300/25 text-rose-300 hover:bg-rose-500/20',
+      selectedBorder: 'border-rose-300/35',
+      badge: 'text-rose-600 border-rose-300/70',
+      pointSelected: 'bg-fuchsia-500/32 border-fuchsia-300/35 text-fuchsia-50 shadow-[0_0_14px_rgba(217,70,239,0.12)]',
+      pointBadge: 'bg-fuchsia-500/70 text-white border-fuchsia-200/50',
+    };
+  }
+  if (key.includes('sound') || key.includes('사운드')) {
+    return {
+      bar: 'bg-sky-400/75',
+      text: 'text-sky-300',
+      softText: 'text-sky-300/55',
+      selected: 'bg-sky-500/34 border-sky-300/32 text-sky-50 shadow-[0_0_14px_rgba(56,189,248,0.11)]',
+      selectedSoft: 'bg-sky-500/13 border-sky-300/25 text-sky-300 hover:bg-sky-500/20',
+      selectedBorder: 'border-sky-300/35',
+      badge: 'text-sky-700 border-sky-300/70',
+      pointSelected: 'bg-fuchsia-500/32 border-fuchsia-300/35 text-fuchsia-50 shadow-[0_0_14px_rgba(217,70,239,0.12)]',
+      pointBadge: 'bg-fuchsia-500/70 text-white border-fuchsia-200/50',
+    };
+  }
+  if (key.includes('mood') || key.includes('분위기')) {
+    return {
+      bar: 'bg-violet-400/75',
+      text: 'text-violet-300',
+      softText: 'text-violet-300/55',
+      selected: 'bg-violet-500/34 border-violet-300/35 text-violet-50 shadow-[0_0_14px_rgba(139,92,246,0.12)]',
+      selectedSoft: 'bg-violet-500/13 border-violet-300/25 text-violet-300 hover:bg-violet-500/20',
+      selectedBorder: 'border-violet-300/35',
+      badge: 'text-violet-700 border-violet-300/70',
+      pointSelected: 'bg-fuchsia-500/32 border-fuchsia-300/35 text-fuchsia-50 shadow-[0_0_14px_rgba(217,70,239,0.12)]',
+      pointBadge: 'bg-fuchsia-500/70 text-white border-fuchsia-200/50',
+    };
+  }
+  if (key.includes('theme') || key.includes('주제')) {
+    return {
+      bar: 'bg-fuchsia-400/75',
+      text: 'text-fuchsia-300',
+      softText: 'text-fuchsia-300/55',
+      selected: 'bg-fuchsia-500/32 border-fuchsia-300/35 text-fuchsia-50 shadow-[0_0_14px_rgba(217,70,239,0.12)]',
+      selectedSoft: 'bg-fuchsia-500/13 border-fuchsia-300/25 text-fuchsia-300 hover:bg-fuchsia-500/20',
+      selectedBorder: 'border-fuchsia-300/35',
+      badge: 'text-fuchsia-700 border-fuchsia-300/70',
+      pointSelected: 'bg-rose-500/32 border-rose-300/35 text-rose-50 shadow-[0_0_14px_rgba(244,63,94,0.12)]',
+      pointBadge: 'bg-rose-500/70 text-white border-rose-200/50',
+    };
+  }
+  return {
+    bar: 'bg-amber-400/80',
+    text: 'text-amber-300',
+    softText: 'text-amber-300/55',
+    selected: 'bg-amber-500/38 border-amber-300/38 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.12)]',
+    selectedSoft: 'bg-amber-500/14 border-amber-300/25 text-amber-300 hover:bg-amber-500/20',
+    selectedBorder: 'border-amber-300/35',
+    badge: 'text-amber-700 border-amber-300/70',
+    pointSelected: 'bg-fuchsia-500/32 border-fuchsia-300/35 text-fuchsia-50 shadow-[0_0_14px_rgba(217,70,239,0.12)]',
+    pointBadge: 'bg-fuchsia-500/70 text-white border-fuchsia-200/50',
+  };
+};
+
+
 const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
   const normalized = String(typeOrKey || '').toLowerCase();
 
   if (normalized.includes('genre') || normalized === 'subgenre') {
-    return 'bg-brand-orange/10 border-brand-orange/25 text-brand-orange shadow-[0_0_10px_rgba(242,125,38,0.08)]';
+    return 'bg-amber-500/10 border-amber-300/20 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.06)]';
   }
   if (normalized.includes('style')) {
-    return 'bg-violet-500/10 border-violet-400/25 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.08)]';
+    return 'bg-rose-500/10 border-rose-300/20 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.06)]';
   }
   if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
-    return 'bg-cyan-500/10 border-cyan-400/25 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.08)]';
+    return 'bg-sky-500/10 border-sky-300/20 text-sky-300 shadow-[0_0_10px_rgba(56,189,248,0.06)]';
   }
   if (normalized.includes('mood') || normalized.includes('atmosphere')) {
-    return 'bg-rose-500/10 border-rose-400/25 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.08)]';
+    return 'bg-violet-500/10 border-violet-300/20 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.06)]';
   }
   if (normalized.includes('theme') || normalized.includes('topic')) {
-    return 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.08)]';
+    return 'bg-fuchsia-500/10 border-fuchsia-300/20 text-fuchsia-300 shadow-[0_0_10px_rgba(217,70,239,0.06)]';
   }
   if (isRandom) {
-    return 'bg-brand-orange/20 border-brand-orange/30 text-brand-orange font-bold shadow-[0_0_10px_rgba(242,125,38,0.1)]';
+    return 'bg-amber-500/14 border-amber-300/24 text-amber-300 font-bold shadow-[0_0_10px_rgba(245,158,11,0.08)]';
   }
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)]';
 };
@@ -982,7 +1062,7 @@ const SituationChoicePicker = ({
           <button
             type="button"
             onClick={applyDirectInput}
-            className="p-1.5 rounded-lg text-brand-orange hover:bg-brand-orange/10 transition-all"
+            className="p-1.5 rounded-lg text-amber-300 hover:bg-amber-500/10 transition-all"
             aria-label={`${label} 직접 입력 적용`}
           >
             <Check className="w-3.5 h-3.5" />
@@ -1574,7 +1654,7 @@ const ReorderableSectionItem = ({
           {getSectionShortDescription(String(item.section), sectionDisplayLabel)}
         </p>
         {(item.tags ?? []).length > 0 && (
-          <p className="text-[10px] text-brand-orange/80 font-medium mt-1 truncate">
+          <p className="text-[10px] text-amber-300/80 font-medium mt-1 truncate">
             {(item.tags ?? [])
               .map((tag) => tagDisplayLabel ? tagDisplayLabel(tag) : tag)
               .filter(Boolean)
@@ -1960,11 +2040,11 @@ const MOOD_BPM: Record<string, { min: number; max: number }> = {
 };
 
 const CYCLE_VARIANT_COLORS = [
-  "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20",
-  "bg-violet-600 border-violet-400 text-white shadow-lg shadow-violet-500/20",
-  "bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-500/20",
-  "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20",
-  "bg-fuchsia-600 border-fuchsia-400 text-white shadow-lg shadow-fuchsia-500/20",
+  "bg-amber-500/38 border-amber-300/38 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.12)]",
+  "bg-violet-500/34 border-violet-300/35 text-violet-50 shadow-[0_0_14px_rgba(139,92,246,0.12)]",
+  "bg-sky-500/32 border-sky-300/35 text-sky-50 shadow-[0_0_14px_rgba(56,189,248,0.11)]",
+  "bg-teal-500/32 border-teal-300/35 text-teal-50 shadow-[0_0_14px_rgba(45,212,191,0.11)]",
+  "bg-fuchsia-500/32 border-fuchsia-300/35 text-fuchsia-50 shadow-[0_0_14px_rgba(217,70,239,0.12)]",
 ] as const;
 
 function buildCycleLookup<T extends { variants: readonly { id: string }[] }>(cycles: readonly T[]) {
@@ -2682,7 +2762,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   <button
                     type="button"
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="group relative overflow-hidden rounded-full border-2 border-brand-orange/30 shadow-xl transition-all hover:scale-110"
+                    className="group relative overflow-hidden rounded-full border-2 border-amber-300/25 shadow-xl transition-all hover:scale-110"
                     aria-label="프로필 메뉴"
                   >
                     <img
@@ -7883,7 +7963,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     className={cn(
                       "rounded-2xl border px-3 py-2 text-[11px] font-black transition-all active:scale-95",
                       isGlobalSearchSelectionClearable
-                        ? "border-brand-orange/40 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20"
+                        ? "border-brand-orange/40 bg-brand-orange/10 text-brand-orange hover:bg-amber-500/15"
                         : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)]/40"
                     )}
                   >
@@ -10024,9 +10104,10 @@ ${normalizePromptForDisplay(result.prompt)}
         }
 
         .section-expand-button[data-expanded="true"] {
-          background: rgb(255, 130, 0) !important;
-          border-color: rgb(255, 130, 0) !important;
-          color: #fff !important;
+          background: rgba(255, 130, 0, 0.16) !important;
+          border-color: rgba(255, 130, 0, 0.38) !important;
+          color: rgb(255, 166, 64) !important;
+          box-shadow: 0 4px 12px rgba(255, 130, 0, 0.12) !important;
         }
 
         .section-expand-button[data-expanded="false"] {
@@ -10048,9 +10129,9 @@ ${normalizePromptForDisplay(result.prompt)}
             color: rgb(255, 130, 0) !important;
           }
           .section-expand-button[data-expanded="true"]:hover {
-            background: rgb(255, 130, 0) !important;
-            border-color: rgb(255, 130, 0) !important;
-            color: #fff !important;
+            background: rgba(255, 130, 0, 0.2) !important;
+            border-color: rgba(255, 130, 0, 0.46) !important;
+            color: rgb(255, 182, 82) !important;
           }
         }
 
@@ -10207,6 +10288,7 @@ function GenreCategorySection({
 
   const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
+  const sectionAccent = getStudioSectionAccent('genre');
 
   return (
     <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
@@ -10218,8 +10300,8 @@ function GenreCategorySection({
           className={cn(
             "section-expand-button absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
             isExpanded
-              ? "bg-brand-orange text-white border-brand-orange"
-              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+              ? "bg-[#4a2a0e] text-amber-300 border-amber-500/40"
+              : "bg-[var(--card-bg)] border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
           )}
         >
           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -10234,7 +10316,7 @@ function GenreCategorySection({
               onMouseLeave={() => setShowTitleTooltip(false)}
               className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
             >
-              <span className="w-1.5 h-6 bg-brand-orange rounded-full" />
+              <span className={cn("w-1.5 h-6 rounded-full", sectionAccent.bar)} />
               {title}
               <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
             </h3>
@@ -10244,7 +10326,7 @@ function GenreCategorySection({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                  className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", sectionAccent.selectedBorder)}
                 >
                   <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
                 </motion.div>
@@ -10266,7 +10348,7 @@ function GenreCategorySection({
             className={cn(
               "p-2.5 rounded-xl transition-all",
               isRandomized
-                ? "bg-brand-orange text-white"
+                ? sectionAccent.selected
                 : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
             )}
           >
@@ -10329,7 +10411,7 @@ function GenreCategorySection({
                 className={cn(
                   "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border text-left min-h-[44px]",
                   isSelectedGroup
-                    ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                    ? sectionAccent.selected
                     : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover"
                 )}
               >
@@ -10350,7 +10432,7 @@ function GenreCategorySection({
 
       <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selectedChild ? (
-          <p className="text-sm font-semibold text-brand-orange">
+          <p className={cn("text-sm font-semibold", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
@@ -10435,7 +10517,7 @@ function GenreSelectModal({
                 className={cn(
                   "w-full text-left rounded-2xl border px-4 py-2 transition-all",
                   isSelected
-                    ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
+                    ? "bg-amber-500/38 border-amber-300/38 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.12)]"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]"
                 )}
               >
@@ -10583,6 +10665,7 @@ function CycleSection({
     : `${selectedKeywordCount}/${totalKeywordCount}`;
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
+  const sectionAccent = getStudioSectionAccent(titleKo || title);
 
   return (
     <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
@@ -10595,7 +10678,7 @@ function CycleSection({
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0", titleClassName ?? "text-[20px]")}
               >
-                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 {countLabel && (
                   <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
@@ -10638,7 +10721,7 @@ function CycleSection({
                 {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
-            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? 'bg-brand-orange text-white border-brand-orange' : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
+            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
               <Dices className="w-4 h-4" />
             </button>
             <button 
@@ -10648,7 +10731,7 @@ function CycleSection({
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (activeSelected.length > 0 || isRandomized)
-                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  ? sectionAccent.selectedSoft 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
@@ -10706,10 +10789,10 @@ function CycleSection({
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
                     selectedVariants.length > 0
                       ? hasHighlightedSelectedVariant
-                        ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.28)]"
-                        : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.24)]"
+                        ? "bg-sky-500/32 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+                        : sectionAccent.selected
                       : pointSelectedVariants.length > 0
-                        ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.24)]"
+                        ? sectionAccent.pointSelected
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
@@ -10720,14 +10803,14 @@ function CycleSection({
                     <span className={cn(
                       "absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-white border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none",
                       hasHighlightedSelectedVariant
-                        ? "text-sky-700 border-sky-300"
-                        : "text-brand-orange border-brand-orange/50"
+                        ? "text-sky-700 border-sky-300/70"
+                        : sectionAccent.badge
                     )}>
                       {selectedCountInCycle}
                     </span>
                   )}
                   {pointSelectedCountInCycle > 0 && (
-                    <span className="absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-fuchsia-600 text-white border border-fuchsia-300/70 shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none">
+                    <span className={cn("absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none", sectionAccent.pointBadge)}>
                       {pointSelectedCountInCycle}
                     </span>
                   )}
@@ -10744,13 +10827,13 @@ function CycleSection({
         {selectedDisplayItems.length > 0 ? (
           <div className={cn("w-full max-h-[42px] overflow-hidden font-semibold break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn(item.mode === 'point' ? 'text-fuchsia-300' : 'text-brand-orange')}>
+              <span key={`${item.mode}-${item.id}`} className={cn(item.mode === 'point' ? 'text-fuchsia-300/85' : sectionAccent.text)}>
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}
           </div>
         ) : (
-          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-fuchsia-400/45" : "text-brand-orange/40")}>
+          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-fuchsia-300/45" : sectionAccent.softText)}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
         )}
@@ -10783,8 +10866,8 @@ function CycleSection({
           className={cn(
             "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
             isExpanded
-              ? "bg-brand-orange text-white border-brand-orange"
-              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+              ? "bg-[#4a2a0e] text-amber-300 border-amber-500/40"
+              : "bg-[var(--card-bg)] border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
           )}
         >
           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -11005,7 +11088,7 @@ function CycleKeywordPopup({
         >
           <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
             <div className="min-w-0">
-              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isPointSelectionMode ? "text-fuchsia-400" : "text-brand-orange")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
+              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isPointSelectionMode ? "text-fuchsia-300" : "text-amber-300")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
@@ -11020,7 +11103,7 @@ function CycleKeywordPopup({
                     setLocalSelected([]);
                     setLocalOtherSelected([]);
                   }}
-                  className="h-11 px-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 transition-all text-[11px] font-black whitespace-nowrap"
+                  className="h-11 px-3 rounded-2xl border border-amber-300/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 transition-all text-[11px] font-black whitespace-nowrap"
                   title="이 폴더 선택 전체 해제"
                 >
                   전체 해제
@@ -11033,8 +11116,8 @@ function CycleKeywordPopup({
                   className={cn(
                     "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
                     isPointSelectionMode
-                      ? "bg-fuchsia-600 text-white border-fuchsia-500 shadow-[0_0_18px_rgba(217,70,239,0.28)] hover:bg-fuchsia-500"
-                      : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.28)] hover:bg-brand-orange/90"
+                      ? "bg-fuchsia-500/45 text-fuchsia-50 border-fuchsia-300/40 shadow-[0_0_14px_rgba(217,70,239,0.13)] hover:bg-fuchsia-500/55"
+                      : "bg-amber-500/45 text-amber-50 border-amber-300/40 shadow-[0_0_14px_rgba(245,158,11,0.13)] hover:bg-amber-500/55"
                   )}
                   title="변경 적용"
                   aria-label="변경 적용"
@@ -11085,10 +11168,10 @@ function CycleKeywordPopup({
                     "w-full rounded-2xl border transition-all flex items-stretch overflow-hidden",
                     isSelected
                       ? isHighlightedSelected
-                        ? "bg-sky-600 text-white border-sky-500 shadow-[0_0_18px_rgba(14,165,233,0.26)]"
-                        : "bg-brand-orange text-white border-brand-orange shadow-[0_0_18px_rgba(255,132,0,0.22)]"
+                        ? "bg-sky-500/34 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+                        : "bg-amber-500/38 text-amber-50 border-amber-300/38 shadow-[0_0_14px_rgba(245,158,11,0.12)]"
                       : isOtherSelected
-                        ? "bg-fuchsia-600/85 text-white border-fuchsia-500/85 shadow-[0_0_14px_rgba(217,70,239,0.16)]"
+                        ? "bg-fuchsia-500/34 text-fuchsia-50 border-fuchsia-300/35 shadow-[0_0_14px_rgba(217,70,239,0.12)]"
                         : disabled
                           ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                           : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:border-brand-orange/40"
@@ -11143,8 +11226,8 @@ function CycleKeywordPopup({
                       className={cn(
                         "w-12 shrink-0 border-l flex items-center justify-center transition-all",
                         isOtherSelected
-                          ? "bg-fuchsia-500 text-white border-fuchsia-300/70"
-                          : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/15 hover:text-fuchsia-300 hover:border-fuchsia-400/50"
+                          ? "bg-fuchsia-500/45 text-fuchsia-50 border-fuchsia-300/45"
+                          : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/12 hover:text-fuchsia-300 hover:border-fuchsia-300/35"
                       )}
                       title={isOtherSelected ? '포인트 선택 해제' : '포인트 선택'}
                       aria-label={`${variant.labelKo || variant.label} 포인트 선택`}
@@ -11234,6 +11317,7 @@ function CategorySection({
   const [contentHeight, setContentHeight] = useState<number | string>(84);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState('');
+  const sectionAccent = getStudioSectionAccent(titleKo || title);
 
   useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid, forcedHeight], onHeightChange);
 
@@ -11277,7 +11361,7 @@ function CategorySection({
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
               >
-                <span className="w-1.5 h-6 bg-brand-orange rounded-full shrink-0" />
+                <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
@@ -11287,7 +11371,7 @@ function CategorySection({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-48 pointer-events-none"
+                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-48 pointer-events-none", sectionAccent.selectedBorder)}
                   >
                     <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
@@ -11331,7 +11415,7 @@ function CategorySection({
               className={cn(
                 "p-2.5 rounded-xl transition-all shadow-btn",
                 isRandomized 
-                  ? "bg-brand-orange text-white" 
+                  ? sectionAccent.selected 
                   : "bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover"
               )}
             >
@@ -11364,7 +11448,7 @@ function CategorySection({
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
-                  ? "bg-brand-orange/20 text-brand-orange border-brand-orange/30 hover:bg-brand-orange/30" 
+                  ? sectionAccent.selectedSoft 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
@@ -11393,10 +11477,6 @@ function CategorySection({
             {items.map((item) => {
             const isPinned = pinned.includes(item.id);
             const isSelected = selected.includes(item.id);
-            const selectedIndex = selected.indexOf(item.id);
-            const isPrimaryMood = title === "Mood" && isSelected && selectedIndex >= 0 && selectedIndex < 3;
-            const isSecondaryMood = isSelected && !isPrimaryMood;
-            
             const isKpop = item.id === 'kpop';
             const isCitypop = item.id === 'citypop';
             
@@ -11414,11 +11494,11 @@ function CategorySection({
 
             if (isKpop) {
               if (kpopMode === 2) {
-                kpopStyle = "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/20";
+                kpopStyle = "bg-violet-500/34 border-violet-300/35 text-violet-50 shadow-[0_0_14px_rgba(139,92,246,0.12)]";
                 displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
                 displayLabel = "K-Pop (Mix)";
               } else if (kpopMode === 1) {
-                kpopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
+                kpopStyle = "bg-amber-500/38 border-amber-300/38 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.12)]";
                 displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
                 displayLabel = "K-Pop";
               } else {
@@ -11432,11 +11512,11 @@ function CategorySection({
             let citypopStyle = "";
             if (isCitypop) {
               if (citypopMode === 2) {
-                citypopStyle = "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-500/20";
+                citypopStyle = "bg-teal-500/34 border-teal-300/35 text-teal-50 shadow-[0_0_14px_rgba(45,212,191,0.12)]";
                 displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
                 displayLabel = "City Pop(M)";
               } else if (citypopMode === 1) {
-                citypopStyle = "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20";
+                citypopStyle = "bg-rose-500/34 border-rose-300/35 text-rose-50 shadow-[0_0_14px_rgba(244,63,94,0.12)]";
                 displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
                 displayLabel = "City Pop(O)";
               } else {
@@ -11490,11 +11570,9 @@ function CategorySection({
                       ? "w-full min-w-0 h-10 md:h-11 px-1.5 py-1 rounded-xl font-bold transition-all border flex items-center justify-center text-center shadow-btn"
                       : "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2 shadow-btn",
                     (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
-                    isPrimaryMood
-                      ? "bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/20"
-                      : isSecondaryMood
-                        ? "bg-brand-orange border-orange-400 text-white shadow-lg shadow-brand-orange/20"
-                        : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
+                    isSelected
+                      ? sectionAccent.selected
+                      : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                     isKpop && kpopMode > 0 ? kpopStyle : "",
                     isCitypop && citypopMode > 0 ? citypopStyle : ""
                   )}
@@ -11533,8 +11611,8 @@ function CategorySection({
                     className={cn(
                       "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                       isPinned 
-                        ? "bg-brand-orange border-orange-400 text-white opacity-100 scale-100 shadow-lg shadow-brand-orange/20" 
-                        : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-brand-orange"
+                        ? "bg-amber-500/38 border-amber-300/38 text-amber-50 opacity-100 scale-100 shadow-[0_0_14px_rgba(245,158,11,0.12)]" 
+                        : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-amber-300"
                     )}
                   >
                     <Pin className={cn("w-3 h-3", isPinned && "fill-current")} />
@@ -11561,12 +11639,12 @@ function CategorySection({
               }}
               autoFocus
               placeholder={`${titleKo || title} 직접 입력`}
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-semibold text-brand-orange text-center placeholder:text-brand-orange/30"
+              className={cn("flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-semibold text-center", sectionAccent.text, "placeholder:text-white/20")}
             />
             <button
               type="button"
               onClick={applyDirectInput}
-              className="shrink-0 w-8 h-8 bg-transparent border-0 text-brand-orange/80 hover:text-brand-orange transition-colors flex items-center justify-center"
+              className={cn("shrink-0 w-8 h-8 bg-transparent border-0 transition-colors flex items-center justify-center", sectionAccent.text)}
               aria-label="직접입력 적용"
             >
               <Check className="w-4 h-4" />
@@ -11581,11 +11659,11 @@ function CategorySection({
             </button>
           </div>
         ) : selected.length > 0 ? (
-          <p className="text-sm font-semibold text-brand-orange leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10">
+          <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
             {selected.map(id => resolveSelectedLabel(id)).join(', ')}
           </p>
         ) : (
-          <p className="text-sm font-medium text-brand-orange/40 leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10">
+          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.softText)}>
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
         )}
@@ -11613,8 +11691,8 @@ function CategorySection({
           className={cn(
             "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
             isExpanded
-              ? "bg-brand-orange text-white border-brand-orange"
-              : "bg-[var(--card-bg)] border-brand-orange/30 text-brand-orange hover:bg-brand-orange hover:text-white"
+              ? "bg-[#4a2a0e] text-amber-300 border-amber-500/40"
+              : "bg-[var(--card-bg)] border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
           )}
         >
           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}

@@ -16,7 +16,10 @@ export const GENRES: CategoryItem[] = [
   { id: 'teen-pop', label: 'Teen Pop', labelKo: '틴 팝', description: '밝고 접근성이 높은 틴 팝 스타일입니다.' },
   { id: 'kpop', label: 'K-Pop', labelKo: 'K-팝', description: '한국 대중음악 기반의 세련된 사운드입니다.' },
   { id: 'jpop', label: 'J-Pop', labelKo: 'J-팝', description: '일본 대중음악 특유의 멜로디와 편곡이 특징입니다.' },
-  { id: 'citypop', label: 'City Pop', labelKo: '시티팝', description: '도시적인 레트로 감성과 세련된 그루브가 중심인 시티팝입니다.' },
+  { id: 'citypop', label: 'Classic City Pop', labelKo: '클래식 시티팝', description: '70~80년대 원형 시티팝의 아날로그 도시 감성과 펑키한 그루브가 중심인 스타일입니다.' },
+  { id: 'j-citypop', label: 'J-City Pop', labelKo: 'J-시티팝', description: '일본 80s 도시 감성과 레트로한 펑크/디스코/소울 기반의 시티팝입니다.' },
+  { id: 'k-citypop', label: 'K-City Pop', labelKo: 'K-시티팝', description: '시티팝의 도시적 그루브에 한국식 멜로디와 감성 보컬을 섞은 스타일입니다.' },
+  { id: 'modern-citypop', label: 'Modern City Pop', labelKo: '모던 시티팝', description: '시티팝 감성을 현대 팝/인디/신스/누디스코 질감으로 세련되게 재해석한 스타일입니다.' },
   { id: 'piano-ballad', label: 'Piano Ballad', labelKo: '피아노 발라드', description: '피아노 중심의 감성적인 발라드입니다.' },
   { id: 'adult-contemporary', label: 'Adult Contemporary', labelKo: '어덜트 컨템퍼러리', description: '부드럽고 안정적인 성인 취향의 팝입니다.' },
   { id: 'indie-pop', label: 'Indie Pop', labelKo: '인디 팝', description: '감각적인 인디 팝 스타일입니다.' },
@@ -105,46 +108,46 @@ export const GENRES: CategoryItem[] = [
   { id: 'ambient-newage', label: 'Ambient New Age', labelKo: '앰비언트 뉴에이지', description: '앰비언트/뉴에이지 계열의 평온한 음악입니다.' },
 
   // Added genre options for reorganized hierarchy
-  { id: 'italian_pop', label: 'Italian Pop', labelKo: '이탈리아 팝', description: 'Italian Pop with melodic European pop color.' },
-  { id: 'underground_hiphop', label: 'Underground Hip-Hop', labelKo: '언더그라운드 힙합', description: 'Underground Hip-Hop with raw street texture.' },
-  { id: 'comedy_hiphop', label: 'Comedy Hip-Hop', labelKo: '코미디 힙합', description: 'Comedy Hip-Hop with playful rap delivery.' },
-  { id: 'baroque_hiphop', label: 'Baroque Hip-Hop', labelKo: '바로크 힙합', description: 'Baroque Hip-Hop with classical sample color.' },
-  { id: 'chill_trap', label: 'Chill Trap', labelKo: '칠 트랩', description: 'Chill Trap with laid-back melodic bounce.' },
-  { id: 'acoustic_rnb', label: 'Acoustic R&B', labelKo: '어쿠스틱 R&B', description: 'Acoustic R&B with warm intimate groove.' },
-  { id: 'soul_blues', label: 'Soul Blues', labelKo: '소울 블루스', description: 'Soul Blues with deep emotional groove.' },
-  { id: 'pop_punk', label: 'Pop Punk', labelKo: '팝 펑크', description: 'Pop Punk with bright guitar-driven energy.' },
-  { id: 'romantic_rock', label: 'Romantic Rock', labelKo: '로맨틱 록', description: 'Romantic Rock with emotional band lift.' },
-  { id: 'medieval_rock', label: 'Medieval Rock', labelKo: '중세시대 록음악', description: 'Medieval Rock with ancient folk-rock color.' },
-  { id: 'opera_rock', label: 'Opera Rock', labelKo: '오페라 록', description: 'Opera Rock with dramatic vocal-rock scale.' },
-  { id: 'retro_punk', label: 'Retro Punk', labelKo: '레트로펑크', description: 'Retro Punk with raw vintage band energy.' },
-  { id: 'slow_metal', label: 'Slow Metal', labelKo: '슬로우 메탈', description: 'Slow Metal with heavy crawling intensity.' },
-  { id: 'djent_metal', label: 'Djent Metal', labelKo: '젠트 메탈', description: 'Djent Metal with tight modern riff pressure.' },
-  { id: 'beatdown_hardcore', label: 'Beatdown Hardcore', labelKo: '비트다운 하드코어', description: 'Beatdown Hardcore with brutal breakdown energy.' },
-  { id: 'crunkcore', label: 'Crunkcore', labelKo: '크렁크코어', description: 'Crunkcore with rap-rock electronic aggression.' },
-  { id: 'epic_edm', label: 'Epic EDM', labelKo: '에픽 EDM', description: 'Epic EDM with massive festival build.' },
-  { id: 'retrowave', label: 'Retrowave', labelKo: '레트로 웨이브', description: 'Retrowave with neon synth nostalgia.' },
-  { id: 'tech_house', label: 'Tech House', labelKo: '테크 하우스', description: 'Tech House with clean club groove.' },
-  { id: 'microhouse', label: 'Microhouse', labelKo: '마이크로하우스', description: 'Microhouse with minimal detailed groove.' },
-  { id: 'underground_techno', label: 'Underground Techno', labelKo: '언더그라운드 테크노', description: 'Underground Techno with dark club pulse.' },
-  { id: 'goa_psytrance', label: 'Goa Psytrance', labelKo: '고아 사이 트랜스', description: 'Goa Psytrance with hypnotic psychedelic drive.' },
-  { id: 'hard_dubstep', label: 'Hard Dubstep', labelKo: '하드 덥스텝', description: 'Hard Dubstep with aggressive bass-drop energy.' },
-  { id: 'funk_carioca', label: 'Funk Carioca', labelKo: '펑크 카리오카', description: 'Funk Carioca with raw Brazilian bass rhythm.' },
-  { id: 'jazz_blues', label: 'Jazz Blues', labelKo: '재즈 블루스', description: 'Jazz Blues with smoky swing-blues color.' },
-  { id: 'acoustic_jazz', label: 'Acoustic Jazz', labelKo: '어쿠스틱 재즈', description: 'Acoustic Jazz with live intimate ensemble feel.' },
-  { id: 'p_funk_jazz', label: 'P-Funk Jazz', labelKo: 'P-Funk Jazz', description: 'P-Funk Jazz with funky jazz-groove movement.' },
-  { id: 'slow_country_pop', label: 'Slow Country Pop', labelKo: '슬로우 컨트리 팝', description: 'Slow Country Pop with warm rural pop sentiment.' },
-  { id: 'traditional_folk_music', label: 'Traditional Folk Music', labelKo: '민속 음악', description: 'Traditional Folk Music with regional acoustic color.' },
-  { id: 'balkan_folk', label: 'Balkan Folk', labelKo: '발칸 민속', description: 'Balkan Folk with lively Eastern European rhythm.' },
-  { id: 'sarod', label: 'Sarod', labelKo: '사로드', description: 'Sarod-based Indian Classical Fusion.' },
-  { id: 'chacha', label: 'Cha-cha-cha', labelKo: '차차차', description: 'Cha-cha-cha with playful Latin dance rhythm.' },
-  { id: 'church_hymn', label: 'Church Hymn', labelKo: '교회 성가', description: 'Church Hymn with sacred choral resonance.' },
-  { id: 'gothic_opera', label: 'Gothic Opera', labelKo: '고딕 오페라', description: 'Gothic Opera with dark dramatic vocal scale.' },
-  { id: 'cinematic_ballad', label: 'Cinematic Ballad', labelKo: '영화 발라드', description: 'Cinematic Ballad with emotional score-like build.' },
-  { id: 'battle_theme', label: 'Battle Theme', labelKo: '전투테마', description: 'Battle Theme with heroic action-score energy.' },
-  { id: 'video_game_music', label: 'Video Game Music', labelKo: '비디오 게임 음악', description: 'Video Game Music with loopable thematic score design.' },
-  { id: 'bass_synth', label: 'Synth/Bass', labelKo: '신스/베이스', description: 'Electronic synth and bass-focused subgenres.' },
-  { id: 'theme_bgm', label: 'Theme/BGM', labelKo: '테마/BGM', description: 'Theme and background music for games, scenes, and stories.' },
-  { id: 'global_rhythm', label: 'Global Rhythm', labelKo: '글로벌 리듬', description: 'Global rhythm genres with Latin, reggae, Afro, and danceable regional groove.' },
+  { id: 'italian_pop', label: 'Italian Pop', labelKo: '이탈리아 팝', description: '유럽식 멜로디 감성과 부드러운 팝 색채가 살아있는 이탈리아 팝 스타일입니다.' },
+  { id: 'underground_hiphop', label: 'Underground Hip-Hop', labelKo: '언더그라운드 힙합', description: '거칠고 날것 같은 거리감과 언더그라운드 힙합의 투박한 질감이 중심인 스타일입니다.' },
+  { id: 'comedy_hiphop', label: 'Comedy Hip-Hop', labelKo: '코미디 힙합', description: '장난스럽고 코믹한 랩 전달감이 살아있는 유쾌한 힙합 스타일입니다.' },
+  { id: 'baroque_hiphop', label: 'Baroque Hip-Hop', labelKo: '바로크 힙합', description: '바로크풍 클래식 샘플과 힙합 리듬을 결합한 독특한 스타일입니다.' },
+  { id: 'chill_trap', label: 'Chill Trap', labelKo: '칠 트랩', description: '느긋한 멜로디와 부드럽게 튀는 트랩 리듬이 중심인 스타일입니다.' },
+  { id: 'acoustic_rnb', label: 'Acoustic R&B', labelKo: '어쿠스틱 R&B', description: '어쿠스틱 악기와 따뜻하고 가까운 R&B 그루브가 어우러진 스타일입니다.' },
+  { id: 'soul_blues', label: 'Soul Blues', labelKo: '소울 블루스', description: '깊은 감정선과 블루지한 소울 그루브가 중심인 스타일입니다.' },
+  { id: 'pop_punk', label: 'Pop Punk', labelKo: '팝 펑크', description: '밝고 빠른 기타 중심 에너지가 살아있는 팝 펑크 스타일입니다.' },
+  { id: 'romantic_rock', label: 'Romantic Rock', labelKo: '로맨틱 록', description: '감정적인 밴드 상승감과 로맨틱한 멜로디가 중심인 록 스타일입니다.' },
+  { id: 'medieval_rock', label: 'Medieval Rock', labelKo: '중세시대 록음악', description: '중세풍 선율과 고전적인 포크 록 색채를 결합한 스타일입니다.' },
+  { id: 'opera_rock', label: 'Opera Rock', labelKo: '오페라 록', description: '오페라적인 극적 보컬과 록의 스케일이 결합된 스타일입니다.' },
+  { id: 'retro_punk', label: 'Retro Punk', labelKo: '레트로펑크', description: '빈티지한 밴드 에너지와 거친 펑크 감성이 살아있는 레트로 스타일입니다.' },
+  { id: 'slow_metal', label: 'Slow Metal', labelKo: '슬로우 메탈', description: '느리고 묵직하게 기어가는 듯한 압박감이 중심인 메탈 스타일입니다.' },
+  { id: 'djent_metal', label: 'Djent Metal', labelKo: '젠트 메탈', description: '정교하고 타이트한 현대적 리프 압박감이 특징인 젠트 메탈입니다.' },
+  { id: 'beatdown_hardcore', label: 'Beatdown Hardcore', labelKo: '비트다운 하드코어', description: '강한 브레이크다운과 거친 하드코어 에너지가 중심인 스타일입니다.' },
+  { id: 'crunkcore', label: 'Crunkcore', labelKo: '크렁크코어', description: '랩, 록, 전자음의 공격적인 에너지가 뒤섞인 크렁크코어 스타일입니다.' },
+  { id: 'epic_edm', label: 'Epic EDM', labelKo: '에픽 EDM', description: '거대한 페스티벌 빌드업과 웅장한 드롭이 중심인 EDM 스타일입니다.' },
+  { id: 'retrowave', label: 'Retrowave', labelKo: '레트로 웨이브', description: '네온빛 신스와 복고적인 향수를 담은 레트로 웨이브 스타일입니다.' },
+  { id: 'tech_house', label: 'Tech House', labelKo: '테크 하우스', description: '깔끔한 클럽 그루브와 하우스 리듬이 중심인 테크 하우스 스타일입니다.' },
+  { id: 'microhouse', label: 'Microhouse', labelKo: '마이크로하우스', description: '미니멀하고 섬세한 그루브가 중심인 마이크로하우스 스타일입니다.' },
+  { id: 'underground_techno', label: 'Underground Techno', labelKo: '언더그라운드 테크노', description: '어둡고 반복적인 클럽 펄스가 살아있는 언더그라운드 테크노입니다.' },
+  { id: 'goa_psytrance', label: 'Goa Psytrance', labelKo: '고아 사이 트랜스', description: '최면적인 사이키델릭 드라이브가 강한 고아 사이 트랜스입니다.' },
+  { id: 'hard_dubstep', label: 'Hard Dubstep', labelKo: '하드 덥스텝', description: '공격적인 베이스 드롭과 강한 전자 에너지가 중심인 하드 덥스텝입니다.' },
+  { id: 'funk_carioca', label: 'Funk Carioca', labelKo: '펑크 카리오카', description: '브라질식 베이스 리듬과 날것 같은 댄스 에너지가 중심인 펑크 카리오카입니다.' },
+  { id: 'jazz_blues', label: 'Jazz Blues', labelKo: '재즈 블루스', description: '스모키한 블루스 색채와 재즈 스윙감이 어우러진 스타일입니다.' },
+  { id: 'acoustic_jazz', label: 'Acoustic Jazz', labelKo: '어쿠스틱 재즈', description: '가까운 라이브 합주감과 어쿠스틱 재즈의 따뜻함이 중심인 스타일입니다.' },
+  { id: 'p_funk_jazz', label: 'P-Funk Jazz', labelKo: 'P-Funk Jazz', description: '펑키한 재즈 그루브와 P-Funk식 움직임이 결합된 스타일입니다.' },
+  { id: 'slow_country_pop', label: 'Slow Country Pop', labelKo: '슬로우 컨트리 팝', description: '느긋하고 따뜻한 시골 정서가 담긴 컨트리 팝 스타일입니다.' },
+  { id: 'traditional_folk_music', label: 'Traditional Folk Music', labelKo: '민속 음악', description: '지역 고유의 어쿠스틱 색채가 살아있는 전통 민속 음악입니다.' },
+  { id: 'balkan_folk', label: 'Balkan Folk', labelKo: '발칸 민속', description: '동유럽 특유의 활기찬 리듬이 살아있는 발칸 민속 음악입니다.' },
+  { id: 'sarod', label: 'Sarod', labelKo: '사로드', description: '사로드 중심의 인도 클래식 선율을 현대적으로 결합한 퓨전 스타일입니다.' },
+  { id: 'chacha', label: 'Cha-cha-cha', labelKo: '차차차', description: '장난스럽고 경쾌한 라틴 댄스 리듬이 중심인 차차차 스타일입니다.' },
+  { id: 'church_hymn', label: 'Church Hymn', labelKo: '교회 성가', description: '성스러운 합창 울림이 중심인 교회 성가 스타일입니다.' },
+  { id: 'gothic_opera', label: 'Gothic Opera', labelKo: '고딕 오페라', description: '어둡고 극적인 보컬 스케일이 강조된 고딕 오페라 스타일입니다.' },
+  { id: 'cinematic_ballad', label: 'Cinematic Ballad', labelKo: '영화 발라드', description: '영화 음악처럼 감정이 점층되는 시네마틱 발라드 스타일입니다.' },
+  { id: 'battle_theme', label: 'Battle Theme', labelKo: '전투테마', description: '영웅적인 액션 스코어 에너지가 중심인 전투 테마 음악입니다.' },
+  { id: 'video_game_music', label: 'Video Game Music', labelKo: '비디오 게임 음악', description: '반복 재생에 어울리는 테마성과 게임 음악 구조가 중심인 스타일입니다.' },
+  { id: 'bass_synth', label: 'Synth/Bass', labelKo: '신스/베이스', description: '신스와 베이스 중심의 전자음악 세부 장르군입니다.' },
+  { id: 'theme_bgm', label: 'Theme/BGM', labelKo: '테마/BGM', description: '게임, 장면, 이야기에 쓰이는 테마곡과 배경음악 계열입니다.' },
+  { id: 'global_rhythm', label: 'Global Rhythm', labelKo: '글로벌 리듬', description: '라틴, 레게, 아프로 리듬 등 춤추기 좋은 지역 그루브를 다루는 장르군입니다.' },
 ];
 
 function groupChildren(ids: string[]) {
@@ -243,24 +246,24 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
     titleKo: '퓨전 장르',
     variants: [
       { id: 'separator-style-fusion-idol-jpop', kind: 'separator', label: '아이돌/J-Pop', labelKo: '아이돌/J-Pop', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-k-idol-pop', label: 'K-Idol Pop', labelKo: 'K-아이돌 팝', description: 'K-idol style polish with sharp sections and catchy hooks.', descriptionKo: '선명한 섹션 대비와 중독적인 훅이 있는 K-아이돌식 팝 감성입니다. (K-Idol Pop)', style: 'K-Idol Pop fusion', sound: 'polished synths, punchy drums, sharp hook layers', mood: 'bright, energetic' },
-      { id: 'fusion-j-idol-pop', label: 'J-Idol Pop', labelKo: 'J-아이돌 팝', description: 'Japanese idol-pop brightness with melodic lift and cute energy.', descriptionKo: '밝은 멜로디 상승감과 산뜻한 J-아이돌 팝 감성입니다. (J-Idol Pop)', style: 'J-Idol Pop fusion', sound: 'sparkling synths, bright drums, melodic hook layers', mood: 'bright, cute' },
-      { id: 'fusion-jpop-anime-opening', label: 'J-Pop Anime Opening', labelKo: 'J-Pop 애니 오프닝', description: 'Anime-opening style melodic rush with bright band-pop lift.', descriptionKo: '애니 오프닝처럼 빠르게 치고 올라가는 밝은 밴드팝 감성입니다. (J-Pop Anime Opening)', style: 'J-Pop Anime Opening fusion', sound: 'fast band-pop drums, bright guitars, soaring synth layers', mood: 'uplifting, dramatic' },
-      { id: 'fusion-anisong-pop', label: 'Anisong Pop', labelKo: '애니송 팝', description: 'Anime-song pop color with dramatic melody and emotional hooks.', descriptionKo: '극적인 멜로디와 감정적인 훅이 살아있는 애니송 팝 색채입니다. (Anisong Pop)', style: 'Anisong Pop fusion', sound: 'bright pop-rock drums, emotional synth strings, melodic hooks', mood: 'dramatic, bright' },
-      { id: 'fusion-vocaloid-style', label: 'Vocaloid Style', labelKo: '보컬로이드 스타일', description: 'Fast digital J-pop color with synthetic vocal-friendly motion.', descriptionKo: '빠르고 디지털한 J-pop 질감과 보컬로이드식 전개감을 더합니다. (Vocaloid Style)', style: 'Vocaloid Style fusion', sound: 'fast digital synths, sharp drums, playful arps', mood: 'energetic, synthetic' },
+      { id: 'fusion-k-idol-pop', label: 'K-Idol Pop', labelKo: 'K-아이돌 팝', description: '선명한 섹션 대비와 중독적인 훅이 있는 K-아이돌식 팝 감성입니다.', descriptionKo: '선명한 섹션 대비와 중독적인 훅이 있는 K-아이돌식 팝 감성입니다. (K-Idol Pop)', style: 'K-Idol Pop fusion', sound: 'polished synths, punchy drums, sharp hook layers', mood: 'bright, energetic' },
+      { id: 'fusion-j-idol-pop', label: 'J-Idol Pop', labelKo: 'J-아이돌 팝', description: '밝은 멜로디 상승감과 귀여운 에너지가 살아있는 일본 아이돌 팝 감성입니다.', descriptionKo: '밝은 멜로디 상승감과 산뜻한 J-아이돌 팝 감성입니다. (J-Idol Pop)', style: 'J-Idol Pop fusion', sound: 'sparkling synths, bright drums, melodic hook layers', mood: 'bright, cute' },
+      { id: 'fusion-jpop-anime-opening', label: 'J-Pop Anime Opening', labelKo: 'J-Pop 애니 오프닝', description: '애니메이션 오프닝처럼 밝은 밴드팝 상승감과 빠른 멜로디 전개가 있는 스타일입니다.', descriptionKo: '애니 오프닝처럼 빠르게 치고 올라가는 밝은 밴드팝 감성입니다. (J-Pop Anime Opening)', style: 'J-Pop Anime Opening fusion', sound: 'fast band-pop drums, bright guitars, soaring synth layers', mood: 'uplifting, dramatic' },
+      { id: 'fusion-anisong-pop', label: 'Anisong Pop', labelKo: '애니송 팝', description: '드라마틱한 멜로디와 감정적인 훅이 살아있는 애니송 팝 색채입니다.', descriptionKo: '극적인 멜로디와 감정적인 훅이 살아있는 애니송 팝 색채입니다. (Anisong Pop)', style: 'Anisong Pop fusion', sound: 'bright pop-rock drums, emotional synth strings, melodic hooks', mood: 'dramatic, bright' },
+      { id: 'fusion-vocaloid-style', label: 'Vocaloid Style', labelKo: '보컬로이드 스타일', description: '빠른 디지털 J-Pop 질감과 합성 보컬에 어울리는 움직임이 중심인 스타일입니다.', descriptionKo: '빠르고 디지털한 J-pop 질감과 보컬로이드식 전개감을 더합니다. (Vocaloid Style)', style: 'Vocaloid Style fusion', sound: 'fast digital synths, sharp drums, playful arps', mood: 'energetic, synthetic' },
       { id: 'separator-style-fusion-band-rock', kind: 'separator', label: '밴드/록', labelKo: '밴드/록', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-britpop', label: 'Britpop', labelKo: '브릿팝', description: 'British melodic band-pop color with guitar-driven lift.', descriptionKo: '영국식 멜로디와 기타 중심 밴드팝 감성을 더합니다. (Britpop)', style: 'Britpop fusion', sound: 'jangly guitars, live drums, melodic bass', mood: 'confident, nostalgic' },
-      { id: 'fusion-rock', label: 'Rock', labelKo: '록', description: 'Rock band energy with guitar-driven arrangement power.', descriptionKo: '기타 중심의 밴드 에너지와 강한 전개감을 더합니다. (Rock)', style: 'Rock fusion', sound: 'electric guitars, live drums, driving bass', mood: 'energetic, raw' },
+      { id: 'fusion-britpop', label: 'Britpop', labelKo: '브릿팝', description: '기타 중심의 상승감과 영국식 멜로딕 밴드팝 색채가 살아있는 스타일입니다.', descriptionKo: '영국식 멜로디와 기타 중심 밴드팝 감성을 더합니다. (Britpop)', style: 'Britpop fusion', sound: 'jangly guitars, live drums, melodic bass', mood: 'confident, nostalgic' },
+      { id: 'fusion-rock', label: 'Rock', labelKo: '록', description: '기타 중심 편곡의 힘과 록 밴드 에너지가 살아있는 스타일입니다.', descriptionKo: '기타 중심의 밴드 에너지와 강한 전개감을 더합니다. (Rock)', style: 'Rock fusion', sound: 'electric guitars, live drums, driving bass', mood: 'energetic, raw' },
       { id: 'separator-style-fusion-orchestral-acoustic', kind: 'separator', label: '오케스트라/어쿠스틱', labelKo: '오케스트라/어쿠스틱', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-orchestral', label: 'Orchestral', labelKo: '오케스트라', description: 'Orchestral scale and cinematic harmonic depth.', descriptionKo: '오케스트라의 웅장함과 영화적인 화성감을 더합니다. (Orchestral)', style: 'Orchestral fusion', sound: 'strings, brass, cinematic percussion', mood: 'grand, dramatic' },
-      { id: 'fusion-acoustic-piano', label: 'Acoustic Piano', labelKo: '어쿠스틱 피아노', description: 'Piano-led acoustic fusion with intimate melodic weight.', descriptionKo: '피아노 중심의 어쿠스틱 감성과 선율 중심 무게감을 더합니다. (Acoustic Piano)', style: 'Acoustic Piano fusion', sound: 'acoustic piano, soft room tone, gentle sustain', mood: 'intimate, emotional' },
+      { id: 'fusion-orchestral', label: 'Orchestral', labelKo: '오케스트라', description: '오케스트라의 스케일과 영화적인 화성 깊이를 더하는 스타일입니다.', descriptionKo: '오케스트라의 웅장함과 영화적인 화성감을 더합니다. (Orchestral)', style: 'Orchestral fusion', sound: 'strings, brass, cinematic percussion', mood: 'grand, dramatic' },
+      { id: 'fusion-acoustic-piano', label: 'Acoustic Piano', labelKo: '어쿠스틱 피아노', description: '피아노 중심의 어쿠스틱 감성과 가까운 멜로디 무게감을 더하는 스타일입니다.', descriptionKo: '피아노 중심의 어쿠스틱 감성과 선율 중심 무게감을 더합니다. (Acoustic Piano)', style: 'Acoustic Piano fusion', sound: 'acoustic piano, soft room tone, gentle sustain', mood: 'intimate, emotional' },
       { id: 'separator-style-fusion-indie-space', kind: 'separator', label: '인디/공간 팝', labelKo: '인디/공간 팝', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-bedroom-pop', label: 'Bedroom Pop', labelKo: '베드룸 팝', description: 'Intimate DIY pop color with close, small-room warmth.', descriptionKo: '방 안에서 녹음한 듯한 밀착감과 DIY 팝 감성을 더합니다. (Bedroom Pop)', style: 'Bedroom Pop fusion', sound: 'close-mic vocals, soft synths, small-room warmth', mood: 'intimate, lo-fi' },
-      { id: 'fusion-shoegaze', label: 'Shoegaze', labelKo: '슈게이즈', description: 'Guitar haze and spatial wall-of-sound texture.', descriptionKo: '기타 노이즈와 넓은 공간감이 쌓이는 슈게이즈 질감입니다. (Shoegaze)', style: 'Shoegaze fusion', sound: 'washed guitars, wide reverb, layered noise wall', mood: 'hazy, immersive' },
-      { id: 'fusion-ambient-pop', label: 'Ambient Pop', labelKo: '앰비언트 팝', description: 'Pop structure softened by ambient atmosphere and spacious texture.', descriptionKo: '팝 구조에 앰비언트한 공간감과 부드러운 질감을 더합니다. (Ambient Pop)', style: 'Ambient Pop fusion', sound: 'ambient pads, soft pulses, spacious texture', mood: 'floating, calm' },
+      { id: 'fusion-bedroom-pop', label: 'Bedroom Pop', labelKo: '베드룸 팝', description: '작은 방에서 직접 만든 듯한 가까운 온기의 DIY 팝 색채입니다.', descriptionKo: '방 안에서 녹음한 듯한 밀착감과 DIY 팝 감성을 더합니다. (Bedroom Pop)', style: 'Bedroom Pop fusion', sound: 'close-mic vocals, soft synths, small-room warmth', mood: 'intimate, lo-fi' },
+      { id: 'fusion-shoegaze', label: 'Shoegaze', labelKo: '슈게이즈', description: '흐릿한 기타 레이어와 넓은 소리의 벽 질감이 중심인 스타일입니다.', descriptionKo: '기타 노이즈와 넓은 공간감이 쌓이는 슈게이즈 질감입니다. (Shoegaze)', style: 'Shoegaze fusion', sound: 'washed guitars, wide reverb, layered noise wall', mood: 'hazy, immersive' },
+      { id: 'fusion-ambient-pop', label: 'Ambient Pop', labelKo: '앰비언트 팝', description: '팝 구조에 앰비언트한 공간감과 넓은 질감을 더한 스타일입니다.', descriptionKo: '팝 구조에 앰비언트한 공간감과 부드러운 질감을 더합니다. (Ambient Pop)', style: 'Ambient Pop fusion', sound: 'ambient pads, soft pulses, spacious texture', mood: 'floating, calm' },
       { id: 'separator-style-fusion-world-pop', kind: 'separator', label: '월드 팝', labelKo: '월드 팝', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-bollywood-pop', label: 'Bollywood Pop', labelKo: '볼리우드 팝', description: 'Indian pop color with bright rhythm and cinematic melodic lift.', descriptionKo: '인도 팝 특유의 밝은 리듬과 영화적인 멜로디 상승감을 더합니다. (Bollywood Pop)', style: 'Bollywood Pop fusion', sound: 'tabla accents, bright strings, cinematic pop drums', mood: 'colorful, dramatic' },
-      { id: 'fusion-arab-pop', label: 'Arab Pop', labelKo: '아랍 팝', description: 'Arab pop melodic color with ornamental phrasing and percussion.', descriptionKo: '아랍 팝 특유의 장식적인 선율감과 퍼커션 색채를 더합니다. (Arab Pop)', style: 'Arab Pop fusion', sound: 'middle eastern percussion, ornamental melodic lines, warm strings', mood: 'exotic, dramatic' }
+      { id: 'fusion-bollywood-pop', label: 'Bollywood Pop', labelKo: '볼리우드 팝', description: '밝은 리듬과 영화적인 멜로디 상승감이 있는 인도 팝 색채입니다.', descriptionKo: '인도 팝 특유의 밝은 리듬과 영화적인 멜로디 상승감을 더합니다. (Bollywood Pop)', style: 'Bollywood Pop fusion', sound: 'tabla accents, bright strings, cinematic pop drums', mood: 'colorful, dramatic' },
+      { id: 'fusion-arab-pop', label: 'Arab Pop', labelKo: '아랍 팝', description: '장식적인 선율과 퍼커션이 어우러진 아랍 팝 색채입니다.', descriptionKo: '아랍 팝 특유의 장식적인 선율감과 퍼커션 색채를 더합니다. (Arab Pop)', style: 'Arab Pop fusion', sound: 'middle eastern percussion, ornamental melodic lines, warm strings', mood: 'exotic, dramatic' }
     ],
   },
   {
@@ -1604,7 +1607,8 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'teen_pop', label: 'Teen Pop', labelKo: '틴팝', description: '밝고 청량한 에너지와 중독성 있는 훅이 돋보이는 하이틴 감성의 팝입니다.' },
           { id: 'britpop', label: 'Britpop', labelKo: '브릿팝', description: '영국 밴드 특유의 멜로디와 자연스러운 사운드가 강조된 얼터너티브 록 스타일입니다.' },
           { id: 'indie_pop', label: 'Indie Pop', labelKo: '인디팝', description: '독창적인 감성과 부드러운 사운드로 나른하고 편안한 분위기를 만드는 팝입니다.' },
-          { id: 'city_pop', label: 'City Pop', labelKo: '클래식 시티팝', description: '밤거리, 드라이브, 네온사인 같은 도시 장면에 잘 맞는 레트로 팝입니다. 부드러운 베이스, 펑키한 기타, 일렉트릭 피아노와 아날로그 신스가 세련된 그루브를 만듭니다.' },
+          { id: 'city_pop', label: 'Classic City Pop', labelKo: '클래식 시티팝', description: '70~80년대 원형 시티팝의 아날로그 도시 감성과 펑키한 그루브가 중심인 스타일입니다. 펑키 베이스, 클린 기타, 일렉 피아노, 브라스/스트링, 네온 밤거리와 드라이브 감성에 잘 어울립니다.' },
+          { id: 'modern_city_pop', label: 'Modern City Pop', labelKo: '모던 시티팝', description: '시티팝의 도시적 감성을 현대 팝/인디/신스/누디스코 질감으로 세련되게 재해석한 스타일입니다. 글로시한 믹스, 밤 드라이브, 부드러운 신스와 현대적인 그루브에 잘 어울립니다.' },
           { id: 'funk_pop', label: 'Funk Pop', labelKo: '펑크팝', description: '리듬감 넘치는 베이스와 경쾌한 기타 커팅이 조화로운 팝 스타일입니다.' },
           { id: 'dance_pop', label: 'Dance Pop', labelKo: '댄스팝', description: '클럽 지향의 강렬한 비트와 화려한 코러스가 돋보이는 댄스 음악입니다.' },
           { id: 'acoustic_pop', label: 'Acoustic Pop', labelKo: '어쿠스틱팝', description: '어쿠스틱 기타와 피아노 중심의 담백하고 진솔한 감성을 담은 팝입니다.' },
@@ -1614,7 +1618,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'art_pop', label: 'Art Pop', labelKo: '아트팝', description: '팝의 멜로디를 유지하면서도 실험적인 구성과 독특한 사운드 디자인을 더한 장르입니다. 감각적이고 비정형적인 곡에 적합합니다.' },
           { id: 'y2k_pop', label: 'Y2K Pop', labelKo: 'Y2K 팝', description: '2000년대 초반의 반짝이는 디지털 팝 감성을 현대적으로 재해석한 스타일입니다. 통통 튀는 신스, 밝은 훅, 향수 어린 질감에 잘 어울립니다.' },
           { id: 'hyperpop', label: 'Hyperpop', labelKo: '하이퍼팝', description: '과장된 신스, 튀는 보컬 처리, 빠른 전개가 특징인 실험적 디지털 팝입니다. 과감하고 비현실적인 에너지에 적합합니다.' },
-          { id: 'italian_pop', label: 'Italian Pop', labelKo: '이탈리아 팝', description: 'Italian Pop with melodic European pop color.' },
+          { id: 'italian_pop', label: 'Italian Pop', labelKo: '이탈리아 팝', description: '유럽식 멜로디 감성과 부드러운 팝 색채가 살아있는 이탈리아 팝 스타일입니다.' },
         ]
       },
       {
@@ -1626,6 +1630,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'idol_dance', label: 'Idol Dance', labelKo: '아이돌 댄스', description: '강한 비트와 중독성 있는 훅, 퍼포먼스 중심의 에너지 넘치는 K-Pop 댄스 스타일입니다.' },
           { id: 'k_ballad', label: 'K-Ballad', labelKo: 'K-발라드', description: '한국적인 감정선과 호소력 짙은 보컬, 웅장한 스트링이 조화로운 발라드입니다.' },
           { id: 'k_synth_pop', label: 'K-Synth Pop', labelKo: 'K-신스팝', description: '세련된 K-Pop 감성에 복고풍 신스 사운드를 더한 몽환적인 스타일입니다.' },
+          { id: 'k_city_pop', label: 'K-City Pop', labelKo: 'K-시티팝', description: '시티팝의 도시적 그루브에 한국식 멜로디와 감성 보컬을 섞은 스타일입니다. K-Pop/인디/발라드 감성, 밤공기, 세련된 리듬과 한국적인 정서가 함께 살아납니다.' },
           { id: 'k_trap', label: 'K-Trap', labelKo: 'K-트랩', description: '한국식 멜로디 훅과 트랩 리듬을 결합한 강한 힙합 팝입니다. 묵직한 808, 빠른 하이햇, 랩과 보컬의 대비, 어두운 무대 전환감에 잘 어울립니다.' },
           { id: 'k_new_jack_swing', label: 'K-New Jack Swing', labelKo: 'K-뉴잭스윙', description: '90년대 한국 가요의 향수를 불러일으키는 경쾌한 스윙 리듬의 음악입니다.' },
           { id: 'k_indie', label: 'K-Indie', labelKo: 'K-인디', description: '담백한 밴드 사운드와 생활감 있는 멜로디가 중심인 한국 인디 스타일입니다. 과하게 세련되기보다 자연스러운 음색, 말하듯 흐르는 보컬, 작은 공간감에 잘 맞습니다.' },
@@ -1646,7 +1651,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'j_idol_pop', label: 'J-Idol Pop', labelKo: 'J-아이돌 팝', description: '밝고 활기찬 에너지와 하이톤의 멜로디가 돋보이는 일본 아이돌 스타일입니다.' },
           { id: 'shibuya_kei', label: 'Shibuya-kei', labelKo: '시부야계', description: '재즈, 보사노바, 라운지 음악이 섞인 세련되고 감각적인 시부야계 스타일입니다.' },
           { id: 'anime_rock', label: 'Anime Rock', labelKo: '애니메이션 록', description: '애니메이션 주제가 특유의 빠른 전개와 질주감 있는 밴드 사운드입니다.' },
-          { id: 'j_city_pop', label: 'J-City Pop', labelKo: 'J-시티팝', description: '80년대 일본 시티팝의 펑키하고 도회적인 감성을 현대적으로 재해석한 스타일입니다.' },
+          { id: 'j_city_pop', label: 'J-City Pop', labelKo: 'J-시티팝', description: '일본 80s 도시 감성과 레트로한 펑크/디스코/소울 기반의 시티팝입니다. 일본식 멜로디, 클린 기타, 일렉 피아노, 부드러운 베이스와 야간 드라이브 감성에 잘 어울립니다.' },
           { id: 'visual_kei', label: 'Visual-kei', labelKo: '비주얼계', description: '화려한 비주얼과 드라마틱한 구성, 강렬한 록 사운드가 특징인 장르입니다.' },
           { id: 'utaite_style', label: 'Utaite Style', labelKo: '우타이테 스타일', description: '인터넷 문화 기반의 빠른 템포와 개성 넘치는 보컬 표현이 돋보이는 스타일입니다.' },
           { id: 'vocaloid_style', label: 'Vocaloid Style', labelKo: '보컬로이드 스타일', description: '디지털 보컬의 독특한 질감과 테크니컬한 팝 사운드가 결합된 장르입니다.' },
@@ -1684,10 +1689,10 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'trap_soul', label: 'Trap Soul', labelKo: '트랩 소울', description: '트랩 비트와 R&B 보컬 감성이 결합된 어둡고 부드러운 스타일입니다. 낮은 808, 몽환 신스, 끈적한 보컬에 잘 맞습니다.' },
           { id: 'phonk', label: 'Phonk', labelKo: '퐁크', description: '거친 샘플, 어두운 베이스, 반복적인 드라이브감이 강한 힙합/전자음악 스타일입니다. 질주감과 다크한 에너지를 만들 때 적합합니다.' },
           { id: 'jersey_club_hiphop', label: 'Jersey Club Hip-hop', labelKo: '저지 클럽 힙합', description: '빠르게 튀는 킥 패턴과 반복 훅이 강한 클럽 기반 힙합입니다. 짧고 중독적인 보컬 샘플, 댄스 에너지에 잘 맞습니다.' },
-          { id: 'underground_hiphop', label: 'Underground Hip-Hop', labelKo: '언더그라운드 힙합', description: 'Underground Hip-Hop with raw street texture.' },
-          { id: 'comedy_hiphop', label: 'Comedy Hip-Hop', labelKo: '코미디 힙합', description: 'Comedy Hip-Hop with playful rap delivery.' },
-          { id: 'baroque_hiphop', label: 'Baroque Hip-Hop', labelKo: '바로크 힙합', description: 'Baroque Hip-Hop with classical sample color.' },
-          { id: 'chill_trap', label: 'Chill Trap', labelKo: '칠 트랩', description: 'Chill Trap with laid-back melodic bounce.' },
+          { id: 'underground_hiphop', label: 'Underground Hip-Hop', labelKo: '언더그라운드 힙합', description: '거칠고 날것 같은 거리감과 언더그라운드 힙합의 투박한 질감이 중심인 스타일입니다.' },
+          { id: 'comedy_hiphop', label: 'Comedy Hip-Hop', labelKo: '코미디 힙합', description: '장난스럽고 코믹한 랩 전달감이 살아있는 유쾌한 힙합 스타일입니다.' },
+          { id: 'baroque_hiphop', label: 'Baroque Hip-Hop', labelKo: '바로크 힙합', description: '바로크풍 클래식 샘플과 힙합 리듬을 결합한 독특한 스타일입니다.' },
+          { id: 'chill_trap', label: 'Chill Trap', labelKo: '칠 트랩', description: '느긋한 멜로디와 부드럽게 튀는 트랩 리듬이 중심인 스타일입니다.' },
         ]
       },
       {
@@ -1705,8 +1710,8 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'slow_jam', label: 'Slow Jam', labelKo: '슬로우 잼', description: '느린 템포와 끈적한 보컬 그루브가 중심인 R&B입니다. 밤, 고백, 가까운 거리감, 부드러운 베이스에 잘 어울립니다.' },
           { id: 'city_rnb', label: 'City R&B', labelKo: '시티 R&B', description: '도시적인 밤 분위기와 세련된 R&B 그루브가 결합된 스타일입니다. Rhodes, 서브 베이스, 부드러운 보컬에 잘 맞습니다.' },
           { id: 'uk_garage_rnb', label: 'UK Garage R&B', labelKo: 'UK 개러지 R&B', description: '쪼개지는 UK 개러지 리듬 위에 부드러운 R&B 보컬을 얹는 스타일입니다. 세련된 리듬감과 도시적인 질감이 특징입니다.' },
-          { id: 'acoustic_rnb', label: 'Acoustic R&B', labelKo: '어쿠스틱 R&B', description: 'Acoustic R&B with warm intimate groove.' },
-          { id: 'soul_blues', label: 'Soul Blues', labelKo: '소울 블루스', description: 'Soul Blues with deep emotional groove.' },
+          { id: 'acoustic_rnb', label: 'Acoustic R&B', labelKo: '어쿠스틱 R&B', description: '어쿠스틱 악기와 따뜻하고 가까운 R&B 그루브가 어우러진 스타일입니다.' },
+          { id: 'soul_blues', label: 'Soul Blues', labelKo: '소울 블루스', description: '깊은 감정선과 블루지한 소울 그루브가 중심인 스타일입니다.' },
         ]
       }
     ]
@@ -1738,10 +1743,10 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'post_punk', label: 'Post-Punk', labelKo: '포스트 펑크', description: '차갑고 반복적인 베이스, 건조한 보컬, 어두운 기타 질감이 중심인 록입니다. 도시적 긴장감과 냉소적인 분위기에 적합합니다.' },
           { id: 'pop_punk', label: 'Pop Punk', labelKo: '팝 펑크', description: '펑크의 속도감과 팝의 선명한 멜로디가 결합된 밝고 직선적인 밴드 사운드입니다.' },
           { id: 'band_ballad', label: 'Band Ballad', labelKo: '밴드 발라드', description: '발라드의 감정선에 밴드 사운드가 더해진 스타일입니다. 기타와 드럼이 후반 감정 고조를 받쳐주는 곡에 잘 맞습니다.' },
-          { id: 'romantic_rock', label: 'Romantic Rock', labelKo: '로맨틱 록', description: 'Romantic Rock with emotional band lift.' },
-          { id: 'medieval_rock', label: 'Medieval Rock', labelKo: '중세시대 록음악', description: 'Medieval Rock with ancient folk-rock color.' },
-          { id: 'opera_rock', label: 'Opera Rock', labelKo: '오페라 록', description: 'Opera Rock with dramatic vocal-rock scale.' },
-          { id: 'retro_punk', label: 'Retro Punk', labelKo: '레트로펑크', description: 'Retro Punk with raw vintage band energy.' },
+          { id: 'romantic_rock', label: 'Romantic Rock', labelKo: '로맨틱 록', description: '감정적인 밴드 상승감과 로맨틱한 멜로디가 중심인 록 스타일입니다.' },
+          { id: 'medieval_rock', label: 'Medieval Rock', labelKo: '중세시대 록음악', description: '중세풍 선율과 고전적인 포크 록 색채를 결합한 스타일입니다.' },
+          { id: 'opera_rock', label: 'Opera Rock', labelKo: '오페라 록', description: '오페라적인 극적 보컬과 록의 스케일이 결합된 스타일입니다.' },
+          { id: 'retro_punk', label: 'Retro Punk', labelKo: '레트로펑크', description: '빈티지한 밴드 에너지와 거친 펑크 감성이 살아있는 레트로 스타일입니다.' },
         ]
       },
       {
@@ -1757,10 +1762,10 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'nu_metal', label: 'Nu Metal', labelKo: '뉴메탈', description: '힙합과 전자음악 요소가 섞인 리드미컬하고 묵직한 메탈 장르입니다.' },
           { id: 'symphonic_metal', label: 'Symphonic Metal', labelKo: '심포닉 메탈', description: '오케스트라와 오페라적인 요소가 가미된 웅장하고 서사적인 메탈입니다.' },
           { id: 'power_metal', label: 'Power Metal', labelKo: '파워 메탈', description: '빠른 템포와 멜로딕한 선율, 영웅적인 분위기가 특징인 메탈 스타일입니다.' },
-          { id: 'slow_metal', label: 'Slow Metal', labelKo: '슬로우 메탈', description: 'Slow Metal with heavy crawling intensity.' },
-          { id: 'djent_metal', label: 'Djent Metal', labelKo: '젠트 메탈', description: 'Djent Metal with tight modern riff pressure.' },
-          { id: 'beatdown_hardcore', label: 'Beatdown Hardcore', labelKo: '비트다운 하드코어', description: 'Beatdown Hardcore with brutal breakdown energy.' },
-          { id: 'crunkcore', label: 'Crunkcore', labelKo: '크렁크코어', description: 'Crunkcore with rap-rock electronic aggression.' },
+          { id: 'slow_metal', label: 'Slow Metal', labelKo: '슬로우 메탈', description: '느리고 묵직하게 기어가는 듯한 압박감이 중심인 메탈 스타일입니다.' },
+          { id: 'djent_metal', label: 'Djent Metal', labelKo: '젠트 메탈', description: '정교하고 타이트한 현대적 리프 압박감이 특징인 젠트 메탈입니다.' },
+          { id: 'beatdown_hardcore', label: 'Beatdown Hardcore', labelKo: '비트다운 하드코어', description: '강한 브레이크다운과 거친 하드코어 에너지가 중심인 스타일입니다.' },
+          { id: 'crunkcore', label: 'Crunkcore', labelKo: '크렁크코어', description: '랩, 록, 전자음의 공격적인 에너지가 뒤섞인 크렁크코어 스타일입니다.' },
         ]
       }
     ]
@@ -1784,11 +1789,11 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'tropical_house', label: 'Tropical House', labelKo: '트로피컬 하우스', description: '여유롭고 시원한 분위기의 신스 사운드가 돋보이는 하우스 스타일입니다.' },
           { id: 'eurobeat', label: 'Eurobeat', labelKo: '유로비트', description: '빠른 템포와 강렬한 멜로디로 질주감을 선사하는 댄스 음악입니다.' },
           { id: 'hardstyle', label: 'Hardstyle', labelKo: '하드스타일', description: '강한 킥과 공격적인 신스 리드가 폭발하는 고에너지 전자음악입니다. 페스티벌, 질주감, 강한 드롭에 잘 맞습니다.' },
-          { id: 'epic_edm', label: 'Epic EDM', labelKo: '에픽 EDM', description: 'Epic EDM with massive festival build.' },
-          { id: 'tech_house', label: 'Tech House', labelKo: '테크 하우스', description: 'Tech House with clean club groove.' },
-          { id: 'microhouse', label: 'Microhouse', labelKo: '마이크로하우스', description: 'Microhouse with minimal detailed groove.' },
-          { id: 'underground_techno', label: 'Underground Techno', labelKo: '언더그라운드 테크노', description: 'Underground Techno with dark club pulse.' },
-          { id: 'goa_psytrance', label: 'Goa Psytrance', labelKo: '고아 사이 트랜스', description: 'Goa Psytrance with hypnotic psychedelic drive.' },
+          { id: 'epic_edm', label: 'Epic EDM', labelKo: '에픽 EDM', description: '거대한 페스티벌 빌드업과 웅장한 드롭이 중심인 EDM 스타일입니다.' },
+          { id: 'tech_house', label: 'Tech House', labelKo: '테크 하우스', description: '깔끔한 클럽 그루브와 하우스 리듬이 중심인 테크 하우스 스타일입니다.' },
+          { id: 'microhouse', label: 'Microhouse', labelKo: '마이크로하우스', description: '미니멀하고 섬세한 그루브가 중심인 마이크로하우스 스타일입니다.' },
+          { id: 'underground_techno', label: 'Underground Techno', labelKo: '언더그라운드 테크노', description: '어둡고 반복적인 클럽 펄스가 살아있는 언더그라운드 테크노입니다.' },
+          { id: 'goa_psytrance', label: 'Goa Psytrance', labelKo: '고아 사이 트랜스', description: '최면적인 사이키델릭 드라이브가 강한 고아 사이 트랜스입니다.' },
         ]
       },
       {
@@ -1806,9 +1811,9 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'uk_garage', label: 'UK Garage', labelKo: 'UK 개러지', description: '튕기는 드럼과 쪼개지는 리듬이 세련된 클럽 감각을 만드는 장르입니다. 도시적인 밤, 가벼운 그루브, R&B 보컬과 잘 어울립니다.' },
           { id: 'future_garage', label: 'Future Garage', labelKo: '퓨처 개러지', description: 'UK 개러지 리듬에 몽환적인 패드와 감성적인 공간감을 더한 장르입니다. 새벽, 비 오는 도시, 고독한 감정에 잘 맞습니다.' },
           { id: 'glitch_pop', label: 'Glitch Pop', labelKo: '글리치 팝', description: '깨지는 전자음과 팝 멜로디가 결합된 실험적 장르입니다. 디지털 오류, 사이버 장면, 독특한 보컬 처리에 적합합니다.' },
-          { id: 'retrowave', label: 'Retrowave', labelKo: '레트로 웨이브', description: 'Retrowave with neon synth nostalgia.' },
-          { id: 'hard_dubstep', label: 'Hard Dubstep', labelKo: '하드 덥스텝', description: 'Hard Dubstep with aggressive bass-drop energy.' },
-          { id: 'funk_carioca', label: 'Funk Carioca', labelKo: '펑크 카리오카', description: 'Funk Carioca with raw Brazilian bass rhythm.' },
+          { id: 'retrowave', label: 'Retrowave', labelKo: '레트로 웨이브', description: '네온빛 신스와 복고적인 향수를 담은 레트로 웨이브 스타일입니다.' },
+          { id: 'hard_dubstep', label: 'Hard Dubstep', labelKo: '하드 덥스텝', description: '공격적인 베이스 드롭과 강한 전자 에너지가 중심인 하드 덥스텝입니다.' },
+          { id: 'funk_carioca', label: 'Funk Carioca', labelKo: '펑크 카리오카', description: '브라질식 베이스 리듬과 날것 같은 댄스 에너지가 중심인 펑크 카리오카입니다.' },
         ]
       }
     ]
@@ -1837,9 +1842,9 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'lounge_jazz', label: 'Lounge Jazz', labelKo: '라운지 재즈', description: '칵테일 바나 호텔 라운지처럼 차분하고 고급스러운 분위기의 재즈입니다. 보사노바, 피아노, 브러시 드럼과 잘 맞습니다.' },
           { id: 'nu_jazz', label: 'Nu Jazz', labelKo: '누 재즈', description: '재즈 화성에 전자음악과 힙합 비트를 섞은 현대적 재즈입니다. 세련된 도시감과 실험적인 그루브에 적합합니다.' },
           { id: 'jazz_ballad', label: 'Jazz Ballad', labelKo: '재즈 발라드', description: '느린 템포의 재즈 화성과 감성적인 보컬이 중심인 발라드입니다. 쓸쓸한 밤, 바, 회상 장면에 잘 어울립니다.' },
-          { id: 'jazz_blues', label: 'Jazz Blues', labelKo: '재즈 블루스', description: 'Jazz Blues with smoky swing-blues color.' },
-          { id: 'acoustic_jazz', label: 'Acoustic Jazz', labelKo: '어쿠스틱 재즈', description: 'Acoustic Jazz with live intimate ensemble feel.' },
-          { id: 'p_funk_jazz', label: 'P-Funk Jazz', labelKo: 'P-Funk Jazz', description: 'P-Funk Jazz with funky jazz-groove movement.' },
+          { id: 'jazz_blues', label: 'Jazz Blues', labelKo: '재즈 블루스', description: '스모키한 블루스 색채와 재즈 스윙감이 어우러진 스타일입니다.' },
+          { id: 'acoustic_jazz', label: 'Acoustic Jazz', labelKo: '어쿠스틱 재즈', description: '가까운 라이브 합주감과 어쿠스틱 재즈의 따뜻함이 중심인 스타일입니다.' },
+          { id: 'p_funk_jazz', label: 'P-Funk Jazz', labelKo: 'P-Funk Jazz', description: '펑키한 재즈 그루브와 P-Funk식 움직임이 결합된 스타일입니다.' },
         ]
       },
       {
@@ -1856,7 +1861,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'fingerstyle', label: 'Fingerstyle', labelKo: '핑거스타일', description: '기타 한 대로 멜로디와 리듬을 동시에 표현하는 테크니컬한 연주입니다.' },
           { id: 'modern_folk', label: 'Modern Folk', labelKo: '모던 포크', description: '전통 포크의 담백함에 현대적인 편곡과 보컬 감성을 더한 장르입니다. 작은 방, 일기 같은 가사, 담담한 고백에 잘 어울립니다.' },
           { id: 'indie_folk', label: 'Indie Folk', labelKo: '인디 포크', description: '소박한 어쿠스틱 악기와 개인적인 가사가 중심인 포크입니다. 자연스러운 보컬과 따뜻한 공간감에 적합합니다.' },
-          { id: 'slow_country_pop', label: 'Slow Country Pop', labelKo: '슬로우 컨트리 팝', description: 'Slow Country Pop with warm rural pop sentiment.' },
+          { id: 'slow_country_pop', label: 'Slow Country Pop', labelKo: '슬로우 컨트리 팝', description: '느긋하고 따뜻한 시골 정서가 담긴 컨트리 팝 스타일입니다.' },
         ]
       }
     ]
@@ -1879,9 +1884,9 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'middle_eastern', label: 'Middle Eastern', labelKo: '중동 음악', description: '우드, 두둑, 프레임드럼 같은 중동 악기의 이국적인 선율과 리듬을 중심으로 한 장르입니다. 신비롭고 건조한 사막의 분위기에 적합합니다.' },
           { id: 'japanese_folk', label: 'Japanese Folk', labelKo: '일본 포크', description: '샤쿠하치, 고토 등 일본 전통 악기의 섬세한 선율과 담백한 포크 감성을 결합한 스타일입니다.' },
           { id: 'pansori_fusion', label: 'Pansori Fusion', labelKo: '판소리 퓨전', description: '판소리의 극적인 발성과 현대적인 비트나 밴드 사운드를 결합한 한국적 퓨전 장르입니다. 서사와 캐릭터성이 강한 곡에 잘 맞습니다.' },
-          { id: 'traditional_folk_music', label: 'Traditional Folk Music', labelKo: '민속 음악', description: 'Traditional Folk Music with regional acoustic color.' },
-          { id: 'balkan_folk', label: 'Balkan Folk', labelKo: '발칸 민속', description: 'Balkan Folk with lively Eastern European rhythm.' },
-          { id: 'sarod', label: 'Sarod', labelKo: '사로드', description: 'Sarod-based Indian Classical Fusion.' },
+          { id: 'traditional_folk_music', label: 'Traditional Folk Music', labelKo: '민속 음악', description: '지역 고유의 어쿠스틱 색채가 살아있는 전통 민속 음악입니다.' },
+          { id: 'balkan_folk', label: 'Balkan Folk', labelKo: '발칸 민속', description: '동유럽 특유의 활기찬 리듬이 살아있는 발칸 민속 음악입니다.' },
+          { id: 'sarod', label: 'Sarod', labelKo: '사로드', description: '사로드 중심의 인도 클래식 선율을 현대적으로 결합한 퓨전 스타일입니다.' },
         ]
       },
       {
@@ -1896,7 +1901,7 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'reggaeton', label: 'Reggaeton', labelKo: '레게톤', description: '반복적인 뎀보 리듬과 라틴 팝 감성이 결합된 댄스 장르입니다. 중독적인 훅과 여름, 클럽, 파티 장면에 잘 맞습니다.' },
           { id: 'latin_pop', label: 'Latin Pop', labelKo: '라틴 팝', description: '라틴 리듬과 팝 멜로디가 결합된 밝고 뜨거운 스타일입니다. 기타, 퍼커션, 경쾌한 후렴에 잘 어울립니다.' },
           { id: 'afro_pop', label: 'Afro Pop', labelKo: '아프로 팝', description: '아프리카 리듬의 탄력과 팝 멜로디가 만난 장르입니다. 부드러운 그루브, 밝은 기타, 리듬감 있는 보컬에 적합합니다.' },
-          { id: 'chacha', label: 'Cha-cha-cha', labelKo: '차차차', description: 'Cha-cha-cha with playful Latin dance rhythm.' },
+          { id: 'chacha', label: 'Cha-cha-cha', labelKo: '차차차', description: '장난스럽고 경쾌한 라틴 댄스 리듬이 중심인 차차차 스타일입니다.' },
         ]
       }
     ]
@@ -1959,8 +1964,8 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'modern_classical', label: 'Modern Classical', labelKo: '모던 클래식', description: '전통 클래식의 형식을 현대적인 화성과 공간감으로 재해석한 장르입니다. 영화적이면서도 절제된 분위기에 적합합니다.' },
           { id: 'cinematic_piano', label: 'Cinematic Piano', labelKo: '시네마틱 피아노', description: '피아노를 중심으로 장면의 감정선을 크게 만드는 연주 스타일입니다. 드라마틱한 회상, 독백, 엔딩 장면에 잘 어울립니다.' },
           { id: 'chamber_orchestra', label: 'Chamber Orchestra', labelKo: '체임버 오케스트라', description: '소규모 현악과 목관 중심의 섬세한 오케스트라 사운드입니다. 웅장함보다 가까운 감정과 우아함을 표현합니다.' },
-          { id: 'church_hymn', label: 'Church Hymn', labelKo: '교회 성가', description: 'Church Hymn with sacred choral resonance.' },
-          { id: 'gothic_opera', label: 'Gothic Opera', labelKo: '고딕 오페라', description: 'Gothic Opera with dark dramatic vocal scale.' },
+          { id: 'church_hymn', label: 'Church Hymn', labelKo: '교회 성가', description: '성스러운 합창 울림이 중심인 교회 성가 스타일입니다.' },
+          { id: 'gothic_opera', label: 'Gothic Opera', labelKo: '고딕 오페라', description: '어둡고 극적인 보컬 스케일이 강조된 고딕 오페라 스타일입니다.' },
         ]
       },
       {
@@ -1980,9 +1985,9 @@ export const GENRE_HIERARCHY: GenreGroupItem[] = [
           { id: 'sci_fi_score', label: 'Sci-Fi Score', labelKo: 'SF 스코어', description: '차가운 신스, 우주적인 패드, 기계적 리듬으로 미래적 장면을 만드는 음악입니다.' },
           { id: 'horror_ambience', label: 'Horror Theme', labelKo: '호러 테마', description: '낮은 드론, 불안한 노이즈, 갑작스러운 임팩트로 공포감을 만드는 장면 음악입니다.' },
           { id: 'epic_trailer', label: 'Epic Trailer', labelKo: '에픽 트레일러', description: '강한 타악, 브라스, 스트링 빌드업으로 영화 예고편 같은 거대한 클라이맥스를 만드는 음악입니다.' },
-          { id: 'cinematic_ballad', label: 'Cinematic Ballad', labelKo: '영화 발라드', description: 'Cinematic Ballad with emotional score-like build.' },
-          { id: 'battle_theme', label: 'Battle Theme', labelKo: '전투테마', description: 'Battle Theme with heroic action-score energy.' },
-          { id: 'video_game_music', label: 'Video Game Music', labelKo: '비디오 게임 음악', description: 'Video Game Music with loopable thematic score design.' },
+          { id: 'cinematic_ballad', label: 'Cinematic Ballad', labelKo: '영화 발라드', description: '영화 음악처럼 감정이 점층되는 시네마틱 발라드 스타일입니다.' },
+          { id: 'battle_theme', label: 'Battle Theme', labelKo: '전투테마', description: '영웅적인 액션 스코어 에너지가 중심인 전투 테마 음악입니다.' },
+          { id: 'video_game_music', label: 'Video Game Music', labelKo: '비디오 게임 음악', description: '반복 재생에 어울리는 테마성과 게임 음악 구조가 중심인 스타일입니다.' },
         ]
       },
       {
@@ -2125,10 +2130,15 @@ export const SUB_GENRE_PROMPTS: Record<
     vocal: "Breathy, Soft, Whispering tone" 
   }, // 나른하고 부드러운 로파이 인디 감성
   city_pop: { 
-    style: "Urban City Pop, 80s Nostalgia", 
-    sound: "Fretless bass, Sophisticated jazz chords", 
+    style: "Classic City Pop, 80s Analog Urban Groove", 
+    sound: "Fretless bass, clean funk guitar, electric piano, brass or string accents", 
     vocal: "Sophisticated, Smooth delivery" 
-  }, // 도회적이고 세련된 80년대 라운지 사운드
+  }, // 70~80년대 원형 시티팝의 아날로그 도시 그루브
+  modern_city_pop: { 
+    style: "Modern City Pop, Glossy Night-drive Pop", 
+    sound: "Polished synth layers, nu-disco groove, clean modern mix, smooth electric piano", 
+    vocal: "Smooth modern pop vocal with relaxed city-pop phrasing" 
+  }, // 현대적인 팝/인디/신스 질감으로 재해석한 시티팝
   funk_pop: { 
     style: "Funk-driven Pop, Rhythmic Style", 
     sound: "Slap bass, Rhythmic guitar scratching", 
@@ -2160,6 +2170,11 @@ export const SUB_GENRE_PROMPTS: Record<
     sound: "Vintage synths, Dreamy K-pop atmosphere", 
     vocal: "Sweet, Melodic K-pop phrasing" 
   }, // 한국식 세련미를 더한 복고풍 신스팝 사운드
+  k_city_pop: { 
+    style: "K-City Pop, Korean Urban Romance", 
+    sound: "Smooth city-pop groove, Korean pop melody, warm electric piano, clean guitar, polished rhythm section", 
+    vocal: "Emotional Korean pop vocal with smooth city-pop phrasing" 
+  }, // 한국식 멜로디와 감성 보컬을 섞은 K-시티팝
   k_trap: { 
     style: "K-Hip-hop Fusion, Trap Style", 
     sound: "Rapid hi-hats, Booming 808 bass", 

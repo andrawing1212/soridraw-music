@@ -1267,6 +1267,21 @@ function getDirectArtistReferences(params?: GenerateSongParams): DirectArtistRef
   return refs.slice(0, 2);
 }
 
+
+function isSpecificIdolArtistReference(ref?: DirectArtistReference): boolean {
+  if (!ref) return false;
+  return /BLACKPINK|NewJeans|BTS|TWICE|IVE|LE\s*SSERAFIM|aespa|블랙핑크|뉴진스|방탄소년단|트와이스|아이브|르세라핌|에스파/i.test(`${ref.raw} ${ref.reference}`);
+}
+
+function buildArtistGenrePhrase(ref?: DirectArtistReference, options?: { allowReference?: boolean }): string {
+  if (!ref) return '';
+  const allowReference = options?.allowReference !== false;
+  if (!allowReference || isSpecificIdolArtistReference(ref)) {
+    return cleanupPromptTail(ref.traits || 'artist-referenced musical direction');
+  }
+  return cleanupPromptTail(`${ref.reference}${ref.traits ? `, ${ref.traits}` : ''}`);
+}
+
 function buildArtistReferenceGenreAccent(params?: GenerateSongParams): string {
   const refs = getDirectArtistReferences(params);
   if (!refs.length) return '';
@@ -1275,13 +1290,14 @@ function buildArtistReferenceGenreAccent(params?: GenerateSongParams): string {
   const isBuzzReference = /(?:버즈|\bBuzz\b)/i.test(`${main.raw} ${main.reference}`);
   if (isBuzzReference) {
     const secondaryColor = second && !/(?:버즈|\bBuzz\b)/i.test(`${second.raw} ${second.reference}`)
-      ? ` with ${second.reference} color`
+      ? ` with ${buildArtistGenrePhrase(second, { allowReference: !isSpecificIdolArtistReference(second) })} color`
       : '';
     return cleanupPromptTail(`2000s Korean rock band Buzz-style emotional K-rock ballad${secondaryColor}`);
   }
-  const referenceText = second ? `${main.reference} with ${second.reference} color` : main.reference;
-  const traitText = [main.traits, second?.traits].filter(Boolean).join(', ');
-  return cleanupPromptTail(`${referenceText}${traitText ? `, ${traitText}` : ''}`);
+  const mainPhrase = buildArtistGenrePhrase(main);
+  const secondPhrase = second ? buildArtistGenrePhrase(second, { allowReference: !isSpecificIdolArtistReference(second) }) : '';
+  if (secondPhrase) return cleanupPromptTail(`${mainPhrase} with ${secondPhrase} color`);
+  return cleanupPromptTail(mainPhrase);
 }
 
 function buildArtistReferenceVocalAccent(params?: GenerateSongParams): string {
@@ -13386,6 +13402,19 @@ function stripInternalPromptLeakPhrases(value: string): string {
     .trim());
 }
 
+
+function removeAudioQualityLineWhenPromptIsNearLimit(prompt: string): string {
+  const source = String(prompt || '').trim();
+  if (!source) return source;
+  if (source.length < 950) return source;
+  return source
+    .split(/\r?\n/)
+    .filter((line) => !/^\[Audio quality improved to masterpiece\]$/i.test(line.trim()))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string): string {
   const labels = ['Genre', 'Instruments', 'Atmosphere', 'Vocals', 'Arrangement'] as const;
   const fallbackByLabel = new Map<string, string>();
@@ -13432,7 +13461,7 @@ function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string):
   });
 
   finalLines.push('[Audio quality improved to masterpiece]');
-  return finalLines.join('\n');
+  return removeAudioQualityLineWhenPromptIsNearLimit(finalLines.join('\n'));
 }
 
 function reconcileFiveLinePromptRoles(prompt: string): string {
@@ -14485,14 +14514,14 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
     map.vocals = cleanupPromptTail(buildFiveLineVocalsValue(validationParams, '')) || 'Natural solo vocal with human breath';
   }
 
-  return enforceEnglishProductionPrompt([
+  return removeAudioQualityLineWhenPromptIsNearLimit(enforceEnglishProductionPrompt([
     `[Genre] ${map.genre}`,
     `[Instruments] ${map.instruments}`,
     `[Atmosphere] ${map.atmosphere}`,
     `[Vocals] ${map.vocals}`,
     `[Arrangement] ${map.arrangement}`,
     `[Audio quality improved to masterpiece]`,
-  ].join('\n'));
+  ].join('\n')));
 }
 
 
@@ -14558,14 +14587,14 @@ function buildDedicatedInstrumentalBgmPrompt(params: GenerateSongParams): string
   }
 
   const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
-  return enforceEnglishProductionPrompt([
+  return removeAudioQualityLineWhenPromptIsNearLimit(enforceEnglishProductionPrompt([
     `[Genre] ${cleanupPromptTail(genre)}`,
     `[Instruments] ${cleanupPromptTail(instruments)}`,
     `[Atmosphere] ${cleanupPromptTail(atmosphere)}`,
     `[Vocals] Instrumental only, no vocals, no humming`,
     `[Arrangement] ${cleanupPromptTail([tempo, arrangementConstraint, arrangementCore].filter(Boolean).join(', '))}`,
     `[Audio quality improved to masterpiece]`,
-  ].join('\n'));
+  ].join('\n')));
 }
 
 function hardEnforceInstrumentalBgmFinalPrompt(prompt: string, params: GenerateSongParams): string {
@@ -16770,14 +16799,14 @@ export async function generateSong(
     const safeAtmosphere = buildThemeMoodInterpretation(params).atmosphereCue || "balanced emotional scene";
     const safeVocalCue = mergeCompactCue(getSelectedGenreVocalCue(params), getEraTextureVocalCues(params), 2);
     const safeArrangementCue = mergeCompactCue(getSpecificGenreArrangementCue(params) || getGenreArrangementDNA(params), getEraTextureArrangementCues(params), 3);
-    finalPrompt = [
+    finalPrompt = removeAudioQualityLineWhenPromptIsNearLimit([
       `[Genre] ${safeGenre || 'Pop Fusion'}`,
       `[Instruments] ${safeInstruments || 'balanced drums, bass, and melodic core instruments'}`,
       `[Atmosphere] ${normalizeAtmospherePromptLine(safeAtmosphere) || 'balanced emotional scene'}`,
       `[Vocals] ${safeVocalCue ? `natural solo vocal with ${safeVocalCue}` : 'natural solo vocal with story-aware delivery'}`,
       `[Arrangement] ${normalizeArrangementLine([safeArrangementCue, 'focused hook']) || 'clear sectional contrast and focused hook'}`,
       `[Audio quality improved to masterpiece]`,
-    ].join("\n");
+    ].join("\n"));
   }
   console.log("🔥 generateSong called");
   console.log("🔥 FINAL PROMPT:", finalPrompt);

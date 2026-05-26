@@ -2961,6 +2961,10 @@ function App() {
   });
 
   const pendingSunoCreditCheckTrackIdsRef = useRef<Set<string>>(new Set());
+  const [recentSunoTracksForPolling, setRecentSunoTracksForPolling] = useState<any[]>([]);
+  const globalSunoStatusCheckingIdsRef = useRef<Set<string>>(new Set());
+  const globalSunoStatusCheckCountsRef = useRef<Map<string, number>>(new Map());
+  const globalSunoStatusLastRunAtRef = useRef<Map<string, number>>(new Map());
 
   const setSunoLibrarySignal = (value: 'generating' | 'completed' | null, startedAt?: number) => {
     const resolvedStartedAt = value === 'generating'
@@ -3178,6 +3182,7 @@ function App() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tracks = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      setRecentSunoTracksForPolling(tracks);
       const pendingTrackIds = new Set(getPendingSunoCreditTrackIds());
 
       const completedPendingTrack = tracks.find((track) =>
@@ -3206,6 +3211,99 @@ function App() {
 
     return () => unsubscribe();
   }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
+
+  const shouldPollSunoTrackGlobally = useCallback((track: any, now: number): boolean => {
+    if (!track || typeof track !== 'object') return false;
+    if (!track.id || !track.taskId) return false;
+
+    const status = String(track.status || '').toLowerCase();
+    if (['completed', 'success', 'complete', 'succeeded', 'failed', 'cancelled', 'canceled'].includes(status)) return false;
+    if (isCompletedSunoLibraryTrack(track, 0)) return false;
+
+    const createdAtMs = getSunoTrackTimeMs(track.createdAt);
+    const updatedAtMs = getSunoTrackTimeMs(track.updatedAt);
+    const baseTimeMs = createdAtMs || updatedAtMs;
+    if (!baseTimeMs) return false;
+
+    const elapsedMs = now - baseTimeMs;
+    if (elapsedMs < 8000) return false;
+    if (elapsedMs > 10 * 60 * 1000) return false;
+
+    const trackId = String(track.id);
+    const count = globalSunoStatusCheckCountsRef.current.get(trackId) || 0;
+    if (count >= 30) return false;
+    if (globalSunoStatusCheckingIdsRef.current.has(trackId)) return false;
+
+    const nextIntervalMs = elapsedMs < 3 * 60 * 1000
+      ? 15 * 1000
+      : elapsedMs < 6 * 60 * 1000
+        ? 30 * 1000
+        : 60 * 1000;
+
+    const lastRunAt = globalSunoStatusLastRunAtRef.current.get(trackId) || 0;
+    if (lastRunAt && now - lastRunAt < nextIntervalMs) return false;
+
+    return true;
+  }, []);
+
+  const checkSunoTrackStatusGlobally = useCallback(async (track: any) => {
+    if (!user || !track?.id || !track?.taskId) return;
+
+    const trackId = String(track.id);
+    if (globalSunoStatusCheckingIdsRef.current.has(trackId)) return;
+
+    globalSunoStatusCheckingIdsRef.current.add(trackId);
+    globalSunoStatusLastRunAtRef.current.set(trackId, Date.now());
+    globalSunoStatusCheckCountsRef.current.set(trackId, (globalSunoStatusCheckCountsRef.current.get(trackId) || 0) + 1);
+
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          trackId,
+          taskId: track.taskId,
+        }),
+      });
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        console.warn('Global Suno status check failed:', trackId, data);
+      }
+    } catch (error) {
+      console.warn('Global Suno status check error:', trackId, error);
+    } finally {
+      globalSunoStatusCheckingIdsRef.current.delete(trackId);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || location.pathname === '/suno-library') return;
+
+    const runGlobalSunoPolling = () => {
+      const now = Date.now();
+      recentSunoTracksForPolling
+        .filter((track) => shouldPollSunoTrackGlobally(track, now))
+        .slice(0, 4)
+        .forEach((track) => {
+          void checkSunoTrackStatusGlobally(track);
+        });
+    };
+
+    runGlobalSunoPolling();
+    const intervalId = window.setInterval(runGlobalSunoPolling, 15000);
+    return () => window.clearInterval(intervalId);
+  }, [user, location.pathname, recentSunoTracksForPolling, shouldPollSunoTrackGlobally, checkSunoTrackStatusGlobally]);
 
   const RECENT_SONGS_CACHE_TTL_MS = 10 * 60 * 1000;
   const getRecentSongsCacheKey = (uid: string) => `soridraw_recent_songs_cache_${uid}`;

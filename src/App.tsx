@@ -2740,6 +2740,22 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, themeMode, t
   );
 }
 
+const GEMINI_MODEL_LABELS: Record<string, string> = {
+  'gemini-3.5-flash': 'Gemini 3.5 Flash',
+  'gemini-3-flash': 'Gemini 3 Flash',
+  'gemini-3.1-flash-lite': 'Gemini 3.1 Flash Lite',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+  'local-emergency': '로컬 안전 결과',
+};
+
+const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
+  if (!song) return '';
+  const applied = (song.appliedKeywords || {}) as any;
+  const rawModel = String(applied.geminiUsedModel || (song as any).geminiModelInfo?.usedModel || '').trim();
+  return rawModel ? (GEMINI_MODEL_LABELS[rawModel] || rawModel) : '';
+};
+
 function App() {
   const getAvailableMusicApiLyricLanguages = (song: SongResult | null): LanguageCode[] => {
     return getGeneratedLyricLanguages(song);
@@ -2917,6 +2933,7 @@ function App() {
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [latestGenerationBatchId, setLatestGenerationBatchId] = useState<string | null>(null);
+  const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
@@ -4500,6 +4517,12 @@ const toggleCycleVariantSelection = (
 
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!generationModelNotice) return;
+    const timer = window.setTimeout(() => setGenerationModelNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [generationModelNotice]);
 
   const hasInitializedHomeRef = useRef(false);
 
@@ -6725,6 +6748,11 @@ const saveRecentSong = async (newSong: any) => {
       const [firstResult] = generatedResults;
       if (!firstResult) return;
 
+      const usedModelLabel = getGeminiUsedModelLabel(firstResult);
+      if (usedModelLabel) {
+        setGenerationModelNotice(`생성 모델 ${usedModelLabel}`);
+      }
+
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
@@ -7519,41 +7547,43 @@ ${normalizePromptForDisplay(result.prompt)}
         </button>
       </div>
 
-      <button
-        onClick={() => {
-          if (isGenerating) {
-            handleGenerate();
-          } else {
-            setShowMainGenerationModal(true);
-          }
-          setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
-        }}
-        onMouseEnter={() => setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
-        onMouseLeave={() => {
-          clearActionButtonHint();
-          handleLongPressEnd();
-        }}
-        onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
-        onTouchEnd={handleLongPressEnd}
-        className={cn(
-          "flex-1 py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
-          isGenerating 
-            ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-            : "music-waves shadow-brand-orange/20 hover:brightness-110"
-        )}
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
-            <span>작곡 취소</span>
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
-            <span>생성하기</span>
-          </>
-        )}
-      </button>
+      <div className="relative flex-1">
+        <button
+          onClick={() => {
+            if (isGenerating) {
+              handleGenerate();
+            } else {
+              setShowMainGenerationModal(true);
+            }
+            setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
+          }}
+          onMouseEnter={() => setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+          onMouseLeave={() => {
+            clearActionButtonHint();
+            handleLongPressEnd();
+          }}
+          onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+          onTouchEnd={handleLongPressEnd}
+          className={cn(
+            "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
+            isGenerating 
+              ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
+              : "music-waves shadow-brand-orange/20 hover:brightness-110"
+          )}
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
+              <span>작곡 취소</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
+              <span>생성하기</span>
+            </>
+          )}
+        </button>
+      </div>
 
       <div className="relative flex-shrink-0">
         <button
@@ -8662,6 +8692,11 @@ ${normalizePromptForDisplay(result.prompt)}
                     className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
                   >
                     <div className="relative w-full max-w-4xl pointer-events-auto">
+                      {generationModelNotice && (
+                        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
+                          {generationModelNotice}
+                        </div>
+                      )}
                       <motion.div
                         layoutId="action-buttons-floating-bar"
                         drag={isActionDragMobile ? "x" : false}

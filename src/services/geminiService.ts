@@ -106,6 +106,131 @@ function getAI() {
   return aiInstance;
 }
 
+const GEMINI_TEXT_MODEL_CHAIN = [
+  "gemini-3.5-flash",
+  "gemini-3-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+];
+
+const GEMINI_FALLBACK_STABILITY_INSTRUCTION = `
+[FALLBACK MODEL SAFETY MODE]
+- Prioritize structural stability over creative reinterpretation.
+- Keep the exact 5-line production prompt structure: [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement].
+- Do not invent extra vocal roles. If the user selected solo vocal, keep it solo.
+- Do not convert a vocal song into instrumental. Use instrumental/no vocals only when instrumental BGM or no-lyrics mode is explicitly active.
+- Preserve direct user input above automatic keyword interpretation.
+- Keep lines concise, but do not remove essential vocal character details.
+- Return valid JSON exactly matching the requested schema.
+`.trim();
+
+function describeGeminiError(error: any): string {
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error || "");
+  }
+}
+
+function isGeminiRetryableError(error: any): boolean {
+  const text = describeGeminiError(error).toLowerCase();
+  const status = error?.status || error?.error?.status || "";
+  const code = error?.code || error?.error?.code || 0;
+  return (
+    code === 429 ||
+    code === 500 ||
+    code === 502 ||
+    code === 503 ||
+    code === 504 ||
+    status === "RESOURCE_EXHAUSTED" ||
+    status === "UNAVAILABLE" ||
+    status === "DEADLINE_EXCEEDED" ||
+    text.includes("429") ||
+    text.includes("quota") ||
+    text.includes("rate limit") ||
+    text.includes("resource_exhausted") ||
+    text.includes("overloaded") ||
+    text.includes("unavailable") ||
+    text.includes("temporarily")
+  );
+}
+
+function withFallbackSafetyInstruction(config: any, attemptIndex: number): any {
+  if (attemptIndex <= 0) return config;
+  const baseInstruction = config?.systemInstruction ? String(config.systemInstruction) : "";
+  return {
+    ...(config || {}),
+    systemInstruction: [baseInstruction, GEMINI_FALLBACK_STABILITY_INSTRUCTION]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+}
+
+function getGeminiFallbackReason(error: any): string {
+  const text = describeGeminiError(error).toLowerCase();
+  const status = String(error?.status || error?.error?.status || "").toLowerCase();
+  const code = Number(error?.code || error?.error?.code || 0);
+  if (code === 429 || status.includes("resource_exhausted") || text.includes("quota")) return "quota_or_rate_limit";
+  if (text.includes("rate limit") || text.includes("429")) return "quota_or_rate_limit";
+  if (status.includes("unavailable") || text.includes("unavailable") || text.includes("overloaded")) return "model_unavailable_or_overloaded";
+  if (code >= 500 || status.includes("deadline") || text.includes("temporarily")) return "temporary_server_error";
+  return "generation_error";
+}
+
+interface GeminiModelUsageInfo {
+  usedModel: string;
+  fallbackUsed: boolean;
+  fallbackFrom?: string | null;
+  fallbackReason?: string | null;
+  attemptedModels: string[];
+}
+
+async function generateContentWithModelFallback(
+  ai: GoogleGenAI,
+  generateParams: any,
+  context: string,
+  modelChain: string[] = GEMINI_TEXT_MODEL_CHAIN,
+): Promise<any> {
+  let lastError: any = null;
+  let firstFailedModel: string | null = null;
+  let firstFallbackReason: string | null = null;
+  const attemptedModels: string[] = [];
+
+  for (let i = 0; i < modelChain.length; i += 1) {
+    const model = modelChain[i];
+    attemptedModels.push(model);
+    const paramsForAttempt = {
+      ...generateParams,
+      model,
+      config: withFallbackSafetyInstruction(generateParams.config, i),
+    };
+    try {
+      if (i > 0) {
+        console.warn(`[SORIDRAW Gemini Fallback] ${context}: retrying with ${model}`);
+      }
+      const response = await ai.models.generateContent(paramsForAttempt);
+      (response as any).__soridrawGeminiModelInfo = {
+        usedModel: model,
+        fallbackUsed: i > 0,
+        fallbackFrom: i > 0 ? firstFailedModel || modelChain[0] || null : null,
+        fallbackReason: i > 0 ? firstFallbackReason || "generation_error" : null,
+        attemptedModels,
+      } satisfies GeminiModelUsageInfo;
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (!firstFailedModel) {
+        firstFailedModel = model;
+        firstFallbackReason = getGeminiFallbackReason(error);
+      }
+      console.warn(`[SORIDRAW Gemini Fallback] ${context}: ${model} failed`, error);
+      if (!isGeminiRetryableError(error) && i >= 1) break;
+    }
+  }
+  throw lastError;
+}
+
 
 export interface CustomSectionAutoMetadataInput {
   labelKo: string;
@@ -16730,7 +16855,7 @@ export async function generateSong(
     (params as any).instrumentalBgmMode = true;
   }
   params.lyricLanguages = params.isNoLyrics ? [] : requestedLyricLanguages;
-  const model: string = "gemini-3-flash-preview";
+  const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
 
   const genresForDuration = params.genre ? [params.genre] : [];
   const selectedStructureMode = (params.songStructure ?? "1") as SongStructure;
@@ -17592,29 +17717,29 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   };
 
   try {
-    response = await ai.models.generateContent(generateParams);
-  } catch (error) {
-    console.warn("[SORIDRAW Generation Guard] primary generation failed, trying safe fallback:", error);
+    response = await generateContentWithModelFallback(
+      ai,
+      generateParams,
+      "generateSong",
+    );
+  } catch (fallbackError) {
+    console.warn("[SORIDRAW Generation Guard] model fallback chain failed, trying minimal fallback:", fallbackError);
     try {
-      response = await ai.models.generateContent({
-        ...generateParams,
-        model: "gemini-2.5-flash-lite",
-      });
-    } catch (fallbackError) {
-      console.warn("[SORIDRAW Generation Guard] schema fallback failed, trying minimal fallback:", fallbackError);
-      try {
-        response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-lite",
+      response = await generateContentWithModelFallback(
+        ai,
+        {
+          model: GEMINI_TEXT_MODEL_CHAIN[0],
           contents: "Generate a short safe song title, final productionPrompt, and lyrics as JSON. Always return valid JSON only.",
           config: {
-            systemInstruction: `${systemInstruction}\n\nCRITICAL FALLBACK MODE: Return compact valid JSON only. Do not refuse. If any keyword combination is difficult, simplify it and continue.`,
+            systemInstruction: `${systemInstruction}\n\nCRITICAL FALLBACK MODE: Return compact valid JSON only. Do not refuse. If any keyword combination is difficult, simplify it and continue.\n\n${GEMINI_FALLBACK_STABILITY_INSTRUCTION}`,
             responseMimeType: "application/json",
           },
-        });
-      } catch (minimalError) {
-        console.warn("[SORIDRAW Generation Guard] minimal fallback failed, using local emergency result:", minimalError);
-        response = null;
-      }
+        },
+        "generateSong minimal",
+      );
+    } catch (minimalError) {
+      console.warn("[SORIDRAW Generation Guard] minimal fallback failed, using local emergency result:", minimalError);
+      response = null;
     }
   }
 
@@ -17627,6 +17752,14 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   if (!result || typeof result !== "object") result = {};
+  const geminiModelInfo: GeminiModelUsageInfo = (response as any)?.__soridrawGeminiModelInfo || {
+    usedModel: response ? GEMINI_TEXT_MODEL_CHAIN[0] : "local-emergency",
+    fallbackUsed: !response,
+    fallbackFrom: response ? null : GEMINI_TEXT_MODEL_CHAIN[0],
+    fallbackReason: response ? null : "local_emergency_result",
+    attemptedModels: response ? [GEMINI_TEXT_MODEL_CHAIN[0]] : [...GEMINI_TEXT_MODEL_CHAIN],
+  };
+  (result as any).geminiModelInfo = geminiModelInfo;
   if (!result.title || typeof result.title !== "string") {
     result.title = hasKoreanLanguage ? "다시 시작" : "New Start";
   }
@@ -17940,6 +18073,11 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     secondaryLanguage: secondaryLanguage as any,
     isNoLyrics: params.isNoLyrics as any,
     instrumentalBgmMode: Boolean((params as any).instrumentalBgmMode) as any,
+    geminiUsedModel: geminiModelInfo.usedModel,
+    geminiFallbackUsed: geminiModelInfo.fallbackUsed,
+    geminiFallbackFrom: geminiModelInfo.fallbackFrom || null,
+    geminiFallbackReason: geminiModelInfo.fallbackReason || null,
+    geminiAttemptedModels: geminiModelInfo.attemptedModels,
   } as any;
 
   return result as SongResult;
@@ -17949,7 +18087,7 @@ export async function translateLyrics(
   lyrics: string,
   targetLanguage: "korean" | "english" | string,
 ): Promise<string> {
-  const model: string = "gemini-3-flash-preview";
+  const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
 
   const systemInstruction = `
 You are a professional lyricist and translator.
@@ -17970,30 +18108,13 @@ Translate the provided text into ${targetLanguage}.
   };
 
   try {
-    response = await ai.models.generateContent(generateParams);
+    response = await generateContentWithModelFallback(
+      ai,
+      generateParams,
+      "translateLyrics",
+    );
   } catch (error) {
-    const errorStr = JSON.stringify(error);
-    const isQuotaError =
-      error?.status === "RESOURCE_EXHAUSTED" ||
-      error?.code === 429 ||
-      error?.error?.code === 429 ||
-      error?.error?.status === "RESOURCE_EXHAUSTED" ||
-      errorStr.includes("RESOURCE_EXHAUSTED") ||
-      errorStr.includes("quota") ||
-      errorStr.includes("429");
-
-    if (isQuotaError && model !== "gemini-2.5-flash-lite") {
-      try {
-        response = await ai.models.generateContent({
-          ...generateParams,
-          model: "gemini-2.5-flash-lite",
-        });
-      } catch (fallbackError) {
-        handleGeminiError(fallbackError, "translateLyrics (fallback)");
-      }
-    } else {
-      handleGeminiError(error, "translateLyrics");
-    }
+    handleGeminiError(error, "translateLyrics");
   }
 
   return response.text || "";

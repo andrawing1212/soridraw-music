@@ -348,6 +348,11 @@ export interface AppliedKeywords {
   isNoLyrics?: boolean;
   includeLyrics?: boolean;
   instrumentalBgmMode?: boolean;
+  geminiUsedModel?: string;
+  geminiFallbackUsed?: boolean;
+  geminiFallbackFrom?: string | null;
+  geminiFallbackReason?: string | null;
+  geminiAttemptedModels?: string[];
 }
 
 export interface GenerateSongParams {
@@ -387,6 +392,13 @@ export interface SongResult {
   appliedKeywords: AppliedKeywords;
   situationSummary?: string;
   randomKeywords?: string[];
+  geminiModelInfo?: {
+    usedModel: string;
+    fallbackUsed: boolean;
+    fallbackFrom?: string | null;
+    fallbackReason?: string | null;
+    attemptedModels?: string[];
+  };
 }
 
 export type UserRole = 'free' | 'basic' | 'pro' | 'admin';

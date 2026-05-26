@@ -187,7 +187,7 @@ export default function GlobalPlayer() {
   } = useGlobalPlayer();
 
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
+  const [mode, setMode] = useState<'collapsed' | 'expanded'>('collapsed');
   const [showMenu, setShowMenu] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
@@ -295,7 +295,7 @@ export default function GlobalPlayer() {
     const handlePopState = () => {
       if (mobileExpandedHistoryPushedRef.current) {
         mobileExpandedHistoryPushedRef.current = false;
-        handleModeChange('normal');
+        handleModeChange('collapsed');
       }
     };
 
@@ -361,14 +361,64 @@ export default function GlobalPlayer() {
 
   useEffect(() => {
     const savedMode = localStorage.getItem('soridraw_global_player_mode');
-    if (savedMode === 'collapsed' || savedMode === 'normal' || savedMode === 'expanded') {
-      setMode(savedMode as 'collapsed' | 'normal' | 'expanded');
+    if (savedMode === 'expanded') {
+      setMode('expanded');
+    } else {
+      setMode('collapsed');
+      if (savedMode === 'normal') localStorage.setItem('soridraw_global_player_mode', 'collapsed');
     }
   }, []);
 
-  const handleModeChange = (newMode: 'collapsed' | 'normal' | 'expanded') => {
+  const handleModeChange = (newMode: 'collapsed' | 'expanded') => {
     setMode(newMode);
     localStorage.setItem('soridraw_global_player_mode', newMode);
+  };
+
+  const [expandedPosition, setExpandedPosition] = useState({ x: 0, y: 0 });
+  const expandedDragRef = useRef<{ active: boolean; startX: number; startY: number; baseX: number; baseY: number }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    baseX: 0,
+    baseY: 0,
+  });
+
+  useEffect(() => {
+    const handleResizeForPlayer = () => {
+      if (!isMobile && window.innerWidth < 1100 && mode === 'expanded') {
+        handleModeChange('collapsed');
+      }
+    };
+    window.addEventListener('resize', handleResizeForPlayer);
+    return () => window.removeEventListener('resize', handleResizeForPlayer);
+  }, [isMobile, mode]);
+
+  const handleExpandedDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (isMobile || mode !== 'expanded') return;
+    expandedDragRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: expandedPosition.x,
+      baseY: expandedPosition.y,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleExpandedDragMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = expandedDragRef.current;
+    if (!drag.active) return;
+    const nextX = drag.baseX + (event.clientX - drag.startX);
+    const nextY = drag.baseY + (event.clientY - drag.startY);
+    setExpandedPosition({
+      x: Math.max(-window.innerWidth + 120, Math.min(120, nextX)),
+      y: Math.max(-80, Math.min(window.innerHeight - 260, nextY)),
+    });
+  };
+
+  const handleExpandedDragEnd = (event: React.PointerEvent<HTMLButtonElement>) => {
+    expandedDragRef.current.active = false;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
 
@@ -798,7 +848,7 @@ export default function GlobalPlayer() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[99] bg-transparent"
-          onClick={() => handleModeChange('normal')}
+          onClick={() => handleModeChange('collapsed')}
           aria-hidden="true"
         />
       )}
@@ -813,139 +863,63 @@ export default function GlobalPlayer() {
         ref={playerRef}
         initial={false}
         animate={{ 
-          x: mode === 'expanded' ? (isMobile ? '-50%' : 0) : (isSharedPlayerMode || isMobile ? '-50%' : 0),
-          y: mode === 'expanded' ? '-50%' : 0
+          x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isSharedPlayerMode || isMobile ? '-50%' : 0),
+          y: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.y) : 0
         }}
         className={`fixed z-[100] flex flex-col ${
           mode === 'expanded'
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-24px)] max-w-[430px]'
-              : 'top-1/2 right-4 xl:right-10 w-[400px] max-w-[calc(100vw-32px)]'
+              : 'top-[88px] right-6 w-[400px] max-w-[calc(100vw-32px)]'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
-            : 'bottom-6 right-6 w-auto items-end'
+            : 'top-2 right-[178px] w-[230px] items-end'
         }`}
       >
         <AnimatePresence mode="popLayout">
           {mode === 'collapsed' && (
             <motion.div
               key="collapsed"
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={() => {
-                 handleModeChange('normal');
-              }}
-              className="w-full bg-[var(--bg-secondary)] border border-white/10 rounded-full py-2 px-4 shadow-xl flex items-center justify-between cursor-pointer"
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="w-full overflow-hidden rounded-xl border border-white/10 bg-[#151515]/95 shadow-[0_8px_28px_rgba(0,0,0,0.35)] backdrop-blur-xl"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
-                   {currentTrack.imageUrl ? (
-                      <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
-                   ) : (
-                      <Music className="w-4 h-4 text-white/30" />
-                   )}
-                </div>
-                <div className="min-w-0 pr-2 overflow-hidden max-w-[140px] md:max-w-[200px]">
-                   <ScrollText text={currentTrack.title || 'Untitled'} className="font-bold text-xs" />
-                </div>
+              <div className="h-0.5 w-full bg-white/10">
+                <div
+                  className="h-full bg-brand-orange transition-none"
+                  style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                />
               </div>
-
-              <div className="flex items-center gap-1 shrink-0 relative z-10 pointer-events-auto">
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); playPrev(); }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
-                 >
-                    <SkipBack className="w-4 h-4 fill-current" />
-                 </button>
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center bg-brand-orange/10 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shrink-0"
-                 >
-                    {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
-                 </button>
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); playNext(); }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
-                 >
-                    <SkipForward className="w-4 h-4 fill-current" />
-                 </button>
-              </div>
-            </motion.div>
-          )}
-
-          {mode === 'normal' && (
-            <motion.div
-              key="normal"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={() => {
-                 handleModeChange('expanded');
-              }}
-              className="w-full md:w-96 bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-2xl p-3 shadow-2xl flex flex-col cursor-pointer relative overflow-hidden"
-            >
-              {/* Normal mode top handle */}
-              <div className="absolute top-0 left-0 right-0 h-6 flex items-center justify-center z-20 pointer-events-auto">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleModeChange('collapsed'); }}
-                  className="px-4 py-1 hover:bg-white/10 rounded-b-xl transition-all text-white/40 hover:text-white/80"
+              <div className="flex h-10 items-center gap-2 px-2">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/40"
+                  title="대형 플레이어 열기"
+                  aria-label="대형 플레이어 열기"
                 >
-                  <div className="w-8 h-1 bg-white/20 rounded-full" />
+                  {currentTrack.imageUrl ? (
+                    <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`h-full w-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
+                  ) : (
+                    <Music className="h-4 w-4 text-white/35" />
+                  )}
                 </button>
-              </div>
-
-              {/* Menu and Close buttons for Normal mode */}
-              <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); clearPlayer(); }}
-                  className="p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 relative z-30 pointer-events-auto"
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
+                  className="min-w-0 flex-1 text-left"
                 >
-                  <X className="w-4 h-4" />
+                  <ScrollText text={currentTrack.title || 'Untitled'} className="text-[11px] font-black text-white/85" />
                 </button>
-              </div>
-
-              <div className="flex items-center gap-3 relative z-10 w-full mt-2">
-                <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-black/40 flex items-center justify-center border border-white/5 relative">
-                   {currentTrack.imageUrl ? (
-                      <img src={currentTrack.imageUrl} alt={currentTrack.title} draggable={false} onDragStart={(e) => e.preventDefault()} className={`w-full h-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`} />
-                   ) : (
-                      <Music className="w-6 h-6 text-white/30" />
-                   )}
-                </div>
-                
-                <div className="flex-1 min-w-0 pr-16 relative overflow-hidden">
-                   <ScrollText text={currentTrack.title || 'Untitled'} className="font-bold text-sm" />
-                   <p className="text-[10px] opacity-50 truncate">{artistDisplay}</p>
-                </div>
-
-                <div className="flex items-center gap-1.5 relative z-30 pointer-events-auto shrink-0 mr-1">
-                   <button 
-                      onClick={(e) => { e.stopPropagation(); playPrev(); }}
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
-                   >
-                      <SkipBack className="w-4 h-4 fill-current" />
-                   </button>
-                   <button 
-                      onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                      className="w-10 h-10 rounded-full flex items-center justify-center bg-brand-orange/10 text-brand-orange hover:bg-brand-orange hover:text-white transition-all shrink-0"
-                   >
-                      {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
-                   </button>
-                   <button 
-                      onClick={(e) => { e.stopPropagation(); playNext(); }}
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
-                   >
-                      <SkipForward className="w-4 h-4 fill-current" />
-                   </button>
-                </div>
-              </div>
-
-              <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-white/10 rounded-full overflow-hidden pointer-events-none mt-2">
-                 <div 
-                   className="h-full bg-brand-orange transition-none" 
-                   style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                 />
+                <button
+                  onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-orange/15 text-brand-orange transition-all hover:bg-brand-orange hover:text-white"
+                  title={isPlaying ? '일시정지' : '재생'}
+                  aria-label={isPlaying ? '일시정지' : '재생'}
+                >
+                  {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
+                </button>
               </div>
             </motion.div>
           )}
@@ -1015,8 +989,13 @@ export default function GlobalPlayer() {
                  </div>
 
                  <button 
-                    onClick={() => handleModeChange('normal')}
-                    className="p-2 px-6 hover:bg-white/10 rounded-full transition-all text-white/50"
+                    onClick={() => handleModeChange('collapsed')}
+                    onPointerDown={handleExpandedDragStart}
+                    onPointerMove={handleExpandedDragMove}
+                    onPointerUp={handleExpandedDragEnd}
+                    onPointerCancel={handleExpandedDragEnd}
+                    className="p-2 px-6 hover:bg-white/10 rounded-full transition-all text-white/50 cursor-grab active:cursor-grabbing"
+                    title="드래그로 이동 / 클릭하면 축소"
                  >
                     <div className="w-8 h-1.5 bg-white/20 rounded-full" />
                  </button>

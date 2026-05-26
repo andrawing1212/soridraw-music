@@ -1816,6 +1816,7 @@ const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManageme
 const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
 const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
 const MyPageLazy = lazy(() => import('./pages/MyPage'));
+const HomePageLazy = lazy(() => import('./pages/HomePage'));
 const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
@@ -2420,6 +2421,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
   const topNavItems: Array<{ path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
     { path: '/', label: '홈', icon: HomeIcon },
+    { path: '/studio', label: '스튜디오', icon: Zap },
     { path: '/history', label: '뮤직노트', icon: HeartIcon },
     { path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
     { path: '/my-page', label: '마이페이지', icon: UserIcon },
@@ -2485,6 +2487,19 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
       scrollToTop();
     } else {
       navigate('/');
+    }
+    setIsExpanded(false);
+  };
+
+  const handleStudioClick = () => {
+    if (!user) {
+      handleLogin();
+      return;
+    }
+    if (location.pathname === '/studio') {
+      scrollToTop();
+    } else {
+      navigate('/studio');
     }
     setIsExpanded(false);
   };
@@ -2759,6 +2774,15 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 title="홈"
               >
                 <HomeIcon className="h-5 w-5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleStudioClick}
+                className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
+                title="스튜디오"
+              >
+                <Zap className="h-5 w-5" />
               </button>
 
               <button
@@ -4250,6 +4274,7 @@ function App() {
   const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
+  const [isHomeMusicApiMenuCollapsed, setIsHomeMusicApiMenuCollapsed] = useState(true);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
@@ -6077,7 +6102,7 @@ const toggleCycleVariantSelection = (
   // Keep the in-progress Home draft when navigating away and back.
   // Only pending shared/playlist keywords intentionally replace the current draft.
   useEffect(() => {
-    if (location.pathname !== '/') return;
+    if (location.pathname !== '/studio') return;
 
     let isCancelled = false;
 
@@ -7993,6 +8018,11 @@ ${normalizePromptForDisplay(result.prompt)}
 
       <Routes>
         <Route path="/" element={
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
+            <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} />
+          </Suspense>
+        } />
+        <Route path="/studio" element={
           <>
 
               {/* Header */}
@@ -9375,42 +9405,63 @@ ${normalizePromptForDisplay(result.prompt)}
                     })()}
                   </div>
                 )}
-                  <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="mt-2 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
                     <button
-                      onClick={() => navigate('/my-page')}
-                      className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5"
-                      title="마이페이지에서 API 관리"
+                      type="button"
+                      onClick={() => setIsHomeMusicApiMenuCollapsed((prev) => !prev)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-white/[0.04]"
                     >
-                      <Settings className="w-5 h-5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-white/85">Music API 생성</p>
+                        <p className="mt-0.5 text-[11px] font-medium text-white/40">
+                          Suno 음원 생성 메뉴
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 text-[11px] font-black text-white/45">
+                        <span>{isHomeMusicApiMenuCollapsed ? '펼쳐보기' : '접기'}</span>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", !isHomeMusicApiMenuCollapsed && "rotate-180")} />
+                      </div>
                     </button>
-                    <button
-                      onClick={() => {
-                        setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
-                        setShowMusicApiModal(true);
-                      }}
-                      disabled={isMusicApiGenerating}
-                      className={cn(
-                        "flex-1 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap",
-                        isMusicApiGenerating
-                          ? "bg-purple-600/40 cursor-not-allowed"
-                          : "bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/20"
-                      )}
-                    >
-                      {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        clearSunoLibrarySignal();
-                        navigate('/suno-library');
-                      }}
-                      className="relative flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
-                      title="라이브러리로 이동"
-                    >
-                      {sunoLibrarySignal && (
-                        <span className={`absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
-                      )}
-                      Library
-                    </button>
+
+                    {!isHomeMusicApiMenuCollapsed && (
+                      <div className="flex items-center justify-between gap-2 border-t border-white/10 p-3">
+                        <button
+                          onClick={() => navigate('/my-page')}
+                          className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5"
+                          title="마이페이지에서 API 관리"
+                        >
+                          <Settings className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
+                            setShowMusicApiModal(true);
+                          }}
+                          disabled={isMusicApiGenerating}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap",
+                            isMusicApiGenerating
+                              ? "bg-purple-600/40 cursor-not-allowed"
+                              : "bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/20"
+                          )}
+                        >
+                          {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            clearSunoLibrarySignal();
+                            navigate('/suno-library');
+                          }}
+                          className="relative flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
+                          title="라이브러리로 이동"
+                        >
+                          {sunoLibrarySignal && (
+                            <span className={`absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
+                          )}
+                          Library
+                        </button>
+                      </div>
+                    )}
                   </div>
               </div>
             </motion.div>
@@ -9524,7 +9575,7 @@ ${normalizePromptForDisplay(result.prompt)}
             onMouseLeave={() => setIsTooltipHovered(false)}
             className={cn(
               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
-              location.pathname === '/' 
+              location.pathname === '/studio' 
                 ? (!isActionButtonsCollapsed && shouldShowActionButtons
                     ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")

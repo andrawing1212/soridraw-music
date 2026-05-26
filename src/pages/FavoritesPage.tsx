@@ -248,6 +248,7 @@ export default function FavoritesPage({
   const [showFavoriteMusicApiModal, setShowFavoriteMusicApiModal] = useState(false);
   const [isFavoriteMusicApiGenerating, setIsFavoriteMusicApiGenerating] = useState(false);
   const [favoriteMusicApiMessage, setFavoriteMusicApiMessage] = useState<string | null>(null);
+  const [isFavoriteMusicApiSectionExpanded, setIsFavoriteMusicApiSectionExpanded] = useState(false);
   const [hasFavoriteSunoApiKey, setHasFavoriteSunoApiKey] = useState<boolean>(() => {
     try {
       return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
@@ -1562,7 +1563,7 @@ ${song.prompt}
 
     requestAnimationFrame(() => {
       window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
-      navigate(`/?applyPending=1&t=${Date.now()}`);
+      navigate(`/studio?applyPending=1&t=${Date.now()}`);
     });
   };
 
@@ -3041,69 +3042,91 @@ ${song.prompt}
                   )}
                 </section>
 
-                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                  <div className="mb-4">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">music api</div>
-                    <h4 className="mt-1 text-xl font-bold text-white">Music API 생성</h4>
-                    <p className="mt-1 text-sm text-white/45">현재 Edit 화면의 제목, 가사, 프롬프트 기준으로 곡을 생성하고 Suno Library에 저장합니다.</p>
-                  </div>
+                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-4 md:p-5">
+                  <button
+                    type="button"
+                    onClick={() => setIsFavoriteMusicApiSectionExpanded((prev) => !prev)}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left transition-all hover:border-white/14 hover:bg-white/[0.035]"
+                    aria-expanded={isFavoriteMusicApiSectionExpanded}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-brand-orange/85">music api</div>
+                      <h4 className="mt-0.5 truncate text-base font-bold text-white md:text-lg">Music API 생성</h4>
+                      <p className="mt-0.5 text-xs text-white/42 md:text-sm">현재 Edit 화면의 제목, 가사, 프롬프트 기준으로 생성합니다.</p>
+                    </div>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/65">
+                      {isFavoriteMusicApiSectionExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </span>
+                  </button>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => navigate('/suno-api-settings')}
-                      onMouseEnter={() => onHover({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
-                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                      title="Music API 설정"
-                    >
-                      <SlidersHorizontal className="w-5 h-5" />
-                    </button>
+                  <AnimatePresence initial={false}>
+                    {isFavoriteMusicApiSectionExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-4 flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => navigate('/suno-api-settings')}
+                            onMouseEnter={() => onHover({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
+                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                            onTouchStart={() => onLongPressStart({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
+                            onTouchEnd={onLongPressEnd}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
+                            title="Music API 설정"
+                          >
+                            <SlidersHorizontal className="h-5 w-5" />
+                          </button>
 
-                    <button
-                      onClick={() => {
-                        try {
-                          setHasFavoriteSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
-                        } catch {
-                          setHasFavoriteSunoApiKey(false);
-                        }
-                        setFavoriteMusicApiMessage(null);
-                        setShowFavoriteMusicApiModal(true);
-                      }}
-                      disabled={isFavoriteMusicApiGenerating}
-                      onMouseEnter={() => onHover({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
-                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className={cn(
-                        'flex-1 h-12 rounded-2xl text-sm font-bold text-white transition-all whitespace-nowrap',
-                        isFavoriteMusicApiGenerating
-                          ? 'bg-purple-600/40 cursor-not-allowed'
-                          : 'bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/20'
-                      )}
-                    >
-                      {isFavoriteMusicApiGenerating ? 'Music API 요청 중...' : 'Music API로 생성'}
-                    </button>
+                          <button
+                            onClick={() => {
+                              try {
+                                setHasFavoriteSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
+                              } catch {
+                                setHasFavoriteSunoApiKey(false);
+                              }
+                              setFavoriteMusicApiMessage(null);
+                              setShowFavoriteMusicApiModal(true);
+                            }}
+                            disabled={isFavoriteMusicApiGenerating}
+                            onMouseEnter={() => onHover({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
+                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                            onTouchStart={() => onLongPressStart({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
+                            onTouchEnd={onLongPressEnd}
+                            className={cn(
+                              'h-12 flex-1 rounded-2xl text-sm font-bold text-white transition-all whitespace-nowrap',
+                              isFavoriteMusicApiGenerating
+                                ? 'cursor-not-allowed bg-purple-600/40'
+                                : 'bg-purple-600 shadow-lg shadow-purple-600/20 hover:bg-purple-700'
+                            )}
+                          >
+                            {isFavoriteMusicApiGenerating ? 'Music API 요청 중...' : 'Music API로 생성'}
+                          </button>
 
-                    <button
-                      onClick={() => navigate('/suno-library')}
-                      onMouseEnter={() => onHover({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
-                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className="flex h-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-bold text-white/70 transition-all hover:text-brand-orange"
-                      title="라이브러리로 이동"
-                    >
-                      Library
-                    </button>
-                  </div>
+                          <button
+                            onClick={() => navigate('/suno-library')}
+                            onMouseEnter={() => onHover({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
+                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                            onTouchStart={() => onLongPressStart({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
+                            onTouchEnd={onLongPressEnd}
+                            className="flex h-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-bold text-white/70 transition-all hover:text-brand-orange"
+                            title="라이브러리로 이동"
+                          >
+                            Library
+                          </button>
+                        </div>
 
-                  {favoriteMusicApiMessage && (
-                    <p className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-center text-xs font-semibold text-white/62 whitespace-pre-line">
-                      {favoriteMusicApiMessage}
-                    </p>
-                  )}
+                        {favoriteMusicApiMessage && (
+                          <p className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-center text-xs font-semibold text-white/62 whitespace-pre-line">
+                            {favoriteMusicApiMessage}
+                          </p>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </section>
               </div>
             </motion.div>

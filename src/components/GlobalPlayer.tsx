@@ -663,7 +663,7 @@ export default function GlobalPlayer() {
 
     alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');
     handleModeChange('collapsed');
-    navigate('/?applyPending=1');
+    navigate('/studio?applyPending=1');
   };
 
   const handleSaveOrMovePlaylist = async () => {

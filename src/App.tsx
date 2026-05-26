@@ -2506,8 +2506,9 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     <>
       {/* Top Navigation */}
       <div
-        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:flex"
+        className="absolute left-0 z-[60] hidden w-full border-b border-white/10 bg-[#101010]/92 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:block"
       >
+        <div className="mx-auto flex w-full max-w-[1720px] items-center justify-between gap-3 px-8 2xl:px-10">
         <button
           type="button"
           onClick={() => goToTopNav('/')}
@@ -2620,6 +2621,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               {isLoggingIn ? 'Logging in...' : 'Login'}
             </button>
           )}
+        </div>
         </div>
       </div>
 

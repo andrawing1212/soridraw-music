@@ -27,6 +27,32 @@ function scopedStorageKey(base: string, uid?: string | null) {
   return `${base}_${uid || 'guest'}`;
 }
 
+function getMusicApiErrorMessage(result: any): string {
+  if (result?.userMessage) return result.userMessage;
+
+  if (result?.errorCode === 'SUNO_API_TLS_CERTIFICATE_ERROR') {
+    return 'Music API 서버의 보안 연결에 문제가 있어 잠시 사용할 수 없습니다. 잠시 후 다시 시도해주세요.';
+  }
+
+  if (result?.errorCode === 'SUNO_API_CONNECTION_ERROR') {
+    return 'Music API 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.';
+  }
+
+  if (typeof result?.details === 'string' && (
+    result.details.includes('UNABLE_TO_VERIFY_LEAF_SIGNATURE') ||
+    result.details.includes('unable to verify the first certificate') ||
+    result.details.toLowerCase().includes('certificate')
+  )) {
+    return 'Music API 서버의 보안 연결에 문제가 있어 잠시 사용할 수 없습니다. 잠시 후 다시 시도해주세요.';
+  }
+
+  if (result?.error === 'Failed to fetch remaining credits') {
+    return 'Music API 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.';
+  }
+
+  return result?.error || 'Music API 남은 크레딧 확인에 실패했습니다.';
+}
+
 function getStoredGoogleApiKey(uid?: string | null) {
   try {
     return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid)) || '';
@@ -486,11 +512,11 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
         cacheRemainingCredits(result.remainingCredits, result.checkedAt || new Date().toISOString());
         setMessage('Music API 남은 크레딧을 새로 확인했습니다.');
       } else {
-        setMessage(result?.error || 'Music API 남은 크레딧 확인에 실패했습니다.');
+        setMessage(getMusicApiErrorMessage(result));
       }
     } catch (e) {
       console.error('Failed to refresh Suno remaining credits:', e);
-      setMessage('Music API 남은 크레딧 확인에 실패했습니다.');
+      setMessage('Music API 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setIsCreditRefreshing(false);
     }

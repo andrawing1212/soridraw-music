@@ -170,6 +170,34 @@ const hasSunoTrackAudio = (track: any): boolean => {
   ));
 };
 
+
+const isExternalTlsCertificateError = (error: any): boolean => {
+  const code = String(error?.code || error?.cause?.code || "");
+  const message = String(error?.message || error?.cause?.message || "");
+  return (
+    code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+    code === "CERT_HAS_EXPIRED" ||
+    code === "ERR_TLS_CERT_ALTNAME_INVALID" ||
+    message.includes("unable to verify the first certificate") ||
+    message.includes("certificate")
+  );
+};
+
+const sendSunoExternalConnectionError = (res: any, error: any) => {
+  const isTlsError = isExternalTlsCertificateError(error);
+  res.status(502).json({
+    ok: false,
+    errorCode: isTlsError ? "SUNO_API_TLS_CERTIFICATE_ERROR" : "SUNO_API_CONNECTION_ERROR",
+    error: isTlsError
+      ? "Music API 서버의 보안 연결에 문제가 있어 요청을 완료하지 못했습니다."
+      : "Music API 서버에 연결하지 못했습니다.",
+    userMessage: isTlsError
+      ? "Music API 서버의 보안 연결에 문제가 있어 잠시 사용할 수 없습니다. 잠시 후 다시 시도해주세요."
+      : "Music API 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.",
+    details: error?.message || error?.cause?.message || String(error),
+  });
+};
+
 const extractRemainingCredits = (payload: any): number | null => {
   const candidates = [
     payload?.data,
@@ -489,7 +517,7 @@ export const getSunoRemainingCredits = onRequest(
       });
     } catch (error: any) {
       console.error(error);
-      res.status(500).json({ error: "Failed to fetch remaining credits", details: error.message, ok: false });
+      sendSunoExternalConnectionError(res, error);
     }
   }
 );
@@ -622,7 +650,7 @@ export const getSunoRemainingCreditsAfterComplete = onRequest(
       });
     } catch (error: any) {
       console.error(error);
-      res.status(500).json({ error: "Failed to fetch remaining credits", details: error.message, ok: false });
+      sendSunoExternalConnectionError(res, error);
     }
   }
 );

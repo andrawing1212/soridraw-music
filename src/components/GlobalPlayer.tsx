@@ -375,6 +375,7 @@ export default function GlobalPlayer() {
   };
 
   const [expandedPosition, setExpandedPosition] = useState({ x: 0, y: 0 });
+  const [isExpandedDragging, setIsExpandedDragging] = useState(false);
   const expandedDragRef = useRef<{ active: boolean; startX: number; startY: number; baseX: number; baseY: number }>({
     active: false,
     startX: 0,
@@ -395,6 +396,7 @@ export default function GlobalPlayer() {
 
   const handleExpandedDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (isMobile || mode !== 'expanded') return;
+    setIsExpandedDragging(true);
     expandedDragRef.current = {
       active: true,
       startX: event.clientX,
@@ -418,6 +420,7 @@ export default function GlobalPlayer() {
 
   const handleExpandedDragEnd = (event: React.PointerEvent<HTMLButtonElement>) => {
     expandedDragRef.current.active = false;
+    setIsExpandedDragging(false);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
@@ -854,11 +857,10 @@ export default function GlobalPlayer() {
       )}
 
       <motion.div
-        layout
-        transition={{ 
-          type: 'spring', 
-          bounce: 0.1, 
-          duration: 0.35,
+        transition={{
+          type: 'tween',
+          duration: isExpandedDragging ? 0 : 0.16,
+          ease: 'easeOut',
         }}
         ref={playerRef}
         initial={false}
@@ -873,7 +875,7 @@ export default function GlobalPlayer() {
               : 'top-[88px] right-6 w-[400px] max-w-[calc(100vw-32px)]'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
-            : 'top-2 right-[178px] w-[230px] items-end'
+            : 'top-2 left-[168px] w-[205px] items-start'
         }`}
       >
         <AnimatePresence mode="popLayout">
@@ -883,19 +885,19 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="w-full overflow-hidden rounded-xl border border-white/10 bg-[#151515]/95 shadow-[0_8px_28px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+              className="w-full overflow-hidden rounded-2xl border border-white/10 bg-[#151515]/95 shadow-[0_6px_20px_rgba(0,0,0,0.3)] backdrop-blur-xl"
             >
-              <div className="h-0.5 w-full bg-white/10">
+              <div className="h-[2px] w-full bg-white/10">
                 <div
                   className="h-full bg-brand-orange transition-none"
                   style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                 />
               </div>
-              <div className="flex h-10 items-center gap-2 px-2">
+              <div className="flex h-9 items-center gap-1.5 px-1.5">
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/40"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/40"
                   title="대형 플레이어 열기"
                   aria-label="대형 플레이어 열기"
                 >
@@ -910,15 +912,15 @@ export default function GlobalPlayer() {
                   onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <ScrollText text={currentTrack.title || 'Untitled'} className="text-[11px] font-black text-white/85" />
+                  <ScrollText text={currentTrack.title || 'Untitled'} className="text-[10px] font-black text-white/85" />
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-orange/15 text-brand-orange transition-all hover:bg-brand-orange hover:text-white"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-orange/15 text-brand-orange transition-all hover:bg-brand-orange hover:text-white"
                   title={isPlaying ? '일시정지' : '재생'}
                   aria-label={isPlaying ? '일시정지' : '재생'}
                 >
-                  {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
+                  {isPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />}
                 </button>
               </div>
             </motion.div>
@@ -989,23 +991,36 @@ export default function GlobalPlayer() {
                  </div>
 
                  <button 
-                    onClick={() => handleModeChange('collapsed')}
                     onPointerDown={handleExpandedDragStart}
                     onPointerMove={handleExpandedDragMove}
                     onPointerUp={handleExpandedDragEnd}
                     onPointerCancel={handleExpandedDragEnd}
                     className="p-2 px-6 hover:bg-white/10 rounded-full transition-all text-white/50 cursor-grab active:cursor-grabbing"
-                    title="드래그로 이동 / 클릭하면 축소"
+                    title="드래그로 이동"
                  >
                     <div className="w-8 h-1.5 bg-white/20 rounded-full" />
                  </button>
 
-                 <button 
-                    onClick={() => clearPlayer()}
-                    className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50"
-                 >
-                    <X className="w-5 h-5" />
-                 </button>
+                 <div className="flex items-center gap-1">
+                   <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleModeChange('collapsed'); }}
+                      className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white"
+                      title="초소형 플레이어로 접기"
+                      aria-label="초소형 플레이어로 접기"
+                   >
+                      <ChevronDown className="w-5 h-5" />
+                   </button>
+                   <button 
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); clearPlayer(); }}
+                      className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white"
+                      title="플레이어 닫기"
+                      aria-label="플레이어 닫기"
+                   >
+                      <X className="w-5 h-5" />
+                   </button>
+                 </div>
               </div>
 
               <button

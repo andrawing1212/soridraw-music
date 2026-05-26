@@ -2398,6 +2398,28 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPwaTitlebarVisible, setIsPwaTitlebarVisible] = useState(false);
+
+  useEffect(() => {
+    const overlay = (navigator as any)?.windowControlsOverlay;
+    if (!overlay) {
+      setIsPwaTitlebarVisible(false);
+      return;
+    }
+
+    const updateTitlebarVisibility = () => {
+      setIsPwaTitlebarVisible(Boolean(overlay.visible));
+    };
+
+    updateTitlebarVisibility();
+    overlay.addEventListener?.('geometrychange', updateTitlebarVisibility);
+    window.addEventListener('resize', updateTitlebarVisibility);
+
+    return () => {
+      overlay.removeEventListener?.('geometrychange', updateTitlebarVisibility);
+      window.removeEventListener('resize', updateTitlebarVisibility);
+    };
+  }, []);
 
   const isActivePath = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -2503,11 +2525,72 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     setIsExpanded(false);
   };
 
+  const handlePwaBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+    setIsExpanded(false);
+    setIsProfileOpen(false);
+  };
+
+  const handlePwaRefresh = () => {
+    window.location.reload();
+  };
+
 
   return (
     <>
+      {isPwaTitlebarVisible && (
+        <div
+          className="fixed top-0 z-[95] hidden items-center gap-2 overflow-hidden border-b border-white/10 bg-[#101010]/95 px-2 text-white/75 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl md:flex"
+          style={{
+            left: 'env(titlebar-area-x, 0px)',
+            width: 'env(titlebar-area-width, 100%)',
+            height: 'env(titlebar-area-height, 32px)',
+            WebkitAppRegion: 'drag',
+          } as React.CSSProperties}
+        >
+          <button
+            type="button"
+            onClick={() => goToTopNav('/')}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-sky-400/20 bg-sky-500/10 text-sky-300 transition-all hover:bg-sky-500/20"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            aria-label="홈으로 이동"
+            title="홈"
+          >
+            <Music className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handlePwaBack}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/55 transition-all hover:bg-white/[0.07] hover:text-white"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            aria-label="뒤로가기"
+            title="뒤로가기"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handlePwaRefresh}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/55 transition-all hover:bg-white/[0.07] hover:text-white"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            aria-label="새로고침"
+            title="새로고침"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          <div className="min-w-0 truncate pl-1 text-[12px] font-bold tracking-tight text-white/80">SORIDRAW's Studio</div>
+        </div>
+      )}
+
       {/* Desktop Top Navigation */}
-      <div className="absolute left-0 top-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:flex">
+      <div
+        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:flex"
+        style={{ top: isPwaTitlebarVisible ? 'env(titlebar-area-height, 0px)' : '0px' }}
+      >
         <button
           type="button"
           onClick={() => goToTopNav('/')}

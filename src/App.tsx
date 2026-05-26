@@ -2588,13 +2588,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
       {/* Top Navigation */}
       <div
-        className="absolute left-0 z-[60] flex w-full items-center justify-between gap-2 border-b border-white/10 bg-[#101010]/92 px-2 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:px-4 md:gap-3 md:px-5"
+        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:flex"
         style={{ top: isPwaTitlebarVisible ? 'env(titlebar-area-height, 0px)' : '0px' }}
       >
         <button
           type="button"
           onClick={() => goToTopNav('/')}
-          className="flex shrink-0 items-center gap-2 rounded-xl px-1.5 py-1 text-left transition-all hover:bg-white/[0.04] sm:px-2"
+          className="flex min-w-[168px] shrink-0 items-center gap-2 rounded-xl px-2 py-1 text-left transition-all hover:bg-white/[0.04]"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-500/10 text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.08)]">
             <Music className="h-4 w-4" />
@@ -2605,7 +2605,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
           </span>
         </button>
 
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5 md:overflow-visible">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-visible">
           {topNavItems.map((item) => {
             const Icon = item.icon;
             const active = isActivePath(item.path);
@@ -2626,7 +2626,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/50 ${sunoLibrarySignalDotClass}`} />
                 )}
                 <Icon className="h-4 w-4" />
-                <span className="hidden min-[420px]:inline">{item.label}</span>
+                <span>{item.label}</span>
               </button>
             );
           })}
@@ -2642,12 +2642,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               )}
             >
               <Shield className="h-4 w-4" />
-              <span className="hidden min-[420px]:inline">관리자</span>
+              <span>관리자</span>
             </button>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-1.5">
+        <div className="flex min-w-[168px] shrink-0 items-center justify-end gap-1.5">
           {user && (
             <a
               href="https://suno.com/create"
@@ -2704,6 +2704,196 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
             </button>
           )}
         </div>
+      </div>
+
+      {/* Mobile Floating Menu */}
+      <div
+        ref={menuRef}
+        className="fixed left-3 top-3 z-50 flex flex-col items-center gap-3 md:hidden"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            if (isExpanded) {
+              setIsExpanded(false);
+              setIsProfileOpen(false);
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            } else {
+              setIsExpanded(true);
+            }
+          }}
+          className={cn(
+            "rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 p-3 text-[var(--text-primary)] shadow-2xl backdrop-blur-md transition-all z-50",
+            isExpanded ? "bg-brand-orange border-brand-orange/50 scale-90 text-white" : "hover:bg-[var(--hover-bg)]"
+          )}
+          aria-label="메뉴 열기"
+        >
+          <Menu className={cn("h-6 w-6 transition-transform", isExpanded && "rotate-90")} />
+        </button>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.8 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.8 }}
+              className="flex flex-col items-center gap-4"
+            >
+              <div
+                className="relative"
+                onMouseEnter={handleProfileMouseEnter}
+                onMouseLeave={handleProfileMouseLeave}
+              >
+                {user ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    className="group relative overflow-hidden rounded-full border-2 border-brand-orange/30 shadow-xl transition-all hover:scale-110"
+                    aria-label="프로필 메뉴"
+                  >
+                    <img
+                      src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                      alt="Profile"
+                      className="h-10 w-10 object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { handleLogin(); setIsExpanded(false); }}
+                    disabled={isLoggingIn}
+                    className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                    aria-label="로그인"
+                  >
+                    {isLoggingIn ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserIcon className="h-5 w-5" />}
+                  </button>
+                )}
+
+                <AnimatePresence>
+                  {isProfileOpen && user && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 10, scale: 0.95 }}
+                      className="absolute left-full top-0 ml-3 w-40 overflow-visible rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/95 py-2 shadow-2xl backdrop-blur-xl"
+                    >
+                      <div className="absolute -left-3 top-0 bottom-0 w-3 pointer-events-auto" />
+                      <div className="relative overflow-hidden rounded-xl">
+                        <div className="mb-1 border-b border-[var(--border-color)]/50 px-3 py-2">
+                          <p className="truncate text-[12px] font-medium text-[var(--text-secondary)]">{user.displayName}</p>
+                        </div>
+                        {isAdminUser && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigate('/admin/users');
+                                setIsProfileOpen(false);
+                                setIsExpanded(false);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] text-[var(--text-primary)] transition-all hover:bg-brand-orange/10 hover:text-brand-orange"
+                            >
+                              <Users className="h-3 w-3" />
+                              회원 관리
+                            </button>
+                          </>
+                        )}
+                        <div className="mx-2 my-1 h-px bg-[var(--border-color)]/30" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate('/my-page');
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] text-[var(--text-primary)] transition-all hover:bg-sky-500/10 hover:text-sky-300"
+                        >
+                          <UserIcon className="h-3 w-3" />
+                          마이페이지
+                        </button>
+                        <div className="mx-2 my-1 h-px bg-[var(--border-color)]/30" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleLogout();
+                            setIsProfileOpen(false);
+                            setIsExpanded(false);
+                            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                            if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-bold text-brand-orange transition-colors hover:bg-[var(--hover-bg)]"
+                        >
+                          로그아웃
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleHomeClick}
+                className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
+                title="홈"
+              >
+                <HomeIcon className="h-5 w-5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleHistoryClick}
+                className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
+                title="뮤직노트"
+              >
+                <HeartIcon className="h-5 w-5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  clearSunoLibrarySignal();
+                  navigate('/suno-library');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  setIsExpanded(false);
+                }}
+                className="relative rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
+                title="라이브러리"
+              >
+                {sunoLibrarySignal && (
+                  <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
+                )}
+                <div className="flex h-5 w-5 items-end justify-center gap-[3px] text-[var(--text-primary)]">
+                  <div className="h-[14px] w-[4px] rounded-sm border-[1.5px] border-current opacity-80" />
+                  <div className="h-[16px] w-[4px] rounded-sm border-[1.5px] border-current" />
+                  <div className="h-[14px] w-[4px] origin-bottom translate-x-[1px] -rotate-12 rounded-sm border-[1.5px] border-current opacity-90" />
+                </div>
+              </button>
+
+              {user && (
+                <a
+                  href="https://suno.com/create"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                  title="Suno Create"
+                  aria-label="Suno Create"
+                >
+                  <img
+                    src="/suno-icon.webp"
+                    alt="Suno"
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </a>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
     </>
@@ -3943,7 +4133,7 @@ function App() {
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
-  const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(false);
+  const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(true);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);

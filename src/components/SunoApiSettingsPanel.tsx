@@ -291,18 +291,67 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
     }
   }, [user]);
 
-  const saveGoogleApiKey = () => {
-    if (!googleApiKey.trim()) return;
+  const loadGoogleApiKeyStatus = useCallback(async (isRetry = false) => {
+    if (!user) return;
+
+    if (!isRetry) {
+      setGoogleRegistered(getStoredGoogleApiKeyStatus(user.uid));
+    }
+
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/getGoogleGeminiApiKeyStatus`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      const result = await res.json();
+
+      if (res.ok && result?.ok && result.hasGoogleGeminiApiKey) {
+        setGoogleRegistered(true);
+        localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
+      } else if (res.ok) {
+        setGoogleRegistered(false);
+        localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));
+        localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
+      } else if (!isRetry) {
+        setGoogleRegistered(getStoredGoogleApiKeyStatus(user.uid));
+      }
+    } catch (e) {
+      if (!isRetry) setGoogleRegistered(getStoredGoogleApiKeyStatus(user.uid));
+    }
+  }, [user]);
+
+  const saveGoogleApiKey = async () => {
+    if (!googleApiKey.trim() || !user) return;
     setIsLoading(true);
     setMessage('');
     try {
-      if (!user?.uid) throw new Error('login required');
-      localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid), googleApiKey.trim());
-      localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
-      setGoogleRegistered(true);
-      setGoogleApiKey('');
-      setActiveModal(null);
-      setMessage('Google Gemini API Key가 현재 계정 기준으로 이 브라우저에 저장되었습니다.');
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/saveGoogleGeminiApiKey`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ apiKey: googleApiKey.trim() })
+      });
+      const result = await res.json();
+
+      if (res.ok && result?.ok) {
+        localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid), googleApiKey.trim());
+        localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
+        setGoogleRegistered(true);
+        setGoogleApiKey('');
+        setActiveModal(null);
+        setMessage('Google Gemini API Key가 현재 계정 기준으로 저장되었습니다. 같은 아이디로 로그인하면 다른 환경에서도 사용할 수 있습니다.');
+        loadGoogleApiKeyStatus(true);
+      } else {
+        setMessage(result?.error || 'Google API Key 저장에 실패했습니다.');
+      }
     } catch {
       setMessage('Google API Key 저장에 실패했습니다.');
     } finally {
@@ -310,17 +359,33 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
     }
   };
 
-  const deleteGoogleApiKey = () => {
+  const deleteGoogleApiKey = async () => {
+    if (!user) return;
     setIsLoading(true);
     setMessage('');
     try {
-      if (!user?.uid) throw new Error('login required');
-      localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));
-      localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
-      setGoogleRegistered(false);
-      setGoogleApiKey('');
-      setActiveModal(null);
-      setMessage('Google Gemini API Key가 삭제되었습니다.');
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/deleteGoogleGeminiApiKey`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      const result = await res.json();
+
+      if (res.ok && result?.ok) {
+        localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));
+        localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
+        setGoogleRegistered(false);
+        setGoogleApiKey('');
+        setActiveModal(null);
+        setMessage('Google Gemini API Key가 삭제되었습니다.');
+        loadGoogleApiKeyStatus(true);
+      } else {
+        setMessage(result?.error || 'Google API Key 삭제에 실패했습니다.');
+      }
     } catch {
       setMessage('Google API Key 삭제에 실패했습니다.');
     } finally {
@@ -432,8 +497,9 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
   };
 
   useEffect(() => {
+    loadGoogleApiKeyStatus(false);
     loadSunoApiKeyStatus(false);
-  }, [loadSunoApiKeyStatus]);
+  }, [loadGoogleApiKeyStatus, loadSunoApiKeyStatus]);
 
   const StatusBadge = ({ registered, pending = false }: { registered: boolean; pending?: boolean }) => (
     <div className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-black ${

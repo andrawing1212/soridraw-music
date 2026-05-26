@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSunoTrackStatus = exports.createSunoTrack = exports.getSunoApiKeyStatus = exports.deleteSunoApiKey = exports.saveSunoApiKey = void 0;
+exports.getSunoTrackStatus = exports.createSunoTrack = exports.getSunoApiKeyStatus = exports.deleteSunoApiKey = exports.saveSunoApiKey = exports.getGoogleGeminiApiKey = exports.getGoogleGeminiApiKeyStatus = exports.deleteGoogleGeminiApiKey = exports.saveGoogleGeminiApiKey = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -85,6 +85,102 @@ const isFailedStatus = (value) => {
     const normalized = String(value || "").toLowerCase();
     return ["failed", "failure", "error"].includes(normalized);
 };
+exports.saveGoogleGeminiApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
+    var _a;
+    if (handleCors(req, res))
+        return;
+    if (req.method !== "POST") {
+        res.status(405).json({ error: "Method Not Allowed" });
+        return;
+    }
+    const uid = await verifyAuth(req, res);
+    if (!uid)
+        return;
+    const apiKey = (_a = req.body) === null || _a === void 0 ? void 0 : _a.apiKey;
+    if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
+        res.status(400).json({ error: "Google Gemini API Key is required", ok: false });
+        return;
+    }
+    const db = admin.firestore();
+    await db.collection("user_api_keys").doc(uid).set({
+        googleGeminiApiKey: apiKey.trim(),
+        hasGoogleGeminiApiKey: true,
+        googleGeminiProvider: "Google AI Studio",
+        googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    res.json({ ok: true, hasGoogleGeminiApiKey: true });
+});
+exports.deleteGoogleGeminiApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
+    if (handleCors(req, res))
+        return;
+    if (req.method !== "POST") {
+        res.status(405).json({ error: "Method Not Allowed" });
+        return;
+    }
+    const uid = await verifyAuth(req, res);
+    if (!uid)
+        return;
+    const db = admin.firestore();
+    await db.collection("user_api_keys").doc(uid).set({
+        googleGeminiApiKey: admin.firestore.FieldValue.delete(),
+        hasGoogleGeminiApiKey: false,
+        googleGeminiProvider: admin.firestore.FieldValue.delete(),
+        googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    res.json({ ok: true, hasGoogleGeminiApiKey: false });
+});
+exports.getGoogleGeminiApiKeyStatus = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
+    if (handleCors(req, res))
+        return;
+    if (req.method !== "POST") {
+        res.status(405).json({ error: "Method Not Allowed" });
+        return;
+    }
+    const uid = await verifyAuth(req, res);
+    if (!uid)
+        return;
+    const db = admin.firestore();
+    const docSnap = await db.collection("user_api_keys").doc(uid).get();
+    if (!docSnap.exists) {
+        res.json({ ok: true, hasGoogleGeminiApiKey: false });
+        return;
+    }
+    const docData = docSnap.data() || {};
+    const updatedAt = docData.googleGeminiUpdatedAt && typeof docData.googleGeminiUpdatedAt.toDate === "function" ? docData.googleGeminiUpdatedAt.toDate().toISOString() : null;
+    res.json({
+        ok: true,
+        hasGoogleGeminiApiKey: Boolean(docData.hasGoogleGeminiApiKey && docData.googleGeminiApiKey),
+        provider: docData.googleGeminiProvider || null,
+        updatedAt,
+    });
+});
+exports.getGoogleGeminiApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
+    if (handleCors(req, res))
+        return;
+    if (req.method !== "POST") {
+        res.status(405).json({ error: "Method Not Allowed" });
+        return;
+    }
+    const uid = await verifyAuth(req, res);
+    if (!uid)
+        return;
+    const db = admin.firestore();
+    const docSnap = await db.collection("user_api_keys").doc(uid).get();
+    if (!docSnap.exists) {
+        res.status(404).json({ ok: false, hasGoogleGeminiApiKey: false, error: "Google Gemini API Key not found." });
+        return;
+    }
+    const docData = docSnap.data() || {};
+    const apiKey = typeof docData.googleGeminiApiKey === "string" ? docData.googleGeminiApiKey.trim() : "";
+    if (!apiKey) {
+        res.status(404).json({ ok: false, hasGoogleGeminiApiKey: false, error: "Google Gemini API Key not found." });
+        return;
+    }
+    res.json({ ok: true, hasGoogleGeminiApiKey: true, apiKey });
+});
 exports.saveSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     var _a;
     if (handleCors(req, res))
@@ -122,7 +218,16 @@ exports.deleteSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, asy
     if (!uid)
         return;
     const db = admin.firestore();
-    await db.collection('user_api_keys').doc(uid).delete();
+    await db.collection('user_api_keys').doc(uid).set({
+        sunoApiKey: admin.firestore.FieldValue.delete(),
+        hasSunoApiKey: false,
+        provider: admin.firestore.FieldValue.delete(),
+        sunoRemainingCredits: admin.firestore.FieldValue.delete(),
+        sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.delete(),
+        sunoRemainingCreditsSourceTrackId: admin.firestore.FieldValue.delete(),
+        sunoRemainingCreditsSourceTaskId: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
     res.json({ ok: true, hasSunoApiKey: false });
 });
 exports.getSunoApiKeyStatus = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {

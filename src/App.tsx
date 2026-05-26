@@ -2901,6 +2901,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 }
 
 
+const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
 const GOOGLE_GEMINI_API_KEY_STORAGE_BASE = 'soridraw_google_gemini_api_key';
 const GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_google_gemini_api_key_registered';
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
@@ -2913,6 +2914,55 @@ const getStoredGoogleGeminiApiKey = (uid?: string | null): string => {
   } catch {
     return '';
   }
+};
+
+const cacheGoogleGeminiApiKey = (uid: string, apiKey: string) => {
+  try {
+    localStorage.setItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid), apiKey);
+    localStorage.setItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid), 'true');
+  } catch {
+    // localStorage may be unavailable.
+  }
+};
+
+const clearCachedGoogleGeminiApiKey = (uid?: string | null) => {
+  try {
+    localStorage.removeItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid));
+    localStorage.removeItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid));
+  } catch {
+    // localStorage may be unavailable.
+  }
+};
+
+const fetchGoogleGeminiApiKeyFromServer = async (user: User | null | undefined): Promise<string> => {
+  if (!user?.uid) return '';
+
+  const token = await user.getIdToken();
+  const res = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/getGoogleGeminiApiKey`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({}),
+  });
+
+  const result = await res.json().catch(() => null);
+  if (res.ok && result?.ok && typeof result.apiKey === 'string' && result.apiKey.trim()) {
+    const apiKey = result.apiKey.trim();
+    cacheGoogleGeminiApiKey(user.uid, apiKey);
+    return apiKey;
+  }
+
+  if (res.status === 404) clearCachedGoogleGeminiApiKey(user.uid);
+  return '';
+};
+
+const resolveGoogleGeminiApiKey = async (user: User | null | undefined): Promise<string> => {
+  if (!user?.uid) return '';
+  const serverKey = await fetchGoogleGeminiApiKeyFromServer(user);
+  if (serverKey) return serverKey;
+  return getStoredGoogleGeminiApiKey(user.uid);
 };
 
 const hasStoredGoogleGeminiApiKey = (uid?: string | null): boolean => {
@@ -6366,7 +6416,7 @@ const saveRecentSong = async (newSong: any) => {
       }
     }
 
-    const personalGeminiApiKey = getStoredGoogleGeminiApiKey(user.uid);
+    const personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
     if (!personalGeminiApiKey) {
       showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
       navigate('/my-page');
@@ -7140,7 +7190,7 @@ ${normalizePromptForDisplay(result.prompt)}
     }
 
     try {
-      const personalGeminiApiKey = getStoredGoogleGeminiApiKey(user?.uid);
+      const personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
       if (!personalGeminiApiKey) {
         showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
         navigate('/my-page');

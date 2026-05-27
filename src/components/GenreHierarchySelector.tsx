@@ -22,12 +22,12 @@ function cn(...inputs: ClassValue[]) {
 
 
 const genreAccent = {
-  bar: 'bg-[#A47048]/90',
-  text: 'text-[#D9B89D]',
-  softText: 'text-[#D9B89D]/58',
-  selected: 'bg-[#A47048]/72 border-[#C69A76]/55 text-[#FFF7EF] shadow-[0_0_10px_rgba(164,112,72,0.10)]',
-  selectedSoft: 'bg-[#A47048]/16 border-[#A47048]/40 text-[#D9B89D] hover:bg-[#A47048]/22',
-  selectedBorder: 'border-[#A47048]/45',
+  bar: 'bg-[#DFA05D]/95',
+  text: 'text-[#E8B878]',
+  softText: 'text-[#E8B878]/58',
+  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
+  selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
+  selectedBorder: 'border-[#DFA05D]/42',
 };
 
 const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
@@ -892,7 +892,7 @@ export default function GenreHierarchySelector({
         }}
         className={cn(
           "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
-          onToggleExpand && "cursor-pointer hover:border-[#A47048]/40 hover:bg-[#A47048]/6 focus:outline-none focus:ring-1 focus:ring-[#A47048]/30"
+          onToggleExpand && "cursor-pointer hover:border-[#DFA05D]/40 hover:bg-[#DFA05D]/6 focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30"
         )}
         title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}
       >

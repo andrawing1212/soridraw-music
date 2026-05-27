@@ -511,92 +511,92 @@ type StudioSectionAccent = {
 
 const STUDIO_CATEGORY_ACCENTS: Record<'genre' | 'style' | 'sound' | 'mood' | 'theme' | 'vocal' | 'structure' | 'tempo', StudioSectionAccent> = {
   genre: {
-    bar: 'bg-[#A47048]/90',
-    text: 'text-[#D9B89D]',
-    softText: 'text-[#D9B89D]/58',
-    selected: 'bg-[#A47048]/72 border-[#C69A76]/55 text-[#FFF7EF] shadow-[0_0_10px_rgba(164,112,72,0.10)]',
-    selectedSoft: 'bg-[#A47048]/16 border-[#A47048]/40 text-[#D9B89D] hover:bg-[#A47048]/22',
-    selectedBorder: 'border-[#A47048]/45',
-    badge: 'text-[#D9B89D] border-[#A47048]/60',
-    pointSelected: 'bg-[#A47048]/68 border-[#C69A76]/55 text-[#FFF7EF] shadow-[0_0_10px_rgba(164,112,72,0.10)]',
-    pointBadge: 'bg-[#A47048]/78 text-white border-[#D9B89D]/45',
+    bar: 'bg-[#DFA05D]/95',
+    text: 'text-[#E8B878]',
+    softText: 'text-[#E8B878]/58',
+    selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
+    selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
+    selectedBorder: 'border-[#DFA05D]/42',
+    badge: 'text-[#E8B878] border-[#DFA05D]/55',
+    pointSelected: 'bg-[#DFA05D]/68 border-[#F1C98B]/50 text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.10)]',
+    pointBadge: 'bg-[#DFA05D]/80 text-[#171717] border-[#F1C98B]/45',
   },
   style: {
-    bar: 'bg-[#AC6B69]/90',
-    text: 'text-[#D8A4A2]',
-    softText: 'text-[#D8A4A2]/58',
-    selected: 'bg-[#AC6B69]/72 border-[#D8A4A2]/50 text-[#FFF4F3] shadow-[0_0_10px_rgba(172,107,105,0.10)]',
-    selectedSoft: 'bg-[#AC6B69]/16 border-[#AC6B69]/40 text-[#D8A4A2] hover:bg-[#AC6B69]/22',
-    selectedBorder: 'border-[#AC6B69]/45',
-    badge: 'text-[#D8A4A2] border-[#AC6B69]/60',
-    pointSelected: 'bg-[#AC6B69]/68 border-[#D8A4A2]/50 text-[#FFF4F3] shadow-[0_0_10px_rgba(172,107,105,0.10)]',
-    pointBadge: 'bg-[#AC6B69]/78 text-white border-[#D8A4A2]/45',
+    bar: 'bg-[#AC5045]/95',
+    text: 'text-[#D79084]',
+    softText: 'text-[#D79084]/58',
+    selected: 'bg-[#AC5045]/74 border-[#D79084]/50 text-[#FFF4EF] shadow-[0_0_10px_rgba(172,80,69,0.12)]',
+    selectedSoft: 'bg-[#AC5045]/15 border-[#AC5045]/38 text-[#D79084] hover:bg-[#AC5045]/22',
+    selectedBorder: 'border-[#AC5045]/42',
+    badge: 'text-[#D79084] border-[#AC5045]/55',
+    pointSelected: 'bg-[#AC5045]/68 border-[#D79084]/48 text-[#FFF4EF] shadow-[0_0_10px_rgba(172,80,69,0.10)]',
+    pointBadge: 'bg-[#AC5045]/80 text-white border-[#D79084]/45',
   },
   sound: {
-    bar: 'bg-[#965B77]/90',
-    text: 'text-[#C995AC]',
-    softText: 'text-[#C995AC]/58',
-    selected: 'bg-[#965B77]/72 border-[#C995AC]/50 text-[#FFF2F8] shadow-[0_0_10px_rgba(150,91,119,0.10)]',
-    selectedSoft: 'bg-[#965B77]/16 border-[#965B77]/40 text-[#C995AC] hover:bg-[#965B77]/22',
-    selectedBorder: 'border-[#965B77]/45',
-    badge: 'text-[#C995AC] border-[#965B77]/60',
-    pointSelected: 'bg-[#965B77]/68 border-[#C995AC]/50 text-[#FFF2F8] shadow-[0_0_10px_rgba(150,91,119,0.10)]',
-    pointBadge: 'bg-[#965B77]/78 text-white border-[#C995AC]/45',
+    bar: 'bg-[#658761]/95',
+    text: 'text-[#A8C49F]',
+    softText: 'text-[#A8C49F]/58',
+    selected: 'bg-[#658761]/74 border-[#A8C49F]/50 text-[#F3FAEF] shadow-[0_0_10px_rgba(101,135,97,0.12)]',
+    selectedSoft: 'bg-[#658761]/15 border-[#658761]/38 text-[#A8C49F] hover:bg-[#658761]/22',
+    selectedBorder: 'border-[#658761]/42',
+    badge: 'text-[#A8C49F] border-[#658761]/55',
+    pointSelected: 'bg-[#658761]/68 border-[#A8C49F]/48 text-[#F3FAEF] shadow-[0_0_10px_rgba(101,135,97,0.10)]',
+    pointBadge: 'bg-[#658761]/80 text-white border-[#A8C49F]/45',
   },
   mood: {
-    bar: 'bg-[#877198]/90',
-    text: 'text-[#BBA8CA]',
-    softText: 'text-[#BBA8CA]/58',
-    selected: 'bg-[#877198]/72 border-[#BBA8CA]/50 text-[#F8F1FF] shadow-[0_0_10px_rgba(135,113,152,0.10)]',
-    selectedSoft: 'bg-[#877198]/16 border-[#877198]/40 text-[#BBA8CA] hover:bg-[#877198]/22',
-    selectedBorder: 'border-[#877198]/45',
-    badge: 'text-[#BBA8CA] border-[#877198]/60',
-    pointSelected: 'bg-[#877198]/68 border-[#BBA8CA]/50 text-[#F8F1FF] shadow-[0_0_10px_rgba(135,113,152,0.10)]',
-    pointBadge: 'bg-[#877198]/78 text-white border-[#BBA8CA]/45',
+    bar: 'bg-[#F1DAA4]/95',
+    text: 'text-[#F1DAA4]',
+    softText: 'text-[#F1DAA4]/58',
+    selected: 'bg-[#F1DAA4]/68 border-[#F5E8BD]/50 text-[#171717] shadow-[0_0_10px_rgba(241,218,164,0.12)]',
+    selectedSoft: 'bg-[#F1DAA4]/14 border-[#F1DAA4]/36 text-[#F1DAA4] hover:bg-[#F1DAA4]/20',
+    selectedBorder: 'border-[#F1DAA4]/40',
+    badge: 'text-[#F1DAA4] border-[#F1DAA4]/52',
+    pointSelected: 'bg-[#F1DAA4]/62 border-[#F5E8BD]/45 text-[#171717] shadow-[0_0_10px_rgba(241,218,164,0.09)]',
+    pointBadge: 'bg-[#F1DAA4]/78 text-[#171717] border-[#F5E8BD]/45',
   },
   theme: {
-    bar: 'bg-[#5E7FA8]/90',
-    text: 'text-[#A7BCD8]',
-    softText: 'text-[#A7BCD8]/58',
-    selected: 'bg-[#5E7FA8]/72 border-[#A7BCD8]/50 text-[#F1F7FF] shadow-[0_0_10px_rgba(94,127,168,0.10)]',
-    selectedSoft: 'bg-[#5E7FA8]/16 border-[#5E7FA8]/40 text-[#A7BCD8] hover:bg-[#5E7FA8]/22',
-    selectedBorder: 'border-[#5E7FA8]/45',
-    badge: 'text-[#A7BCD8] border-[#5E7FA8]/60',
-    pointSelected: 'bg-[#5E7FA8]/68 border-[#A7BCD8]/50 text-[#F1F7FF] shadow-[0_0_10px_rgba(94,127,168,0.10)]',
-    pointBadge: 'bg-[#5E7FA8]/78 text-white border-[#A7BCD8]/45',
+    bar: 'bg-[#EA642D]/95',
+    text: 'text-[#F19A70]',
+    softText: 'text-[#F19A70]/58',
+    selected: 'bg-[#EA642D]/72 border-[#F19A70]/50 text-[#FFF4EC] shadow-[0_0_10px_rgba(234,100,45,0.12)]',
+    selectedSoft: 'bg-[#EA642D]/15 border-[#EA642D]/38 text-[#F19A70] hover:bg-[#EA642D]/22',
+    selectedBorder: 'border-[#EA642D]/42',
+    badge: 'text-[#F19A70] border-[#EA642D]/55',
+    pointSelected: 'bg-[#EA642D]/68 border-[#F19A70]/48 text-[#FFF4EC] shadow-[0_0_10px_rgba(234,100,45,0.10)]',
+    pointBadge: 'bg-[#EA642D]/80 text-white border-[#F19A70]/45',
   },
   vocal: {
-    bar: 'bg-[#467891]/90',
-    text: 'text-[#A7C2D0]',
-    softText: 'text-[#A7C2D0]/58',
-    selected: 'bg-[#467891]/72 border-[#8FB1C0]/52 text-[#F1F7FA] shadow-[0_0_10px_rgba(70,120,145,0.10)]',
-    selectedSoft: 'bg-[#467891]/16 border-[#467891]/40 text-[#A7C2D0] hover:bg-[#467891]/22',
-    selectedBorder: 'border-[#467891]/45',
-    badge: 'text-[#A7C2D0] border-[#467891]/60',
-    pointSelected: 'bg-[#467891]/68 border-[#8FB1C0]/52 text-[#F1F7FA] shadow-[0_0_10px_rgba(70,120,145,0.10)]',
-    pointBadge: 'bg-[#467891]/78 text-white border-[#A7C2D0]/45',
+    bar: 'bg-[#DFA05D]/95',
+    text: 'text-[#E8B878]',
+    softText: 'text-[#E8B878]/58',
+    selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
+    selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
+    selectedBorder: 'border-[#DFA05D]/42',
+    badge: 'text-[#E8B878] border-[#DFA05D]/55',
+    pointSelected: 'bg-[#DFA05D]/68 border-[#F1C98B]/50 text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.10)]',
+    pointBadge: 'bg-[#DFA05D]/80 text-[#171717] border-[#F1C98B]/45',
   },
   structure: {
-    bar: 'bg-[#3F7E75]/90',
-    text: 'text-[#9FC6BE]',
-    softText: 'text-[#9FC6BE]/58',
-    selected: 'bg-[#3F7E75]/72 border-[#97C3BA]/52 text-[#F1FAF7] shadow-[0_0_10px_rgba(63,126,117,0.10)]',
-    selectedSoft: 'bg-[#3F7E75]/16 border-[#3F7E75]/40 text-[#9FC6BE] hover:bg-[#3F7E75]/22',
-    selectedBorder: 'border-[#3F7E75]/45',
-    badge: 'text-[#9FC6BE] border-[#3F7E75]/60',
-    pointSelected: 'bg-[#3F7E75]/68 border-[#97C3BA]/52 text-[#F1FAF7] shadow-[0_0_10px_rgba(63,126,117,0.10)]',
-    pointBadge: 'bg-[#3F7E75]/78 text-white border-[#9FC6BE]/45',
+    bar: 'bg-[#658761]/95',
+    text: 'text-[#A8C49F]',
+    softText: 'text-[#A8C49F]/58',
+    selected: 'bg-[#658761]/74 border-[#A8C49F]/50 text-[#F3FAEF] shadow-[0_0_10px_rgba(101,135,97,0.12)]',
+    selectedSoft: 'bg-[#658761]/15 border-[#658761]/38 text-[#A8C49F] hover:bg-[#658761]/22',
+    selectedBorder: 'border-[#658761]/42',
+    badge: 'text-[#A8C49F] border-[#658761]/55',
+    pointSelected: 'bg-[#658761]/68 border-[#A8C49F]/48 text-[#F3FAEF] shadow-[0_0_10px_rgba(101,135,97,0.10)]',
+    pointBadge: 'bg-[#658761]/80 text-white border-[#A8C49F]/45',
   },
   tempo: {
-    bar: 'bg-[#72884A]/90',
-    text: 'text-[#C0D29D]',
-    softText: 'text-[#C0D29D]/58',
-    selected: 'bg-[#72884A]/72 border-[#B8CB93]/52 text-[#F7FBEF] shadow-[0_0_10px_rgba(114,136,74,0.10)]',
-    selectedSoft: 'bg-[#72884A]/16 border-[#72884A]/40 text-[#C0D29D] hover:bg-[#72884A]/22',
-    selectedBorder: 'border-[#72884A]/45',
-    badge: 'text-[#C0D29D] border-[#72884A]/60',
-    pointSelected: 'bg-[#72884A]/68 border-[#B8CB93]/52 text-[#F7FBEF] shadow-[0_0_10px_rgba(114,136,74,0.10)]',
-    pointBadge: 'bg-[#72884A]/78 text-white border-[#C0D29D]/45',
+    bar: 'bg-[#F1DAA4]/95',
+    text: 'text-[#F1DAA4]',
+    softText: 'text-[#F1DAA4]/58',
+    selected: 'bg-[#F1DAA4]/68 border-[#F5E8BD]/50 text-[#171717] shadow-[0_0_10px_rgba(241,218,164,0.12)]',
+    selectedSoft: 'bg-[#F1DAA4]/14 border-[#F1DAA4]/36 text-[#F1DAA4] hover:bg-[#F1DAA4]/20',
+    selectedBorder: 'border-[#F1DAA4]/40',
+    badge: 'text-[#F1DAA4] border-[#F1DAA4]/52',
+    pointSelected: 'bg-[#F1DAA4]/62 border-[#F5E8BD]/45 text-[#171717] shadow-[0_0_10px_rgba(241,218,164,0.09)]',
+    pointBadge: 'bg-[#F1DAA4]/78 text-[#171717] border-[#F5E8BD]/45',
   },
 };
 
@@ -617,31 +617,31 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
   const normalized = String(typeOrKey || '').toLowerCase();
 
   if (normalized.includes('vocal')) {
-    return 'bg-[#467891]/12 border-[#467891]/28 text-[#A7C2D0] shadow-[0_0_8px_rgba(70,120,145,0.05)]';
+    return 'bg-[#DFA05D]/12 border-[#DFA05D]/28 text-[#E8B878] shadow-[0_0_8px_rgba(223,160,93,0.05)]';
   }
   if (normalized.includes('section') || normalized.includes('structure')) {
-    return 'bg-[#3F7E75]/12 border-[#3F7E75]/28 text-[#9FC6BE] shadow-[0_0_8px_rgba(63,126,117,0.05)]';
+    return 'bg-[#658761]/12 border-[#658761]/28 text-[#A8C49F] shadow-[0_0_8px_rgba(101,135,97,0.05)]';
   }
   if (normalized.includes('tempo') || normalized.includes('bpm')) {
-    return 'bg-[#72884A]/12 border-[#72884A]/28 text-[#C0D29D] shadow-[0_0_8px_rgba(114,136,74,0.05)]';
+    return 'bg-[#F1DAA4]/12 border-[#F1DAA4]/28 text-[#F1DAA4] shadow-[0_0_8px_rgba(241,218,164,0.05)]';
   }
   if (normalized.includes('genre') || normalized === 'subgenre') {
-    return 'bg-[#A47048]/12 border-[#A47048]/28 text-[#D9B89D] shadow-[0_0_8px_rgba(164,112,72,0.05)]';
+    return 'bg-[#DFA05D]/12 border-[#DFA05D]/28 text-[#E8B878] shadow-[0_0_8px_rgba(223,160,93,0.05)]';
   }
   if (normalized.includes('style')) {
-    return 'bg-[#AC6B69]/12 border-[#AC6B69]/28 text-[#D8A4A2] shadow-[0_0_8px_rgba(172,107,105,0.05)]';
+    return 'bg-[#AC5045]/12 border-[#AC5045]/28 text-[#D79084] shadow-[0_0_8px_rgba(172,80,69,0.05)]';
   }
   if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
-    return 'bg-[#965B77]/12 border-[#965B77]/28 text-[#C995AC] shadow-[0_0_8px_rgba(150,91,119,0.05)]';
+    return 'bg-[#658761]/12 border-[#658761]/28 text-[#A8C49F] shadow-[0_0_8px_rgba(101,135,97,0.05)]';
   }
   if (normalized.includes('mood') || normalized.includes('atmosphere')) {
-    return 'bg-[#877198]/12 border-[#877198]/28 text-[#BBA8CA] shadow-[0_0_8px_rgba(135,113,152,0.05)]';
+    return 'bg-[#F1DAA4]/12 border-[#F1DAA4]/28 text-[#F1DAA4] shadow-[0_0_8px_rgba(241,218,164,0.05)]';
   }
   if (normalized.includes('theme') || normalized.includes('topic')) {
-    return 'bg-[#5E7FA8]/12 border-[#5E7FA8]/28 text-[#A7BCD8] shadow-[0_0_8px_rgba(94,127,168,0.05)]';
+    return 'bg-[#EA642D]/12 border-[#EA642D]/28 text-[#F19A70] shadow-[0_0_8px_rgba(234,100,45,0.05)]';
   }
   if (isRandom) {
-    return 'bg-[#A47048]/16 border-[#A47048]/32 text-[#D9B89D] font-bold shadow-[0_0_8px_rgba(164,112,72,0.06)]';
+    return 'bg-[#DFA05D]/16 border-[#DFA05D]/32 text-[#E8B878] font-bold shadow-[0_0_8px_rgba(223,160,93,0.06)]';
   }
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)]';
 };
@@ -7923,7 +7923,7 @@ ${normalizePromptForDisplay(result.prompt)}
             "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
               ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-              : "bg-[linear-gradient(135deg,#F8CF5C_0%,#F08B68_34%,#EA6674_68%,#CB4F83_100%)] shadow-[0_8px_22px_rgba(225,92,116,0.28),inset_0_1px_0_rgba(255,255,255,0.24)] hover:brightness-[1.07]"
+              : "bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] hover:bg-[#E5AA67]"
           )}
         >
           {isGenerating ? (
@@ -8230,7 +8230,7 @@ ${normalizePromptForDisplay(result.prompt)}
                         aria-label="통합 검색"
                         title="통합 검색"
                       >
-                        <Search className="w-8 h-8 md:w-9 md:h-9 text-white group-hover:scale-110 transition-transform" />
+                        <Search className="w-8 h-8 md:w-9 md:h-9 text-[#F1DAA4] group-hover:scale-110 transition-transform" />
                       </button>
                       <div className="absolute -bottom-[50px] right-6 z-20 flex items-center gap-2">
                         <button
@@ -8240,7 +8240,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           }}
                           className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
                         >
-                          <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                          <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#EA642D] group-hover:scale-110 transition-transform" />
                           <span className="font-bold text-[10px] md:text-xs">가이드</span>
                         </button>
                       </div>
@@ -8251,8 +8251,8 @@ ${normalizePromptForDisplay(result.prompt)}
                     <h1 
                       className="inline-flex items-center justify-center gap-3 text-[46px] md:text-[56px] font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
                     >
-                      <Zap className="w-10 h-10 md:w-11 md:h-11 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]" />
-                      <span>Sori <span className="bg-gradient-to-r from-[#EBCF77] via-[#F39B87] to-[#D96F8F] bg-clip-text text-transparent">Studio</span></span>
+                      <Zap className="w-10 h-10 md:w-11 md:h-11 text-[#DFA05D]" />
+                      <span>Sori <span className="text-[#DFA05D]">Studio</span></span>
                     </h1>
 
                     <p className="text-[13px] md:text-[14px] text-[var(--text-secondary)] font-semibold tracking-[-0.01em] mb-4 text-center w-full">
@@ -8982,10 +8982,9 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-[#F8CF5C]/28 bg-[linear-gradient(135deg,#F8CF5C_0%,#F08B68_42%,#EA6674_72%,#CB4F83_100%)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.34),0_0_16px_rgba(225,92,116,0.19),inset_0_1px_0_rgba(255,255,255,0.24)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
+                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-[#DFA05D]/26 bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
                   >
-                    <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.14)_72%,rgba(255,255,255,0)_100%)] opacity-55" />
-                    <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
+                                        <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
                     </span>
                     <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-white/35" />
@@ -10756,9 +10755,15 @@ function CycleSection({
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const sectionAccent = getStudioSectionAccent(titleKo || title);
+  const isVintageStyleSection = String(titleKo || title || '').toLowerCase().includes('style') || String(titleKo || title || '').includes('스타일');
+  const styleDarkText = 'text-[#1B1412]';
+  const styleSubText = 'text-[#2A1C17]/72';
+  const styleButtonBase = 'bg-[#B76055]/42 border-[#6F302A]/30 text-[#1B1412] hover:bg-[#C46A5F]/48 hover:border-[#1B1412]/28';
+  const styleButtonSelected = 'bg-[#DFA05D]/58 border-[#1B1412]/28 text-[#17120F] shadow-none';
+  const styleButtonSoft = 'bg-[#DFA05D]/24 border-[#1B1412]/22 text-[#17120F] hover:bg-[#DFA05D]/32';
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className={cn("rounded-3xl p-6 border flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]", isVintageStyleSection ? "bg-[#AC5045] border-[#6F302A]/55 text-[#1B1412]" : "bg-[var(--card-bg)] border-[var(--home-card-border)]")}>
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -10766,12 +10771,12 @@ function CycleSection({
               <h3
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0", titleClassName ?? "text-[20px]")}
+                className={cn("font-bold flex items-center gap-2 cursor-help min-w-0", isVintageStyleSection ? styleDarkText : "text-[var(--text-primary)]", titleClassName ?? "text-[20px]")}
               >
-                <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
+                <span className={cn("w-1.5 h-6 rounded-full shrink-0", isVintageStyleSection ? "bg-[#17120F]/78" : sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 {countLabel && (
-                  <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
+                  <span className={cn("text-[14px] font-normal ml-1 shrink-0", isVintageStyleSection ? styleSubText : "text-[var(--text-secondary)]")}>({countLabel})</span>
                 )}
               </h3>
               <AnimatePresence>
@@ -10780,9 +10785,9 @@ function CycleSection({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl border shadow-[var(--shadow-md)] w-56 pointer-events-none", isVintageStyleSection ? "bg-[#AC5045] border-[#1B1412]/24" : "bg-[var(--card-bg)] border-brand-orange/30")}
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                    <p className={cn("text-[11px] leading-snug", isVintageStyleSection ? styleSubText : "text-[var(--text-secondary)]")}>{descriptionKo || description}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -10801,9 +10806,11 @@ function CycleSection({
                 onTouchEnd={onLongPressEnd}
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
-                  isLocked
-                    ? "bg-btn-bg text-[#9FC6BE] border-btn-border hover:bg-btn-hover"
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  isVintageStyleSection
+                    ? styleButtonBase
+                    : isLocked
+                      ? "bg-btn-bg text-[#9FC6BE] border-btn-border hover:bg-btn-hover"
+                      : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
@@ -10811,7 +10818,7 @@ function CycleSection({
                 {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
-            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
+            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border", isVintageStyleSection ? (isRandomized ? styleButtonSelected : styleButtonBase) : (isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover'))}>
               <Dices className="w-4 h-4" />
             </button>
             <button 
@@ -10820,9 +10827,11 @@ function CycleSection({
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
-                (activeSelected.length > 0 || isRandomized)
-                  ? sectionAccent.selectedSoft 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                isVintageStyleSection
+                  ? ((activeSelected.length > 0 || isRandomized) ? styleButtonSoft : styleButtonBase)
+                  : (activeSelected.length > 0 || isRandomized)
+                    ? sectionAccent.selectedSoft 
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
               <RotateCcw className="w-4 h-4" />
@@ -10877,13 +10886,17 @@ function CycleSection({
                   onTouchEnd={onLongPressEnd}
                   className={cn(
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
-                    selectedVariants.length > 0
-                      ? hasHighlightedSelectedVariant
-                        ? "bg-sky-500/32 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
-                        : sectionAccent.selected
-                      : pointSelectedVariants.length > 0
-                        ? sectionAccent.pointSelected
-                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                    isVintageStyleSection
+                      ? (selectedVariants.length > 0 || pointSelectedVariants.length > 0
+                          ? styleButtonSelected
+                          : styleButtonBase)
+                      : selectedVariants.length > 0
+                        ? hasHighlightedSelectedVariant
+                          ? "bg-sky-500/32 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+                          : sectionAccent.selected
+                        : pointSelectedVariants.length > 0
+                          ? sectionAccent.pointSelected
+                          : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
                   <span className="text-[13px] md:text-[13.5px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
@@ -10892,15 +10905,17 @@ function CycleSection({
                   {selectedCountInCycle > 0 && (
                     <span className={cn(
                       "absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-white border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none",
-                      hasHighlightedSelectedVariant
-                        ? "text-sky-700 border-sky-300/70"
-                        : sectionAccent.badge
+                      isVintageStyleSection
+                        ? "text-[#17120F] border-[#17120F]/30"
+                        : hasHighlightedSelectedVariant
+                          ? "text-sky-700 border-sky-300/70"
+                          : sectionAccent.badge
                     )}>
                       {selectedCountInCycle}
                     </span>
                   )}
                   {pointSelectedCountInCycle > 0 && (
-                    <span className={cn("absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none", sectionAccent.pointBadge)}>
+                    <span className={cn("absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none", isVintageStyleSection ? "bg-[#DFA05D]/78 text-[#17120F] border-[#17120F]/30" : sectionAccent.pointBadge)}>
                       {pointSelectedCountInCycle}
                     </span>
                   )}
@@ -10926,21 +10941,22 @@ function CycleSection({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
-          onToggleExpand && "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15"
+          "mt-4 h-[56px] rounded-2xl border border-dashed px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
+          isVintageStyleSection ? "border-[#1B1412]/34 bg-[#9B463D]/16" : "border-[var(--border-color)]",
+          onToggleExpand && (isVintageStyleSection ? "cursor-pointer hover:bg-[#9B463D]/24 hover:border-[#1B1412]/44 focus:outline-none focus:ring-1 focus:ring-[#1B1412]/20" : "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15")
         )}
         title={onToggleExpand ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
         {selectedDisplayItems.length > 0 ? (
           <div className={cn("w-full max-h-[42px] overflow-hidden font-semibold break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn(item.mode === 'point' ? 'text-[#C995AC]/85' : sectionAccent.text)}>
+              <span key={`${item.mode}-${item.id}`} className={cn(isVintageStyleSection ? "text-[#1B1412]/88" : item.mode === 'point' ? 'text-[#C995AC]/85' : sectionAccent.text)}>
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}
           </div>
         ) : (
-          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
+          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isVintageStyleSection ? "text-[#1B1412]/68" : isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
         )}
@@ -11146,6 +11162,7 @@ function CycleKeywordPopup({
   const selectedOutsideCycleCount = selected.filter((id) => !cycleVariantIds.includes(id)).length;
   const localTotalSelectedCount = selectedOutsideCycleCount + localSelected.length;
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
+  const isVintageStylePopup = String(title || '').toLowerCase().includes('style') || String(title || '').includes('스타일');
 
   return (
     <Portal>
@@ -11173,16 +11190,16 @@ function CycleKeywordPopup({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-          className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          className={cn("relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl border shadow-2xl overflow-hidden", isVintageStylePopup ? "bg-[#AC5045] border-[#1B1412]/32 text-[#1B1412]" : "bg-[var(--card-bg)] border-[var(--border-color)]")}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
+          <div className={cn("px-5 py-4 border-b flex items-start justify-between gap-4 shrink-0", isVintageStylePopup ? "border-[#1B1412]/20" : "border-[var(--border-color)]")}>
             <div className="min-w-0">
-              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isPointSelectionMode ? "text-[#C995AC]" : "text-amber-300")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
-              <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">
+              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isVintageStylePopup ? "text-[#1B1412]/72" : isPointSelectionMode ? "text-[#C995AC]" : "text-amber-300")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
+              <h3 className={cn("text-2xl font-black leading-tight truncate", isVintageStylePopup ? "text-[#17120F]" : "text-[var(--text-primary)]")}>{cycle.titleKo || cycle.title}</h3>
+              <p className={cn("text-xs mt-1", isVintageStylePopup ? "text-[#1B1412]/70" : "text-[var(--text-secondary)]")}>
                 {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
                 {localSelected.length > 0 ? ` (${localSelected.length})` : ''}
               </p>
@@ -11195,7 +11212,7 @@ function CycleKeywordPopup({
                     setLocalSelected([]);
                     setLocalOtherSelected([]);
                   }}
-                  className="h-11 px-3 rounded-2xl border border-amber-300/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 transition-all text-[11px] font-black whitespace-nowrap"
+                  className={cn("h-11 px-3 rounded-2xl border transition-all text-[11px] font-black whitespace-nowrap", isVintageStylePopup ? "border-[#1B1412]/24 bg-[#DFA05D]/20 text-[#17120F] hover:bg-[#DFA05D]/28" : "border-amber-300/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15")}
                   title="이 폴더 선택 전체 해제"
                 >
                   전체 해제
@@ -11209,7 +11226,7 @@ function CycleKeywordPopup({
                     "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
                     isPointSelectionMode
                       ? "bg-[#965B77]/70 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)] hover:bg-[#965B77]/78"
-                      : "bg-amber-500/45 text-amber-50 border-amber-300/40 shadow-[0_0_14px_rgba(245,158,11,0.13)] hover:bg-amber-500/55"
+                      : isVintageStylePopup ? "bg-[#DFA05D]/58 text-[#17120F] border-[#1B1412]/28 shadow-none hover:bg-[#DFA05D]/66" : "bg-amber-500/45 text-amber-50 border-amber-300/40 shadow-[0_0_14px_rgba(245,158,11,0.13)] hover:bg-amber-500/55"
                   )}
                   title="변경 적용"
                   aria-label="변경 적용"
@@ -11219,7 +11236,7 @@ function CycleKeywordPopup({
               )}
               <button
                 onClick={closePopup}
-                className="w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0 bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
+                className={cn("w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0", isVintageStylePopup ? "bg-[#B76055]/34 border-[#1B1412]/22 text-[#17120F] hover:bg-[#DFA05D]/18" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover")}
                 title={hasChanges ? "변경 적용 없이 닫기" : "닫기"}
                 aria-label={hasChanges ? "변경 적용 없이 닫기" : "닫기"}
               >
@@ -11236,9 +11253,9 @@ function CycleKeywordPopup({
             {cycle.variants.map((variant) => {
               if (variant.kind === 'separator') {
                 return (
-                  <div key={variant.id} className="pt-2 pb-1 flex items-center gap-2 text-[10.5px] font-black tracking-[0.14em] uppercase text-brand-orange/80 select-none">
+                  <div key={variant.id} className={cn("pt-2 pb-1 flex items-center gap-2 text-[10.5px] font-black tracking-[0.14em] uppercase select-none", isVintageStylePopup ? "text-[#1B1412]/70" : "text-brand-orange/80")}>
                     <span className="shrink-0">{variant.labelKo || variant.label}</span>
-                    <span className="h-px flex-1 bg-brand-orange/20" />
+                    <span className={cn("h-px flex-1", isVintageStylePopup ? "bg-[#1B1412]/18" : "bg-brand-orange/20")} />
                   </div>
                 );
               }
@@ -11258,15 +11275,21 @@ function CycleKeywordPopup({
                   key={variant.id}
                   className={cn(
                     "w-full rounded-2xl border transition-all flex items-stretch overflow-hidden",
-                    isSelected
-                      ? isHighlightedSelected
-                        ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
-                        : "bg-amber-500/38 text-amber-50 border-amber-300/38 shadow-[0_0_14px_rgba(245,158,11,0.12)]"
-                      : isOtherSelected
-                        ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
+                    isVintageStylePopup
+                      ? isSelected || isOtherSelected
+                        ? "bg-[#DFA05D]/44 text-[#17120F] border-[#1B1412]/28 shadow-none"
                         : disabled
-                          ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
-                          : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:border-brand-orange/40"
+                          ? "bg-[#9B463D]/20 border-[#1B1412]/16 text-[#1B1412]/42 opacity-45 cursor-not-allowed"
+                          : "bg-[#B76055]/34 border-[#1B1412]/22 text-[#17120F] hover:bg-[#C46A5F]/44"
+                      : isSelected
+                        ? isHighlightedSelected
+                          ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
+                          : "bg-amber-500/38 text-amber-50 border-amber-300/38 shadow-[0_0_14px_rgba(245,158,11,0.12)]"
+                        : isOtherSelected
+                          ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
+                          : disabled
+                            ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
+                            : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:border-brand-orange/40"
                   )}
                 >
                   <button
@@ -11293,7 +11316,7 @@ function CycleKeywordPopup({
                   >
                     <div className="min-w-0">
                       <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
-                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
+                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", isVintageStylePopup ? "text-[#1B1412]/70" : (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                     </div>
                   </button>
                   {canPointSelect && (
@@ -11317,9 +11340,13 @@ function CycleKeywordPopup({
                       onMouseLeave={() => onHover(null)}
                       className={cn(
                         "w-12 shrink-0 border-l flex items-center justify-center transition-all",
-                        isOtherSelected
-                          ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50"
-                          : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/12 hover:text-[#C995AC] hover:border-fuchsia-300/35"
+                        isVintageStylePopup
+                          ? isOtherSelected
+                            ? "bg-[#DFA05D]/44 text-[#17120F] border-[#1B1412]/28"
+                            : "bg-[#9B463D]/18 text-[#1B1412]/72 border-[#1B1412]/18 hover:bg-[#DFA05D]/20 hover:text-[#17120F]"
+                          : isOtherSelected
+                            ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50"
+                            : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/12 hover:text-[#C995AC] hover:border-fuchsia-300/35"
                       )}
                       title={isOtherSelected ? '포인트 선택 해제' : '포인트 선택'}
                       aria-label={`${variant.labelKo || variant.label} 포인트 선택`}

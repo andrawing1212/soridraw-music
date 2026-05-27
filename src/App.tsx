@@ -8201,7 +8201,7 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-24 pb-0 md:pt-24 md:pb-0 border-b border-[var(--home-card-border)] bg-transparent relative">
+              <header className="studio-hero-tone pt-24 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
@@ -8218,7 +8218,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
                   <div className="flex flex-col items-start mt-9 md:mt-10 translate-y-4 md:translate-y-5">
                     <h1 
-                      className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display text-left w-full"
+                      className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
                       <Zap className="w-8 h-8 md:w-9 md:h-9 text-[#DFA05D]" />
                       <span>Sori <span className="text-[#DFA05D]">Studio</span></span>

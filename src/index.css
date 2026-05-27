@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -335,4 +336,14 @@ html {
 .dark .studio-tone-down .soridraw-expand-summary[data-expanded="true"] {
   border-color: var(--soridraw-summary-border-hover) !important;
   background-color: var(--soridraw-summary-bg-active) !important;
+}
+
+
+/* SORIDRAW_425_HERO_FONT_SYNC
+   Keep the Sori Studio hero font consistent between PC and mobile. */
+.sori-studio-logo-text,
+.sori-studio-logo-text span {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif !important;
+  font-weight: 900 !important;
+  font-synthesis-weight: none;
 }

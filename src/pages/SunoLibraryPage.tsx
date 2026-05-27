@@ -1,571 +1,1226 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { translateLyrics } from '../services/geminiService';
-import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
-import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
-import {
-  Music,
-  Copy,
-  Check,
-  Search,
-  X,
-  Trash2,
-  ArrowLeft,
-  ArrowRight,
-  Maximize2,
-  Minimize2,
-  Plus,
-  Menu,
-  MoreVertical,
-  Info,
-  Share2,
-  Star,
-  FolderOutput,
-  CheckSquare,
-  Square,
-  SlidersHorizontal,
-  Home as HomeIcon,
-  Heart as HeartIcon,
-  Lock,
-  Unlock,
-  Edit2,
-  Filter,
-  Link2,
-  Link2Off,
-  ChevronDown,
-  ChevronUp,
-  RefreshCw,
-  Settings
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import type { User } from 'firebase/auth';
-import { db } from '../firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { updatePlaylistItemColor } from '../services/playlistService';
-import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Settings, Home, Music, RefreshCw, Loader2, AlertCircle, 
+  Search, Filter, PlayCircle, MoreVertical, Download, 
+  Share2, Star, Trash2, Info, ChevronRight, X, Play,
+  Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, CheckSquare, Square, ListChecks, Palette
+} from 'lucide-react';
+import { auth, db } from '../firebase';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
+import { downloadAudioWithTitle } from '../lib/songUtils';
+import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
+import { Playlist, PlaylistItem } from '../types';
+import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+const fallbackNormalPlaylists: Playlist[] = [
+  { id: "fallback-normal-0", title: "기본", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-1", title: "1", type: "normal", order: 2, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-2", title: "2", type: "normal", order: 3, isDefault: true, isFallback: true } as any,
+  { id: "fallback-normal-3", title: "3", type: "normal", order: 4, isDefault: true, isFallback: true } as any,
+];
 
+const fallbackSharedPlaylists: Playlist[] = [
+  { id: "fallback-shared-0", title: "기본", type: "shared", order: 1, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-1", title: "1", type: "shared", order: 2, isDefault: true, isFallback: true } as any,
+  { id: "fallback-shared-2", title: "2", type: "shared", order: 3, isDefault: true, isFallback: true } as any,
+];
 
-const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
-  const normalized = String(typeOrKey || '').toLowerCase();
+const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+const WORKSPACE_PAGE_SIZE = 10;
+const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
+const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
+const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 
-  if (normalized.includes('genre') || normalized === 'subgenre') {
-    return 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange shadow-[0_0_10px_rgba(242,125,38,0.08)]';
-  }
-  if (normalized.includes('style')) {
-    return 'border-violet-400/25 bg-violet-500/10 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.08)]';
-  }
-  if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
-    return 'border-cyan-400/25 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.08)]';
-  }
-  if (normalized.includes('mood') || normalized.includes('atmosphere')) {
-    return 'border-rose-400/25 bg-rose-500/10 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.08)]';
-  }
-  if (normalized.includes('theme') || normalized.includes('topic')) {
-    return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.08)]';
-  }
-  if (isRandom) {
-    return 'border-brand-orange/30 bg-brand-orange/16 text-brand-orange font-bold';
-  }
-  return 'border-white/10 bg-white/[0.04] text-white/72';
+const getSharedPlayedKeys = (item: any): string[] => {
+  const rawKeys = [
+    item?.id,
+    item?.sourceId,
+    item?.trackId,
+    item?.originalTrackId,
+    item?.parentTrackId,
+    item?.audioUrl,
+    item?.streamAudioUrl,
+    item?.audio_url,
+    item?.title ? `title:${item.title}` : ''
+  ];
+
+  return Array.from(new Set(
+    rawKeys
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value).trim())
+  ));
 };
 
-function getSongGenreValues(song: any): string[] {
-  return song?.appliedKeywords?.genre ?? [];
-}
+const COLOR_OPTIONS = [
+  { value: 'gray', color: '#6b7280', label: '회색' },
+  { value: 'red', color: '#ef4444', label: '빨강' },
+  { value: 'orange', color: '#f97316', label: '주황' },
+  { value: 'yellow', color: '#eab308', label: '노랑' },
+  { value: 'green', color: '#22c55e', label: '초록' },
+  { value: 'blue', color: '#3b82f6', label: '파랑' },
+  { value: 'purple', color: '#a855f7', label: '보라' }
+];
 
-function getSongMoodValues(song: any): string[] {
-  return song?.appliedKeywords?.mood ?? [];
-}
+const getColorHex = (colorTag?: string | null) => {
+  const found = COLOR_OPTIONS.find(c => c.value === colorTag);
+  return found?.color || '#6b7280';
+};
 
-function getSongThemeValues(song: any): string[] {
-  return song?.appliedKeywords?.theme ?? [];
-}
+const cleanSunoTitlePart = (value: any): string => {
+  return String(value || '')
+    .replace(/^\[[^\]]+\]\s*/, '')
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .trim();
+};
 
-function getSongSituationSummary(song: any): string {
-  return song?.appliedKeywords?.situationSummary || song?.appliedKeywords?.situation?.summary || '';
-}
+const formatSunoDisplayTitle = (rawTitle: any): string => {
+  const raw = String(rawTitle || '').trim();
+  if (!raw) return 'Untitled';
 
-function getSongStyleValues(song: any): string[] {
-  return song?.appliedKeywords?.style ?? [];
-}
+  const genreMatch = raw.match(/^\[([^\]]+)\]\s*/);
+  const genre = genreMatch?.[1]?.trim() || '';
+  let body = genreMatch ? raw.slice(genreMatch[0].length).trim() : raw;
 
-function getSongInstrumentSoundValues(song: any): string[] {
-  return song?.appliedKeywords?.instrumentSound ?? [];
-}
-
-function getSongSubGenreValues(song: any): string[] {
-  return song?.appliedKeywords?.subGenre ?? song?.appliedKeywords?.subGenreIds ?? [];
-}
-
-function getTimestampMs(value: any): number {
-  if (!value) return 0;
-
-  if (value instanceof Date) {
-    const ms = value.getTime();
-    return Number.isFinite(ms) ? ms : 0;
+  const quotedPair = body.match(/^['"]([^'"]+)['"]\s*[|│]\s*['"]([^'"]+)['"]$/);
+  if (quotedPair) {
+    const first = cleanSunoTitlePart(quotedPair[1]);
+    const second = cleanSunoTitlePart(quotedPair[2]);
+    return `${genre ? `[${genre}] ` : ''}'${first}' | '${second}'`;
   }
 
-  if (typeof value?.toDate === 'function') {
-    const ms = value.toDate().getTime();
-    return Number.isFinite(ms) ? ms : 0;
+  const bodyWithoutOuterQuotes = body.replace(/^['"]+|['"]+$/g, '').trim();
+  const parts = bodyWithoutOuterQuotes.split(/[|│]/).map(cleanSunoTitlePart).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${genre ? `[${genre}] ` : ''}'${parts[0]}' | '${parts[1]}'`;
   }
 
-  if (typeof value?.seconds === 'number') {
-    const millis = typeof value?.nanoseconds === 'number'
-      ? value.seconds * 1000 + Math.floor(value.nanoseconds / 1_000_000)
-      : value.seconds * 1000;
-    return Number.isFinite(millis) ? millis : 0;
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  if (typeof value === 'string') {
-    const ms = new Date(value).getTime();
-    return Number.isFinite(ms) ? ms : 0;
-  }
-
-  return 0;
-}
-
-function getFavoriteDetailCreatedAt(song: any): string {
-  const timestamp = song?.createdAt ?? song?.timestamp ?? song?.updatedAt;
-  const ms = getTimestampMs(timestamp);
-  if (!ms) return '';
-
-  try {
-    return new Date(ms).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  } catch {
-    return '';
-  }
-}
-
-function getFavoriteStructureText(song: any): string {
-  if (!song?.appliedKeywords) return '구조 정보 없음';
-
-  if (song.appliedKeywords.songStructure === 'custom') {
-    const custom = song.appliedKeywords.customStructure ?? [];
-    if (custom.length === 0) return '구조 정보 없음';
-    return custom.map((section: any) => {
-      if (section.section === 'Instrumental' && (section.tags ?? []).length > 0) {
-        return `${section.section}: ${(section.tags ?? [])[0]}`;
-      }
-      return `${section.section}${(section.tags ?? []).length > 0 ? ` (${(section.tags ?? []).join(', ')})` : ''}`;
-    }).join(' → ');
-  }
-
-  if (song.appliedKeywords.songStructure === '1') {
-    return 'Intro → Verse 1 → Chorus / Drop → Outro';
-  }
-
-  if (song.appliedKeywords.songStructure === '2') {
-    return 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro';
-  }
-
-  if (song.appliedKeywords.songStructure) {
-    return 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro';
-  }
-
-  return '구조 정보 없음';
-}
-
-function inferForeignLyricTargetLanguage(text: string): string {
-  const value = String(text || '').trim();
-  if (!value) return 'English';
-
-  if (/[ぁ-ゟ゠-ヿ]/.test(value)) return 'Japanese';
-  if (/[一-鿿]/.test(value) && !/[ぁ-ゟ゠-ヿ]/.test(value)) return 'Chinese';
-  if (/[가-힣]/.test(value) && !/[A-Za-zぁ-ゟ゠-ヿ一-鿿]/.test(value)) return 'English';
-  if (/[А-Яа-яЁё]/.test(value)) return 'Russian';
-  if (/[ก-๙]/.test(value)) return 'Thai';
-  if (/[À-ÿ]/.test(value)) return 'the same foreign language as the existing foreign lyrics';
-  return 'English';
-}
-
-function buildLyricContentOnlyTranslationTarget(targetLanguage: string): string {
-  return `${targetLanguage}. Translate only the actual lyric content. Keep any section header line exactly unchanged, including bracketed or parenthesized labels such as [Intro], [Verse 1], [Chorus / Drop], (Intro), (Verse 1), and similar song-structure markers. Do not translate, rewrite, remove, or add section headers. Preserve all line breaks.`;
-}
+  return `${genre ? `[${genre}] ` : ''}'${cleanSunoTitlePart(body) || 'Untitled'}'`;
+};
 
 
-export default function FavoritesPage({ 
-  favorites, 
-  toggleFavorite, 
-  updateFavorite,
-  clearAllFavorites,
-  unlockAllFavorites,
-  lockAllFavorites,
-  user,
-  onHover,
-  hoveredItem,
-  onLongPressStart,
-  onLongPressEnd
-}: { 
-  favorites: any[]; 
-  toggleFavorite: (song: any) => void; 
-  updateFavorite: (id: string, updates: Partial<any>) => void;
-  clearAllFavorites: () => void;
-  unlockAllFavorites: () => void;
-  lockAllFavorites: () => void;
-  user: User | null;
-  onHover: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string; _ts?: number } | null) => void;
-  hoveredItem: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string; _ts?: number } | null;
-  onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
-  onLongPressEnd: () => void;
+type SunoTitleParts = {
+  genre: string;
+  title: string;
+};
+
+const splitSunoDisplayTitleParts = (rawTitle: any): SunoTitleParts => {
+  const formatted = formatSunoDisplayTitle(rawTitle);
+  const genreMatch = formatted.match(/^\[([^\]]+)\]\s*/);
+  const genre = genreMatch ? `[${genreMatch[1].trim()}]` : '';
+  const title = genreMatch ? formatted.slice(genreMatch[0].length).trim() : formatted.trim();
+
+  return {
+    genre,
+    title: title || 'Untitled',
+  };
+};
+
+
+function AnimatedTrackPlayButton({
+  imageUrl,
+  isActive,
+  isPlaying,
+  onClick,
+  disabled,
+  durationLabel,
+  unavailable = false,
+}: {
+  imageUrl?: string | null;
+  isActive: boolean;
+  isPlaying: boolean;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
+  disabled?: boolean;
+  durationLabel?: string;
+  unavailable?: boolean;
 }) {
-  const [selectedSong, setSelectedSong] = useState<any | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
-  const [showSortPopup, setShowSortPopup] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(15);
-  const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const sortPopupRef = useRef<HTMLDivElement>(null);
-  const [copiedType, setCopiedType] = useState<string | null>(null);
-  const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
-  const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSyncEnabled, setIsSyncEnabled] = useState(false);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [originalLyricsKo, setOriginalLyricsKo] = useState('');
-  const [originalLyricsEn, setOriginalLyricsEn] = useState('');
-  const [originalTitle, setOriginalTitle] = useState('');
-  const popupOpenedRef = useRef(false);
-  const [isInfoExpanded, setIsInfoExpanded] = useState(false);
-  const [activeEditSection, setActiveEditSection] = useState<'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null>(null);
-  const [showFavoriteMusicApiModal, setShowFavoriteMusicApiModal] = useState(false);
-  const [isFavoriteMusicApiGenerating, setIsFavoriteMusicApiGenerating] = useState(false);
-  const [favoriteMusicApiMessage, setFavoriteMusicApiMessage] = useState<string | null>(null);
-  const [isFavoriteMusicApiSectionExpanded, setIsFavoriteMusicApiSectionExpanded] = useState(false);
-  const [hasFavoriteSunoApiKey, setHasFavoriteSunoApiKey] = useState<boolean>(() => {
+  const isNowPlaying = isActive && isPlaying;
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageLoadFailed(false);
+  }, [imageUrl]);
+
+  const shouldUseImage = Boolean(imageUrl && !imageLoadFailed);
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full overflow-hidden flex items-center justify-center transition-all border border-white/10 ${
+        unavailable
+          ? 'opacity-50 cursor-not-allowed text-white/20'
+          : isNowPlaying
+            ? 'ring-[3px] ring-brand-orange/20 shadow-[0_12px_30px_rgba(249,115,22,0.22)] scale-[1.03]'
+            : isActive
+              ? 'ring-2 ring-brand-orange/45'
+              : 'hover:ring-2 hover:ring-brand-orange/35 group-hover:scale-[1.03]'
+      }`}
+      title={durationLabel || undefined}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]" />
+      {shouldUseImage ? (
+        <img
+          src={imageUrl || ''}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+          onError={() => setImageLoadFailed(true)}
+        />
+      ) : null}
+
+      {isNowPlaying && <div className="pointer-events-none absolute inset-0 rounded-full suno-playing-ring" />}
+      {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-brand-orange/20 shadow-[0_0_18px_rgba(249,115,22,0.20)]" />}
+
+      <div className={`absolute inset-0 transition-colors ${isNowPlaying ? 'bg-black/30' : 'bg-black/45 group-hover:bg-black/35'}`} />
+
+      <div className="relative z-10 flex items-center justify-center text-white drop-shadow">
+        {isNowPlaying ? (
+          <span className="suno-icon-stack is-playing" aria-hidden="true">
+            <span className="suno-icon-pause">
+              <span className="suno-icon-pause-bar" />
+              <span className="suno-icon-pause-bar" />
+            </span>
+            <span className="suno-icon-wave">
+              {[0, 1, 2, 3].map((bar) => (
+                <span
+                  key={bar}
+                  className="suno-icon-wave-bar"
+                  style={{ animationDelay: `${bar * 0.12}s` }}
+                />
+              ))}
+            </span>
+          </span>
+        ) : (
+          <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
+        )}
+      </div>
+
+      {durationLabel && (
+        <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-white/10 tabular-nums">
+          {durationLabel}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
+  const navigate = useNavigate();
+  const [tracks, setTracks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusChecking, setStatusChecking] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
+  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => {
     try {
-      return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
+      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+      return Number.isFinite(saved) && saved >= 0 ? saved : null;
     } catch {
-      return false;
+      return null;
     }
   });
-  const [foreignTargetLanguage, setForeignTargetLanguage] = useState<string>('English');
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
-  const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
-  const [originalPrompt, setOriginalPrompt] = useState('');
-  const [editedPrompt, setEditedPrompt] = useState('');
-
-  // 제목/장르 표시 정규화
-  const getDisplaySubGenre = (song: any): string => {
-    return getResolvedGenre(song);
-  };
-
-  const parseLegacyTitles = (song: any): { korean: string; english: string } => {
-    const rawTitle = String(song?.title || '').trim();
-
-    if (!rawTitle) {
-      return { korean: '', english: '' };
+  const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+      return Number.isFinite(saved) && saved > 0 ? saved : null;
+    } catch {
+      return null;
     }
+  });
+  const [isSharedView, setIsSharedView] = useState(false);
+  const [isSharedOwner, setIsSharedOwner] = useState(false);
+  const [sharedTrackLoading, setSharedTrackLoading] = useState(false);
+  const [sharedError, setSharedError] = useState(false);
+  const [showKakaoWarning, setShowKakaoWarning] = useState(false);
+  
+  const [libraryViewMode, setLibraryViewMode] = useState<"workspace" | "playlist" | "sharedPlaylist">("workspace");
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedNormalPlaylistId, setSelectedNormalPlaylistId] = useState<string | null>(null);
+  const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
+  const [activePlaylistSection, setActivePlaylistSection] = useState<'normal' | 'shared'>('normal');
+  const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
+  const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
+  const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
+  const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
+  const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
+  const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
+  const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
+  const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
+  const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
+  const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
+  const [, setLibraryColorSyncTick] = useState(0);
+  const [isLibraryAdminUser, setIsLibraryAdminUser] = useState(false);
+  const lastWorkspaceServerColorMapRef = React.useRef<Record<string, string>>({});
+  const lastPlaylistServerColorMapRef = React.useRef<Record<string, string>>({});
+  const pendingWorkspaceColorKeysRef = React.useRef<Set<string>>(new Set());
+  const pendingPlaylistColorKeysRef = React.useRef<Set<string>>(new Set());
+  const workspaceLocalColorMapRef = React.useRef<Record<string, string>>({});
+  const playlistLocalColorMapRef = React.useRef<Record<string, string>>({});
+  const workspaceColorBaselineRef = React.useRef<string>('{}');
+  const playlistColorBaselineRef = React.useRef<string>('{}');
+  const workspaceColorDirtyRef = React.useRef(false);
+  const playlistColorDirtyRef = React.useRef(false);
+  const libraryColorsAutoSyncingRef = React.useRef(false);
+  const libraryUserRef = React.useRef(user);
+  
+  const [likesCache, setLikesCache] = useState<Record<string, { likeCount: number, likedByMe: boolean }>>({});
+  const [sharedStatusCache, setSharedStatusCache] = useState<Record<string, { isPublic: boolean, checkedAt: number }>>({});
+  const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
+  const [shareCreatorNameMap, setShareCreatorNameMap] = useState<Record<string, string>>({});
+  const [sharedPlayedMap, setSharedPlayedMap] = useState<Record<string, string>>({});
 
-    const cleaned = rawTitle.replace(/^(\[[^\]]+\]\s*)+/g, '');
-
-    const pipeParts = cleaned
-      .split(/[|│]/)
-      .map((v: string) => v.trim().replace(/^['"]|['"]$/g, ''))
-      .filter(Boolean);
-
-    if (pipeParts.length >= 2) {
-      const first = pipeParts[0];
-      const second = pipeParts[1];
-      const firstHasKorean = /[가-힣]/.test(first);
-      const secondHasKorean = /[가-힣]/.test(second);
-
-      if (firstHasKorean && !secondHasKorean) {
-        return { korean: first, english: second };
-      }
-
-      if (!firstHasKorean && secondHasKorean) {
-        return { korean: second, english: first };
-      }
-
-      return { korean: first, english: second };
+  useEffect(() => {
+    if (appUser) {
+      setUser(appUser);
     }
+  }, [appUser?.uid]);
 
-    const quotedParts = [...cleaned.matchAll(/'([^']+)'|\"([^\"]+)\"/g)]
-      .map((match) => (match[1] || match[2] || '').trim())
-      .filter(Boolean);
-
-    if (quotedParts.length >= 2) {
-      const first = quotedParts[0];
-      const second = quotedParts[1];
-      const firstHasKorean = /[가-힣]/.test(first);
-      const secondHasKorean = /[가-힣]/.test(second);
-
-      if (firstHasKorean && !secondHasKorean) {
-        return { korean: first, english: second };
+  useEffect(() => {
+    const readCachedCredits = () => {
+      try {
+        const creditValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
+        setRemainingCredits(Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null);
+        const updatedValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
+        setRemainingCreditsUpdatedAt(Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null);
+      } catch {
+        setRemainingCredits(null);
+        setRemainingCreditsUpdatedAt(null);
       }
-
-      if (!firstHasKorean && secondHasKorean) {
-        return { korean: second, english: first };
-      }
-
-      return { korean: first, english: second };
-    }
-
-    const single = cleaned.replace(/^['"]|['"]$/g, '').trim();
-    if (/[가-힣]/.test(single)) {
-      return { korean: single, english: '' };
-    }
-
-    return { korean: '', english: single };
-  };
-
-  const getNormalizedTitles = (song: any) => {
-    const legacy = parseLegacyTitles(song);
-
-    return {
-      korean: String(song?.koreanTitle || '').trim() || legacy.korean,
-      english: String(song?.englishTitle || '').trim() || legacy.english,
     };
-  };
 
-  const cleanTitlePart = (value: any): string => {
-    return String(value || '')
-      .replace(/^\[[^\]]+\]\s*/, '')
-      .trim()
-      .replace(/^['"]+|['"]+$/g, '')
-      .trim();
-  };
+    const handleUpdate = () => readCachedCredits();
+    readCachedCredits();
+    window.addEventListener('storage', handleUpdate);
+    window.addEventListener('soridraw:suno-credits-updated', handleUpdate as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('soridraw:suno-credits-updated', handleUpdate as EventListener);
+    };
+  }, []);
 
-  const quoteTitlePart = (value: any): string => `'${cleanTitlePart(value) || 'Untitled'}'`;
-
-  const getCombinedFavoriteTitle = (song: any): string => {
-    const genre = getDisplaySubGenre(song);
-    const genreLabel = genre ? `[${genre}] ` : '';
-    const { korean, english } = getNormalizedTitles(song);
-    const ko = cleanTitlePart(korean);
-    const foreign = cleanTitlePart(english);
-
-    if (ko && foreign && ko !== foreign) {
-      return `${genreLabel}${quoteTitlePart(ko)} | ${quoteTitlePart(foreign)}`;
+  const formatCreditCheckedAt = (value: number | null) => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
     }
-
-    return `${genreLabel}${quoteTitlePart(ko || foreign || 'Untitled')}`;
   };
-
-  const getFavoriteKoreanTitle = (song: any): string => {
-    const { korean, english } = getNormalizedTitles(song);
-    return quoteTitlePart(korean || english || 'Untitled');
-  };
-
-  const getFavoriteEnglishTitle = (song: any): string => {
-    const { korean, english } = getNormalizedTitles(song);
-    return quoteTitlePart(english || korean || 'Untitled');
-  };
-
-  // 1. 보관함 목록 카드 제목 렌더 (1줄 형식)
-  const renderFavoriteListTitle = (song: any) => {
-    const titleText = getCombinedFavoriteTitle(song);
-    return (
-      <div className="text-center font-bold">
-        {getCombinedFavoriteTitle(song)}
-      </div>
-    );
-  };
-
-  // 2. 보관함 상세 팝업 제목 렌더 (2줄 형식 + 상시 노출 복사 버튼)
-  const renderFavoriteDetailTitles = (song: any) => {
-    const koLine = getFavoriteKoreanTitle(song);
-    const enLine = getFavoriteEnglishTitle(song);
-
-    const DetailActionCopyBtn = ({
-      text,
-      type,
-      label,
-    }: {
-      text: string;
-      type: string;
-      label: string;
-    }) => (
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          copyToClipboard(text, type);
-        }}
-        onMouseEnter={() =>
-          onHover({
-            id: `copy-${type}`,
-            label: `${label} 제목 복사`,
-            description: `${label} 제목 한 줄을 복사합니다.`,
-          })
-        }
-        onMouseLeave={() => {
-          onHover(null);
-          onLongPressEnd();
-        }}
-        onTouchStart={() =>
-          onLongPressStart({
-            id: `copy-${type}`,
-            label: `${label} 제목 복사`,
-            description: `${label} 제목 한 줄을 복사합니다.`,
-          })
-        }
-        onTouchEnd={onLongPressEnd}
-        className="inline-flex items-center gap-1.5 p-1 px-2 rounded-md bg-[var(--bg-secondary)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-[var(--border-color)] ml-2 shadow-sm"
-        title={`${label} 복사`}
-      >
-        {copiedType === type ? (
-          <Check className="w-3.5 h-3.5 text-green-500" />
-        ) : (
-          <Copy className="w-3.5 h-3.5 opacity-60" />
-        )}
-        <span className="text-[10px] font-bold opacity-70">{label}</span>
-      </button>
-    );
-
-    return (
-      <div className="relative w-full flex items-center justify-center min-h-[80px] md:min-h-[100px]">
-        {/* 중앙 제목 영역 */}
-        <div className="flex flex-col items-center justify-center gap-2 px-10 md:px-14 w-full overflow-hidden">
-          <h2 className="text-[17px] md:text-[22px] font-bold text-[var(--text-primary)] leading-tight text-center break-keep">
-            {koLine}
-          </h2>
-          {enLine && enLine !== koLine && (
-            <h2 className="text-[13px] md:text-[16px] font-bold text-[var(--text-primary)]/70 leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full">
-              {enLine}
-            </h2>
-          )}
-        </div>
-
-        {/* 우측 복사 버튼 그룹 - 세로 1열 고정 */}
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10">
-          <DetailActionCopyBtn text={koLine} type="title-ko" label="KO" />
-          {enLine && enLine !== koLine && (
-            <DetailActionCopyBtn text={enLine} type="title-en" label="EN" />
-          )}
-        </div>
-      </div>
-    );
-  };
-      const getCombinedFavoriteCopyText = (song: any): string => {
-        return getCombinedFavoriteTitle(song);
-      };
-      
-  const isModified = selectedSong && (
-    editedTitle !== originalTitle ||
-    editedKoreanLyrics !== originalLyricsKo ||
-    editedEnglishLyrics !== originalLyricsEn ||
-    editedPrompt !== originalPrompt
-  );
-  const isTitleEditChanged = Boolean(selectedSong && editedTitle !== selectedSong.title);
-  const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== selectedSong.lyrics.korean);
-  const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== selectedSong.lyrics.english);
-  const isPromptEditChanged = Boolean(selectedSong && editedPrompt !== (selectedSong.prompt || ''));
-  const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
-  const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
-  const [confirmLockAll, setConfirmLockAll] = useState(0);
-  const [confirmDeleteSong, setConfirmDeleteSong] = useState(false);
-  const [confirmToggleLock, setConfirmToggleLock] = useState(false);
-  const [deletingSongId, setDeletingSongId] = useState<string | null>(null);
-  const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean; activeEditSection: 'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null; foreignTargetLanguage?: string }>>({});
-  const favoriteDraftCommitRef = useRef(false);
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [isShaking, setIsShaking] = useState(false);
-  const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
-  const [activeFavoriteMenuId, setActiveFavoriteMenuId] = useState<string | null>(null);
-  const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
-  const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
-  const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
-  const [, setFavoriteColorSyncTick] = useState(0);
-  const [isFavoriteAdminUser, setIsFavoriteAdminUser] = useState(false);
-  const lastFavoriteServerColorMapRef = useRef<Record<string, string>>({});
-  const favoriteColorMapRef = useRef<Record<string, string>>({});
-  const favoriteColorBaselineRef = useRef<string>('{}');
-  const favoriteColorDirtyRef = useRef(false);
-  const favoriteColorsAutoSyncingRef = useRef(false);
-  const favoritesRef = useRef<any[]>(favorites || []);
-  const favoriteUserRef = useRef<User | null>(user);
-  const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
-  const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
-  const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const longPressTriggeredRef = useRef(false);
-  const selectionBeforeSelectAllRef = useRef<string[]>([]);
-  const selectionHistoryPushedRef = useRef(false);
-  const detailHistoryPushedRef = useRef(false);
-  const placeholders = [
-    "제목으로 검색해보세요...",
-    "가사 내용으로 검색해보세요...",
-    "장르나 키워드로 검색해보세요...",
-    "분위기로 검색해보세요..."
-  ];
 
   useEffect(() => {
     let cancelled = false;
     const loadAdminRole = async () => {
       if (!user?.uid) {
-        if (!cancelled) setIsFavoriteAdminUser(false);
+        if (!cancelled) setIsLibraryAdminUser(false);
         return;
       }
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
-        if (!cancelled) setIsFavoriteAdminUser(snap.exists() && snap.data()?.role === 'admin');
+        if (!cancelled) setIsLibraryAdminUser(snap.exists() && snap.data()?.role === 'admin');
       } catch (error) {
-        console.warn('favorite admin role check failed', error);
-        if (!cancelled) setIsFavoriteAdminUser(false);
+        console.warn('library admin role check failed', error);
+        if (!cancelled) setIsLibraryAdminUser(false);
       }
     };
     loadAdminRole();
     return () => { cancelled = true; };
   }, [user?.uid]);
 
-
-  const FAVORITE_COLOR_OPTIONS = [
-    { value: 'gray', color: '#6b7280', label: '회색' },
-    { value: 'red', color: '#ef4444', label: '빨강' },
-    { value: 'orange', color: '#f97316', label: '주황' },
-    { value: 'yellow', color: '#eab308', label: '노랑' },
-    { value: 'green', color: '#22c55e', label: '초록' },
-    { value: 'blue', color: '#3b82f6', label: '파랑' },
-    { value: 'purple', color: '#a855f7', label: '보라' },
-  ];
-
-  const getFavoriteColorValue = (song: any): string => {
-    return favoriteColorMap[song?.id] || song?.favoriteColorTag || song?.colorTag || 'gray';
-  };
-
-  const getFavoriteColorHex = (songId: string, song?: any) => {
-    const saved = song ? getFavoriteColorValue(song) : (favoriteColorMap[songId] || 'gray');
-    return FAVORITE_COLOR_OPTIONS.find(c => c.value === saved)?.color || '#6b7280';
-  };
-
-  const showFavoriteToast = (message: string) => {
-    if (favoriteToastTimerRef.current) {
-      clearTimeout(favoriteToastTimerRef.current);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SHARED_PLAYED_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') setSharedPlayedMap(parsed);
+      }
+    } catch (error) {
+      console.warn('load shared playlist played map failed:', error);
     }
-    setFavoriteToastMessage(message);
-    favoriteToastTimerRef.current = setTimeout(() => {
-      setFavoriteToastMessage(null);
-      favoriteToastTimerRef.current = null;
-    }, 2200);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const loadedWorkspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
+      const loadedPlaylistMap = readLocalColorMap('soridraw.library.playlistColorTags');
+      setWorkspaceLocalColorMap(loadedWorkspaceMap);
+      setPlaylistLocalColorMap(loadedPlaylistMap);
+      workspaceLocalColorMapRef.current = loadedWorkspaceMap;
+      playlistLocalColorMapRef.current = loadedPlaylistMap;
+      workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);
+      playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
+    } catch (error) {
+      console.warn('load library color map failed:', error);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    workspaceLocalColorMapRef.current = workspaceLocalColorMap;
+  }, [workspaceLocalColorMap]);
+
+  useEffect(() => {
+    playlistLocalColorMapRef.current = playlistLocalColorMap;
+  }, [playlistLocalColorMap]);
+
+  useEffect(() => {
+    libraryUserRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
+  }, [workspaceLocalColorMap, user?.uid]);
+
+  useEffect(() => {
+    writeLocalColorMap('soridraw.library.playlistColorTags', playlistLocalColorMap);
+  }, [playlistLocalColorMap, user?.uid]);
+
+  useEffect(() => {
+    const serverMap: Record<string, string> = {};
+    const loadedTrackIds = new Set<string>();
+
+    for (const track of tracks || []) {
+      const trackId = track?.id || track?.trackId;
+      if (!trackId) continue;
+      loadedTrackIds.add(String(trackId));
+      for (const colorField of ['colorTags', 'favoriteColorTags']) {
+        const source = track?.[colorField] || {};
+        Object.entries(source).forEach(([idx, color]) => {
+          serverMap[`workspace:${colorField}:${trackId}:${idx}`] = color && color !== 'gray' ? String(color) : 'gray';
+        });
+      }
+    }
+
+    const localWorkspaceMap = { ...readLocalColorMap('soridraw.library.workspaceColorTags'), ...workspaceLocalColorMap };
+    Object.keys(localWorkspaceMap).forEach((key) => {
+      const [, colorField, trackId, idx] = key.split(':');
+      if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) return;
+      if (loadedTrackIds.has(trackId) && serverMap[key] === undefined) serverMap[key] = 'gray';
+    });
+
+    const previous = lastWorkspaceServerColorMapRef.current || {};
+    const allKeys = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
+    if (allKeys.size === 0) {
+      lastWorkspaceServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    if (workspaceColorDirtyRef.current) {
+      lastWorkspaceServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    let changed = false;
+    setWorkspaceLocalColorMap((prev) => {
+      const next = { ...prev };
+      for (const key of allKeys) {
+        if (pendingWorkspaceColorKeysRef.current.has(key)) continue;
+        const before = previous[key] || 'gray';
+        const current = serverMap[key] || 'gray';
+        if (before !== current) {
+          changed = true;
+          if (current === 'gray') delete next[key];
+          else next[key] = current;
+        }
+      }
+      return changed ? next : prev;
+    });
+    if (changed) {
+      try {
+        const merged = { ...readLocalColorMap('soridraw.library.workspaceColorTags') };
+        for (const key of allKeys) {
+          if (pendingWorkspaceColorKeysRef.current.has(key)) continue;
+          const before = previous[key] || 'gray';
+          const current = serverMap[key] || 'gray';
+          if (before !== current) {
+            if (current === 'gray') delete merged[key];
+            else merged[key] = current;
+          }
+        }
+        writeLocalColorMap('soridraw.library.workspaceColorTags', merged);
+        workspaceLocalColorMapRef.current = merged;
+        workspaceColorBaselineRef.current = serializeColorMap(merged);
+        workspaceColorDirtyRef.current = false;
+      } catch (error) {
+        console.warn('workspace server color merge failed:', error);
+      }
+    }
+    lastWorkspaceServerColorMapRef.current = serverMap;
+  }, [tracks, workspaceLocalColorMap]);
+
+  useEffect(() => {
+    const serverMap: Record<string, string> = {};
+    const loadedPlaylistId = activePlaylistId || 'unknown';
+
+    for (const item of playlistItems || []) {
+      const playlistId = (item as any)?.playlistId || loadedPlaylistId;
+      const itemId = (item as any)?.id || 'unknown';
+      const color = (item as any)?.colorTag;
+      if (playlistId !== 'unknown' && itemId !== 'unknown') {
+        serverMap[`playlist:${playlistId}:${itemId}`] = color && color !== 'gray' ? String(color) : 'gray';
+      }
+    }
+
+    const localPlaylistMap = { ...readLocalColorMap('soridraw.library.playlistColorTags'), ...playlistLocalColorMap };
+    Object.keys(localPlaylistMap).forEach((key) => {
+      const [, playlistId, itemId] = key.split(':');
+      if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') return;
+      if (playlistId === loadedPlaylistId && serverMap[key] === undefined) serverMap[key] = 'gray';
+    });
+
+    const previous = lastPlaylistServerColorMapRef.current || {};
+    const allKeys = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
+    if (allKeys.size === 0) {
+      lastPlaylistServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    if (playlistColorDirtyRef.current) {
+      lastPlaylistServerColorMapRef.current = serverMap;
+      return;
+    }
+
+    let changed = false;
+    setPlaylistLocalColorMap((prev) => {
+      const next = { ...prev };
+      for (const key of allKeys) {
+        if (pendingPlaylistColorKeysRef.current.has(key)) continue;
+        const before = previous[key] || 'gray';
+        const current = serverMap[key] || 'gray';
+        if (before !== current) {
+          changed = true;
+          if (current === 'gray') delete next[key];
+          else next[key] = current;
+        }
+      }
+      return changed ? next : prev;
+    });
+    if (changed) {
+      try {
+        const merged = { ...readLocalColorMap('soridraw.library.playlistColorTags') };
+        for (const key of allKeys) {
+          if (pendingPlaylistColorKeysRef.current.has(key)) continue;
+          const before = previous[key] || 'gray';
+          const current = serverMap[key] || 'gray';
+          if (before !== current) {
+            if (current === 'gray') delete merged[key];
+            else merged[key] = current;
+          }
+        }
+        writeLocalColorMap('soridraw.library.playlistColorTags', merged);
+        playlistLocalColorMapRef.current = merged;
+        playlistColorBaselineRef.current = serializeColorMap(merged);
+        playlistColorDirtyRef.current = false;
+      } catch (error) {
+        console.warn('playlist server color merge failed:', error);
+      }
+    }
+    lastPlaylistServerColorMapRef.current = serverMap;
+  }, [playlistItems, activePlaylistId, playlistLocalColorMap]);
+
+  const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
+  const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
+
+  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveMenuState(null);
+      setActivePlaylistItemMenu(null);
+      setActiveColorMenu(null);
+      setBulkMenuState(null);
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
+
+  // UI States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
+  const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
+  const [showWorkspaceMoreTooltip, setShowWorkspaceMoreTooltip] = useState(false);
+  useEffect(() => {
+    if (libraryViewMode === 'workspace') {
+      setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
+    }
+  }, [libraryViewMode, searchTerm, filter, workspaceColorFilter]);
+
+  useEffect(() => {
+    setMultiSelectMode(false);
+    setSelectedTrackMap({});
+    setBulkMenuState(null);
+  }, [libraryViewMode, selectedNormalPlaylistId, selectedSharedPlaylistId, activePlaylistSection, filter]);
+
+  const [showDetails, setShowDetails] = useState<any>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  interface MenuState {
+    id: string;
+    position: { top: number; right: number };
+    anchorEl?: HTMLElement | null;
+    group: any;
+    item: any;
+    idx: number;
+    audioUrl: string;
+  }
+  const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
+  const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
+  const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
+  type MultiSelectContext = 'workspace' | 'playlist' | 'sharedPlaylist';
+  type MultiSelectedTrack = {
+    key: string;
+    context: MultiSelectContext;
+    group?: any;
+    item: any;
+    idx: number;
+    audioUrl: string;
+    title: string;
   };
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedTrackMap, setSelectedTrackMap] = useState<Record<string, MultiSelectedTrack>>({});
+  const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number; anchorEl?: HTMLElement | null } | null>(null);
+  const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
+  const selectedTrackCount = selectedTrackList.length;
+
+  useEffect(() => {
+    const closeFloatingMenus = () => {
+      setActiveMenuState(null);
+      setActivePlaylistItemMenu(null);
+      setActiveColorMenu(null);
+      setBulkMenuState(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeFloatingMenus();
+      if (multiSelectMode) {
+        setMultiSelectMode(false);
+        setSelectedTrackMap({});
+        setBulkShareModalOpen(false);
+        setBulkMoveModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [multiSelectMode]);
+
+  const computeFloatingMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 280) => {
+    const rect = anchorEl.getBoundingClientRect();
+    const margin = 12;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+
+    // 메뉴는 클릭한 순간의 문서 좌표에 고정한다.
+    // 스크롤 중 위치를 재계산하지 않아 화면을 따라오지 않게 한다.
+    const topBelowViewport = rect.bottom + 8;
+    const topAboveViewport = rect.top - estimatedHeight - 8;
+    const viewportTop = topBelowViewport + estimatedHeight > window.innerHeight
+      ? Math.max(margin, topAboveViewport)
+      : Math.max(margin, topBelowViewport);
+    const top = viewportTop + scrollTop;
+    const right = Math.max(margin, window.innerWidth - rect.right);
+
+    return { top, right };
+  };
+
+  interface DeleteAction {
+    groupId: string;
+    itemIndex: number;
+    group: any;
+    action: 'hide' | 'restore' | 'permanentDelete';
+  }
+  interface PlaylistConfirmAction {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => Promise<void> | void;
+  }
+  const [playlistConfirmAction, setPlaylistConfirmAction] = useState<PlaylistConfirmAction | null>(null);
+  const [isPlaylistConfirming, setIsPlaylistConfirming] = useState(false);
+  const [bulkShareModalOpen, setBulkShareModalOpen] = useState(false);
+  const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteAction | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const checkingIdsRef = React.useRef<Set<string>>(new Set());
+  const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
+  const autoCheckLastRunAtRef = React.useRef<Map<string, number>>(new Map());
+  const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
+  const modalHistoryPushedRef = React.useRef(false);
+  const multiSelectHistoryPushedRef = React.useRef(false);
+
+  const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
+
+  // Scroll to top on page enter
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
+
+  useEffect(() => {
+    console.log("Shared page browser check:", {
+      userAgent: navigator.userAgent,
+      isKakaoInAppBrowser,
+      isSharePage: isSharedView,
+    });
+
+    if (isSharedView && isKakaoInAppBrowser) {
+      setShowKakaoWarning(true);
+    }
+  }, [isSharedView, isKakaoInAppBrowser]);
+
+  useEffect(() => {
+    if ((window as any).Kakao && !(window as any).Kakao.isInitialized()) {
+      (window as any).Kakao.init("YOUR_KAKAO_JAVASCRIPT_KEY");
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      setIsSharedPlayerMode(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    const searchParams = new URL(window.location.href).searchParams;
+    const trackId = searchParams.get('track');
+
+    if (trackId) {
+      setIsSharedView(true);
+      setIsSharedPlayerMode(true);
+      setSharedTrackLoading(true);
+
+      const unsubAuth = auth.onAuthStateChanged(async (currentUser) => {
+        const resolvedUser = currentUser || appUser || auth.currentUser;
+        setUser(resolvedUser);
+        try {
+          console.log("shared track search start", { trackId, isSharedView: true, hasUser: !!resolvedUser });
+
+          if (resolvedUser) {
+            const trackRef = doc(db, 'suno_tracks', resolvedUser.uid, 'tracks', trackId);
+            const snap = await getDoc(trackRef);
+            if (snap.exists() && !snap.data().hidden) {
+              setTracks([{ id: snap.id, ...snap.data() }]);
+              setIsSharedOwner(true);
+              setSharedTrackLoading(false);
+              setLoading(false);
+              return;
+            }
+          }
+
+          const shareSnap = await getDoc(doc(db, 'suno_shares', trackId));
+          if (shareSnap.exists() && shareSnap.data().isPublic) {
+            const shareData = shareSnap.data();
+            let safeSunoData = shareData.sunoData || [];
+            if (typeof shareData.subTrackIndex === 'number' && safeSunoData.length > shareData.subTrackIndex) {
+               safeSunoData = [safeSunoData[shareData.subTrackIndex]];
+            }
+            
+            setTracks([{ 
+              ...shareData,
+              id: trackId,
+              trackId: shareData.trackId,
+              sunoData: safeSunoData
+            }]);
+            setIsSharedOwner(resolvedUser?.uid === shareData.ownerUid);
+            setSharedTrackLoading(false);
+            setLoading(false);
+            return;
+          }
+          
+          const q = query(
+            collectionGroup(db, 'tracks'),
+            where('isPublic', '==', true)
+          );
+          const querySnapshot = await getDocs(q);
+          console.log("public tracks count", querySnapshot.size);
+          
+          let publicTrack = null;
+          for (const docSnap of querySnapshot.docs) {
+            const data = docSnap.data();
+            console.log("public track candidate", {
+              docId: docSnap.id,
+              isPublic: data.isPublic,
+              hidden: data.hidden,
+              title: data.title
+            });
+            
+            if (docSnap.id === trackId && data.isPublic === true && data.hidden !== true) {
+              publicTrack = docSnap;
+              break;
+            }
+          }
+          
+          if (publicTrack) {
+            setTracks([{ id: publicTrack.id, ...publicTrack.data() }]);
+          } else {
+            setTracks([]);
+          }
+        } catch (e: any) {
+          console.error("shared track query failed", e);
+          setTracks([]);
+          // Private shares are intentionally unreadable by Firestore rules.
+          // Treat permission-denied as an unavailable/private track, not as a system error.
+          setSharedError(e?.code && e.code !== 'permission-denied');
+        } finally {
+          setSharedTrackLoading(false);
+          setLoading(false);
+        }
+      });
+      return () => unsubAuth();
+    }
+
+    const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
+      const resolvedUser = currentUser || appUser || auth.currentUser;
+      setUser(resolvedUser);
+
+      if (!resolvedUser) {
+        setLoading(false);
+        setTracks([]);
+        return;
+      }
+
+      const q = query(
+        collection(db, 'suno_tracks', resolvedUser.uid, 'tracks')
+      );
+
+      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        list.sort((a: any, b: any) => {
+          const t1 = a.createdAt?.seconds || 0;
+          const t2 = b.createdAt?.seconds || 0;
+          return t2 - t1;
+        });
+
+        setTracks(list);
+        setLoading(false);
+      }, (error) => {
+        console.error('Error fetching tracks:', error);
+        setLoading(false);
+      });
+
+      return () => unsubscribeSnapshot();
+    });
+
+    return () => unsubscribeAuth();
+  }, [appUser?.uid]);
+
+  useEffect(() => {
+    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || isSharedView) {
+      if (!user) {
+        setPlaylists([]);
+      }
+      return;
+    }
+
+    let unsub: (() => void) | undefined;
+
+    const initPlaylists = async () => {
+      try {
+        await ensureDefaultPlaylists(user.uid);
+      } catch (error) {
+        console.error("ensureDefaultPlaylists failed:", error);
+      }
+
+      const listsRef = collection(db, 'user_playlists', user.uid, 'lists');
+      unsub = onSnapshot(listsRef, (snapshot) => {
+        const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Playlist));
+        setPlaylists(lists);
+      }, (error) => {
+        console.error("playlist snapshot failed:", error);
+      });
+    };
+
+    initPlaylists();
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [user, libraryViewMode, isSharedView]);
+
+  const actualNormalPlaylists = useMemo(() => playlists.filter(p => p.type === 'normal').sort((a, b) => a.order - b.order), [playlists]);
+  const actualSharedPlaylists = useMemo(() => playlists.filter(p => p.type === 'shared').sort((a, b) => a.order - b.order), [playlists]);
+
+  const visibleNormalPlaylists = actualNormalPlaylists.length > 0 ? actualNormalPlaylists : fallbackNormalPlaylists;
+  const visibleSharedPlaylists = actualSharedPlaylists.length > 0 ? actualSharedPlaylists : fallbackSharedPlaylists;
+
+  useEffect(() => {
+    if (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') return;
+    
+    console.log("Playlist mode data:", {
+      userId: user?.uid,
+      normalCount: actualNormalPlaylists.length,
+      sharedCount: actualSharedPlaylists.length,
+      usingNormalFallback: actualNormalPlaylists.length === 0,
+      usingSharedFallback: actualSharedPlaylists.length === 0
+    });
+
+    if (visibleNormalPlaylists.length > 0 && !visibleNormalPlaylists.some(p => p.id === selectedNormalPlaylistId)) {
+      setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
+    }
+    if (visibleSharedPlaylists.length > 0 && !visibleSharedPlaylists.some(p => p.id === selectedSharedPlaylistId)) {
+      setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
+    }
+  }, [
+    libraryViewMode, 
+    user?.uid, 
+    actualNormalPlaylists.length, 
+    actualSharedPlaylists.length, 
+    visibleNormalPlaylists, 
+    visibleSharedPlaylists,
+    selectedNormalPlaylistId,
+    selectedSharedPlaylistId
+  ]);
+
+  const handleRenamePlaylist = (playlist: Playlist) => {
+    if (!user || (playlist as any).isFallback) return;
+
+    const isShared = playlist.type === 'shared';
+    const firstPlaylist = isShared ? visibleSharedPlaylists[0] : visibleNormalPlaylists[0];
+    if (firstPlaylist && firstPlaylist.id === playlist.id) {
+      showToast("기본 플레이리스트 이름은 변경할 수 없습니다.");
+      return;
+    }
+
+    setRenameModalArgs({ playlist, newTitle: playlist.title });
+  };
+
+  const handleDeletePlaylist = async (playlist: Playlist) => {
+    if (!user || (playlist as any).isFallback) return;
+
+    const isNormal = playlist.type === 'normal';
+    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+
+    if (currentList.length > 0 && currentList[0].id === playlist.id) {
+      showToast("기본 플레이리스트는 삭제할 수 없습니다.");
+      return;
+    }
+
+    if (currentList.length <= 1) {
+      showToast(isNormal ? '최소 1개의 플레이리스트는 남겨야 합니다.' : '최소 1개의 공유 받은 곡 플레이리스트는 남겨야 합니다.');
+      return;
+    }
+
+    setPlaylistConfirmAction({
+      title: '플레이리스트 삭제',
+      message: '이 플레이리스트를 삭제할까요? 저장된 곡도 내 목록에서 함께 제거됩니다.',
+      confirmLabel: '삭제',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deletePlaylist(user.uid, playlist.id!);
+          
+          // Update selection if the deleted one was selected
+          if (isNormal && selectedNormalPlaylistId === playlist.id) {
+            const remaining = currentList.filter(p => p.id !== playlist.id);
+            if (remaining.length > 0) {
+              setSelectedNormalPlaylistId(remaining[0].id!);
+            }
+          } else if (!isNormal && selectedSharedPlaylistId === playlist.id) {
+            const remaining = currentList.filter(p => p.id !== playlist.id);
+            if (remaining.length > 0) {
+              setSelectedSharedPlaylistId(remaining[0].id!);
+            }
+          }
+          showToast('플레이리스트가 삭제되었습니다.');
+        } catch (error) {
+          console.error(error);
+          showToast('삭제에 실패했습니다.');
+        }
+      }
+    });
+  };
+
+  const handleAddPlaylist = async (type: 'normal' | 'shared') => {
+    if (!user) return;
+    const isNormal = type === 'normal';
+    const listCount = isNormal ? actualNormalPlaylists.length : actualSharedPlaylists.length;
+    const maxCount = isNormal ? 10 : 10;
+
+    if (listCount >= maxCount) {
+      showToast('최대 개수까지 생성되었습니다.');
+      return;
+    }
+
+    const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+    
+    const getNextNewFolderTitle = (playlists: Playlist[]) => {
+      const titles = new Set(playlists.map(p => p.title));
+      if (!titles.has("새폴더")) return "새폴더";
+
+      let index = 2;
+      while (titles.has(`새폴더 ${index}`)) {
+        index++;
+      }
+      return `새폴더 ${index}`;
+    };
+
+    const newTitle = getNextNewFolderTitle(currentList);
+    const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
+
+    try {
+      const newId = await createPlaylist(user.uid, type, newTitle, newOrder);
+      if (isNormal) {
+        setSelectedNormalPlaylistId(newId);
+      } else {
+        setSelectedSharedPlaylistId(newId);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('플레이리스트 생성에 실패했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || !activePlaylistId) {
+      setPlaylistItems([]);
+      return;
+    }
+
+    setLoadingPlaylistItems(true);
+    const itemsRef = collection(db, 'user_playlists', user.uid, 'lists', activePlaylistId, 'items');
+    
+    // Subscribe to items without ordering first, or order by order asc
+    const unsub = onSnapshot(itemsRef, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlaylistItem));
+      items.sort((a, b) => a.order - b.order);
+      setPlaylistItems(items);
+      setLoadingPlaylistItems(false);
+    }, (error) => {
+      console.error("Failed to fetch playlist items:", error);
+      setLoadingPlaylistItems(false);
+    });
+
+    return () => unsub();
+  }, [user, libraryViewMode, activePlaylistId]);
+
+  useEffect(() => {
+    if (playlistItems.length === 0) return;
+
+    const uniqueOwnerUids = Array.from(
+      new Set<string>(
+        playlistItems
+          .map((item: any) => item.ownerUid)
+          .filter((uid): uid is string => typeof uid === 'string' && uid.trim().length > 0)
+      )
+    ).filter((uid) => !userNameMap[uid]);
+
+    if (uniqueOwnerUids.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchUserNames = async () => {
+      const nextMap: Record<string, string> = {};
+
+      await Promise.all(
+        uniqueOwnerUids.map(async (uid) => {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', uid));
+            if (!userSnap.exists()) return;
+            const data: any = userSnap.data();
+            const displayName = data.nickname || data.displayName || data.name || data.email || uid;
+            if (displayName) nextMap[uid] = String(displayName);
+          } catch (error) {
+            console.warn('Failed to fetch playlist creator name:', uid, error);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(nextMap).length > 0) {
+        setUserNameMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    fetchUserNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, userNameMap]);
+
+  useEffect(() => {
+    const sharedSourceIds = Array.from(
+      new Set<string>(
+        playlistItems
+          .filter((item: any) => item.sourceType === 'shared_track')
+          .map((item: any) => item.sourceId)
+          .filter((sourceId): sourceId is string => typeof sourceId === 'string' && sourceId.trim().length > 0)
+      )
+    ).filter((sourceId) => !shareCreatorNameMap[sourceId]);
+
+    if (sharedSourceIds.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchSharedCreatorNames = async () => {
+      const nextMap: Record<string, string> = {};
+
+      await Promise.all(
+        sharedSourceIds.map(async (sourceId) => {
+          try {
+            const shareSnap = await getDoc(doc(db, 'suno_shares', sourceId));
+            if (!shareSnap.exists()) return;
+            const data: any = shareSnap.data();
+            const displayName =
+              data.creatorDisplayId ||
+              data.ownerNickname ||
+              data.creatorNickname ||
+              data.ownerName ||
+              data.nickname ||
+              data.displayName ||
+              data.ownerEmail ||
+              data.creatorEmail ||
+              '';
+            if (displayName) nextMap[sourceId] = String(displayName);
+          } catch (error) {
+            console.warn('Failed to fetch shared track creator name:', sourceId, error);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(nextMap).length > 0) {
+        setShareCreatorNameMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    fetchSharedCreatorNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, shareCreatorNameMap]);
+
+  // Handle caching of likes and shared statuses
+  useEffect(() => {
+    if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
+
+    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+    const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
+    const checkedAt = checkedAtStr ? parseInt(checkedAtStr, 10) : 0;
+    
+    setLikesCache(currentLikesCache);
+
+    const now = Date.now();
+    const needsLikeUpdate = (now - checkedAt) > CACHE_EXPIRY_MS;
+
+    const currentSharedCache = JSON.parse(localStorage.getItem('soridraw_shared_track_status_cache') || '{}');
+    setSharedStatusCache(currentSharedCache);
+
+    const checkCaches = async () => {
+      let updatedLikes = { ...currentLikesCache };
+      let updatedShared = { ...currentSharedCache };
+      let didUpdateLikes = false;
+      let didUpdateShared = false;
+
+      // 1. Likes Cache
+      if (needsLikeUpdate) {
+        const globalIds = playlistItems.map(p => getTrackGlobalId(p));
+        // unique
+        const uniqueGlobalIds = Array.from(new Set<string>(globalIds));
+        const fetchedLikes = await fetchTrackLikes(uniqueGlobalIds, user?.uid);
+        updatedLikes = { ...updatedLikes, ...fetchedLikes };
+        didUpdateLikes = true;
+      }
+
+      // 2. Shared Status Cache
+      // Shared playlists must reflect private/public changes immediately.
+      // Do not rely on the long local cache here, otherwise a track can look public for hours after the owner made it private.
+      const forceSharedStatusRefresh = libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared';
+      const sharedSourceIdsToFetch = playlistItems
+        .filter(p => p.sourceType === 'shared_track')
+        .map(p => p.sourceId!)
+        .filter(sid => {
+           const cached = currentSharedCache[sid];
+           return forceSharedStatusRefresh || !cached || (now - cached.checkedAt > CACHE_EXPIRY_MS);
+        });
+
+      if (sharedSourceIdsToFetch.length > 0) {
+        // unique
+        const uniqueSourceIds = Array.from(new Set<string>(sharedSourceIdsToFetch));
+        const fetchedShared = await fetchSharedTracksStatus(uniqueSourceIds);
+        updatedShared = { ...updatedShared, ...fetchedShared };
+        didUpdateShared = true;
+      }
+      
+      if (didUpdateLikes) {
+        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(updatedLikes));
+        localStorage.setItem('soridraw_like_count_cache_checked_at', now.toString());
+        setLikesCache(updatedLikes);
+      }
+
+      if (didUpdateShared) {
+        localStorage.setItem('soridraw_shared_track_status_cache', JSON.stringify(updatedShared));
+        setSharedStatusCache(updatedShared);
+      }
+    };
+
+    checkCaches();
+
+  }, [playlistItems, libraryViewMode, activePlaylistSection, user]);
+
+  const handleRemoveFromPlaylist = async (item: PlaylistItem) => {
+    if (!user || !activePlaylistId) return;
+    
+    const isShared = item.sourceType === 'shared_track';
+    const msg = isShared 
+      ? "이 공유곡을 내 플레이리스트에서 삭제할까요? 원곡자 데이터에는 영향이 없습니다."
+      : "이 곡을 현재 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.";
+
+    setPlaylistConfirmAction({
+      title: '리스트에서 삭제',
+      message: msg,
+      confirmLabel: '삭제',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deletePlaylistItem(user.uid, activePlaylistId, item.id!);
+          showToast("곡이 삭제되었습니다.");
+        } catch (e) {
+          console.error(e);
+          showToast("곡 삭제에 실패했습니다.");
+        }
+      }
+    });
+  };
+
+  const handleMoveToOtherPlaylist = (item: PlaylistItem) => {
+    if (!user || !activePlaylistId) return;
+
+    const isShared = item.sourceType === 'shared_track';
+    const targetLists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
+    const availableLists = targetLists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
+
+    if (availableLists.length === 0) {
+      showToast("이동할 대상 플레이리스트가 없습니다.");
+      return;
+    }
+
+    setMoveModalArgs({ item });
+  };
+
+  const getWorkspaceColorField = () => filter === 'favorite' ? 'favoriteColorTags' : 'colorTags';
+  const getWorkspaceColorKey = (group: any, idx: number, colorField = getWorkspaceColorField()) => `workspace:${colorField}:${group?.id || group?.trackId || 'unknown'}:${idx}`;
+  const getPlaylistColorKey = (playlistId: string | null, itemId?: string | null) => `playlist:${playlistId || 'unknown'}:${itemId || 'unknown'}`;
 
   const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
   const getColorSyncDateKey = () => new Date().toISOString().slice(0, 10);
   const getScopedColorStorageKey = (baseKey: string) => `${baseKey}.${user?.uid || 'anonymous'}`;
   const serializeColorMap = (value: Record<string, string>) => JSON.stringify(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b)));
   const getColorSyncUsageStorageKey = () => getScopedColorStorageKey(COLOR_SYNC_USAGE_KEY);
-  const getFavoriteColorSyncCount = () => {
+  const getLibraryColorSyncCount = () => {
     try {
       const raw = localStorage.getItem(getColorSyncUsageStorageKey());
       const parsed = raw ? JSON.parse(raw) : null;
@@ -574,16 +1229,16 @@ export default function FavoritesPage({
       return 0;
     }
   };
-  const markFavoriteColorSynced = () => {
-    if (isFavoriteAdminUser) {
-      setFavoriteColorSyncTick((v) => v + 1);
+  const markLibraryColorSynced = () => {
+    if (isLibraryAdminUser) {
+      setLibraryColorSyncTick((v) => v + 1);
       return;
     }
-    const next = Math.min(5, getFavoriteColorSyncCount() + 1);
+    const next = Math.min(5, getLibraryColorSyncCount() + 1);
     localStorage.setItem(getColorSyncUsageStorageKey(), JSON.stringify({ date: getColorSyncDateKey(), count: next }));
-    setFavoriteColorSyncTick((v) => v + 1);
+    setLibraryColorSyncTick((v) => v + 1);
   };
-  const favoriteColorSyncRemaining = isFavoriteAdminUser ? 5 : Math.max(0, 5 - getFavoriteColorSyncCount());
+  const libraryColorSyncRemaining = isLibraryAdminUser ? 5 : Math.max(0, 5 - getLibraryColorSyncCount());
   const readLocalColorMap = (key: string): Record<string, string> => {
     try {
       const scopedRaw = localStorage.getItem(getScopedColorStorageKey(key));
@@ -598,45 +1253,128 @@ export default function FavoritesPage({
     try {
       localStorage.setItem(getScopedColorStorageKey(key), JSON.stringify(value));
     } catch (error) {
-      console.warn('color map save failed', error);
+      console.warn('library color map save failed:', error);
     }
   };
   const getUnifiedColorSyncDescription = () => `색상 변경사항은 이 페이지를 나갈 때 1회 자동 저장됩니다.
 페이지 안에서는 로컬 상태만 바뀌며, 변경이 없으면 저장하지 않습니다.
 필요하면 이 버튼으로 즉시 저장할 수 있습니다.`;
 
-  const handleSyncFavoriteColors = async () => {
+  const handleChangeColor = async (item: PlaylistItem, color: string | null) => {
+    if (!activePlaylistId || !item.id) return;
+    const targetPlaylistId = (item as any)?.playlistId || activePlaylistId;
+    const key = getPlaylistColorKey(targetPlaylistId, item.id);
+    const nextColor = color || 'gray';
+    pendingPlaylistColorKeysRef.current.add(key);
+    setPlaylistLocalColorMap(prev => {
+      const next = { ...prev, [key]: nextColor };
+      writeLocalColorMap('soridraw.library.playlistColorTags', next);
+      playlistLocalColorMapRef.current = next;
+      playlistColorDirtyRef.current = serializeColorMap(next) !== playlistColorBaselineRef.current;
+      return next;
+    });
+    setPlaylistItems(prev => prev.map(row => row.id === item.id ? { ...row, colorTag: nextColor === 'gray' ? null : nextColor } : row));
+  };
+
+  const getPlaylistItemColor = (item: PlaylistItem, playlistId = activePlaylistId): string => {
+    const local = playlistLocalColorMap[getPlaylistColorKey(playlistId, item?.id)];
+    return local || item?.colorTag || 'gray';
+  };
+
+  const getWorkspaceItemColor = (group: any, idx: number): string => {
+    const colorField = getWorkspaceColorField();
+    const local = workspaceLocalColorMap[getWorkspaceColorKey(group, idx, colorField)];
+    if (local) return local;
+    const source = colorField === 'favoriteColorTags' ? group?.favoriteColorTags : group?.colorTags;
+    const raw = source?.[String(idx)] ?? source?.[idx] ?? null;
+    return raw || 'gray';
+  };
+
+  const isWorkspaceItemVisible = (group: any, item: any, idx: number): boolean => {
+    if (filter === 'trash') {
+      if (!item?.hidden && !group?.hidden) return false;
+    } else if (item?.hidden || group?.hidden) {
+      return false;
+    }
+
+    if (workspaceColorFilter === 'all') return true;
+
+    const color = getWorkspaceItemColor(group, idx);
+    return workspaceColorFilter === 'gray' ? color === 'gray' : color === workspaceColorFilter;
+  };
+
+  const handleChangeWorkspaceColor = async (group: any, idx: number, color: string | null) => {
+    if (!group?.id) {
+      showToast("색상 정보를 저장할 수 없습니다.");
+      return;
+    }
+
+    const colorField = getWorkspaceColorField();
+    const nextColor = color || 'gray';
+    const key = getWorkspaceColorKey(group, idx, colorField);
+    pendingWorkspaceColorKeysRef.current.add(key);
+    setWorkspaceLocalColorMap(prev => {
+      const next = { ...prev, [key]: nextColor };
+      writeLocalColorMap('soridraw.library.workspaceColorTags', next);
+      workspaceLocalColorMapRef.current = next;
+      workspaceColorDirtyRef.current = serializeColorMap(next) !== workspaceColorBaselineRef.current;
+      return next;
+    });
+    setTracks((prev) => prev.map((track) => {
+      if (track.id !== group.id) return track;
+      return {
+        ...track,
+        [colorField]: {
+          ...(track?.[colorField] || {}),
+          [String(idx)]: nextColor === 'gray' ? null : nextColor,
+        }
+      };
+    }));
+    if (colorField === 'favoriteColorTags') {
+      group.favoriteColorTags = { ...(group.favoriteColorTags || {}), [String(idx)]: nextColor === 'gray' ? null : nextColor };
+    } else {
+      group.colorTags = { ...(group.colorTags || {}), [String(idx)]: nextColor === 'gray' ? null : nextColor };
+    }
+  };
+
+  const handleSyncLibraryColors = async () => {
     if (!user) {
-      showFavoriteToast('로그인이 필요합니다.');
+      showToast('로그인이 필요합니다.');
       return;
     }
-    const count = getFavoriteColorSyncCount();
-    if (!isFavoriteAdminUser && count >= 5) {
-      showFavoriteToast('오늘 색상 동기화 횟수를 모두 사용했습니다. 내일 다시 동기화됩니다.');
+    const count = getLibraryColorSyncCount();
+    if (!isLibraryAdminUser && count >= 5) {
+      showToast('오늘 색상 동기화 횟수를 모두 사용했습니다.');
       return;
     }
 
-    const existingIds = new Set(favorites.map(song => song.id));
-    const favoriteMap = { ...readLocalColorMap('soridraw.favoriteColorTags'), ...favoriteColorMap };
-    const workspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
-    const playlistMap = readLocalColorMap('soridraw.library.playlistColorTags');
+    const favoriteMap = readLocalColorMap('soridraw.favoriteColorTags');
+    const workspaceMap = { ...readLocalColorMap('soridraw.library.workspaceColorTags'), ...workspaceLocalColorMap };
+    const playlistMap = { ...readLocalColorMap('soridraw.library.playlistColorTags'), ...playlistLocalColorMap };
 
-    const favoriteEntries = Object.entries(favoriteMap).filter(([id]) => existingIds.has(id));
+    const favoriteEntries = Object.entries(favoriteMap);
     const workspaceEntries = Object.entries(workspaceMap);
     const playlistEntries = Object.entries(playlistMap);
 
     if (favoriteEntries.length === 0 && workspaceEntries.length === 0 && playlistEntries.length === 0) {
-      showFavoriteToast('동기화할 색상 변경 내역이 없습니다.');
+      showToast('동기화할 색상 변경 내역이 없습니다.');
       return;
     }
 
     try {
-      await Promise.all(favoriteEntries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
+      for (const [id, color] of favoriteEntries) {
+        if (!id) continue;
+        await updateDoc(doc(db, 'favorites', id), {
+          favoriteColorTag: color === 'gray' ? null : color,
+          updatedAt: serverTimestamp()
+        });
+      }
 
       for (const [key, color] of workspaceEntries) {
         const [, colorField, trackId, idx] = key.split(':');
         if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
-        await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', trackId), {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+        await updateDoc(trackRef, {
           [`${colorField}.${idx}`]: color === 'gray' ? null : color,
           updatedAt: serverTimestamp()
         });
@@ -648,2486 +1386,2956 @@ export default function FavoritesPage({
         await updatePlaylistItemColor(user.uid, playlistId, itemId, color === 'gray' ? null : color);
       }
 
-      markFavoriteColorSynced();
-      showFavoriteToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isFavoriteAdminUser ? '무제한' : `${Math.max(0, 5 - getFavoriteColorSyncCount())}회`}`);
+      pendingWorkspaceColorKeysRef.current.clear();
+      pendingPlaylistColorKeysRef.current.clear();
+      workspaceColorBaselineRef.current = serializeColorMap(workspaceLocalColorMapRef.current || {});
+      playlistColorBaselineRef.current = serializeColorMap(playlistLocalColorMapRef.current || {});
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
+      markLibraryColorSynced();
+      showToast(`색상 설정을 동기화했습니다. 오늘 남은 횟수: ${isLibraryAdminUser ? '무제한' : `${Math.max(0, 5 - getLibraryColorSyncCount())}회`}`);
     } catch (error) {
-      console.error('unified color sync failed', error);
-      showFavoriteToast('색상 동기화에 실패했습니다.');
+      console.error('unified color sync failed:', error);
+      showToast('색상 동기화에 실패했습니다.');
     }
   };
 
 
-  const syncFavoriteColorsOnExit = async (silent = true) => {
-    const currentUser = favoriteUserRef.current;
-    if (!currentUser || favoriteColorsAutoSyncingRef.current) return;
+  const syncLibraryColorsOnExit = async (silent = true) => {
+    const currentUser = libraryUserRef.current;
+    if (!currentUser || libraryColorsAutoSyncingRef.current) return;
 
-    const currentMap = favoriteColorMapRef.current || {};
-    const currentSerialized = serializeColorMap(currentMap);
-    if (currentSerialized === favoriteColorBaselineRef.current) return;
+    const workspaceMap = workspaceLocalColorMapRef.current || {};
+    const playlistMap = playlistLocalColorMapRef.current || {};
+    const workspaceSerialized = serializeColorMap(workspaceMap);
+    const playlistSerialized = serializeColorMap(playlistMap);
+    const workspaceChanged = workspaceSerialized !== workspaceColorBaselineRef.current;
+    const playlistChanged = playlistSerialized !== playlistColorBaselineRef.current;
+    if (!workspaceChanged && !playlistChanged) return;
 
-    const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));
-    const entries = Object.entries(currentMap).filter(([id]) => existingIds.has(id));
-    if (entries.length === 0) {
-      favoriteColorBaselineRef.current = currentSerialized;
-      favoriteColorDirtyRef.current = false;
+    const workspaceEntries = workspaceChanged ? Object.entries(workspaceMap) : [];
+    const playlistEntries = playlistChanged ? Object.entries(playlistMap) : [];
+    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
       return;
     }
 
-    favoriteColorsAutoSyncingRef.current = true;
+    libraryColorsAutoSyncingRef.current = true;
     try {
-      await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
-      favoriteColorBaselineRef.current = currentSerialized;
-      favoriteColorDirtyRef.current = false;
-      if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');
+      for (const [key, color] of workspaceEntries) {
+        const [, colorField, trackId, idx] = key.split(':');
+        if (!trackId || idx === undefined || (colorField !== 'colorTags' && colorField !== 'favoriteColorTags')) continue;
+        await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), {
+          [`${colorField}.${idx}`]: color === 'gray' ? null : color,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      for (const [key, color] of playlistEntries) {
+        const [, playlistId, itemId] = key.split(':');
+        if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
+        await updatePlaylistItemColor(currentUser.uid, playlistId, itemId, color === 'gray' ? null : color);
+      }
+
+      pendingWorkspaceColorKeysRef.current.clear();
+      pendingPlaylistColorKeysRef.current.clear();
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
+      if (!silent) showToast('색상 변경사항을 저장했습니다.');
     } catch (error) {
-      console.error('favorite color exit sync failed', error);
-      if (!silent) showFavoriteToast('색상 변경사항 저장에 실패했습니다.');
+      console.error('library color exit sync failed:', error);
+      if (!silent) showToast('색상 변경사항 저장에 실패했습니다.');
     } finally {
-      favoriteColorsAutoSyncingRef.current = false;
+      libraryColorsAutoSyncingRef.current = false;
     }
   };
 
   useEffect(() => {
     return () => {
-      void syncFavoriteColorsOnExit(true);
+      void syncLibraryColorsOnExit(true);
     };
   }, [user?.uid]);
 
-  useEffect(() => {
-    return () => {
-      if (favoriteToastTimerRef.current) {
-        clearTimeout(favoriteToastTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, []);
-
-  useEffect(() => {
-    favoriteColorMapRef.current = favoriteColorMap;
-  }, [favoriteColorMap]);
-
-  useEffect(() => {
-    favoritesRef.current = favorites || [];
-  }, [favorites]);
-
-  useEffect(() => {
-    favoriteUserRef.current = user;
-  }, [user]);
-
-  useEffect(() => {
-    try {
-      const loaded = readLocalColorMap('soridraw.favoriteColorTags');
-      setFavoriteColorMap(loaded);
-      favoriteColorMapRef.current = loaded;
-      favoriteColorBaselineRef.current = serializeColorMap(loaded);
-      favoriteColorDirtyRef.current = false;
-    } catch (error) {
-      console.warn('favorite color map load failed', error);
-    }
-  }, [user?.uid]);
-
-  useEffect(() => {
-    writeLocalColorMap('soridraw.favoriteColorTags', favoriteColorMap);
-  }, [favoriteColorMap, user?.uid]);
-
-  useEffect(() => {
-    const serverMap: Record<string, string> = {};
-    for (const song of favorites || []) {
-      if (!song?.id) continue;
-      const rawColor = song.favoriteColorTag || song.colorTag || null;
-      if (rawColor && rawColor !== 'gray') serverMap[song.id] = rawColor;
-    }
-
-    const previous = lastFavoriteServerColorMapRef.current || {};
-    const allIds = new Set([...Object.keys(previous), ...Object.keys(serverMap)]);
-    if (allIds.size === 0) {
-      lastFavoriteServerColorMapRef.current = serverMap;
+  const handleToggleWorkspaceFavorite = async (group: any, nextValue?: boolean) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
       return;
     }
 
-    if (favoriteColorDirtyRef.current) {
-      lastFavoriteServerColorMapRef.current = serverMap;
+    if (!group?.id) {
+      showToast("즐겨찾기 정보를 저장할 수 없습니다.");
       return;
     }
 
-    let changed = false;
-    setFavoriteColorMap((prev) => {
-      const next = { ...prev };
-      for (const id of allIds) {
-        const before = previous[id] || 'gray';
-        const current = serverMap[id] || 'gray';
-        if (before !== current) {
-          changed = true;
-          if (current === 'gray') delete next[id];
-          else next[id] = current;
-        }
-      }
-      return changed ? next : prev;
-    });
+    const next = typeof nextValue === 'boolean' ? nextValue : !Boolean(group.favorite);
 
-    if (changed) {
-      try {
-        const merged = { ...readLocalColorMap('soridraw.favoriteColorTags') };
-        for (const id of allIds) {
-          const before = previous[id] || 'gray';
-          const current = serverMap[id] || 'gray';
-          if (before !== current) {
-            if (current === 'gray') delete merged[id];
-            else merged[id] = current;
-          }
-        }
-        writeLocalColorMap('soridraw.favoriteColorTags', merged);
-        favoriteColorMapRef.current = merged;
-        favoriteColorBaselineRef.current = serializeColorMap(merged);
-        favoriteColorDirtyRef.current = false;
-      } catch (error) {
-        console.warn('favorite server color merge failed', error);
-      }
-    }
-    lastFavoriteServerColorMapRef.current = serverMap;
-  }, [favorites]);
-
-  useEffect(() => {
-    const closeMenus = () => {
-      setActiveFavoriteMenuId(null);
-      setActiveFavoriteColorMenuId(null);
-    };
-    document.addEventListener('click', closeMenus);
-    return () => document.removeEventListener('click', closeMenus);
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    return () => clearSelectionLongPressTimer();
-  }, []);
-
-  useEffect(() => {
-    if (isSelectionMode && !selectionHistoryPushedRef.current) {
-      window.history.pushState({ favoritesOverlay: 'selection-mode' }, '');
-      selectionHistoryPushedRef.current = true;
-    }
-
-    if (!isSelectionMode) {
-      selectionHistoryPushedRef.current = false;
-    }
-  }, [isSelectionMode]);
-
-  useEffect(() => {
-    if (selectedSong && !detailHistoryPushedRef.current) {
-      window.history.pushState({ favoritesOverlay: 'song-detail' }, '');
-      detailHistoryPushedRef.current = true;
-    }
-
-    if (!selectedSong) {
-      detailHistoryPushedRef.current = false;
-    }
-  }, [selectedSong]);
-
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (selectedSong) {
-      // Set original lyrics when a song is selected (only if not already set for this song)
-      if (!popupOpenedRef.current) {
-        setOriginalLyricsKo(selectedSong.lyrics.korean);
-        setOriginalLyricsEn(selectedSong.lyrics.english);
-        setOriginalTitle(selectedSong.title);
-        setOriginalPrompt(selectedSong.prompt || '');
-        popupOpenedRef.current = true;
-      }
-
-      const draft = drafts[selectedSong.id];
-      if (draft) {
-        setEditedTitle(draft.title);
-        setEditedKoreanLyrics(draft.korean);
-        setEditedEnglishLyrics(draft.english);
-        setEditedPrompt(draft.prompt);
-        setIsEditing(draft.isEditing);
-        setActiveEditSection(draft.activeEditSection ?? null);
-        setForeignTargetLanguage(draft.foreignTargetLanguage || inferForeignLyricTargetLanguage(draft.english || selectedSong.lyrics.english));
-      } else {
-        setEditedTitle(selectedSong.title);
-        setEditedKoreanLyrics(selectedSong.lyrics.korean);
-        setEditedEnglishLyrics(selectedSong.lyrics.english);
-        setEditedPrompt(selectedSong.prompt || '');
-        setIsEditing(false);
-        setActiveEditSection(null);
-        setForeignTargetLanguage(inferForeignLyricTargetLanguage(selectedSong.lyrics.english));
-      }
-      setIsSyncEnabled(false);
-    } else {
-      setOriginalLyricsKo('');
-      setOriginalLyricsEn('');
-      setOriginalTitle('');
-      setOriginalPrompt('');
-      popupOpenedRef.current = false;
-      setActiveEditSection(null);
-      setForeignTargetLanguage('English');
-      setIsSyncEnabled(false);
-    }
-  }, [selectedSong]);
-
-  // Update draft whenever edit state changes
-  useEffect(() => {
-    if (selectedSong) {
-      setDrafts(prev => ({
-        ...prev,
-        [selectedSong.id]: {
-          title: editedTitle,
-          korean: editedKoreanLyrics,
-          english: editedEnglishLyrics,
-          prompt: editedPrompt,
-          isEditing: isEditing,
-          activeEditSection,
-          foreignTargetLanguage
-        }
-      }));
-    }
-  }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, editedPrompt, isEditing, activeEditSection, foreignTargetLanguage, selectedSong]);
-
-  const buildFavoriteDraftPayload = async () => {
-    if (!selectedSong) return null;
-
-    let finalKorean = editedKoreanLyrics;
-    let finalEnglish = editedEnglishLyrics;
-
-    if (isSyncEnabled) {
-      setIsTranslating(true);
-      try {
-        const koreanChanged = editedKoreanLyrics !== originalLyricsKo;
-        const englishChanged = editedEnglishLyrics !== originalLyricsEn;
-
-        const targetLanguage = buildLyricContentOnlyTranslationTarget(
-          foreignTargetLanguage || inferForeignLyricTargetLanguage(originalLyricsEn || selectedSong.lyrics?.english || '')
-        );
-        const koreanTargetLanguage = buildLyricContentOnlyTranslationTarget('Korean');
-
-        if (koreanChanged && !englishChanged) {
-          finalEnglish = await translateLyrics(editedKoreanLyrics, targetLanguage);
-        } else if (englishChanged && !koreanChanged) {
-          finalKorean = await translateLyrics(editedEnglishLyrics, koreanTargetLanguage);
-        } else if (koreanChanged && englishChanged) {
-          finalEnglish = await translateLyrics(editedKoreanLyrics, targetLanguage);
-        }
-      } catch (error) {
-        console.error("Translation failed:", error);
-      } finally {
-        setIsTranslating(false);
-      }
-    }
-
-    const parsedEditedTitles = parseLegacyTitles({ title: editedTitle });
-    const fallbackTitlePart = cleanTitlePart(editedTitle);
-    const nextKoreanTitle = parsedEditedTitles.korean || (/[가-힣]/.test(fallbackTitlePart) ? fallbackTitlePart : '');
-    const nextEnglishTitle = parsedEditedTitles.english || (!/[가-힣]/.test(fallbackTitlePart) ? fallbackTitlePart : '');
-
-    const nextSong = {
-      ...selectedSong,
-      title: editedTitle,
-      koreanTitle: nextKoreanTitle,
-      englishTitle: nextEnglishTitle,
-      prompt: editedPrompt,
-      lyrics: {
-        ...(selectedSong.lyrics || {}),
-        korean: finalKorean,
-        english: finalEnglish,
-      },
-    };
-
-    const updates: Partial<any> = {};
-
-    if (editedTitle !== originalTitle) {
-      updates.title = editedTitle;
-      updates.koreanTitle = nextKoreanTitle;
-      updates.englishTitle = nextEnglishTitle;
-    }
-
-    if (editedPrompt !== originalPrompt) {
-      updates.prompt = editedPrompt;
-    }
-
-    if (finalKorean !== originalLyricsKo || finalEnglish !== originalLyricsEn) {
-      updates.lyrics = {
-        ...(selectedSong.lyrics || {}),
-        korean: finalKorean,
-        english: finalEnglish,
-      };
-    }
-
-    return {
-      updates,
-      nextSong,
-      finalKorean,
-      finalEnglish,
-      hasChanges: Object.keys(updates).length > 0,
-    };
-  };
-
-  const applyFavoriteDraftLocally = async () => {
-    if (!selectedSong) return;
-    const payload = await buildFavoriteDraftPayload();
-    if (!payload) return;
-
-    setEditedKoreanLyrics(payload.finalKorean);
-    setEditedEnglishLyrics(payload.finalEnglish);
-    setSelectedSong(payload.nextSong);
-    setIsEditing(false);
-    setActiveEditSection(null);
-    setIsSyncEnabled(false);
-  };
-
-  const commitFavoriteDraftIfNeeded = async () => {
-    if (!selectedSong || favoriteDraftCommitRef.current) return;
-
-    const payload = await buildFavoriteDraftPayload();
-    if (!payload?.hasChanges) return;
-
-    favoriteDraftCommitRef.current = true;
     try {
-      await updateFavorite(selectedSong.id, payload.updates);
-
-      setSelectedSong(payload.nextSong);
-      setOriginalTitle(payload.nextSong.title);
-      setOriginalLyricsKo(payload.nextSong.lyrics?.korean || '');
-      setOriginalLyricsEn(payload.nextSong.lyrics?.english || '');
-      setOriginalPrompt(payload.nextSong.prompt || '');
-      setEditedKoreanLyrics(payload.finalKorean);
-      setEditedEnglishLyrics(payload.finalEnglish);
-      setDrafts(prev => {
-        const next = { ...prev };
-        delete next[selectedSong.id];
-        return next;
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      await updateDoc(trackRef, {
+        favorite: next,
+        favoriteUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
-    } finally {
-      favoriteDraftCommitRef.current = false;
+      group.favorite = next;
+      setTracks((prev) => prev.map((track) => track.id === group.id ? { ...track, favorite: next } : track));
+      setPlaylistItems((prev) => prev.map((playlistItem: any) => {
+        const match = String(playlistItem.sourceId || playlistItem.trackId || '') === String(group.id);
+        return match && playlistItem.sourceType !== 'shared_track' ? { ...playlistItem, favorite: next } : playlistItem;
+      }));
+      window.dispatchEvent(new CustomEvent('soridraw:suno-favorite-changed', {
+        detail: { trackId: group.id, favorite: next }
+      }));
+      showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
+    } catch (e) {
+      console.error('workspace favorite update failed:', e);
+      showToast("즐겨찾기 변경에 실패했습니다.");
     }
   };
 
-  const handleSave = async () => {
-    await applyFavoriteDraftLocally();
-  };
+  const handleTogglePlaylistItemFavorite = async (item: PlaylistItem, nextValue?: boolean) => {
+    if (!user || !item) {
+      showToast("즐겨찾기 정보를 저장할 수 없습니다.");
+      return;
+    }
 
-  const handleRestoreOriginal = () => {
-    if (!originalLyricsKo && !originalLyricsEn && !originalTitle && !originalPrompt) return;
-    setEditedKoreanLyrics(originalLyricsKo);
-    setEditedEnglishLyrics(originalLyricsEn);
-    setEditedTitle(originalTitle);
-    setEditedPrompt(originalPrompt);
-    setIsEditing(true);
-  };
+    if ((item as any).sourceType === 'shared_track' || libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared') {
+      showToast("공유 플레이리스트 곡은 즐겨찾기를 사용할 수 없습니다.");
+      return;
+    }
 
-  const handleToggleLock = async (song: any) => {
-    const newLockedState = !song.isLocked;
-    await updateFavorite(song.id, { isLocked: newLockedState });
-    if (selectedSong && selectedSong.id === song.id) {
-      setSelectedSong({ ...selectedSong, isLocked: newLockedState });
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    const sourceTrackId = String((sourceTrack as any)?.id || (sourceTrack as any)?.trackId || (item as any).sourceId || (item as any).trackId || '').trim();
+    if (!sourceTrackId) {
+      showToast("원본 곡 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    const itemAudio = String((item as any).audioUrl || (item as any).streamAudioUrl || (item as any).audio_url || '').trim();
+    const currentValue = Boolean((sourceTrack as any)?.favorite ?? (item as any).favorite);
+    const next = typeof nextValue === 'boolean' ? nextValue : !currentValue;
+
+    try {
+      const ownerUid = String((sourceTrack as any)?.ownerUid || (item as any).ownerUid || user.uid);
+      const trackRef = doc(db, 'suno_tracks', ownerUid, 'tracks', sourceTrackId);
+      await updateDoc(trackRef, {
+        favorite: next,
+        favoriteUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      (item as any).favorite = next;
+      setTracks((prev) => prev.map((track: any) => {
+        const match = String(track.id) === sourceTrackId || String(track.trackId || '') === sourceTrackId;
+        return match ? { ...track, favorite: next } : track;
+      }));
+      setPlaylistItems((prev) => prev.map((playlistItem: any) => {
+        const playlistSourceId = String(playlistItem.sourceId || playlistItem.trackId || '');
+        const playlistAudio = String(playlistItem.audioUrl || playlistItem.streamAudioUrl || playlistItem.audio_url || '').trim();
+        const match =
+          playlistItem.id === item.id ||
+          playlistSourceId === sourceTrackId ||
+          (itemAudio && playlistAudio === itemAudio);
+        return match ? { ...playlistItem, favorite: next, sourceId: playlistItem.sourceType === 'shared_track' ? playlistItem.sourceId : sourceTrackId } : playlistItem;
+      }));
+      window.dispatchEvent(new CustomEvent('soridraw:suno-favorite-changed', {
+        detail: { trackId: sourceTrackId, playlistItemId: item.id, favorite: next }
+      }));
+      showToast(next ? "즐겨찾기에 저장되었습니다." : "즐겨찾기에서 제외되었습니다.");
+    } catch (e) {
+      console.error('playlist source favorite update failed:', e);
+      showToast("즐겨찾기 변경에 실패했습니다.");
     }
   };
 
-  const handlePopupToggleLock = async (song: any) => {
-    await handleToggleLock(song);
-    setConfirmToggleLock(false);
+  const handleCustomSort = async (itemA: PlaylistItem, itemB: PlaylistItem) => {
+    if (!user || !activePlaylistId) return;
+    try {
+      await swapPlaylistItemOrder(user.uid, activePlaylistId, itemA, itemB);
+    } catch (e) {
+      console.error(e);
+      showToast("순서 변경에 실패했습니다.");
+    }
   };
 
-  const handlePopupDelete = async (song: any) => {
-    if (song.isLocked) return;
-    
-    if (!confirmDeleteSong) {
-      setConfirmDeleteSong(true);
+  const handleToggleLike = async (item: PlaylistItem) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
       return;
     }
     
-    toggleFavorite(song);
-    setSelectedSong(null);
-    setConfirmDeleteSong(false);
-  };
+    const globalId = getTrackGlobalId(item);
+    const cached = likesCache[globalId] || { likeCount: 0, likedByMe: false };
+    
+    // Optimistic UI update
+    const newLikedByMe = !cached.likedByMe;
+    const newCount = newLikedByMe ? cached.likeCount + 1 : Math.max(0, cached.likeCount - 1);
+    
+    const newCacheValue = { likeCount: newCount, likedByMe: newLikedByMe };
+    setLikesCache(prev => ({ ...prev, [globalId]: newCacheValue }));
+    
+    // Also update localStorage immediately so it doesn't revert during re-render
+    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+    currentLikesCache[globalId] = newCacheValue;
+    localStorage.setItem('soridraw_like_count_cache', JSON.stringify(currentLikesCache));
 
-  const getBulkLockHover = (isConfirm = confirmLockAll === 1) => ({
-    id: 'bulk-lock',
-    label: '일괄잠금',
-    description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '모든 곡을 삭제되지 않도록 잠급니다.'
-  });
-
-  const getBulkUnlockHover = (isConfirm = confirmUnlockAll === 1) => ({
-    id: 'bulk-unlock',
-    label: '일괄해제',
-    description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '모든 곡의 잠금을 해제합니다.'
-  });
-
-  const getBulkDeleteHover = (isConfirm = confirmDeleteAll === 1) => ({
-    id: 'bulk-delete',
-    label: '전체삭제',
-    description: isConfirm ? '주의: 한번 더 누르면 실행!!' : '잠금되지 않은 모든 곡을 삭제합니다.'
-  });
-
-  const getSelectionLockHover = (
-    allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked)
-  ) => ({
-    id: 'selection-lock',
-    label: allSelectedLocked ? '선택 잠금 해제' : '선택 잠금',
-    description: allSelectedLocked
-      ? '선택된 곡들의 잠금을 해제합니다.'
-      : '선택된 곡들을 삭제되지 않도록 잠급니다.'
-  });
-
-
-  const handleBulkLock = () => {
-    if (confirmLockAll === 0) {
-      setConfirmLockAll(1);
-      onHover(getBulkLockHover(true));
-      setTimeout(() => {
-        setConfirmLockAll(0);
-        if (hoveredItem?.id === 'bulk-lock') {
-          onHover(getBulkLockHover(false));
-        }
-      }, 3000);
-    } else {
-      lockAllFavorites();
-      setConfirmLockAll(0);
-      if (hoveredItem?.id === 'bulk-lock') {
-        onHover(getBulkLockHover(false));
+    try {
+      const actualCount = await toggleTrackLike(globalId, user.uid, cached.likedByMe);
+      // Sync with actual count
+      if (actualCount !== newCount) {
+        const syncedCacheValue = { likeCount: actualCount, likedByMe: newLikedByMe };
+        setLikesCache(prev => ({ ...prev, [globalId]: syncedCacheValue }));
+        
+        const finalCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+        finalCache[globalId] = syncedCacheValue;
+        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(finalCache));
       }
+    } catch (e) {
+      console.error(e);
+      showToast("좋아요 변경에 실패했습니다.");
+      // Rollback
+      setLikesCache(prev => ({ ...prev, [globalId]: cached }));
+      const rbCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+      rbCache[globalId] = cached;
+      localStorage.setItem('soridraw_like_count_cache', JSON.stringify(rbCache));
     }
   };
 
-  const handleBulkDelete = () => {
-    if (confirmDeleteAll === 0) {
-      setConfirmDeleteAll(1);
-      onHover(getBulkDeleteHover(true));
-      setTimeout(() => {
-        setConfirmDeleteAll(0);
-        if (hoveredItem?.id === 'bulk-delete') {
-          onHover(getBulkDeleteHover(false));
-        }
-      }, 3000);
-    } else {
-      clearAllFavorites();
-      setConfirmDeleteAll(0);
-      if (hoveredItem?.id === 'bulk-delete') {
-        onHover(getBulkDeleteHover(false));
-      }
+  const getAudioUrl = (item: any, group: any) => {
+    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || item?.stream_audio_url || item?.sourceAudioUrl || item?.source_audio_url || item?.sourceStreamAudioUrl || item?.source_stream_audio_url || group?.audioUrl || group?.streamAudioUrl || group?.audio_url || group?.stream_audio_url || '';
+  };
+
+  const getTitle = (item: any, group: any, idx: number) => {
+    return item?.title || item?.name || group?.title || `Suno Track ${idx + 1}`;
+  };
+
+  const getSunoModelVersionLabel = (item: any, group: any) => {
+    const raw = item?.sunoVersion || item?.model || item?.requestPayload?.sunoVersion || item?.requestPayload?.model || group?.sunoVersion || group?.model || group?.requestPayload?.sunoVersion || group?.requestPayload?.model;
+    if (!raw) return '';
+    const normalized = String(raw).trim().toUpperCase().replace(/-/g, '_').replace(/\./g, '_');
+    if (normalized === 'V5_5' || normalized === '5_5') return 'v5.5';
+    if (normalized === 'V5' || normalized === '5') return 'v5';
+    if (normalized === 'V4_5' || normalized === '4_5') return 'v4.5';
+    return String(raw).replace(/^v/i, 'v');
+  };
+
+  const getSunoModelVersionBadgeClass = (label: string) => {
+    const normalized = String(label || '').trim().toLowerCase();
+    if (normalized === 'v5.5' || normalized === '5.5') {
+      return 'border-pink-400/35 bg-pink-500/12 text-pink-200 shadow-[0_0_14px_rgba(236,72,153,0.18)]';
     }
-  };
-
-  const handleBulkUnlock = () => {
-    if (confirmUnlockAll === 0) {
-      setConfirmUnlockAll(1);
-      onHover(getBulkUnlockHover(true));
-      setTimeout(() => {
-        setConfirmUnlockAll(0);
-        if (hoveredItem?.id === 'bulk-unlock') {
-          onHover(getBulkUnlockHover(false));
-        }
-      }, 3000);
-    } else {
-      unlockAllFavorites();
-      setConfirmUnlockAll(0);
-      if (hoveredItem?.id === 'bulk-unlock') {
-        onHover(getBulkUnlockHover(false));
-      }
+    if (normalized === 'v5' || normalized === '5') {
+      return 'border-purple-400/30 bg-purple-500/12 text-purple-200 shadow-[0_0_14px_rgba(168,85,247,0.16)]';
     }
-  };
-
-
-  const isScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      isScrollingRef.current = true;
-      clearSelectionLongPressTimer();
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => {
-        isScrollingRef.current = false;
-      }, 150);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    };
-  }, []);
-
-  const clearSelectionLongPressTimer = () => {
-    if (selectionLongPressTimerRef.current) {
-      clearTimeout(selectionLongPressTimerRef.current);
-      selectionLongPressTimerRef.current = null;
+    if (normalized === 'v4.5' || normalized === '4.5') {
+      return 'border-sky-400/35 bg-sky-500/12 text-sky-200 shadow-[0_0_14px_rgba(56,189,248,0.16)]';
     }
+    return 'border-white/20 bg-white/10 text-white/70';
   };
 
-  const toggleSongSelection = (songId: string) => {
-    setSelectedSongIds(prev =>
-      prev.includes(songId) ? prev.filter(id => id !== songId) : [...prev, songId]
-    );
+  const getImageUrl = (item: any, group: any) => {
+    return item?.imageUrl || item?.image_url || group?.imageUrl || '';
   };
 
-  const cycleSelectionModeSelection = (fallbackSongId?: string) => {
-    const allSongIds = favorites.map(song => song.id);
-    if (allSongIds.length === 0) return;
+  const getDuration = (item: any, group: any) => {
+    const rawVal = item?.duration ?? item?.durationSeconds ?? item?.duration_seconds ?? item?.metadata?.duration ?? item?.metadata?.durationSeconds ?? item?.metadata?.duration_seconds ?? item?.metadata?.playDuration ?? item?.playDuration ?? group?.duration ?? group?.durationSeconds;
+    if (rawVal === undefined || rawVal === null) return null;
+    const num = Number(rawVal);
+    if (Number.isFinite(num) && num > 0) return num;
+    return null;
+  };
 
-    const isAllSelected = selectedSongIds.length === allSongIds.length && allSongIds.every(id => selectedSongIds.includes(id));
+  const getPlaylistItemSourceTrack = (item: any) => {
+    if (!item || item.sourceType === 'shared_track') return null;
 
-    if (isAllSelected) {
-      const restoredSelection = selectionBeforeSelectAllRef.current.length > 0
-        ? selectionBeforeSelectAllRef.current.filter(id => allSongIds.includes(id))
-        : (fallbackSongId ? [fallbackSongId] : []);
-      setSelectedSongIds(restoredSelection);
-      return;
+    const candidateIds = [
+      item.sourceId,
+      item.trackId,
+      item.originalTrackId,
+      item.parentTrackId
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value));
+
+    let found = tracks.find((track: any) => {
+      const trackIds = [track.id, track.trackId, track.sourceId, track.taskId]
+        .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+        .map((value) => String(value));
+      return candidateIds.some((id) => trackIds.includes(id));
+    });
+    if (found) return found;
+
+    const itemAudio = String(item.audioUrl || item.streamAudioUrl || item.audio_url || '').trim();
+    if (itemAudio) {
+      found = tracks.find((track: any) => {
+        const directAudio = String(track.audioUrl || track.streamAudioUrl || track.audio_url || '').trim();
+        if (directAudio && directAudio === itemAudio) return true;
+        return extractSunoData(track).some((subItem: any) => {
+          const subAudio = String(subItem.audioUrl || subItem.streamAudioUrl || subItem.audio_url || subItem.url || '').trim();
+          return subAudio && subAudio === itemAudio;
+        });
+      });
+      if (found) return found;
     }
 
-    selectionBeforeSelectAllRef.current = selectedSongIds.length > 0
-      ? [...selectedSongIds]
-      : (fallbackSongId ? [fallbackSongId] : []);
-    setSelectedSongIds(allSongIds);
-  };
-
-  const handleCardLongPressStart = (_e: React.MouseEvent | React.TouchEvent, _song: any) => {
-    // 보관함 선택모드는 라이브러리와 동일하게 ... 메뉴의 '선택'으로만 진입합니다.
-    clearSelectionLongPressTimer();
-  };
-
-  const handleCardLongPressEnd = () => {
-    clearSelectionLongPressTimer();
-  };
-
-  const exitSelectionMode = (source: 'ui' | 'history' = 'ui') => {
-    if (source === 'ui' && selectionHistoryPushedRef.current) {
-      window.history.back();
-      return;
+    const itemTitle = String(item.title || '').trim();
+    const itemDuration = Number(item.duration || 0);
+    if (itemTitle) {
+      found = tracks.find((track: any) => {
+        const directTitle = String(track.title || '').trim();
+        if (directTitle && directTitle === itemTitle) return true;
+        return extractSunoData(track).some((subItem: any) => {
+          const subTitle = String(subItem.title || subItem.name || '').trim();
+          const subDuration = Number(subItem.duration || subItem.durationSeconds || 0);
+          return subTitle === itemTitle && (!itemDuration || !subDuration || Math.abs(subDuration - itemDuration) < 2);
+        });
+      });
     }
 
-    setIsSelectionMode(false);
-    setSelectedSongIds([]);
-    setLastSelectionAction('none');
-    setPendingSelectionAction(null);
-    setConfirmDeleteAll(0);
-    setConfirmUnlockAll(0);
-    setConfirmLockAll(0);
-    selectionBeforeSelectAllRef.current = [];
-    clearSelectionLongPressTimer();
-    longPressTriggeredRef.current = false;
-    selectionHistoryPushedRef.current = false;
+    return found || null;
   };
 
-  useEffect(() => {
-    if (!isSelectionMode) return;
-
-    const handleDocumentPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest('[data-selection-keep="true"]')) return;
-
-      exitSelectionMode('history');
-    };
-
-    document.addEventListener('pointerdown', handleDocumentPointerDown, true);
-    return () => document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
-  }, [isSelectionMode]);
-
-  const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
-    const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
-
-    await commitFavoriteDraftIfNeeded();
-
-    setSelectedSong(null);
-    detailHistoryPushedRef.current = false;
-    setConfirmDeleteSong(false);
-    setConfirmToggleLock(false);
-    setIsEditing(false);
-    setActiveEditSection(null);
-    setIsSyncEnabled(false);
-
-    if (shouldPopOverlayHistory) {
-      try {
-        window.history.back();
-      } catch (error) {
-        console.warn('detail modal history close failed', error);
-      }
-    }
+  const getPlaylistItemSourceTrackId = (item: any) => {
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    return sourceTrack?.id ? String(sourceTrack.id) : String(item?.sourceId || item?.trackId || '').trim();
   };
 
-  const cancelModalEditing = () => {
-    if (!selectedSong) return;
+  const hasBeenPlayed = (target: any) => Boolean(
+    target?.playedAt ||
+    target?.firstPlayedAt ||
+    target?.lastPlayedAt ||
+    target?.hasPlayed ||
+    target?.played === true
+  );
 
-    setIsEditing(false);
-    setActiveEditSection(null);
-    setIsSyncEnabled(false);
-    setEditedTitle(selectedSong.title);
-    setEditedKoreanLyrics(selectedSong.lyrics.korean);
-    setEditedEnglishLyrics(selectedSong.lyrics.english);
-    setEditedPrompt(selectedSong.prompt || '');
-    setDrafts(prev => {
+  const isSharedPlaylistItem = (item: any) => Boolean(
+    item?.sourceType === 'shared_track' ||
+    libraryViewMode === 'sharedPlaylist' ||
+    activePlaylistSection === 'shared'
+  );
+
+  const isSharedPlaylistItemPlayedLocal = (item: any) => {
+    const keys = getSharedPlayedKeys(item);
+    return keys.some((key) => Boolean(sharedPlayedMap[key]));
+  };
+
+  const markSharedPlaylistItemPlayedLocal = (item: any, playedAt: string) => {
+    const keys = getSharedPlayedKeys(item);
+    if (keys.length === 0) return;
+
+    setSharedPlayedMap((prev) => {
       const next = { ...prev };
-      delete next[selectedSong.id];
+      keys.forEach((key) => {
+        next[key] = playedAt;
+      });
+
+      try {
+        localStorage.setItem(SHARED_PLAYED_STORAGE_KEY, JSON.stringify(next));
+      } catch (error) {
+        console.warn('save shared playlist played map failed:', error);
+      }
+
       return next;
     });
   };
 
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      // Clear any pending actions on back navigation
-      setPendingSelectionAction(null);
+  const isWorkspaceItemUnplayed = (group: any, item: any, idx: number) => {
+    const audioUrl = getAudioUrl(item, group);
+    const duration = getDuration(item, group);
+    const completed = Boolean(audioUrl && duration !== null && group?.status === 'completed');
+    if (!completed) return false;
 
-      // If we have pending confirmations in popup, cancel them first
-      if (confirmDeleteSong || confirmToggleLock) {
-        setConfirmDeleteSong(false);
-        setConfirmToggleLock(false);
-        // Push state back to stay on current view
-        window.history.pushState({ favoritesOverlay: 'song-detail' }, '');
-        return;
+    const playedMap = group?.playedItemIndexes || group?.playedItems || {};
+    const playedByIndex = playedMap?.[String(idx)] || playedMap?.[idx];
+    return !(hasBeenPlayed(item) || hasBeenPlayed(playedByIndex));
+  };
+
+  const markWorkspaceItemPlayed = async (group: any, idx: number) => {
+    if (!user || !group?.id) return;
+    const playedAt = new Date().toISOString();
+
+    setTracks((prev) => prev.map((track: any) => {
+      if (track.id !== group.id) return track;
+      const next = { ...track, playedItemIndexes: { ...(track.playedItemIndexes || {}), [String(idx)]: { playedAt } } };
+      if (Array.isArray(track.sunoData)) {
+        next.sunoData = track.sunoData.map((entry: any, entryIndex: number) => entryIndex === idx ? { ...entry, playedAt, hasPlayed: true } : entry);
       }
+      return next;
+    }));
 
-      // If we have bulk confirmations, cancel them first
-      if (confirmDeleteAll > 0 || confirmUnlockAll > 0 || confirmLockAll > 0) {
-        setConfirmDeleteAll(0);
-        setConfirmUnlockAll(0);
-        setConfirmLockAll(0);
-        // Push state back to stay on current view
-        window.history.pushState({ favoritesOverlay: 'selection-mode' }, '');
-        return;
-      }
-
-      if (selectedSong) {
-        closeSelectedSong('history');
-        return;
-      }
-
-      if (isSelectionMode) {
-        exitSelectionMode('history');
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (selectedSong) {
-          closeSelectedSong();
-        } else if (isSelectionMode) {
-          exitSelectionMode();
-        }
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('keydown', handleKeyDown);
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-    };
-  }, [selectedSong, isSelectionMode, confirmDeleteSong, confirmToggleLock, confirmDeleteAll, confirmUnlockAll, confirmLockAll]);
-
-  const handleSelectedLock = async () => {
-    if (pendingSelectionAction === 'lock' || pendingSelectionAction === 'unlock') {
-      setPendingSelectionAction(null);
-      return;
-    }
-    
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
-    if (selectedSongs.length === 0) return;
-
-    const allLocked = selectedSongs.every(song => song.isLocked);
-    setPendingSelectionAction(allLocked ? 'unlock' : 'lock');
-  };
-
-  const executeSelectedLock = async (shouldLock: boolean) => {
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
-    if (selectedSongs.length === 0) return;
-
-    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
-    setLastSelectionAction(shouldLock ? 'lock' : 'unlock');
-    
-    if (selectedSong && selectedSongIds.includes(selectedSong.id)) {
-      setSelectedSong({ ...selectedSong, isLocked: shouldLock });
-    }
-    setPendingSelectionAction(null);
-  };
-
-  const handleSelectedDelete = async () => {
-    if (pendingSelectionAction === 'delete') {
-      setPendingSelectionAction(null);
-      return;
-    }
-
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
-    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
-
-    if (deletableSongs.length === 0) {
-      setIsShaking(true);
-      onHover({ 
-        id: 'selection-delete-error', 
-        label: '삭제 불가', 
-        description: selectedSongIds.length === 0 
-          ? '삭제할 곡을 선택해주세요.' 
-          : '선택된 곡이 모두 잠겨있어 삭제할 수 없습니다.' 
-      });
-      setTimeout(() => {
-        setIsShaking(false);
-        onHover(null);
-      }, 1500);
-      return;
-    }
-
-    setPendingSelectionAction('delete');
-  };
-
-  const executeSelectedDelete = async () => {
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
-    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
-    
-    await Promise.all(deletableSongs.map(song => Promise.resolve(toggleFavorite(song))));
-    exitSelectionMode();
-  };
-
-  const handleSelectionConfirm = () => {
-    if (pendingSelectionAction === 'delete') {
-      executeSelectedDelete();
-    } else if (pendingSelectionAction === 'lock') {
-      executeSelectedLock(true);
-    } else if (pendingSelectionAction === 'unlock') {
-      executeSelectedLock(false);
-    } else {
-      exitSelectionMode();
-    }
-  };
-
-  const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
-    if (newSort === 'title') {
-      setSortBy(prev => prev === 'title-en' ? 'title-ko' : 'title-en');
-    } else if (newSort === 'genre') {
-      setSortBy(prev => prev === 'genre-1' ? 'genre-2' : 'genre-1');
-    } else if (newSort === 'locked') {
-      setSortBy(prev => prev === 'locked-top' ? 'locked-bottom' : 'locked-top');
-    } else {
-      setSortBy(newSort as any);
-    }
-    // Reset timer when a sort option is clicked
-    if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-    sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
-  };
-
-  const toggleSortPopup = () => {
-    if (showSortPopup) {
-      setShowSortPopup(false);
-      if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-    } else {
-      setShowSortPopup(true);
-      if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-      sortPopupTimerRef.current = setTimeout(() => setShowSortPopup(false), 5000);
-    }
-  };
-
-  // Close sort popup when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (sortPopupRef.current && !sortPopupRef.current.contains(event.target as Node)) {
-        setShowSortPopup(false);
-        if (sortPopupTimerRef.current) clearTimeout(sortPopupTimerRef.current);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedType(type);
-    setTimeout(() => setCopiedType(null), 2000);
-  };
-
-  const copyAll = (song: any) => {
-    const keywords = [
-      `[Genres] ${getSongGenreValues(song).join(', ')}`,
-      `[Moods] ${getSongMoodValues(song).join(', ')}`,
-      getSongSituationSummary(song) ? `[Situation] ${getSongSituationSummary(song)}` : '',
-      `[Themes] ${getSongThemeValues(song).join(', ')}`,
-      `[Styles] ${getSongStyleValues(song).join(', ')}`,
-      `[Instruments / Sound] ${getSongInstrumentSoundValues(song).join(', ')}`,
-      song.appliedKeywords.vocalType ? `[Vocal] ${song.appliedKeywords.vocalType}${song.appliedKeywords.vocal?.isToneSelected && song.appliedKeywords.vocalTone ? ` (${song.appliedKeywords.vocalTone})` : ''}` : '',
-      song.appliedKeywords.tempo ? `[Tempo] ${song.appliedKeywords.tempo}` : ''
-    ].filter((line) => !line.endsWith('] ')).join('\n');
-
-    const songTitleCopy = getCombinedFavoriteTitle(song);
-
-    const text = `
-${keywords}
-
-${songTitleCopy}
-
-[Lyrics - English]
-${song.lyrics.english}
-
-[Lyrics - Korean]
-${song.lyrics.korean}
-
-[Music Prompt]
-${song.prompt}
-    `.trim();
-    copyToClipboard(text, `all-${song.id}`);
-  };
-
-  if (!user) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-6 font-sans">
-        <div className="p-6 rounded-full bg-[var(--bg-secondary)]/50 mb-6">
-          <HeartIcon className="w-12 h-12 text-[var(--text-secondary)]" />
-        </div>
-        <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">로그인이 필요합니다</h2>
-        <p className="text-[var(--text-secondary)] mb-8">보관함을 이용하려면 로그인을 해주세요.</p>
-      </div>
-    );
-  }
-
-  const getRelativeTime = (timestamp: any) => {
-    const ms = getTimestampMs(timestamp);
-    if (!ms) return '방금 전';
-
-    const now = Date.now();
-    const diffInSeconds = Math.floor((now - ms) / 1000);
-
-    if (diffInSeconds < 60) return '방금 전';
-    
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}시간 전`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}일 전`;
-    
-    const diffInWeeks = Math.floor(diffInDays / 7);
-    if (diffInWeeks < 4) return `${diffInWeeks}주 전`;
-    
-    const diffInMonths = Math.floor(diffInDays / 30);
-    if (diffInMonths < 12) return `${diffInMonths}달 전`;
-    
-    const diffInYears = Math.floor(diffInDays / 365);
-    return `${diffInYears}년 전`;
-  };
-
-  const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
-  const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
-  const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
-
-  const applyKeywordsToNext = (song: any) => {
-    onHover(null);
-    onLongPressEnd();
     try {
-      window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
-      const activeElement = document.activeElement as HTMLElement | null;
-      activeElement?.blur?.();
-    } catch {
-      // ignore transient UI cleanup failures
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      if (Array.isArray(group.sunoData) && group.sunoData.length > 0) {
+        const nextSunoData = group.sunoData.map((entry: any, entryIndex: number) => entryIndex === idx ? { ...entry, playedAt, hasPlayed: true } : entry);
+        await updateDoc(trackRef, {
+          sunoData: nextSunoData,
+          [`playedItemIndexes.${idx}`]: { playedAt },
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await updateDoc(trackRef, {
+          playedAt,
+          hasPlayed: true,
+          [`playedItemIndexes.${idx}`]: { playedAt },
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (e) {
+      console.warn('mark workspace item played failed:', e);
+    }
+  };
+
+  const isPlaylistItemUnplayed = (item: any) => {
+    if (!item?.audioUrl && !item?.streamAudioUrl && !item?.audio_url) return false;
+    if (formatPlaylistDuration(item.duration) === '--:--') return false;
+
+    if (isSharedPlaylistItem(item) && isSharedPlaylistItemPlayedLocal(item)) return false;
+
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
+    const sourceItems = sourceTrack ? extractSunoData(sourceTrack) : [];
+    const sourceItem = sourceItems.find((entry: any) => String(getAudioUrl(entry, sourceTrack) || '').trim() === itemAudio);
+    return !(hasBeenPlayed(item) || hasBeenPlayed(sourceItem));
+  };
+
+  const markPlaylistItemPlayed = async (item: any) => {
+    if (!user || !item) return;
+    const playedAt = new Date().toISOString();
+    const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
+
+    if (isSharedPlaylistItem(item)) {
+      markSharedPlaylistItemPlayedLocal(item, playedAt);
     }
 
-    const pendingKeywords = {
-      ...song.appliedKeywords,
-      genre: getSongGenreValues(song),
-      subGenre: getSongSubGenreValues(song),
-      mood: getSongMoodValues(song),
-      theme: getSongThemeValues(song),
-      situation: song.appliedKeywords?.situation,
-      situationSummary: getSongSituationSummary(song),
-      style: getSongStyleValues(song),
-      instrumentSound: getSongInstrumentSoundValues(song),
-      tempo: song.appliedKeywords.tempo ?? null,
-      lyricsLength: song.appliedKeywords.lyricsLength ?? 'normal',
-      maleCount: song.appliedKeywords.maleCount ?? 0,
-      femaleCount: song.appliedKeywords.femaleCount ?? 0,
-      rapEnabled: song.appliedKeywords.rapEnabled ?? false,
-      isKoreanEnglishMix: song.appliedKeywords.isKoreanEnglishMix ?? false,
-      vocal: song.appliedKeywords.vocal ?? null,
-      kpopMode: song.appliedKeywords.kpopMode ?? 0,
-      citypopMode: song.appliedKeywords.citypopMode ?? 0,
-      songStructure: song.appliedKeywords.songStructure ?? '2',
-      customStructure: song.appliedKeywords.customStructure ?? [],
-      userInput: song.appliedKeywords.userInput ?? '',
-      lyricDraft: song.appliedKeywords.lyricDraft ?? '',
-      isLyricMode: song.appliedKeywords.isLyricMode ?? false,
-      lyricMode: song.appliedKeywords.lyricMode ?? 'assist',
+    setPlaylistItems((prev) => prev.map((playlistItem: any) => playlistItem.id === item.id ? { ...playlistItem, playedAt, hasPlayed: true } : playlistItem));
+
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    if (sourceTrack?.id && item?.sourceType !== 'shared_track') {
+      const sourceItems = extractSunoData(sourceTrack);
+      const sourceIdx = sourceItems.findIndex((entry: any) => String(getAudioUrl(entry, sourceTrack) || '').trim() === itemAudio);
+      setTracks((prev) => prev.map((track: any) => {
+        if (String(track.id) !== String(sourceTrack.id)) return track;
+        const next = { ...track };
+        if (sourceIdx >= 0) {
+          next.playedItemIndexes = { ...(track.playedItemIndexes || {}), [String(sourceIdx)]: { playedAt } };
+          if (Array.isArray(track.sunoData)) {
+            next.sunoData = track.sunoData.map((entry: any, entryIndex: number) => entryIndex === sourceIdx ? { ...entry, playedAt, hasPlayed: true } : entry);
+          }
+        } else {
+          next.playedAt = playedAt;
+          next.hasPlayed = true;
+        }
+        return next;
+      }));
+
+      try {
+        const ownerUid = String((sourceTrack as any)?.ownerUid || (item as any)?.ownerUid || user.uid);
+        const trackRef = doc(db, 'suno_tracks', ownerUid, 'tracks', sourceTrack.id);
+        if (sourceIdx >= 0 && Array.isArray((sourceTrack as any).sunoData)) {
+          const nextSunoData = (sourceTrack as any).sunoData.map((entry: any, entryIndex: number) => entryIndex === sourceIdx ? { ...entry, playedAt, hasPlayed: true } : entry);
+          await updateDoc(trackRef, {
+            sunoData: nextSunoData,
+            [`playedItemIndexes.${sourceIdx}`]: { playedAt },
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          await updateDoc(trackRef, { playedAt, hasPlayed: true, updatedAt: serverTimestamp() });
+        }
+      } catch (e) {
+        console.warn('mark playlist source item played failed:', e);
+      }
+    }
+  };
+
+
+  const normalizePlayableUrl = (value: any) => String(value || '').trim();
+
+  const getCurrentPlayableUrl = () => {
+    const parent: any = currentTrack?.parent || {};
+    return normalizePlayableUrl(
+      (currentTrack as any)?.url ||
+      (currentTrack as any)?.audioUrl ||
+      parent.audioUrl ||
+      parent.streamAudioUrl ||
+      parent.audio_url
+    );
+  };
+
+  const isSamePlayableUrl = (candidateUrl: any) => {
+    const currentUrl = getCurrentPlayableUrl();
+    const nextUrl = normalizePlayableUrl(candidateUrl);
+    return Boolean(currentUrl && nextUrl && currentUrl === nextUrl);
+  };
+
+  const isCurrentWorkspaceItem = (group: any, item: any, idx: number) => {
+    if (!currentTrack) return false;
+    const audioUrl = getAudioUrl(item, group);
+    if (isSamePlayableUrl(audioUrl)) return true;
+
+    const parent: any = currentTrack.parent || {};
+    const groupId = String(group?.id || group?.trackId || group?.sourceId || '').trim();
+    const parentIds = [parent.id, parent.trackId, parent.sourceId]
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value));
+
+    return Boolean(groupId && parentIds.includes(groupId) && Number((currentTrack as any).index) === idx);
+  };
+
+  const isCurrentPlaylistItem = (item: any) => {
+    if (!currentTrack) return false;
+    if (isSamePlayableUrl(item?.audioUrl || item?.streamAudioUrl || item?.audio_url)) return true;
+
+    const itemId = String(item?.id || '').trim();
+    const sourceId = String(getPlaylistItemSourceTrackId(item) || item?.sourceId || item?.trackId || '').trim();
+    const parent: any = currentTrack.parent || {};
+    const currentIds = [
+      (currentTrack as any)?.trackId,
+      (currentTrack as any)?.id,
+      (currentTrack as any)?.sourceId,
+      parent.id,
+      parent.trackId,
+      parent.sourceId
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim().length > 0)
+      .map((value) => String(value));
+
+    return Boolean((itemId && currentIds.includes(itemId)) || (sourceId && currentIds.includes(sourceId)));
+  };
+
+  const extractSunoData = (group: any) => {
+    let sunoData = null;
+    if (Array.isArray(group?.sunoData) && group.sunoData.length > 0) {
+      sunoData = group.sunoData;
+    } else if (Array.isArray(group?.apiStatusResponse?.data?.response?.sunoData) && group.apiStatusResponse.data.response.sunoData.length > 0) {
+      sunoData = group.apiStatusResponse.data.response.sunoData;
+    } else if (Array.isArray(group?.apiResponse?.response?.sunoData) && group.apiResponse.response.sunoData.length > 0) {
+      sunoData = group.apiResponse.response.sunoData;
+    }
+
+    if (sunoData) {
+      return sunoData;
+    }
+
+    return [{
+      audioUrl: group?.audioUrl || group?.streamAudioUrl,
+      title: group?.title,
+      imageUrl: group?.imageUrl,
+      duration: getDuration(group, group),
+      hidden: !!group?.hidden
+    }];
+  };
+
+
+
+  const collectStatusCandidates = (source: any): string[] => {
+    const candidates: string[] = [];
+    const pushValue = (value: any) => {
+      if (value === undefined || value === null) return;
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        candidates.push(String(value).trim().toLowerCase());
+      }
     };
-    const serialized = JSON.stringify(pendingKeywords);
-    sessionStorage.setItem('pendingAppliedKeywords', serialized);
-    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);
-    setSelectedSong(null);
-    setActiveFavoriteMenuId(null);
 
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
-      navigate(`/studio?applyPending=1&t=${Date.now()}`);
-    });
+    const visit = (obj: any, depth = 0) => {
+      if (!obj || depth > 5 || typeof obj !== 'object') return;
+      if (Array.isArray(obj)) {
+        obj.slice(0, 12).forEach((item) => visit(item, depth + 1));
+        return;
+      }
+
+      Object.entries(obj).forEach(([key, value]) => {
+        const normalizedKey = String(key).toLowerCase();
+        if (
+          normalizedKey === 'status' ||
+          normalizedKey === 'state' ||
+          normalizedKey === 'taskstatus' ||
+          normalizedKey === 'task_status' ||
+          normalizedKey === 'generationstatus' ||
+          normalizedKey === 'generation_status' ||
+          normalizedKey === 'code'
+        ) {
+          pushValue(value);
+        }
+        if (value && typeof value === 'object') visit(value, depth + 1);
+      });
+    };
+
+    visit(source);
+    return candidates;
   };
 
+  const resolveSunoStatusFromResponse = (data: any) => {
+    const candidates = collectStatusCandidates(data);
+    const raw = candidates.join(' | ');
+    const failed = candidates.some((value) =>
+      /fail|failed|failure|error|errored|reject|rejected|cancel|cancelled|canceled|timeout|timed_out|expired|실패|취소|오류/.test(value)
+    );
+    if (failed) return { status: 'failed', raw };
 
-  const FAVORITE_MUSIC_API_LANGUAGE_ORDER: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+    const completed = candidates.some((value) =>
+      /complete|completed|success|succeeded|done|finished|finish|ready|generated|완료|성공/.test(value)
+    );
+    if (completed) return { status: 'completed', raw };
 
-  const normalizeFavoriteMusicApiLanguage = (value: any): LanguageCode | null => {
-    const lang = String(value || '').toLowerCase();
-    if (lang === 'kr' || lang === 'kor' || lang === 'korean') return 'ko';
-    if (lang === 'jp' || lang === 'jpn' || lang === 'japanese') return 'ja';
-    if (lang === 'cn' || lang === 'chinese' || lang === 'zh-cn' || lang === 'zh-tw') return 'zh';
-    if (lang === 'english') return 'en';
-    if (lang === 'spanish') return 'es';
-    if (lang === 'french') return 'fr';
-    return FAVORITE_MUSIC_API_LANGUAGE_ORDER.includes(lang as LanguageCode) ? (lang as LanguageCode) : null;
+    const processing = candidates.some((value) =>
+      /processing|pending|queued|queue|running|submitted|in_progress|generating|생성|진행|대기/.test(value)
+    );
+    if (processing) return { status: 'processing', raw };
+
+    return { status: null, raw };
   };
 
-  const getFavoriteForeignLyricLanguage = (song: any): LanguageCode => {
-    const applied = song?.appliedKeywords || {};
+  const extractStatusSunoData = (data: any) => {
     const candidates = [
-      ...(((applied.lyricLanguages || []) as any[]).filter(Boolean)),
-      ...(((applied.titleLanguages || []) as any[]).filter(Boolean)),
-      applied.secondaryLanguage,
-      applied.foreignLanguage,
-      applied.lyricLanguage,
+      data?.sunoData,
+      data?.data?.sunoData,
+      data?.response?.sunoData,
+      data?.data?.response?.sunoData,
+      data?.result?.sunoData,
+      data?.data?.result?.sunoData,
+      data?.tracks,
+      data?.data?.tracks,
+      data?.response?.tracks,
+      data?.data?.response?.tracks,
+      data?.audios,
+      data?.data?.audios,
+    ];
+    return candidates.find((value) => Array.isArray(value) && value.length > 0) || null;
+  };
+
+  const isMeaningfulSunoFailureText = (value: any) => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    // Cloud Function wrappers often return msg/message: "success" even when the provider task itself failed.
+    // Do not show that wrapper text as the failure reason in the app.
+    if (/^(success|ok|complete|completed|done|true)$/i.test(text)) return false;
+    return true;
+  };
+
+  const getSunoFailureReason = (data: any, rawStatus?: string | null) => {
+    const candidates = [
+      data?.failureReason,
+      data?.reason,
+      data?.error,
+      data?.data?.failureReason,
+      data?.data?.reason,
+      data?.data?.error,
+      data?.response?.failureReason,
+      data?.response?.reason,
+      data?.response?.error,
+      data?.data?.response?.failureReason,
+      data?.data?.response?.reason,
+      data?.data?.response?.error,
+      rawStatus,
     ];
 
-    const found = candidates
-      .map(normalizeFavoriteMusicApiLanguage)
-      .find((lang): lang is LanguageCode => Boolean(lang && lang !== 'ko'));
-
-    return found || 'en';
+    const found = candidates.find(isMeaningfulSunoFailureText);
+    return found ? String(found).trim() : '사이트 확인요망';
   };
 
-  const getFavoriteMusicApiAvailableLyricLanguages = (song: any): LanguageCode[] => {
-    if (!song) return [];
-    const langs: LanguageCode[] = [];
-    if (editedKoreanLyrics.trim()) langs.push('ko');
-    if (editedEnglishLyrics.trim()) langs.push(getFavoriteForeignLyricLanguage(song));
-    return Array.from(new Set(langs));
+  const getSunoFailureDisplayMessage = (group: any) => {
+    const reason = getSunoFailureReason(
+      group?.apiStatusResponse || group?.apiResponse || null,
+      group?.failureReason || group?.lastStatusRaw || null
+    );
+
+    // Keep the UI clear: provider-side failed/cancelled/error states should tell the user to check the site,
+    // not show wrapper text like "success".
+    if (!isMeaningfulSunoFailureText(reason) || /fail|failed|failure|error|reject|cancel|timeout|expired|실패|취소|오류/i.test(reason)) {
+      return '사이트 확인요망';
+    }
+    return reason;
   };
 
-  const getFavoriteMusicApiLyricsByLanguage = (song: any, lang: LanguageCode): string => {
-    if (lang === 'ko') return editedKoreanLyrics.trim();
-    const foreignLang = getFavoriteForeignLyricLanguage(song);
-    if (lang === foreignLang) return editedEnglishLyrics.trim();
-    return '';
-  };
+  const syncStatusResponseToFirestore = async (trackId: string, taskId: string, data: any) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !trackId) return { status: null as string | null, raw: '' };
 
-  const getFavoriteMusicApiTitle = (song: any): string => {
-    const titleSource = {
-      ...song,
-      title: editedTitle || song?.title || '',
-      koreanTitle: '',
-      englishTitle: '',
+    const resolved = resolveSunoStatusFromResponse(data);
+    const updatePayload: any = {
+      apiStatusResponse: data || null,
+      lastStatusCheckedAt: serverTimestamp(),
+      lastStatusRaw: resolved.raw || null,
     };
-    return getCombinedFavoriteCopyText(titleSource);
+
+    if (taskId) updatePayload.taskId = taskId;
+
+    if (resolved.status === 'failed') {
+      updatePayload.status = 'failed';
+      updatePayload.failedAt = serverTimestamp();
+      updatePayload.failureReason = getSunoFailureReason(data, resolved.raw);
+    } else if (resolved.status === 'completed') {
+      updatePayload.status = 'completed';
+      updatePayload.completedAt = serverTimestamp();
+      const nextSunoData = extractStatusSunoData(data);
+      if (nextSunoData) updatePayload.sunoData = nextSunoData;
+    } else if (resolved.status === 'processing') {
+      updatePayload.status = 'processing';
+    }
+
+    if (resolved.status) {
+      await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), updatePayload);
+    } else {
+      await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), updatePayload);
+    }
+
+    return resolved;
   };
 
-  const handleFavoriteMusicApiGenerate = async (
-    _titleLanguage: LanguageCode = 'ko',
-    includeLyrics: boolean = true,
-    lyricLanguages: LanguageCode[] = ['ko'],
-    options?: { sunoModelVersion?: SunoModelVersion }
-  ) => {
-    if (!selectedSong || isFavoriteMusicApiGenerating) return;
+
+  const filteredTracks = useMemo(() => {
+    return tracks.filter(t => {
+      if (filter === 'trash') {
+        const hasHiddenItem = extractSunoData(t).some((i: any) => i.hidden);
+        if (!t.hidden && !hasHiddenItem) return false;
+      } else {
+        if (t.hidden) return false;
+        const allHidden = extractSunoData(t).every((i: any) => i.hidden);
+        if (allHidden) return false;
+      }
+
+      const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filter === 'all' || filter === 'trash' ||
+                            (filter === 'completed' && t.status === 'completed') || 
+                            (filter === 'favorite' && t.favorite) ||
+                            (filter === 'public' && t.isPublic === true) ||
+                            (filter === 'private' && t.isPublic !== true);
+
+      const matchesColor = extractSunoData(t).some((item: any, idx: number) => isWorkspaceItemVisible(t, item, idx));
+
+      return matchesSearch && matchesFilter && matchesColor;
+    });
+  }, [tracks, searchTerm, filter, workspaceColorFilter]);
+
+  const displayedWorkspaceTracks = useMemo(() => {
+    if (libraryViewMode !== 'workspace') return filteredTracks;
+    return filteredTracks.slice(0, workspaceVisibleCount);
+  }, [filteredTracks, libraryViewMode, workspaceVisibleCount]);
+
+  const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && workspaceVisibleCount < filteredTracks.length;
+
+  const allPlayables = useMemo(() => {
+    const list: any[] = [];
+    filteredTracks.forEach(group => {
+      const items = extractSunoData(group);
+      items.forEach((item: any, idx: number) => {
+        if (!isWorkspaceItemVisible(group, item, idx)) return;
+
+        const audioUrl = getAudioUrl(item, group);
+        if (audioUrl) {
+          list.push({ group, item, idx, url: audioUrl });
+        }
+      });
+    });
+    return list;
+  }, [filteredTracks, filter, workspaceColorFilter]);
+
+  const handlePlayTrack = (track: any, subIndex: number = 0) => {
+    const items = extractSunoData(track);
+    const item = items[subIndex] || {};
+    const url = getAudioUrl(item, track);
+    const title = getTitle(item, track, subIndex);
+    const imageUrl = getImageUrl(item, track);
+    const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
+
+    if (url) {
+      markWorkspaceItemPlayed(track, subIndex);
+      const newQueue = allPlayables.map(p => {
+        const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
+        return {
+          url: p.url,
+          title: getTitle(p.item, p.group, p.idx),
+          imageUrl: getImageUrl(p.item, p.group),
+          parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+          index: p.idx,
+          creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
+          ownerNickname: queuedCreatorMeta.ownerNickname,
+          creatorNickname: queuedCreatorMeta.creatorNickname,
+          ownerEmail: queuedCreatorMeta.ownerEmail,
+          creatorEmail: queuedCreatorMeta.creatorEmail,
+          lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
+        };
+      });
+      playTrack({
+        url,
+        title,
+        imageUrl,
+        parent: { ...track, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        index: subIndex,
+        creatorDisplayId: creatorMeta.creatorDisplayId,
+        ownerNickname: creatorMeta.ownerNickname,
+        creatorNickname: creatorMeta.creatorNickname,
+        ownerEmail: creatorMeta.ownerEmail,
+        creatorEmail: creatorMeta.creatorEmail,
+        lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
+      }, newQueue);
+    }
+  };
+
+  useEffect(() => {
+    if (isSharedView || !user) return;
+
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      
+      const eligibleGroups = tracks.filter(group => {
+        if (group.status === 'failed') return false;
+
+        const count = autoCheckCountsRef.current.get(group.id) || 0;
+        if (count >= 30) return false;
+
+        const items = extractSunoData(group);
+        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
+
+        if (isFullyCompleted) return false;
+
+        if (!group.taskId) return false;
+
+        let createdTime = 0;
+        if (group.createdAt?.seconds) {
+          createdTime = group.createdAt.seconds * 1000;
+        } else if (group.createdAt?.toDate) {
+          createdTime = group.createdAt.toDate().getTime();
+        } else if (typeof group.createdAt === 'string' || typeof group.createdAt === 'number') {
+          createdTime = new Date(group.createdAt).getTime();
+        }
+        
+        const elapsedMs = now - createdTime;
+        if (elapsedMs < 8000) return false; // Initial wait before first status check
+        if (elapsedMs > 10 * 60 * 1000) return false; // Stop automatic polling after 10 minutes
+
+        const nextIntervalMs = elapsedMs < 3 * 60 * 1000
+          ? 15 * 1000
+          : elapsedMs < 6 * 60 * 1000
+            ? 30 * 1000
+            : 60 * 1000;
+
+        const lastRunAt = autoCheckLastRunAtRef.current.get(group.id) || 0;
+        if (lastRunAt && now - lastRunAt < nextIntervalMs) return false;
+
+        if (checkingIdsRef.current.has(group.id)) return false;
+
+        return true;
+      });
+
+      eligibleGroups.forEach(async (group) => {
+        const id = group.id;
+        checkingIdsRef.current.add(id);
+        autoCheckLastRunAtRef.current.set(id, Date.now());
+        const currentCount = autoCheckCountsRef.current.get(id) || 0;
+        autoCheckCountsRef.current.set(id, currentCount + 1);
+
+        try {
+          const token = await user.getIdToken();
+          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ trackId: id, taskId: group.taskId })
+          });
+          
+          let data: any = null;
+          try {
+            data = await res.json();
+          } catch {
+            data = null;
+          }
+
+          if (!res.ok) {
+            console.warn(`Auto check failed for ${id}`, data);
+          }
+
+          if (data) {
+            await syncStatusResponseToFirestore(id, group.taskId, data);
+          }
+        } catch (e) {
+          console.warn(`Auto check error for ${id}:`, e);
+        } finally {
+          checkingIdsRef.current.delete(id);
+        }
+      });
+    }, 15000); // Base tick is 15s; network checks use progressive intervals: 15s -> 30s -> 60s, max 10min
+
+    return () => clearInterval(intervalId);
+  }, [tracks, user, isSharedView]);
+
+  const checkStatus = async (trackId: string, taskId: string) => {
+    if (!taskId) {
+      alert('taskId가 없어 상태 확인을 할 수 없습니다.');
+      return;
+    }
+    if (checkingIdsRef.current.has(trackId)) {
+      return;
+    }
 
     try {
-      setIsFavoriteMusicApiGenerating(true);
-      setFavoriteMusicApiMessage(null);
+      checkingIdsRef.current.add(trackId);
+      setStatusChecking(trackId);
+      const user = auth.currentUser;
 
       if (!user) {
-        setFavoriteMusicApiMessage('로그인이 필요합니다.');
+        alert('로그인이 필요합니다.');
         return;
       }
 
       const token = await user.getIdToken();
-      const sunoModelVersion: SunoModelVersion = options?.sunoModelVersion || 'V5_5';
-      const selectedLanguage = includeLyrics
-        ? (lyricLanguages || [])[0] || getFavoriteMusicApiAvailableLyricLanguages(selectedSong)[0]
-        : null;
-      const resolvedLyrics = includeLyrics && selectedLanguage
-        ? getFavoriteMusicApiLyricsByLanguage(selectedSong, selectedLanguage)
-        : '';
-
-      if (includeLyrics && !resolvedLyrics.trim()) {
-        setFavoriteMusicApiMessage('선택한 언어의 가사가 없습니다. 다른 언어를 선택하거나 가사 미포함으로 생성해주세요.');
-        return;
-      }
-
-      const appliedKeywords = {
-        ...(selectedSong.appliedKeywords || {}),
-        source: 'music-note-edit',
-      };
-
-      const res = await fetch(
-        'https://us-central1-soridraw-app-866a5.cloudfunctions.net/createSunoTrack',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title: getFavoriteMusicApiTitle(selectedSong),
-            prompt: editedPrompt || '',
-            style: editedPrompt || '',
-            lyrics: resolvedLyrics,
-            appliedKeywords,
-            titleLanguage: selectedLanguage || null,
-            includeLyrics,
-            lyricLanguages: includeLyrics && selectedLanguage ? [selectedLanguage] : [],
-            lyricLanguage: selectedLanguage || null,
-            model: sunoModelVersion,
-            sunoVersion: sunoModelVersion,
-            sunoModelVersion,
-            generationIndex: 1,
-            generationCount: 1,
-            sourceGenerationBatchId: (selectedSong.appliedKeywords as any)?.generationBatchId || null,
-          }),
-        }
-      );
+      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ trackId, taskId })
+      });
 
       const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setFavoriteMusicApiMessage(`Music API 생성 요청에 실패했습니다. ${data.error || ''}`.trim());
+
+      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
+
+      if (!res.ok) {
+        alert(`상태 확인 실패: ${data?.error || data?.message || 'unknown error'}`);
         return;
       }
 
-      setFavoriteMusicApiMessage('Music API 생성 요청이 완료되었습니다. 라이브러리에서 자동으로 상태가 갱신됩니다.');
-    } catch (error) {
-      console.error('Music Note Music API generate failed:', error);
-      setFavoriteMusicApiMessage('Music API 생성 요청 중 오류가 발생했습니다.');
-    } finally {
-      setIsFavoriteMusicApiGenerating(false);
-    }
-  };
-
-  const getVisibleFavoriteIds = () => filteredFavorites.slice(0, visibleCount).map(song => song.id);
-
-  const enterFavoriteSelectionMode = (song: any) => {
-    setIsSelectionMode(true);
-    setPendingSelectionAction(null);
-    setSelectedSongIds(prev => prev.includes(song.id) ? prev : [...prev, song.id]);
-    setActiveFavoriteMenuId(null);
-  };
-
-  const selectAllVisibleFavorites = () => {
-    const visibleIds = getVisibleFavoriteIds();
-    setSelectedSongIds(visibleIds);
-    setIsSelectionMode(true);
-    setPendingSelectionAction(null);
-  };
-
-  const handleFavoriteColorSelect = (song: any, color: string) => {
-    const targetIds = isSelectionMode && selectedSongIds.length > 0
-      ? selectedSongIds
-      : [song.id];
-
-    setFavoriteColorMap(prev => {
-      const next = { ...prev };
-      targetIds.forEach(id => { next[id] = color; });
-      writeLocalColorMap('soridraw.favoriteColorTags', next);
-      favoriteColorMapRef.current = next;
-      favoriteColorDirtyRef.current = serializeColorMap(next) !== favoriteColorBaselineRef.current;
-      return next;
-    });
-
-    setActiveFavoriteColorMenuId(null);
-    if (isSelectionMode) exitSelectionMode();
-  };
-
-
-  const getFavoriteFullShareText = (song: any): string => {
-    const sections = resolveKeywordsForDisplay(song)
-      .map(section => `${section.title}: ${section.items.map(item => item.label).join(', ')}`)
-      .filter(Boolean)
-      .join('\n');
-
-    return [
-      `제목: ${getCombinedFavoriteTitle(song)}`,
-      sections ? `\n[키워드]\n${sections}` : '',
-      song?.lyrics?.korean ? `\n[한글 가사]\n${song.lyrics.korean}` : '',
-      song?.lyrics?.english ? `\n[외국어 가사]\n${song.lyrics.english}` : '',
-      song?.prompt ? `\n[프롬프트]\n${song.prompt}` : ''
-    ].filter(Boolean).join('\n');
-  };
-
-  const shareFavoriteSong = async (song: any) => {
-    const title = getCombinedFavoriteTitle(song);
-    const text = getFavoriteFullShareText(song);
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: `SORIDRAW - ${title}`, text });
+      if (resolved.status === 'completed') {
+        alert('생성 완료되었습니다.');
+      } else if (resolved.status === 'failed') {
+        alert('생성에 실패했습니다.');
+      } else if (resolved.status === 'processing') {
+        alert('아직 생성 중입니다.');
       } else {
-        await navigator.clipboard.writeText(text);
-        setCopiedType(`share-${song.id}`);
-        setTimeout(() => setCopiedType(null), 1800);
+        alert('상태 응답을 받았지만 완료/실패 상태를 확정하지 못했습니다.');
       }
     } catch (error) {
-      console.warn('favorite share cancelled or failed', error);
+      console.error(error);
+      alert('상태 확인 중 오류가 발생했습니다.');
+    } finally {
+      checkingIdsRef.current.delete(trackId);
+      setStatusChecking(null);
     }
   };
 
+  const getStatusBadge = (group: any) => {
+    const badges = [];
+    if (group.isPublic) {
+      badges.push(
+        <span
+          key="public"
+          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 md:px-3.5 text-[11px] font-semibold tracking-tight text-emerald-300 shadow-[0_8px_24px_rgba(16,185,129,0.14)]"
+        >
+          <Globe2 className="h-3.5 w-3.5" />
+          공개
+        </span>
+      );
+    }
+    switch (group.status) {
+      case 'failed':
+      case 'cancelled':
+      case 'canceled':
+        badges.push(<span key="failed" className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">실패</span>);
+        break;
+      case 'processing':
+      case 'submitted':
+      case 'pending':
+        badges.push(
+          <span key="processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+             <Loader2 className="w-3 h-3 animate-spin" />
+             생성 중...
+          </span>
+        );
+        break;
+    }
+    return badges;
+  };
 
-  const shareSelectedFavoriteSongs = async () => {
-    const targets = favorites.filter(song => selectedSongIds.includes(song.id));
-    if (targets.length === 0) return;
+  const formatCreatedAt = (createdAt: any) => {
+    try {
+      if (!createdAt) return '';
+      if (typeof createdAt.toDate === 'function') {
+        return new Date(createdAt.toDate()).toLocaleString();
+      }
+      if (createdAt.seconds) {
+        return new Date(createdAt.seconds * 1000).toLocaleString();
+      }
+      return new Date(createdAt).toLocaleString();
+    } catch (error) {
+      console.error('createdAt format error:', error);
+      return '';
+    }
+  };
 
-    const text = targets.map((song, index) => `--- ${index + 1}. ${getCombinedFavoriteTitle(song)} ---\n${getFavoriteFullShareText(song)}`).join('\n\n');
+  const runDownload = async (audioUrl?: string, title?: string) => {
+    if (!audioUrl) {
+      showToast('아직 다운로드할 음원이 없습니다.');
+      return;
+    }
+    // Use the optimized blob downloader instead of window.open
+    downloadAudioWithTitle(audioUrl, title);
+  };
+
+  const handleDownload = async (url: string, title?: string) => {
+    if (isSharedView) {
+      const shareTrackId = new URL(window.location.href).searchParams.get('track');
+      if (shareTrackId) {
+        const isPublic = await ensureSharedItemIsPublic(shareTrackId, false);
+        if (!isPublic) {
+          showToast('원곡자가 비공개로 전환하여 다운로드할 수 없습니다.');
+          return;
+        }
+      }
+    }
+
+    if (isSharedView && !user) {
+      console.log("Login required for shared download");
+
+      if (isKakaoInAppBrowser) {
+        setShowKakaoWarning(true);
+        return;
+      }
+      
+      const shareUrl = window.location.href;
+      sessionStorage.setItem("pendingSharedDownload", JSON.stringify({
+        audioUrl: url,
+        title,
+        shareUrl
+      }));
+      
+      showToast("다운로드하려면 로그인이 필요합니다.");
+      
+      const googleProvider = new GoogleAuthProvider();
+      try {
+        await signInWithPopup(auth, googleProvider);
+        
+        // 로그인 성공 후 같은 페이지에서 다운로드 실행
+        const pendingStr = sessionStorage.getItem("pendingSharedDownload");
+        if (pendingStr) {
+          const pending = JSON.parse(pendingStr);
+          sessionStorage.removeItem("pendingSharedDownload");
+          await runDownload(pending.audioUrl, pending.title);
+        }
+      } catch (error: any) {
+        console.error("Shared download login failed:", error);
+        if (error?.code === 'auth/popup-blocked') {
+          showToast("팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.");
+        } else {
+          showToast("로그인이 취소되었거나 실패했습니다.");
+        }
+        sessionStorage.removeItem("pendingSharedDownload");
+      }
+      return;
+    }
+
+    await runDownload(url, title);
+  };
+
+  const [sharePopupInfo, setSharePopupInfo] = useState<{ group: any, item: any, idx?: number, mode: 'default' | 'pc-panel' } | null>(null);
+  const [shareToastInfo, setShareToastInfo] = useState<string | null>(null);
+
+  const canManageSharePrivacy = (info: typeof sharePopupInfo) => {
+    if (!info || !user) return false;
+
+    const group = info.group || {};
+
+    // Shared-link pages and shared playlist items are re-share only.
+    // Public/private scope control belongs to the original owner only.
+    if (isSharedView || group.sourceType === 'shared_track') return false;
+
+    if (group.isPlaylistItem) {
+      return group.sourceType === 'suno_track' && (!group.ownerUid || group.ownerUid === user.uid);
+    }
+
+    return !group.ownerUid || group.ownerUid === user.uid;
+  };
+
+  const getShareIdsForTarget = (group: any, item?: any, idx?: number) => {
+    const ids = new Set<string>();
+    const addId = (value: any) => {
+      const id = String(value || '').trim();
+      if (id) ids.add(id);
+    };
+
+    const baseIds = [
+      group?.shareId,
+      item?.shareId,
+      group?.id,
+      group?.trackId,
+      group?.sourceId,
+      item?.sourceId,
+      item?.trackId,
+    ].map((value) => String(value || '').trim()).filter(Boolean);
+
+    baseIds.forEach(addId);
+
+    const rawSubIndex = idx ?? item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? group?.sourceSubTrackIndex ?? group?.subTrackIndex;
+    const subIndex = Number(rawSubIndex);
+    if (Number.isFinite(subIndex)) {
+      baseIds.forEach((baseId) => addId(`${baseId}_${subIndex}`));
+    }
+
+    const items = group && !group.isPlaylistItem ? extractSunoData(group) : [];
+    if (items.length > 0) {
+      baseIds.forEach((baseId) => {
+        items.forEach((_: any, itemIndex: number) => addId(`${baseId}_${itemIndex}`));
+      });
+    }
+
+    return Array.from(ids);
+  };
+
+  const closeShareDocumentsForTarget = async (group: any, item?: any, idx?: number) => {
+    const shareIds = getShareIdsForTarget(group, item, idx);
+    let closedCount = 0;
+
+    await Promise.all(shareIds.map(async (shareId) => {
+      try {
+        const shareRef = doc(db, 'suno_shares', shareId);
+        const shareSnap = await getDoc(shareRef);
+        if (!shareSnap.exists()) return;
+        const shareData = shareSnap.data();
+        if (shareData.ownerUid && user && shareData.ownerUid !== user.uid) return;
+
+        await updateDoc(shareRef, {
+          isPublic: false,
+          shareType: 'private',
+          privateUpdatedAt: serverTimestamp()
+        });
+        closedCount += 1;
+      } catch (error) {
+        console.warn('share document private update skipped:', shareId, error);
+      }
+    }));
+
+    return closedCount;
+  };
+
+  const ensureSharedItemIsPublic = async (sourceId?: string | null, showMessage = true) => {
+    const safeSourceId = String(sourceId || '').trim();
+    if (!safeSourceId) return false;
+
+    try {
+      const shareSnap = await getDoc(doc(db, 'suno_shares', safeSourceId));
+      const isPublic = shareSnap.exists() && shareSnap.data().isPublic === true;
+      setSharedStatusCache(prev => ({ ...prev, [safeSourceId]: { isPublic, checkedAt: Date.now() } }));
+
+      if (!isPublic && showMessage) {
+        showToast('원곡자가 비공개로 전환하여 사용할 수 없습니다.');
+      }
+
+      return isPublic;
+    } catch (error) {
+      console.error('shared track status check failed:', error);
+      if (showMessage) showToast('공유곡 상태를 확인할 수 없습니다.');
+      return false;
+    }
+  };
+
+  const showToast = (msg: string) => {
+    setShareToastInfo(msg);
+    setTimeout(() => setShareToastInfo(null), 3000);
+  };
+
+  const getWorkspaceSelectionKey = (group: any, idx: number, audioUrl?: string) => {
+    const item = extractSunoData(group)[idx] || {};
+    const subId = item?.id || item?.audioId || item?.taskId || idx;
+    return `workspace:${group?.id || group?.trackId || 'unknown'}:${idx}:${subId}:${audioUrl || ''}`;
+  };
+
+  const getPlaylistSelectionKey = (item: any) => {
+    return `${libraryViewMode}:${activePlaylistId || 'none'}:${item?.playlistUniqueKey || item?.id || item?.sourceSubTrackId || item?.sourceId || item?.audioUrl || ''}`;
+  };
+
+  const buildWorkspaceSelection = (group: any, item: any, idx: number): MultiSelectedTrack => {
+    const audioUrl = getAudioUrl(item, group);
+    return {
+      key: getWorkspaceSelectionKey(group, idx, audioUrl),
+      context: 'workspace',
+      group,
+      item,
+      idx,
+      audioUrl,
+      title: getTitle(item, group, idx),
+    };
+  };
+
+  const buildPlaylistSelection = (item: any): MultiSelectedTrack => ({
+    key: getPlaylistSelectionKey(item),
+    context: libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared' ? 'sharedPlaylist' : 'playlist',
+    group: item,
+    item,
+    idx: Number.isFinite(Number(item?.sourceSubTrackIndex)) ? Number(item.sourceSubTrackIndex) : 0,
+    audioUrl: item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '',
+    title: item?.title || 'Untitled',
+  });
+
+  const isTrackSelected = (key: string) => Boolean(selectedTrackMap[key]);
+
+  const toggleSelectedTrack = (selection: MultiSelectedTrack, force?: boolean) => {
+    setSelectedTrackMap((prev) => {
+      const exists = Boolean(prev[selection.key]);
+      const shouldSelect = typeof force === 'boolean' ? force : !exists;
+      if (!shouldSelect) {
+        const next = { ...prev };
+        delete next[selection.key];
+        return next;
+      }
+      return { ...prev, [selection.key]: selection };
+    });
+  };
+
+  const enterMultiSelectWith = (selection: MultiSelectedTrack) => {
+    setMultiSelectMode(true);
+    setBulkMenuState(null);
+    setBulkShareModalOpen(false);
+    setBulkMoveModalOpen(false);
+    setActiveMenuState(null);
+    setActivePlaylistItemMenu(null);
+    setActiveColorMenu(null);
+    toggleSelectedTrack(selection, true);
+  };
+
+  const clearMultiSelect = () => {
+    setMultiSelectMode(false);
+    setSelectedTrackMap({});
+    setBulkMenuState(null);
+    setBulkShareModalOpen(false);
+    setBulkMoveModalOpen(false);
+  };
+
+  const getPlaylistItemVisibilityState = (item: any): 'public' | 'private' => {
+    if (item?.sourceType === 'shared_track') {
+      const sourceId = String(item?.sourceId || '').trim();
+      const cached = sourceId ? sharedStatusCache[sourceId] : null;
+      return cached?.isPublic === false ? 'private' : 'public';
+    }
+
+    const sourceTrack = getPlaylistItemSourceTrack(item);
+    const isPublicValue = ((sourceTrack as any)?.isPublic ?? item?.isPublic);
+    return isPublicValue === false ? 'private' : 'public';
+  };
+
+  const isUnavailableSharedSelection = (selection: MultiSelectedTrack) => {
+    const item = selection.item as any;
+    if (selection.context !== 'sharedPlaylist' && item?.sourceType !== 'shared_track') return false;
+    const sourceId = String(item?.sourceId || '').trim();
+    if (!sourceId) return false;
+    return sharedStatusCache[sourceId]?.isPublic === false;
+  };
+
+  const hasUnavailableSharedSelection = selectedTrackList.some(isUnavailableSharedSelection);
+  const blockedBulkActionClass = "w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left transition-all text-white/25 cursor-not-allowed";
+  const normalBulkActionClass = "w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all";
+
+  const matchesPlaylistVisibilityFilter = (item: any) => {
+    if (playlistVisibilityFilter === 'all') return true;
+    return getPlaylistItemVisibilityState(item) === playlistVisibilityFilter;
+  };
+
+  const getVisiblePlaylistItemsForSelection = () => {
+    const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
+    let items = playlistItems.filter((item) => {
+      if (!matchesPlaylistVisibilityFilter(item)) return false;
+      if (playlistColorFilter === 'all') return true;
+      const itemColor = getPlaylistItemColor(item);
+      if (playlistColorFilter === 'gray') return itemColor === 'gray';
+      return itemColor === playlistColorFilter;
+    });
+
+    if (normalizedPlaylistSearch) {
+      items = items.filter((item) => {
+        const searchable = [
+          item.title,
+          formatSunoDisplayTitle(item.title),
+          getPlaylistItemCreatorName(item),
+          item.ownerNickname,
+          item.creatorNickname,
+          item.ownerEmail,
+          item.creatorEmail,
+          item.ownerUid,
+          item.sourceId,
+          ...(item.genreLabels || [])
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return searchable.includes(normalizedPlaylistSearch);
+      });
+    }
+
+    if (playlistSortMode === 'added') {
+      items = [...items].sort((a, b) => {
+        if (a.order !== b.order) return a.order - b.order;
+        const timeA = a.addedAt ? (typeof a.addedAt.toMillis === 'function' ? a.addedAt.toMillis() : 0) : 0;
+        const timeB = b.addedAt ? (typeof b.addedAt.toMillis === 'function' ? b.addedAt.toMillis() : 0) : 0;
+        return timeA - timeB;
+      });
+    } else if (playlistSortMode === 'genre') {
+      items = [...items].sort((a, b) => {
+        const genreA = (a.genreLabels && a.genreLabels[0]) || '';
+        const genreB = (b.genreLabels && b.genreLabels[0]) || '';
+        return genreA.localeCompare(genreB);
+      });
+    } else if (playlistSortMode === 'custom') {
+      items = [...items].sort((a, b) => a.order - b.order);
+    }
+
+    return items;
+  };
+
+  const getVisibleMultiSelections = () => {
+    if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
+      return getVisiblePlaylistItemsForSelection().map((item) => buildPlaylistSelection(item));
+    }
+
+    const selections: MultiSelectedTrack[] = [];
+    displayedWorkspaceTracks.forEach((group) => {
+      const dataItems = extractSunoData(group);
+      const items = (dataItems.length > 0 ? dataItems : [{}])
+        .map((item: any, idx: number) => ({ item, idx }))
+        .filter(({ item, idx }: { item: any; idx: number }) => isWorkspaceItemVisible(group, item, idx));
+
+      items.forEach(({ item, idx }: { item: any; idx: number }) => {
+        selections.push(buildWorkspaceSelection(group, item, idx));
+      });
+    });
+
+    return selections;
+  };
+
+  const selectAllVisibleTracks = () => {
+    const selections = getVisibleMultiSelections();
+    if (selections.length === 0) {
+      showToast('선택할 곡이 없습니다.');
+      return;
+    }
+
+    const nextMap: Record<string, MultiSelectedTrack> = {};
+    selections.forEach((selection) => {
+      nextMap[selection.key] = selection;
+    });
+
+    setMultiSelectMode(true);
+    setSelectedTrackMap(nextMap);
+    setBulkMenuState(null);
+  };
+
+  const openBulkMenuFromButton = (button: HTMLButtonElement) => {
+    if (!multiSelectMode) return;
+    const position = computeFloatingMenuPosition(button, 300);
+    setBulkMenuState({ ...position, anchorEl: button });
+  };
+
+  useEffect(() => {
+    if (!multiSelectMode) {
+      multiSelectHistoryPushedRef.current = false;
+      return;
+    }
+
+    if (!multiSelectHistoryPushedRef.current) {
+      window.history.pushState({ soridrawMultiSelect: true }, '', window.location.href);
+      multiSelectHistoryPushedRef.current = true;
+    }
+
+    const handlePopState = () => {
+      clearMultiSelect();
+      multiSelectHistoryPushedRef.current = false;
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [multiSelectMode]);
+
+
+  const normalizeCreatorName = (value: any, ownerUid?: string | null) => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return '';
+    if (ownerUid && text === ownerUid) return '';
+    // Firebase UID-like values should not be treated as display names.
+    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+    return text;
+  };
+
+  const resolveCreatorSnapshot = (group: any, item: any, options?: { fallbackToCurrentUser?: boolean }) => {
+    const ownerUid = group?.ownerUid || item?.ownerUid || group?.uid || item?.uid || user?.uid || '';
+    const currentUserName = options?.fallbackToCurrentUser
+      ? (userNameMap[user?.uid || ''] || user?.displayName || user?.email || '')
+      : '';
+
+    const creatorName =
+      normalizeCreatorName(group?.artist, ownerUid) ||
+      normalizeCreatorName(group?.artistName, ownerUid) ||
+      normalizeCreatorName(group?.author, ownerUid) ||
+      normalizeCreatorName(group?.uploaderName, ownerUid) ||
+      normalizeCreatorName(group?.ownerNickname, ownerUid) ||
+      normalizeCreatorName(group?.creatorNickname, ownerUid) ||
+      normalizeCreatorName(group?.creatorDisplayId, ownerUid) ||
+      normalizeCreatorName(group?.ownerName, ownerUid) ||
+      normalizeCreatorName(group?.nickname, ownerUid) ||
+      normalizeCreatorName(group?.displayName, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.ownerNickname, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.creatorNickname, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.creatorDisplayId, ownerUid) ||
+      normalizeCreatorName(group?.shareData?.ownerName, ownerUid) ||
+      normalizeCreatorName(item?.artist, ownerUid) ||
+      normalizeCreatorName(item?.artistName, ownerUid) ||
+      normalizeCreatorName(item?.author, ownerUid) ||
+      normalizeCreatorName(item?.uploaderName, ownerUid) ||
+      normalizeCreatorName(item?.ownerNickname, ownerUid) ||
+      normalizeCreatorName(item?.creatorNickname, ownerUid) ||
+      normalizeCreatorName(item?.creatorDisplayId, ownerUid) ||
+      normalizeCreatorName(item?.ownerName, ownerUid) ||
+      normalizeCreatorName(currentUserName, ownerUid) ||
+      '';
+
+    const ownerEmail =
+      group?.ownerEmail ||
+      group?.creatorEmail ||
+      group?.shareData?.ownerEmail ||
+      group?.shareData?.creatorEmail ||
+      item?.ownerEmail ||
+      item?.creatorEmail ||
+      (options?.fallbackToCurrentUser ? user?.email : null) ||
+      null;
+
+    const creatorEmail =
+      group?.creatorEmail ||
+      group?.ownerEmail ||
+      group?.shareData?.creatorEmail ||
+      group?.shareData?.ownerEmail ||
+      item?.creatorEmail ||
+      item?.ownerEmail ||
+      (options?.fallbackToCurrentUser ? user?.email : null) ||
+      null;
+
+    return {
+      creatorDisplayId: creatorName || null,
+      ownerNickname: creatorName || null,
+      creatorNickname: creatorName || null,
+      ownerEmail,
+      creatorEmail,
+    };
+  };
+
+  const handleShare = (group: any, item: any, idx: number) => {
+    setSharePopupInfo({ group, item, idx, mode: 'default' });
+  };
+
+  const getSharePageUrl = (group?: any, idx?: number) => {
+    if (isSharedView) return window.location.href;
+
+    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+      ? "https://soridraw-music.vercel.app"
+      : window.location.origin;
+
+    const shareId = idx !== undefined && group ? `${group.id}_${idx}` : group?.id || '';
+    return `${appOrigin}/suno-library?track=${shareId}`;
+  };
+
+  const handleShareCurrentPage = async () => {
+    const shareUrl = window.location.href;
+
+    console.log("Shared page share action:", {
+      shareUrl,
+      canUseNativeShare: !!navigator.share,
+    });
+
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `SORIDRAW 선택한 ${targets.length}곡`,
-          text: `SORIDRAW Music Note에서 선택한 ${targets.length}곡입니다.\n\n${text}`,
+          title: "SORIDRAW Music 공유 음악",
+          text: "SORIDRAW에서 공유된 음악입니다.",
+          url: shareUrl,
         });
-      } else {
-        await navigator.clipboard.writeText(`SORIDRAW Music Note 선택곡 ${targets.length}곡\n\n${text}`);
-        setCopiedType('share-selected');
-        setTimeout(() => setCopiedType(null), 1800);
+        return;
       }
-    } catch (error) {
-      console.warn('selected favorites share cancelled or failed', error);
-    } finally {
-      setActiveFavoriteMenuId(null);
+
+      await navigator.clipboard.writeText(shareUrl);
+      showToast("공유 링크가 복사되었습니다.");
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return;
+      console.error("Shared page share failed:", e);
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast("공유 링크가 복사되었습니다.");
+      } catch {
+        showToast("공유에 실패했습니다.");
+      }
     }
   };
 
-  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'favorite' | 'folder' | 'delete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected', song: any) => {
-    setActiveFavoriteMenuId(null);
+  const openCurrentShareInChrome = () => {
+    const currentUrl = window.location.href.replace(/^https?:\/\//, '');
+    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+  };
 
-    if (action === 'details') {
-      setSelectedSong(song);
+  const handleKakaoModalShare = async () => {
+    await handleShareCurrentPage();
+  };
+
+  const handleCopyShareLink = async (group: any) => {
+    if (isSharedView) {
+      await handleShareCurrentPage();
       return;
     }
 
-    if (action === 'select') {
-      enterFavoriteSelectionMode(song);
-      return;
-    }
-
-    if (action === 'selectAll') {
-      selectAllVisibleFavorites();
-      return;
-    }
-
-    if (action === 'clearSelection') {
-      exitSelectionMode();
-      return;
-    }
-
-    if (action === 'lock') {
-      if (!song.isLocked) handleToggleLock(song);
-      return;
-    }
-
-    if (action === 'unlock') {
-      if (song.isLocked) handleToggleLock(song);
-      return;
-    }
-
-    if (action === 'lockSelected') {
-      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: true }));
-      exitSelectionMode();
-      return;
-    }
-
-    if (action === 'unlockSelected') {
-      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: false }));
-      exitSelectionMode();
-      return;
-    }
-
-    if (action === 'shareSelected') {
-      shareSelectedFavoriteSongs();
-      return;
-    }
-
-    if (action === 'favoriteSelected') {
-      onHover({ id: 'favorites-already-saved', label: '즐겨찾기', description: '선택한 곡은 이미 보관함에 저장되어 있습니다.', _ts: Date.now() });
-      setActiveFavoriteMenuId(null);
-      return;
-    }
-
-    if (action === 'unfavoriteSelected') {
-      favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
-      exitSelectionMode();
-      return;
-    }
-
-    if (action === 'folderSelected') {
-      onHover({ id: 'favorite-folder-selected-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
-      setActiveFavoriteMenuId(null);
-      return;
-    }
-
-    if (action === 'deleteSelected') {
-      favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
-      exitSelectionMode();
-      return;
-    }
-
-    if (action === 'apply') {
-      applyKeywordsToNext(song);
-      return;
-    }
-
-    if (action === 'share') {
-      shareFavoriteSong(song);
-      return;
-    }
-
-    if (action === 'favorite') {
-      toggleFavorite(song);
-      return;
-    }
-
-    if (action === 'folder') {
-      onHover({ id: 'favorite-folder-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
-      return;
-    }
-
-    if (action === 'delete') {
-      if (!song.isLocked) toggleFavorite(song);
+    const shareUrl = getSharePageUrl(group);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast("링크가 복사되었습니다");
+    } catch (e) {
+      showToast("링크 복사에 실패했습니다.");
     }
   };
 
-  const renderFavoriteKeywordChips = (song: any) => {
-    const entries = [
-      ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value })),
-      ...getSongMoodValues(song).map((value: string) => ({ type: 'mood', value })),
-      ...getSongThemeValues(song).map((value: string) => ({ type: 'theme', value })),
-      ...(getSongSituationSummary(song) ? [{ type: 'situation', value: getSongSituationSummary(song) }] : []),
-      ...getSongStyleValues(song).map((value: string) => ({ type: 'style', value })),
-      ...getSongInstrumentSoundValues(song).map((value: string) => ({ type: 'sound', value })),
-    ];
+  const handlePublicShare = async () => {
+    if (!sharePopupInfo) return;
+    const { group, item, idx } = sharePopupInfo;
+    try {
+      if (user) {
+        if (!group.isPlaylistItem) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+          await updateDoc(trackRef, {
+            isPublic: true,
+            hidden: false,
+            shareType: 'public',
+            publicSharedAt: serverTimestamp()
+          });
+        }
 
-    if (song.appliedKeywords?.vocalType) {
-      entries.push({ type: 'vocal', value: song.appliedKeywords.vocalType });
+        const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !group?.isPlaylistItem });
+        const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
+        const shareRef = doc(db, 'suno_shares', shareId);
+        await setDoc(shareRef, {
+          trackId: group.id,
+          subTrackIndex: idx ?? null,
+          taskId: group.taskId || '',
+          title: item?.title || item?.name || group.title || 'Untitled',
+          audioUrl: item?.audio_url || item?.url || '',
+          imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
+          duration: item?.duration || group.duration || null,
+          status: group.status || 'completed',
+          prompt: group.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || '',
+          style: group.style || group?.appliedKeywords?.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || item?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+          lyricsText: group.lyricsText || group.lyrics || item?.lyricsText || item?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+          koreanLyrics: group.koreanLyrics || item?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+          englishLyrics: group.englishLyrics || item?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+          requestPayload: group.requestPayload || group.appliedKeywords || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
+          appliedKeywords: group.appliedKeywords || {},
+          createdAt: group.createdAt || serverTimestamp(),
+          ownerUid: user.uid,
+          creatorDisplayId: creatorMeta.creatorDisplayId,
+          ownerNickname: creatorMeta.ownerNickname,
+          creatorNickname: creatorMeta.creatorNickname,
+          ownerEmail: creatorMeta.ownerEmail,
+          creatorEmail: creatorMeta.creatorEmail,
+          isPublic: true
+        });
+
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
+      }
+      
+      const shareUrl = getSharePageUrl(group, idx);
+      const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
+
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title,
+            text: '공유 음악 재생하기🎵',
+            url: shareUrl,
+          });
+          closeModal();
+          return;
+        }
+
+        await navigator.clipboard.writeText(shareUrl);
+        showToast("공유 링크가 복사되었습니다.");
+        closeModal();
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return;
+        console.error('Native share failed:', e);
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          showToast("공유 링크가 복사되었습니다.");
+          closeModal();
+        } catch {
+          showToast("공유에 실패했습니다.");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('공유 처리 중 오류가 발생했습니다.');
     }
+  };
 
-    return entries.map((entry) => {
-      const meta = getKeywordMeta(entry.value);
-      return (
-        <span
-          key={`${entry.type}-${entry.value}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onHover({
-              id: `favorite-${entry.type}-${entry.value}`,
-              label: entry.value,
-              labelKo: meta?.labelKo,
-              description: meta?.descriptionKo || meta?.description || `${entry.value} 키워드입니다.`,
-              _ts: Date.now(),
+  const handlePublicStatus = async () => {
+    if (!sharePopupInfo) return;
+    if (!canManageSharePrivacy(sharePopupInfo)) {
+      showToast('공개 범위 설정은 원제작자만 변경할 수 있습니다.');
+      return;
+    }
+    const { group, item, idx } = sharePopupInfo;
+    try {
+      if (user) {
+        if (!group.isPlaylistItem) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+          await updateDoc(trackRef, {
+            isPublic: true,
+            hidden: false,
+            shareType: 'public',
+            publicSharedAt: serverTimestamp()
+          });
+        }
+
+        const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !group?.isPlaylistItem });
+        const shareId = idx !== undefined ? `${group.id}_${idx}` : group.id;
+        const shareRef = doc(db, 'suno_shares', shareId);
+        await setDoc(shareRef, {
+          trackId: group.id,
+          subTrackIndex: idx ?? null,
+          taskId: group.taskId || '',
+          title: item?.title || item?.name || group.title || 'Untitled',
+          audioUrl: item?.audio_url || item?.url || '',
+          imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
+          duration: item?.duration || group.duration || null,
+          status: group.status || 'completed',
+          prompt: group.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || '',
+          style: group.style || group?.appliedKeywords?.style || '',
+          lyrics: group.lyrics || group.lyricsText || item?.lyrics || item?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+          lyricsText: group.lyricsText || group.lyrics || item?.lyricsText || item?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+          koreanLyrics: group.koreanLyrics || item?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+          englishLyrics: group.englishLyrics || item?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+          requestPayload: group.requestPayload || group.appliedKeywords || null,
+          sunoData: group.sunoData || null,
+          apiResponse: group.apiResponse || null,
+          apiStatusResponse: group.apiStatusResponse || null,
+          appliedKeywords: group.appliedKeywords || {},
+          createdAt: group.createdAt || serverTimestamp(),
+          ownerUid: user.uid,
+          creatorDisplayId: creatorMeta.creatorDisplayId,
+          ownerNickname: creatorMeta.ownerNickname,
+          creatorNickname: creatorMeta.creatorNickname,
+          ownerEmail: creatorMeta.ownerEmail,
+          creatorEmail: creatorMeta.creatorEmail,
+          isPublic: true
+        });
+
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: true } } : null);
+        showToast('공개 상태로 전환되었습니다');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('공개 전환 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handlePrivateShare = async () => {
+    if (!sharePopupInfo) return;
+    if (!canManageSharePrivacy(sharePopupInfo)) {
+      showToast('공개 범위 설정은 원제작자만 변경할 수 있습니다.');
+      return;
+    }
+    const { group, item, idx } = sharePopupInfo;
+    try {
+      if (user) {
+        if (!group.isPlaylistItem) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+          await updateDoc(trackRef, {
+            isPublic: false,
+            shareType: 'private',
+            privateUpdatedAt: serverTimestamp()
+          });
+        }
+
+        await closeShareDocumentsForTarget(group, item, idx);
+
+        setSharePopupInfo(prev => prev ? { ...prev, group: { ...prev.group, isPublic: false } } : null);
+        showToast('비공개 상태로 전환되었습니다');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('비공개 전환 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handlePlatformShare = async (platform: string) => {
+    if (!sharePopupInfo) return;
+    const { group, item, idx } = sharePopupInfo;
+    const shareUrl = getSharePageUrl(group, idx);
+    const title = item?.title || item?.name || group.title || 'SORIDRAW Music';
+
+    try {
+      if (platform === 'copy') {
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title,
+              text: '공유 음악 재생하기🎵',
+              url: shareUrl,
             });
-          }}
-          className="text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer border border-white/8 bg-white/[0.075] text-white/58 transition-colors hover:text-white/78"
-        >
-          #{meta?.labelKo || entry.value}
-        </span>
-      );
+          } catch (e: any) {
+            if (e?.name === 'AbortError') return;
+            await navigator.clipboard.writeText(shareUrl);
+            showToast("공유 링크가 복사되었습니다.");
+          }
+        } else {
+          await navigator.clipboard.writeText(shareUrl);
+          showToast("공유 링크가 복사되었습니다.");
+        }
+      } else if (platform === 'email') {
+        window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`;
+      } else if (platform === 'facebook') {
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
+      } else if (platform === 'twitter') {
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
+      } else if (platform === 'telegram') {
+        window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(title)}`, '_blank');
+      } else if (platform === 'kakao' || platform === 'kakao_me') {
+        const kakao = (window as any).Kakao;
+        if (kakao && kakao.isInitialized()) {
+          try {
+            kakao.Share.sendDefault({
+              objectType: 'feed',
+              content: {
+                title: title,
+                description: '공유 음악 재생하기🎵',
+                imageUrl: getImageUrl(item, group) || 'https://soridraw-music.vercel.app/og-image.png',
+                link: {
+                  mobileWebUrl: shareUrl,
+                  webUrl: shareUrl,
+                },
+              },
+            });
+          } catch (e) {
+            console.error("Kakao share failed", e);
+            showToast("카카오톡 공유에 실패했습니다.");
+          }
+        } else {
+          showToast("카카오톡 SDK가 초기화되지 않았습니다.");
+        }
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast("링크가 복사되었습니다. 원하는 앱에 붙여넣어 공유해주세요.");
+      }
+    } catch(e) {
+      console.error("Platform share failed:", e);
+      showToast("공유 실패");
+    }
+  };
+
+
+  const resolveSunoAppliedKeywords = (...sources: any[]) => {
+    for (const source of sources) {
+      if (!source) continue;
+
+      const keywords =
+        source?.appliedKeywords ||
+        source?.requestPayload?.appliedKeywords ||
+        source?.shareData?.appliedKeywords ||
+        source?.shareData?.requestPayload?.appliedKeywords ||
+        source?.track?.appliedKeywords ||
+        source?.track?.requestPayload?.appliedKeywords ||
+        source?.group?.appliedKeywords ||
+        source?.group?.requestPayload?.appliedKeywords ||
+        source?.tracks?.[0]?.appliedKeywords ||
+        source?.tracks?.[0]?.requestPayload?.appliedKeywords ||
+        null;
+
+      if (
+        keywords &&
+        typeof keywords === "object" &&
+        !Array.isArray(keywords) &&
+        Object.keys(keywords).length > 0
+      ) {
+        return keywords;
+      }
+    }
+
+    return null;
+  };
+
+  const handleApplyNext = (group: any, item: any) => {
+    if (!group && !item) return;
+
+    const appliedKeywords = resolveSunoAppliedKeywords(
+      item,
+      group,
+      group?.item,
+      group?.track,
+      group?.shareData,
+      group?.tracks?.[0]
+    );
+
+    console.log("Shared/Library apply source:", {
+      group,
+      item,
+      resolvedAppliedKeywords: appliedKeywords,
+    });
+
+    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
+      showToast("이 곡은 키워드 정보가 없어 적용할 수 없습니다.");
+      return;
+    }
+
+    const serialized = JSON.stringify(appliedKeywords);
+    sessionStorage.setItem("pendingAppliedKeywords", serialized);
+    localStorage.setItem("pendingAppliedKeywordsBackup", serialized);
+
+    console.log("Saved pendingAppliedKeywords:", {
+      appliedKeywords,
+      sessionValue: sessionStorage.getItem("pendingAppliedKeywords"),
+      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup"),
+    });
+
+    showToast("다음 곡에 곡 설정이 복원되었습니다.");
+
+    setTimeout(() => {
+      navigate(`/studio?applyPending=1&t=${Date.now()}`);
+    }, 700);
+  };
+
+  const handleSavePlaylist = async (group: any, item: any, url: string, idx: number) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
+      return;
+    }
+
+    const isShared = Boolean(isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track');
+
+    try {
+      await ensureDefaultPlaylists(user.uid);
+    } catch (e) {
+      console.error("Failed to ensure default playlists", e);
+    }
+
+    let targetPlaylist: Playlist | undefined;
+    try {
+      const dbLists = await getPlaylistsByType(user.uid, isShared ? "shared" : "normal");
+      targetPlaylist = dbLists[0];
+    } catch (e) {
+      console.error("Failed to fetch target playlists", e);
+    }
+
+    if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
+      showToast(`저장할 ${isShared ? '공유 받은 곡 ' : ''}플레이리스트가 없습니다.`);
+      return;
+    }
+
+    const finalAudioUrl =
+      url ||
+      item?.audioUrl ||
+      item?.streamAudioUrl ||
+      item?.sourceAudioUrl ||
+      item?.sourceStreamAudioUrl ||
+      group?.audioUrl ||
+      group?.streamAudioUrl ||
+      group?.sourceAudioUrl ||
+      group?.sourceStreamAudioUrl ||
+      "";
+
+    if (!finalAudioUrl) {
+      showToast("저장할 오디오 URL이 없습니다.");
+      return;
+    }
+
+    const safeShareId =
+      group?.shareId ||
+      group?.id ||
+      group?.trackId ||
+      group?.sourceId ||
+      group?.shareData?.id ||
+      item?.shareId ||
+      item?.id ||
+      item?.audioId ||
+      item?.taskId ||
+      `shared_${Date.now()}_${idx}`;
+
+    const sourceId = isShared
+      ? String(safeShareId)
+      : String(group?.id || group?.trackId || item?.sourceId || item?.id || item?.audioId || item?.taskId || `${group?.id || 'unknown'}_${idx}`);
+
+    if (isShared) {
+      const isPublic = await ensureSharedItemIsPublic(sourceId, false);
+      if (!isPublic) {
+        showToast('원곡자가 비공개로 전환하여 플레이리스트에 저장할 수 없습니다.');
+        return;
+      }
+    }
+
+    const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !isShared });
+
+    const itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'> = {
+      sourceType: isShared ? 'shared_track' : 'suno_track',
+      sourceId: sourceId,
+      sourceSubTrackId: !isShared ? String(item?.id || item?.audioId || item?.taskId || idx || '') : null,
+      ownerUid: (isShared ? (group?.ownerUid || group?.uid || '') : (user.uid || group?.ownerUid)) || '',
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      title: getTitle(item, group, idx) || "Shared Track",
+      audioUrl: finalAudioUrl,
+      imageUrl: item?.image_url || item?.imageUrl || group?.imageUrl || getImageUrl(item, group) || null,
+      duration: item?.duration || group?.duration || getDuration(item, group) || null,
+      genreLabels: [],
+      appliedKeywords: resolveSunoAppliedKeywords(item, group, group?.item, group?.track, group?.shareData) || group?.appliedKeywords || null,
+      prompt: group?.prompt || item?.prompt || group?.shareData?.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || null,
+      style: group?.style || item?.style || group?.shareData?.style || group?.appliedKeywords?.style || null,
+      lyrics: group?.lyrics || group?.lyricsText || item?.lyrics || item?.lyricsText || group?.shareData?.lyrics || group?.shareData?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+      lyricsText: group?.lyricsText || group?.lyrics || item?.lyricsText || item?.lyrics || group?.shareData?.lyricsText || group?.shareData?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+      koreanLyrics: group?.koreanLyrics || item?.koreanLyrics || group?.shareData?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+      englishLyrics: group?.englishLyrics || item?.englishLyrics || group?.shareData?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+      requestPayload: group?.requestPayload || group?.shareData?.requestPayload || group?.appliedKeywords || null,
+      colorTag: null,
+      likeCount: 0,
+      order: 0,
+      isUnavailable: false,
+      unavailableReason: null
+    };
+
+    // Remove undefined values to prevent Firestore errors
+    (Object.keys(itemData) as Array<keyof typeof itemData>).forEach(key => {
+      if (itemData[key] === undefined) {
+        delete itemData[key];
+      }
+    });
+
+    if (itemData.appliedKeywords) {
+      const labels: string[] = [];
+      if (itemData.appliedKeywords.genre) labels.push(...itemData.appliedKeywords.genre);
+      if (itemData.appliedKeywords.subGenre) labels.push(...itemData.appliedKeywords.subGenre);
+      if (itemData.appliedKeywords.style) labels.push(...itemData.appliedKeywords.style);
+      if (itemData.appliedKeywords.situationSummary) labels.push(itemData.appliedKeywords.situationSummary);
+      itemData.genreLabels = labels;
+    }
+
+    try {
+      await addPlaylistItem(user.uid, targetPlaylist.id!, itemData);
+      showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
+    } catch (error: any) {
+      console.error("shared playlist save failed:", {
+        error,
+        targetPlaylist,
+        finalAudioUrl,
+        sourceId,
+        group,
+        item,
+        isSharedView
+      });
+      if (error.message === 'DUPLICATE') {
+        showToast("이미 이 플레이리스트에 저장된 곡입니다.");
+      } else {
+        showToast("플레이리스트 저장에 실패했습니다.");
+      }
+    }
+  };
+
+
+  const getBulkShareTarget = (selection: MultiSelectedTrack) => {
+    if (selection.context === 'workspace') {
+      return { group: selection.group, item: selection.item, idx: selection.idx };
+    }
+
+    const item = selection.item || {};
+    const subIndexRaw = item.sourceSubTrackIndex ?? item.subTrackIndex ?? item.trackIndex;
+    const subIndex = Number.isFinite(Number(subIndexRaw)) ? Number(subIndexRaw) : undefined;
+    const stableId = String(
+      item.shareId ||
+      item.playlistUniqueKey ||
+      (subIndex !== undefined ? `${item.sourceId || item.trackId || item.id}_${subIndex}` : '') ||
+      (item.sourceSubTrackId ? `${item.sourceId || item.trackId || item.id}_${item.sourceSubTrackId}` : '') ||
+      item.sourceId ||
+      item.trackId ||
+      item.id ||
+      selection.key
+    );
+    const fakeItem = {
+      ...item,
+      id: stableId,
+      trackId: item.sourceId || item.trackId || stableId,
+      duration: item.duration,
+      audio_url: item.audioUrl || item.streamAudioUrl || item.audio_url || selection.audioUrl,
+      url: item.audioUrl || item.streamAudioUrl || item.audio_url || selection.audioUrl,
+      image_url: item.imageUrl || item.image_url,
+      ownerNickname: item.ownerNickname,
+      creatorNickname: item.creatorNickname,
+      creatorDisplayId: getPlaylistItemCreatorName(item),
+      ownerEmail: item.ownerEmail,
+      creatorEmail: item.creatorEmail,
+      isPlaylistItem: true,
+      sourceType: item.sourceType,
+      title: formatSunoDisplayTitle(item.title || selection.title),
+    };
+    return { group: fakeItem, item: fakeItem, idx: undefined };
+  };
+
+  const createShareRecordForSelection = async (selection: MultiSelectedTrack) => {
+    if (!user) throw new Error('NO_USER');
+    const { group, item, idx } = getBulkShareTarget(selection);
+    if (!group || !item) throw new Error('NO_TARGET');
+
+    if (!group.isPlaylistItem && group?.id) {
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+      await updateDoc(trackRef, {
+        isPublic: true,
+        hidden: false,
+        shareType: 'public',
+        publicSharedAt: serverTimestamp()
+      });
+    }
+
+    const creatorMeta = resolveCreatorSnapshot(group, item, { fallbackToCurrentUser: !group?.isPlaylistItem });
+    const shareId = idx !== undefined ? `${group.id}_${idx}` : String(group.id || selection.key);
+    const shareRef = doc(db, 'suno_shares', shareId);
+    await setDoc(shareRef, {
+      trackId: group.id,
+      subTrackIndex: idx ?? null,
+      taskId: group.taskId || '',
+      title: item?.title || item?.name || group.title || selection.title || 'Untitled',
+      audioUrl: item?.audio_url || item?.url || selection.audioUrl || '',
+      imageUrl: item?.image_url || item?.imageUrl || group.imageUrl || '',
+      duration: item?.duration || group.duration || null,
+      status: group.status || 'completed',
+      prompt: group.prompt || group?.requestPayload?.prompt || group?.appliedKeywords?.prompt || '',
+      style: group.style || group?.appliedKeywords?.style || '',
+      lyrics: group.lyrics || group.lyricsText || item?.lyrics || item?.lyricsText || group?.requestPayload?.lyrics || group?.requestPayload?.lyricsText || null,
+      lyricsText: group.lyricsText || group.lyrics || item?.lyricsText || item?.lyrics || group?.requestPayload?.lyricsText || group?.requestPayload?.lyrics || null,
+      koreanLyrics: group.koreanLyrics || item?.koreanLyrics || group?.requestPayload?.koreanLyrics || null,
+      englishLyrics: group.englishLyrics || item?.englishLyrics || group?.requestPayload?.englishLyrics || null,
+      requestPayload: group.requestPayload || group.appliedKeywords || item?.appliedKeywords || null,
+      sunoData: group.sunoData || null,
+      apiResponse: group.apiResponse || null,
+      apiStatusResponse: group.apiStatusResponse || null,
+      appliedKeywords: group.appliedKeywords || item?.appliedKeywords || {},
+      createdAt: group.createdAt || serverTimestamp(),
+      ownerUid: user.uid,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      isPublic: true
+    });
+
+    return getSharePageUrl({ ...group, id: shareId }, undefined);
+  };
+
+  const handleBulkChangeColor = async (color: string | null) => {
+    if (selectedTrackCount === 0) return;
+    try {
+      for (const selection of selectedTrackList) {
+        if (selection.context === 'workspace') {
+          await handleChangeWorkspaceColor(selection.group, selection.idx, color);
+        } else {
+          await handleChangeColor(selection.item as PlaylistItem, color);
+        }
+      }
+      setActiveColorMenu(null);
+      clearMultiSelect();
+      showToast(`${selectedTrackCount}곡 색상이 변경되었습니다.`);
+    } catch (e) {
+      console.error(e);
+      showToast('선택한 곡 색상 변경에 실패했습니다.');
+    }
+  };
+
+  const handleBulkFavorite = async () => {
+    const targets = selectedTrackList.filter((selection) => {
+      if (selection.context === 'sharedPlaylist') return false;
+      if ((selection.item as any)?.sourceType === 'shared_track') return false;
+      return true;
+    });
+
+    if (targets.length === 0) {
+      showToast('공유 플레이리스트 곡은 즐겨찾기를 사용할 수 없습니다.');
+      return;
+    }
+
+    for (const selection of targets) {
+      if (selection.context === 'workspace') {
+        await handleToggleWorkspaceFavorite(selection.group, true);
+      } else {
+        await handleTogglePlaylistItemFavorite(selection.item as PlaylistItem, true);
+      }
+    }
+    setBulkMenuState(null);
+    showToast(`${targets.length}곡을 즐겨찾기에 저장했습니다.`);
+  };
+
+  const handleBulkDownload = async () => {
+    if (selectedTrackList.some(isUnavailableSharedSelection)) {
+      showToast('비공개로 전환된 공유곡은 다운로드할 수 없습니다.');
+      return;
+    }
+    const targets = selectedTrackList.filter((selection) => selection.audioUrl);
+    if (targets.length === 0) {
+      showToast('다운로드할 오디오 URL이 없습니다.');
+      return;
+    }
+    for (const selection of targets) {
+      await runDownload(selection.audioUrl, selection.title);
+    }
+    setBulkMenuState(null);
+    showToast(`${targets.length}곡 다운로드를 시작했습니다.`);
+  };
+
+  const handleBulkPlaylistSave = async () => {
+    if (selectedTrackCount === 0) return;
+    if (selectedTrackList.some(isUnavailableSharedSelection)) {
+      showToast('비공개로 전환된 공유곡은 플레이리스트에 저장할 수 없습니다.');
+      return;
+    }
+    for (const selection of selectedTrackList) {
+      if (selection.context === 'workspace') {
+        await handleSavePlaylist(selection.group, selection.item, selection.audioUrl, selection.idx);
+      } else {
+        const { group, item, idx } = getBulkShareTarget(selection);
+        await handleSavePlaylist(group, item, selection.audioUrl, idx ?? 0);
+      }
+    }
+    setBulkMenuState(null);
+  };
+
+  const buildBulkShareItem = (selection: MultiSelectedTrack) => {
+    const { group, item, idx } = getBulkShareTarget(selection);
+    const source = item || {};
+    const parent = group || {};
+    return {
+      ...source,
+      id: source.id || source.sourceSubTrackId || source.trackId || source.sourceId || `${selection.key}`,
+      title: source.title || source.name || parent.title || selection.title || 'Untitled',
+      audioUrl: source.audioUrl || source.streamAudioUrl || source.audio_url || source.url || selection.audioUrl || '',
+      streamAudioUrl: source.streamAudioUrl || source.audioUrl || source.audio_url || source.url || selection.audioUrl || '',
+      audio_url: source.audio_url || source.audioUrl || source.streamAudioUrl || source.url || selection.audioUrl || '',
+      imageUrl: source.imageUrl || source.image_url || parent.imageUrl || parent.image_url || '',
+      image_url: source.image_url || source.imageUrl || parent.imageUrl || parent.image_url || '',
+      duration: source.duration || parent.duration || null,
+      lyrics: source.lyrics || source.lyricsText || parent.lyrics || parent.lyricsText || null,
+      lyricsText: source.lyricsText || source.lyrics || parent.lyricsText || parent.lyrics || null,
+      koreanLyrics: source.koreanLyrics || parent.koreanLyrics || null,
+      englishLyrics: source.englishLyrics || parent.englishLyrics || null,
+      prompt: source.prompt || parent.prompt || parent?.requestPayload?.prompt || parent?.appliedKeywords?.prompt || '',
+      style: source.style || parent.style || parent?.appliedKeywords?.style || '',
+      sourceSubTrackIndex: Number.isFinite(Number(source.sourceSubTrackIndex ?? idx)) ? Number(source.sourceSubTrackIndex ?? idx) : idx ?? 0,
+      sourceSubTrackId: source.sourceSubTrackId || `${parent.id || source.sourceId || source.trackId || 'track'}_${idx ?? 0}`,
+      creatorDisplayId: source.creatorDisplayId || parent.creatorDisplayId || getPlaylistItemCreatorName(source) || null,
+      ownerNickname: source.ownerNickname || parent.ownerNickname || null,
+      creatorNickname: source.creatorNickname || parent.creatorNickname || null,
+      ownerEmail: source.ownerEmail || parent.ownerEmail || null,
+      creatorEmail: source.creatorEmail || parent.creatorEmail || null,
+      appliedKeywords: source.appliedKeywords || parent.appliedKeywords || null,
+      requestPayload: source.requestPayload || parent.requestPayload || null,
+    };
+  };
+
+  const createBulkSharePage = async (options?: { makePublic?: boolean }) => {
+    if (!user) throw new Error('NO_USER');
+    if (selectedTrackCount === 0) throw new Error('NO_SELECTION');
+    if (selectedTrackList.some(isUnavailableSharedSelection)) throw new Error('PRIVATE_SHARED_TRACK_SELECTED');
+
+    const first = selectedTrackList[0];
+    const firstTarget = getBulkShareTarget(first);
+    const firstGroup = firstTarget.group || {};
+    const firstItem = firstTarget.item || {};
+    const creatorMeta = resolveCreatorSnapshot(firstGroup, firstItem, { fallbackToCurrentUser: true });
+    const shareId = `bulk_${user.uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const shareRef = doc(db, 'suno_shares', shareId);
+    const bulkSunoData = selectedTrackList.map(buildBulkShareItem).filter((entry) => entry.audioUrl || entry.streamAudioUrl || entry.audio_url);
+
+    if (options?.makePublic) {
+      for (const selection of selectedTrackList) {
+        if (selection.context !== 'workspace') continue;
+        const target = getBulkShareTarget(selection);
+        if (!target.group?.id) continue;
+        try {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', target.group.id);
+          await updateDoc(trackRef, {
+            isPublic: true,
+            hidden: false,
+            shareType: 'public',
+            publicSharedAt: serverTimestamp()
+          });
+        } catch (e) {
+          console.warn('bulk source public update skipped:', e);
+        }
+      }
+    }
+
+    await setDoc(shareRef, {
+      trackId: shareId,
+      shareId,
+      shareType: 'bulk',
+      isBulkShare: true,
+      bulkTrackCount: bulkSunoData.length,
+      title: `선택한 ${bulkSunoData.length}곡`,
+      status: 'completed',
+      sunoData: bulkSunoData,
+      prompt: firstGroup.prompt || firstItem.prompt || firstGroup?.requestPayload?.prompt || '',
+      style: firstGroup.style || firstItem.style || '',
+      lyrics: firstGroup.lyrics || firstItem.lyrics || null,
+      lyricsText: firstGroup.lyricsText || firstItem.lyricsText || null,
+      requestPayload: firstGroup.requestPayload || firstItem.requestPayload || null,
+      appliedKeywords: firstGroup.appliedKeywords || firstItem.appliedKeywords || {},
+      createdAt: serverTimestamp(),
+      ownerUid: user.uid,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      isPublic: true
+    });
+
+    return getSharePageUrl({ id: shareId }, undefined);
+  };
+
+  const createBulkShareLinks = async () => {
+    return [await createBulkSharePage()];
+  };
+
+  const canBulkManageSharePrivacy = () => !isSharedView && selectedTrackList.some((selection) => (
+    selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track'
+  ));
+
+  const handleBulkAllPublic = async () => {
+    if (selectedTrackCount === 0) return;
+    if (!canBulkManageSharePrivacy()) {
+      showToast('공유 플레이리스트에서는 공개 전환을 사용할 수 없습니다.');
+      return;
+    }
+
+    try {
+      await createBulkSharePage({ makePublic: true });
+      setBulkShareModalOpen(false);
+      setBulkMenuState(null);
+      showToast(`선택한 ${selectedTrackCount}곡을 All 공개 상태로 설정했습니다.`);
+    } catch (e) {
+      console.error(e);
+      showToast('선택한 곡 공개 처리에 실패했습니다.');
+    }
+  };
+
+  const handleBulkAllLinkShare = async () => {
+    if (selectedTrackCount === 0) return;
+
+    try {
+      const shareUrl = await createBulkSharePage();
+      const title = `SORIDRAW 선택한 ${selectedTrackCount}곡`;
+      const text = `SORIDRAW에서 선택한 ${selectedTrackCount}곡을 한 페이지로 공유합니다.`;
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title,
+            text,
+            url: shareUrl,
+          });
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+          await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+          showToast('공유 링크가 복사되었습니다.');
+        }
+      } else {
+        await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+        showToast('공유 링크가 복사되었습니다.');
+      }
+
+      setBulkShareModalOpen(false);
+      setBulkMenuState(null);
+    } catch (e) {
+      console.error(e);
+      showToast('선택한 곡 링크 공유에 실패했습니다.');
+    }
+  };
+
+  const handleBulkPrivateShare = async () => {
+    if (!user || selectedTrackCount === 0) return;
+    if (!canBulkManageSharePrivacy()) {
+      showToast('공유 플레이리스트에서는 비공개 전환을 사용할 수 없습니다.');
+      return;
+    }
+
+    let changed = 0;
+    for (const selection of selectedTrackList) {
+      try {
+        if (selection.context === 'workspace' && selection.group?.id) {
+          await updateDoc(doc(db, 'suno_tracks', user.uid, 'tracks', selection.group.id), {
+            isPublic: false,
+            shareType: 'private',
+            privateUpdatedAt: serverTimestamp()
+          });
+          await closeShareDocumentsForTarget(selection.group, selection.item, selection.idx);
+          changed += 1;
+        } else if ((selection.item as any)?.sourceType !== 'shared_track') {
+          const sourceId = String((selection.item as any)?.sourceId || (selection.item as any)?.trackId || '').trim();
+          const ownerUid = String((selection.item as any)?.ownerUid || user.uid).trim();
+          if (sourceId) {
+            await updateDoc(doc(db, 'suno_tracks', ownerUid, 'tracks', sourceId), {
+              isPublic: false,
+              shareType: 'private',
+              privateUpdatedAt: serverTimestamp()
+            });
+            await closeShareDocumentsForTarget(selection.group || selection.item, selection.item, selection.idx);
+            changed += 1;
+          }
+        }
+      } catch (e) {
+        console.error('bulk private share failed:', e);
+      }
+    }
+    setBulkShareModalOpen(false);
+    setBulkMenuState(null);
+    showToast(changed > 0 ? `${changed}곡을 비공개로 전환했습니다.` : '비공개로 전환할 수 있는 원곡이 없습니다.');
+  };
+
+  const handleBulkMoveToPlaylist = async (targetPlaylistId: string) => {
+    if (!user || !activePlaylistId || !targetPlaylistId) return;
+    if (selectedTrackList.some(isUnavailableSharedSelection)) {
+      showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.');
+      return;
+    }
+    const targets = selectedTrackList.filter((selection) => selection.context !== 'workspace' && (selection.item as any)?.id);
+    if (targets.length === 0) {
+      showToast('이동할 플레이리스트 곡이 없습니다.');
+      return;
+    }
+
+    let moved = 0;
+    for (const selection of targets) {
+      try {
+        await movePlaylistItem(user.uid, activePlaylistId, targetPlaylistId, selection.item as PlaylistItem);
+        moved += 1;
+      } catch (e: any) {
+        if (e?.message !== 'DUPLICATE') console.error('bulk move failed:', e);
+      }
+    }
+
+    setBulkMoveModalOpen(false);
+    setBulkMenuState(null);
+    clearMultiSelect();
+    showToast(moved > 0 ? `${moved}곡을 폴더 이동했습니다.` : '이미 대상 폴더에 있는 곡입니다.');
+  };
+
+  const handleBulkDeleteSelected = () => {
+    if (!user || selectedTrackCount === 0) return;
+
+    const hasWorkspace = selectedTrackList.some((selection) => selection.context === 'workspace');
+    const title = hasWorkspace ? '선택한 곡을 휴지통으로 이동' : '선택한 곡을 리스트에서 삭제';
+    const message = hasWorkspace
+      ? '선택한 워크스페이스 곡을 휴지통으로 이동할까요?'
+      : '선택한 곡을 현재 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.';
+
+    setBulkMenuState(null);
+    setPlaylistConfirmAction({
+      title,
+      message,
+      confirmLabel: '삭제',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const workspaceGroups = new Map<string, { group: any; indices: Set<number> }>();
+          for (const selection of selectedTrackList) {
+            if (selection.context === 'workspace') {
+              const groupId = selection.group?.id;
+              if (!groupId) continue;
+              if (!workspaceGroups.has(groupId)) workspaceGroups.set(groupId, { group: selection.group, indices: new Set<number>() });
+              workspaceGroups.get(groupId)!.indices.add(selection.idx);
+            } else if ((selection.item as any)?.id && activePlaylistId) {
+              await deletePlaylistItem(user.uid, activePlaylistId, (selection.item as any).id);
+            }
+          }
+
+          for (const [groupId, payload] of workspaceGroups.entries()) {
+            const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', groupId);
+            const items = extractSunoData(payload.group);
+            if (items.length > 0) {
+              const nextSunoData = items.map((entry: any, entryIndex: number) => payload.indices.has(entryIndex) ? { ...entry, hidden: true } : entry);
+              const allHidden = nextSunoData.length > 0 && nextSunoData.every((entry: any) => entry.hidden === true);
+              const updatePayload: any = { sunoData: nextSunoData };
+              if (allHidden) {
+                updatePayload.hidden = true;
+                updatePayload.isPublic = false;
+                updatePayload.deletedAt = serverTimestamp();
+              }
+              await updateDoc(trackRef, updatePayload);
+            } else {
+              await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt: serverTimestamp() });
+            }
+          }
+
+          clearMultiSelect();
+          showToast('선택한 곡을 삭제했습니다.');
+        } catch (e) {
+          console.error('bulk delete failed:', e);
+          showToast('선택한 곡 삭제에 실패했습니다.');
+        }
+      }
     });
   };
 
-  const filteredFavorites = favorites.filter(song => {
-    const matchesSearch = (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (song.englishTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongStyleValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()));
+  const handleDeleteClick = (groupId: string, itemIndex: number, group: any, action: 'hide' | 'restore' | 'permanentDelete') => {
+    setDeleteTarget({ groupId, itemIndex, group, action });
+    setDeleteError(null);
+  };
 
-    const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
-    return matchesSearch && matchesColor;
-  }).sort((a, b) => {
-    const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
+  const confirmDelete = async () => {
+    if (!deleteTarget || !user) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const { doc, updateDoc, serverTimestamp, deleteDoc } = await import('firebase/firestore');
+      const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget.groupId);
 
-    switch (sortBy) {
-      case 'latest':
-        return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
-      case 'oldest':
-        return getTimestampMs(a.createdAtMs || a.createdAt) - getTimestampMs(b.createdAtMs || b.createdAt);
-      case 'genre-1':
-        return (getDisplaySubGenre(a) || '').localeCompare(getDisplaySubGenre(b) || '');
-      case 'genre-2': {
-        const aG = a.appliedKeywords.genre[1] || a.appliedKeywords.genre[0] || '';
-        const bG = b.appliedKeywords.genre[1] || b.appliedKeywords.genre[0] || '';
-        return aG.localeCompare(bG);
+      const items = extractSunoData(deleteTarget.group);
+      let newSunoData = [...items];
+
+      if (items.length > 0 && !(!deleteTarget.group.sunoData?.length && newSunoData.length === 1 && !newSunoData[0].audioUrl && !newSunoData[0].streamAudioUrl)) {
+        // Normal case: treat extracted items as the root sunoData array.
+        if (deleteTarget.action === 'hide') {
+            newSunoData[deleteTarget.itemIndex] = { ...newSunoData[deleteTarget.itemIndex], hidden: true };
+        } else if (deleteTarget.action === 'restore') {
+            newSunoData[deleteTarget.itemIndex] = { ...newSunoData[deleteTarget.itemIndex], hidden: false };
+        } else if (deleteTarget.action === 'permanentDelete') {
+            newSunoData.splice(deleteTarget.itemIndex, 1);
+        }
+
+        if (deleteTarget.action === 'permanentDelete' && newSunoData.length === 0) {
+            await deleteDoc(trackRef);
+        } else {
+            const allHidden = newSunoData.length > 0 && newSunoData.every(i => i.hidden === true);
+            const updatePayload: any = { sunoData: newSunoData };
+            if (allHidden) {
+              updatePayload.hidden = true;
+              updatePayload.isPublic = false;
+              updatePayload.deletedAt = serverTimestamp();
+            } else if (deleteTarget.action === 'restore') {
+              updatePayload.hidden = false;
+            }
+            await updateDoc(trackRef, updatePayload);
+        }
+      } else {
+        // Fallback case: just update document hidden field.
+        if (deleteTarget.action === 'hide') {
+            await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt: serverTimestamp() });
+        } else if (deleteTarget.action === 'restore') {
+            await updateDoc(trackRef, { hidden: false });
+        } else if (deleteTarget.action === 'permanentDelete') {
+            await deleteDoc(trackRef);
+        }
       }
-      case 'title-en': {
-        const aT = (a.englishTitle || a.title || '').toLowerCase();
-        const bT = (b.englishTitle || b.title || '').toLowerCase();
-        return aT.localeCompare(bT);
-      }
-      case 'title-ko': {
-        const aT = a.koreanTitle || a.title || '';
-        const bT = b.koreanTitle || b.title || '';
-        const aIsKo = isKorean(aT);
-        const bIsKo = isKorean(bT);
-        if (aIsKo && !bIsKo) return -1;
-        if (!aIsKo && bIsKo) return 1;
-        return aT.localeCompare(bT);
-      }
-      case 'locked-top':
-        if (a.isLocked !== b.isLocked) return a.isLocked ? -1 : 1;
-        return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
-      case 'locked-bottom':
-        if (a.isLocked !== b.isLocked) return a.isLocked ? 1 : -1;
-        return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
-      default:
-        return 0;
+
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error(e);
+      setDeleteError('작업에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsDeleting(false);
     }
-  });
+  };
+
+  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!bulkShareModalOpen || !!bulkMoveModalOpen;
+
+  const closeModal = () => {
+    modalHistoryPushedRef.current = false;
+    setSharePopupInfo(null);
+    setShowDetails(null);
+    setDeleteTarget(null);
+    setRenameModalArgs(null);
+    setMoveModalArgs(null);
+    setBulkShareModalOpen(false);
+    setBulkMoveModalOpen(false);
+  };
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'contain';
+
+    if (!modalHistoryPushedRef.current) {
+      window.history.pushState({ soridrawModal: true }, '', window.location.href);
+      modalHistoryPushedRef.current = true;
+    }
+
+    const handlePopState = () => {
+      closeModal();
+    };
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleEsc);
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.overscrollBehavior = '';
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [isModalOpen]);
+
+  const normalizeDetailText = (value: any): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => normalizeDetailText(v))
+        .filter(Boolean)
+        .join(', ');
+    }
+    return '';
+  };
+
+  const firstMeaningfulText = (...values: any[]): string => {
+    for (const value of values) {
+      const text = normalizeDetailText(value);
+      if (text) return text;
+    }
+    return '';
+  };
+
+  const extractActualLyricsForDetails = (item: any, applied: any = {}, requestPayload: any = {}): string => {
+    const directLyrics = firstMeaningfulText(
+      item?.lyrics,
+      item?.lyricsText,
+      item?.koreanLyrics,
+      item?.englishLyrics,
+      item?.lyrics?.korean,
+      item?.lyrics?.english,
+      requestPayload?.lyrics,
+      requestPayload?.lyricsText,
+      applied?.lyrics,
+      applied?.lyricsText,
+      applied?.koreanLyrics,
+      applied?.englishLyrics,
+      applied?.generatedLyrics,
+      applied?.generatedLyricsText
+    );
+
+    return directLyrics || '가사 정보 없음';
+  };
+
+  const extractKeywordStyleTextForDetails = (item: any, applied: any = {}, requestPayload: any = {}): string => {
+    const parts: string[] = [];
+    const push = (value: any) => {
+      const text = normalizeDetailText(value);
+      if (text) parts.push(text);
+    };
+
+    push(item?.style);
+    if (parts.length === 0) {
+      push(item?.genreLabels);
+      push(applied?.genre);
+      push(applied?.selectedGenres);
+      push(applied?.subGenre);
+      push(applied?.selectedSubGenres);
+      push(applied?.style);
+      push(applied?.selectedStyles);
+      push(applied?.sound);
+      push(applied?.selectedSounds);
+      push(applied?.mood);
+      push(applied?.selectedMoods);
+      push(applied?.theme);
+      push(applied?.selectedThemes);
+      push(applied?.situationSummary);
+      push(applied?.situation?.summary);
+      push(applied?.situation?.description);
+      push(applied?.tempo);
+      push(applied?.bpm);
+      
+      push(requestPayload?.genre);
+      push(requestPayload?.subGenre);
+      push(requestPayload?.style);
+      push(requestPayload?.sound);
+      push(requestPayload?.mood);
+      push(requestPayload?.theme);
+      push(requestPayload?.situationSummary);
+      push(requestPayload?.situation?.summary);
+      push(requestPayload?.situation?.description);
+      push(requestPayload?.tempo);
+    }
+
+    const unique = Array.from(new Set(parts.map((p) => p.trim()).filter(Boolean)));
+    return unique.length > 0 ? unique.join(' / ') : '없음';
+  };
+
+  const getPlaylistItemCreatorName = (item: any): string => {
+    const normalizeCreatorValue = (value: any) => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (!text) return '';
+      // Older shared playlist items sometimes stored Firebase UID in display fields.
+      // Do not show UID-like values before trying nickname/email fallbacks.
+      if (item?.ownerUid && text === item.ownerUid) return '';
+      if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+      return text;
+    };
+
+    return (
+      normalizeCreatorValue(item?.ownerNickname) ||
+      normalizeCreatorValue(item?.creatorNickname) ||
+      normalizeCreatorValue(item?.creatorDisplayId) ||
+      (item?.sourceId ? shareCreatorNameMap[item.sourceId] : '') ||
+      (item?.ownerUid ? userNameMap[item.ownerUid] : '') ||
+      normalizeCreatorValue(item?.ownerEmail) ||
+      normalizeCreatorValue(item?.creatorEmail) ||
+      item?.ownerUid ||
+      'Unknown'
+    );
+  };
+
+  const formatPlaylistDuration = (duration: any): string => {
+    const numeric = typeof duration === 'number' ? duration : Number(duration);
+    if (!Number.isFinite(numeric) || numeric <= 0) return '--:--';
+    const totalSeconds = Math.round(numeric);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  const buildPlaylistItemDetails = (item: PlaylistItem) => {
+    const applied = (item as any).appliedKeywords || {};
+    const reqPayload = item.requestPayload || {};
+
+    return {
+      title: formatSunoDisplayTitle(item.title || 'Untitled'),
+      status: item.sourceType === 'shared_track' ? '공유받은 곡' : '일반곡',
+      createdAt: item.addedAt,
+      taskId: item.sourceId,
+      style: extractKeywordStyleTextForDetails(item, applied, reqPayload),
+      situation: applied?.situationSummary || reqPayload?.situationSummary || applied?.situation?.summary || reqPayload?.situation?.summary || '',
+      prompt: normalizeDetailText(item.prompt || applied?.prompt || applied?.detailLayer || reqPayload?.prompt) || '',
+      lyrics: extractActualLyricsForDetails(item, applied, reqPayload),
+      audioUrl: item.audioUrl || '',
+      streamAudioUrl: item.audioUrl || '',
+      requestPayload: reqPayload || applied,
+      creatorDisplayId: getPlaylistItemCreatorName(item),
+    };
+  };
+
+  const handleShowPlaylistItemDetails = async (item: PlaylistItem) => {
+    let details = buildPlaylistItemDetails(item);
+    
+    // Fallback: If prompt and lyrics are missing, try fetching from the source
+    if (
+      (!details.prompt || details.prompt === '없음') && 
+      (!details.lyrics || details.lyrics === '가사 정보 없음')
+    ) {
+      try {
+        if (item.sourceType === 'shared_track') {
+          const shareDoc = await getDoc(doc(db, 'suno_shares', item.sourceId));
+          if (shareDoc.exists()) {
+            const data = shareDoc.data();
+            const enrichedItem = { ...item, ...data };
+            details = buildPlaylistItemDetails(enrichedItem as PlaylistItem);
+          }
+        } else if (item.sourceType === 'suno_track' && item.ownerUid) {
+          const trackDoc = await getDoc(doc(db, 'suno_tracks', item.ownerUid, 'tracks', item.sourceId));
+          if (trackDoc.exists()) {
+            const data = trackDoc.data();
+            const enrichedItem = { ...item, ...data };
+            details = buildPlaylistItemDetails(enrichedItem as PlaylistItem);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch fallback details:', error);
+      }
+    }
+
+    setShowDetails(details);
+  };
+
+  useEffect(() => {
+    const handleGlobalPlayerAction = (event: Event) => {
+      const customEvent = event as CustomEvent<any>;
+      const detail = customEvent.detail || {};
+      const action = detail.action as 'details' | 'applyNext' | 'saveOrMove' | 'delete' | 'favorite' | undefined;
+      const track = detail.track || null;
+      if (!action || !track) return;
+
+      detail.handled = true;
+
+      const parent = track.parent || {};
+      const itemIndex = Number.isInteger(track.index) ? track.index : 0;
+      const isPlaylistTrack = Boolean(parent.__playlistContext || track.trackId || parent.sourceType);
+      const workspaceItem = !isPlaylistTrack ? (extractSunoData(parent)[itemIndex] || {}) : null;
+
+      if (action === 'details') {
+        if (isPlaylistTrack) {
+          handleShowPlaylistItemDetails(parent as PlaylistItem);
+        } else {
+          setShowDetails({
+            ...parent,
+            itemIndex,
+            title: track.title || parent.title || 'Untitled',
+            status: parent.status || 'completed',
+            audioUrl: track.url || workspaceItem?.audioUrl || workspaceItem?.streamAudioUrl || parent.audioUrl || parent.streamAudioUrl || '',
+            streamAudioUrl: track.url || workspaceItem?.streamAudioUrl || workspaceItem?.audioUrl || parent.streamAudioUrl || parent.audioUrl || '',
+            lyrics: track.lyrics || workspaceItem?.lyrics || workspaceItem?.lyricsText || parent.lyrics || parent.lyricsText || '',
+            style: parent.style || workspaceItem?.style || parent.prompt || '',
+            prompt: parent.prompt || workspaceItem?.prompt || '',
+            ...resolveCreatorSnapshot(parent, workspaceItem || parent, { fallbackToCurrentUser: true }),
+            creatorDisplayId: resolveCreatorSnapshot(parent, workspaceItem || parent, { fallbackToCurrentUser: true }).creatorDisplayId || parent.creatorDisplayId || parent.ownerNickname || parent.creatorNickname || parent.ownerEmail || parent.creatorEmail || ''
+          });
+        }
+        return;
+      }
+
+      if (action === 'applyNext') {
+        if (isPlaylistTrack) {
+          handleApplyNext(parent, parent);
+        } else {
+          handleApplyNext(parent, workspaceItem || parent);
+        }
+        return;
+      }
+
+      if (action === 'saveOrMove') {
+        if (isPlaylistTrack) {
+          handleMoveToOtherPlaylist(parent as PlaylistItem);
+        } else {
+          handleSavePlaylist(parent, workspaceItem || parent, track.url || '', itemIndex);
+        }
+        return;
+      }
+
+      if (action === 'favorite') {
+        if (isPlaylistTrack) {
+          if ((parent as any).sourceType === 'shared_track' || (parent as any).__libraryViewMode === 'sharedPlaylist') {
+            showToast('공유 플레이리스트 곡은 즐겨찾기를 사용할 수 없습니다.');
+            return;
+          }
+          handleTogglePlaylistItemFavorite(parent as PlaylistItem);
+        } else {
+          handleToggleWorkspaceFavorite(parent);
+        }
+        return;
+      }
+
+      if (action === 'delete') {
+        if (isPlaylistTrack) {
+          handleRemoveFromPlaylist(parent as PlaylistItem);
+        } else if (parent?.id) {
+          handleDeleteClick(parent.id, itemIndex, parent, 'hide');
+        } else {
+          showToast('삭제할 곡 정보를 찾을 수 없습니다.');
+        }
+      }
+    };
+
+    window.addEventListener('soridraw:global-player-action', handleGlobalPlayerAction as EventListener);
+    return () => window.removeEventListener('soridraw:global-player-action', handleGlobalPlayerAction as EventListener);
+  }, [playlistItems, tracks, activePlaylistId, libraryViewMode, user, isSharedView]);
 
   return (
-    <div 
-      className="mx-auto w-full max-w-[1320px] px-0 pt-28 pb-12 font-sans relative"
+    <div
+      className="min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
       onClickCapture={(e) => {
-        if (!isSelectionMode) return;
         const target = e.target as HTMLElement;
-        if (target.closest('[data-selection-keep="true"]')) return;
-        exitSelectionMode('history');
+        if (target.closest('[data-floating-menu="true"]')) return;
+
+        if (multiSelectMode && !target.closest('[data-selection-keep="true"]')) {
+          clearMultiSelect();
+        }
+
+        if (activeMenuState || activePlaylistItemMenu || activeColorMenu || bulkMenuState) {
+          setActiveMenuState(null);
+          setActivePlaylistItemMenu(null);
+          setActiveColorMenu(null);
+          setBulkMenuState(null);
+        }
       }}
     >
       <style>{`
-        .favorite-keyword-strip {
+        .suno-playing-ring {
+          background: conic-gradient(
+            from 0deg,
+            rgba(249,115,22,0) 0deg,
+            rgba(249,115,22,0.04) 105deg,
+            rgba(251,191,36,0.18) 142deg,
+            rgba(249,115,22,0.95) 174deg,
+            rgba(249,115,22,0.12) 210deg,
+            rgba(249,115,22,0) 360deg
+          );
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+          animation: sunoOrbitGlow 5.8s linear infinite;
+          filter: drop-shadow(0 0 7px rgba(249, 115, 22, 0.38));
+        }
+
+        .suno-icon-stack {
+          position: relative;
+          width: 22px;
+          height: 22px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .suno-icon-pause,
+        .suno-icon-wave {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .suno-icon-pause {
+          gap: 4px;
+        }
+
+        .suno-icon-pause-bar {
+          width: 4px;
+          height: 15px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.96);
+        }
+
+        .suno-icon-wave {
+          gap: 2px;
+          opacity: 0;
+          transform: scale(0.78);
+        }
+
+        .suno-icon-wave-bar {
+          width: 3px;
+          height: 8px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.96);
+          transform-origin: center bottom;
+          animation: sunoWaveBounce 0.92s ease-in-out infinite;
+        }
+
+        .is-playing .suno-icon-pause {
+          animation: sunoPauseMorph 4.2s ease-in-out infinite;
+        }
+
+        .is-playing .suno-icon-wave {
+          animation: sunoWaveMorph 4.2s ease-in-out infinite;
+        }
+
+        @keyframes sunoOrbitGlow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        @keyframes sunoWaveBounce {
+          0%, 100% { transform: scaleY(0.7); }
+          50% { transform: scaleY(1.45); }
+        }
+
+        @keyframes sunoPauseMorph {
+          0%, 24% { opacity: 1; transform: scale(1); }
+          34%, 72% { opacity: 0; transform: scale(0.72); }
+          82%, 100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes sunoWaveMorph {
+          0%, 24% { opacity: 0; transform: scale(0.72); }
+          34%, 68% { opacity: 1; transform: scale(1); }
+          78%, 100% { opacity: 0; transform: scale(0.82); }
+        }
+
+        .suno-mobile-title-strip {
           scrollbar-width: none;
           -ms-overflow-style: none;
           -webkit-overflow-scrolling: touch;
           touch-action: pan-x pan-y;
+          overscroll-behavior-x: contain;
           cursor: grab;
         }
-        .favorite-keyword-strip:active { cursor: grabbing; }
-        .favorite-keyword-strip::-webkit-scrollbar { display: none; }
-        .favorite-mobile-title-strip {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-          -webkit-overflow-scrolling: touch;
-          touch-action: pan-x pan-y;
-          cursor: grab;
-        }
-        .favorite-mobile-title-strip:active { cursor: grabbing; }
-        .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
+        .suno-mobile-title-strip:active { cursor: grabbing; }
+        .suno-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      <div className="mb-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
-              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" />
-              <span>Music <span className="text-brand-orange">Note</span></span>
-            </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
-          </div>
-          <div className="flex items-center gap-2 self-end md:self-center">
-            <button
-              onClick={handleSyncFavoriteColors}
-              onMouseEnter={() => onHover({ id: 'favorite-color-sync', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onMouseLeave={() => onHover(null)}
-              onTouchStart={() => onLongPressStart({ id: 'favorite-color-sync', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onTouchEnd={onLongPressEnd}
-              className="hidden md:flex h-12 w-auto px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all items-center justify-center gap-2"
-              title={getUnifiedColorSyncDescription()}
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">동기화 : {isFavoriteAdminUser ? '무제한' : `${favoriteColorSyncRemaining}/5`}</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-[260px]">
-            <button
-              onClick={() => navigate('/')}
-              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all flex items-center justify-center"
-              title="홈"
-            >
-              <HomeIcon className="w-4 h-4" />
-            </button>
-            <div className="relative flex-1 min-w-0 group overflow-hidden">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
-              <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              className="w-full h-[46px] bg-[var(--bg-secondary)] border border-white/10 rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all"
-            />
-            {!searchQuery && !isSearchFocused && (
-              <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={placeholderIndex}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    transition={{ duration: 0.35 }}
-                    className="text-sm text-[var(--text-secondary)] whitespace-nowrap"
-                  >
-                    {placeholders[placeholderIndex]}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            )}
-            </div>
-          </div>
-
-          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
-            <button
-              onClick={() => setFavoriteColorFilter('all')}
-              className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
-            >
-              전체
-            </button>
-            <div className="mx-2 h-4 w-px bg-white/10" />
-            {FAVORITE_COLOR_OPTIONS.map((color) => (
-              <button
-                key={color.value}
-                onClick={() => setFavoriteColorFilter(color.value)}
-                className={`mx-1 h-4 w-4 rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[#2a2a2a]' : 'hover:scale-110'}`}
-                style={{ backgroundColor: color.color }}
-                title={color.label}
-              />
-            ))}
-            <div className="md:hidden mx-2 h-4 w-px bg-white/10" />
-            <button
-              onClick={handleSyncFavoriteColors}
-              onMouseEnter={() => onHover({ id: 'favorite-color-sync-mobile', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onMouseLeave={() => onHover(null)}
-              onTouchStart={() => onLongPressStart({ id: 'favorite-color-sync-mobile', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onTouchEnd={onLongPressEnd}
-              className="md:hidden h-9 w-9 shrink-0 rounded-xl text-white/60 hover:text-brand-orange transition-all flex items-center justify-center"
-              title={getUnifiedColorSyncDescription()}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
-            {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => handleSortChange(mode)}
-                className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
-                  (mode === 'latest' && sortBy === 'latest') ||
-                  (mode === 'oldest' && sortBy === 'oldest') ||
-                  (mode === 'genre' && sortBy.startsWith('genre')) ||
-                  (mode === 'title' && sortBy.startsWith('title')) ||
-                  (mode === 'locked' && sortBy.startsWith('locked'))
-                    ? 'bg-brand-orange text-white'
-                    : 'text-white/50 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                {mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}
-              </button>
-            ))}
-          </div>
+      <div className="mx-auto mb-4 flex w-full max-w-[1320px] items-start gap-3 rounded-2xl border border-sky-400/15 bg-sky-500/10 px-4 py-3 text-xs leading-relaxed text-sky-100/75">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-300/80" />
+        <div>
+          <span className="font-black text-sky-100">외부 URL 안내</span>
+          <span className="ml-2">Music API 음원/커버 URL은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</span>
         </div>
       </div>
-
-      <div className="my-4 md:my-5 border-t border-white/[0.07]" />
-
-      {favorites.length === 0 ? (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">
-          <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
-          <p className="text-[var(--text-secondary)] text-lg font-medium">아직 저장된 곡이 없습니다.</p>
-          <Link to="/" className="mt-6 text-brand-orange font-bold hover:underline">
-            첫 번째 곡 만들러 가기
-          </Link>
-        </div>
-      ) : filteredFavorites.length === 0 ? (
-        <div className="min-h-[30vh] flex flex-col items-center justify-center text-center">
-          <Search className="w-10 h-10 text-[var(--text-secondary)]/20 mb-4" />
-          <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
-        </div>
-      ) : (
-        <div className="space-y-12">
-          <div className="space-y-4" data-selection-keep="true">
-            {filteredFavorites.slice(0, visibleCount).map((song) => {
-              const isSelected = selectedSongIds.includes(song.id);
-              const colorHex = getFavoriteColorHex(song.id, song);
-              const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
-              const mobileGenreLabel = getDisplaySubGenre(song);
-              const mobileTitles = getNormalizedTitles(song);
-              const mobileTitleText = mobileTitles.korean && mobileTitles.english
-                ? `${mobileTitles.korean} | ${mobileTitles.english}`
-                : mobileTitles.korean || mobileTitles.english || 'Untitled';
-
-              return (
-                <motion.div
-                  key={song.id}
-                  layout
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  onClick={(e) => {
-                    if (longPressTriggeredRef.current) {
-                      longPressTriggeredRef.current = false;
-                      return;
-                    }
-
-                    if (isSelectionMode) {
-                      e.stopPropagation();
-                      toggleSongSelection(song.id);
-                      setPendingSelectionAction(null);
+      <AnimatePresence>
+        {renameModalArgs && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
+               onClick={() => setRenameModalArgs(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-white/10"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                <h3 className="font-bold text-white">플레이리스트 이름 변경</h3>
+                <button onClick={() => setRenameModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 flex flex-col gap-4">
+                <input 
+                  type="text" 
+                  value={renameModalArgs.newTitle} 
+                  onChange={e => setRenameModalArgs({ ...renameModalArgs, newTitle: e.target.value })}
+                  placeholder="플레이리스트 이름 (최대 20자)"
+                  maxLength={20}
+                  className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-white/5 focus:border-brand-orange/50 transition-colors"
+                  autoFocus
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      if (!user || (renameModalArgs.playlist as any).isFallback) return;
+                      const trimmedTitle = renameModalArgs.newTitle.trim();
+                      if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
+                      if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
+                      const isNormal = renameModalArgs.playlist.type === 'normal';
+                      const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+                      if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
+                        showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
+                      }
+                      try {
+                        await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
+                        setRenameModalArgs(null);
+                        showToast('플레이리스트 이름이 변경되었습니다.');
+                      } catch (error) { showToast('이름 변경에 실패했습니다.'); }
                     }
                   }}
-                  className={cn(
-                    "group relative overflow-visible rounded-2xl border border-white/10 bg-[var(--bg-secondary)] transition-all select-none hover:bg-white/[0.03]",
-                    isSelectionMode ? "cursor-pointer" : ""
-                  )}
-                >
-                  <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
-                    {isSelectionMode && (
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleSongSelection(song.id);
-                        }}
-                        className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/20 text-white/30 hover:border-white/40'
-                        }`}
-                      >
-                        {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}
-                      </button>
-                    )}
-
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
-                        setActiveFavoriteMenuId(null);
-                      }}
-                      className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
-                      style={{ backgroundColor: colorHex }}
-                      title="색상 지정"
-                    />
-
-                    {activeFavoriteColorMenuId === song.id && (
-                      <div className="absolute left-14 md:left-20 top-[54px] z-40 flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-                        {FAVORITE_COLOR_OPTIONS.map((color) => (
-                          <button
-                            key={color.value}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleFavoriteColorSelect(song, color.value);
-                            }}
-                            className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
-                            style={{ backgroundColor: color.color }}
-                            title={color.label}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-brand-orange md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
-                      <Music className="w-5 h-5" />
-                    </div>
-
-                    <div className="flex-1 min-w-0 pr-1 md:pr-0">
-                      <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2">
-                        <div className="md:hidden min-w-0 leading-tight">
-                          <div className="text-sm font-extrabold text-white truncate">
-                            {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
-                          </div>
-                          <div
-                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-178px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[15px] font-bold text-white/92 md:max-w-none"
-                            onMouseDown={(event) => {
-                              event.stopPropagation();
-                              const target = event.currentTarget;
-                              const startX = event.pageX;
-                              const startScrollLeft = target.scrollLeft;
-                              let moved = false;
-
-                              const onMove = (moveEvent: MouseEvent) => {
-                                const deltaX = moveEvent.pageX - startX;
-                                if (Math.abs(deltaX) > 3) moved = true;
-                                target.scrollLeft = startScrollLeft - deltaX;
-                              };
-
-                              const onUp = () => {
-                                if (moved) {
-                                  longPressTriggeredRef.current = true;
-                                  window.setTimeout(() => {
-                                    longPressTriggeredRef.current = false;
-                                  }, 0);
-                                }
-                                document.removeEventListener('mousemove', onMove);
-                                document.removeEventListener('mouseup', onUp);
-                              };
-
-                              document.addEventListener('mousemove', onMove);
-                              document.addEventListener('mouseup', onUp);
-                            }}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {mobileTitleText}
-                          </div>
-                        </div>
-                        <h3 className="hidden md:block text-base font-bold text-white truncate">
-                          {getCombinedFavoriteTitle(song)}
-                        </h3>
-                        <span className="hidden md:inline text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 min-w-0">
-                        <div
-                          className="favorite-keyword-strip relative flex w-full max-w-[calc(100vw-232px)] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
-                          onMouseDown={(event) => {
-                            event.stopPropagation();
-                            const target = event.currentTarget;
-                            const startX = event.pageX;
-                            const startScrollLeft = target.scrollLeft;
-
-                            const onMove = (moveEvent: MouseEvent) => {
-                              target.scrollLeft = startScrollLeft - (moveEvent.pageX - startX);
-                            };
-
-                            const onUp = () => {
-                              document.removeEventListener('mousemove', onMove);
-                              document.removeEventListener('mouseup', onUp);
-                            };
-
-                            document.addEventListener('mousemove', onMove);
-                            document.addEventListener('mouseup', onUp);
-                          }}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {renderFavoriteKeywordChips(song)}
-                        </div>
-                        <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">
-                          {getRelativeTime(song.createdAtMs || song.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {song.isLocked && (
-                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-brand-orange" title="잠김">
-                          <Lock className="w-4 h-4" />
-                        </span>
-                      )}
-
-                      <div className="relative shrink-0">
-                        {song.isLocked && (
-                          <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-20 inline-flex h-5 w-5 items-center justify-center text-brand-orange md:hidden" title="잠김">
-                            <Lock className="w-3.5 h-3.5" />
-                          </span>
-                        )}
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedSong(song);
-                          }}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xs font-black text-white/85 transition-all hover:bg-white/10 hover:text-white md:w-auto md:px-5 md:font-bold"
-                        >
-                          <span className="md:hidden">E</span>
-                          <span className="hidden md:inline">Edit</span>
-                        </button>
-                      </div>
-<div className="relative">
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
-                            setActiveFavoriteColorMenuId(null);
-                          }}
-                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-brand-orange' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-
-                        {activeFavoriteMenuId === song.id && (
-                          <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-brand-orange/30 bg-[#181818] py-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-                            {isBulkMenu ? (
-                              <>
-                                <div className="px-4 py-2 text-xs font-bold text-brand-orange">선택한 {selectedSongIds.length}곡</div>
-                                <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
-                                <button onClick={() => executeFavoriteMenuAction('lockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
-                                <button onClick={() => executeFavoriteMenuAction('unlockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
-                                <button onClick={() => executeFavoriteMenuAction('shareSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
-                                <button onClick={() => executeFavoriteMenuAction('folderSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
-                                <button onClick={() => executeFavoriteMenuAction('deleteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />선택 삭제</button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />상세정보</button>
-                                <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택</button>
-                                {!song.isLocked ? (
-                                  <button onClick={() => executeFavoriteMenuAction('lock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
-                                ) : (
-                                  <button onClick={() => executeFavoriteMenuAction('unlock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
-                                )}
-                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
-                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
-                                <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
-                                <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-
-          {visibleCount < filteredFavorites.length && (
-            <div className="flex justify-center pt-8">
-              <button
-                onClick={() => setVisibleCount(prev => prev + 15)}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 15개 더 불러옵니다.' })}
-                onMouseLeave={() => onHover(null)}
-                className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
-              >
-                <Plus className="w-5 h-5 text-brand-orange group-hover:rotate-90 transition-transform" />
-                더보기 ({filteredFavorites.length - visibleCount}개 남음)
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      <AnimatePresence>
-        {favoriteToastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 14, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 14, scale: 0.96 }}
-            transition={{ duration: 0.16 }}
-            className="fixed bottom-6 left-1/2 z-[160] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-          >
-            <span className="inline-flex items-center gap-2 whitespace-pre-line">
-              <Check className="h-4 w-4 text-brand-orange" />
-              {favoriteToastMessage}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Lyrics Modal */}
-      <AnimatePresence>
-        {selectedSong && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 font-sans">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => closeSelectedSong()}
-              className="absolute inset-0 bg-black/72 backdrop-blur-[7px]"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.965, y: 18 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 18 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh]"
-              onClick={(e) => e.stopPropagation()}
-              onClickCapture={(e) => {
-                if (confirmDeleteSong && !(e.target as HTMLElement).closest('[data-detail-delete-button="true"]')) {
-                  setConfirmDeleteSong(false);
-                }
-              }}
-            >
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,145,0,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(255,145,0,0.08),transparent_28%)]" />
-
-              <div className="relative flex items-center justify-between gap-4 border-b border-white/8 px-5 py-4 md:px-8 md:py-5">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-brand-orange/90">music note detail</div>
-                  <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">디테일 & Edit</h3>
-                </div>
-                <div className="flex shrink-0 items-center gap-4">
-                  <a
-                    href="https://suno.com/create"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onMouseEnter={() => onHover({ id: 'detail-suno', label: 'SUNO', description: 'Suno 생성 페이지를 엽니다.' })}
-                    onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                    onTouchStart={() => onLongPressStart({ id: 'detail-suno', label: 'SUNO', description: 'Suno 생성 페이지를 엽니다.' })}
-                    onTouchEnd={onLongPressEnd}
-                    className={cn(
-                      'inline-flex h-14 w-14 items-center justify-center rounded-[18px] border border-white/14 bg-white/[0.025] text-[11px] font-black tracking-[0.04em] text-brand-orange transition-all hover:text-brand-orange',
-                      isEditing && 'pointer-events-none opacity-35'
-                    )}
-                  >
-                    SUNO
-                  </a>
-                  <button
-                    onClick={() => closeSelectedSong()}
-                    onMouseEnter={() => onHover({ id: 'detail-close', label: '닫기', description: '상세정보 창을 닫습니다.' })}
-                    onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                    onTouchStart={() => onLongPressStart({ id: 'detail-close', label: '닫기', description: '상세정보 창을 닫습니다.' })}
-                    onTouchEnd={onLongPressEnd}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/60 transition-all hover:text-brand-orange"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </div>
+                />
               </div>
-
-              <div className="relative flex-1 overflow-y-auto overscroll-contain custom-scrollbar px-4 py-4 md:px-8 md:py-7 space-y-5" style={{ overscrollBehavior: 'contain' }}>
-                <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-5 py-5 md:px-7 md:py-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-brand-orange/90">title</div>
-                      <h4 className="mt-1 text-2xl font-bold text-white">제목</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!isEditing && (
-                        <button
-                          onClick={() => {
-                            setIsEditing(true);
-                            setActiveEditSection('title');
-                          }}
-                          onMouseEnter={() => onHover({ id: 'detail-title-edit', label: '제목 수정', description: '곡 제목을 수정합니다.' })}
-                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                          onTouchStart={() => onLongPressStart({ id: 'detail-title-edit', label: '제목 수정', description: '곡 제목을 수정합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/70 transition-all hover:text-brand-orange"
-                          title="제목 수정"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      {isEditing && activeEditSection === 'title' && (
-                        <>
-                          {isTitleEditChanged && (
-                            <button
-                              onClick={handleSave}
-                              onMouseEnter={() => onHover({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
-                              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                              onTouchStart={() => onLongPressStart({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
-                              onTouchEnd={onLongPressEnd}
-                              disabled={isTranslating}
-                              onMouseEnter={() => onHover({ id: 'detail-title-save', label: '저장', description: '수정한 제목을 저장합니다.' })}
-                              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                              onTouchStart={() => onLongPressStart({ id: 'detail-title-save', label: '저장', description: '수정한 제목을 저장합니다.' })}
-                              onTouchEnd={onLongPressEnd}
-                              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-brand-orange disabled:opacity-60"
-                              title="저장"
-                            >
-                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={cancelModalEditing}
-                            onMouseEnter={() => onHover({ id: 'detail-title-cancel', label: '취소', description: '제목 수정을 취소합니다.' })}
-                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                            onTouchStart={() => onLongPressStart({ id: 'detail-title-cancel', label: '취소', description: '제목 수정을 취소합니다.' })}
-                            onTouchEnd={onLongPressEnd}
-                            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:text-brand-orange"
-                            title="취소"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={() => copyToClipboard(getCombinedFavoriteCopyText(selectedSong), 'title-all')}
-                        onMouseEnter={() => onHover({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 통합 제목을 복사합니다.' })}
-                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        onTouchStart={() => onLongPressStart({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 통합 제목을 복사합니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[12px] font-semibold text-white/72 transition-all hover:text-brand-orange"
-                        title="통합 제목 복사"
-                      >
-                        {copiedType === 'title-all' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                        <span className="hidden sm:inline">제목 복사</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 text-center">
-                    {isEditing && activeEditSection === 'title' ? (
-                      <input
-                        value={editedTitle}
-                        onChange={(e) => setEditedTitle(e.target.value)}
-                        className="mx-auto w-full max-w-[820px] rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[24px] font-extrabold leading-tight tracking-tight text-white outline-none transition-all focus:border-brand-orange/35 md:text-[34px]"
-                      />
-                    ) : (
-                      <>
-                        {getDisplaySubGenre(selectedSong) && (
-                          <p className="mx-auto mb-2 max-w-[720px] text-[13px] font-bold leading-tight text-white/54 md:text-[16px]">
-                            [{getDisplaySubGenre(selectedSong)}]
-                          </p>
-                        )}
-                        <h2 className="mx-auto max-w-[820px] text-[24px] font-extrabold leading-tight tracking-tight text-white md:text-[34px]">
-                          {getFavoriteKoreanTitle(selectedSong)}
-                        </h2>
-                        {getFavoriteEnglishTitle(selectedSong) !== getFavoriteKoreanTitle(selectedSong) && (
-                          <p className="mx-auto mt-3 max-w-[720px] text-[15px] font-semibold leading-tight text-white/64 md:text-[21px]">
-                            {getFavoriteEnglishTitle(selectedSong)}
-                          </p>
-                        )}
-                      </>
-                    )}
-
-                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                      {getDisplaySubGenre(selectedSong) && (
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
-                          {getDisplaySubGenre(selectedSong)}
-                        </span>
-                      )}
-                      {getFavoriteDetailCreatedAt(selectedSong) && (
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
-                          {getFavoriteDetailCreatedAt(selectedSong)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                    <button
-                      onClick={() => handlePopupToggleLock(selectedSong)}
-                      disabled={isEditing}
-                      onMouseEnter={() => onHover({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
-                      onTouchEnd={onLongPressEnd}
-                      className={cn(
-                        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35 hover:text-brand-orange',
-                        selectedSong.isLocked
-                          ? 'border-brand-orange/25 bg-white/[0.035] text-brand-orange'
-                          : 'border-white/10 bg-white/[0.035] text-white/78'
-                      )}
-                    >
-                      {selectedSong.isLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
-                    </button>
-                    <button
-                      data-detail-delete-button="true"
-                      onClick={() => handlePopupDelete(selectedSong)}
-                      disabled={selectedSong.isLocked || isEditing}
-                      onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
-                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
-                      onTouchEnd={onLongPressEnd}
-                      className={cn(
-                        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                        selectedSong.isLocked
-                          ? 'border-white/8 bg-white/[0.03] text-white/18'
-                          : confirmDeleteSong
-                            ? 'border-red-500/55 bg-white/[0.035] text-red-500'
-                            : 'border-white/10 bg-white/[0.035] text-white/78 hover:text-red-500'
-                      )}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-
-                    {isEditing && isModified && (
-                      <button
-                        onClick={handleRestoreOriginal}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/72 transition-all hover:text-brand-orange"
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                        원본 복원
-                      </button>
-                    )}
-                  </div>
-                </section>
-
-                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">info set</div>
-                      <h4 className="mt-1 text-[22px] font-bold text-white">키워드</h4>
-                      <p className="mt-1 text-sm text-white/45">곡의 키워드와 핵심 정보를 확인합니다.</p>
-                    </div>
-                    <div className="-mt-1 flex shrink-0 items-center gap-2">
-                      {!isEditing && (
-                        <button
-                          onClick={() => applyKeywordsToNext(selectedSong)}
-                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-orange/20 bg-white/[0.035] text-brand-orange transition-all hover:bg-brand-orange/10 hover:border-brand-orange/35"
-                        >
-                          <RefreshCw className="h-5 w-5 text-brand-orange" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setIsInfoExpanded((prev) => !prev)}
-                        onMouseEnter={() => onHover({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
-                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        onTouchStart={() => onLongPressStart({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                      >
-                        {isInfoExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {!isInfoExpanded && (
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
-                        Genre: {getDisplaySubGenre(selectedSong) || '정보 없음'}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
-                        Tempo: {selectedSong.appliedKeywords.tempo || '정보 없음'}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
-                        {resolveKeywordsForDisplay(selectedSong).length}개 카테고리
-                      </span>
-                    </div>
-                  )}
-
-                  <AnimatePresence initial={false}>
-                    {isInfoExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                        animate={{ opacity: 1, height: 'auto', marginTop: 20 }}
-                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
-                          <section className="rounded-[24px] border border-white/8 bg-black/10 p-5">
-                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">keywords</div>
-                                <h4 className="mt-1 text-xl font-bold text-white">곡 키워드 & 스타일</h4>
-                              </div>
-                              {!isEditing && (
-                                <button
-                                  onClick={() => {
-                                    const sections = resolveKeywordsForDisplay(selectedSong);
-                                    const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
-                                    copyToClipboard(text, 'keywords');
-                                  }}
-                                  onMouseEnter={() => onHover({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
-                                  onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                                  onTouchStart={() => onLongPressStart({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
-                                  onTouchEnd={onLongPressEnd}
-                                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                                >
-                                  {copiedType === 'keywords' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                </button>
-                              )}
-                            </div>
-                            <div className="space-y-4">
-                              {resolveKeywordsForDisplay(selectedSong).map((section) => (
-                                <div key={section.key} className="space-y-2.5">
-                                  <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/38">{section.title}</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {section.items.map((item, idx) => (
-                                      <span
-                                        key={`${section.key}-${idx}`}
-                                        className={cn(
-                                          'rounded-full border px-3 py-1.5 text-[12px] font-medium',
-                                          getAppliedKeywordChipClass(section.key || section.accent || '', item.isRandom)
-                                        )}
-                                      >
-                                        {item.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </section>
-
-                          <section className="rounded-[24px] border border-white/8 bg-black/10 p-5">
-                            <div className="mb-4">
-                              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">overview</div>
-                              <h4 className="mt-1 text-xl font-bold text-white">핵심 정보</h4>
-                            </div>
-                            <div className="grid gap-3">
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">genre</p>
-                                <p className="mt-2 text-lg font-semibold text-white/90">{getDisplaySubGenre(selectedSong) || '정보 없음'}</p>
-                              </div>
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">vocal</p>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] text-white/75">{selectedSong.appliedKeywords.vocalType || '정보 없음'}</span>
-                                  {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
-                                    <span className="rounded-full border border-brand-orange/25 bg-brand-orange/10 px-3 py-1 text-[12px] text-brand-orange">보컬톤: {selectedSong.appliedKeywords.vocalTone}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">tempo</p>
-                                <p className="mt-2 text-base font-semibold text-white/88">{selectedSong.appliedKeywords.tempo || '정보 없음'}</p>
-                              </div>
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">structure</p>
-                                <div className="mt-2 rounded-xl border border-white/8 bg-black/20 px-3 py-3 text-[12px] leading-6 text-white/72" style={{ wordBreak: 'break-word' }}>
-                                  {getFavoriteStructureText(selectedSong)}
-                                </div>
-                              </div>
-                            </div>
-                          </section>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </section>
-
-                <div className="grid gap-5 xl:grid-cols-2">
-                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics ko</div>
-                        <h4 className="mt-1 text-xl font-bold text-white">한글 가사</h4>
-                        {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
-                          <div className="mt-3 space-y-2">
-                            <button
-                              onClick={() => setIsSyncEnabled(!isSyncEnabled)}
-                              className={cn(
-                                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
-                                isSyncEnabled ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-white/[0.04] text-white/60'
-                              )}
-                            >
-                              {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
-                              한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
-                            </button>
-                            {isSyncEnabled && (
-                              <select
-                                value={foreignTargetLanguage}
-                                onChange={(e) => setForeignTargetLanguage(e.target.value)}
-                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-brand-orange/30"
-                              >
-                                <option value="English">영어</option>
-                                <option value="Japanese">일본어</option>
-                                <option value="Chinese">중국어</option>
-                                <option value="Spanish">스페인어</option>
-                                <option value="French">프랑스어</option>
-                                <option value="German">독일어</option>
-                                <option value="Russian">러시아어</option>
-                                <option value="Thai">태국어</option>
-                              </select>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isEditing && activeEditSection === 'lyrics-ko' ? (
-                          <>
-                            {isKoreanLyricsEditChanged && (
-                              <button
-                                onClick={handleSave}
-                                disabled={isTranslating}
-                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-brand-orange disabled:opacity-60"
-                                title="저장"
-                              >
-                                {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
-                              </button>
-                            )}
-                            <button
-                              onClick={cancelModalEditing}
-                              onMouseEnter={() => onHover({ id: 'detail-cancel', label: '취소', description: '수정을 취소합니다.' })}
-                              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                              onTouchStart={() => onLongPressStart({ id: 'detail-cancel', label: '취소', description: '수정을 취소합니다.' })}
-                              onTouchEnd={onLongPressEnd}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                              title="취소"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : !isEditing && (
-                          <button
-                            onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-ko'); }}
-                            onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-edit', label: '한글 가사 수정', description: '한글 가사를 수정합니다.' })}
-                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                            onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-edit', label: '한글 가사 수정', description: '한글 가사를 수정합니다.' })}
-                            onTouchEnd={onLongPressEnd}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                            title="한글 가사 수정"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => copyToClipboard(selectedSong.lyrics.korean, 'lyrics-korean')}
-                          onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
-                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                          onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                          title="한글 가사 복사"
-                        >
-                          {copiedType === 'lyrics-korean' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {isEditing && activeEditSection === 'lyrics-ko' ? (
-                      <textarea
-                        value={editedKoreanLyrics}
-                        onChange={(e) => setEditedKoreanLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-brand-orange/30"
-                      />
-                    ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
-                        {selectedSong.lyrics.korean}
-                      </div>
-                    )}
-                  </section>
-
-                  <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">lyrics foreign</div>
-                        <h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4>
-                        {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
-                          <div className="mt-3 space-y-2">
-                            <button
-                              onClick={() => setIsSyncEnabled(!isSyncEnabled)}
-                              className={cn(
-                                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
-                                isSyncEnabled ? 'border-brand-orange/30 bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-white/[0.04] text-white/60'
-                              )}
-                            >
-                              {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
-                              한글/외국어 연동 {isSyncEnabled ? 'ON' : 'OFF'}
-                            </button>
-                            {isSyncEnabled && (
-                              <select
-                                value={foreignTargetLanguage}
-                                onChange={(e) => setForeignTargetLanguage(e.target.value)}
-                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-brand-orange/30"
-                              >
-                                <option value="English">영어</option>
-                                <option value="Japanese">일본어</option>
-                                <option value="Chinese">중국어</option>
-                                <option value="Spanish">스페인어</option>
-                                <option value="French">프랑스어</option>
-                                <option value="German">독일어</option>
-                                <option value="Russian">러시아어</option>
-                                <option value="Thai">태국어</option>
-                              </select>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isEditing && activeEditSection === 'lyrics-en' ? (
-                          <>
-                            {isForeignLyricsEditChanged && (
-                              <button
-                                onClick={handleSave}
-                                disabled={isTranslating}
-                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-brand-orange disabled:opacity-60"
-                                title="저장"
-                              >
-                                {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
-                              </button>
-                            )}
-                            <button
-                              onClick={cancelModalEditing}
-                              onMouseEnter={() => onHover({ id: 'detail-cancel', label: '취소', description: '수정을 취소합니다.' })}
-                              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                              onTouchStart={() => onLongPressStart({ id: 'detail-cancel', label: '취소', description: '수정을 취소합니다.' })}
-                              onTouchEnd={onLongPressEnd}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                              title="취소"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : !isEditing && (
-                          <button
-                            onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-en'); }}
-                            onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-edit', label: '외국어 가사 수정', description: '외국어 가사를 수정합니다.' })}
-                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                            onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-edit', label: '외국어 가사 수정', description: '외국어 가사를 수정합니다.' })}
-                            onTouchEnd={onLongPressEnd}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                            title="외국어 가사 수정"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-foreign')}
-                          onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
-                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                          onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                          title="외국어 가사 복사"
-                        >
-                          {copiedType === 'lyrics-foreign' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {isEditing && activeEditSection === 'lyrics-en' ? (
-                      <textarea
-                        value={editedEnglishLyrics}
-                        onChange={(e) => setEditedEnglishLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-brand-orange/30"
-                      />
-                    ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
-                        {selectedSong.lyrics.english}
-                      </div>
-                    )}
-                  </section>
-                </div>
-
-                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-orange/90">prompt</div>
-                      <h4 className="mt-1 text-xl font-bold text-white">곡 프롬프트</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isEditing && activeEditSection === 'prompt' ? (
-                        <>
-                          {isPromptEditChanged && (
-                            <button
-                              onClick={handleSave}
-                              onMouseEnter={() => onHover({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
-                              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                              onTouchStart={() => onLongPressStart({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
-                              onTouchEnd={onLongPressEnd}
-                              disabled={isTranslating}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-brand-orange disabled:opacity-60"
-                              title="저장"
-                            >
-                              {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={cancelModalEditing}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                            title="취소"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : !isEditing && (
-                        <button
-                          onClick={() => { setIsEditing(true); setActiveEditSection('prompt'); }}
-                          onMouseEnter={() => onHover({ id: 'detail-prompt-edit', label: '프롬프트 수정', description: '곡 프롬프트를 수정합니다.' })}
-                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                          onTouchStart={() => onLongPressStart({ id: 'detail-prompt-edit', label: '프롬프트 수정', description: '곡 프롬프트를 수정합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                          title="프롬프트 수정"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}
-                        onMouseEnter={() => onHover({ id: 'detail-prompt-copy', label: '프롬프트 복사', description: '곡 프롬프트를 복사합니다.' })}
-                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        onTouchStart={() => onLongPressStart({ id: 'detail-prompt-copy', label: '프롬프트 복사', description: '곡 프롬프트를 복사합니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                        title="프롬프트 복사"
-                      >
-                        {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  {isEditing && activeEditSection === 'prompt' ? (
-                    <textarea
-                      value={editedPrompt}
-                      onChange={(e) => setEditedPrompt(e.target.value)}
-                      className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-brand-orange/30"
-                    />
-                  ) : (
-                    <div className="rounded-2xl border border-white/8 bg-black/15 p-4 md:p-5">
-                      <p className="text-sm leading-7 text-white/68">{selectedSong.prompt || '프롬프트 정보가 없습니다.'}</p>
-                    </div>
-                  )}
-                </section>
-
-                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-4 md:p-5">
-                  <button
-                    type="button"
-                    onClick={() => setIsFavoriteMusicApiSectionExpanded((prev) => !prev)}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left transition-all hover:border-white/14 hover:bg-white/[0.035]"
-                    aria-expanded={isFavoriteMusicApiSectionExpanded}
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-brand-orange/85">music api</div>
-                      <h4 className="mt-0.5 truncate text-base font-bold text-white md:text-lg">Music API 생성</h4>
-                      <p className="mt-0.5 text-xs text-white/42 md:text-sm">현재 Edit 화면의 제목, 가사, 프롬프트 기준으로 생성합니다.</p>
-                    </div>
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/65">
-                      {isFavoriteMusicApiSectionExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </span>
-                  </button>
-
-                  <AnimatePresence initial={false}>
-                    {isFavoriteMusicApiSectionExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.18, ease: 'easeOut' }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-4 flex items-center justify-between gap-2">
-                          <button
-                            onClick={() => navigate('/suno-api-settings')}
-                            onMouseEnter={() => onHover({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
-                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                            onTouchStart={() => onLongPressStart({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
-                            onTouchEnd={onLongPressEnd}
-                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-brand-orange"
-                            title="Music API 설정"
-                          >
-                            <SlidersHorizontal className="h-5 w-5" />
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              try {
-                                setHasFavoriteSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
-                              } catch {
-                                setHasFavoriteSunoApiKey(false);
-                              }
-                              setFavoriteMusicApiMessage(null);
-                              setShowFavoriteMusicApiModal(true);
-                            }}
-                            disabled={isFavoriteMusicApiGenerating}
-                            onMouseEnter={() => onHover({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
-                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                            onTouchStart={() => onLongPressStart({ id: 'detail-api-generate', label: 'Music API로 생성', description: '현재 Edit 화면의 수정값 기준으로 Music API 생성을 요청합니다.' })}
-                            onTouchEnd={onLongPressEnd}
-                            className={cn(
-                              'h-12 flex-1 rounded-2xl text-sm font-bold text-white transition-all whitespace-nowrap',
-                              isFavoriteMusicApiGenerating
-                                ? 'cursor-not-allowed bg-purple-600/40'
-                                : 'bg-purple-600 shadow-lg shadow-purple-600/20 hover:bg-purple-700'
-                            )}
-                          >
-                            {isFavoriteMusicApiGenerating ? 'Music API 요청 중...' : 'Music API로 생성'}
-                          </button>
-
-                          <button
-                            onClick={() => navigate('/suno-library')}
-                            onMouseEnter={() => onHover({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
-                            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                            onTouchStart={() => onLongPressStart({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
-                            onTouchEnd={onLongPressEnd}
-                            className="flex h-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-bold text-white/70 transition-all hover:text-brand-orange"
-                            title="라이브러리로 이동"
-                          >
-                            Library
-                          </button>
-                        </div>
-
-                        {favoriteMusicApiMessage && (
-                          <p className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-center text-xs font-semibold text-white/62 whitespace-pre-line">
-                            {favoriteMusicApiMessage}
-                          </p>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </section>
+              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/5">
+                <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
+                <button className="px-4 py-2 font-bold bg-brand-orange text-white rounded-xl hover:bg-brand-orange/90 transition-colors" onClick={async () => {
+                  if (!user || (renameModalArgs.playlist as any).isFallback) return;
+                  const trimmedTitle = renameModalArgs.newTitle.trim();
+                  if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
+                  if (trimmedTitle.length > 20) { showToast('이름은 최대 20자까지 가능합니다.'); return; }
+                  const isNormal = renameModalArgs.playlist.type === 'normal';
+                  const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
+                  if (currentList.some(p => p.id !== renameModalArgs.playlist.id && p.title === trimmedTitle)) {
+                    showToast('같은 이름의 플레이리스트가 이미 있습니다.'); return;
+                  }
+                  try {
+                    await renamePlaylist(user.uid, renameModalArgs.playlist.id!, trimmedTitle);
+                    setRenameModalArgs(null);
+                    showToast('플레이리스트 이름이 변경되었습니다.');
+                  } catch (error) { showToast('이름 변경에 실패했습니다.'); }
+                }}>저장</button>
               </div>
             </motion.div>
           </div>
@@ -3135,19 +4343,1711 @@ ${song.prompt}
       </AnimatePresence>
 
       <AnimatePresence>
-        {showFavoriteMusicApiModal && selectedSong && (
-          <MusicApiGenerateModal
-            variant="musicApi"
-            hasApiKey={hasFavoriteSunoApiKey}
-            isNoLyrics={!editedKoreanLyrics.trim() && !editedEnglishLyrics.trim()}
-            availableLyricLanguages={getFavoriteMusicApiAvailableLyricLanguages(selectedSong)}
-            maxLyricLanguages={1}
-            onClose={() => setShowFavoriteMusicApiModal(false)}
-            onConfirm={(titleLang, includeLyrics, lyricLanguages, _generationCount, options) => {
-              setShowFavoriteMusicApiModal(false);
-              handleFavoriteMusicApiGenerate(titleLang, includeLyrics, lyricLanguages, options);
+        {moveModalArgs && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
+               onClick={() => setMoveModalArgs(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#2a2a2a] w-full max-w-sm rounded-2xl flex flex-col overflow-hidden border border-white/10 max-h-[80vh]"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between shrink-0">
+                <h3 className="font-bold text-white">폴더 이동</h3>
+                <button onClick={() => setMoveModalArgs(null)} className="p-1 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex flex-col gap-2">
+                {(() => {
+                  const isShared = moveModalArgs.item.sourceType === 'shared_track';
+                  const targetLists = isShared ? actualSharedPlaylists : actualNormalPlaylists;
+                  const availableLists = targetLists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
+                  
+                  return availableLists.map(list => (
+                    <button
+                      key={list.id}
+                      onClick={async () => {
+                        if (!user || !activePlaylistId) return;
+                        try {
+                          const targetItemsRef = collection(db, 'user_playlists', user.uid, 'lists', list.id!, 'items');
+                          const q = query(targetItemsRef, where('sourceId', '==', moveModalArgs.item.sourceId));
+                          const targetDocs = await getDocs(q);
+                          
+                          if (!targetDocs.empty) {
+                            showToast("이미 대상 플레이리스트에 있는 곡입니다.");
+                            return;
+                          }
+
+                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
+                          showToast("플레이리스트를 이동했습니다.");
+                          setMoveModalArgs(null);
+                        } catch (error) {
+                          console.error("move playlist item failed:", {
+                            error,
+                            fromPlaylistId: activePlaylistId,
+                            toPlaylistId: list.id,
+                            itemId: moveModalArgs.item?.id,
+                            item: moveModalArgs.item,
+                            activePlaylistType: activePlaylistSection
+                          });
+                          showToast("곡 이동에 실패했습니다."); 
+                        }
+                      }}
+                      className="w-full text-left px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors font-medium text-white flex items-center"
+                    >
+                      [{list.title}]
+                    </button>
+                  ));
+                })()}
+              </div>
+              <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-white/5 shrink-0">
+                <button className="px-4 py-2 font-bold bg-white/10 text-white rounded-xl hover:bg-white/20 transition-colors" onClick={() => setMoveModalArgs(null)}>닫기</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isSharedView && showKakaoWarning && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/25">
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              className="w-full max-w-sm rounded-[2rem] bg-[#1f1f1f] border border-white/10 shadow-2xl p-7 text-center"
+            >
+              <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-brand-orange/20 text-brand-orange flex items-center justify-center">
+                <Info className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-black text-white mb-3">Chrome에서 열어주세요</h2>
+              <p className="text-sm leading-relaxed text-white/60 mb-6">
+                카카오톡 브라우저에서는 Google 로그인 및 일부 기능이 제한될 수 있습니다.<br />
+                정상적인 음악 감상과 저장 기능 사용을 위해 Chrome에서 열어주세요.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={openCurrentShareInChrome}
+                  className="w-full py-4 rounded-2xl bg-brand-orange text-white font-black text-lg shadow-lg shadow-brand-orange/20 hover:bg-brand-orange/90 transition-all"
+                >
+                  공유 음악 듣기
+                </button>
+                <button
+                  onClick={handleKakaoModalShare}
+                  className="w-full py-4 rounded-2xl bg-white/10 text-white font-black text-lg flex items-center justify-center gap-2 hover:bg-white/15 transition-all"
+                >
+                  <Share2 className="w-5 h-5" /> 공유하기
+                </button>
+                <button
+                  onClick={() => setShowKakaoWarning(false)}
+                  className="w-full pt-3 pb-1 text-white/40 hover:text-white/70 font-bold transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="mx-auto w-full max-w-[1320px] space-y-4 md:space-y-5">
+        
+        {/* Header Block */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+        >
+          <div className="flex items-start gap-4 min-w-0">
+            {isSharedView && (
+              <button
+                onClick={() => navigate('/')}
+                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
+              >
+                <Home className="w-4 h-4" />홈
+              </button>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
+                <div className="flex gap-[5px] items-end justify-center w-9 h-9 text-white shrink-0">
+                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
+                  <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
+                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
+                </div>
+                {isSharedView ? '공유된 음악' : <>Suno <span className="bg-gradient-to-r from-[#EBCF77] via-[#F39B87] to-[#D96F8F] bg-clip-text text-transparent">Library</span></>}
+              </h1>
+              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">
+                {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 items-center self-end md:self-center">
+          {!isSharedView && (
+            <>
+              {typeof remainingCredits === 'number' && (
+                <div
+                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-purple-500/20 bg-purple-500/10 text-xs font-bold text-purple-200"
+                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+                >
+                  남은 크레딧 {remainingCredits.toLocaleString()}
+                </div>
+              )}
+              <button
+                onClick={() => navigate('/suno-api-settings')}
+                className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all"
+                title="Music API 설정"
+              >
+                <Settings className="w-4 h-4" />
+                API 설정
+              </button>
+              <button
+                onClick={handleSyncLibraryColors}
+                className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all"
+                title={getUnifiedColorSyncDescription()}
+              >
+                <RefreshCw className="w-4 h-4" />
+                동기화 : {isLibraryAdminUser ? '무제한' : `${libraryColorSyncRemaining}/5`}
+              </button>
+            </>
+          )}
+          </div>
+        </motion.div>
+
+        <div className="flex md:hidden items-center justify-between gap-3 -mt-2">
+          <button
+            onClick={() => navigate('/')}
+            className="h-12 px-4 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center gap-2"
+          >
+            <Home className="w-4 h-4" />홈
+          </button>
+          {!isSharedView && (
+            <div className="flex items-center gap-2">
+              {typeof remainingCredits === 'number' && (
+                <div
+                  className="h-12 flex items-center px-3 rounded-xl text-xs font-bold bg-purple-500/10 border border-purple-500/20 text-purple-200"
+                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+                >
+                  {remainingCredits.toLocaleString()} credit
+                </div>
+              )}
+              <button
+                onClick={() => navigate('/suno-api-settings')}
+                className="h-12 flex items-center gap-2 px-4 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
+                title="Music API 설정"
+              >
+                <Settings className="w-4 h-4" />
+                API 설정
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Main Music Player relocated to GlobalPlayer */}
+
+        {/* View Mode Tabs */}
+        {!isSharedView && (
+          <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
+            <button
+              onClick={() => navigate('/')}
+              className="hidden md:flex h-12 w-12 shrink-0 items-center justify-center text-sm font-bold rounded-2xl border border-white/10 bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white shadow-btn transition-all"
+              title="홈"
+            >
+              <Home className="w-4 h-4" />
+            </button>
+            <div className="grid grid-cols-3 gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 w-full max-w-[520px] md:w-fit md:max-w-none">
+            <button
+              onClick={() => setLibraryViewMode('workspace')}
+              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#877198]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              워크스페이스
+            </button>
+            <button
+              onClick={() => {
+                if (libraryViewMode !== 'playlist') {
+                  setLibraryViewMode('playlist');
+                  setActivePlaylistSection('normal');
+                  if (visibleNormalPlaylists.length > 0 && !selectedNormalPlaylistId) {
+                    setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
+                  }
+                }
+              }}
+              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#877198]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              플레이리스트
+            </button>
+            <button
+              onClick={() => {
+                if (libraryViewMode !== 'sharedPlaylist') {
+                  setLibraryViewMode('sharedPlaylist');
+                  setActivePlaylistSection('shared');
+                  if (visibleSharedPlaylists.length > 0 && !selectedSharedPlaylistId) {
+                    setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
+                  }
+                }
+              }}
+              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#877198]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              공유 플레이리스트
+            </button>
+            </div>
+          </div>
+        )}
+
+        {libraryViewMode === 'workspace' && (
+          <>
+            {/* Search & Filter */}
+        {!isSharedView && (
+          <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+              <input 
+                type="text" 
+                placeholder="음악 제목이나 스타일 검색..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-white/10 outline-none focus:border-brand-orange/50 transition-all text-sm"
+              />
+            </div>
+            <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <button
+                onClick={() => setWorkspaceColorFilter('all')}
+                className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#BBA8CA] bg-[#877198]/26' : 'text-white/40 hover:text-white/70'}`}
+              >
+                전체
+              </button>
+              <div className="w-px h-3 bg-white/10 mx-1"></div>
+              {COLOR_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setWorkspaceColorFilter(opt.value)}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                    workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                  }`}
+                  title={opt.label}
+                >
+                  <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                </button>
+              ))}
+              <div className="md:hidden w-px h-3 bg-white/10 mx-1"></div>
+              <button
+                onClick={handleSyncLibraryColors}
+                className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-brand-orange transition-all"
+                title={getUnifiedColorSyncDescription()}
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl shrink-0">
+              {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
+                    filter === f ? 'bg-[#877198]/78 text-white' : 'hover:bg-white/5 opacity-60'
+                  }`}
+                >
+                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loading || sharedTrackLoading ? (
+          <div className="!mt-2 border-t border-white/[0.06] pt-4 flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
+          </div>
+        ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
+          <div className="!mt-2 border-t border-white/[0.06] pt-4 flex flex-col items-center justify-center py-16 text-center">
+            <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
+            <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
+          </div>
+        ) : filteredTracks.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="!mt-2 border-t border-white/[0.06] pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
+          >
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+              {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
+            </div>
+            <h2 className="text-xl font-bold mb-2">
+              {isSharedView ? (sharedError ? '공유곡 조회 중 오류가 발생했습니다.' : '공유된 음악을 이용할 수 없습니다') : '검색 결과가 없습니다'}
+            </h2>
+            <p className="text-[var(--text-secondary)] mb-8">
+              {isSharedView ? (sharedError ? '잠시 후 다시 시도해주세요.' : '비공개로 전환되었거나 삭제된 음악일 수 있습니다.') : '다른 검색어를 사용하거나 필터를 변경해보세요.'}
+            </p>
+          </motion.div>
+        ) : (
+          <div className="!mt-2 border-t border-white/[0.06] pt-4 space-y-4 md:space-y-5">
+            {displayedWorkspaceTracks.map((group) => {
+              const dataItems = extractSunoData(group);
+              const items = (dataItems.length > 0 ? dataItems : [{}])
+                .map((item: any, idx: number) => ({ item, idx }))
+                .filter(({ item, idx }: { item: any; idx: number }) => isWorkspaceItemVisible(group, item, idx));
+              const dateStr = formatCreatedAt(group.createdAt);
+              
+              return (
+                <motion.div
+                  key={group.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-[var(--bg-secondary)] border border-white/10 rounded-2xl"
+                >
+                  {/* Group Header */}
+                  <div className="px-4 md:px-6 py-4 border-b border-white/5 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-white/[0.02] rounded-t-2xl overflow-hidden">
+                    <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-orange shrink-0">
+                        <Music className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1 pr-1 md:pr-0">
+                        {(() => {
+                          const titleParts = splitSunoDisplayTitleParts(group.title || 'Untitled Generation');
+                          return (
+                            <>
+                              <h3 className="hidden md:block font-bold leading-tight truncate">
+                                {formatSunoDisplayTitle(group.title || 'Untitled Generation')}
+                              </h3>
+                              <div className="md:hidden min-w-0 leading-tight">
+                                {titleParts.genre && (
+                                  <div className="text-sm font-black text-[var(--text-primary)] truncate">
+                                    {titleParts.genre}
+                                  </div>
+                                )}
+                                <div className="mt-0.5 text-sm font-black text-[var(--text-primary)] truncate">
+                                  {titleParts.title}
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                        <div className="flex items-center gap-2 mt-1 opacity-40 text-[10px] min-w-0">
+                          <span className="truncate">{dateStr}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="shrink-0">{items.length}곡</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-start md:items-center justify-end gap-1.5 md:gap-3 flex-nowrap max-w-[112px] md:max-w-none">
+                      {getStatusBadge(group)}
+                      {group.status !== 'completed' && (
+                        <button
+                          onClick={() => checkStatus(group.id, group.taskId)}
+                          disabled={statusChecking === group.id || !group.taskId}
+                          className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-bold border border-white/10 transition-all"
+                        >
+                          {statusChecking === group.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          <span className="hidden sm:inline">{group.status === 'failed' || group.status === 'cancelled' || group.status === 'canceled' ? '재확인' : '상태 확인'}</span>
+                        </button>
+                      )}
+                      {!isSharedView && !group.taskId && <span className="hidden md:inline text-[10px] opacity-30">Task ID 없음</span>}
+                    </div>
+                  </div>
+
+                  {/* Tracks List */}
+                  <div className="divide-y divide-white/5">
+                    {items.map(({ item, idx }: { item: any; idx: number }) => {
+                      const audioUrl = getAudioUrl(item, group);
+                      const duration = getDuration(item, group);
+                      const hasValidDuration = duration !== null;
+                      const isFailed = group.status === 'failed';
+                      const isCompleted = Boolean(audioUrl && (group.status === 'completed' || group.status === 'success' || hasValidDuration));
+                      const isPending = !isFailed && !audioUrl;
+                      const sunoVersionLabel = getSunoModelVersionLabel(item, group);
+                      
+                      const isCurrent = isCurrentWorkspaceItem(group, item, idx);
+                      const selection = buildWorkspaceSelection(group, item, idx);
+                      const isSelected = isTrackSelected(selection.key);
+                      
+                      return (
+                        <div 
+                          key={`${group.id}-${idx}`} 
+                          data-selection-keep="true"
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          onClick={(e) => {
+                             if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
+                             if (multiSelectMode) {
+                               toggleSelectedTrack(selection);
+                               return;
+                             }
+                             if (audioUrl) {
+                               if (isCurrent) togglePlayPause();
+                               else handlePlayTrack(group, idx);
+                             }
+                          }}
+                        >
+                          <AnimatedTrackPlayButton
+                            imageUrl={getImageUrl(item, group)}
+                            isActive={isCurrent}
+                            isPlaying={isPlaying}
+                            disabled={!audioUrl}
+                            durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (multiSelectMode) {
+                                toggleSelectedTrack(selection);
+                                return;
+                              }
+                              if (audioUrl) {
+                                if (isCurrent) togglePlayPause();
+                                else handlePlayTrack(group, idx);
+                              }
+                            }}
+                          />
+                          {multiSelectMode && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center transition-all ${isSelected ? 'text-brand-orange' : 'text-white/35 hover:text-white/70'}`}
+                              title={isSelected ? '선택 해제' : '선택'}
+                            >
+                              {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                            </button>
+                          )}
+                          
+                          <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const colorMenuId = `workspace-${group.id}-${idx}`;
+                                setActiveColorMenu(activeColorMenu === colorMenuId ? null : colorMenuId);
+                                setActiveMenuState(null);
+                                setActivePlaylistItemMenu(null);
+                                setBulkMenuState(null);
+                              }}
+                              className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
+                              style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
+                              title="색상 지정"
+                            />
+                            {activeColorMenu === `workspace-${group.id}-${idx}` && (
+                              <div data-floating-menu="true" className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                                {COLOR_OPTIONS.map(c => (
+                                  <button
+                                    key={c.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (multiSelectMode && selectedTrackCount > 0) {
+                                        handleBulkChangeColor(c.value);
+                                      } else {
+                                        handleChangeWorkspaceColor(group, idx, c.value);
+                                        setActiveColorMenu(null);
+                                      }
+                                    }}
+                                    className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                    style={{ backgroundColor: c.color }}
+                                    title={c.label}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-brand-orange' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
+                                {getTitle(item, group, idx)}
+                              </span>
+                              <span className="hidden md:block truncate">
+                                {getTitle(item, group, idx)}
+                              </span>
+                            </h4>
+                            {sunoVersionLabel && (
+                              <span
+                                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${getSunoModelVersionBadgeClass(sunoVersionLabel)}`}
+                                title={`Suno ${sunoVersionLabel}로 생성`}
+                              >
+                                {sunoVersionLabel}
+                              </span>
+                            )}
+                            {isFailed ? (
+                              <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                                생성 실패: {getSunoFailureDisplayMessage(group)}
+                              </span>
+                            ) : isPending ? (
+                              <span className="text-xs opacity-50 truncate flex items-center gap-1.5 text-blue-400">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                생성 중...
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {isCompleted && isWorkspaceItemUnplayed(group, item, idx) && (
+                            <span
+                              className="w-2 h-2 rounded-full bg-brand-orange shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
+                              title="아직 재생하지 않은 완성곡"
+                            />
+                          )}
+
+                          <div className="relative shrink-0 ml-2">
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation();
+                                if (multiSelectMode) {
+                                  openBulkMenuFromButton(e.currentTarget);
+                                  return;
+                                }
+                                const id = `${group.id}-${idx}`;
+                                if (activeMenuState?.id === id) {
+                                  setActiveMenuState(null);
+                                } else {
+                                  setActiveMenuState({
+                                    id,
+                                    position: computeFloatingMenuPosition(e.currentTarget, 300),
+                                    anchorEl: e.currentTarget,
+                                    group,
+                                    item,
+                                    idx,
+                                    audioUrl
+                                  });
+                                }
+                              }}
+                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-brand-orange hover:text-brand-orange/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              );
+            })}
+            {hasMoreWorkspaceTracks && (
+              <div className="flex flex-col items-center gap-2 pt-8 pb-4">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length))}
+                  onMouseEnter={() => setShowWorkspaceMoreTooltip(true)}
+                  onMouseLeave={() => setShowWorkspaceMoreTooltip(false)}
+                  onFocus={() => setShowWorkspaceMoreTooltip(true)}
+                  onBlur={() => setShowWorkspaceMoreTooltip(false)}
+                  className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
+                >
+                  <span className="text-brand-orange text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
+                  더보기 ({filteredTracks.length - workspaceVisibleCount}세트 남음)
+                </button>
+                <p className="text-[11px] text-white/35">
+                  {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 총 {filteredTracks.length}세트
+                </p>
+                {showWorkspaceMoreTooltip && (
+                  <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-brand-orange/30 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
+                    <p className="text-xs font-bold text-brand-orange">더보기</p>
+                    <p className="mt-1 text-[11px] text-white/60">곡을 10세트 더 불러옵니다.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+          </>
+        )}
+
+        {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
+          <div className="space-y-5 mt-5">
+            {/* Playlist Tabs Layout */}
+            
+            {libraryViewMode === 'playlist' && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+                {visibleNormalPlaylists.map((playlist) => (
+                  <button 
+                    key={playlist.id} 
+                    onClick={() => {
+                      setSelectedNormalPlaylistId(playlist.id!);
+                      setActivePlaylistSection('normal');
+                    }}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${
+                      activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
+                        ? 'bg-[#877198]/78 text-white border-[#877198]/65 shadow-lg' 
+                        : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {playlist.title}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => handleAddPlaylist('normal')}
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
+                >
+                  <span className="text-lg font-light leading-none">+</span>
+                </button>
+              </div>
+            </div>
+            )}
+
+            {libraryViewMode === 'sharedPlaylist' && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+                {visibleSharedPlaylists.map((playlist) => (
+                  <button 
+                    key={playlist.id} 
+                    onClick={() => {
+                      setSelectedSharedPlaylistId(playlist.id!);
+                      setActivePlaylistSection('shared');
+                    }}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 ${
+                      activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
+                        ? 'bg-[#877198]/78 text-white border-[#877198]/65 shadow-lg' 
+                        : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {playlist.title}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => handleAddPlaylist('shared')}
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
+                >
+                  <span className="text-lg font-light leading-none">+</span>
+                </button>
+              </div>
+            </div>
+            )}
+
+            {/* Selected Playlist Header */}
+            {(() => {
+              const activePlaylist = activePlaylistSection === 'normal' 
+                ? visibleNormalPlaylists.find(p => p.id === selectedNormalPlaylistId)
+                : visibleSharedPlaylists.find(p => p.id === selectedSharedPlaylistId);
+                
+              if (!activePlaylist) return null;
+              const isFallback = (activePlaylist as any).isFallback;
+              
+              return (
+                <div className="mx-2 flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border border-white/5 rounded-2xl mb-4 mt-6 shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-white/40 mb-1">
+                      {activePlaylistSection === 'normal' ? '선택된 플레이리스트' : '선택된 공유 플레이리스트'}
+                    </span>
+                    <span className="text-base font-bold text-white flex items-center gap-1.5">
+                      {activePlaylistSection === 'shared' && <Share2 className="w-4 h-4 text-brand-orange" />}
+                      {activePlaylist.title}
+                    </span>
+                  </div>
+                  {!isFallback && user && (
+                    <div className="flex items-center gap-1">
+                      {!(activePlaylist.id === (activePlaylistSection === 'normal' ? visibleNormalPlaylists[0]?.id : visibleSharedPlaylists[0]?.id)) && (
+                        <button 
+                          onClick={() => handleRenamePlaylist(activePlaylist)}
+                          className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDeletePlaylist(activePlaylist)}
+                        className="p-2 text-white/50 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Playlist Controls (Search, Color Filter & Sort) */}
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3 px-2 mt-2">
+              {/* Search */}
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                <input
+                  type="text"
+                  value={playlistSearchTerm}
+                  onChange={(e) => setPlaylistSearchTerm(e.target.value)}
+                  placeholder="음악 제목이나 제작자 검색..."
+                  className="w-full h-[46px] bg-[var(--bg-secondary)] border border-white/10 rounded-2xl pl-11 pr-4 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-brand-orange/50 transition-all"
+                />
+              </div>
+
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 lg:justify-end">
+                {/* Color Filter */}
+                <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-white/5 overflow-x-auto hide-scrollbar">
+                  <button
+                    onClick={() => setPlaylistColorFilter('all')}
+                    className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#BBA8CA] bg-[#877198]/26' : 'text-white/40 hover:text-white/70'}`}
+                  >
+                    전체
+                  </button>
+                  <div className="w-px h-3 bg-white/10 mx-1"></div>
+                  {[
+                    { value: 'gray', color: '#6b7280' },
+                    { value: 'red', color: '#ef4444' },
+                    { value: 'orange', color: '#f97316' },
+                    { value: 'yellow', color: '#eab308' },
+                    { value: 'green', color: '#22c55e' },
+                    { value: 'blue', color: '#3b82f6' },
+                    { value: 'purple', color: '#a855f7' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPlaylistColorFilter(opt.value)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                        playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                      }`}
+                    >
+                      <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                    </button>
+                  ))}
+                  <div className="md:hidden w-px h-3 bg-white/10 mx-1"></div>
+                  <button
+                    onClick={handleSyncLibraryColors}
+                    className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-brand-orange transition-all"
+                    title={getUnifiedColorSyncDescription()}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Sort Options */}
+                <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-white/5">
+                  {[
+                    { value: 'added', label: '저장순' },
+                    { value: 'genre', label: '장르순' },
+                    { value: 'custom', label: '사용자' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPlaylistSortMode(opt.value as any)}
+                      className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                        playlistSortMode === opt.value
+                          ? 'bg-[#877198]/26 text-[#BBA8CA]'
+                          : 'text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  {[
+                    { value: 'all', label: '전체' },
+                    { value: 'public', label: '공개' },
+                    { value: 'private', label: '비공개' }
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
+                      className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                        playlistVisibilityFilter === opt.value
+                          ? 'bg-[#877198]/26 text-[#BBA8CA]'
+                          : 'text-white/40 hover:text-white/70'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Playlist Items */}
+            {loadingPlaylistItems ? (
+              <div className="flex justify-center p-6 mt-3 border-t border-white/5">
+                <Loader2 className="w-6 h-6 animate-spin text-brand-orange" />
+              </div>
+            ) : playlistItems.length > 0 ? (
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-white/5">
+                {(() => {
+                  const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
+                  let items = playlistItems.filter(item => {
+                    if (!matchesPlaylistVisibilityFilter(item)) return false;
+                    if (playlistColorFilter === 'all') return true;
+                    const itemColor = getPlaylistItemColor(item);
+                    if (playlistColorFilter === 'gray') return itemColor === 'gray';
+                    return itemColor === playlistColorFilter;
+                  });
+
+                  if (normalizedPlaylistSearch) {
+                    items = items.filter(item => {
+                      const searchable = [
+                        item.title,
+                        formatSunoDisplayTitle(item.title),
+                        getPlaylistItemCreatorName(item),
+                        item.ownerNickname,
+                        item.creatorNickname,
+                        item.ownerEmail,
+                        item.creatorEmail,
+                        item.ownerUid,
+                        item.sourceId,
+                        ...(item.genreLabels || [])
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                        .toLowerCase();
+                      return searchable.includes(normalizedPlaylistSearch);
+                    });
+                  }
+
+                  if (playlistSortMode === 'added') {
+                    items = items.sort((a, b) => {
+                      if (a.order !== b.order) return a.order - b.order;
+                      const timeA = a.addedAt ? (typeof a.addedAt.toMillis === 'function' ? a.addedAt.toMillis() : 0) : 0;
+                      const timeB = b.addedAt ? (typeof b.addedAt.toMillis === 'function' ? b.addedAt.toMillis() : 0) : 0;
+                      return timeA - timeB;
+                    });
+                  } else if (playlistSortMode === 'genre') {
+                    items = items.sort((a, b) => {
+                      const genreA = (a.genreLabels && a.genreLabels[0]) || '';
+                      const genreB = (b.genreLabels && b.genreLabels[0]) || '';
+                      return genreA.localeCompare(genreB);
+                    });
+                  } else if (playlistSortMode === 'custom') {
+                    items = items.sort((a, b) => a.order - b.order);
+                  }
+
+                  return items.map((item, index) => {
+                  const isActive = isCurrentPlaylistItem(item);
+                  const isShared = item.sourceType === 'shared_track';
+                  const sourceTrackForPlaylist = !isShared
+                    ? getPlaylistItemSourceTrack(item)
+                    : null;
+                  const playlistFavoriteActive = Boolean(!isShared && (((sourceTrackForPlaylist as any)?.favorite) ?? ((item as any).favorite)));
+                  const cachedSharedStatus = sharedStatusCache[item.sourceId];
+                  const isUnavailable = isShared && cachedSharedStatus && cachedSharedStatus.isPublic === false;
+                  const blockedPlaylistActionClass = "w-full text-left px-4 py-2 flex items-center justify-between group text-white/25 cursor-not-allowed";
+                  const normalPlaylistActionClass = "w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white";
+                  
+                  const globalId = getTrackGlobalId(item);
+                  const likeData = likesCache[globalId] || { likeCount: 0, likedByMe: false };
+                  const selection = buildPlaylistSelection(item);
+                  const isSelected = isTrackSelected(selection.key);
+                  
+                  return (
+                    <div 
+                      key={item.id} 
+                      onClick={() => {
+                        if (multiSelectMode) toggleSelectedTrack(selection);
+                      }}
+                      data-selection-keep="true"
+                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
+                    >
+                      {/* Left: Play/Pause */}
+                      <AnimatedTrackPlayButton
+                        imageUrl={item.imageUrl}
+                        isActive={isActive}
+                        isPlaying={isPlaying}
+                        unavailable={isUnavailable}
+                        disabled={isUnavailable}
+                        durationLabel={formatPlaylistDuration(item.duration) !== '--:--' ? formatPlaylistDuration(item.duration) : undefined}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (multiSelectMode) {
+                            toggleSelectedTrack(selection);
+                            return;
+                          }
+                          if (isUnavailable) return;
+                          
+                          if (item.sourceType === 'shared_track') {
+                            const isPublic = await ensureSharedItemIsPublic(item.sourceId, false);
+                            if (!isPublic) {
+                              showToast("원곡자가 비공개로 전환하여 재생할 수 없습니다.");
+                              return;
+                            }
+                          }
+                          
+                          if (isActive) {
+                            togglePlayPause();
+                          } else {
+                            const newQueue = playlistItems
+                              .filter(p => {
+                                if (p.sourceType !== 'shared_track') return true;
+                                const cached = p.sourceId ? sharedStatusCache[p.sourceId] : null;
+                                return cached?.isPublic !== false;
+                              })
+                              .map(p => ({
+                                url: p.audioUrl!,
+                                title: p.title,
+                                imageUrl: p.imageUrl,
+                                parent: {
+                                  ...p,
+                                  creatorDisplayId: getPlaylistItemCreatorName(p),
+                                  ownerNickname: getPlaylistItemCreatorName(p) || p.ownerNickname,
+                                  creatorNickname: getPlaylistItemCreatorName(p) || p.creatorNickname,
+                                  __playlistContext: true,
+                                  __activePlaylistId: activePlaylistId,
+                                  __libraryViewMode: libraryViewMode,
+                                  favorite: p.sourceType === 'shared_track' ? false : Boolean((getPlaylistItemSourceTrack(p) as any)?.favorite ?? (p as any).favorite)
+                                },
+                                index: 0,
+                                trackId: p.id,
+                                creatorDisplayId: getPlaylistItemCreatorName(p),
+                                lyrics: p.lyrics || p.lyricsText || p.koreanLyrics || p.englishLyrics || null
+                              })).filter(q => q.url);
+
+                            if (item.audioUrl) {
+                              markPlaylistItemPlayed(item);
+                              playTrack({
+                                url: item.audioUrl,
+                                title: formatSunoDisplayTitle(item.title),
+                                imageUrl: item.imageUrl,
+                                parent: {
+                                  ...item,
+                                  creatorDisplayId: getPlaylistItemCreatorName(item),
+                                  ownerNickname: getPlaylistItemCreatorName(item) || item.ownerNickname,
+                                  creatorNickname: getPlaylistItemCreatorName(item) || item.creatorNickname,
+                                  __playlistContext: true,
+                                  __activePlaylistId: activePlaylistId,
+                                  __libraryViewMode: libraryViewMode,
+                                  favorite: playlistFavoriteActive,
+                                  sourceId: isShared ? item.sourceId : (sourceTrackForPlaylist as any)?.id || item.sourceId
+                                },
+                                index: 0,
+                                trackId: item.id,
+                                creatorDisplayId: getPlaylistItemCreatorName(item),
+                                lyrics: item.lyrics || item.lyricsText || item.koreanLyrics || item.englishLyrics || null
+                              }, newQueue);
+                            } else {
+                              showToast('이 곡은 재생할 수 없습니다.');
+                            }
+                          }
+                        }}
+                      />
+                      {multiSelectMode && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
+                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center transition-all ${isSelected ? 'text-brand-orange' : 'text-white/35 hover:text-white/70'}`}
+                          title={isSelected ? '선택 해제' : '선택'}
+                        >
+                          {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                        </button>
+                      )}
+
+                      {/* Main Info */}
+                      <div className={`flex flex-col ml-3 flex-1 min-w-0 ${isUnavailable ? 'opacity-50 grayscale' : ''}`}>
+                        <div className="flex items-center gap-2 relative">
+                          {/* Color Point */}
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); setBulkMenuState(null); }}
+                            className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center hover:scale-110 transition-transform"
+                            style={{ backgroundColor: getColorHex(getPlaylistItemColor(item)) }}
+                          />
+                          {activeColorMenu === item.id && (
+                            <div data-floating-menu="true" className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-white/10">
+                              {[
+                                { value: 'gray', color: '#6b7280' },
+                                { value: 'red', color: '#ef4444' },
+                                { value: 'orange', color: '#f97316' },
+                                { value: 'yellow', color: '#eab308' },
+                                { value: 'green', color: '#22c55e' },
+                                { value: 'blue', color: '#3b82f6' },
+                                { value: 'purple', color: '#a855f7' }
+                              ].map(c => (
+                                <button
+                                  key={c.value}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (multiSelectMode && selectedTrackCount > 0) {
+                                      handleBulkChangeColor(c.value);
+                                    } else {
+                                      handleChangeColor(item, c.value);
+                                      setActiveColorMenu(null);
+                                    }
+                                  }}
+                                  className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                  style={{ backgroundColor: c.color }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          
+                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-brand-orange' : 'text-white'}`}>
+                            <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
+                            <span className="hidden md:block truncate">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
+                          </h3>
+                        </div>
+                        
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <div className="flex items-center gap-2 text-xs text-white/50">
+                            <span className="truncate">
+                              {getPlaylistItemCreatorName(item)}
+                            </span>
+                          </div>
+                          {isUnavailable && (
+                            <span className="text-[10px] text-red-400 font-bold bg-red-400/10 px-1.5 py-0.5 rounded w-fit pb-0">
+                              원곡자가 비공개로 전환했습니다.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="flex items-center pr-2 ml-2">
+                        {isPlaylistItemUnplayed(item) && (
+                          <span
+                            className="w-2 h-2 rounded-full bg-brand-orange shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
+                            title="아직 재생하지 않은 완성곡"
+                          />
+                        )}
+                        {playlistSortMode === 'custom' && (
+                          <div className="flex flex-col items-center mr-3 gap-1">
+                            <button 
+                              onClick={() => { if (index > 0) handleCustomSort(item, items[index - 1]); }}
+                              disabled={index === 0}
+                              className={`p-1 rounded-sm ${index === 0 ? 'text-white/20' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                            </button>
+                            <button 
+                              onClick={() => { if (index < items.length - 1) handleCustomSort(item, items[index + 1]); }}
+                              disabled={index === items.length - 1}
+                              className={`p-1 rounded-sm ${index === items.length - 1 ? 'text-white/20' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                          </div>
+                        )}
+                        
+                        <button 
+                          onClick={() => { if (!isUnavailable) handleToggleLike(item); }}
+                          disabled={isUnavailable}
+                          className={`flex items-center gap-1 text-xs font-medium mr-3 p-1.5 rounded-lg transition-colors ${
+                            isUnavailable ? 'text-white/20 cursor-not-allowed' : likeData.likedByMe ? 'text-red-500 hover:bg-red-500/10' : 'text-white/40 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {likeData.likedByMe ? (
+                            <Heart className="w-4 h-4 fill-current" />
+                          ) : (
+                            <Heart className="w-4 h-4" />
+                          )}
+                          <span>{likeData.likeCount}</span>
+                        </button>
+                        
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (multiSelectMode) {
+                                openBulkMenuFromButton(e.currentTarget);
+                                return;
+                              }
+                              setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!);
+                              setActiveColorMenu(null);
+                            }}
+                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-brand-orange hover:text-brand-orange/80' : 'rounded-full text-white/40 hover:text-white'}`}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {activePlaylistItemMenu === item.id && (
+                            <div data-floating-menu="true" className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-white/5 text-sm py-1">
+                              <button 
+                                disabled={isUnavailable}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (isUnavailable) return;
+                                  handleShowPlaylistItemDetails(item); 
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
+                              >
+                                <span className="flex items-center gap-2"><Info className="w-4 h-4 opacity-70" />상세정보</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  enterMultiSelectWith(selection);
+                                  setActivePlaylistItemMenu(null);
+                                }}
+                                className="w-full text-left px-4 py-2 hover:bg-brand-orange/10 flex items-center justify-between group text-white/80 hover:text-brand-orange"
+                              >
+                                <span className="flex items-center gap-2"><CheckSquare className="w-4 h-4 opacity-70" />선택</span>
+                              </button>
+                              <button 
+                                disabled={isUnavailable}
+                                onClick={async (e) => { 
+                                  e.stopPropagation(); 
+                                  if (isUnavailable) return;
+                                  if (!item.audioUrl) { showToast("다운로드할 오디오 URL이 없습니다."); return; }
+                                  if (item.sourceType === 'shared_track' && !user) { showToast("로그인이 필요합니다."); return; }
+                                  if (item.sourceType === 'shared_track') {
+                                    const isPublic = await ensureSharedItemIsPublic(item.sourceId, false);
+                                    if (!isPublic) { showToast("원곡자가 비공개로 전환하여 다운로드할 수 없습니다."); return; }
+                                  }
+                                  handleDownload(item.audioUrl, formatSunoDisplayTitle(item.title)); 
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
+                              >
+                                <span className="flex items-center gap-2"><Download className="w-4 h-4 opacity-70" />다운로드</span>
+                              </button>
+                              <button 
+                                disabled={isUnavailable}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (isUnavailable) return;
+                                  if (!item.appliedKeywords || Object.keys(item.appliedKeywords).length === 0) {
+                                    showToast("적용할 곡 설정 정보가 없습니다."); return;
+                                  }
+                                  handleApplyNext(item, item); 
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
+                              >
+                                <span className="flex items-center gap-2"><Music className="w-4 h-4 opacity-70" />다음곡에 적용</span>
+                              </button>
+                              <button 
+                                disabled={isUnavailable}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (isUnavailable) return;
+                                  const fakeItem = { ...item, id: item.sourceId, trackId: item.sourceId, duration: item.duration, audio_url: item.audioUrl, image_url: item.imageUrl, ownerNickname: item.ownerNickname, creatorNickname: item.creatorNickname, creatorDisplayId: getPlaylistItemCreatorName(item), ownerEmail: item.ownerEmail, creatorEmail: item.creatorEmail, isPlaylistItem: true };
+                                  setSharePopupInfo({ group: fakeItem, item: fakeItem, idx: undefined, mode: 'default' });
+                                  setActivePlaylistItemMenu(null); 
+                                }}
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
+                              >
+                                <span className="flex items-center gap-2"><Share2 className="w-4 h-4 opacity-70" />공유</span>
+                              </button>
+                              {!isShared && activePlaylistSection !== 'shared' && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleTogglePlaylistItemFavorite(item); setActivePlaylistItemMenu(null); }}
+                                  className="w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white"
+                                >
+                                  <span className="flex items-center gap-2"><Star className={`w-4 h-4 opacity-70 ${playlistFavoriteActive ? 'fill-yellow-400 text-yellow-400' : ''}`} />{playlistFavoriteActive ? '즐겨찾기 해제' : '즐겨찾기'}</span>
+                                </button>
+                              )}
+                              <button 
+                                disabled={isUnavailable}
+                                onClick={(e) => { e.stopPropagation(); if (isUnavailable) return; handleMoveToOtherPlaylist(item); setActivePlaylistItemMenu(null); }}
+                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
+                              >
+                                <span className="flex items-center gap-2"><FolderOutput className="w-4 h-4 opacity-70" />폴더 이동</span>
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleRemoveFromPlaylist(item); setActivePlaylistItemMenu(null); }}
+                                className="w-full text-left px-4 py-2 hover:bg-red-400/10 text-red-400 font-bold transition-colors"
+                              >
+                                <span className="flex items-center gap-2"><Trash2 className="w-4 h-4 opacity-70" />리스트 삭제</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })})()}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center border-t border-white/5 mt-3">
+                <Music className="w-12 h-12 text-brand-orange/40 mb-4" />
+                <h2 className="text-xl font-bold mb-2">
+                  {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}
+                </h2>
+                <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
+                  {activePlaylistSection === 'normal' 
+                    ? '워크스페이스에서 플레이리스트 저장을 눌러 곡을 추가하세요.' 
+                    : '공유받은 곡에서 플레이리스트 저장을 누르면 여기에 추가됩니다.'}
+                </p>
+                <button
+                  onClick={() => setLibraryViewMode('workspace')}
+                  className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all"
+                >
+                  워크스페이스로 이동
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {shareToastInfo && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center"
+          >
+            <Share2 className="w-4 h-4 text-brand-orange shrink-0" />
+            <span className="text-sm font-bold tracking-tight whitespace-nowrap">{shareToastInfo}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Share Modal */}
+      <AnimatePresence>
+        {sharePopupInfo && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-black tracking-tight text-white mb-1">공유 설정</h2>
+                <p className="text-xs text-white/40 font-medium lowercase">공유할 방법을 선택해주세요.</p>
+              </div>
+              
+              {sharePopupInfo.mode === 'default' ? (
+                <div className="space-y-6">
+                  <button
+                    onClick={handlePublicShare}
+                    className="w-full py-4 bg-brand-orange text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all shadow-lg shadow-brand-orange/20"
+                  >
+                    <Share2 className="w-5 h-5" /> 링크 공유하기
+                  </button>
+                  
+                  {canManageSharePrivacy(sharePopupInfo) && (
+                    <div className="pt-4 border-t border-white/5">
+                      <div className="text-[10px] text-white/30 mb-3 font-bold uppercase tracking-widest text-center">공개 범위 설정</div>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'public', label: '공개', active: sharePopupInfo.group?.isPublic, action: handlePublicStatus, color: 'green' },
+                          { id: 'private', label: '비공개', active: !sharePopupInfo.group?.isPublic, action: handlePrivateShare, color: 'red' }
+                        ].map(btn => (
+                          <button
+                            key={btn.id}
+                            onClick={btn.action}
+                            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all border ${
+                              btn.active 
+                                ? btn.color === 'green' ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
+                                : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <button
+                    onClick={() => handlePlatformShare('copy')}
+                    className="w-full py-4 bg-white text-black rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/90 transition-all shadow-lg"
+                  >
+                    <Share2 className="w-5 h-5" /> 공유하기
+                  </button>
+
+                  <div className="grid grid-cols-4 gap-y-6 gap-x-2">
+                    {[
+                      { id: 'kakao', label: '카카오톡', icon: MessageCircle, bgColor: 'bg-[#FEE500]', iconColor: 'text-[#3C1E1E]', disabled: !(window as any).Kakao?.isInitialized() },
+                      { id: 'email', label: '이메일', icon: Mail, bgColor: 'bg-white/10', iconColor: 'text-white' },
+                      { id: 'facebook', label: 'Facebook', icon: Facebook, bgColor: 'bg-[#1877F2]', iconColor: 'text-white' },
+                      { id: 'twitter', label: 'X (Twitter)', icon: Twitter, bgColor: 'bg-black border border-white/20', iconColor: 'text-white' },
+                      { id: 'telegram', label: '텔레그램', icon: Send, bgColor: 'bg-[#0088cc]', iconColor: 'text-white' },
+                    ].map(platform => (
+                      <button
+                        key={platform.id}
+                        disabled={platform.disabled}
+                        onClick={() => handlePlatformShare(platform.id)}
+                        className={`flex flex-col items-center gap-2 group transition-opacity ${platform.disabled ? 'opacity-30 cursor-not-allowed' : 'opacity-100'}`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl ${platform.bgColor} flex items-center justify-center transition-all group-hover:scale-110 shadow-lg`}>
+                          <platform.icon className={`w-6 h-6 ${platform.iconColor}`} />
+                        </div>
+                        <span className="text-[10px] font-bold text-white/50 group-hover:text-white transition-colors text-center">
+                          {platform.label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setSharePopupInfo(prev => prev ? { ...prev, mode: 'default' } : null)}
+                    className="w-full py-3 text-xs text-white/50 hover:text-white transition-all font-bold tracking-tight"
+                  >
+                    기본 설정으로 돌아가기
+                  </button>
+                </div>
+              )}
+              
+              <button
+                onClick={closeModal}
+                className="w-full py-3 text-white/20 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all mt-4"
+              >
+                닫기
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bulkMenuState && multiSelectMode && (
+          <>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              data-floating-menu="true" className="absolute z-[9999] w-56 bg-[var(--bg-secondary)] border border-brand-orange/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-2 text-[11px] font-bold text-brand-orange border-b border-white/5">
+                선택한 {selectedTrackCount}곡
+              </div>
+
+              <button
+                onClick={selectAllVisibleTracks}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+              >
+                <CheckSquare className="w-4 h-4" />
+                전체선택
+              </button>
+
+              <button
+                onClick={clearMultiSelect}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+              >
+                <X className="w-4 h-4" />
+                선택해제
+              </button>
+
+              <button
+                disabled={hasUnavailableSharedSelection}
+                onClick={handleBulkDownload}
+                className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+              >
+                <Download className="w-4 h-4" />
+                다운로드
+              </button>
+
+              <button
+                disabled={hasUnavailableSharedSelection}
+                onClick={() => {
+                  if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 공유할 수 없습니다.'); return; }
+                  setBulkMenuState(null); setBulkShareModalOpen(true);
+                }}
+                className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+              >
+                <Share2 className="w-4 h-4" />
+                공유
+              </button>
+
+              {!isSharedView && libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
+                <button
+                  onClick={handleBulkFavorite}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                >
+                  <Star className="w-4 h-4" />
+                  즐겨찾기
+                </button>
+              )}
+
+              {(libraryViewMode !== 'sharedPlaylist' || isSharedView) && (
+                <button
+                  disabled={hasUnavailableSharedSelection}
+                  onClick={handleBulkPlaylistSave}
+                  className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+                >
+                  <FolderOutput className="w-4 h-4" />
+                  플레이리스트 저장
+                </button>
+              )}
+
+              {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
+                <button
+                  disabled={hasUnavailableSharedSelection}
+                  onClick={() => {
+                    if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.'); return; }
+                    setBulkMenuState(null); setBulkMoveModalOpen(true);
+                  }}
+                  className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+                >
+                  <FolderOutput className="w-4 h-4" />
+                  폴더 이동
+                </button>
+              )}
+
+              {!isSharedView && (
+                <button
+                  onClick={handleBulkDeleteSelected}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {libraryViewMode === 'workspace' ? '선택삭제(휴지통)' : '리스트 삭제'}
+                </button>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bulkShareModalOpen && multiSelectMode && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkShareModalOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-black tracking-tight text-white mb-1">선택한 곡 공유</h2>
+                <p className="text-xs text-white/40 font-medium">선택한 {selectedTrackCount}곡에 적용할 공유 방식을 선택해주세요.</p>
+              </div>
+
+              <div className="space-y-3">
+                {!isSharedView && libraryViewMode !== 'sharedPlaylist' && canBulkManageSharePrivacy() && (
+                  <>
+                    <button
+                      onClick={handleBulkAllPublic}
+                      className="w-full py-4 bg-brand-orange text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-brand-orange/90 transition-all shadow-lg shadow-brand-orange/20"
+                    >
+                      <Globe2 className="w-5 h-5" /> All 공개
+                    </button>
+                    <button
+                      onClick={handleBulkPrivateShare}
+                      className="w-full py-4 bg-white/5 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/10 transition-all border border-white/10"
+                    >
+                      <X className="w-5 h-5" /> All 비공개
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={handleBulkAllLinkShare}
+                  className="w-full py-4 bg-white text-black rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-white/90 transition-all shadow-lg"
+                >
+                  <Share2 className="w-5 h-5" /> All 링크공유하기
+                </button>
+              </div>
+
+              <button
+                onClick={() => setBulkShareModalOpen(false)}
+                className="w-full py-3 text-white/20 text-[10px] font-black uppercase tracking-widest hover:text-white/60 transition-all mt-4"
+              >
+                닫기
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bulkMoveModalOpen && multiSelectMode && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#1a1a1a] border border-white/10 rounded-2xl p-5 shadow-2xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-black tracking-tight text-white">폴더 이동</h2>
+                  <p className="text-xs text-white/40 mt-1">선택한 {selectedTrackCount}곡을 이동할 폴더를 선택해주세요.</p>
+                </div>
+                <button onClick={() => setBulkMoveModalOpen(false)} className="p-2 rounded-full text-white/40 hover:text-white hover:bg-white/5">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                {(() => {
+                  const lists = activePlaylistSection === 'shared' ? actualSharedPlaylists : actualNormalPlaylists;
+                  const availableLists = lists.filter(p => !(p as any).isFallback && p.id !== activePlaylistId);
+                  if (availableLists.length === 0) {
+                    return <div className="px-4 py-8 text-center text-sm text-white/40">이동할 수 있는 다른 폴더가 없습니다.</div>;
+                  }
+                  return availableLists.map(list => (
+                    <button
+                      key={list.id}
+                      onClick={() => handleBulkMoveToPlaylist(list.id!)}
+                      className="w-full px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 text-left text-sm font-bold text-white/80 hover:text-white transition-all"
+                    >
+                      {list.title}
+                    </button>
+                  ));
+                })()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeMenuState && (
+          <>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              data-floating-menu="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              style={{
+                top: activeMenuState.position.top,
+                right: activeMenuState.position.right,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {[
+                { icon: Info, label: '상세정보', action: () => {
+                  const creatorMeta = resolveCreatorSnapshot(activeMenuState.group, activeMenuState.item, { fallbackToCurrentUser: !isSharedView });
+                  setShowDetails({ ...activeMenuState.group, ...creatorMeta, itemIndex: activeMenuState.idx });
+                  setActiveMenuState(null);
+                } },
+                { icon: CheckSquare, label: '선택', action: () => {
+                  enterMultiSelectWith(buildWorkspaceSelection(activeMenuState.group, activeMenuState.item, activeMenuState.idx));
+                  setActiveMenuState(null);
+                } },
+                filter !== 'trash' ? { 
+                  icon: Download, 
+                  label: '다운로드', 
+                  action: () => { 
+                    const title = getTitle(activeMenuState.item, activeMenuState.group, activeMenuState.idx);
+                    handleDownload(activeMenuState.audioUrl, title); 
+                    setActiveMenuState(null); 
+                  } 
+                } : null,
+                filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
+                !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제(휴지통)', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
+                !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
+                !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,
+              ].filter(Boolean).map((m: any, i) => (
+                <button
+                  key={i}
+                  onClick={m.action}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all ${m.danger ? 'text-red-400' : ''}`}
+                >
+                  <m.icon className={`w-4 h-4 ${m.filled ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                  {m.label}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {playlistConfirmAction && (
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/35"
+            onClick={() => {
+              if (!isPlaylistConfirming) setPlaylistConfirmAction(null);
             }}
-          />
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[360px] overflow-hidden rounded-3xl border border-white/10 bg-[var(--bg-secondary)] shadow-2xl"
+            >
+              <div className="px-5 pt-5 pb-4 border-b border-white/5">
+                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange'}`}>
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <h3 className="text-center text-lg font-black text-white tracking-tight">
+                  {playlistConfirmAction.title}
+                </h3>
+                <p className="mt-2 text-center text-sm leading-relaxed text-white/55">
+                  {playlistConfirmAction.message}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 p-4 bg-black/10">
+                <button
+                  type="button"
+                  disabled={isPlaylistConfirming}
+                  onClick={() => setPlaylistConfirmAction(null)}
+                  className="h-11 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/65 transition-all hover:bg-white/10 hover:text-white disabled:opacity-40"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={isPlaylistConfirming}
+                  onClick={async () => {
+                    if (!playlistConfirmAction) return;
+                    setIsPlaylistConfirming(true);
+                    try {
+                      await playlistConfirmAction.onConfirm();
+                      setPlaylistConfirmAction(null);
+                    } finally {
+                      setIsPlaylistConfirming(false);
+                    }
+                  }}
+                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-brand-orange hover:bg-brand-orange/90 shadow-lg shadow-brand-orange/15'}`}
+                >
+                  {isPlaylistConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {playlistConfirmAction.confirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Details Modal */}
+      <SunoTrackDetailModal
+        open={!!showDetails}
+        track={showDetails}
+        onClose={closeModal}
+      />
+
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/25" onClick={closeModal}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl p-6"
+            >
+              <div className="flex flex-col items-center text-center">
+                 <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">
+                    <AlertCircle className="w-6 h-6 text-red-500" />
+                 </div>
+                 <h3 className="text-xl font-bold mb-2">
+                   {deleteTarget.action === 'permanentDelete' ? '이 곡을 영구 삭제할까요?' : 
+                    deleteTarget.action === 'restore' ? '이 곡을 복구할까요?' : 
+                    '이 곡을 휴지통으로 이동할까요?'}
+                 </h3>
+                 <p className="text-sm text-[var(--text-secondary)] mb-6">
+                   {deleteTarget.action === 'permanentDelete' ? '이 작업은 앱에서 복구할 수 없습니다.' : 
+                    deleteTarget.action === 'restore' ? '복구된 곡은 다시 라이브러리에 표시됩니다.' : 
+                    '휴지통에서 나중에 복구하거나 영구 삭제할 수 있습니다.'}
+                 </p>
+                 
+                 {deleteError && (
+                   <div className="w-full text-xs text-red-400 bg-red-500/10 px-4 py-2 rounded-xl mb-4 border border-red-500/20">
+                     {deleteError}
+                   </div>
+                 )}
+                 
+                 <div className="flex w-full gap-3">
+                   <button
+                     onClick={closeModal}
+                     disabled={isDeleting}
+                     className="flex-1 py-3 px-4 rounded-xl font-bold bg-white/5 hover:bg-white/10 transition-all text-white/70 hover:text-white disabled:opacity-50"
+                   >
+                     취소
+                   </button>
+                   <button
+                     onClick={confirmDelete}
+                     disabled={isDeleting}
+                     className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg ${
+                       deleteTarget.action === 'permanentDelete' ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20' :
+                       deleteTarget.action === 'restore' ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/20' :
+                       'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20'
+                     }`}
+                   >
+                     {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 
+                      deleteTarget.action === 'permanentDelete' ? '영구 삭제' : 
+                      deleteTarget.action === 'restore' ? '복구' : '휴지통으로 이동'}
+                   </button>
+                 </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

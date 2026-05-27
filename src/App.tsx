@@ -2654,7 +2654,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
           onClick={() => goToTopNav('/')}
           className="flex min-w-[168px] shrink-0 items-center gap-2 rounded-xl px-2 py-1 text-left transition-all hover:bg-white/[0.04]"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-500/10 text-sky-300 shadow-[0_0_18px_rgba(56,189,248,0.08)]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C87572]/28 bg-[#C87572]/14 text-[#E59A96] shadow-[0_0_18px_rgba(200,117,114,0.10)]">
             <Music className="h-4 w-4" />
           </span>
           <span className="hidden min-w-0 sm:block">
@@ -2674,17 +2674,20 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 type="button"
                 onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
                 className={cn(
-                  "relative flex h-8 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-black transition-all whitespace-nowrap sm:px-3",
+                  "relative flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-black transition-all whitespace-nowrap sm:px-3",
                   active
-                    ? "border-sky-400/30 bg-sky-500/10 text-sky-200 shadow-[0_0_20px_rgba(56,189,248,0.1)]"
-                    : "border-transparent bg-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.05] hover:text-white"
+                    ? "bg-transparent text-white"
+                    : "bg-transparent text-white/60 hover:text-white"
                 )}
               >
                 {signalActive && (
                   <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/50 ${sunoLibrarySignalDotClass}`} />
                 )}
                 <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
+                <span className="relative inline-flex items-center pb-1">
+                  {item.label}
+                  {active && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
+                </span>
               </button>
             );
           })}
@@ -2693,14 +2696,17 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={() => goToTopNav('/admin/users')}
               className={cn(
-                "flex h-8 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-black transition-all whitespace-nowrap sm:px-3",
+                "relative flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-black transition-all whitespace-nowrap sm:px-3",
                 isActivePath('/admin')
-                  ? "border-violet-400/30 bg-violet-500/10 text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.1)]"
-                  : "border-transparent bg-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.05] hover:text-white"
+                  ? "bg-transparent text-white"
+                  : "bg-transparent text-white/60 hover:text-white"
               )}
             >
               <Shield className="h-4 w-4" />
-              <span>관리자</span>
+              <span className="relative inline-flex items-center pb-1">
+                관리자
+                {isActivePath('/admin') && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
+              </span>
             </button>
           )}
         </div>
@@ -7857,7 +7863,7 @@ ${normalizePromptForDisplay(result.prompt)}
             "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
               ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-              : "bg-[linear-gradient(135deg,#F7D66E_0%,#F19A77_34%,#EA777E_68%,#C85C8A_100%)] shadow-[0_8px_22px_rgba(220,96,118,0.24),inset_0_1px_0_rgba(255,255,255,0.22)] hover:brightness-[1.06]"
+              : "bg-[linear-gradient(135deg,#F8CF5C_0%,#F08B68_34%,#EA6674_68%,#CB4F83_100%)] shadow-[0_8px_22px_rgba(225,92,116,0.28),inset_0_1px_0_rgba(255,255,255,0.24)] hover:brightness-[1.07]"
           )}
         >
           {isGenerating ? (
@@ -8181,11 +8187,11 @@ ${normalizePromptForDisplay(result.prompt)}
                     </>
                   )}
 
-                  <div className="text-center flex flex-col items-center">
+                  <div className="text-center flex flex-col items-center mt-3 md:mt-7">
                     <h1 
-                      className="inline-flex items-center justify-center gap-3 text-3xl md:text-5xl font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
+                      className="inline-flex items-center justify-center gap-3 text-4xl md:text-[56px] font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
                     >
-                      <Zap className="w-7 h-7 md:w-10 md:h-10 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]" />
+                      <Zap className="w-8 h-8 md:w-11 md:h-11 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]" />
                       <span>Sori <span className="bg-gradient-to-r from-[#EBCF77] via-[#F39B87] to-[#D96F8F] bg-clip-text text-transparent">Studio</span></span>
                     </h1>
 
@@ -8916,7 +8922,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-[#F7D66E]/25 bg-[linear-gradient(135deg,#F7D66E_0%,#F19A77_42%,#EA777E_72%,#C85C8A_100%)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.34),0_0_16px_rgba(220,96,118,0.16),inset_0_1px_0_rgba(255,255,255,0.22)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
+                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-[#F8CF5C]/28 bg-[linear-gradient(135deg,#F8CF5C_0%,#F08B68_42%,#EA6674_72%,#CB4F83_100%)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.34),0_0_16px_rgba(225,92,116,0.19),inset_0_1px_0_rgba(255,255,255,0.24)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
                   >
                     <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.14)_72%,rgba(255,255,255,0)_100%)] opacity-55" />
                     <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
@@ -9584,7 +9590,7 @@ ${normalizePromptForDisplay(result.prompt)}
                   <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
                 </div>
               </div>
-            ) : user ? (
+            ) : (user || auth.currentUser) ? (
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <FavoritesPageLazy
                   favorites={favorites}
@@ -9593,7 +9599,7 @@ ${normalizePromptForDisplay(result.prompt)}
                   clearAllFavorites={clearAllFavorites}
                   unlockAllFavorites={unlockAllFavorites}
                   lockAllFavorites={lockAllFavorites}
-                  user={user}
+                  user={user || auth.currentUser}
                   onHover={setHoveredItem}
                   hoveredItem={hoveredItem}
                   onLongPressStart={handleLongPressStart}
@@ -9610,7 +9616,7 @@ ${normalizePromptForDisplay(result.prompt)}
         
         <Route path="/suno-library" element={
           <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
-            <SunoLibraryPageLazy />
+            <SunoLibraryPageLazy appUser={user || auth.currentUser} />
           </Suspense>
         } />
         <Route path="/suno-api-settings" element={

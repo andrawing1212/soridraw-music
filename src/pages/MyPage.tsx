@@ -55,7 +55,7 @@ const PLAN_CONFIG: Record<Exclude<UserRole, 'admin'> | 'admin', PlanConfig> = {
     badge: '기본 플랜',
     description: '개인 API 키 등록 후 기본 생성만 사용할 수 있습니다.',
     dailyGenerateLimit: 10,
-    accentClass: 'from-slate-500/15 to-zinc-500/5 border-slate-400/20',
+    accentClass: 'from-[#A47048]/14 to-[#1B1412]/20 border-[#A47048]/22',
     features: {
       libraryDetail: false,
       applyToNextSong: false,
@@ -74,7 +74,7 @@ const PLAN_CONFIG: Record<Exclude<UserRole, 'admin'> | 'admin', PlanConfig> = {
     badge: '편의 기능 플랜',
     description: '보관함, 라이브러리, 언어 생성 편의 기능을 사용할 수 있습니다.',
     dailyGenerateLimit: null,
-    accentClass: 'from-sky-500/18 to-blue-500/8 border-sky-400/25',
+    accentClass: 'from-[#AC6B69]/18 to-[#A47048]/8 border-[#AC6B69]/28',
     features: {
       libraryDetail: true,
       applyToNextSong: true,
@@ -93,7 +93,7 @@ const PLAN_CONFIG: Record<Exclude<UserRole, 'admin'> | 'admin', PlanConfig> = {
     badge: '전체 기능 플랜',
     description: 'SORIDRAW의 고급 커스텀과 프로 작업 기능을 모두 사용할 수 있습니다.',
     dailyGenerateLimit: null,
-    accentClass: 'from-violet-500/20 to-indigo-500/8 border-violet-400/30',
+    accentClass: 'from-[#877198]/20 to-[#965B77]/8 border-[#877198]/30',
     features: {
       libraryDetail: true,
       applyToNextSong: true,
@@ -112,7 +112,7 @@ const PLAN_CONFIG: Record<Exclude<UserRole, 'admin'> | 'admin', PlanConfig> = {
     badge: '관리자',
     description: '관리자 계정으로 모든 기능을 사용할 수 있습니다.',
     dailyGenerateLimit: null,
-    accentClass: 'from-cyan-500/20 to-violet-500/8 border-cyan-400/30',
+    accentClass: 'from-[#A47048]/18 to-[#877198]/10 border-[#D9B89D]/24',
     features: {
       libraryDetail: true,
       applyToNextSong: true,
@@ -189,7 +189,7 @@ function FeatureBadge({ state }: { state: FeatureState }) {
     return <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-300">사용 가능</span>;
   }
   if (state === 'partial') {
-    return <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-black text-sky-300">일부 가능</span>;
+    return <span className="rounded-full border border-[#AC6B69]/24 bg-[#AC6B69]/12 px-2.5 py-1 text-[11px] font-black text-[#D8A4A2]">일부 가능</span>;
   }
   return <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-[var(--text-secondary)]">잠김</span>;
 }
@@ -251,10 +251,10 @@ export default function MyPage() {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] px-4 pt-20 pb-16 text-[var(--text-primary)]">
         <div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-[var(--bg-secondary)] p-8 text-center shadow-2xl">
-          <UserCircle2 className="mx-auto mb-4 h-10 w-10 text-sky-300" />
+          <UserCircle2 className="mx-auto mb-4 h-10 w-10 text-[#D8A4A2]" />
           <h1 className="text-2xl font-black">로그인이 필요합니다</h1>
           <p className="mt-2 text-sm text-[var(--text-secondary)]">마이페이지는 로그인 후 사용할 수 있습니다.</p>
-          <button onClick={() => navigate('/')} className="mt-6 rounded-2xl border border-sky-400/25 bg-sky-500/10 px-5 py-3 text-sm font-black text-sky-200 hover:bg-sky-500/20 transition-all">
+          <button onClick={() => navigate('/')} className="mt-6 rounded-2xl border border-[#AC6B69]/28 bg-[#AC6B69]/12 px-5 py-3 text-sm font-black text-[#D8A4A2] hover:bg-[#AC6B69]/20 transition-all">
             홈으로 돌아가기
           </button>
         </div>
@@ -276,7 +276,7 @@ export default function MyPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-2xl border border-violet-400/25 bg-violet-500/10 px-4 py-2.5 text-sm font-black text-violet-300 opacity-80 cursor-not-allowed"
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#877198]/28 bg-[#877198]/12 px-4 py-2.5 text-sm font-black text-[#BBA8CA] opacity-80 cursor-not-allowed"
                 title="플랜/구독 페이지는 다음 단계에서 연결합니다."
               >
                 <Crown className="w-4 h-4" /> 플랜 업그레이드 준비중
@@ -285,7 +285,7 @@ export default function MyPage() {
           </div>
 
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-sky-400/80">MY STUDIO</p>
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#AC6B69]/80">MY STUDIO</p>
             <h1 className="mt-2 text-3xl md:text-4xl font-black tracking-tight">마이페이지</h1>
             <p className="mt-2 text-sm text-[var(--text-secondary)] leading-relaxed">
               개인 API 연결 관리, 현재 플랜, 사용량과 잠긴 기능을 한눈에 확인합니다.
@@ -320,7 +320,7 @@ export default function MyPage() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-xs font-bold text-[var(--text-secondary)]">생성 제한</p>
-                <p className="mt-2 text-lg font-black text-sky-300">{dailyLimitText}</p>
+                <p className="mt-2 text-lg font-black text-[#D8A4A2]">{dailyLimitText}</p>
               </div>
             </div>
           </motion.section>
@@ -353,7 +353,7 @@ export default function MyPage() {
           <SunoApiSettingsPanel />
 
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-4 md:p-5 shadow-2xl backdrop-blur-xl">
-            <h2 className="text-base font-black flex items-center gap-2"><Palette className="w-4 h-4 text-violet-300" /> 개인 설정</h2>
+            <h2 className="text-base font-black flex items-center gap-2"><Palette className="w-4 h-4 text-[#BBA8CA]" /> 개인 설정</h2>
             <p className="mt-1 text-xs text-[var(--text-secondary)]">이후 단계에서 확장합니다.</p>
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -391,10 +391,10 @@ export default function MyPage() {
               const Icon = feature.icon;
               const state = plan.features[feature.key];
               return (
-                <div key={feature.key} className={`rounded-2xl border p-4 transition-all ${state ? 'border-sky-400/15 bg-sky-500/[0.045]' : 'border-white/10 bg-white/[0.025]'}`}>
+                <div key={feature.key} className={`rounded-2xl border p-4 transition-all ${state ? 'border-[#AC6B69]/20 bg-[#AC6B69]/[0.055]' : 'border-white/10 bg-white/[0.025]'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <div className={`rounded-2xl border p-2 ${state ? 'border-sky-400/20 bg-sky-500/10 text-sky-300' : 'border-white/10 bg-white/[0.04] text-[var(--text-secondary)]'}`}>
+                      <div className={`rounded-2xl border p-2 ${state ? 'border-[#AC6B69]/24 bg-[#AC6B69]/12 text-[#D8A4A2]' : 'border-white/10 bg-white/[0.04] text-[var(--text-secondary)]'}`}>
                         <Icon className="w-4 h-4" />
                       </div>
                       <div>

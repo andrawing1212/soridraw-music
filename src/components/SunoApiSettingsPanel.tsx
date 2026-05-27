@@ -133,7 +133,7 @@ function ApiKeyModal({
         <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className={`flex h-9 w-9 items-center justify-center rounded-2xl border ${type === 'google' ? 'border-sky-400/20 bg-sky-500/10 text-sky-300' : 'border-violet-400/20 bg-violet-500/10 text-violet-300'}`}>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-2xl border ${type === 'google' ? 'border-[#AC6B69]/24 bg-[#AC6B69]/12 text-[#D8A4A2]' : 'border-[#877198]/24 bg-[#877198]/12 text-[#BBA8CA]'}`}>
                 {type === 'google' ? <Sparkles className="h-4 w-4" /> : <Music2 className="h-4 w-4" />}
               </span>
               <div>
@@ -153,7 +153,7 @@ function ApiKeyModal({
         </div>
 
         <div className="space-y-4 p-5">
-          <div className={`rounded-2xl border p-4 text-sm leading-relaxed ${type === 'google' ? 'border-sky-400/15 bg-sky-500/[0.06] text-sky-100/75' : 'border-violet-400/15 bg-violet-500/[0.06] text-violet-100/75'}`}>
+          <div className={`rounded-2xl border p-4 text-sm leading-relaxed ${type === 'google' ? 'border-[#AC6B69]/20 bg-[#AC6B69]/[0.06] text-[#F2D1CF]/75' : 'border-[#877198]/20 bg-[#877198]/[0.06] text-[#E6DDF0]/75'}`}>
             {guideText}
           </div>
 
@@ -161,7 +161,7 @@ function ApiKeyModal({
             href={createUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${type === 'google' ? 'border-sky-400/25 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20' : 'border-violet-400/25 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20'}`}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black transition ${type === 'google' ? 'border-[#AC6B69]/28 bg-[#AC6B69]/12 text-[#D8A4A2] hover:bg-[#AC6B69]/20' : 'border-[#877198]/28 bg-[#877198]/12 text-[#BBA8CA] hover:bg-[#877198]/20'}`}
           >
             API Key 생성 페이지 열기 <ExternalLink className="h-4 w-4" />
           </a>
@@ -174,7 +174,7 @@ function ApiKeyModal({
               onChange={(event) => setInputValue(event.target.value)}
               placeholder={inputPlaceholder}
               autoFocus
-              className={`w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3 font-mono text-white transition-all outline-none placeholder:text-white/30 ${type === 'google' ? 'focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/25' : 'focus:border-violet-400/50 focus:ring-1 focus:ring-violet-400/25'}`}
+              className={`w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3 font-mono text-white transition-all outline-none placeholder:text-white/30 ${type === 'google' ? 'focus:border-[#AC6B69]/50 focus:ring-1 focus:ring-[#AC6B69]/25' : 'focus:border-[#877198]/50 focus:ring-1 focus:ring-[#877198]/25'}`}
             />
           </div>
 
@@ -183,7 +183,7 @@ function ApiKeyModal({
               type="button"
               onClick={onSave}
               disabled={isLoading || !inputValue.trim()}
-              className={`flex-1 rounded-2xl border py-3 font-black transition disabled:cursor-not-allowed disabled:opacity-45 ${type === 'google' ? 'border-sky-400/25 bg-sky-500/15 text-sky-200 hover:bg-sky-500/25' : 'border-violet-400/25 bg-violet-500/15 text-violet-200 hover:bg-violet-500/25'}`}
+              className={`flex-1 rounded-2xl border py-3 font-black transition disabled:cursor-not-allowed disabled:opacity-45 ${type === 'google' ? 'border-[#AC6B69]/28 bg-[#AC6B69]/15 text-[#D8A4A2] hover:bg-[#AC6B69]/25' : 'border-[#877198]/28 bg-[#877198]/15 text-[#BBA8CA] hover:bg-[#877198]/25'}`}
             >
               {isLoading ? '처리 중...' : '저장하기'}
             </button>
@@ -544,21 +544,21 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
     >
       {showHeader && (
         <div className="mb-5">
-          <h2 className="flex items-center gap-2 text-lg font-black"><Key className="w-5 h-5 text-sky-300" /> API 연결</h2>
+          <h2 className="flex items-center gap-2 text-lg font-black"><Key className="w-5 h-5 text-[#D8A4A2]" /> API 연결</h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">Google API와 Music API를 구분해서 관리합니다.</p>
         </div>
       )}
 
-      <div className="rounded-2xl border border-sky-400/15 bg-sky-500/[0.06] p-4 text-sm leading-relaxed text-[var(--text-secondary)]">
-        <b className="text-sky-200">Google Gemini API</b>는 가사/프롬프트 생성에 사용되고, <b className="text-violet-200">Music API</b>는 음원 생성 및 크레딧 확인에 사용됩니다. SORIDRAW 플랜은 API 비용이 아니라 편의 기능과 고급 기능을 여는 구조입니다.
+      <div className="rounded-2xl border border-[#AC6B69]/20 bg-[#AC6B69]/[0.06] p-4 text-sm leading-relaxed text-[var(--text-secondary)]">
+        <b className="text-[#D8A4A2]">Google Gemini API</b>는 가사/프롬프트 생성에 사용되고, <b className="text-[#BBA8CA]">Music API</b>는 음원 생성 및 크레딧 확인에 사용됩니다. SORIDRAW 플랜은 API 비용이 아니라 편의 기능과 고급 기능을 여는 구조입니다.
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <div className="rounded-3xl border border-sky-400/15 bg-sky-500/[0.04] p-4">
+        <div className="rounded-3xl border border-[#AC6B69]/20 bg-[#AC6B69]/[0.045] p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-sky-300" />
+                <Sparkles className="h-5 w-5 text-[#D8A4A2]" />
                 <h3 className="text-base font-black text-white">Google Gemini API</h3>
               </div>
               <p className="mt-2 text-xs leading-relaxed text-white/45">가사, 프롬프트, 번역, 보정 같은 텍스트 생성에 사용됩니다.</p>
@@ -566,7 +566,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
             <StatusBadge registered={googleRegistered} />
           </div>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <a href={GOOGLE_API_CREATE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-sky-400/20 bg-sky-500/10 px-3 py-2.5 text-xs font-black text-sky-200 transition hover:bg-sky-500/20">
+            <a href={GOOGLE_API_CREATE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/24 bg-[#AC6B69]/12 px-3 py-2.5 text-xs font-black text-[#D8A4A2] transition hover:bg-[#AC6B69]/20">
               API Key 생성 <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <button type="button" onClick={() => setActiveModal('google')} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs font-black text-white/70 transition hover:bg-white/[0.07] hover:text-white">
@@ -575,28 +575,28 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
           </div>
         </div>
 
-        <div className="rounded-3xl border border-violet-400/15 bg-violet-500/[0.04] p-4">
+        <div className="rounded-3xl border border-[#877198]/20 bg-[#877198]/[0.045] p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <Music2 className="h-5 w-5 text-violet-300" />
+                <Music2 className="h-5 w-5 text-[#BBA8CA]" />
                 <h3 className="text-base font-black text-white">Music API</h3>
               </div>
               <p className="mt-2 text-xs leading-relaxed text-white/45">Suno 기반 음원 생성, 생성 완료 후 남은 크레딧 확인에 사용됩니다.</p>
             </div>
             <StatusBadge registered={isMusicRegistered} pending={statusText === '확인 중...'} />
           </div>
-          <div className="mt-4 rounded-2xl border border-violet-400/15 bg-violet-500/[0.06] p-3">
+          <div className="mt-4 rounded-2xl border border-[#877198]/20 bg-[#877198]/[0.06] p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-bold text-white/45">남은 크레딧</div>
-                <div className="mt-1 text-xl font-black text-violet-300">{remainingCredits === null ? '-' : remainingCredits.toLocaleString()}</div>
+                <div className="mt-1 text-xl font-black text-[#BBA8CA]">{remainingCredits === null ? '-' : remainingCredits.toLocaleString()}</div>
               </div>
               <button
                 type="button"
                 onClick={refreshSunoRemainingCredits}
                 disabled={!isMusicRegistered || isCreditRefreshing}
-                className="shrink-0 rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300 hover:bg-violet-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-40 flex items-center gap-2"
+                className="shrink-0 rounded-xl border border-[#877198]/28 bg-[#877198]/12 px-3 py-2 text-xs font-bold text-[#BBA8CA] hover:bg-[#877198]/20 transition-all disabled:cursor-not-allowed disabled:opacity-40 flex items-center gap-2"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isCreditRefreshing ? 'animate-spin' : ''}`} />
                 새로고침
@@ -605,7 +605,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
             {remainingCreditsUpdatedAt && <div className="mt-2 text-[11px] text-white/35">{formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인</div>}
           </div>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <a href={MUSIC_API_CREATE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-violet-400/20 bg-violet-500/10 px-3 py-2.5 text-xs font-black text-violet-200 transition hover:bg-violet-500/20">
+            <a href={MUSIC_API_CREATE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#877198]/24 bg-[#877198]/12 px-3 py-2.5 text-xs font-black text-[#BBA8CA] transition hover:bg-[#877198]/20">
               API Key 생성 <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <button type="button" onClick={() => setActiveModal('music')} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs font-black text-white/70 transition hover:bg-white/[0.07] hover:text-white">
@@ -616,7 +616,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
       </div>
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-sm text-[var(--text-secondary)]">
-        <div className="mb-2 flex items-center gap-2 font-black text-sky-200">
+        <div className="mb-2 flex items-center gap-2 font-black text-[#D8A4A2]">
           <AlertTriangle className="w-4 h-4" /> 사용 안내
         </div>
         <ul className="list-disc list-inside space-y-1">
@@ -627,7 +627,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
       </div>
 
       {message && (
-        <div className="mt-4 rounded-2xl border border-sky-400/15 bg-sky-500/[0.06] px-4 py-3 text-center text-sm font-bold text-sky-200">
+        <div className="mt-4 rounded-2xl border border-[#AC6B69]/20 bg-[#AC6B69]/[0.06] px-4 py-3 text-center text-sm font-bold text-[#D8A4A2]">
           {message}
         </div>
       )}

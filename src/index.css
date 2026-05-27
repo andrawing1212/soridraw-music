@@ -239,3 +239,26 @@ html {
 .dark .studio-tone-down [class*="bg-white/5"] {
   background-color: rgba(255, 255, 255, 0.035) !important;
 }
+
+
+/* SORIDRAW_404_SELECTED_TEXT_FORCE
+   Desktop popup/list selections can contain nested text classes. Force every
+   selected keyword/card label and description to read as bold black text. */
+.soridraw-selected-strong,
+.soridraw-selected-strong *,
+.soridraw-selected-strong svg {
+  color: #171717 !important;
+  font-weight: 900 !important;
+}
+
+.soridraw-selected-strong p,
+.soridraw-selected-strong span,
+.soridraw-selected-strong div,
+.soridraw-selected-strong button {
+  color: #171717 !important;
+  font-weight: 900 !important;
+}
+
+.soridraw-selected-summary {
+  font-weight: 900 !important;
+}

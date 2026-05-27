@@ -8218,7 +8218,7 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-28 pb-20 md:pt-24 md:pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+              <header className="studio-hero-tone pt-24 pb-10 md:pt-24 md:pb-11 border-b border-[var(--home-card-border)] bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
                   {/* Search icon / Guide button inside Studio Header */}
                   {user && (
@@ -8247,7 +8247,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     </>
                   )}
 
-                  <div className="text-center flex flex-col items-center mt-5 md:mt-7">
+                  <div className="text-center flex flex-col items-center mt-5 md:mt-6">
                     <h1 
                       className="inline-flex items-center justify-center gap-3 text-[46px] md:text-[56px] font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
                     >
@@ -8263,7 +8263,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 </div>
               </header>
 
-            <main className="studio-tone-down mx-auto w-full max-w-[1320px] px-4 md:px-6 py-6 space-y-6">
+            <main className="studio-tone-down mx-auto w-full max-w-[1320px] px-4 md:px-6 pt-6 pb-6 space-y-6">
               {/* Selection Sections */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <GenreHierarchySelector
@@ -10755,15 +10755,9 @@ function CycleSection({
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const sectionAccent = getStudioSectionAccent(titleKo || title);
-  const isVintageStyleSection = String(titleKo || title || '').toLowerCase().includes('style') || String(titleKo || title || '').includes('스타일');
-  const styleDarkText = 'text-[#1B1412]';
-  const styleSubText = 'text-[#2A1C17]/72';
-  const styleButtonBase = 'bg-[#B76055]/42 border-[#6F302A]/30 text-[#1B1412] hover:bg-[#C46A5F]/48 hover:border-[#1B1412]/28';
-  const styleButtonSelected = 'bg-[#DFA05D]/58 border-[#1B1412]/28 text-[#17120F] shadow-none';
-  const styleButtonSoft = 'bg-[#DFA05D]/24 border-[#1B1412]/22 text-[#17120F] hover:bg-[#DFA05D]/32';
 
   return (
-    <div data-expand-section className={cn("rounded-3xl p-6 border flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]", isVintageStyleSection ? "bg-[#AC5045] border-[#6F302A]/55 text-[#1B1412]" : "bg-[var(--card-bg)] border-[var(--home-card-border)]")}>
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -10771,12 +10765,12 @@ function CycleSection({
               <h3
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className={cn("font-bold flex items-center gap-2 cursor-help min-w-0", isVintageStyleSection ? styleDarkText : "text-[var(--text-primary)]", titleClassName ?? "text-[20px]")}
+                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0", titleClassName ?? "text-[20px]")}
               >
-                <span className={cn("w-1.5 h-6 rounded-full shrink-0", isVintageStyleSection ? "bg-[#17120F]/78" : sectionAccent.bar)} />
+                <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 {countLabel && (
-                  <span className={cn("text-[14px] font-normal ml-1 shrink-0", isVintageStyleSection ? styleSubText : "text-[var(--text-secondary)]")}>({countLabel})</span>
+                  <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
                 )}
               </h3>
               <AnimatePresence>
@@ -10785,9 +10779,9 @@ function CycleSection({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl border shadow-[var(--shadow-md)] w-56 pointer-events-none", isVintageStyleSection ? "bg-[#AC5045] border-[#1B1412]/24" : "bg-[var(--card-bg)] border-brand-orange/30")}
+                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
                   >
-                    <p className={cn("text-[11px] leading-snug", isVintageStyleSection ? styleSubText : "text-[var(--text-secondary)]")}>{descriptionKo || description}</p>
+                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -10806,11 +10800,9 @@ function CycleSection({
                 onTouchEnd={onLongPressEnd}
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
-                  isVintageStyleSection
-                    ? styleButtonBase
-                    : isLocked
-                      ? "bg-btn-bg text-[#9FC6BE] border-btn-border hover:bg-btn-hover"
-                      : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  isLocked
+                    ? "bg-btn-bg text-[#9FC6BE] border-btn-border hover:bg-btn-hover"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
@@ -10818,7 +10810,7 @@ function CycleSection({
                 {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
-            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border", isVintageStyleSection ? (isRandomized ? styleButtonSelected : styleButtonBase) : (isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover'))}>
+            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
               <Dices className="w-4 h-4" />
             </button>
             <button 
@@ -10827,11 +10819,9 @@ function CycleSection({
               onMouseLeave={() => onHover(null)}
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
-                isVintageStyleSection
-                  ? ((activeSelected.length > 0 || isRandomized) ? styleButtonSoft : styleButtonBase)
-                  : (activeSelected.length > 0 || isRandomized)
-                    ? sectionAccent.selectedSoft 
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                (activeSelected.length > 0 || isRandomized)
+                  ? sectionAccent.selectedSoft 
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
               <RotateCcw className="w-4 h-4" />
@@ -10886,17 +10876,13 @@ function CycleSection({
                   onTouchEnd={onLongPressEnd}
                   className={cn(
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
-                    isVintageStyleSection
-                      ? (selectedVariants.length > 0 || pointSelectedVariants.length > 0
-                          ? styleButtonSelected
-                          : styleButtonBase)
-                      : selectedVariants.length > 0
-                        ? hasHighlightedSelectedVariant
-                          ? "bg-sky-500/32 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
-                          : sectionAccent.selected
-                        : pointSelectedVariants.length > 0
-                          ? sectionAccent.pointSelected
-                          : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                    selectedVariants.length > 0
+                      ? hasHighlightedSelectedVariant
+                        ? "bg-sky-500/32 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+                        : sectionAccent.selected
+                      : pointSelectedVariants.length > 0
+                        ? sectionAccent.pointSelected
+                        : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
                   <span className="text-[13px] md:text-[13.5px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
@@ -10905,17 +10891,15 @@ function CycleSection({
                   {selectedCountInCycle > 0 && (
                     <span className={cn(
                       "absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full bg-white border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none",
-                      isVintageStyleSection
-                        ? "text-[#17120F] border-[#17120F]/30"
-                        : hasHighlightedSelectedVariant
-                          ? "text-sky-700 border-sky-300/70"
-                          : sectionAccent.badge
+                      hasHighlightedSelectedVariant
+                        ? "text-sky-700 border-sky-300/70"
+                        : sectionAccent.badge
                     )}>
                       {selectedCountInCycle}
                     </span>
                   )}
                   {pointSelectedCountInCycle > 0 && (
-                    <span className={cn("absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none", isVintageStyleSection ? "bg-[#DFA05D]/78 text-[#17120F] border-[#17120F]/30" : sectionAccent.pointBadge)}>
+                    <span className={cn("absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none", sectionAccent.pointBadge)}>
                       {pointSelectedCountInCycle}
                     </span>
                   )}
@@ -10941,22 +10925,21 @@ function CycleSection({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
-          isVintageStyleSection ? "border-[#1B1412]/34 bg-[#9B463D]/16" : "border-[var(--border-color)]",
-          onToggleExpand && (isVintageStyleSection ? "cursor-pointer hover:bg-[#9B463D]/24 hover:border-[#1B1412]/44 focus:outline-none focus:ring-1 focus:ring-[#1B1412]/20" : "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15")
+          "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
+          onToggleExpand && "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15"
         )}
         title={onToggleExpand ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
         {selectedDisplayItems.length > 0 ? (
           <div className={cn("w-full max-h-[42px] overflow-hidden font-semibold break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn(isVintageStyleSection ? "text-[#1B1412]/88" : item.mode === 'point' ? 'text-[#C995AC]/85' : sectionAccent.text)}>
+              <span key={`${item.mode}-${item.id}`} className={cn(item.mode === 'point' ? 'text-[#C995AC]/85' : sectionAccent.text)}>
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}
           </div>
         ) : (
-          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isVintageStyleSection ? "text-[#1B1412]/68" : isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
+          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
         )}
@@ -11162,7 +11145,6 @@ function CycleKeywordPopup({
   const selectedOutsideCycleCount = selected.filter((id) => !cycleVariantIds.includes(id)).length;
   const localTotalSelectedCount = selectedOutsideCycleCount + localSelected.length;
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
-  const isVintageStylePopup = String(title || '').toLowerCase().includes('style') || String(title || '').includes('스타일');
 
   return (
     <Portal>
@@ -11190,16 +11172,16 @@ function CycleKeywordPopup({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-          className={cn("relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl border shadow-2xl overflow-hidden", isVintageStylePopup ? "bg-[#AC5045] border-[#1B1412]/32 text-[#1B1412]" : "bg-[var(--card-bg)] border-[var(--border-color)]")}
+          className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className={cn("px-5 py-4 border-b flex items-start justify-between gap-4 shrink-0", isVintageStylePopup ? "border-[#1B1412]/20" : "border-[var(--border-color)]")}>
+          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
             <div className="min-w-0">
-              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isVintageStylePopup ? "text-[#1B1412]/72" : isPointSelectionMode ? "text-[#C995AC]" : "text-amber-300")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
-              <h3 className={cn("text-2xl font-black leading-tight truncate", isVintageStylePopup ? "text-[#17120F]" : "text-[var(--text-primary)]")}>{cycle.titleKo || cycle.title}</h3>
-              <p className={cn("text-xs mt-1", isVintageStylePopup ? "text-[#1B1412]/70" : "text-[var(--text-secondary)]")}>
+              <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", isPointSelectionMode ? "text-[#C995AC]" : "text-amber-300")}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
+              <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
                 {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
                 {localSelected.length > 0 ? ` (${localSelected.length})` : ''}
               </p>
@@ -11212,7 +11194,7 @@ function CycleKeywordPopup({
                     setLocalSelected([]);
                     setLocalOtherSelected([]);
                   }}
-                  className={cn("h-11 px-3 rounded-2xl border transition-all text-[11px] font-black whitespace-nowrap", isVintageStylePopup ? "border-[#1B1412]/24 bg-[#DFA05D]/20 text-[#17120F] hover:bg-[#DFA05D]/28" : "border-amber-300/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15")}
+                  className="h-11 px-3 rounded-2xl border border-amber-300/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 transition-all text-[11px] font-black whitespace-nowrap"
                   title="이 폴더 선택 전체 해제"
                 >
                   전체 해제
@@ -11226,7 +11208,7 @@ function CycleKeywordPopup({
                     "w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0",
                     isPointSelectionMode
                       ? "bg-[#965B77]/70 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)] hover:bg-[#965B77]/78"
-                      : isVintageStylePopup ? "bg-[#DFA05D]/58 text-[#17120F] border-[#1B1412]/28 shadow-none hover:bg-[#DFA05D]/66" : "bg-amber-500/45 text-amber-50 border-amber-300/40 shadow-[0_0_14px_rgba(245,158,11,0.13)] hover:bg-amber-500/55"
+                      : "bg-amber-500/45 text-amber-50 border-amber-300/40 shadow-[0_0_14px_rgba(245,158,11,0.13)] hover:bg-amber-500/55"
                   )}
                   title="변경 적용"
                   aria-label="변경 적용"
@@ -11236,7 +11218,7 @@ function CycleKeywordPopup({
               )}
               <button
                 onClick={closePopup}
-                className={cn("w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0", isVintageStylePopup ? "bg-[#B76055]/34 border-[#1B1412]/22 text-[#17120F] hover:bg-[#DFA05D]/18" : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover")}
+                className="w-11 h-11 rounded-2xl border flex items-center justify-center transition-all shrink-0 bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:text-white hover:bg-btn-hover"
                 title={hasChanges ? "변경 적용 없이 닫기" : "닫기"}
                 aria-label={hasChanges ? "변경 적용 없이 닫기" : "닫기"}
               >
@@ -11253,9 +11235,9 @@ function CycleKeywordPopup({
             {cycle.variants.map((variant) => {
               if (variant.kind === 'separator') {
                 return (
-                  <div key={variant.id} className={cn("pt-2 pb-1 flex items-center gap-2 text-[10.5px] font-black tracking-[0.14em] uppercase select-none", isVintageStylePopup ? "text-[#1B1412]/70" : "text-brand-orange/80")}>
+                  <div key={variant.id} className="pt-2 pb-1 flex items-center gap-2 text-[10.5px] font-black tracking-[0.14em] uppercase text-brand-orange/80 select-none">
                     <span className="shrink-0">{variant.labelKo || variant.label}</span>
-                    <span className={cn("h-px flex-1", isVintageStylePopup ? "bg-[#1B1412]/18" : "bg-brand-orange/20")} />
+                    <span className="h-px flex-1 bg-brand-orange/20" />
                   </div>
                 );
               }
@@ -11275,21 +11257,15 @@ function CycleKeywordPopup({
                   key={variant.id}
                   className={cn(
                     "w-full rounded-2xl border transition-all flex items-stretch overflow-hidden",
-                    isVintageStylePopup
-                      ? isSelected || isOtherSelected
-                        ? "bg-[#DFA05D]/44 text-[#17120F] border-[#1B1412]/28 shadow-none"
+                    isSelected
+                      ? isHighlightedSelected
+                        ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
+                        : "bg-amber-500/38 text-amber-50 border-amber-300/38 shadow-[0_0_14px_rgba(245,158,11,0.12)]"
+                      : isOtherSelected
+                        ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
                         : disabled
-                          ? "bg-[#9B463D]/20 border-[#1B1412]/16 text-[#1B1412]/42 opacity-45 cursor-not-allowed"
-                          : "bg-[#B76055]/34 border-[#1B1412]/22 text-[#17120F] hover:bg-[#C46A5F]/44"
-                      : isSelected
-                        ? isHighlightedSelected
-                          ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
-                          : "bg-amber-500/38 text-amber-50 border-amber-300/38 shadow-[0_0_14px_rgba(245,158,11,0.12)]"
-                        : isOtherSelected
-                          ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50 shadow-[0_0_10px_rgba(150,91,119,0.10)]"
-                          : disabled
-                            ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
-                            : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:border-brand-orange/40"
+                          ? "bg-[var(--hover-bg)] border-[var(--border-color)] text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
+                          : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:border-brand-orange/40"
                   )}
                 >
                   <button
@@ -11316,7 +11292,7 @@ function CycleKeywordPopup({
                   >
                     <div className="min-w-0">
                       <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
-                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", isVintageStylePopup ? "text-[#1B1412]/70" : (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
+                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-white/85" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                     </div>
                   </button>
                   {canPointSelect && (
@@ -11340,13 +11316,9 @@ function CycleKeywordPopup({
                       onMouseLeave={() => onHover(null)}
                       className={cn(
                         "w-12 shrink-0 border-l flex items-center justify-center transition-all",
-                        isVintageStylePopup
-                          ? isOtherSelected
-                            ? "bg-[#DFA05D]/44 text-[#17120F] border-[#1B1412]/28"
-                            : "bg-[#9B463D]/18 text-[#1B1412]/72 border-[#1B1412]/18 hover:bg-[#DFA05D]/20 hover:text-[#17120F]"
-                          : isOtherSelected
-                            ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50"
-                            : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/12 hover:text-[#C995AC] hover:border-fuchsia-300/35"
+                        isOtherSelected
+                          ? "bg-[#965B77]/72 text-[#FFF2F8] border-[#C995AC]/50"
+                          : "bg-black/5 text-[var(--text-secondary)] border-[var(--border-color)] hover:bg-fuchsia-500/12 hover:text-[#C995AC] hover:border-fuchsia-300/35"
                       )}
                       title={isOtherSelected ? '포인트 선택 해제' : '포인트 선택'}
                       aria-label={`${variant.labelKo || variant.label} 포인트 선택`}

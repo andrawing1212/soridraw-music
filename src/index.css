@@ -178,12 +178,12 @@ html {
   background-color: rgba(255, 255, 255, 0.035) !important;
 }
 
-/* SORIDRAW_397_STUDIO_VINTAGE_FLAT_TONE
-   Keep the studio structure dark and flat; use vintage palette only as small color accents. */
+/* SORIDRAW_399_STUDIO_HERO_MERGED_FLAT
+   Merge the studio hero into the page background; keep only a thin divider line. */
 .dark .studio-hero-tone {
   --hover-bg: rgba(255, 255, 255, 0.055);
   --home-card-border: rgba(223, 160, 93, 0.10);
-  background: #111111 !important;
+  background: transparent !important;
 }
 
 .dark .studio-hero-tone::before {

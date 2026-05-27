@@ -119,3 +119,61 @@ html {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
+
+
+/* SORIDRAW_369_STUDIO_TONE_DOWN
+   Studio-only tone adjustment: keep the existing design structure, but lower
+   card/button brightness so it visually matches Music Note and Library lists. */
+.dark .studio-hero-tone {
+  --hover-bg: rgba(255, 255, 255, 0.055);
+  --home-card-border: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0)) !important;
+}
+
+.dark .studio-hero-tone [class*="bg-[var(--card-bg)]"] {
+  background-color: rgba(24, 24, 24, 0.78) !important;
+}
+
+.dark .studio-tone-down {
+  --card-bg: #181818;
+  --bg-secondary: #141414;
+  --input-bg: rgba(255, 255, 255, 0.075);
+  --hover-bg: rgba(255, 255, 255, 0.075);
+  --hover-bg-solid: #232323;
+  --border-color: rgba(255, 255, 255, 0.16);
+  --home-card-border: rgba(255, 255, 255, 0.095);
+  --keyword-button-border: rgba(255, 255, 255, 0.095);
+  --modal-soft-border: rgba(255, 255, 255, 0.10);
+  --modal-button-border: rgba(255, 255, 255, 0.095);
+  --button-bg: rgba(255, 255, 255, 0.04);
+  --button-border: rgba(255, 255, 255, 0.085);
+  --button-hover-bg: rgba(255, 255, 255, 0.085);
+  --button-shadow: none;
+  --shadow-md: 0 10px 18px rgba(0, 0, 0, 0.42), 0 3px 8px rgba(0, 0, 0, 0.32);
+}
+
+.dark .studio-tone-down [class*="bg-[var(--card-bg)]"] {
+  background-color: #181818 !important;
+}
+
+.dark .studio-tone-down [class*="bg-btn-bg"] {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dark .studio-tone-down [class*="hover:bg-btn-hover"]:hover {
+  background-color: rgba(255, 255, 255, 0.085) !important;
+}
+
+.dark .studio-tone-down [class*="border-btn-border"],
+.dark .studio-tone-down [class*="border-[var(--home-card-border)]"],
+.dark .studio-tone-down [class*="border-[var(--keyword-button-border)]"] {
+  border-color: rgba(255, 255, 255, 0.095) !important;
+}
+
+.dark .studio-tone-down [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.055) !important;
+}
+
+.dark .studio-tone-down [class*="bg-white/5"] {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}

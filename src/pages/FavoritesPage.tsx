@@ -2016,7 +2016,7 @@ ${song.prompt}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
-              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-brand-orange shrink-0" />
+              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" />
               <span>Music <span className="text-brand-orange">Note</span></span>
             </h1>
             <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>

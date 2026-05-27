@@ -7857,7 +7857,7 @@ ${normalizePromptForDisplay(result.prompt)}
             "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
               ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-              : "bg-gradient-to-r from-[#ff8a00] via-[#ff9f1c] to-[#ff6a00] shadow-[0_8px_20px_rgba(255,130,0,0.22)] hover:brightness-105"
+              : "bg-[linear-gradient(135deg,#F7D66E_0%,#F19A77_34%,#EA777E_68%,#C85C8A_100%)] shadow-[0_8px_22px_rgba(220,96,118,0.24),inset_0_1px_0_rgba(255,255,255,0.22)] hover:brightness-[1.06]"
           )}
         >
           {isGenerating ? (
@@ -8152,74 +8152,52 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="pt-24 pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+              <header className="studio-hero-tone pt-24 pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
-                  {/* Guide/Search Buttons inside Home Header - Aligned above genre menu */}
+                  {/* Search icon / Guide button inside Studio Header */}
                   {user && (
-                    <div className="absolute -bottom-[50px] right-6 z-20 flex items-center gap-2">
+                    <>
                       <button
                         type="button"
                         onClick={openGlobalSearchModal}
-                        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
+                        className="absolute -bottom-[62px] left-6 z-20 flex h-12 w-12 items-center justify-center bg-transparent border-0 shadow-none text-white hover:scale-105 transition-all group"
+                        aria-label="통합 검색"
+                        title="통합 검색"
                       >
-                        <Search className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-orange group-hover:scale-110 transition-transform" />
-                        <span className="font-bold text-[10px] md:text-xs">통합 검색</span>
+                        <Search className="w-8 h-8 md:w-9 md:h-9 text-white group-hover:scale-110 transition-transform" />
                       </button>
-                      <button
-                        onClick={() => {
-                          syncActionBarModalBlock(true);
-                          setIsGuideModalOpen(true);
-                        }}
-                        className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
-                      >
-                        <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 group-hover:scale-110 transition-transform" />
-                        <span className="font-bold text-[10px] md:text-xs">가이드</span>
-                      </button>
-                    </div>
+                      <div className="absolute -bottom-[50px] right-6 z-20 flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            syncActionBarModalBlock(true);
+                            setIsGuideModalOpen(true);
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
+                        >
+                          <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                          <span className="font-bold text-[10px] md:text-xs">가이드</span>
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   <div className="text-center flex flex-col items-center">
-                    <motion.div
-                      initial={{ opacity: 0, y: -40 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 100, damping: 10 }}
-                      className="mb-6"
-                    >
-                      <button 
-                        onClick={() => {
-                          if (!user) {
-                            handleLogin();
-                          } else {
-                            navigate('/history');
-                          }
-                        }}
-                        disabled={isLoggingIn}
-                        className="inline-flex items-center justify-center p-4 rounded-2xl bg-brand-orange/10 hover:bg-brand-orange/20 disabled:opacity-50 transition-all group"
-                      >
-                        {isLoggingIn ? (
-                          <Loader2 className="w-10 h-10 text-brand-orange animate-spin" />
-                        ) : (
-                          <Music className="w-10 h-10 text-brand-orange group-hover:scale-110 transition-transform" />
-                        )}
-                      </button>
-                    </motion.div>
-
                     <h1 
-                      className="text-3xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)] mb-2 font-display text-center w-full"
-                      style={{ fontFamily: 'Verdana' }}
+                      className="inline-flex items-center justify-center gap-3 text-3xl md:text-5xl font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
                     >
-                      SORIDRAW's <span className="text-brand-orange">Studio</span>
+                      <Zap className="w-7 h-7 md:w-10 md:h-10 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]" />
+                      <span>Sori <span className="bg-gradient-to-r from-[#EBCF77] via-[#F39B87] to-[#D96F8F] bg-clip-text text-transparent">Studio</span></span>
                     </h1>
 
-                    <p className="text-[11px] md:text-[13px] text-[var(--text-secondary)] font-medium tracking-widest uppercase mb-4 text-center w-full">
-                      Compose Your Atmosphere
+                    <p className="text-[12px] md:text-[14px] text-[var(--text-secondary)] font-semibold tracking-[-0.01em] mb-4 text-center w-full">
+                      가사와 프롬프트를 감각적으로 설계하는 음악 작업실
                     </p>
 
                   </div>
                 </div>
               </header>
 
-            <main className="mx-auto w-full max-w-[1320px] px-4 md:px-6 py-6 space-y-6">
+            <main className="studio-tone-down mx-auto w-full max-w-[1320px] px-4 md:px-6 py-6 space-y-6">
               {/* Selection Sections */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <GenreHierarchySelector
@@ -8938,7 +8916,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-orange-300/25 bg-gradient-to-br from-orange-400 via-brand-orange to-orange-600 text-white shadow-[0_8px_18px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-110"
+                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-[#F7D66E]/25 bg-[linear-gradient(135deg,#F7D66E_0%,#F19A77_42%,#EA777E_72%,#C85C8A_100%)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.34),0_0_16px_rgba(220,96,118,0.16),inset_0_1px_0_rgba(255,255,255,0.22)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
                   >
                     <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.14)_72%,rgba(255,255,255,0)_100%)] opacity-55" />
                     <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
@@ -13089,7 +13067,7 @@ function SongStructureIntegratedControl({
 
               {/* 3. 섹션 */}
               <div className="space-y-2">
-                <p className="text-[13px] font-bold text-brand-orange uppercase tracking-wider">│섹션</p>
+                <p className="text-[13px] font-bold text-[#9FC6BE] uppercase tracking-wider">│섹션</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -13121,8 +13099,8 @@ function SongStructureIntegratedControl({
                 </div>
                 
                 {/* Structure Guide - Always Visible */}
-                <div className="mt-2 rounded-2xl border border-dashed border-brand-orange/30 px-3 py-3 bg-brand-orange/5">
-                  <p className="text-[10px] font-bold text-brand-orange mb-1 uppercase tracking-tight">
+                <div className="mt-2 rounded-2xl border border-dashed border-[#3F7E75]/30 px-3 py-3 bg-[#3F7E75]/5">
+                  <p className="text-[10px] font-bold text-[#9FC6BE] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '현재 커스텀 섹션' : songStructure === '1' ? '기본 섹션 상세 가이드' : `섹션 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
@@ -15574,18 +15552,29 @@ function VocalControl({
                           onModalStateChange?.(true);
                           setEditingVocalMemberId(member.id);
                         }}
-                        className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all hover:border-[#467891]/40 hover:bg-[#467891]/5 group/character"
+                        className={cn(
+                          "w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all group/character",
+                          member.gender === 'male'
+                            ? "hover:border-[#4B6280]/45 hover:bg-[#4B6280]/5"
+                            : "hover:border-[#73495D]/45 hover:bg-[#73495D]/5"
+                        )}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-[#A7C2D0] tracking-tight">보컬 캐릭터 만들기</span>
+                              <span className={cn(
+                                "text-[10px] font-black tracking-tight",
+                                member.gender === 'male' ? "text-[#4B6280]" : "text-[#73495D]"
+                              )}>보컬 캐릭터 만들기</span>
                             </div>
                             <p className="mt-1 text-[10px] font-bold text-[var(--text-primary)] truncate">
                               {getVocalCharacterSummary(member)}
                             </p>
                           </div>
-                          <div className="shrink-0 p-1 text-[var(--text-secondary)] group-hover/character:text-[#A7C2D0] transition-colors">
+                          <div className={cn(
+                            "shrink-0 p-1 text-[var(--text-secondary)] transition-colors",
+                            member.gender === 'male' ? "group-hover/character:text-[#4B6280]" : "group-hover/character:text-[#73495D]"
+                          )}>
                             <Edit2 className="w-4 h-4" />
                           </div>
                         </div>

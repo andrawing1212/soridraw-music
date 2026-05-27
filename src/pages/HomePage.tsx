@@ -15,28 +15,28 @@ const quickCards = [
     desc: '가사와 5단 프롬프트를 설계하는 메인 작업실',
     path: '/studio',
     icon: Wand2,
-    accent: 'from-amber-300/90 via-pink-400/85 to-violet-500/85',
+    accent: 'from-[#D8B88C]/90 via-[#A47048]/88 to-[#965B77]/78',
   },
   {
     title: '뮤직노트',
     desc: '저장한 가사, 프롬프트, 설정값을 다시 꺼내 쓰기',
     path: '/history',
     icon: Heart,
-    accent: 'from-pink-400/85 to-violet-500/85',
+    accent: 'from-[#AC6B69]/88 to-[#965B77]/82',
   },
   {
     title: '라이브러리',
     desc: 'Music API로 만든 곡과 재생 가능한 URL 확인',
     path: '/suno-library',
     icon: Library,
-    accent: 'from-fuchsia-400/80 to-purple-500/85',
+    accent: 'from-[#877198]/82 to-[#5E7FA8]/78',
   },
   {
     title: '마이페이지',
     desc: 'API 연결, 플랜, 사용량, 개인 설정 관리',
     path: '/my-page',
     icon: User,
-    accent: 'from-violet-400/80 to-rose-300/75',
+    accent: 'from-[#C08A5D]/82 to-[#AC6B69]/78',
   },
 ];
 
@@ -52,27 +52,27 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#08050f] text-white">
-      <div className="pointer-events-none fixed inset-0 opacity-90">
-        <div className="absolute -top-44 left-[18%] h-[440px] w-[440px] rounded-full bg-violet-600/14 blur-[120px]" />
-        <div className="absolute right-[-140px] top-24 h-[420px] w-[420px] rounded-full bg-pink-500/12 blur-[120px]" />
-        <div className="absolute bottom-[-180px] left-[8%] h-[460px] w-[460px] rounded-full bg-amber-300/10 blur-[130px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(236,72,153,0.08),transparent_34%),radial-gradient(circle_at_70%_18%,rgba(250,204,21,0.055),transparent_28%)]" />
+    <main className="min-h-screen overflow-hidden bg-[#0d0b10] text-white">
+      <div className="pointer-events-none fixed inset-0 opacity-80">
+        <div className="absolute -top-44 left-[14%] h-[440px] w-[440px] rounded-full bg-[#A47048]/13 blur-[125px]" />
+        <div className="absolute right-[-160px] top-24 h-[420px] w-[420px] rounded-full bg-[#AC6B69]/10 blur-[128px]" />
+        <div className="absolute bottom-[-180px] left-[8%] h-[460px] w-[460px] rounded-full bg-[#F7D66E]/8 blur-[135px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(164,112,72,0.065),transparent_35%),radial-gradient(circle_at_72%_18%,rgba(247,214,110,0.052),transparent_30%)]" />
       </div>
 
       <section className="relative mx-auto flex w-full max-w-[1320px] flex-col gap-8 px-4 pb-16 pt-24 md:px-6 md:pt-28">
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#15101e]/80 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:p-8 lg:p-10">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-pink-300/55 to-transparent" />
-            <div className="absolute right-8 top-8 hidden h-24 w-24 rounded-full border border-white/10 bg-gradient-to-br from-amber-300/18 via-pink-400/18 to-violet-500/18 blur-sm md:block" />
+          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#171414]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:p-8 lg:p-10">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#D8B88C]/45 to-transparent" />
+            <div className="absolute right-8 top-8 hidden h-24 w-24 rounded-full border border-white/10 bg-gradient-to-br from-[#F7D66E]/16 via-[#A47048]/14 to-[#AC6B69]/12 blur-sm md:block" />
             <div className="relative z-10 max-w-3xl">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-pink-100/85">
-                <Sparkles className="h-3.5 w-3.5 text-amber-200" />
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/14 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-[#D8B88C]/85">
+                <Sparkles className="h-3.5 w-3.5 text-[#F7D66E]" />
                 Creative Music Workspace
               </div>
               <h1 className="text-4xl font-black leading-tight tracking-[-0.055em] text-white md:text-6xl">
                 감각적인 음악 아이디어를<br className="hidden md:block" />
-                <span className="bg-gradient-to-r from-amber-200 via-pink-300 to-violet-300 bg-clip-text text-transparent">완성도 있는 곡 설계</span>로.
+                <span className="bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#C995AC] bg-clip-text text-transparent">완성도 있는 곡 설계</span>로.
               </h1>
               <p className="mt-5 max-w-2xl text-sm font-medium leading-7 text-zinc-300 md:text-base">
                 SORIDRAW는 가사, 프롬프트, 보컬 감정, 곡 구조를 한곳에서 다듬는 AI 음악 제작 작업실입니다.
@@ -84,7 +84,7 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
                   type="button"
                   onClick={() => go('/studio')}
                   disabled={isLoggingIn}
-                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-300 via-pink-500 to-violet-500 px-5 py-3 text-sm font-black text-white shadow-[0_16px_42px_rgba(236,72,153,0.24)] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#D56C7F] px-5 py-3 text-sm font-black text-white shadow-[0_16px_42px_rgba(164,112,72,0.22)] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
                 >
                   스튜디오 시작하기
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -93,9 +93,9 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
                   type="button"
                   onClick={() => go('/history')}
                   disabled={isLoggingIn}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-5 py-3 text-sm font-black text-white/85 transition-all hover:bg-white/[0.09] disabled:cursor-wait disabled:opacity-70"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-5 py-3 text-sm font-black text-white/85 transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-70"
                 >
-                  <Heart className="h-4 w-4 text-pink-200" />
+                  <Heart className="h-4 w-4 text-[#D8B88C]" />
                   뮤직노트 보기
                 </button>
               </div>
@@ -103,22 +103,22 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
           </div>
 
           <aside className="grid gap-4">
-            <div className="rounded-[1.75rem] border border-white/10 bg-[#15101e]/70 p-5 backdrop-blur-xl">
+            <div className="rounded-[1.75rem] border border-white/10 bg-[#171414]/82 p-5 backdrop-blur-xl">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-white/40">My Setup</p>
                   <h2 className="mt-1 text-xl font-black text-white">작업 준비 상태</h2>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300/20 via-pink-400/18 to-violet-500/20 text-amber-100">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F7D66E]/16 via-[#A47048]/14 to-[#965B77]/12 text-[#D8B88C]">
                   <Music2 className="h-5 w-5" />
                 </div>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3">
+                <div className="flex items-center justify-between rounded-2xl bg-black/14 px-4 py-3">
                   <span className="text-zinc-300">Google Gemini API</span>
                   <span className="rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-black text-zinc-200">마이페이지 확인</span>
                 </div>
-                <div className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3">
+                <div className="flex items-center justify-between rounded-2xl bg-black/14 px-4 py-3">
                   <span className="text-zinc-300">Music API</span>
                   <span className="rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-black text-zinc-200">마이페이지 확인</span>
                 </div>
@@ -127,15 +127,15 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
                 type="button"
                 onClick={() => go('/my-page')}
                 disabled={isLoggingIn}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-pink-300/15 bg-pink-400/10 px-4 py-3 text-xs font-black text-pink-100 transition-all hover:bg-pink-400/15 disabled:cursor-wait disabled:opacity-70"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#A47048]/24 bg-[#A47048]/12 px-4 py-3 text-xs font-black text-[#D8B88C] transition-all hover:bg-[#A47048]/18 disabled:cursor-wait disabled:opacity-70"
               >
                 API / 플랜 관리
               </button>
             </div>
 
-            <div className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-amber-300/10 via-pink-500/10 to-violet-500/12 p-5 backdrop-blur-xl">
+            <div className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-[#F7D66E]/8 via-[#A47048]/10 to-[#5E7FA8]/8 p-5 backdrop-blur-xl">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-amber-100">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-[#D8B88C]">
                   <Mic2 className="h-5 w-5" />
                 </div>
                 <div>
@@ -156,14 +156,14 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
                 type="button"
                 onClick={() => go(card.path)}
                 disabled={isLoggingIn}
-                className="group rounded-[1.5rem] border border-white/10 bg-[#15101e]/62 p-5 text-left backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.065] disabled:cursor-wait disabled:opacity-70"
+                className="group rounded-[1.5rem] border border-white/10 bg-[#171414]/76 p-5 text-left backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.065] disabled:cursor-wait disabled:opacity-70"
               >
                 <div className={`mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${card.accent} text-white shadow-[0_12px_34px_rgba(0,0,0,0.22)]`}>
                   <Icon className="h-5 w-5" />
                 </div>
                 <h3 className="text-lg font-black text-white">{card.title}</h3>
                 <p className="mt-2 min-h-[44px] text-xs font-medium leading-5 text-zinc-400">{card.desc}</p>
-                <div className="mt-4 flex items-center gap-1 text-[11px] font-black text-pink-200/85">
+                <div className="mt-4 flex items-center gap-1 text-[11px] font-black text-[#D8B88C]/85">
                   이동하기 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </button>

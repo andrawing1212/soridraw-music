@@ -25,7 +25,7 @@ const genreAccent = {
   bar: 'bg-[#DFA05D]/95',
   text: 'text-[#E8B878]',
   softText: 'text-[#E8B878]/58',
-  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
+  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
   selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
   selectedBorder: 'border-[#DFA05D]/42',
 };
@@ -1038,7 +1038,7 @@ export default function GenreHierarchySelector({
                                 className={cn(
                                   "text-xs truncate w-full break-keep",
                                   isActiveVisual
-                                    ? "text-white/90"
+                                    ? "text-[#171717]/75 font-black"
                                     : "text-[var(--text-secondary)]",
                                 )}
                               >

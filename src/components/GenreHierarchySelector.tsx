@@ -935,7 +935,14 @@ export default function GenreHierarchySelector({
                   <ArrowLeft className="w-5 h-5" />
                 </button>
 
-                <h3 className="text-xl md:text-2xl font-bold text-[var(--text-primary)] absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <h3
+                  className={cn(
+                    "text-xl md:text-2xl font-bold text-[var(--text-primary)] absolute -translate-x-1/2 whitespace-nowrap truncate max-w-[calc(100%-148px)] transition-[left,max-width] duration-150",
+                    pendingSubIds.length > 0
+                      ? "left-[42%] max-w-[calc(100%-190px)] md:left-1/2 md:max-w-[calc(100%-210px)]"
+                      : "left-1/2"
+                  )}
+                >
                   {modalStep === "main"
                     ? activeGroup.labelKo || activeGroup.label
                     : activeMain?.labelKo || activeMain?.label}
@@ -946,7 +953,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={handleClearModalSelection}
-                      className="h-10 px-3 rounded-full border border-[#A47048]/35 bg-[#A47048]/12 text-[#D9B89D] text-[11px] font-black hover:bg-[#A47048]/18 transition-all active:scale-95"
+                      className="h-10 px-2.5 rounded-full border border-[#A47048]/35 bg-[#A47048]/12 text-[#D9B89D] text-[10.5px] font-black hover:bg-[#A47048]/18 transition-all active:scale-95"
                       title="전체해제"
                       aria-label="선택한 장르 전체해제"
                     >
@@ -1075,6 +1082,7 @@ export default function GenreHierarchySelector({
                           onMouseLeave={() => setHoveredModalItem(null)}
                           className={cn(
                             "px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep",
+                            isActiveVisual && "font-black soridraw-selected-strong",
                             isActiveVisual
                               ? genreAccent.selected
                               : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-[#A47048]/35 shadow-btn",

@@ -241,24 +241,36 @@ html {
 }
 
 
-/* SORIDRAW_404_SELECTED_TEXT_FORCE
-   Desktop popup/list selections can contain nested text classes. Force every
-   selected keyword/card label and description to read as bold black text. */
+/* SORIDRAW_407_SELECTED_TEXT_CLEAN_BOLD
+   선택된 버튼/카드 텍스트만 선명한 검정 + 굵은 글씨로 고정한다.
+   과한 stroke와 4방향 shadow는 글자를 뭉개므로 사용하지 않는다. */
 .soridraw-selected-strong,
-.soridraw-selected-strong *,
+.soridraw-selected-strong :where(span, p, div, button, strong, em, small, h1, h2, h3, label) {
+  color: #050505 !important;
+  font-weight: 950 !important;
+  font-synthesis: weight !important;
+  -webkit-text-stroke: 0 !important;
+  text-rendering: geometricPrecision;
+}
+
+.soridraw-selected-strong :where(span, strong, h1, h2, h3, label) {
+  text-shadow: 0.22px 0 0 #050505;
+}
+
+.soridraw-selected-strong :where(p, small, em) {
+  color: rgba(5, 5, 5, 0.86) !important;
+  font-weight: 850 !important;
+  text-shadow: 0.16px 0 0 rgba(5, 5, 5, 0.72);
+}
+
 .soridraw-selected-strong svg {
-  color: #171717 !important;
-  font-weight: 900 !important;
+  color: #050505 !important;
+  stroke-width: 3 !important;
 }
 
-.soridraw-selected-strong p,
-.soridraw-selected-strong span,
-.soridraw-selected-strong div,
-.soridraw-selected-strong button {
-  color: #171717 !important;
-  font-weight: 900 !important;
+@media (max-width: 767px) {
+  .soridraw-selected-strong :where(span, strong, h1, h2, h3, label) {
+    text-shadow: 0.24px 0 0 #050505;
+  }
 }
 
-.soridraw-selected-summary {
-  font-weight: 900 !important;
-}

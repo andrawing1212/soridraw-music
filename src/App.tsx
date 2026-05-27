@@ -10819,7 +10819,7 @@ function CycleSection({
                     "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
                     selectedVariants.length > 0
                       ? hasHighlightedSelectedVariant
-                        ? "bg-sky-500/32 text-sky-50 border-sky-300/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]"
+                        ? "bg-sky-500/32 text-[#111111] border-sky-300/35 font-black soridraw-selected-strong shadow-[0_0_14px_rgba(56,189,248,0.12)]"
                         : sectionAccent.selected
                       : pointSelectedVariants.length > 0
                         ? sectionAccent.pointSelected
@@ -10872,9 +10872,9 @@ function CycleSection({
         title={onToggleExpand ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
         {selectedDisplayItems.length > 0 ? (
-          <div className={cn("w-full max-h-[42px] overflow-hidden font-semibold break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
+          <div className={cn("w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn(item.mode === 'point' ? 'text-[#C995AC]/85' : sectionAccent.text)}>
+              <span key={`${item.mode}-${item.id}`} className={cn("soridraw-selected-summary", item.mode === 'point' ? 'text-[#111111]' : sectionAccent.text)}>
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}
@@ -11197,6 +11197,7 @@ function CycleKeywordPopup({
                   key={variant.id}
                   className={cn(
                     "w-full rounded-2xl border transition-all flex items-stretch overflow-hidden",
+                    (isSelected || isOtherSelected) && "soridraw-selected-strong",
                     isSelected
                       ? sectionAccent.selected
                       : isOtherSelected
@@ -11230,7 +11231,7 @@ function CycleKeywordPopup({
                   >
                     <div className="min-w-0">
                       <span className="text-sm font-black truncate block">{variant.labelKo || variant.label}</span>
-                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-[#171717]/75 font-bold" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
+                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", (isSelected || isOtherSelected) ? "text-[#050505]/85 font-extrabold" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                     </div>
                   </button>
                   {canPointSelect && (

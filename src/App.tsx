@@ -8218,7 +8218,7 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-24 pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
+              <header className="studio-hero-tone pt-28 pb-20 md:pt-24 md:pb-16 border-b border-[var(--home-card-border)] bg-gradient-to-b from-[var(--hover-bg)] to-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
                   {/* Search icon / Guide button inside Studio Header */}
                   {user && (
@@ -8247,15 +8247,15 @@ ${normalizePromptForDisplay(result.prompt)}
                     </>
                   )}
 
-                  <div className="text-center flex flex-col items-center mt-3 md:mt-7">
+                  <div className="text-center flex flex-col items-center mt-5 md:mt-7">
                     <h1 
-                      className="inline-flex items-center justify-center gap-3 text-4xl md:text-[56px] font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
+                      className="inline-flex items-center justify-center gap-3 text-[46px] md:text-[56px] font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
                     >
-                      <Zap className="w-8 h-8 md:w-11 md:h-11 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]" />
+                      <Zap className="w-10 h-10 md:w-11 md:h-11 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.10)]" />
                       <span>Sori <span className="bg-gradient-to-r from-[#EBCF77] via-[#F39B87] to-[#D96F8F] bg-clip-text text-transparent">Studio</span></span>
                     </h1>
 
-                    <p className="text-[12px] md:text-[14px] text-[var(--text-secondary)] font-semibold tracking-[-0.01em] mb-4 text-center w-full">
+                    <p className="text-[13px] md:text-[14px] text-[var(--text-secondary)] font-semibold tracking-[-0.01em] mb-4 text-center w-full">
                       가사와 프롬프트를 감각적으로 설계하는 음악 작업실
                     </p>
 

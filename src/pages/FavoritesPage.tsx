@@ -2013,7 +2013,7 @@ ${song.prompt}
 
   return (
     <div 
-      className="mx-auto w-full max-w-[1320px] px-0 pt-28 pb-12 font-sans relative"
+      className="mx-auto w-full max-w-[1320px] px-4 md:px-6 pt-28 pb-12 font-sans relative"
       onClickCapture={(e) => {
         if (!isSelectionMode) return;
         const target = e.target as HTMLElement;

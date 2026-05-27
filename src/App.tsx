@@ -8201,33 +8201,28 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-24 pb-10 md:pt-24 md:pb-11 border-b border-[var(--home-card-border)] bg-transparent relative">
+              <header className="studio-hero-tone pt-24 pb-0 md:pt-24 md:pb-0 border-b border-[var(--home-card-border)] bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
                     <button
                       type="button"
                       onClick={openGlobalSearchModal}
-                      className="absolute bottom-3 right-6 z-20 flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                      className="absolute bottom-0 right-5 md:right-6 z-20 flex h-9 w-9 md:h-10 md:w-10 translate-y-1/2 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
                       aria-label="통합 검색"
                       title="통합 검색"
                     >
-                      <Search className="w-7 h-7 md:w-8 md:h-8 text-[#F1DAA4] group-hover:scale-110 transition-transform" />
+                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#DFA05D] group-hover:scale-110 transition-transform" />
                     </button>
                   )}
 
-                  <div className="text-center flex flex-col items-center mt-5 md:mt-6">
+                  <div className="flex flex-col items-start mt-9 md:mt-10 translate-y-4 md:translate-y-5">
                     <h1 
-                      className="inline-flex items-center justify-center gap-3 text-[46px] md:text-[56px] font-black tracking-tight text-[var(--text-primary)] mb-3 font-display text-center w-full"
+                      className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display text-left w-full"
                     >
-                      <Zap className="w-10 h-10 md:w-11 md:h-11 text-[#DFA05D]" />
+                      <Zap className="w-8 h-8 md:w-9 md:h-9 text-[#DFA05D]" />
                       <span>Sori <span className="text-[#DFA05D]">Studio</span></span>
                     </h1>
-
-                    <p className="text-[13px] md:text-[14px] text-[var(--text-secondary)] font-semibold tracking-[-0.01em] mb-4 text-center w-full">
-                      가사와 프롬프트를 감각적으로 설계하는 음악 작업실
-                    </p>
-
                   </div>
                 </div>
               </header>

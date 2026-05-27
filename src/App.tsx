@@ -1430,6 +1430,7 @@ type StoryboardSliderProps = {
   onChange: (value: number) => void;
   description?: string;
   statusLabels?: [string, string, string];
+  accent?: 'story' | 'characterA' | 'characterB';
 };
 
 const getStoryboardSliderStatus = (value: number, labels?: [string, string, string]) => {
@@ -1458,27 +1459,40 @@ const getStoryboardSliderHint = (value: number, left: string, right: string, lab
 
 const StoryboardSectionTitle = ({ title, description }: { title: string; description?: string }) => (
   <div className="flex items-start gap-3">
-    <span className="mt-1 h-6 w-1.5 rounded-full bg-brand-orange shadow-[0_0_12px_rgba(255,132,0,0.45)] shrink-0" />
+    <span className="mt-1 h-6 w-1.5 rounded-full bg-[#AC5045] shadow-[0_0_12px_rgba(172,80,69,0.38)] shrink-0" />
     <div className="min-w-0">
-      <p className="text-lg md:text-xl font-black text-brand-orange tracking-tight">{title}</p>
+      <p className="text-lg md:text-xl font-black text-[#D79084] tracking-tight">{title}</p>
       {description && <p className="mt-1.5 text-sm md:text-[15px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
     </div>
   </div>
 );
 
-const StoryboardSlider = ({ label, left, right, value, onChange, description, statusLabels }: StoryboardSliderProps) => {
+const StoryboardSlider = ({ label, left, right, value, onChange, description, statusLabels, accent = 'story' }: StoryboardSliderProps) => {
   const status = getStoryboardSliderStatus(value, statusLabels);
   const sliderHint = getStoryboardSliderHint(value, left, right, statusLabels);
   const leftLabelClass = left.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
   const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
+  const accentStyle = accent === 'characterA'
+    ? {
+        text: 'text-[#E8B878]',
+        dot: 'bg-[#DFA05D] shadow-[0_0_8px_rgba(223,160,93,0.36)]',
+        badge: 'border-[#DFA05D]/28 text-[#E8B878]',
+        slider: 'storyboard-slider--character-a',
+      }
+    : {
+        text: 'text-[#D79084]',
+        dot: 'bg-[#AC5045] shadow-[0_0_8px_rgba(172,80,69,0.36)]',
+        badge: 'border-[#AC5045]/30 text-[#D79084]',
+        slider: 'storyboard-slider--story',
+      };
   return (
     <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
       <div className="flex items-center justify-between gap-3">
-        <p className="inline-flex items-center gap-2 text-base md:text-[17px] font-black text-brand-orange">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-orange shadow-[0_0_8px_rgba(255,132,0,0.45)] shrink-0" />
+        <p className={cn("inline-flex items-center gap-2 text-base md:text-[17px] font-black", accentStyle.text)}>
+          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", accentStyle.dot)} />
           <span>{label}</span>
         </p>
-        <span className="rounded-full border border-brand-orange/25 bg-transparent px-3 py-1 text-xs font-black text-brand-orange shrink-0">{status}</span>
+        <span className={cn("rounded-full border bg-transparent px-3 py-1 text-xs font-black shrink-0", accentStyle.badge)}>{status}</span>
       </div>
       {description && <p className="text-xs md:text-[13px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
       <div className="space-y-1.5">
@@ -1495,7 +1509,7 @@ const StoryboardSlider = ({ label, left, right, value, onChange, description, st
             step={1}
             value={snapStoryboardSliderValue(value)}
             onChange={(e) => onChange(snapStoryboardSliderValue(Number(e.target.value))) }
-            className="storyboard-slider w-full"
+            className={cn("storyboard-slider w-full", accentStyle.slider)}
             aria-label={`${left}에서 ${right} 사이 ${label}`}
           />
           <div className="pointer-events-none absolute bottom-0 left-1/2 max-w-[190px] -translate-x-1/2 truncate text-center text-[10px] font-black text-white/90 md:text-[11px]">
@@ -8441,8 +8455,8 @@ ${normalizePromptForDisplay(result.prompt)}
                   className="flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-brand-orange/10 border border-brand-orange/25 flex items-center justify-center shrink-0">
-                      <Users className="w-5 h-5 text-brand-orange" />
+                    <div className="w-10 h-10 rounded-2xl bg-[#AC5045]/12 border border-[#AC5045]/28 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5 text-[#D79084]" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -8463,9 +8477,9 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock Storyboard' : 'Lock Storyboard', labelKo: menuLocks.situation ? '잠금 해제' : '스토리보드 잠금', description: menuLocks.situation ? '스토리보드를 랜덤 선택에 다시 포함합니다.' : '현재 스토리보드 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
                     onMouseLeave={() => setHoveredItem(null)}
                     className={cn(
-                      "p-2 rounded-xl border border-[#DFA05D]/50 transition-all shadow-btn",
+                      "p-2 rounded-xl border border-[#AC5045]/50 transition-all shadow-btn",
                       menuLocks.situation
-                        ? "bg-[#DFA05D]/72 text-[#17120F] border-[#DFA05D]/70 shadow-[0_0_10px_rgba(223,160,93,0.14)]"
+                        ? "bg-[#AC5045]/72 text-[#17120F] border-[#AC5045]/70 shadow-[0_0_10px_rgba(172,80,69,0.14)]"
                         : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                     )}
                     title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
@@ -8488,7 +8502,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     className={cn(
                       "px-3 py-2 rounded-xl border text-xs font-black transition-all shadow-btn",
                       hasActiveSituation(situation)
-                        ? "bg-brand-orange border-brand-orange text-white hover:bg-brand-orange/90"
+                        ? "bg-[#AC5045]/78 border-[#D79084]/55 text-[#171717] font-black soridraw-selected-strong hover:bg-[#AC5045]/86"
                         : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                     )}
                     aria-label="스토리보드 설정 열기"
@@ -8536,7 +8550,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 border-b border-[var(--modal-soft-border)] bg-[var(--card-bg)]/95 backdrop-blur-xl">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <Users className="w-5 h-5 text-brand-orange" />
+                            <Users className="w-5 h-5 text-[#D79084]" />
                             <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
                             <span className="text-[11px] font-bold text-[var(--text-tertiary)]">Storyboard</span>
                           </div>
@@ -8547,7 +8561,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             <button
                               type="button"
                               onClick={clearDraftSituation}
-                              className="px-3 py-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[11px] font-black text-[var(--text-secondary)] hover:text-brand-orange hover:bg-btn-hover transition-all"
+                              className="px-3 py-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[11px] font-black text-[var(--text-secondary)] hover:text-[#D79084] hover:bg-[#AC5045]/10 transition-all"
                             >
                               전체 해제
                             </button>
@@ -8556,7 +8570,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             <button
                               type="button"
                               onClick={applyStoryboardModal}
-                              className="p-2 rounded-xl bg-brand-orange text-white border border-brand-orange hover:bg-brand-orange/90 transition-all"
+                              className="p-2 rounded-xl bg-[#AC5045]/78 text-[#171717] border border-[#D79084]/55 font-black soridraw-selected-strong hover:bg-[#AC5045]/86 transition-all"
                               title="적용"
                               aria-label="스토리보드 적용"
                             >
@@ -8580,21 +8594,21 @@ ${normalizePromptForDisplay(result.prompt)}
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-black text-brand-orange mb-2">캐릭터 A</label>
+                              <label className="block text-xs font-black text-[#E8B878] mb-2">캐릭터 A</label>
                               <input
                                 value={draftSituation.targetA || ''}
                                 onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
                                 placeholder="예: 저승사자, 엄마, 상사"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-black text-brand-orange mb-2">캐릭터 B</label>
+                              <label className="block text-xs font-black text-[#D79084] mb-2">캐릭터 B</label>
                               <input
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
                                 placeholder="예: 귀신, 아들, 직원"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
                               />
                             </div>
                           </div>
@@ -8605,22 +8619,22 @@ ${normalizePromptForDisplay(result.prompt)}
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-brand-orange truncate">{draftSituation.targetA || '캐릭터 A'}</p>
+                                <p className="text-sm font-black text-[#E8B878] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
-                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
-                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} />
-                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} />
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="characterA" />
+                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} accent="characterA" />
+                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="characterA" />
                               <input
                                 value={draftSituation.speakerAExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
                               />
                             </div>
 
                             <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-brand-orange truncate">{draftSituation.targetB || '캐릭터 B'}</p>
+                                <p className="text-sm font-black text-[#D79084] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
                               <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} />
@@ -8629,7 +8643,7 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.speakerBExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 공손하지만 안 물러남"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
                               />
                             </div>
                           </div>
@@ -8642,7 +8656,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             onChange={(e) => updateDraftSituationField('description', e.target.value)}
                             placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
                             rows={4}
-                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-brand-orange resize-none"
+                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-[#AC5045] resize-none"
                           />
                           <input
                             value={draftSituation.detailCustom || draftSituation.details || ''}
@@ -8651,7 +8665,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               updateDraftSituationField('detailPresets', []);
                             }}
                             placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-brand-orange"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
                           />
                         </section>
 
@@ -9939,7 +9953,7 @@ ${normalizePromptForDisplay(result.prompt)}
           height: 22px;
           margin-top: -8px;
           border-radius: 999px;
-          background: rgb(255, 130, 0);
+          background: rgb(172, 80, 69);
           border: 3px solid rgba(255,255,255,0.86);
           box-shadow: none;
           cursor: grab;
@@ -9962,10 +9976,16 @@ ${normalizePromptForDisplay(result.prompt)}
           width: 22px;
           height: 22px;
           border-radius: 999px;
-          background: rgb(255, 130, 0);
+          background: rgb(172, 80, 69);
           border: 3px solid rgba(255,255,255,0.86);
           box-shadow: none;
           cursor: grab;
+        }
+        .storyboard-slider--character-a::-webkit-slider-thumb {
+          background: rgb(223, 160, 93);
+        }
+        .storyboard-slider--character-a::-moz-range-thumb {
+          background: rgb(223, 160, 93);
         }
         .storyboard-slider-center-marker {
           position: absolute;
@@ -10001,7 +10021,7 @@ ${normalizePromptForDisplay(result.prompt)}
           height: 24px;
           margin-top: -8.5px;
           border-radius: 999px;
-          background: rgb(255, 130, 0);
+          background: rgb(172, 80, 69);
           border: 4px solid rgba(255,255,255,0.90);
           box-shadow: none;
           cursor: grab;
@@ -10030,7 +10050,7 @@ ${normalizePromptForDisplay(result.prompt)}
           width: 24px;
           height: 24px;
           border-radius: 999px;
-          background: rgb(255, 130, 0);
+          background: rgb(172, 80, 69);
           border: 4px solid rgba(255,255,255,0.90);
           box-shadow: none;
           cursor: grab;
@@ -10095,7 +10115,7 @@ ${normalizePromptForDisplay(result.prompt)}
         }
         .vocal-character-dual-handle-secondary {
           z-index: 2;
-          background: rgb(255, 130, 0);
+          background: rgb(172, 80, 69);
         }
         .vocal-character-dual-handle-female {
           background: rgb(244, 114, 182);

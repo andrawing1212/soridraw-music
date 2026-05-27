@@ -523,7 +523,7 @@ const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
   pointSelected: 'bg-[#DFA05D]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#E8B878]/95 text-[#171717] border-black/25',
+  pointBadge: 'bg-[#DFA05D]/80 text-[#171717] border-black/20',
   badgeAccent: '#DFA05D',
 };
 
@@ -538,7 +538,7 @@ const STUDIO_ACCENT_RED: StudioSectionAccent = {
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
   pointSelected: 'bg-[#AC5045]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#D79084]/95 text-[#171717] font-black border-black/25',
+  pointBadge: 'bg-[#AC5045]/80 text-[#171717] font-black border-black/20',
   badgeAccent: '#AC5045',
 };
 
@@ -553,7 +553,7 @@ const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
   pointSelected: 'bg-[#658761]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#A8C49F]/95 text-[#171717] font-black border-black/25',
+  pointBadge: 'bg-[#658761]/80 text-[#171717] font-black border-black/20',
   badgeAccent: '#658761',
 };
 
@@ -10920,7 +10920,7 @@ function CycleSection({
         {selectedDisplayItems.length > 0 ? (
           <div className={cn("w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn("soridraw-selected-summary", item.mode === 'point' ? 'text-[#111111]' : sectionAccent.text)}>
+              <span key={`${item.mode}-${item.id}`} className={cn("soridraw-selected-summary", sectionAccent.text)}>
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}

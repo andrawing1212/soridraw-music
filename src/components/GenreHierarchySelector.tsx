@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryItem, GenreGroupItem } from "../types";
 import { GENRE_HIERARCHY, GENRES } from "../constants";
 import {
-  ChevronDown,
-  ChevronUp,
   RotateCcw,
   Dices,
   X,
@@ -24,12 +22,12 @@ function cn(...inputs: ClassValue[]) {
 
 
 const genreAccent = {
-  bar: 'bg-amber-400/80',
-  text: 'text-amber-300',
-  softText: 'text-amber-300/55',
-  selected: 'bg-amber-500/38 border-amber-300/38 text-amber-50 shadow-[0_0_14px_rgba(245,158,11,0.12)]',
-  selectedSoft: 'bg-amber-500/14 border-amber-300/25 text-amber-300 hover:bg-amber-500/20',
-  selectedBorder: 'border-amber-300/35',
+  bar: 'bg-[#A47048]/90',
+  text: 'text-[#D9B89D]',
+  softText: 'text-[#D9B89D]/58',
+  selected: 'bg-[#A47048]/72 border-[#C69A76]/55 text-[#FFF7EF] shadow-[0_0_10px_rgba(164,112,72,0.10)]',
+  selectedSoft: 'bg-[#A47048]/16 border-[#A47048]/40 text-[#D9B89D] hover:bg-[#A47048]/22',
+  selectedBorder: 'border-[#A47048]/45',
 };
 
 const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
@@ -80,7 +78,7 @@ function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean)
 }
 
 function handleExpandableToggle(
-  event: React.MouseEvent<HTMLButtonElement>,
+  event: React.MouseEvent<HTMLElement>,
   isExpanded: boolean,
   onToggleExpand?: () => void
 ) {
@@ -720,7 +718,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] pb-12">
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -773,7 +771,7 @@ export default function GenreHierarchySelector({
                 className={cn(
                   "p-2.5 rounded-xl transition-all shadow-btn border",
                   isLocked
-                    ? "bg-btn-bg text-amber-300 border-btn-border hover:bg-btn-hover"
+                    ? "bg-btn-bg text-[#D9B89D] border-btn-border hover:bg-btn-hover"
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
                 )}
                 title={isLocked ? "잠금 해제" : "메뉴 잠금"}
@@ -878,7 +876,26 @@ export default function GenreHierarchySelector({
         </motion.div>
       </div>
 
-      <div className="mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden">
+      <div
+        data-expanded={isExpanded ? "true" : "false"}
+        role={onToggleExpand ? "button" : undefined}
+        tabIndex={onToggleExpand ? 0 : undefined}
+        aria-pressed={onToggleExpand ? isExpanded : undefined}
+        onClick={(event) => onToggleExpand && handleExpandableToggle(event, isExpanded, onToggleExpand)}
+        onKeyDown={(event) => {
+          if (!onToggleExpand) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleExpand();
+            keepExpandableSectionInView(event.currentTarget, isExpanded);
+          }
+        }}
+        className={cn(
+          "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
+          onToggleExpand && "cursor-pointer hover:border-[#A47048]/40 hover:bg-[#A47048]/6 focus:outline-none focus:ring-1 focus:ring-[#A47048]/30"
+        )}
+        title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}
+      >
         {selectedDisplayLabels.length > 0 ? (
           <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
             {selectedDisplayLabels.join(" · ")}
@@ -889,24 +906,6 @@ export default function GenreHierarchySelector({
           </p>
         )}
       </div>
-
-      <button
-        data-expanded={isExpanded ? "true" : "false"}
-        onClick={(event) => handleExpandableToggle(event, isExpanded, onToggleExpand)}
-        className={cn(
-          "section-expand-button absolute -bottom-5 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full border transition-all shadow-[0_4px_12px_rgba(255,130,0,0.2)] flex items-center justify-center",
-          isExpanded
-            ? "bg-[#4a2a0e] text-amber-300 border-amber-500/40"
-            : "bg-[var(--card-bg)] border-amber-500/30 text-amber-300",
-        )}
-        title={isExpanded ? "접기" : "펼치기"}
-      >
-        {isExpanded ? (
-          <ChevronUp className="w-5 h-5" />
-        ) : (
-          <ChevronDown className="w-5 h-5" />
-        )}
-      </button>
 
       <AnimatePresence>
         {activeGroup && (
@@ -930,7 +929,7 @@ export default function GenreHierarchySelector({
               <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]">
                 <button
                   onClick={handleBack}
-                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-amber-300 hover:border-amber-300/35 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
+                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#D9B89D] hover:border-[#A47048]/45 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
                   title="뒤로가기"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -947,7 +946,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={handleClearModalSelection}
-                      className="h-10 px-3 rounded-full border border-amber-300/25 bg-amber-500/10 text-amber-300 text-[11px] font-black hover:bg-amber-500/15 transition-all active:scale-95"
+                      className="h-10 px-3 rounded-full border border-[#A47048]/35 bg-[#A47048]/12 text-[#D9B89D] text-[11px] font-black hover:bg-[#A47048]/18 transition-all active:scale-95"
                       title="전체해제"
                       aria-label="선택한 장르 전체해제"
                     >
@@ -958,7 +957,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={applyModalChanges}
-                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-amber-500/45 text-amber-50 border-amber-300/40 hover:bg-amber-500/55"
+                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-[#A47048]/72 text-[#FFF7EF] border-[#C69A76]/55 hover:bg-[#A47048]/78"
                       title="변경 적용"
                       aria-label="변경 적용"
                     >
@@ -968,7 +967,7 @@ export default function GenreHierarchySelector({
                   <button
                     type="button"
                     onClick={() => closeModal()}
-                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-amber-300 hover:border-amber-300/35"
+                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-[#D9B89D] hover:border-[#A47048]/45"
                     title={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
                     aria-label={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
                   >
@@ -978,13 +977,13 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-amber-500/5 border-b border-amber-300/10 flex items-center justify-center gap-2 overflow-hidden">
-                <span className="text-[10px] font-black text-amber-300 uppercase tracking-widest shrink-0">
+              <div className="px-6 py-2.5 bg-[#A47048]/6 border-b border-[#A47048]/18 flex items-center justify-center gap-2 overflow-hidden">
+                <span className="text-[10px] font-black text-[#D9B89D] uppercase tracking-widest shrink-0">
                   Selection
                 </span>
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   {pendingSubIds.length > 0 ? (
-                    <span className="text-amber-300 truncate">
+                    <span className="text-[#D9B89D] truncate">
                       {pendingSubIds.map(resolveGenreDisplayLabel).join(" · ")}
                     </span>
                   ) : (
@@ -1027,7 +1026,7 @@ export default function GenreHierarchySelector({
                               "w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.02] active:scale-[0.98]",
                               isActiveVisual
                                 ? genreAccent.selected
-                                : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-amber-300/25 text-[var(--text-primary)] shadow-btn",
+                                : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-[#A47048]/35 text-[var(--text-primary)] shadow-btn",
                             )}
                             title="세부 장르 열기"
                           >
@@ -1078,7 +1077,7 @@ export default function GenreHierarchySelector({
                             "px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep",
                             isActiveVisual
                               ? genreAccent.selected
-                              : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-amber-300/25 shadow-btn",
+                              : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-[#A47048]/35 shadow-btn",
                           )}
                         >
                           {item.labelKo || item.label}
@@ -1091,7 +1090,7 @@ export default function GenreHierarchySelector({
 
               {/* Bottom Info Area */}
               <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
-                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-300 shrink-0 shadow-inner hidden md:flex">
+                <div className="p-2.5 rounded-xl bg-[#A47048]/12 text-[#D9B89D] shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1 text-center">

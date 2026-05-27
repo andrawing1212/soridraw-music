@@ -25,7 +25,7 @@ const genreAccent = {
   bar: 'bg-[#DFA05D]/95',
   text: 'text-[#E8B878]',
   softText: 'text-[#E8B878]/58',
-  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
+  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(223,160,93,0.12)]',
   selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
   selectedBorder: 'border-[#DFA05D]/42',
 };
@@ -897,7 +897,7 @@ export default function GenreHierarchySelector({
         title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}
       >
         {selectedDisplayLabels.length > 0 ? (
-          <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
+          <p className={cn("text-sm font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
             {selectedDisplayLabels.join(" · ")}
           </p>
         ) : (

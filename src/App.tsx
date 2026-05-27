@@ -513,11 +513,11 @@ const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
   bar: 'bg-[#DFA05D]/95',
   text: 'text-[#E8B878]',
   softText: 'text-[#E8B878]/58',
-  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]',
+  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(223,160,93,0.12)]',
   selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
   selectedBorder: 'border-[#DFA05D]/42',
   badge: 'text-[#E8B878] border-[#DFA05D]/55',
-  pointSelected: 'bg-[#DFA05D]/68 border-[#F1C98B]/50 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.10)]',
+  pointSelected: 'bg-[#DFA05D]/68 border-[#F1C98B]/50 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(223,160,93,0.10)]',
   pointBadge: 'bg-[#DFA05D]/80 text-[#171717] border-[#F1C98B]/45',
 };
 
@@ -525,11 +525,11 @@ const STUDIO_ACCENT_RED: StudioSectionAccent = {
   bar: 'bg-[#AC5045]/95',
   text: 'text-[#D79084]',
   softText: 'text-[#D79084]/58',
-  selected: 'bg-[#AC5045]/74 border-[#D79084]/50 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(172,80,69,0.12)]',
+  selected: 'bg-[#AC5045]/74 border-[#D79084]/50 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(172,80,69,0.12)]',
   selectedSoft: 'bg-[#AC5045]/15 border-[#AC5045]/38 text-[#D79084] hover:bg-[#AC5045]/22',
   selectedBorder: 'border-[#AC5045]/42',
   badge: 'text-[#D79084] border-[#AC5045]/55',
-  pointSelected: 'bg-[#AC5045]/68 border-[#D79084]/48 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(172,80,69,0.10)]',
+  pointSelected: 'bg-[#AC5045]/68 border-[#D79084]/48 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(172,80,69,0.10)]',
   pointBadge: 'bg-[#AC5045]/80 text-[#171717] font-black border-[#D79084]/45',
 };
 
@@ -537,11 +537,11 @@ const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
   bar: 'bg-[#658761]/95',
   text: 'text-[#A8C49F]',
   softText: 'text-[#A8C49F]/58',
-  selected: 'bg-[#658761]/74 border-[#A8C49F]/50 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(101,135,97,0.12)]',
+  selected: 'bg-[#658761]/74 border-[#A8C49F]/50 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(101,135,97,0.12)]',
   selectedSoft: 'bg-[#658761]/15 border-[#658761]/38 text-[#A8C49F] hover:bg-[#658761]/22',
   selectedBorder: 'border-[#658761]/42',
   badge: 'text-[#A8C49F] border-[#658761]/55',
-  pointSelected: 'bg-[#658761]/68 border-[#A8C49F]/48 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(101,135,97,0.10)]',
+  pointSelected: 'bg-[#658761]/68 border-[#A8C49F]/48 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(101,135,97,0.10)]',
   pointBadge: 'bg-[#658761]/80 text-[#171717] font-black border-[#A8C49F]/45',
 };
 
@@ -8095,7 +8095,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           className={cn(
                             "w-full rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.99]",
                             isSelected
-                              ? "border-[#658761]/55 bg-[#658761]/74 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-lg shadow-[#658761]/10"
+                              ? "border-[#658761]/55 bg-[#658761]/74 text-[#171717] font-black soridraw-selected-strong shadow-lg shadow-[#658761]/10"
                               : "border-[var(--modal-button-border)] bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
                           )}
                         >
@@ -10462,7 +10462,7 @@ function GenreCategorySection({
 
       <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
         {selectedChild ? (
-          <p className={cn("text-sm font-semibold", sectionAccent.text)}>
+          <p className={cn("text-sm font-black soridraw-selected-summary", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
@@ -10547,7 +10547,7 @@ function GenreSelectModal({
                 className={cn(
                   "w-full text-left rounded-2xl border px-4 py-2 transition-all",
                   isSelected
-                    ? "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(223,160,93,0.12)]"
+                    ? "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(223,160,93,0.12)]"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]"
                 )}
               >
@@ -11523,11 +11523,11 @@ function CategorySection({
 
             if (isKpop) {
               if (kpopMode === 2) {
-                kpopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(172,107,105,0.10)]";
+                kpopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(172,107,105,0.10)]";
                 displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
                 displayLabel = "K-Pop (Mix)";
               } else if (kpopMode === 1) {
-                kpopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_14px_rgba(245,158,11,0.12)]";
+                kpopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_14px_rgba(245,158,11,0.12)]";
                 displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
                 displayLabel = "K-Pop";
               } else {
@@ -11541,11 +11541,11 @@ function CategorySection({
             let citypopStyle = "";
             if (isCitypop) {
               if (citypopMode === 2) {
-                citypopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_14px_rgba(45,212,191,0.12)]";
+                citypopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_14px_rgba(45,212,191,0.12)]";
                 displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
                 displayLabel = "City Pop(M)";
               } else if (citypopMode === 1) {
-                citypopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] shadow-[0_0_10px_rgba(164,112,72,0.10)]";
+                citypopStyle = "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(164,112,72,0.10)]";
                 displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
                 displayLabel = "City Pop(O)";
               } else {
@@ -11640,7 +11640,7 @@ function CategorySection({
                     className={cn(
                       "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                       isPinned 
-                        ? "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black [&_*]:font-black [&_*]:text-[#171717] opacity-100 scale-100 shadow-[0_0_14px_rgba(245,158,11,0.12)]" 
+                        ? "bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong opacity-100 scale-100 shadow-[0_0_14px_rgba(245,158,11,0.12)]" 
                         : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-amber-300"
                     )}
                   >
@@ -11708,7 +11708,7 @@ function CategorySection({
             </button>
           </div>
         ) : selected.length > 0 ? (
-          <p className={cn("text-sm font-semibold leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
+          <p className={cn("text-sm font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
             {selected.map(id => resolveSelectedLabel(id)).join(', ')}
           </p>
         ) : (

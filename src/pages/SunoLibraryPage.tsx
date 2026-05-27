@@ -4027,6 +4027,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       streamAudioUrl: item.audioUrl || '',
       requestPayload: reqPayload || applied,
       creatorDisplayId: getPlaylistItemCreatorName(item),
+      sourceItem: item,
+      item,
     };
   };
 
@@ -5448,7 +5450,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 }}
                                 className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
                               >
-                                <span className="flex items-center gap-2"><Info className="w-4 h-4 opacity-70" />상세정보</span>
+                                <span className="flex items-center gap-2"><Info className="w-4 h-4 opacity-70" />디테일</span>
                               </button>
                               <button
                                 onClick={(e) => {
@@ -5489,9 +5491,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   handleApplyNext(item, item); 
                                   setActivePlaylistItemMenu(null); 
                                 }}
-                                className={isUnavailable ? blockedPlaylistActionClass : normalPlaylistActionClass}
+                                className={isUnavailable ? blockedPlaylistActionClass : "w-full text-left px-4 py-2 flex items-center justify-between group text-[#8A4EAD] hover:text-[#A567CF] hover:bg-transparent"}
                               >
-                                <span className="flex items-center gap-2"><Music className="w-4 h-4 opacity-70" />다음곡에 적용</span>
+                                <span className="flex items-center gap-2"><RefreshCw className="w-4 h-4 opacity-90" />다음곡에 적용</span>
                               </button>
                               <button 
                                 disabled={isUnavailable}
@@ -5885,9 +5887,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               onClick={(e) => e.stopPropagation()}
             >
               {[
-                { icon: Info, label: '상세정보', action: () => {
+                { icon: Info, label: '디테일', action: () => {
                   const creatorMeta = resolveCreatorSnapshot(activeMenuState.group, activeMenuState.item, { fallbackToCurrentUser: !isSharedView });
-                  setShowDetails({ ...activeMenuState.group, ...creatorMeta, itemIndex: activeMenuState.idx });
+                  setShowDetails({ ...activeMenuState.group, ...creatorMeta, item: activeMenuState.item, itemIndex: activeMenuState.idx });
                   setActiveMenuState(null);
                 } },
                 { icon: CheckSquare, label: '선택', action: () => {
@@ -5903,7 +5905,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     setActiveMenuState(null); 
                   } 
                 } : null,
-                filter !== 'trash' ? { icon: Music, label: '다음곡에 적용', action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                filter !== 'trash' ? { icon: RefreshCw, label: '다음곡에 적용', highlight: true, action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
                 !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
                 filter !== 'trash' ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
@@ -5914,7 +5916,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   key={i}
                   onClick={m.action}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all ${m.danger ? 'text-red-400' : ''}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left transition-all ${m.highlight ? 'text-[#8A4EAD] hover:text-[#A567CF] hover:bg-transparent' : 'hover:bg-white/5'} ${m.danger ? 'text-red-400' : ''}`}
                 >
                   <m.icon className={`w-4 h-4 ${m.filled ? 'fill-yellow-400 text-yellow-400' : ''}`} />
                   {m.label}
@@ -5990,6 +5992,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         open={!!showDetails}
         track={showDetails}
         onClose={closeModal}
+        onEdit={(detailTrack) => {
+          handleApplyNext(detailTrack?.parent || detailTrack, detailTrack?.item || detailTrack?.sourceItem || detailTrack);
+          setShowDetails(null);
+        }}
       />
 
       <AnimatePresence>

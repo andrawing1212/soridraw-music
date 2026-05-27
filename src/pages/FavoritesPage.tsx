@@ -154,6 +154,35 @@ function getFavoriteDetailCreatedAt(song: any): string {
   }
 }
 
+
+function getFavoriteDetailCreator(song: any, user?: User | null): string {
+  const candidates = [
+    song?.creatorDisplayId,
+    song?.ownerNickname,
+    song?.creatorNickname,
+    song?.ownerName,
+    song?.creatorName,
+    song?.ownerDisplayName,
+    song?.createdByName,
+    song?.artist,
+    song?.artistName,
+    song?.author,
+    song?.ownerEmail,
+    song?.creatorEmail,
+    user?.displayName,
+    user?.email,
+  ];
+  const ownerUid = String(song?.ownerUid || song?.uid || '');
+  for (const value of candidates) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) continue;
+    if (ownerUid && text === ownerUid) continue;
+    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) continue;
+    return text;
+  }
+  return '';
+}
+
 function getFavoriteStructureText(song: any): string {
   if (!song?.appliedKeywords) return '구조 정보 없음';
 
@@ -2354,14 +2383,14 @@ ${song.prompt}
                               </>
                             ) : (
                               <>
-                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />상세정보</button>
+                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />디테일 & Edit</button>
                                 <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택</button>
                                 {!song.isLocked ? (
                                   <button onClick={() => executeFavoriteMenuAction('lock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
                                 ) : (
                                   <button onClick={() => executeFavoriteMenuAction('unlock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
                                 )}
-                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
+                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D45A66] hover:text-[#F07882] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
@@ -2573,9 +2602,14 @@ ${song.prompt}
                           {getDisplaySubGenre(selectedSong)}
                         </span>
                       )}
+                      {getFavoriteDetailCreator(selectedSong, user) && (
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
+                          제작자: {getFavoriteDetailCreator(selectedSong, user)}
+                        </span>
+                      )}
                       {getFavoriteDetailCreatedAt(selectedSong) && (
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
-                          {getFavoriteDetailCreatedAt(selectedSong)}
+                          생성일: {getFavoriteDetailCreatedAt(selectedSong)}
                         </span>
                       )}
                     </div>
@@ -2645,9 +2679,9 @@ ${song.prompt}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#AC6B69]/20 bg-white/[0.035] text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/10 hover:border-[#AC6B69]/35"
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#D45A66]/35 bg-[#D45A66]/10 text-[#F07882] transition-all hover:bg-[#D45A66]/16 hover:border-[#F07882]/50 hover:text-[#FF8B94]"
                         >
-                          <RefreshCw className="h-5 w-5 text-[#D8A4A2]" />
+                          <RefreshCw className="h-5 w-5" />
                         </button>
                       )}
                       <button

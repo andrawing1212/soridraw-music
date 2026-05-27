@@ -2652,14 +2652,10 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
         <button
           type="button"
           onClick={() => goToTopNav('/')}
-          className="flex min-w-[168px] shrink-0 items-center gap-2 rounded-xl px-2 py-1 text-left transition-all hover:bg-white/[0.04]"
+          className="flex min-w-[168px] shrink-0 items-center rounded-xl px-2 py-1 text-left transition-all hover:bg-white/[0.04]"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C87572]/28 bg-[#C87572]/14 text-[#E59A96] shadow-[0_0_18px_rgba(200,117,114,0.10)]">
-            <Music className="h-4 w-4" />
-          </span>
-          <span className="hidden min-w-0 sm:block">
-            <span className="block truncate text-[12px] font-black tracking-tight text-white">SORIDRAW</span>
-            <span className="block truncate text-[9px] font-bold uppercase tracking-[0.2em] text-white/40">Studio</span>
+          <span className="font-display text-[18px] font-black leading-none tracking-tight bg-gradient-to-r from-[#F0D37C] via-[#F09B83] to-[#D86D8E] bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(216,109,142,0.10)]">
+            SORiDRAW
           </span>
         </button>
 
@@ -2713,21 +2709,38 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
         <div className="flex min-w-[168px] shrink-0 items-center justify-end gap-1.5">
           {user && (
-            <a
-              href="https://suno.com/create"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
-              title="Suno Create"
-              aria-label="Suno Create"
-            >
-              <img
-                src="/suno-icon.webp"
-                alt="Suno"
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            </a>
+            <>
+              <a
+                href="https://elevenlabs.io/app/music/history"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
+                title="ElevenLabs Music History"
+                aria-label="ElevenLabs Music History"
+              >
+                <img
+                  src="/elevenlabs-icon.png"
+                  alt="ElevenLabs"
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </a>
+              <a
+                href="https://suno.com/create"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
+                title="Suno Create"
+                aria-label="Suno Create"
+              >
+                <img
+                  src="/suno-icon.webp"
+                  alt="Suno"
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </a>
+            </>
           )}
           {location.pathname === '/' && !user && (
             <label className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.035] px-2.5 py-2 text-[10px] font-bold text-white/50">
@@ -2948,21 +2961,38 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               </button>
 
               {user && (
-                <a
-                  href="https://suno.com/create"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
-                  title="Suno Create"
-                  aria-label="Suno Create"
-                >
-                  <img
-                    src="/suno-icon.webp"
-                    alt="Suno"
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                </a>
+                <>
+                  <a
+                    href="https://elevenlabs.io/app/music/history"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                    title="ElevenLabs Music History"
+                    aria-label="ElevenLabs Music History"
+                  >
+                    <img
+                      src="/elevenlabs-icon.png"
+                      alt="ElevenLabs"
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                  <a
+                    href="https://suno.com/create"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                    title="Suno Create"
+                    aria-label="Suno Create"
+                  >
+                    <img
+                      src="/suno-icon.webp"
+                      alt="Suno"
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
+                </>
               )}
             </motion.div>
           )}

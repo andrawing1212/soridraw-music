@@ -2050,20 +2050,7 @@ ${song.prompt}
             </h1>
             <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
           </div>
-          <div className="flex items-center gap-2 self-end md:self-center">
-            <button
-              onClick={handleSyncFavoriteColors}
-              onMouseEnter={() => onHover({ id: 'favorite-color-sync', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onMouseLeave={() => onHover(null)}
-              onTouchStart={() => onLongPressStart({ id: 'favorite-color-sync', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onTouchEnd={onLongPressEnd}
-              className="hidden md:flex h-12 w-auto px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all items-center justify-center gap-2"
-              title={getUnifiedColorSyncDescription()}
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">동기화 : {isFavoriteAdminUser ? '무제한' : `${favoriteColorSyncRemaining}/5`}</span>
-            </button>
-          </div>
+
         </div>
 
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
@@ -2123,18 +2110,7 @@ ${song.prompt}
                 title={color.label}
               />
             ))}
-            <div className="md:hidden mx-2 h-4 w-px bg-white/10" />
-            <button
-              onClick={handleSyncFavoriteColors}
-              onMouseEnter={() => onHover({ id: 'favorite-color-sync-mobile', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onMouseLeave={() => onHover(null)}
-              onTouchStart={() => onLongPressStart({ id: 'favorite-color-sync-mobile', label: '색상 동기화', description: getUnifiedColorSyncDescription() })}
-              onTouchEnd={onLongPressEnd}
-              className="md:hidden h-9 w-9 shrink-0 rounded-xl text-white/60 hover:text-brand-orange transition-all flex items-center justify-center"
-              title={getUnifiedColorSyncDescription()}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+
           </div>
 
           <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">

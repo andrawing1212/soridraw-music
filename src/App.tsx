@@ -2711,6 +2711,21 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
           {user && (
             <>
               <a
+                href="https://www.flowmusic.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
+                title="Flow Music"
+                aria-label="Flow Music"
+              >
+                <img
+                  src="/flowmusic-icon.png"
+                  alt="Flow Music"
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </a>
+              <a
                 href="https://elevenlabs.io/app/music/history"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -2962,6 +2977,21 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
               {user && (
                 <>
+                  <a
+                    href="https://www.flowmusic.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                    title="Flow Music"
+                    aria-label="Flow Music"
+                  >
+                    <img
+                      src="/flowmusic-icon.png"
+                      alt="Flow Music"
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </a>
                   <a
                     href="https://elevenlabs.io/app/music/history"
                     target="_blank"

@@ -4504,14 +4504,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <Settings className="w-4 h-4" />
                 API 설정
               </button>
-              <button
-                onClick={handleSyncLibraryColors}
-                className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-brand-orange transition-all"
-                title={getUnifiedColorSyncDescription()}
-              >
-                <RefreshCw className="w-4 h-4" />
-                동기화 : {isLibraryAdminUser ? '무제한' : `${libraryColorSyncRemaining}/5`}
-              </button>
+
             </>
           )}
           </div>
@@ -4632,14 +4625,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                 </button>
               ))}
-              <div className="md:hidden w-px h-3 bg-white/10 mx-1"></div>
-              <button
-                onClick={handleSyncLibraryColors}
-                className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-brand-orange transition-all"
-                title={getUnifiedColorSyncDescription()}
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
+
             </div>
             <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-white/10 p-1 rounded-2xl shrink-0">
               {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
@@ -5095,14 +5081,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                     </button>
                   ))}
-                  <div className="md:hidden w-px h-3 bg-white/10 mx-1"></div>
-                  <button
-                    onClick={handleSyncLibraryColors}
-                    className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-brand-orange transition-all"
-                    title={getUnifiedColorSyncDescription()}
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
+
                 </div>
 
                 {/* Sort Options */}

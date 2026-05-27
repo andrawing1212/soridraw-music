@@ -2852,21 +2852,6 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               )}
               <Library className="h-[18px] w-[18px]" />
             </button>
-
-            {isAdminUser && (
-              <button
-                type="button"
-                onClick={() => goToTopNav('/admin/users')}
-                className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
-                  isActivePath('/admin') && "bg-[#DFA05D]/18 text-[#DFA05D]"
-                )}
-                aria-label="관리자"
-                title="관리자"
-              >
-                <Shield className="h-[18px] w-[18px]" />
-              </button>
-            )}
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -2925,7 +2910,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
                       >
                         <Users className="h-3.5 w-3.5" />
-                        회원관리
+                        관리자메뉴
                       </button>
                     )}
                     <button
@@ -8231,8 +8216,8 @@ ${normalizePromptForDisplay(result.prompt)}
                     <h1 
                       className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
-                      <Zap className="w-8 h-8 md:w-9 md:h-9 text-[#DFA05D]" />
-                      <span>Sori <span className="text-[#DFA05D]">Studio</span></span>
+                      <Zap className="w-8 h-8 md:w-9 md:h-9 text-[#c8801b]" />
+                      <span>Sori <span className="text-[#c8801b]">Studio</span></span>
                     </h1>
                   </div>
                 </div>

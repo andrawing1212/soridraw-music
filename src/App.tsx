@@ -2781,235 +2781,242 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
         </div>
       </div>
 
-      {/* Mobile Floating Menu */}
+      {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="fixed left-3 top-3 z-50 flex flex-col items-center gap-3 md:hidden"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        className="fixed left-0 top-0 z-[70] flex w-full items-start justify-center px-2 pt-2 md:hidden"
       >
-        <button
-          type="button"
-          onClick={() => {
-            if (isExpanded) {
+        <div className="relative flex max-w-[calc(100vw-16px)] items-center gap-1.5 overflow-visible rounded-2xl bg-[#111111]/88 px-2 py-1.5 shadow-[0_10px_26px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+          <button
+            type="button"
+            onClick={handleHomeClick}
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+              isActivePath('/') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+            )}
+            aria-label="홈"
+            title="홈"
+          >
+            <HomeIcon className="h-[18px] w-[18px]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleStudioClick}
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+              isActivePath('/studio') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+            )}
+            aria-label="스튜디오"
+            title="스튜디오"
+          >
+            <Zap className="h-[18px] w-[18px]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleHistoryClick}
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+              isActivePath('/history') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+            )}
+            aria-label="뮤직노트"
+            title="뮤직노트"
+          >
+            <HeartIcon className="h-[18px] w-[18px]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!user) {
+                handleLogin();
+                return;
+              }
+              clearSunoLibrarySignal();
+              navigate('/suno-library');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
               setIsExpanded(false);
               setIsProfileOpen(false);
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            } else {
-              setIsExpanded(true);
-            }
-          }}
-          className={cn(
-            "rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/90 p-3 text-[var(--text-primary)] shadow-2xl backdrop-blur-md transition-all z-50",
-            isExpanded ? "bg-brand-orange border-brand-orange/50 scale-90 text-white" : "hover:bg-[var(--hover-bg)]"
-          )}
-          aria-label="메뉴 열기"
-        >
-          <Menu className={cn("h-6 w-6 transition-transform", isExpanded && "rotate-90")} />
-        </button>
+            }}
+            className={cn(
+              "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+              isActivePath('/suno-library') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+            )}
+            aria-label="라이브러리"
+            title="라이브러리"
+          >
+            {sunoLibrarySignal && (
+              <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
+            )}
+            <Library className="h-[18px] w-[18px]" />
+          </button>
 
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.8 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.8 }}
-              className="flex flex-col items-center gap-4"
-            >
-              <div
-                className="relative"
-                onMouseEnter={handleProfileMouseEnter}
-                onMouseLeave={handleProfileMouseLeave}
-              >
-                {user ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="group relative overflow-hidden rounded-full border-2 border-amber-300/25 shadow-xl transition-all hover:scale-110"
-                    aria-label="프로필 메뉴"
-                  >
-                    <img
-                      src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
-                      alt="Profile"
-                      className="h-10 w-10 object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { handleLogin(); setIsExpanded(false); }}
-                    disabled={isLoggingIn}
-                    className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)] disabled:opacity-50"
-                    aria-label="로그인"
-                  >
-                    {isLoggingIn ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserIcon className="h-5 w-5" />}
-                  </button>
-                )}
-
-                <AnimatePresence>
-                  {isProfileOpen && user && (
-                    <motion.div
-                      initial={{ opacity: 0, x: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
-                      exit={{ opacity: 0, x: 10, scale: 0.95 }}
-                      className="absolute left-full top-0 ml-3 w-40 overflow-visible rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/95 py-2 shadow-2xl backdrop-blur-xl"
-                    >
-                      <div className="absolute -left-3 top-0 bottom-0 w-3 pointer-events-auto" />
-                      <div className="relative overflow-hidden rounded-xl">
-                        <div className="mb-1 border-b border-[var(--border-color)]/50 px-3 py-2">
-                          <p className="truncate text-[12px] font-medium text-[var(--text-secondary)]">{user.displayName}</p>
-                        </div>
-                        {isAdminUser && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigate('/admin/users');
-                                setIsProfileOpen(false);
-                                setIsExpanded(false);
-                              }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] text-[var(--text-primary)] transition-all hover:bg-brand-orange/10 hover:text-brand-orange"
-                            >
-                              <Users className="h-3 w-3" />
-                              회원 관리
-                            </button>
-                          </>
-                        )}
-                        <div className="mx-2 my-1 h-px bg-[var(--border-color)]/30" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigate('/my-page');
-                            setIsProfileOpen(false);
-                            setIsExpanded(false);
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] text-[var(--text-primary)] transition-all hover:bg-sky-500/10 hover:text-sky-300"
-                        >
-                          <UserIcon className="h-3 w-3" />
-                          마이페이지
-                        </button>
-                        <div className="mx-2 my-1 h-px bg-[var(--border-color)]/30" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleLogout();
-                            setIsProfileOpen(false);
-                            setIsExpanded(false);
-                            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                            if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-bold text-brand-orange transition-colors hover:bg-[var(--hover-bg)]"
-                        >
-                          로그아웃
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleHomeClick}
-                className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
-                title="홈"
-              >
-                <HomeIcon className="h-5 w-5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleStudioClick}
-                className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
-                title="스튜디오"
-              >
-                <Zap className="h-5 w-5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleHistoryClick}
-                className="rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
-                title="뮤직노트"
-              >
-                <HeartIcon className="h-5 w-5" />
-              </button>
-
+          <div className="relative shrink-0">
+            {user ? (
               <button
                 type="button"
                 onClick={() => {
-                  clearSunoLibrarySignal();
-                  navigate('/suno-library');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  setIsProfileOpen((prev) => !prev);
                   setIsExpanded(false);
                 }}
-                className="relative rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-2.5 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition-all hover:bg-[var(--hover-bg)]"
-                title="라이브러리"
-              >
-                {sunoLibrarySignal && (
-                  <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-white/[0.035] transition-all hover:bg-[#DFA05D]/15",
+                  isProfileOpen && "bg-[#DFA05D]/18"
                 )}
-                <div className="flex h-5 w-5 items-end justify-center gap-[3px] text-[var(--text-primary)]">
-                  <div className="h-[14px] w-[4px] rounded-sm border-[1.5px] border-current opacity-80" />
-                  <div className="h-[16px] w-[4px] rounded-sm border-[1.5px] border-current" />
-                  <div className="h-[14px] w-[4px] origin-bottom translate-x-[1px] -rotate-12 rounded-sm border-[1.5px] border-current opacity-90" />
-                </div>
+                aria-label="마이페이지 메뉴"
+                title="마이페이지"
+              >
+                <img
+                  src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  alt="Profile"
+                  className="h-[26px] w-[26px] rounded-lg object-cover"
+                  referrerPolicy="no-referrer"
+                />
               </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLogin}
+                disabled={isLoggingIn}
+                className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D] disabled:opacity-50"
+                aria-label="로그인"
+                title="로그인"
+              >
+                {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserIcon className="h-[18px] w-[18px]" />}
+              </button>
+            )}
 
-              {user && (
-                <>
+            <AnimatePresence>
+              {isProfileOpen && user && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.16 }}
+                  className="absolute left-1/2 top-full z-[80] mt-2 w-32 -translate-x-1/2 overflow-hidden rounded-xl bg-[#181818]/96 p-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                >
+                  {isAdminUser && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate('/admin/users');
+                        setIsProfileOpen(false);
+                        setIsExpanded(false);
+                      }}
+                      className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      회원관리
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('/my-page');
+                      setIsProfileOpen(false);
+                      setIsExpanded(false);
+                    }}
+                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
+                  >
+                    <UserIcon className="h-3.5 w-3.5" />
+                    마이페이지
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLogout();
+                      setIsProfileOpen(false);
+                      setIsExpanded(false);
+                      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                      if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
+                    }}
+                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-[#DFA05D] transition-all hover:bg-[#DFA05D]/12"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    로그아웃
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {isAdminUser && (
+            <button
+              type="button"
+              onClick={() => goToTopNav('/admin/users')}
+              className={cn(
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                isActivePath('/admin') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+              )}
+              aria-label="관리자"
+              title="관리자"
+            >
+              <Shield className="h-[18px] w-[18px]" />
+            </button>
+          )}
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setIsExpanded((prev) => !prev);
+                setIsProfileOpen(false);
+              }}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.035] text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                isExpanded && "bg-[#DFA05D]/18 text-[#DFA05D]"
+              )}
+              aria-label="외부 앱 메뉴"
+              title="메뉴"
+            >
+              <Menu className={cn("h-[18px] w-[18px] transition-transform", isExpanded && "rotate-90")} />
+            </button>
+
+            <AnimatePresence>
+              {isExpanded && user && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.16 }}
+                  className="absolute right-0 top-full z-[80] mt-2 flex flex-col gap-1.5 rounded-xl bg-[#181818]/96 p-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                >
                   <a
                     href="https://www.flowmusic.app/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
                     title="Flow Music"
                     aria-label="Flow Music"
                   >
-                    <img
-                      src="/flowmusic-icon.png"
-                      alt="Flow Music"
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+                    <img src="/flowmusic-icon.png" alt="Flow Music" className="h-full w-full object-cover" loading="lazy" />
                   </a>
                   <a
                     href="https://elevenlabs.io/app/music/history"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
                     title="ElevenLabs Music History"
                     aria-label="ElevenLabs Music History"
                   >
-                    <img
-                      src="/elevenlabs-icon.png"
-                      alt="ElevenLabs"
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+                    <img src="/elevenlabs-icon.png" alt="ElevenLabs" className="h-full w-full object-cover" loading="lazy" />
                   </a>
                   <a
                     href="https://suno.com/create"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 shadow-xl transition-all hover:border-white/20 hover:bg-white/[0.08]"
+                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
                     title="Suno Create"
                     aria-label="Suno Create"
                   >
-                    <img
-                      src="/suno-icon.webp"
-                      alt="Suno"
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+                    <img src="/suno-icon.webp" alt="Suno" className="h-full w-full object-cover" loading="lazy" />
                   </a>
-                </>
+                </motion.div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
 
     </>

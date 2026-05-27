@@ -25,9 +25,11 @@ const genreAccent = {
   bar: 'bg-[#DFA05D]/95',
   text: 'text-[#E8B878]',
   softText: 'text-[#E8B878]/58',
-  selected: 'bg-[#DFA05D]/72 border-[#F1C98B]/55 text-[#171717] font-black soridraw-selected-strong shadow-[0_0_10px_rgba(223,160,93,0.12)]',
-  selectedSoft: 'bg-[#DFA05D]/14 border-[#DFA05D]/38 text-[#E8B878] hover:bg-[#DFA05D]/20',
-  selectedBorder: 'border-[#DFA05D]/42',
+  selected: 'bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#DFA05D]/14 border-black/20 text-[#E8B878] hover:bg-[#DFA05D]/20',
+  summaryActive: 'bg-[#DFA05D]/6 border-black/20 text-[#E8B878]',
+  summaryHover: 'hover:border-black/20 hover:bg-[#DFA05D]/6',
+  selectedBorder: 'border-black/20',
 };
 
 const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
@@ -894,9 +896,9 @@ export default function GenreHierarchySelector({
         className={cn(
           "mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
           isExpandSummaryActive
-            ? cn(genreAccent.selectedSoft, "border-solid shadow-[0_0_12px_rgba(0,0,0,0.10)]")
+            ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
-          onToggleExpand && !isExpandSummaryActive && "cursor-pointer hover:border-[#DFA05D]/40 hover:bg-[#DFA05D]/6 focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30",
+          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30", genreAccent.summaryHover),
           onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30"
         )}
         title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}

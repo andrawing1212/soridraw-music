@@ -241,6 +241,33 @@ html {
 }
 
 
+/* SORIDRAW_411_SOFT_DARK_BOUNDARY
+   스튜디오 영역의 밝은 외곽선을 줄이고, 어두운 투명 선과 번짐 없는 그림자로 경계를 만든다. */
+.dark .studio-tone-down :where(button, .rounded-xl, .rounded-2xl, .rounded-3xl, input, textarea, select)[class*="border"] {
+  border-color: rgba(0, 0, 0, 0.28) !important;
+}
+
+.dark .studio-tone-down :where(button, input, textarea, select)[class*="border"] {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+}
+
+.dark .studio-tone-down :where(.rounded-2xl, .rounded-3xl)[class*="border"] {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark .studio-tone-down :where(button, .rounded-xl, .rounded-2xl, .rounded-3xl, input, textarea, select)[class*="border"]:hover {
+  border-color: rgba(0, 0, 0, 0.34) !important;
+}
+
+.dark .studio-tone-down .soridraw-selected-strong {
+  border-color: rgba(0, 0, 0, 0.24) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+.dark .studio-tone-down .soridraw-selected-summary {
+  text-shadow: none !important;
+}
+
 /* SORIDRAW_407_SELECTED_TEXT_CLEAN_BOLD
    선택된 버튼/카드 텍스트만 선명한 검정 + 굵은 글씨로 고정한다.
    과한 stroke와 4방향 shadow는 글자를 뭉개므로 사용하지 않는다. */
@@ -274,3 +301,22 @@ html {
   }
 }
 
+
+/* SORIDRAW_413_BADGE_VISIBILITY_FIX
+   오른쪽 일반 선택 숫자 배지만 검정 배경 + 메뉴 고유색 숫자로 고정한다.
+   왼쪽 포인트 숫자 배지는 기존 선택색 배경 방식을 유지한다. */
+.soridraw-selected-strong .soridraw-count-badge-main,
+.soridraw-count-badge-main {
+  background: rgba(3, 3, 3, 0.94) !important;
+  color: var(--soridraw-badge-accent, #DFA05D) !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: 0 0 0 transparent !important;
+}
+
+.soridraw-selected-strong .soridraw-count-badge-point {
+  color: #050505 !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}

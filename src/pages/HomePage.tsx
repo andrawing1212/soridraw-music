@@ -52,14 +52,7 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#0d0b10] text-white">
-      <div className="pointer-events-none fixed inset-0 opacity-80">
-        <div className="absolute -top-44 left-[14%] h-[440px] w-[440px] rounded-full bg-[#A47048]/13 blur-[125px]" />
-        <div className="absolute right-[-160px] top-24 h-[420px] w-[420px] rounded-full bg-[#AC6B69]/10 blur-[128px]" />
-        <div className="absolute bottom-[-180px] left-[8%] h-[460px] w-[460px] rounded-full bg-[#F7D66E]/8 blur-[135px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(164,112,72,0.065),transparent_35%),radial-gradient(circle_at_72%_18%,rgba(247,214,110,0.052),transparent_30%)]" />
-      </div>
-
+    <main className="min-h-screen overflow-hidden bg-[var(--bg-primary)] text-white">
       <section className="relative mx-auto flex w-full max-w-[1320px] flex-col gap-8 px-4 pb-16 pt-24 md:px-6 md:pt-28">
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
           <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#171414]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:p-8 lg:p-10">

@@ -1472,12 +1472,12 @@ const StoryboardSlider = ({ label, left, right, value, onChange, description, st
   const sliderHint = getStoryboardSliderHint(value, left, right, statusLabels);
   const leftLabelClass = left.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
   const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
-  const accentStyle = accent === 'characterA'
+  const accentStyle = accent === 'characterB'
     ? {
         text: 'text-[#E8B878]',
         dot: 'bg-[#DFA05D] shadow-[0_0_8px_rgba(223,160,93,0.36)]',
         badge: 'border-[#DFA05D]/28 text-[#E8B878]',
-        slider: 'storyboard-slider--character-a',
+        slider: 'storyboard-slider--character-b',
       }
     : {
         text: 'text-[#D79084]',
@@ -8594,7 +8594,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-black text-[#E8B878] mb-2">캐릭터 A</label>
+                              <label className="block text-xs font-black text-[#D79084] mb-2">캐릭터 A</label>
                               <input
                                 value={draftSituation.targetA || ''}
                                 onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
@@ -8603,7 +8603,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-black text-[#D79084] mb-2">캐릭터 B</label>
+                              <label className="block text-xs font-black text-[#E8B878] mb-2">캐릭터 B</label>
                               <input
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
@@ -8619,11 +8619,11 @@ ${normalizePromptForDisplay(result.prompt)}
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#E8B878] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
+                                <p className="text-sm font-black text-[#D79084] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
-                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="characterA" />
-                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} accent="characterA" />
-                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="characterA" />
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="story" />
+                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} accent="story" />
+                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="story" />
                               <input
                                 value={draftSituation.speakerAExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
@@ -8634,11 +8634,11 @@ ${normalizePromptForDisplay(result.prompt)}
 
                             <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#D79084] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
+                                <p className="text-sm font-black text-[#E8B878] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
-                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} />
-                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} />
-                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} statusLabels={["직설", "혼합", "은유"]} />
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} accent="characterB" statusLabels={["존댓말", "반존대", "반말"]} />
+                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["잔잔", "울컥", "폭발"]} />
+                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} accent="characterB" statusLabels={["직설", "혼합", "은유"]} />
                               <input
                                 value={draftSituation.speakerBExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
@@ -9981,10 +9981,10 @@ ${normalizePromptForDisplay(result.prompt)}
           box-shadow: none;
           cursor: grab;
         }
-        .storyboard-slider--character-a::-webkit-slider-thumb {
+        .storyboard-slider--character-b::-webkit-slider-thumb {
           background: rgb(223, 160, 93);
         }
-        .storyboard-slider--character-a::-moz-range-thumb {
+        .storyboard-slider--character-b::-moz-range-thumb {
           background: rgb(223, 160, 93);
         }
         .storyboard-slider-center-marker {
@@ -10339,6 +10339,7 @@ function GenreCategorySection({
   const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
   const sectionAccent = getStudioSectionAccent('genre');
+  const isExpandSummaryActive = isExpanded || !!selectedChild;
 
   return (
     <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
@@ -10480,7 +10481,12 @@ function GenreCategorySection({
         </div>
       </motion.div>
 
-      <div className="mt-4 min-h-[44px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center">
+      <div className={cn(
+        "mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
+        isExpandSummaryActive
+          ? cn(sectionAccent.selectedSoft, "border-solid shadow-[0_0_12px_rgba(0,0,0,0.10)]")
+          : "border-[var(--border-color)]"
+      )}>
         {selectedChild ? (
           <p className={cn("text-sm font-black soridraw-selected-summary", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
@@ -10716,6 +10722,7 @@ function CycleSection({
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const sectionAccent = getStudioSectionAccent(titleKo || title);
+  const isExpandSummaryActive = isExpanded || selectedKeywordCount > 0;
 
   return (
     <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
@@ -10886,8 +10893,12 @@ function CycleSection({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
-          onToggleExpand && "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15"
+          "mt-4 h-[56px] rounded-2xl border border-dashed px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
+          isExpandSummaryActive
+            ? cn(sectionAccent.selectedSoft, "border-solid shadow-[0_0_12px_rgba(0,0,0,0.10)]")
+            : "border-[var(--border-color)]",
+          onToggleExpand && !isExpandSummaryActive && "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15",
+          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
         )}
         title={onToggleExpand ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
@@ -11368,6 +11379,7 @@ function CategorySection({
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState('');
   const sectionAccent = getStudioSectionAccent(titleKo || title);
+  const isExpandSummaryActive = isExpanded || selected.length > 0;
 
   useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid, forcedHeight], onHeightChange);
 
@@ -11693,8 +11705,12 @@ function CategorySection({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
-          !isDirectInputEditing && "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15"
+          "mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
+          isExpandSummaryActive
+            ? cn(sectionAccent.selectedSoft, "border-solid shadow-[0_0_12px_rgba(0,0,0,0.10)]")
+            : "border-[var(--border-color)]",
+          !isDirectInputEditing && !isExpandSummaryActive && "cursor-pointer hover:bg-white/[0.03] hover:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/15",
+          !isDirectInputEditing && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
         )}
         title={!isDirectInputEditing ? (isExpanded ? '접기' : '펼치기') : undefined}
       >

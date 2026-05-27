@@ -446,6 +446,7 @@ export default function GenreHierarchySelector({
     const ids = Array.from(new Set([...committedGenre, ...committedSubGenre]));
     return ids.map(resolveGenreDisplayLabel).filter(Boolean);
   }, [committedGenre, committedSubGenre, groups]);
+  const isExpandSummaryActive = isExpanded || selectedDisplayLabels.length > 0;
 
   const buildModalTooltip = (item: {
     label: string;
@@ -891,8 +892,12 @@ export default function GenreHierarchySelector({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
-          onToggleExpand && "cursor-pointer hover:border-[#DFA05D]/40 hover:bg-[#DFA05D]/6 focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30"
+          "mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
+          isExpandSummaryActive
+            ? cn(genreAccent.selectedSoft, "border-solid shadow-[0_0_12px_rgba(0,0,0,0.10)]")
+            : "border-[var(--border-color)]",
+          onToggleExpand && !isExpandSummaryActive && "cursor-pointer hover:border-[#DFA05D]/40 hover:bg-[#DFA05D]/6 focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30",
+          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30"
         )}
         title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}
       >

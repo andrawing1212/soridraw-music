@@ -6,7 +6,6 @@ import {
   Dices,
   X,
   Check,
-  ArrowLeft,
   ChevronRight,
   Info,
   Lock,
@@ -941,22 +940,9 @@ export default function GenreHierarchySelector({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between relative bg-[var(--bg-secondary)]">
-                <button
-                  onClick={handleBack}
-                  className="w-10 h-10 rounded-full border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#D9B89D] hover:border-[#A47048]/45 transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90"
-                  title="뒤로가기"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-
+              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
                 <h3
-                  className={cn(
-                    "text-xl md:text-2xl font-bold text-[var(--text-primary)] absolute -translate-x-1/2 whitespace-nowrap truncate max-w-[calc(100%-148px)] transition-[left,max-width] duration-150",
-                    pendingSubIds.length > 0
-                      ? "left-[42%] max-w-[calc(100%-190px)] md:left-1/2 md:max-w-[calc(100%-210px)]"
-                      : "left-1/2"
-                  )}
+                  className="min-w-0 flex-1 text-left text-xl md:text-2xl font-bold text-[var(--text-primary)] whitespace-nowrap truncate pr-2"
                 >
                   {modalStep === "main"
                     ? activeGroup.labelKo || activeGroup.label
@@ -999,11 +985,11 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-[#A47048]/6 border-b border-[#A47048]/18 flex items-center justify-center gap-2 overflow-hidden">
+              <div className="px-6 py-2.5 bg-[#A47048]/6 border-b border-[#A47048]/18 flex items-center justify-start gap-2 overflow-hidden text-left">
                 <span className="text-[10px] font-black text-[#D9B89D] uppercase tracking-widest shrink-0">
                   Selection
                 </span>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
+                <div className="min-w-0 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   {pendingSubIds.length > 0 ? (
                     <span className="text-[#D9B89D] truncate">
                       {pendingSubIds.map(resolveGenreDisplayLabel).join(" · ")}

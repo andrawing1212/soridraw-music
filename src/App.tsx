@@ -504,7 +504,11 @@ type StudioSectionAccent = {
   selected: string;
   selectedSoft: string;
   summaryActive: string;
+  summaryRest: string;
   summaryHover: string;
+  summaryBorder: string;
+  summaryBorderHover: string;
+  summaryActiveBg: string;
   selectedBorder: string;
   badge: string;
   pointSelected: string;
@@ -518,8 +522,12 @@ const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
   softText: 'text-[#E8B878]/58',
   selected: 'bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
   selectedSoft: 'bg-[#DFA05D]/14 border-black/20 text-[#E8B878] hover:bg-[#DFA05D]/20',
-  summaryActive: 'bg-[#DFA05D]/6 border-black/20 text-[#E8B878]',
-  summaryHover: 'hover:border-black/20 hover:bg-[#DFA05D]/6',
+  summaryActive: 'bg-[#DFA05D]/[0.035] border-[#DFA05D]/15 text-[#E8B878]',
+  summaryRest: 'border-[#DFA05D]/10 bg-black/5',
+  summaryHover: 'hover:border-[#DFA05D]/20 hover:bg-[#DFA05D]/[0.035]',
+  summaryBorder: 'rgba(223, 160, 93, 0.14)',
+  summaryBorderHover: 'rgba(223, 160, 93, 0.24)',
+  summaryActiveBg: 'rgba(223, 160, 93, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
   pointSelected: 'bg-[#DFA05D]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
@@ -533,8 +541,12 @@ const STUDIO_ACCENT_RED: StudioSectionAccent = {
   softText: 'text-[#D79084]/58',
   selected: 'bg-[#AC5045]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
   selectedSoft: 'bg-[#AC5045]/15 border-black/20 text-[#D79084] hover:bg-[#AC5045]/22',
-  summaryActive: 'bg-[#AC5045]/6 border-black/20 text-[#D79084]',
-  summaryHover: 'hover:border-black/20 hover:bg-[#AC5045]/6',
+  summaryActive: 'bg-[#AC5045]/[0.035] border-[#AC5045]/15 text-[#D79084]',
+  summaryRest: 'border-[#AC5045]/10 bg-black/5',
+  summaryHover: 'hover:border-[#AC5045]/20 hover:bg-[#AC5045]/[0.035]',
+  summaryBorder: 'rgba(172, 80, 69, 0.14)',
+  summaryBorderHover: 'rgba(172, 80, 69, 0.24)',
+  summaryActiveBg: 'rgba(172, 80, 69, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
   pointSelected: 'bg-[#AC5045]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
@@ -548,8 +560,12 @@ const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
   softText: 'text-[#A8C49F]/58',
   selected: 'bg-[#658761]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
   selectedSoft: 'bg-[#658761]/15 border-black/20 text-[#A8C49F] hover:bg-[#658761]/22',
-  summaryActive: 'bg-[#658761]/6 border-black/20 text-[#A8C49F]',
-  summaryHover: 'hover:border-black/20 hover:bg-[#658761]/6',
+  summaryActive: 'bg-[#658761]/[0.035] border-[#658761]/15 text-[#A8C49F]',
+  summaryRest: 'border-[#658761]/10 bg-black/5',
+  summaryHover: 'hover:border-[#658761]/20 hover:bg-[#658761]/[0.035]',
+  summaryBorder: 'rgba(101, 135, 97, 0.14)',
+  summaryBorderHover: 'rgba(101, 135, 97, 0.24)',
+  summaryActiveBg: 'rgba(101, 135, 97, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
   pointSelected: 'bg-[#658761]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
@@ -8187,31 +8203,17 @@ ${normalizePromptForDisplay(result.prompt)}
               {/* Header */}
               <header className="studio-hero-tone pt-24 pb-10 md:pt-24 md:pb-11 border-b border-[var(--home-card-border)] bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
-                  {/* Search icon / Guide button inside Studio Header */}
+                  {/* Studio header search button */}
                   {user && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={openGlobalSearchModal}
-                        className="absolute -bottom-[62px] left-6 z-20 flex h-12 w-12 items-center justify-center bg-transparent border-0 shadow-none text-white hover:scale-105 transition-all group"
-                        aria-label="통합 검색"
-                        title="통합 검색"
-                      >
-                        <Search className="w-8 h-8 md:w-9 md:h-9 text-[#F1DAA4] group-hover:scale-110 transition-transform" />
-                      </button>
-                      <div className="absolute -bottom-[50px] right-6 z-20 flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            syncActionBarModalBlock(true);
-                            setIsGuideModalOpen(true);
-                          }}
-                          className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-[var(--card-bg)]/80 border border-[var(--home-card-border)] backdrop-blur-md text-[var(--text-primary)] shadow-lg hover:bg-[var(--hover-bg)] hover:scale-105 transition-all group text-[10px] md:text-xs"
-                        >
-                          <YoutubeIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#EA642D] group-hover:scale-110 transition-transform" />
-                          <span className="font-bold text-[10px] md:text-xs">가이드</span>
-                        </button>
-                      </div>
-                    </>
+                    <button
+                      type="button"
+                      onClick={openGlobalSearchModal}
+                      className="absolute bottom-3 right-6 z-20 flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                      aria-label="통합 검색"
+                      title="통합 검색"
+                    >
+                      <Search className="w-7 h-7 md:w-8 md:h-8 text-[#F1DAA4] group-hover:scale-110 transition-transform" />
+                    </button>
                   )}
 
                   <div className="text-center flex flex-col items-center mt-5 md:mt-6">
@@ -10351,7 +10353,7 @@ function GenreCategorySection({
   const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
   const sectionAccent = getStudioSectionAccent('genre');
-  const isExpandSummaryActive = isExpanded || !!selectedChild;
+  const isExpandSummaryActive = isExpanded;
 
   return (
     <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
@@ -10493,12 +10495,34 @@ function GenreCategorySection({
         </div>
       </motion.div>
 
-      <div className={cn(
-        "mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
+      <div
+        data-expanded={isExpanded ? 'true' : 'false'}
+        role={onToggleExpand ? 'button' : undefined}
+        tabIndex={onToggleExpand ? 0 : undefined}
+        aria-pressed={onToggleExpand ? isExpanded : undefined}
+        onClick={(event) => onToggleExpand && handleExpandableToggle(event, isExpanded, onToggleExpand)}
+        onKeyDown={(event) => {
+          if (!onToggleExpand) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleExpand();
+            keepExpandableSectionInView(event.currentTarget, isExpanded);
+          }
+        }}
+        className={cn(
+        "soridraw-expand-summary mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
         isExpandSummaryActive
           ? cn(sectionAccent.summaryActive, "border-dashed")
-          : "border-[var(--border-color)]"
-      )}>
+          : cn("border-dashed", sectionAccent.summaryRest),
+        onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15", sectionAccent.summaryHover),
+        onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
+      )}
+        style={{
+          '--soridraw-summary-border': sectionAccent.summaryBorder,
+          '--soridraw-summary-border-hover': sectionAccent.summaryBorderHover,
+          '--soridraw-summary-bg-active': sectionAccent.summaryActiveBg,
+        } as React.CSSProperties}
+      >
         {selectedChild ? (
           <p className={cn("text-sm font-black soridraw-selected-summary", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
@@ -10734,7 +10758,7 @@ function CycleSection({
   const activePopupCycle = cycles.find((cycle) => cycle.id === keywordPopupCycleId) ?? null;
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const sectionAccent = getStudioSectionAccent(titleKo || title);
-  const isExpandSummaryActive = isExpanded || selectedKeywordCount > 0;
+  const isExpandSummaryActive = isExpanded;
 
   return (
     <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
@@ -10908,13 +10932,18 @@ function CycleSection({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
+          "soridraw-expand-summary mt-4 h-[56px] rounded-2xl border border-dashed px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
-            : "border-[var(--border-color)]",
+            : cn("border-dashed", sectionAccent.summaryRest),
           onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15", sectionAccent.summaryHover),
           onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
         )}
+        style={{
+          '--soridraw-summary-border': sectionAccent.summaryBorder,
+          '--soridraw-summary-border-hover': sectionAccent.summaryBorderHover,
+          '--soridraw-summary-bg-active': sectionAccent.summaryActiveBg,
+        } as React.CSSProperties}
         title={onToggleExpand ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
         {selectedDisplayItems.length > 0 ? (
@@ -11389,7 +11418,7 @@ function CategorySection({
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState('');
   const sectionAccent = getStudioSectionAccent(titleKo || title);
-  const isExpandSummaryActive = isExpanded || selected.length > 0;
+  const isExpandSummaryActive = isExpanded;
 
   useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid, forcedHeight], onHeightChange);
 
@@ -11715,13 +11744,18 @@ function CategorySection({
           }
         }}
         className={cn(
-          "mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
+          "soridraw-expand-summary mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
-            : "border-[var(--border-color)]",
+            : cn("border-dashed", sectionAccent.summaryRest),
           !isDirectInputEditing && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15", sectionAccent.summaryHover),
           !isDirectInputEditing && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
         )}
+        style={{
+          '--soridraw-summary-border': sectionAccent.summaryBorder,
+          '--soridraw-summary-border-hover': sectionAccent.summaryBorderHover,
+          '--soridraw-summary-bg-active': sectionAccent.summaryActiveBg,
+        } as React.CSSProperties}
         title={!isDirectInputEditing ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
         {isDirectInputEditing && directInput ? (

@@ -320,3 +320,19 @@ html {
   -webkit-text-stroke: 0 !important;
   text-shadow: none !important;
 }
+
+
+/* SORIDRAW_420_SUMMARY_DASHED_ACCENT_FIX
+   펼쳐보기 하단 선택 표시 영역 전용.
+   전체 border hover 규칙이 검정으로 덮지 않도록 메뉴색 점선을 변수로 고정한다.
+   키워드 선택 여부는 배경색에 영향을 주지 않고, hover/펼침 상태에서만 은은한 배경을 준다. */
+.dark .studio-tone-down .soridraw-expand-summary {
+  border-color: var(--soridraw-summary-border) !important;
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.dark .studio-tone-down .soridraw-expand-summary:hover,
+.dark .studio-tone-down .soridraw-expand-summary[data-expanded="true"] {
+  border-color: var(--soridraw-summary-border-hover) !important;
+  background-color: var(--soridraw-summary-bg-active) !important;
+}

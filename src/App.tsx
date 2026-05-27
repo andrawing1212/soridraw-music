@@ -9065,12 +9065,12 @@ ${normalizePromptForDisplay(result.prompt)}
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-6 pt-4 md:pt-5 border-t-2 border-brand-orange/35 shadow-[0_-1px_0_rgba(242,125,38,0.18)]"
+              className="space-y-6 pt-4 md:pt-5 border-t-2 border-[#cd8c31]/30 shadow-[0_-1px_0_rgba(205,140,49,0.16)]"
             >
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[var(--border-color)]/80 shadow-[var(--shadow-lg)] relative overflow-hidden group hover:border-brand-orange/20 transition-all duration-500">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
           <div className="absolute top-4 left-4 flex items-center gap-3 z-10">
                     <button
                       onClick={() => navigate('/history')}
@@ -9082,7 +9082,7 @@ ${normalizePromptForDisplay(result.prompt)}
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-brand-orange/10 text-brand-orange border border-brand-orange/30 hover:border-brand-orange/40 transition-all active:scale-95 shadow-sm"
+                      className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-[#cd8c31]/10 text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all active:scale-95 shadow-sm"
                     >
                       <HeartIcon className="w-5 h-5" />
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">보관함</span>
@@ -9128,7 +9128,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               })
                             }
                             onMouseLeave={() => setHoveredItem(null)}
-                            className="flex items-center justify-center gap-1.5 p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-brand-orange/10 hover:bg-brand-orange/20 text-brand-orange transition-all shrink-0 active:scale-95 border border-brand-orange/20 shadow-sm w-full"
+                            className="flex items-center justify-center gap-1.5 p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/20 shadow-sm w-full"
                           >
                             {copiedType === 'title' ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" /> : <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-80" />}
                             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tight">전체복사</span>
@@ -9174,11 +9174,11 @@ ${normalizePromptForDisplay(result.prompt)}
                 <div className="space-y-4">
                   <div className="flex flex-col items-center gap-2">
                     {isInLatestGenerationBatch(result) && (
-                      <span className="px-3 py-1 bg-yellow-400/10 text-yellow-300 text-[10px] font-bold rounded-full border border-yellow-400/25 normal-case tracking-normal mb-1">
+                      <span className="px-3 py-1 bg-[#cd8c31]/10 text-[#f0c079] text-[10px] font-bold rounded-full border border-[#cd8c31]/25 normal-case tracking-normal mb-1">
                         최근 생성 곡
                       </span>
                     )}
-                    <div className="flex items-center gap-2 text-brand-orange font-mono text-sm tracking-widest uppercase font-bold">
+                    <div className="flex items-center gap-2 text-[#cd8c31] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-4 h-4" />
                       제목 (Title)
                     </div>
@@ -9189,8 +9189,8 @@ ${normalizePromptForDisplay(result.prompt)}
                         const lines = getTitleLinesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
-                        const primaryClass = hasAddedLyricsLanguage ? 'text-amber-500' : (isRecent ? 'text-yellow-300' : 'text-[var(--text-primary)]');
-                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#ffb000]' : (isRecent ? 'text-[#ffb000]' : 'text-[#ffb000]/90');
+                        const primaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#f0c079]' : 'text-[var(--text-primary)]');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#cd8c31]' : 'text-[#cd8c31]/90');
 
                         if (lines.length >= 2) {
                           return (
@@ -9277,8 +9277,8 @@ ${normalizePromptForDisplay(result.prompt)}
                         className={cn(
                           "w-5 h-5 transition-all",
                           favorites.some(f => f.title === result.title && f.prompt === result.prompt)
-                            ? "fill-brand-orange text-brand-orange"
-                            : "text-[var(--text-primary)] group-hover/heart:text-brand-orange"
+                            ? "fill-[#cd8c31] text-[#cd8c31]"
+                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
                         )} 
                       />
                     </button>
@@ -9287,10 +9287,10 @@ ${normalizePromptForDisplay(result.prompt)}
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--border-color)]/80 shadow-[var(--shadow-md)] relative hover:border-brand-orange/10 transition-all duration-500">
+              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[#cd8c31]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#cd8c31]/[0.15] transition-all duration-500">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-brand-orange" />
+                    <CheckCircle2 className="w-4 h-4 text-[#cd8c31]" />
                     적용된 키워드
                   </h3>
                   <div className="flex items-center gap-2 shrink-0">
@@ -9298,7 +9298,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-1.5 px-3 h-9 min-w-[90px] rounded-xl bg-[var(--card-bg)] text-brand-orange hover:bg-brand-orange/10 transition-all shadow-sm text-[11px] font-bold border border-brand-orange/30 active:scale-95"
+                      className="flex items-center justify-center gap-1.5 px-3 h-9 min-w-[90px] rounded-xl bg-[#cd8c31]/[0.08] text-[#cd8c31] hover:bg-[#cd8c31]/[0.12] transition-all shadow-sm text-[11px] font-bold border border-[#cd8c31]/[0.18] active:scale-95"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span className="whitespace-nowrap">다음 곡에 적용</span>
@@ -9357,7 +9357,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           )}
                           {result.appliedKeywords.vocal?.isToneSelected && result.appliedKeywords.vocalTone && (
                             <span 
-                              className="px-1.5 py-0.5 rounded-md text-[11px] bg-brand-orange/10 text-brand-orange border border-brand-orange/20 cursor-help"
+                              className="px-1.5 py-0.5 rounded-md text-[11px] bg-[#cd8c31]/10 text-[#cd8c31] border border-[#cd8c31]/20 cursor-help"
                               onMouseEnter={() => setHoveredItem({ id: 'kw-vocal-tone', label: 'Vocal Tone', description: `선택된 보컬톤: ${result.appliedKeywords.vocalTone}` })}
                               onMouseLeave={() => setHoveredItem(null)}
                             >
@@ -9418,8 +9418,8 @@ ${normalizePromptForDisplay(result.prompt)}
                   className={cn(
                     "section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
                     isAppliedKeywordsExpanded 
-                      ? "bg-brand-orange text-white border-brand-orange" 
-                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-brand-orange hover:text-white hover:bg-brand-orange"
+                      ? "bg-[#cd8c31] text-white border-[#cd8c31]" 
+                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#cd8c31] hover:text-white hover:bg-[#cd8c31]"
                   )}
                 >
                   {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -9427,10 +9427,10 @@ ${normalizePromptForDisplay(result.prompt)}
               </div>
 
               {/* Prompt Section */}
-              <div className="bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col h-[400px] shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
+              <div className="bg-[var(--card-bg)] rounded-3xl border border-[#cd8c31]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#cd8c31]/[0.15] transition-all duration-500">
+                <div className="p-5 border-b border-[#cd8c31]/[0.14] flex items-center justify-between bg-[#cd8c31]/[0.045]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                    <Sparkles className="w-4 h-4 text-brand-orange" />
+                    <Sparkles className="w-4 h-4 text-[#cd8c31]" />
                     음악 프롬프트
                   </h3>
                   <div className="flex items-center gap-2">
@@ -9438,7 +9438,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       onClick={() => copyToClipboard(normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
+                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
                     >
                       {copiedType === 'prompt' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
                       <span className="hidden md:block text-sm font-bold">복사</span>
@@ -9462,10 +9462,10 @@ ${normalizePromptForDisplay(result.prompt)}
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-brand-orange/30 overflow-hidden flex flex-col shadow-[var(--shadow-md)] transition-all duration-500">
-                          <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
+                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#cd8c31]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
+                          <div className="p-5 border-b border-[#cd8c31]/[0.14] flex items-center justify-between bg-[#cd8c31]/[0.045]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                              <Languages className="w-4 h-4 text-brand-orange" />
+                              <Languages className="w-4 h-4 text-[#cd8c31]" />
                               가사 언어 추가
                             </h3>
                           </div>
@@ -9482,7 +9482,7 @@ ${normalizePromptForDisplay(result.prompt)}
                                   key={lang}
                                   onClick={() => handleAddLyricsLanguage(lang)}
                                   disabled={isAddingLyricsLanguage}
-                                  className="px-3 py-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 hover:bg-brand-orange hover:text-white text-brand-orange text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="px-3 py-3 rounded-2xl border border-[#cd8c31]/25 bg-[#cd8c31]/10 hover:bg-[#cd8c31] hover:text-white text-[#cd8c31] text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   {isAddingLyricsLanguage ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
                                 </button>
@@ -9502,10 +9502,10 @@ ${normalizePromptForDisplay(result.prompt)}
                         const copyType = `lyrics-${lang}`;
 
                         return (
-                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-btn-border overflow-hidden flex flex-col group/lyrics shadow-[var(--shadow-md)] hover:border-brand-orange/10 transition-all duration-500">
-                            <div className="p-5 border-b border-btn-border flex items-center justify-between bg-[var(--bg-secondary)]">
+                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#cd8c31]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#cd8c31]/[0.15] transition-all duration-500">
+                            <div className="p-5 border-b border-[#cd8c31]/[0.14] flex items-center justify-between bg-[#cd8c31]/[0.045]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                                <Music className="w-4 h-4 text-brand-orange" />
+                                <Music className="w-4 h-4 text-[#cd8c31]" />
                                 {label} 가사
                               </h3>
                               <div className="flex items-center gap-2">
@@ -9513,7 +9513,7 @@ ${normalizePromptForDisplay(result.prompt)}
                                   onClick={() => copyToClipboard(lyricsText, copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
-                                  className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-btn-bg hover:bg-btn-hover text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all border border-btn-border active:scale-95 shadow-btn"
+                                  className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
                                 >
                                   {copiedType === copyType ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
                                   <span className="hidden md:block text-sm font-bold">복사</span>
@@ -9543,29 +9543,29 @@ ${normalizePromptForDisplay(result.prompt)}
                     })()}
                   </div>
                 )}
-                  <div className="mt-2 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                  <div className="mt-2 overflow-hidden rounded-2xl border border-[#cd8c31]/[0.16] bg-[#cd8c31]/[0.035]">
                     <button
                       type="button"
                       onClick={() => setIsHomeMusicApiMenuCollapsed((prev) => !prev)}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-white/[0.04]"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#cd8c31]/[0.06]"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-black text-white/85">Music API 생성</p>
-                        <p className="mt-0.5 text-[11px] font-medium text-white/40">
+                        <p className="text-sm font-black text-[#f0c079]">Music API 생성</p>
+                        <p className="mt-0.5 text-[11px] font-medium text-[#cd8c31]/55">
                           Suno 음원 생성 메뉴
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 text-[11px] font-black text-white/45">
+                      <div className="flex shrink-0 items-center gap-2 text-[11px] font-black text-[#cd8c31]/55">
                         <span>{isHomeMusicApiMenuCollapsed ? '펼쳐보기' : '접기'}</span>
                         <ChevronDown className={cn("h-4 w-4 transition-transform", !isHomeMusicApiMenuCollapsed && "rotate-180")} />
                       </div>
                     </button>
 
                     {!isHomeMusicApiMenuCollapsed && (
-                      <div className="flex items-center justify-between gap-2 border-t border-white/10 p-3">
+                      <div className="flex items-center justify-between gap-2 border-t border-[#cd8c31]/[0.14] p-3">
                         <button
                           onClick={() => navigate('/my-page')}
-                          className="flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5"
+                          className="flex bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] py-3 px-4 rounded-xl text-[#cd8c31]/80 hover:text-[#f0c079] transition-all items-center justify-center shrink-0 border border-[#cd8c31]/[0.14]"
                           title="마이페이지에서 API 관리"
                         >
                           <Settings className="w-5 h-5" />
@@ -9579,8 +9579,8 @@ ${normalizePromptForDisplay(result.prompt)}
                           className={cn(
                             "flex-1 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap",
                             isMusicApiGenerating
-                              ? "bg-purple-600/40 cursor-not-allowed"
-                              : "bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/20"
+                              ? "bg-[#cd8c31]/35 cursor-not-allowed"
+                              : "bg-[#cd8c31] hover:bg-[#b77925] shadow-lg shadow-[#cd8c31]/[0.18]"
                           )}
                         >
                           {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
@@ -9590,7 +9590,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             clearSunoLibrarySignal();
                             navigate('/suno-library');
                           }}
-                          className="relative flex bg-white/5 hover:bg-white/10 py-3 px-4 rounded-xl text-white/70 hover:text-white transition-all items-center justify-center shrink-0 border border-white/5 text-sm font-bold"
+                          className="relative flex bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] py-3 px-4 rounded-xl text-[#cd8c31]/80 hover:text-[#f0c079] transition-all items-center justify-center shrink-0 border border-[#cd8c31]/[0.14] text-sm font-bold"
                           title="라이브러리로 이동"
                         >
                           {sunoLibrarySignal && (

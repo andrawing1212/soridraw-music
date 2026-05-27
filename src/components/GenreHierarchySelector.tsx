@@ -769,10 +769,10 @@ export default function GenreHierarchySelector({
                 }
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-2.5 rounded-xl transition-all shadow-btn border",
+                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
-                    ? "bg-btn-bg text-[#D9B89D] border-btn-border hover:bg-btn-hover"
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                    ? genreAccent.selected
+                    : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover",
                 )}
                 title={isLocked ? "잠금 해제" : "메뉴 잠금"}
                 aria-label={isLocked ? "장르 잠금 해제" : "장르 잠금"}

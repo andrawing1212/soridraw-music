@@ -2630,7 +2630,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     <>
       {/* Top Navigation */}
       <div
-        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl md:flex"
+        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
       >
         <button
           type="button"
@@ -2784,7 +2784,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-2 py-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl md:hidden"
+        className="fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-2 py-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden"
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">

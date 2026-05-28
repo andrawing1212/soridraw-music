@@ -347,3 +347,87 @@ html {
   font-weight: 900 !important;
   font-synthesis-weight: none;
 }
+
+
+/* SORIDRAW_435_MUSICNOTE_LIBRARY_THEME
+   Music Note and Library pages use page-specific accent tones and the same
+   soft, low-border surface treatment used in Studio. */
+.dark .soridraw-musicnote-theme {
+  --page-accent: #AC5045;
+  --page-accent-soft: rgba(172, 80, 69, 0.14);
+  --page-accent-hover: rgba(172, 80, 69, 0.20);
+  --page-accent-text: #D79084;
+  --page-soft-border: rgba(0, 0, 0, 0.30);
+  --page-soft-border-hover: rgba(0, 0, 0, 0.38);
+}
+
+.dark .soridraw-library-theme {
+  --page-accent: #658761;
+  --page-accent-soft: rgba(101, 135, 97, 0.14);
+  --page-accent-hover: rgba(101, 135, 97, 0.20);
+  --page-accent-text: #A8C49F;
+  --page-soft-border: rgba(0, 0, 0, 0.30);
+  --page-soft-border-hover: rgba(0, 0, 0, 0.38);
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select, section, article, div)[class*="border"] {
+  border-color: var(--page-soft-border) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select, section, article, div)[class*="border"]:hover {
+  border-color: var(--page-soft-border-hover) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(.rounded-xl, .rounded-2xl, .rounded-3xl)[class*="border"] {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select)[class*="border"] {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="text-brand-orange"], .text-brand-orange) {
+  color: var(--page-accent-text) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="bg-brand-orange"], .bg-brand-orange) {
+  background-color: var(--page-accent) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="border-brand-orange"], .border-brand-orange) {
+  border-color: rgba(0, 0, 0, 0.30) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="focus:border-brand-orange"]):focus {
+  border-color: var(--page-accent) !important;
+}
+
+.dark .soridraw-musicnote-theme :where([class*="text-[#D8A4A2]"], [class*="text-[#D45A66]"], [class*="text-[#F07882]"]) {
+  color: var(--page-accent-text) !important;
+}
+
+.dark .soridraw-library-theme :where([class*="text-sky"], [class*="text-purple"], [class*="text-emerald"]) {
+  color: var(--page-accent-text) !important;
+}
+
+.dark .soridraw-library-theme :where([class*="bg-sky"], [class*="bg-purple"], [class*="bg-emerald"]) {
+  background-color: var(--page-accent-soft) !important;
+}
+
+.dark .soridraw-library-theme :where([class*="border-sky"], [class*="border-purple"], [class*="border-emerald"]) {
+  border-color: rgba(0, 0, 0, 0.30) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="bg-white/5"], [class*="bg-white/[0.02]"], [class*="bg-white/[0.03]"]) {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="hover:bg-white/5"]):hover,
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="hover:bg-white/10"]):hover {
+  background-color: var(--page-accent-soft) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(input, textarea):focus {
+  outline: none !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--page-accent) 42%, transparent), 0 10px 24px rgba(0, 0, 0, 0.16) !important;
+}

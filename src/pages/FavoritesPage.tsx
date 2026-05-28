@@ -55,22 +55,22 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
   const normalized = String(typeOrKey || '').toLowerCase();
 
   if (normalized.includes('genre') || normalized === 'subgenre') {
-    return 'border-brand-orange/25 bg-brand-orange/10 text-brand-orange shadow-[0_0_10px_rgba(242,125,38,0.08)]';
+    return 'border-[#AC5045]/25 bg-[#AC5045]/10 text-[#AC5045] shadow-[0_0_10px_rgba(172,80,69,0.08)]';
   }
   if (normalized.includes('style')) {
-    return 'border-violet-400/25 bg-violet-500/10 text-violet-300 shadow-[0_0_10px_rgba(139,92,246,0.08)]';
+    return 'border-[#AC5045]/20 bg-[#AC5045]/8 text-[#D8A4A2] shadow-[0_0_10px_rgba(172,80,69,0.06)]';
   }
   if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
-    return 'border-cyan-400/25 bg-cyan-500/10 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.08)]';
+    return 'border-[#AC5045]/20 bg-[#AC5045]/8 text-[#D8A4A2] shadow-[0_0_10px_rgba(172,80,69,0.06)]';
   }
   if (normalized.includes('mood') || normalized.includes('atmosphere')) {
-    return 'border-rose-400/25 bg-rose-500/10 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.08)]';
+    return 'border-[#AC5045]/22 bg-[#AC5045]/10 text-[#D8A4A2] shadow-[0_0_10px_rgba(172,80,69,0.07)]';
   }
   if (normalized.includes('theme') || normalized.includes('topic')) {
-    return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.08)]';
+    return 'border-[#AC5045]/22 bg-[#AC5045]/10 text-[#D8A4A2] shadow-[0_0_10px_rgba(172,80,69,0.07)]';
   }
   if (isRandom) {
-    return 'border-brand-orange/30 bg-brand-orange/16 text-brand-orange font-bold';
+    return 'border-[#AC5045]/30 bg-[#AC5045]/16 text-[#AC5045] font-bold';
   }
   return 'border-white/10 bg-white/[0.04] text-white/72';
 };
@@ -448,7 +448,7 @@ export default function FavoritesPage({
           })
         }
         onTouchEnd={onLongPressEnd}
-        className="inline-flex items-center gap-1.5 p-1 px-2 rounded-md bg-[var(--bg-secondary)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-[var(--border-color)] ml-2 shadow-sm"
+        className="inline-flex items-center gap-1.5 p-1 px-2 rounded-md bg-[var(--bg-secondary)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-black/20 ml-2 shadow-sm"
         title={`${label} 복사`}
       >
         {copiedType === type ? (
@@ -1949,7 +1949,7 @@ ${song.prompt}
               _ts: Date.now(),
             });
           }}
-          className="text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer border border-white/8 bg-white/[0.075] text-white/58 transition-colors hover:text-white/78"
+          className="text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer border border-black/20 bg-white/[0.075] text-white/58 transition-colors hover:text-white/78"
         >
           #{meta?.labelKo || entry.value}
         </span>
@@ -2013,7 +2013,7 @@ ${song.prompt}
 
   return (
     <div 
-      className="mx-auto w-full max-w-[1320px] px-4 md:px-6 pt-28 pb-12 font-sans relative"
+      className="soridraw-musicnote-theme mx-auto w-full max-w-[1320px] px-4 md:px-6 pt-28 pb-12 font-sans relative"
       onClickCapture={(e) => {
         if (!isSelectionMode) return;
         const target = e.target as HTMLElement;
@@ -2045,8 +2045,8 @@ ${song.prompt}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
-              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-white shrink-0" />
-              <span>Music <span className="bg-gradient-to-r from-[#EBCF77] via-[#F39B87] to-[#D96F8F] bg-clip-text text-transparent">Note</span></span>
+              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-[#AC5045] shrink-0" />
+              <span>Music <span className="text-[#AC5045]">Note</span></span>
             </h1>
             <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
           </div>
@@ -2057,14 +2057,14 @@ ${song.prompt}
           <div className="flex items-center gap-2 flex-1 min-w-[260px]">
             <button
               onClick={() => navigate('/')}
-              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-white/10 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all flex items-center justify-center"
+              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all flex items-center justify-center"
               title="홈"
             >
               <HomeIcon className="w-4 h-4" />
             </button>
             <div className="relative flex-1 min-w-0 group overflow-hidden">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
-              <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
+              <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#AC5045] transition-colors" />
             </div>
             <input
               type="text"
@@ -2072,7 +2072,7 @@ ${song.prompt}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="w-full h-[46px] bg-[var(--bg-secondary)] border border-white/10 rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-brand-orange/50 transition-all"
+              className="w-full h-[46px] bg-[var(--bg-secondary)] border border-white/10 rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#AC5045]/50 transition-all"
             />
             {!searchQuery && !isSearchFocused && (
               <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
@@ -2093,10 +2093,10 @@ ${song.prompt}
             </div>
           </div>
 
-          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
+          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0">
             <button
               onClick={() => setFavoriteColorFilter('all')}
-              className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#AC6B69]/28 text-[#D8A4A2]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#AC5045]/24 text-[#D8A4A2]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
             >
               전체
             </button>
@@ -2113,7 +2113,7 @@ ${song.prompt}
 
           </div>
 
-          <div className="flex h-[46px] items-center rounded-2xl border border-white/10 bg-[var(--bg-secondary)] p-1 shrink-0">
+          <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0">
             {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
               <button
                 key={mode}
@@ -2124,7 +2124,7 @@ ${song.prompt}
                   (mode === 'genre' && sortBy.startsWith('genre')) ||
                   (mode === 'title' && sortBy.startsWith('title')) ||
                   (mode === 'locked' && sortBy.startsWith('locked'))
-                    ? 'bg-[#AC6B69]/78 text-white'
+                    ? 'bg-[#AC5045]/72 text-white'
                     : 'text-white/50 hover:bg-white/5 hover:text-white'
                 }`}
               >
@@ -2138,10 +2138,10 @@ ${song.prompt}
       <div className="my-4 md:my-5 border-t border-white/[0.07]" />
 
       {favorites.length === 0 ? (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-12 shadow-[var(--shadow-md)]">
+        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">아직 저장된 곡이 없습니다.</p>
-          <Link to="/" className="mt-6 text-brand-orange font-bold hover:underline">
+          <Link to="/" className="mt-6 text-[#AC5045] font-bold hover:underline">
             첫 번째 곡 만들러 가기
           </Link>
         </div>
@@ -2182,7 +2182,7 @@ ${song.prompt}
                     }
                   }}
                   className={cn(
-                    "group relative overflow-visible rounded-2xl border border-white/10 bg-[var(--bg-secondary)] transition-all select-none hover:bg-white/[0.03]",
+                    "group relative overflow-visible rounded-2xl border border-black/20 bg-[var(--bg-secondary)] transition-all select-none hover:bg-white/[0.03]",
                     isSelectionMode ? "cursor-pointer" : ""
                   )}
                 >
@@ -2194,7 +2194,7 @@ ${song.prompt}
                           toggleSongSelection(song.id);
                         }}
                         className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/20 text-white/30 hover:border-white/40'
+                          isSelected ? 'border-[#AC5045] bg-[#AC5045]/15 text-[#AC5045]' : 'border-black/25 text-white/30 hover:border-white/40'
                         }`}
                       >
                         {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}
@@ -2229,7 +2229,7 @@ ${song.prompt}
                       </div>
                     )}
 
-                    <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-brand-orange md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
+                    <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-[#AC5045] md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
                       <Music className="w-5 h-5" />
                     </div>
 
@@ -2311,14 +2311,14 @@ ${song.prompt}
 
                     <div className="flex items-center gap-2 shrink-0">
                       {song.isLocked && (
-                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-brand-orange" title="잠김">
+                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-[#AC5045]" title="잠김">
                           <Lock className="w-4 h-4" />
                         </span>
                       )}
 
                       <div className="relative shrink-0">
                         {song.isLocked && (
-                          <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-20 inline-flex h-5 w-5 items-center justify-center text-brand-orange md:hidden" title="잠김">
+                          <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-20 inline-flex h-5 w-5 items-center justify-center text-[#AC5045] md:hidden" title="잠김">
                             <Lock className="w-3.5 h-3.5" />
                           </span>
                         )}
@@ -2340,16 +2340,16 @@ ${song.prompt}
                             setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
                             setActiveFavoriteColorMenuId(null);
                           }}
-                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-brand-orange' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-[#AC5045]' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
 
                         {activeFavoriteMenuId === song.id && (
-                          <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-brand-orange/30 bg-[#181818] py-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                          <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-[#AC5045]/30 bg-[#181818] py-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                             {isBulkMenu ? (
                               <>
-                                <div className="px-4 py-2 text-xs font-bold text-brand-orange">선택한 {selectedSongIds.length}곡</div>
+                                <div className="px-4 py-2 text-xs font-bold text-[#AC5045]">선택한 {selectedSongIds.length}곡</div>
                                 <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
                                 <button onClick={() => executeFavoriteMenuAction('lockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
                                 <button onClick={() => executeFavoriteMenuAction('unlockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
@@ -2388,9 +2388,9 @@ ${song.prompt}
                 onClick={() => setVisibleCount(prev => prev + 15)}
                 onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 15개 더 불러옵니다.' })}
                 onMouseLeave={() => onHover(null)}
-                className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
+                className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]"
               >
-                <Plus className="w-5 h-5 text-brand-orange group-hover:rotate-90 transition-transform" />
+                <Plus className="w-5 h-5 text-[#AC5045] group-hover:rotate-90 transition-transform" />
                 더보기 ({filteredFavorites.length - visibleCount}개 남음)
               </button>
             </div>
@@ -2408,7 +2408,7 @@ ${song.prompt}
             className="fixed bottom-6 left-1/2 z-[160] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
           >
             <span className="inline-flex items-center gap-2 whitespace-pre-line">
-              <Check className="h-4 w-4 text-brand-orange" />
+              <Check className="h-4 w-4 text-[#AC5045]" />
               {favoriteToastMessage}
             </span>
           </motion.div>
@@ -2441,7 +2441,7 @@ ${song.prompt}
             >
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(172,107,105,0.10),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(172,107,105,0.08),transparent_28%)]" />
 
-              <div className="relative flex items-center justify-between gap-4 border-b border-white/8 px-5 py-4 md:px-8 md:py-5">
+              <div className="relative flex items-center justify-between gap-4 border-b border-black/20 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
                   <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#D8A4A2]">music note detail</div>
                   <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">디테일 & Edit</h3>
@@ -2619,7 +2619,7 @@ ${song.prompt}
                       className={cn(
                         'inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
                         selectedSong.isLocked
-                          ? 'border-white/8 bg-white/[0.03] text-white/18'
+                          ? 'border-black/20 bg-white/[0.03] text-white/18'
                           : confirmDeleteSong
                             ? 'border-red-500/55 bg-white/[0.035] text-red-500'
                             : 'border-white/10 bg-white/[0.035] text-white/78 hover:text-red-500'
@@ -2696,7 +2696,7 @@ ${song.prompt}
                         className="overflow-hidden"
                       >
                         <div className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
-                          <section className="rounded-[24px] border border-white/8 bg-black/10 p-5">
+                          <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
                             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                               <div>
                                 <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2]">keywords</div>
@@ -2741,17 +2741,17 @@ ${song.prompt}
                             </div>
                           </section>
 
-                          <section className="rounded-[24px] border border-white/8 bg-black/10 p-5">
+                          <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
                             <div className="mb-4">
                               <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2]">overview</div>
                               <h4 className="mt-1 text-xl font-bold text-white">핵심 정보</h4>
                             </div>
                             <div className="grid gap-3">
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">genre</p>
                                 <p className="mt-2 text-lg font-semibold text-white/90">{getDisplaySubGenre(selectedSong) || '정보 없음'}</p>
                               </div>
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">vocal</p>
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] text-white/75">{selectedSong.appliedKeywords.vocalType || '정보 없음'}</span>
@@ -2760,13 +2760,13 @@ ${song.prompt}
                                   )}
                                 </div>
                               </div>
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">tempo</p>
                                 <p className="mt-2 text-base font-semibold text-white/88">{selectedSong.appliedKeywords.tempo || '정보 없음'}</p>
                               </div>
-                              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">structure</p>
-                                <div className="mt-2 rounded-xl border border-white/8 bg-black/20 px-3 py-3 text-[12px] leading-6 text-white/72" style={{ wordBreak: 'break-word' }}>
+                                <div className="mt-2 rounded-xl border border-black/20 bg-black/20 px-3 py-3 text-[12px] leading-6 text-white/72" style={{ wordBreak: 'break-word' }}>
                                   {getFavoriteStructureText(selectedSong)}
                                 </div>
                               </div>
@@ -2871,10 +2871,10 @@ ${song.prompt}
                       <textarea
                         value={editedKoreanLyrics}
                         onChange={(e) => setEditedKoreanLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#AC6B69]/30"
+                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#AC6B69]/30"
                       />
                     ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
+                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
                         {selectedSong.lyrics.korean}
                       </div>
                     )}
@@ -2972,10 +2972,10 @@ ${song.prompt}
                       <textarea
                         value={editedEnglishLyrics}
                         onChange={(e) => setEditedEnglishLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#AC6B69]/30"
+                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#AC6B69]/30"
                       />
                     ) : (
-                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-white/8 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
+                      <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
                         {selectedSong.lyrics.english}
                       </div>
                     )}
@@ -3043,10 +3043,10 @@ ${song.prompt}
                     <textarea
                       value={editedPrompt}
                       onChange={(e) => setEditedPrompt(e.target.value)}
-                      className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-white/8 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-[#AC6B69]/30"
+                      className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-[#AC6B69]/30"
                     />
                   ) : (
-                    <div className="rounded-2xl border border-white/8 bg-black/15 p-4 md:p-5">
+                    <div className="rounded-2xl border border-black/20 bg-black/15 p-4 md:p-5">
                       <p className="text-sm leading-7 text-white/68">{selectedSong.prompt || '프롬프트 정보가 없습니다.'}</p>
                     </div>
                   )}
@@ -3056,7 +3056,7 @@ ${song.prompt}
                   <button
                     type="button"
                     onClick={() => setIsFavoriteMusicApiSectionExpanded((prev) => !prev)}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left transition-all hover:border-white/14 hover:bg-white/[0.035]"
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/20 bg-black/10 px-4 py-3 text-left transition-all hover:border-white/14 hover:bg-white/[0.035]"
                     aria-expanded={isFavoriteMusicApiSectionExpanded}
                   >
                     <div className="min-w-0">
@@ -3130,7 +3130,7 @@ ${song.prompt}
                         </div>
 
                         {favoriteMusicApiMessage && (
-                          <p className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-center text-xs font-semibold text-white/62 whitespace-pre-line">
+                          <p className="mt-3 rounded-2xl border border-black/20 bg-black/15 px-4 py-3 text-center text-xs font-semibold text-white/62 whitespace-pre-line">
                             {favoriteMusicApiMessage}
                           </p>
                         )}

@@ -4644,11 +4644,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
 
         {loading || sharedTrackLoading ? (
-          <div className="!mt-2 border-t border-[#658761]/16 pt-4 flex items-center justify-center py-16">
+          <div className="!mt-2 border-t border-[#658761]/24 pt-4 flex items-center justify-center py-16 shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
             <Loader2 className="w-8 h-8 animate-spin text-[#658761]" />
           </div>
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
-          <div className="!mt-2 border-t border-[#658761]/16 pt-4 flex flex-col items-center justify-center py-16 text-center">
+          <div className="!mt-2 border-t border-[#658761]/24 pt-4 flex flex-col items-center justify-center py-16 text-center shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
@@ -4656,7 +4656,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="!mt-2 border-t border-[#658761]/16 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
+            className="!mt-2 border-t border-[#658761]/24 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#658761]/16 bg-white/[0.015] shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -4669,7 +4669,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="!mt-2 border-t border-[#658761]/16 pt-4 space-y-4 md:space-y-5">
+          <div className="!mt-2 border-t border-[#658761]/24 pt-4 space-y-4 md:space-y-5 shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
@@ -4682,10 +4682,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   key={group.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="bg-[var(--bg-secondary)] border border-black/20 rounded-2xl"
+                  className="bg-[#151515] border border-black/24 rounded-2xl shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
                 >
                   {/* Group Header */}
-                  <div className="px-4 md:px-6 py-4 border-b border-black/15 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-white/[0.02] rounded-t-2xl overflow-hidden">
+                  <div className="px-4 md:px-6 py-4 border-b border-[#658761]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-black/10 rounded-t-2xl overflow-hidden">
                     <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#658761] shrink-0">
                         <Music className="w-5 h-5" />
@@ -4735,7 +4735,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </div>
 
                   {/* Tracks List */}
-                  <div className="divide-y divide-white/5">
+                  <div className="divide-y divide-[#658761]/8">
                     {items.map(({ item, idx }: { item: any; idx: number }) => {
                       const audioUrl = getAudioUrl(item, group);
                       const duration = getDuration(item, group);
@@ -4753,7 +4753,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-white/[0.03] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-[#658761]/[0.035] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {

@@ -370,6 +370,12 @@ html {
   --page-soft-border-hover: rgba(0, 0, 0, 0.38);
 }
 
+
+/* 437: Keep the custom Suno Library title mark visible despite the soft-border reset. */
+.dark .soridraw-library-theme .soridraw-library-title-icon > div {
+  border-color: currentColor !important;
+}
+
 .dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select, section, article, div)[class*="border"] {
   border-color: var(--page-soft-border) !important;
 }

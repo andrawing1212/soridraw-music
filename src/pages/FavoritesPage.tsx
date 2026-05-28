@@ -2042,7 +2042,7 @@ ${song.prompt}
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
       <div className="mb-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 translate-y-2 md:translate-y-3">
           <div>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
               <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-[#AC5045] shrink-0" />

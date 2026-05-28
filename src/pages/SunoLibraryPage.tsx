@@ -4587,6 +4587,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <>
             {/* Search & Filter */}
         {!isSharedView && (
+          <>
           <div className="flex flex-col xl:flex-row xl:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
@@ -4639,6 +4640,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#A8C49F]/85" />
             <p>API로 생성된 곡은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</p>
           </div>
+          </>
         )}
 
         {loading || sharedTrackLoading ? (

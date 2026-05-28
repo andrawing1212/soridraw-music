@@ -8546,13 +8546,13 @@ ${normalizePromptForDisplay(result.prompt)}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 20 }}
                       transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl"
+                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onPointerUp={(e) => e.stopPropagation()}
                     >
-                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 border-b border-[var(--modal-soft-border)] bg-[var(--card-bg)]/95 backdrop-blur-xl">
+                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 bg-[var(--card-bg)]/95 backdrop-blur-xl shadow-[inset_0_-1px_0_rgba(172,80,69,0.08)]">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <Users className="w-5 h-5 text-[#D79084]" />
@@ -8566,7 +8566,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             <button
                               type="button"
                               onClick={clearDraftSituation}
-                              className="px-3 py-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[11px] font-black text-[var(--text-secondary)] hover:text-[#D79084] hover:bg-[#AC5045]/10 transition-all"
+                              className="px-3 py-2 rounded-xl bg-btn-bg text-[11px] font-black text-[var(--text-secondary)] hover:text-[#D79084] hover:bg-[#AC5045]/10 transition-all"
                             >
                               전체 해제
                             </button>
@@ -8575,7 +8575,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             <button
                               type="button"
                               onClick={applyStoryboardModal}
-                              className="p-2 rounded-xl bg-[#AC5045]/78 text-[#171717] border border-black/20 font-black soridraw-selected-strong hover:bg-[#AC5045]/86 transition-all"
+                              className="p-2 rounded-xl bg-[#AC5045]/78 text-[#171717] font-black soridraw-selected-strong hover:bg-[#AC5045]/86 transition-all"
                               title="적용"
                               aria-label="스토리보드 적용"
                             >
@@ -8585,7 +8585,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           <button
                             type="button"
                             onClick={closeStoryboardModal}
-                            className="p-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                            className="p-2 rounded-xl bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
                             title="닫기"
                             aria-label="스토리보드 닫기"
                           >
@@ -8595,7 +8595,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       </div>
 
                       <div className="max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
-                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-4">
+                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
@@ -8604,7 +8604,7 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.targetA || ''}
                                 onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
                                 placeholder="예: 저승사자, 엄마, 상사"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
                               />
                             </div>
                             <div>
@@ -8613,16 +8613,16 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
                                 placeholder="예: 귀신, 아들, 직원"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
                               />
                             </div>
                           </div>
                         </section>
 
-                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-5">
+                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="캐릭터 포지션" description="원하는 스타일로 게이지를 맞춰보세요" />
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
+                            <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
                                 <p className="text-sm font-black text-[#D79084] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
@@ -8633,11 +8633,11 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.speakerAExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
                               />
                             </div>
 
-                            <div className="rounded-3xl bg-[#151515] border border-[#2e2e2e] p-4 space-y-3.5">
+                            <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
                                 <p className="text-sm font-black text-[#E8B878] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
@@ -8648,20 +8648,20 @@ ${normalizePromptForDisplay(result.prompt)}
                                 value={draftSituation.speakerBExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 공손하지만 안 물러남"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
                               />
                             </div>
                           </div>
                         </section>
 
-                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-4">
+                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
                           <textarea
                             value={draftSituation.description || ''}
                             onChange={(e) => updateDraftSituationField('description', e.target.value)}
                             placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
                             rows={4}
-                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-sm text-[var(--text-primary)] outline-none focus:border-[#AC5045] resize-none"
+                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40 resize-none"
                           />
                           <input
                             value={draftSituation.detailCustom || draftSituation.details || ''}
@@ -8670,11 +8670,11 @@ ${normalizePromptForDisplay(result.prompt)}
                               updateDraftSituationField('detailPresets', []);
                             }}
                             placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] border border-[var(--modal-button-border)] text-xs text-[var(--text-primary)] outline-none focus:border-[#AC5045]"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
                           />
                         </section>
 
-                        <section className="rounded-3xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 space-y-5">
+                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <StoryboardSlider label="대화" left="티키타카" right="독백" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["티키타카", "반반", "독백"]} />
@@ -10027,8 +10027,8 @@ ${normalizePromptForDisplay(result.prompt)}
           margin-top: -8.5px;
           border-radius: 999px;
           background: rgb(172, 80, 69);
-          border: 4px solid rgba(255,255,255,0.90);
-          box-shadow: none;
+          border: 0;
+          box-shadow: 0 0 0 3px rgba(0,0,0,0.20);
           cursor: grab;
           position: relative;
           z-index: 2;
@@ -10056,8 +10056,8 @@ ${normalizePromptForDisplay(result.prompt)}
           height: 24px;
           border-radius: 999px;
           background: rgb(172, 80, 69);
-          border: 4px solid rgba(255,255,255,0.90);
-          box-shadow: none;
+          border: 0;
+          box-shadow: 0 0 0 3px rgba(0,0,0,0.20);
           cursor: grab;
         }
         .vocal-character-slider-female::-moz-range-thumb {
@@ -10074,8 +10074,8 @@ ${normalizePromptForDisplay(result.prompt)}
           height: 14px;
           transform: translate(-50%, -50%);
           border-radius: 999px;
-          border: 2px solid rgba(255,255,255,0.86);
-          background: rgba(17,17,17,0.96);
+          border: 0;
+          background: rgba(101,135,97,0.34);
           pointer-events: none;
           z-index: 1;
         }
@@ -10105,8 +10105,8 @@ ${normalizePromptForDisplay(result.prompt)}
           height: 24px;
           transform: translate(-50%, -50%);
           border-radius: 999px;
-          border: 4px solid rgba(255,255,255,0.90);
-          box-shadow: none;
+          border: 0;
+          box-shadow: 0 0 0 3px rgba(0,0,0,0.20);
           cursor: grab;
           touch-action: none;
           transition: transform 120ms ease, filter 120ms ease;
@@ -15805,9 +15805,9 @@ function VocalControl({
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
-                className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#2b2b2b] bg-[#111] shadow-2xl shadow-black/70"
+                className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-[#242424] bg-[#151515] px-5 py-4">
+                <div className="flex items-center justify-between gap-3 bg-[#151515] px-5 py-4 shadow-[inset_0_-1px_0_rgba(101,135,97,0.08)]">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className={cn(
@@ -15818,14 +15818,14 @@ function VocalControl({
                         {editingVocalMember.gender === 'male' ? '남성' : '여성'} {editingVocalMemberIndex + 1} 캐릭터
                       </h4>
                     </div>
-                    <p className="mt-1 truncate text-xs font-bold text-brand-orange">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-[#A8C49F]">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {hasVocalCharacterSelection && (
                       <button
                         type="button"
                         onClick={clearLocalVocalCharacter}
-                        className="h-10 px-3 rounded-xl border border-brand-orange/22 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/18 transition-all text-[11px] font-black whitespace-nowrap"
+                        className="h-10 px-3 rounded-xl bg-[#658761]/12 text-[#A8C49F] hover:bg-[#658761]/18 transition-all text-[11px] font-black whitespace-nowrap"
                         title="캐릭터 전체 해제"
                       >
                         전체 해제
@@ -15845,7 +15845,7 @@ function VocalControl({
                     <button
                       type="button"
                       onClick={closeVocalCharacterEditor}
-                      className="rounded-full border border-[#303030] bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:border-black/20/30 hover:text-brand-orange"
+                      className="rounded-full bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-[#658761]/10 hover:text-[#A8C49F]"
                       title={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
                       aria-label={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
                     >
@@ -15862,7 +15862,7 @@ function VocalControl({
                           <h5 className="text-base font-black text-[var(--text-primary)]">보컬 캐릭터 게이지</h5>
                           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">가운데가 기본값입니다. 움직인 항목만 보컬 프롬프트에 반영됩니다.</p>
                         </div>
-                        <span className="text-xs font-bold text-brand-orange">좌우 5단계 · 기교 좌우 7단계</span>
+                        <span className="text-xs font-bold text-[#A8C49F]">좌우 5단계 · 기교 좌우 7단계</span>
                       </div>
 
                       <div className="space-y-3">
@@ -15882,24 +15882,24 @@ function VocalControl({
                             <div
                               key={config.key}
                               className={cn(
-                                "rounded-2xl border p-4 transition-all",
+                                "rounded-2xl p-4 transition-all shadow-[0_10px_26px_rgba(0,0,0,0.18)]",
                                 isCardActive
-                                  ? "border-[#d6a000] bg-[#1a1a1a] shadow-none"
-                                  : "border-[#2e2e2e] bg-[#1a1a1a]"
+                                  ? "bg-[#658761]/12"
+                                  : "bg-[#1a1a1a]"
                               )}
                             >
                               <div className="mb-3 flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2.5">
-                                    <h6 className="text-base font-black text-brand-orange">{config.titleKo}</h6>
-                                    <span className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-black", isDefault ? "border-transparent bg-btn-bg text-[var(--text-secondary)]" : "border-brand-orange/25 bg-transparent text-brand-orange")}>{step.labelKo}</span>
+                                    <h6 className="text-base font-black text-[#A8C49F]">{config.titleKo}</h6>
+                                    <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-black", isDefault ? "bg-btn-bg text-[var(--text-secondary)]" : "bg-[#658761]/14 text-[#A8C49F]")}>{step.labelKo}</span>
                                     {isOrnament && !isSecondaryDefault && (
-                                      <span className="rounded-full border border-brand-orange/20 bg-transparent px-2.5 py-0.5 text-[11px] font-black text-brand-orange">{secondaryStep.labelKo}</span>
+                                      <span className="rounded-full bg-[#658761]/14 px-2.5 py-0.5 text-[11px] font-black text-[#A8C49F]">{secondaryStep.labelKo}</span>
                                     )}
                                   </div>
                                   <p className="mt-1.5 text-xs leading-snug text-[var(--text-secondary)]">{config.subtitleKo}</p>
                                 </div>
-                                <span className="shrink-0 text-xs font-black text-brand-orange">{isOrnament ? `${value}/${config.steps.length}${!isSecondaryDefault ? ` · ${secondaryValue}/${config.steps.length}` : ''}` : `${value}/${config.steps.length}`}</span>
+                                <span className="shrink-0 text-xs font-black text-[#A8C49F]">{isOrnament ? `${value}/${config.steps.length}${!isSecondaryDefault ? ` · ${secondaryValue}/${config.steps.length}` : ''}` : `${value}/${config.steps.length}`}</span>
                               </div>
 
                               {isOrnament ? (

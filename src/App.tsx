@@ -7874,10 +7874,10 @@ ${normalizePromptForDisplay(result.prompt)}
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[var(--text-primary)] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#DFA05D] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
-          <Dices className="w-5 h-5 text-brand-orange group-hover:rotate-180 transition-transform duration-500" />
-          <span className="hidden md:block font-bold">랜덤 선택</span>
+          <Dices className="w-5 h-5 text-[#DFA05D] group-hover:rotate-180 transition-transform duration-500" />
+          <span className="hidden md:block font-bold text-[#DFA05D]">랜덤 선택</span>
         </button>
       </div>
 
@@ -8197,7 +8197,7 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-24 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+              <header className="studio-hero-tone pt-14 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
@@ -8212,7 +8212,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     </button>
                   )}
 
-                  <div className="flex flex-col items-start mt-9 md:mt-10 translate-y-4 md:translate-y-5">
+                  <div className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5">
                     <h1 
                       className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
@@ -8990,7 +8990,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           onClick={() => setIsActionButtonsCollapsed(true)}
                           onMouseEnter={() => {}}
                           onMouseLeave={() => {}}
-                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-brand-orange hover:bg-white/[0.045] hover:text-brand-orange transition-all shadow-none items-center justify-center opacity-100"
+                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#DFA05D] hover:bg-white/[0.045] hover:text-[#DFA05D] transition-all shadow-none items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />

@@ -2135,7 +2135,7 @@ ${song.prompt}
         </div>
       </div>
 
-      <div className="my-4 md:my-5 border-t border-white/[0.07]" />
+      <div className="my-4 md:my-5 border-t border-[#AC5045]/16" />
 
       {favorites.length === 0 ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">

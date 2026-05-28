@@ -4267,13 +4267,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         .suno-mobile-title-strip:active { cursor: grabbing; }
         .suno-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      <div className="mx-auto mb-4 flex w-full max-w-[1320px] items-start gap-3 rounded-2xl border border-sky-400/15 bg-sky-500/10 px-4 py-3 text-xs leading-relaxed text-sky-100/75">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-300/80" />
-        <div>
-          <span className="font-black text-sky-100">외부 URL 안내</span>
-          <span className="ml-2">Music API 음원/커버 URL은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</span>
-        </div>
-      </div>
       <AnimatePresence>
         {renameModalArgs && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25"
@@ -4641,14 +4634,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               ))}
             </div>
           </div>
+
+          <div className="mx-auto mt-1 mb-1 flex w-full items-start gap-3 rounded-2xl border border-[#658761]/12 bg-[#658761]/10 px-4 py-3 text-xs leading-relaxed text-[#C7D7C0]/80 shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#A8C49F]/85" />
+            <p>API로 생성된 곡은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</p>
+          </div>
         )}
 
         {loading || sharedTrackLoading ? (
-          <div className="!mt-2 border-t border-black/20 pt-4 flex items-center justify-center py-16">
+          <div className="!mt-2 border-t border-[#658761]/16 pt-4 flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-[#658761]" />
           </div>
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
-          <div className="!mt-2 border-t border-black/20 pt-4 flex flex-col items-center justify-center py-16 text-center">
+          <div className="!mt-2 border-t border-[#658761]/16 pt-4 flex flex-col items-center justify-center py-16 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
@@ -4656,7 +4654,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="!mt-2 border-t border-black/20 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
+            className="!mt-2 border-t border-[#658761]/16 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -4669,7 +4667,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="!mt-2 border-t border-black/20 pt-4 space-y-4 md:space-y-5">
+          <div className="!mt-2 border-t border-[#658761]/16 pt-4 space-y-4 md:space-y-5">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])

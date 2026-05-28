@@ -4146,6 +4146,225 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return () => window.removeEventListener('soridraw:global-player-action', handleGlobalPlayerAction as EventListener);
   }, [playlistItems, tracks, activePlaylistId, libraryViewMode, user, isSharedView]);
 
+
+  const renderLibraryTopControls = () => {
+    if (isSharedView) return null;
+    const isWorkspaceMode = libraryViewMode === 'workspace';
+
+    return (
+      <>
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <button
+              onClick={() => navigate('/')}
+              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#B8C9B2] hover:bg-white/5 shadow-btn transition-all"
+              title="홈"
+            >
+              <Home className="w-4 h-4" />
+            </button>
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+              <input
+                type="text"
+                placeholder={isWorkspaceMode ? "음악 제목이나 스타일 검색..." : "음악 제목이나 제작자 검색..."}
+                value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
+                onChange={(e) => {
+                  if (isWorkspaceMode) setSearchTerm(e.target.value);
+                  else setPlaylistSearchTerm(e.target.value);
+                }}
+                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#658761]/45 transition-all text-sm"
+              />
+            </div>
+          </div>
+
+          {isWorkspaceMode ? (
+            <>
+              <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+                <button
+                  onClick={() => setWorkspaceColorFilter('all')}
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#B8C9B2] bg-[#658761]/24' : 'text-white/40 hover:text-white/70'}`}
+                >
+                  전체
+                </button>
+                <div className="w-px h-3 bg-white/10 mx-1"></div>
+                {COLOR_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setWorkspaceColorFilter(opt.value)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
+                    title={opt.label}
+                  >
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+                {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
+                      filter === f ? 'bg-[#658761]/78 text-white' : 'hover:bg-white/5 opacity-60'
+                    }`}
+                  >
+                    {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+                <button
+                  onClick={() => setPlaylistColorFilter('all')}
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#B8C9B2] bg-[#658761]/24' : 'text-white/40 hover:text-white/70'}`}
+                >
+                  전체
+                </button>
+                <div className="w-px h-3 bg-white/10 mx-1"></div>
+                {[
+                  { value: 'gray', color: '#6b7280' },
+                  { value: 'red', color: '#ef4444' },
+                  { value: 'orange', color: '#f97316' },
+                  { value: 'yellow', color: '#eab308' },
+                  { value: 'green', color: '#22c55e' },
+                  { value: 'blue', color: '#3b82f6' },
+                  { value: 'purple', color: '#a855f7' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistColorFilter(opt.value)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
+                  >
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+                {[
+                  { value: 'added', label: '저장순' },
+                  { value: 'genre', label: '장르순' },
+                  { value: 'custom', label: '사용자' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistSortMode(opt.value as any)}
+                    className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                      playlistSortMode === opt.value
+                        ? 'bg-[#658761]/24 text-[#B8C9B2]'
+                        : 'text-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <div className="w-px h-4 bg-white/10 mx-1" />
+                {[
+                  { value: 'all', label: '전체' },
+                  { value: 'public', label: '공개' },
+                  { value: 'private', label: '비공개' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
+                    className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                      playlistVisibilityFilter === opt.value
+                        ? 'bg-[#658761]/24 text-[#B8C9B2]'
+                        : 'text-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="mx-auto mt-1 mb-1 flex w-full items-start gap-3 rounded-2xl border border-[#658761]/12 bg-[#658761]/10 px-4 py-3 text-xs leading-relaxed text-[#C7D7C0]/80 shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#A8C49F]/85" />
+          <p>API로 생성된 곡은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</p>
+        </div>
+      </>
+    );
+  };
+
+  const renderLibraryModeTabs = () => {
+    if (isSharedView) return null;
+    return (
+      <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
+        <div className="grid grid-cols-3 gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
+          <button
+            onClick={() => setLibraryViewMode('workspace')}
+            className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+          >
+            워크스페이스
+          </button>
+          <button
+            onClick={() => {
+              if (libraryViewMode !== 'playlist') {
+                setLibraryViewMode('playlist');
+                setActivePlaylistSection('normal');
+                if (visibleNormalPlaylists.length > 0 && !selectedNormalPlaylistId) {
+                  setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
+                }
+              }
+            }}
+            className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+          >
+            플레이리스트
+          </button>
+          <button
+            onClick={() => {
+              if (libraryViewMode !== 'sharedPlaylist') {
+                setLibraryViewMode('sharedPlaylist');
+                setActivePlaylistSection('shared');
+                if (visibleSharedPlaylists.length > 0 && !selectedSharedPlaylistId) {
+                  setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
+                }
+              }
+            }}
+            className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+          >
+            공유 플레이리스트
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderActivePlaylistManageButtons = (section: 'normal' | 'shared') => {
+    const list = section === 'normal' ? visibleNormalPlaylists : visibleSharedPlaylists;
+    const selectedId = section === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
+    const activePlaylist = list.find(p => p.id === selectedId);
+    if (!activePlaylist || !user || (activePlaylist as any).isFallback) return null;
+    const isDefaultPlaylist = activePlaylist.id === list[0]?.id;
+    if (isDefaultPlaylist) return null;
+
+    return (
+      <div className="shrink-0 inline-flex items-center overflow-hidden rounded-xl bg-[var(--bg-secondary)] shadow-btn">
+        <button
+          onClick={() => handleRenamePlaylist(activePlaylist)}
+          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#B8C9B2] hover:bg-white/5 transition-all"
+          title="플레이리스트 이름 변경"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => handleDeletePlaylist(activePlaylist)}
+          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-red-400 hover:bg-red-400/10 transition-all"
+          title="플레이리스트 삭제"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div
       className="soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
@@ -4503,13 +4722,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </div>
         </motion.div>
 
-        <div className="flex md:hidden items-center justify-between gap-3 -mt-2">
-          <button
-            onClick={() => navigate('/')}
-            className="h-12 px-4 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 flex items-center gap-2"
-          >
-            <Home className="w-4 h-4" />홈
-          </button>
+        <div className="flex md:hidden items-center justify-end gap-3 -mt-2">
           {!isSharedView && (
             <div className="flex items-center gap-2">
               {typeof remainingCredits === 'number' && (
@@ -4534,115 +4747,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
-        {/* View Mode Tabs */}
-        {!isSharedView && (
-          <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
-            <button
-              onClick={() => navigate('/')}
-              className="hidden md:flex h-12 w-12 shrink-0 items-center justify-center text-sm font-bold rounded-2xl border border-black/20 bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white shadow-btn transition-all"
-              title="홈"
-            >
-              <Home className="w-4 h-4" />
-            </button>
-            <div className="grid grid-cols-3 gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
-            <button
-              onClick={() => setLibraryViewMode('workspace')}
-              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-            >
-              워크스페이스
-            </button>
-            <button
-              onClick={() => {
-                if (libraryViewMode !== 'playlist') {
-                  setLibraryViewMode('playlist');
-                  setActivePlaylistSection('normal');
-                  if (visibleNormalPlaylists.length > 0 && !selectedNormalPlaylistId) {
-                    setSelectedNormalPlaylistId(visibleNormalPlaylists[0].id!);
-                  }
-                }
-              }}
-              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-            >
-              플레이리스트
-            </button>
-            <button
-              onClick={() => {
-                if (libraryViewMode !== 'sharedPlaylist') {
-                  setLibraryViewMode('sharedPlaylist');
-                  setActivePlaylistSection('shared');
-                  if (visibleSharedPlaylists.length > 0 && !selectedSharedPlaylistId) {
-                    setSelectedSharedPlaylistId(visibleSharedPlaylists[0].id!);
-                  }
-                }
-              }}
-              className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-            >
-              공유 플레이리스트
-            </button>
-            </div>
-          </div>
-        )}
+        {renderLibraryTopControls()}
+
+        {renderLibraryModeTabs()}
 
         {libraryViewMode === 'workspace' && (
           <>
-            {/* Search & Filter */}
-        {!isSharedView && (
-          <>
-          <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
-              <input 
-                type="text" 
-                placeholder="음악 제목이나 스타일 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#658761]/45 transition-all text-sm"
-              />
-            </div>
-            <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
-              <button
-                onClick={() => setWorkspaceColorFilter('all')}
-                className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#B8C9B2] bg-[#658761]/24' : 'text-white/40 hover:text-white/70'}`}
-              >
-                전체
-              </button>
-              <div className="w-px h-3 bg-white/10 mx-1"></div>
-              {COLOR_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setWorkspaceColorFilter(opt.value)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                    workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
-                  }`}
-                  title={opt.label}
-                >
-                  <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
-                </button>
-              ))}
-
-            </div>
-            <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0">
-              {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
-                    filter === f ? 'bg-[#658761]/78 text-white' : 'hover:bg-white/5 opacity-60'
-                  }`}
-                >
-                  {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mx-auto mt-1 mb-1 flex w-full items-start gap-3 rounded-2xl border border-[#658761]/12 bg-[#658761]/10 px-4 py-3 text-xs leading-relaxed text-[#C7D7C0]/80 shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#A8C49F]/85" />
-            <p>API로 생성된 곡은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</p>
-          </div>
-          </>
-        )}
-
         {loading || sharedTrackLoading ? (
           <div className="!mt-2 border-t border-[#658761]/24 pt-4 flex items-center justify-center py-16 shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
             <Loader2 className="w-8 h-8 animate-spin text-[#658761]" />
@@ -4957,10 +5067,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 ))}
                 <button 
                   onClick={() => handleAddPlaylist('normal')}
-                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+                  title="플레이리스트 추가"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
+                {renderActivePlaylistManageButtons('normal')}
               </div>
             </div>
             )}
@@ -4988,142 +5100,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 ))}
                 <button 
                   onClick={() => handleAddPlaylist('shared')}
-                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all border bg-[var(--bg-secondary)] border-white/10 border-dashed text-white/40 hover:bg-white/5 hover:text-white hover:border-white/20 flex items-center gap-1"
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+                  title="공유 플레이리스트 추가"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
+                {renderActivePlaylistManageButtons('shared')}
               </div>
             </div>
             )}
-
-            {/* Selected Playlist Header */}
-            {(() => {
-              const activePlaylist = activePlaylistSection === 'normal' 
-                ? visibleNormalPlaylists.find(p => p.id === selectedNormalPlaylistId)
-                : visibleSharedPlaylists.find(p => p.id === selectedSharedPlaylistId);
-                
-              if (!activePlaylist) return null;
-              const isFallback = (activePlaylist as any).isFallback;
-              
-              return (
-                <div className="mx-2 flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border border-black/15 rounded-2xl mb-4 mt-6 shadow-sm">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-white/40 mb-1">
-                      {activePlaylistSection === 'normal' ? '선택된 플레이리스트' : '선택된 공유 플레이리스트'}
-                    </span>
-                    <span className="text-base font-bold text-white flex items-center gap-1.5">
-                      {activePlaylistSection === 'shared' && <Share2 className="w-4 h-4 text-[#658761]" />}
-                      {activePlaylist.title}
-                    </span>
-                  </div>
-                  {!isFallback && user && (
-                    <div className="flex items-center gap-1">
-                      {!(activePlaylist.id === (activePlaylistSection === 'normal' ? visibleNormalPlaylists[0]?.id : visibleSharedPlaylists[0]?.id)) && (
-                        <button 
-                          onClick={() => handleRenamePlaylist(activePlaylist)}
-                          className="p-2 text-white/50 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => handleDeletePlaylist(activePlaylist)}
-                        className="p-2 text-white/50 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Playlist Controls (Search, Color Filter & Sort) */}
-            <div className="flex flex-col lg:flex-row lg:items-center gap-3 px-2 mt-2">
-              {/* Search */}
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                <input
-                  type="text"
-                  value={playlistSearchTerm}
-                  onChange={(e) => setPlaylistSearchTerm(e.target.value)}
-                  placeholder="음악 제목이나 제작자 검색..."
-                  className="w-full h-[46px] bg-[var(--bg-secondary)] border border-black/20 rounded-2xl pl-11 pr-4 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#658761]/45 transition-all"
-                />
-              </div>
-
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 lg:justify-end">
-                {/* Color Filter */}
-                <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 overflow-x-auto hide-scrollbar">
-                  <button
-                    onClick={() => setPlaylistColorFilter('all')}
-                    className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#B8C9B2] bg-[#658761]/24' : 'text-white/40 hover:text-white/70'}`}
-                  >
-                    전체
-                  </button>
-                  <div className="w-px h-3 bg-white/10 mx-1"></div>
-                  {[
-                    { value: 'gray', color: '#6b7280' },
-                    { value: 'red', color: '#ef4444' },
-                    { value: 'orange', color: '#f97316' },
-                    { value: 'yellow', color: '#eab308' },
-                    { value: 'green', color: '#22c55e' },
-                    { value: 'blue', color: '#3b82f6' },
-                    { value: 'purple', color: '#a855f7' }
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setPlaylistColorFilter(opt.value)}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                        playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
-                      }`}
-                    >
-                      <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
-                    </button>
-                  ))}
-
-                </div>
-
-                {/* Sort Options */}
-                <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15">
-                  {[
-                    { value: 'added', label: '저장순' },
-                    { value: 'genre', label: '장르순' },
-                    { value: 'custom', label: '사용자' }
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setPlaylistSortMode(opt.value as any)}
-                      className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
-                        playlistSortMode === opt.value
-                          ? 'bg-[#658761]/24 text-[#B8C9B2]'
-                          : 'text-white/40 hover:text-white/70'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                  <div className="w-px h-4 bg-white/10 mx-1" />
-                  {[
-                    { value: 'all', label: '전체' },
-                    { value: 'public', label: '공개' },
-                    { value: 'private', label: '비공개' }
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
-                      className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
-                        playlistVisibilityFilter === opt.value
-                          ? 'bg-[#658761]/24 text-[#B8C9B2]'
-                          : 'text-white/40 hover:text-white/70'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (

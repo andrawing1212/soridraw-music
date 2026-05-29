@@ -55,22 +55,10 @@ const isInstrumentalBgmGenreId = (id?: string | null) => Boolean(id && INSTRUMEN
 function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
   if (wasExpanded || typeof window === 'undefined') return;
 
-  const section = trigger.closest('[data-expand-section]') as HTMLElement | null;
-  if (!section) return;
-
-  const triggerRect = trigger.getBoundingClientRect();
-  const shouldAnchorTop = triggerRect.top < window.innerHeight * 0.48;
-
+  // Do not force-anchor top-row cards while their height is animating.
+  // This prevents scroll/height animation from fighting each other on Genre expansion.
   window.requestAnimationFrame(() => {
     window.setTimeout(() => {
-      if (shouldAnchorTop) {
-        const sectionRect = section.getBoundingClientRect();
-        const topOffset = 88;
-        const targetTop = Math.max(0, window.scrollY + sectionRect.top - topOffset);
-        window.scrollTo({ top: targetTop, behavior: 'smooth' });
-        return;
-      }
-
       const updatedTriggerRect = trigger.getBoundingClientRect();
       const bottomSafeSpace = 104;
       const overflowAmount = updatedTriggerRect.bottom + bottomSafeSpace - window.innerHeight;

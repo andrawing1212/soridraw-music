@@ -661,22 +661,11 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
 function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
   if (wasExpanded || typeof window === 'undefined') return;
 
-  const section = trigger.closest('[data-expand-section]') as HTMLElement | null;
-  if (!section) return;
-
-  const triggerRect = trigger.getBoundingClientRect();
-  const shouldAnchorTop = triggerRect.top < window.innerHeight * 0.48;
-
+  // Expanding the top studio cards should not force-scroll the page.
+  // The previous anchor-to-top behavior could fight Framer Motion height animation
+  // and caused intermittent heavy stutter on Genre / Style / Sound expansion.
   window.requestAnimationFrame(() => {
     window.setTimeout(() => {
-      if (shouldAnchorTop) {
-        const sectionRect = section.getBoundingClientRect();
-        const topOffset = 88;
-        const targetTop = Math.max(0, window.scrollY + sectionRect.top - topOffset);
-        window.scrollTo({ top: targetTop, behavior: 'smooth' });
-        return;
-      }
-
       const updatedTriggerRect = trigger.getBoundingClientRect();
       const bottomSafeSpace = 104;
       const overflowAmount = updatedTriggerRect.bottom + bottomSafeSpace - window.innerHeight;
@@ -702,7 +691,7 @@ function useStableContentHeight(
   deps: React.DependencyList,
   onHeightChange?: (height: number) => void
 ) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     let frameId: number | null = null;
     let timeoutId: number | null = null;
 
@@ -740,6 +729,20 @@ function useStableContentHeight(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
+
+const resolveExpandedHeight = (preferredHeight: number | undefined, measuredHeight: number | string, fallbackHeight: number) => {
+  if (typeof preferredHeight === 'number' && preferredHeight > 0) return preferredHeight;
+  if (typeof measuredHeight === 'number' && measuredHeight > 0) return measuredHeight;
+  return fallbackHeight;
+};
+
+// Top-row studio menus are heavier than mood/theme because they render folder grids and
+// also sync row heights. Giving them a stable preset height prevents the first open from
+// animating through late measurement updates. PC keeps the row visually aligned; mobile
+// keeps each menu compact and independent.
+const STUDIO_TOP_MENU_EXPANDED_HEIGHT_DESKTOP = 348;
+const STUDIO_GENRE_EXPANDED_HEIGHT_MOBILE = 216;
+const STUDIO_CYCLE_EXPANDED_HEIGHT_MOBILE = 348;
 
 const getVocalToneDisplayLabel = (toneId: string | undefined, vocalTones: VocalTone[]) => {
   if (!toneId) return '';
@@ -4426,6 +4429,9 @@ function App() {
 
   const row1MaxHeight = useMemo(() => Math.max(genreHeight, styleHeight, soundHeight), [genreHeight, styleHeight, soundHeight]);
   const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
+  const isStudioDesktopLayout = typeof window !== 'undefined' && window.innerWidth >= 1024;
+  const genreExpandedHeight = isStudioDesktopLayout ? STUDIO_TOP_MENU_EXPANDED_HEIGHT_DESKTOP : STUDIO_GENRE_EXPANDED_HEIGHT_MOBILE;
+  const styleSoundExpandedHeight = isStudioDesktopLayout ? STUDIO_TOP_MENU_EXPANDED_HEIGHT_DESKTOP : STUDIO_CYCLE_EXPANDED_HEIGHT_MOBILE;
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
@@ -8600,7 +8606,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+                forcedHeight={genreExpandedHeight}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
               />
           <CycleSection 
@@ -8625,7 +8631,7 @@ ${normalizePromptForDisplay(result.prompt)}
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
-            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+            forcedHeight={styleSoundExpandedHeight}
             onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
           <CycleSection 
@@ -8680,7 +8686,7 @@ ${normalizePromptForDisplay(result.prompt)}
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
-            forcedHeight={window.innerWidth >= 1024 ? row1MaxHeight : undefined}
+            forcedHeight={styleSoundExpandedHeight}
             onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
         </div>
@@ -8718,7 +8724,7 @@ ${normalizePromptForDisplay(result.prompt)}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 1024 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -8748,7 +8754,7 @@ ${normalizePromptForDisplay(result.prompt)}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 1024 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 1024 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}
@@ -10644,7 +10650,7 @@ function GenreCategorySection({
 }: GenreCategorySectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [contentHeight, setContentHeight] = useState<number | string>(0);
+  const [contentHeight, setContentHeight] = useState<number | string>(120);
 
   useStableContentHeight(contentRef, setContentHeight, [isExpanded, groups]);
 
@@ -10741,7 +10747,7 @@ function GenreCategorySection({
       <motion.div
         initial={false}
         animate={{ 
-          height: isExpanded ? contentHeight : 120,
+          height: isExpanded ? resolveExpandedHeight(undefined, contentHeight, 120) : 120,
           opacity: 1
         }}
         transition={{ duration: 0.25, ease: "easeOut" }}
@@ -11009,9 +11015,9 @@ function CycleSection({
 }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [contentHeight, setContentHeight] = useState<number | string>(0);
+  const [contentHeight, setContentHeight] = useState<number | string>(64);
 
-  useStableContentHeight(contentRef, setContentHeight, [isExpanded, cycles, selected, pointSelected, isPointSelectionMode, forcedHeight], onHeightChange);
+  useStableContentHeight(contentRef, setContentHeight, [isExpanded, cycles, selected, pointSelected, isPointSelectionMode], onHeightChange);
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
 
@@ -11134,11 +11140,12 @@ function CycleSection({
         <motion.div
           initial={false}
           animate={{ 
-            height: isExpanded ? (forcedHeight || contentHeight) : 64,
+            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 64) : 64,
             opacity: 1
           }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           className="overflow-hidden"
+          style={{ willChange: 'height' }}
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {cycles.map((cycle) => {
@@ -11718,7 +11725,7 @@ function CategorySection({
   const sectionAccent = getStudioSectionAccent(titleKo || title);
   const isExpandSummaryActive = isExpanded;
 
-  useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid, forcedHeight], onHeightChange);
+  useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid], onHeightChange);
 
   const resolveSelectedLabel = (id: string) => {
     const customMoodText = getCustomKeywordText(id, CUSTOM_MOOD_PREFIX);
@@ -11859,7 +11866,7 @@ function CategorySection({
         <motion.div
           initial={false}
           animate={{ 
-            height: isExpanded ? (forcedHeight || contentHeight) : (window.innerWidth < 768 ? 40 : 84),
+            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 40 : 84) : (window.innerWidth < 768 ? 40 : 84),
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}

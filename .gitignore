@@ -1,6 +1,17 @@
 node_modules/
+functions/node_modules/
+dist/
+build/
+.firebase/
 coverage/
 .DS_Store
 *.log
+*.tmp
+*.temp
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
 .env*
 !.env.example

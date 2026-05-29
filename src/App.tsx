@@ -382,7 +382,9 @@ const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefine
   const cleanIds = ids.filter((id): id is string => Boolean(id));
   return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
 };
-import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, type User } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
+
+type AuthMode = 'login' | 'signup' | 'reset';
 
 enum OperationType {
   CREATE = 'create',
@@ -3266,6 +3268,12 @@ function App() {
   // 1. ALL STATES & REFS FIRST
   const [user, setUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [rememberLogin, setRememberLogin] = useState<boolean>(() => {
     try {
       return localStorage.getItem('rememberLogin') === 'true';
@@ -3910,7 +3918,98 @@ function App() {
     }
   };
 
-  const handleLogin = async () => {
+  const getEmailAuthErrorMessage = (error: any) => {
+    const code = error?.code || 'unknown';
+    if (code === 'auth/email-already-in-use') return '이미 가입된 이메일입니다. 이메일 로그인 또는 기존 로그인 방식을 사용해주세요.';
+    if (code === 'auth/account-exists-with-different-credential') return '같은 이메일이 이미 다른 로그인 방식으로 가입되어 있습니다. 기존 로그인 방식으로 로그인해주세요.';
+    if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return '이메일 또는 비밀번호를 확인해주세요.';
+    if (code === 'auth/weak-password') return '비밀번호는 6자 이상으로 입력해주세요.';
+    if (code === 'auth/invalid-email') return '이메일 형식을 확인해주세요.';
+    if (code === 'auth/too-many-requests') return '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.';
+    return `인증 처리 중 오류가 발생했습니다. (${code})`;
+  };
+
+  const prepareEmailAuthAttempt = async () => {
+    localStorage.setItem('rememberLogin', String(rememberLogin));
+    await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
+  };
+
+  const handleLogin = () => {
+    setAuthMode('login');
+    setAuthMessage(null);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    if (isLoggingIn) return;
+    setIsAuthModalOpen(false);
+    setAuthMessage(null);
+  };
+
+  const handleEmailAuth = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    if (isLoggingIn) return;
+
+    const email = authEmail.trim();
+    const password = authPassword;
+    setAuthMessage(null);
+
+    if (!email) {
+      setAuthMessage('이메일을 입력해주세요.');
+      return;
+    }
+
+    if (authMode === 'reset') {
+      setIsLoggingIn(true);
+      try {
+        await sendPasswordResetEmail(auth, email);
+        setAuthMessage('비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.');
+      } catch (error: any) {
+        console.error('Password reset error:', error);
+        setAuthMessage(getEmailAuthErrorMessage(error));
+      } finally {
+        setIsLoggingIn(false);
+      }
+      return;
+    }
+
+    if (!password) {
+      setAuthMessage('비밀번호를 입력해주세요.');
+      return;
+    }
+
+    if (authMode === 'signup' && password !== authPasswordConfirm) {
+      setAuthMessage('비밀번호 확인이 일치하지 않습니다.');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    try {
+      await prepareEmailAuthAttempt();
+
+      if (authMode === 'signup') {
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        if (methods.length > 0 && !methods.includes('password')) {
+          setAuthMessage('같은 이메일이 이미 다른 로그인 방식으로 가입되어 있습니다. 기존 로그인 방식으로 로그인해주세요.');
+          return;
+        }
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+
+      setAuthPassword('');
+      setAuthPasswordConfirm('');
+      setIsAuthModalOpen(false);
+    } catch (error: any) {
+      console.error('Email auth error:', error);
+      setAuthMessage(getEmailAuthErrorMessage(error));
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     const showAuthError = (message: string) => {
@@ -8225,6 +8324,179 @@ ${normalizePromptForDisplay(result.prompt)}
         </Portal>
       )}
 
+
+      <AnimatePresence>
+        {isAuthModalOpen && !user && (
+          <Portal>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/68 px-4 py-6 backdrop-blur-md"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) closeAuthModal();
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.96 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#151313] shadow-[0_24px_90px_rgba(0,0,0,0.52)]"
+              >
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#D8B88C]/70">SORiDRAW</p>
+                    <h2 className="mt-1 text-lg font-black text-white">
+                      {authMode === 'signup' ? '이메일 회원가입' : authMode === 'reset' ? '비밀번호 재설정' : '로그인'}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeAuthModal}
+                    disabled={isLoggingIn}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-white/54 transition-all hover:bg-white/[0.07] hover:text-white disabled:opacity-50"
+                    aria-label="닫기"
+                    title="닫기"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/14 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('login');
+                        setAuthMessage(null);
+                      }}
+                      className={cn(
+                        "rounded-lg px-3 py-2 text-xs font-black transition-all",
+                        authMode === 'login' ? "bg-white/12 text-white" : "text-white/55 hover:text-white"
+                      )}
+                    >
+                      로그인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('signup');
+                        setAuthMessage(null);
+                      }}
+                      className={cn(
+                        "rounded-lg px-3 py-2 text-xs font-black transition-all",
+                        authMode === 'signup' ? "bg-white/12 text-white" : "text-white/55 hover:text-white"
+                      )}
+                    >
+                      회원가입
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoggingIn}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.07] px-4 py-3 text-sm font-black text-white transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#D8B88C]" />}
+                    Google로 계속하기
+                  </button>
+
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-white/10" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/32">or</span>
+                    <div className="h-px flex-1 bg-white/10" />
+                  </div>
+
+                  <form onSubmit={handleEmailAuth} className="space-y-3">
+                    <label className="block">
+                      <span className="mb-1.5 block text-[11px] font-black text-white/55">이메일</span>
+                      <input
+                        type="email"
+                        value={authEmail}
+                        onChange={(event) => setAuthEmail(event.target.value)}
+                        autoComplete="email"
+                        placeholder="name@example.com"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8B88C]/45"
+                      />
+                    </label>
+
+                    {authMode !== 'reset' && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11px] font-black text-white/55">비밀번호</span>
+                        <input
+                          type="password"
+                          value={authPassword}
+                          onChange={(event) => setAuthPassword(event.target.value)}
+                          autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                          placeholder="6자 이상"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8B88C]/45"
+                        />
+                      </label>
+                    )}
+
+                    {authMode === 'signup' && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11px] font-black text-white/55">비밀번호 확인</span>
+                        <input
+                          type="password"
+                          value={authPasswordConfirm}
+                          onChange={(event) => setAuthPasswordConfirm(event.target.value)}
+                          autoComplete="new-password"
+                          placeholder="비밀번호 다시 입력"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8B88C]/45"
+                        />
+                      </label>
+                    )}
+
+                    {authMessage && (
+                      <div className="rounded-xl border border-[#D8B88C]/20 bg-[#D8B88C]/10 px-3 py-2 text-xs font-bold leading-5 text-[#F0D37C]">
+                        {authMessage}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isLoggingIn}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#D56C7F] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
+                    >
+                      {isLoggingIn && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {authMode === 'signup' ? '이메일로 가입하기' : authMode === 'reset' ? '재설정 메일 보내기' : '이메일로 로그인'}
+                    </button>
+                  </form>
+
+                  <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-white/45">
+                    {authMode === 'reset' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setAuthMessage(null);
+                        }}
+                        className="text-[#D8B88C] hover:text-[#F0D37C]"
+                      >
+                        로그인으로 돌아가기
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('reset');
+                          setAuthMessage(null);
+                        }}
+                        className="text-[#D8B88C] hover:text-[#F0D37C]"
+                      >
+                        비밀번호를 잊으셨나요?
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          </Portal>
+        )}
+      </AnimatePresence>
 
       <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 

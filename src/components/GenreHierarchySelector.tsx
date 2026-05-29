@@ -52,9 +52,31 @@ const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
 const isInstrumentalBgmGenreId = (id?: string | null) => Boolean(id && INSTRUMENTAL_BGM_GENRE_IDS.has(id));
 
 
-function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
-  // Mood/Theme sections open without scroll anchoring. Keep Genre the same way so
-  // top-row expansion does not fight browser scroll anchoring during height animation.
+function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
+  if (wasExpanded || typeof window === 'undefined') return;
+
+  const section = trigger.closest('[data-expand-section]') as HTMLElement | null;
+  if (!section) return;
+
+  const triggerRect = trigger.getBoundingClientRect();
+  const sectionRect = section.getBoundingClientRect();
+  const edgePadding = 96;
+  const shouldAnchor =
+    sectionRect.top < edgePadding ||
+    triggerRect.bottom > window.innerHeight - edgePadding;
+
+  if (!shouldAnchor) return;
+
+  const anchorSectionTop = () => {
+    const updatedRect = section.getBoundingClientRect();
+    const targetTop = Math.max(0, window.scrollY + updatedRect.top - edgePadding);
+    if (Math.abs(window.scrollY - targetTop) > 2) {
+      window.scrollTo({ top: targetTop, behavior: 'smooth' });
+    }
+  };
+
+  window.requestAnimationFrame(() => window.setTimeout(anchorSectionTop, 80));
+  window.setTimeout(anchorSectionTop, 260);
 }
 
 function handleExpandableToggle(
@@ -699,7 +721,12 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <motion.div
+      data-expand-section
+      layout="size"
+      transition={{ layout: { duration: 0.25, ease: "easeOut" } }}
+      className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] [overflow-anchor:none]"
+    >
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -1104,6 +1131,6 @@ export default function GenreHierarchySelector({
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

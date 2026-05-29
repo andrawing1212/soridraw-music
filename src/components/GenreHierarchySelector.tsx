@@ -267,6 +267,43 @@ export default function GenreHierarchySelector({
 
   const modalHistoryDepthRef = useRef(0);
   const modalScrollYRef = useRef(0);
+  const modalTouchStartYRef = useRef<number | null>(null);
+
+  const stopModalScrollChaining = (element: HTMLElement, deltaY: number, preventDefault: () => void) => {
+    const canScroll = element.scrollHeight > element.clientHeight + 1;
+    if (!canScroll) {
+      preventDefault();
+      return;
+    }
+
+    const atTop = element.scrollTop <= 0;
+    const atBottom = Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight;
+    if ((atTop && deltaY < 0) || (atBottom && deltaY > 0)) {
+      preventDefault();
+    }
+  };
+
+  const handleModalWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    stopModalScrollChaining(event.currentTarget, event.deltaY, () => event.preventDefault());
+  };
+
+  const handleModalTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    modalTouchStartYRef.current = event.touches[0]?.clientY ?? null;
+  };
+
+  const handleModalTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    const startY = modalTouchStartYRef.current;
+    const currentY = event.touches[0]?.clientY ?? null;
+    if (startY === null || currentY === null) return;
+    stopModalScrollChaining(event.currentTarget, startY - currentY, () => event.preventDefault());
+  };
+
+  const blockModalOuterScroll = (event: React.WheelEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   // committed selections from parent
   const committedGenre = selectedGenre ?? [];
@@ -696,7 +733,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -916,8 +953,10 @@ export default function GenreHierarchySelector({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", duration: 0.4, bounce: 0.3 }}
-              className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
+              className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10"
               onClick={(e) => e.stopPropagation()}
+              onWheel={blockModalOuterScroll}
+              onTouchMove={blockModalOuterScroll}
             >
               {/* Modal Header */}
               <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
@@ -982,8 +1021,10 @@ export default function GenreHierarchySelector({
 
               <div
                 className="p-5 md:p-6 space-y-4 max-h-[60vh] md:max-h-[62vh] overflow-y-auto overscroll-contain custom-scrollbar"
-                onWheel={(e) => e.stopPropagation()}
-                onTouchMove={(e) => e.stopPropagation()}
+                style={{ overscrollBehavior: 'contain' }}
+                onWheel={handleModalWheel}
+                onTouchStart={handleModalTouchStart}
+                onTouchMove={handleModalTouchMove}
               >
                 {modalStep === "main" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">

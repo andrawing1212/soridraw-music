@@ -8758,7 +8758,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="md:col-span-2 rounded-[26px] bg-[var(--card-bg)] border border-[var(--home-card-border)] shadow-card overflow-hidden relative z-[20]">
+            <div className="md:col-span-2 rounded-[26px] bg-[var(--card-bg)] shadow-card overflow-hidden relative z-[20]">
               <div className="p-5 md:p-6 flex items-center justify-between gap-4">
                 <button
                   type="button"
@@ -10653,7 +10653,7 @@ function GenreCategorySection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -11058,7 +11058,7 @@ function CycleSection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -11460,6 +11460,11 @@ function CycleKeywordPopup({
   const localTotalSelectedCount = selectedOutsideCycleCount + localSelected.length;
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
 
+  useEffect(() => {
+    onHover(null);
+    return () => onHover(null);
+  }, [onHover]);
+
   return (
     <Portal>
       <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none">
@@ -11486,7 +11491,7 @@ function CycleKeywordPopup({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-          className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
+          className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -11558,12 +11563,6 @@ function CycleKeywordPopup({
               const isHighlightedSelected = isSelected && highlightedVariantIdSet.has(variant.id);
               const disabled = !isSelected && !isOtherSelected && isAtLimit;
               const canPointSelect = !!onToggleOtherVariant && cycle.id !== 'recommended-sound-combos' && !(variant.applyPools && variant.applyPools.length > 0);
-              const hoverItem: CategoryItem = {
-                id: variant.id,
-                label: variant.label,
-                labelKo: variant.labelKo,
-                description: variant.descriptionKo ?? variant.description,
-              };
               return (
                 <div
                   key={variant.id}
@@ -11585,10 +11584,7 @@ function CycleKeywordPopup({
 
                       setLocalSelected(nextSelected);
                       setLocalOtherSelected(nextOtherSelected);
-                      onHover({ ...hoverItem, _ts: Date.now() } as CategoryItem);
                     }}
-                    onMouseEnter={() => onHover(hoverItem)}
-                    onMouseLeave={() => onHover(null)}
                     className={cn(
                       "min-w-0 flex-1 px-4 py-3 text-left transition-all",
                       isSelected && cn(sectionAccent.selected, "soridraw-selected-strong"),
@@ -11616,10 +11612,7 @@ function CycleKeywordPopup({
 
                         setLocalSelected(nextSelected);
                         setLocalOtherSelected(nextOtherSelected);
-                        onHover({ id: `point-${variant.id}`, label: 'Point Accent', labelKo: '포인트 선택', description: `${variant.labelKo || variant.label}을 곡 전체 악기가 아닌 특정 전환/섹션 포인트로 적용합니다.`, _ts: Date.now() } as CategoryItem);
                       }}
-                      onMouseEnter={() => onHover({ id: `point-${variant.id}`, label: 'Point Accent', labelKo: '포인트 선택', description: `${variant.labelKo || variant.label}을 곡 전체 악기가 아닌 특정 전환/섹션 포인트로 적용합니다.` })}
-                      onMouseLeave={() => onHover(null)}
                       className={cn(
                         "w-12 shrink-0 border-l flex items-center justify-center transition-all",
                         isOtherSelected
@@ -11749,7 +11742,7 @@ function CategorySection({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -12100,10 +12093,10 @@ function CategorySection({
             onClick={(event) => { event.stopPropagation(); openDirectInput(); }}
             onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
             onMouseLeave={() => onHover(null)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-brand-orange transition-colors flex items-center justify-center"
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
             aria-label={`${titleKo || title} 직접 입력`}
           >
-            <Edit2 className="w-[18px] h-[18px]" />
+            <Edit2 className="w-[22px] h-[22px]" />
           </button>
         )}
       </div>
@@ -13647,7 +13640,7 @@ function SongStructureIntegratedControl({
                               className="ml-1 inline-flex items-center rounded-md px-1.5 py-1 text-[#A8C49F] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
                               title="내 섹션 수정"
                             >
-                              <Edit2 className="w-[18px] h-[18px]" />
+                              <Edit2 className="w-[22px] h-[22px]" />
                             </span>
                           )}
                           {isLocked && <Lock className="w-3 h-3" />}
@@ -15481,6 +15474,43 @@ function VocalControl({
   const initialVocalCharacterRef = useRef<NonNullable<VocalMember['character']>>({});
   const vocalCharacterBackdropPointerDownRef = useRef(false);
   const vocalCharacterCloseFromHistoryRef = useRef(false);
+  const vocalCharacterTouchStartYRef = useRef<number | null>(null);
+
+  const stopVocalCharacterScrollChaining = (element: HTMLElement, deltaY: number, preventDefault: () => void) => {
+    const canScroll = element.scrollHeight > element.clientHeight + 1;
+    if (!canScroll) {
+      preventDefault();
+      return;
+    }
+
+    const atTop = element.scrollTop <= 0;
+    const atBottom = Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight;
+    if ((atTop && deltaY < 0) || (atBottom && deltaY > 0)) {
+      preventDefault();
+    }
+  };
+
+  const handleVocalCharacterWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    stopVocalCharacterScrollChaining(event.currentTarget, event.deltaY, () => event.preventDefault());
+  };
+
+  const handleVocalCharacterTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    vocalCharacterTouchStartYRef.current = event.touches[0]?.clientY ?? null;
+  };
+
+  const handleVocalCharacterTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    const startY = vocalCharacterTouchStartYRef.current;
+    const currentY = event.touches[0]?.clientY ?? null;
+    if (startY === null || currentY === null) return;
+    stopVocalCharacterScrollChaining(event.currentTarget, startY - currentY, () => event.preventDefault());
+  };
+
+  const blockVocalCharacterOuterScroll = (event: React.WheelEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   useEffect(() => {
     onModalStateChange?.(!!editingVocalMember);
@@ -15956,7 +15986,7 @@ function VocalControl({
                             "shrink-0 p-1 text-[var(--text-secondary)] transition-colors",
                             member.gender === 'male' ? "group-hover/character:text-[#4B6280]" : "group-hover/character:text-[#73495D]"
                           )}>
-                            <Edit2 className="w-[18px] h-[18px]" />
+                            <Edit2 className="w-[22px] h-[22px]" />
                           </div>
                         </div>
                       </button>
@@ -16111,6 +16141,8 @@ function VocalControl({
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
+                onWheel={blockVocalCharacterOuterScroll}
+                onTouchMove={blockVocalCharacterOuterScroll}
                 className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
               >
                 <div className="flex items-center justify-between gap-3 bg-[#151515] px-5 py-4 shadow-[inset_0_-1px_0_rgba(101,135,97,0.08)]">
@@ -16160,7 +16192,13 @@ function VocalControl({
                   </div>
                 </div>
 
-                <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-4">
+                <div
+                  className="custom-scrollbar flex-1 overflow-y-auto overscroll-contain px-5 py-4"
+                  style={{ overscrollBehavior: 'contain' }}
+                  onWheel={handleVocalCharacterWheel}
+                  onTouchStart={handleVocalCharacterTouchStart}
+                  onTouchMove={handleVocalCharacterTouchMove}
+                >
                   <div className="space-y-5">
                     <section className="space-y-4">
                       <div className="flex items-end justify-between gap-3">

@@ -658,22 +658,9 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
 };
 
 
-function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
-  if (wasExpanded || typeof window === 'undefined') return;
-
-  // Expanding the top studio cards should not force-scroll the page.
-  // The previous anchor-to-top behavior could fight Framer Motion height animation
-  // and caused intermittent heavy stutter on Genre / Style / Sound expansion.
-  window.requestAnimationFrame(() => {
-    window.setTimeout(() => {
-      const updatedTriggerRect = trigger.getBoundingClientRect();
-      const bottomSafeSpace = 104;
-      const overflowAmount = updatedTriggerRect.bottom + bottomSafeSpace - window.innerHeight;
-      if (overflowAmount > 0) {
-        window.scrollBy({ top: overflowAmount, behavior: 'smooth' });
-      }
-    }, 90);
-  });
+function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
+  // Keep expansion purely local. Auto-scroll during height transitions can fight
+  // the browser's scroll anchoring and make the first top-row open feel choppy.
 }
 
 function handleExpandableToggle(
@@ -735,14 +722,6 @@ const resolveExpandedHeight = (preferredHeight: number | undefined, measuredHeig
   if (typeof measuredHeight === 'number' && measuredHeight > 0) return measuredHeight;
   return fallbackHeight;
 };
-
-// Top-row studio menus are heavier than mood/theme because they render folder grids and
-// also sync row heights. Giving them a stable preset height prevents the first open from
-// animating through late measurement updates. PC keeps the row visually aligned; mobile
-// keeps each menu compact and independent.
-const STUDIO_TOP_MENU_EXPANDED_HEIGHT_DESKTOP = 348;
-const STUDIO_GENRE_EXPANDED_HEIGHT_MOBILE = 216;
-const STUDIO_CYCLE_EXPANDED_HEIGHT_MOBILE = 348;
 
 const getVocalToneDisplayLabel = (toneId: string | undefined, vocalTones: VocalTone[]) => {
   if (!toneId) return '';
@@ -4429,9 +4408,6 @@ function App() {
 
   const row1MaxHeight = useMemo(() => Math.max(genreHeight, styleHeight, soundHeight), [genreHeight, styleHeight, soundHeight]);
   const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
-  const isStudioDesktopLayout = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const genreExpandedHeight = isStudioDesktopLayout ? STUDIO_TOP_MENU_EXPANDED_HEIGHT_DESKTOP : STUDIO_GENRE_EXPANDED_HEIGHT_MOBILE;
-  const styleSoundExpandedHeight = isStudioDesktopLayout ? STUDIO_TOP_MENU_EXPANDED_HEIGHT_DESKTOP : STUDIO_CYCLE_EXPANDED_HEIGHT_MOBILE;
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
@@ -8606,7 +8582,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={genreExpandedHeight}
+                forcedHeight={window.innerWidth >= 1024 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
               />
           <CycleSection 
@@ -8631,7 +8607,7 @@ ${normalizePromptForDisplay(result.prompt)}
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
-            forcedHeight={styleSoundExpandedHeight}
+            forcedHeight={window.innerWidth >= 1024 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
           <CycleSection 
@@ -8686,7 +8662,7 @@ ${normalizePromptForDisplay(result.prompt)}
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
-            forcedHeight={styleSoundExpandedHeight}
+            forcedHeight={window.innerWidth >= 1024 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
         </div>
@@ -11139,13 +11115,12 @@ function CycleSection({
 
         <motion.div
           initial={false}
-          animate={{ 
+          animate={{
             height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 64) : 64,
             opacity: 1
           }}
-          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
           className="overflow-hidden"
-          style={{ willChange: 'height' }}
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {cycles.map((cycle) => {

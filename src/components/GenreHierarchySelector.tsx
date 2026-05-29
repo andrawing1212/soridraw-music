@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CategoryItem, GenreGroupItem } from "../types";
 import { GENRE_HIERARCHY, GENRES } from "../constants";
 import {
@@ -52,21 +52,9 @@ const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
 const isInstrumentalBgmGenreId = (id?: string | null) => Boolean(id && INSTRUMENTAL_BGM_GENRE_IDS.has(id));
 
 
-function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
-  if (wasExpanded || typeof window === 'undefined') return;
-
-  // Do not force-anchor top-row cards while their height is animating.
-  // This prevents scroll/height animation from fighting each other on Genre expansion.
-  window.requestAnimationFrame(() => {
-    window.setTimeout(() => {
-      const updatedTriggerRect = trigger.getBoundingClientRect();
-      const bottomSafeSpace = 104;
-      const overflowAmount = updatedTriggerRect.bottom + bottomSafeSpace - window.innerHeight;
-      if (overflowAmount > 0) {
-        window.scrollBy({ top: overflowAmount, behavior: 'smooth' });
-      }
-    }, 90);
-  });
+function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
+  // Mood/Theme sections open without scroll anchoring. Keep Genre the same way so
+  // top-row expansion does not fight browser scroll anchoring during height animation.
 }
 
 function handleExpandableToggle(
@@ -398,7 +386,7 @@ export default function GenreHierarchySelector({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (contentRef.current) {
       const height = contentRef.current.scrollHeight;
       setContentHeight(height);
@@ -823,8 +811,8 @@ export default function GenreHierarchySelector({
         <motion.div
           initial={false}
           animate={{
-            height: isExpanded ? forcedHeight || contentHeight : 64,
-            opacity: 1,
+            height: isExpanded ? forcedHeight || contentHeight || 280 : 64,
+            opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="overflow-hidden"

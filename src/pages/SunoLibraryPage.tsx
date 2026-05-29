@@ -4666,7 +4666,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      <div className="mx-auto w-full max-w-[1320px] space-y-4 md:space-y-5">
+      <div className="mx-auto w-full max-w-[1500px] space-y-4 md:space-y-5">
         
         {/* Header Block */}
         <motion.div

@@ -264,7 +264,7 @@ export default function MyPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-20 pb-16 text-[var(--text-primary)]">
-      <div className="mx-auto w-full max-w-[1320px] space-y-7">
+      <div className="mx-auto w-full max-w-[1500px] space-y-7">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button

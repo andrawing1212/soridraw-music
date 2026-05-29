@@ -1192,7 +1192,7 @@ const SituationChoicePicker = ({
                   onClick={clearChoices}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-btn-bg border border-btn-border text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-all"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-[18px] h-[18px]" />
                   지우기
                 </button>
               )}
@@ -1406,7 +1406,7 @@ const SituationVersionPicker = ({ value, onChange }: SituationVersionPickerProps
                   onClick={clearValue}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-btn-bg border border-btn-border text-[10px] font-bold text-[var(--text-secondary)] hover:text-brand-orange transition-all"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-[18px] h-[18px]" />
                   지우기
                 </button>
               )}
@@ -1477,7 +1477,7 @@ const SituationDetailInput = ({
         className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-btn-bg border border-btn-border text-left text-xs font-bold text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange transition-all"
       >
         <span>작성 예시 보기</span>
-        {showExamples ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        {showExamples ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
       </button>
       {showExamples && (
         <div className="rounded-2xl bg-btn-bg/70 border border-btn-border p-3 space-y-2">
@@ -1711,7 +1711,7 @@ const ReorderableSectionItem = ({
         onMouseEnter={() => onHover({ id: 'section-drag', label: '순서 변경', description: '이 버튼을 누른 채 위아래로 드래그하여 순서를 변경합니다. 목록 끝에 가까워지면 자동으로 스크롤됩니다.' })}
         onMouseLeave={() => onHover(null)}
       >
-        <ArrowUpDown className="w-4 h-4" />
+        <ArrowUpDown className="w-[18px] h-[18px]" />
       </button>
 
       <span className="w-6 h-6 rounded-full bg-brand-orange/10 text-brand-orange text-[11px] font-black flex items-center justify-center shrink-0">
@@ -2671,14 +2671,14 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     <>
       {/* Top Navigation */}
       <div
-        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
+        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
       >
         <button
           type="button"
           onClick={() => goToTopNav('/')}
-          className="flex min-w-[168px] shrink-0 items-center rounded-xl px-2 py-1 text-left transition-all hover:bg-white/[0.04]"
+          className="flex min-w-[176px] shrink-0 items-center rounded-xl px-3 py-2 text-left transition-all hover:bg-white/[0.04]"
         >
-          <span className="font-display text-[18px] font-black leading-none tracking-tight bg-gradient-to-r from-[#F0D37C] via-[#F09B83] to-[#D86D8E] bg-clip-text text-transparent drop-shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+          <span className="font-display text-[22px] font-black leading-none tracking-tight bg-gradient-to-r from-[#F0D37C] via-[#F09B83] to-[#D86D8E] bg-clip-text text-transparent drop-shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
             SORiDRAW
           </span>
         </button>
@@ -2694,7 +2694,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 type="button"
                 onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
                 className={cn(
-                  "relative flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-black transition-all whitespace-nowrap sm:px-3",
+                  "relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
                   active
                     ? "bg-transparent text-white"
                     : "bg-transparent text-white/60 hover:text-white"
@@ -2703,7 +2703,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 {signalActive && (
                   <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/50 ${sunoLibrarySignalDotClass}`} />
                 )}
-                <Icon className="h-4 w-4" />
+                <Icon className="h-6 w-6" />
                 <span className="relative inline-flex items-center pb-1">
                   {item.label}
                   {active && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
@@ -2716,13 +2716,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={() => goToTopNav('/admin/users')}
               className={cn(
-                "relative flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-black transition-all whitespace-nowrap sm:px-3",
+                "relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
                 isActivePath('/admin')
                   ? "bg-transparent text-white"
                   : "bg-transparent text-white/60 hover:text-white"
               )}
             >
-              <Shield className="h-4 w-4" />
+              <Shield className="h-6 w-6" />
               <span className="relative inline-flex items-center pb-1">
                 관리자
                 {isActivePath('/admin') && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
@@ -2731,14 +2731,14 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
           )}
         </div>
 
-        <div className="flex min-w-[168px] shrink-0 items-center justify-end gap-1.5">
+        <div className="flex min-w-[176px] shrink-0 items-center justify-end gap-2.5">
           {user && (
             <>
               <a
                 href="https://www.flowmusic.app/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
+                className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08]"
                 title="Flow Music"
                 aria-label="Flow Music"
               >
@@ -2753,7 +2753,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 href="https://elevenlabs.io/app/music/history"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
+                className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08]"
                 title="ElevenLabs Music History"
                 aria-label="ElevenLabs Music History"
               >
@@ -2768,7 +2768,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 href="https://suno.com/create"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08] sm:h-9 sm:w-9"
+                className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-0 transition-all hover:border-white/20 hover:bg-white/[0.08]"
                 title="Suno Create"
                 aria-label="Suno Create"
               >
@@ -2797,12 +2797,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               <button
                 type="button"
                 onClick={() => goToTopNav('/my-page')}
-                className="flex h-8 max-w-[44px] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[12px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[140px] sm:px-3"
+                className="flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
               >
                 <img
                   src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
                   alt="Profile"
-                  className="h-[22px] w-[22px] shrink-0 rounded-md object-cover"
+                  className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
                   referrerPolicy="no-referrer"
                 />
                 <span className="hidden truncate sm:inline">{user.displayName || 'My'}</span>
@@ -2813,9 +2813,9 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleLogin}
               disabled={isLoggingIn}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-sky-400/25 bg-sky-500/10 px-3 text-[12px] font-black text-sky-200 hover:bg-sky-500/20 disabled:opacity-50 transition-all"
+              className="flex h-11 items-center gap-2.5 rounded-2xl border border-sky-400/25 bg-sky-500/10 px-4 text-[14px] font-black text-sky-200 hover:bg-sky-500/20 disabled:opacity-50 transition-all"
             >
-              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {isLoggingIn ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
               {isLoggingIn ? 'Logging in...' : 'Login'}
             </button>
           )}
@@ -2825,7 +2825,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-2 py-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden"
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
@@ -2833,39 +2833,39 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleHomeClick}
               className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
                 isActivePath('/') && "bg-[#DFA05D]/18 text-[#DFA05D]"
               )}
               aria-label="홈"
               title="홈"
             >
-              <HomeIcon className="h-[18px] w-[18px]" />
+              <HomeIcon className="h-6 w-6" />
             </button>
 
             <button
               type="button"
               onClick={handleStudioClick}
               className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
                 isActivePath('/studio') && "bg-[#DFA05D]/18 text-[#DFA05D]"
               )}
               aria-label="스튜디오"
               title="스튜디오"
             >
-              <Zap className="h-[18px] w-[18px]" />
+              <Zap className="h-6 w-6" />
             </button>
 
             <button
               type="button"
               onClick={handleHistoryClick}
               className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
                 isActivePath('/history') && "bg-[#DFA05D]/18 text-[#DFA05D]"
               )}
               aria-label="뮤직노트"
               title="뮤직노트"
             >
-              <HeartIcon className="h-[18px] w-[18px]" />
+              <HeartIcon className="h-6 w-6" />
             </button>
 
             <button
@@ -2882,7 +2882,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 setIsProfileOpen(false);
               }}
               className={cn(
-                "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
                 isActivePath('/suno-library') && "bg-[#DFA05D]/18 text-[#DFA05D]"
               )}
               aria-label="라이브러리"
@@ -2891,7 +2891,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               {sunoLibrarySignal && (
                 <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
               )}
-              <Library className="h-[18px] w-[18px]" />
+              <Library className="h-6 w-6" />
             </button>
           </div>
 
@@ -2905,7 +2905,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-transparent transition-all hover:bg-[#DFA05D]/15",
+                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#DFA05D]/15",
                     isProfileOpen && "bg-[#DFA05D]/18"
                   )}
                   aria-label="마이페이지 메뉴"
@@ -2914,7 +2914,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   <img
                     src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
                     alt="Profile"
-                    className="h-[26px] w-[26px] rounded-lg object-cover"
+                    className="h-8 w-8 rounded-xl object-cover"
                     referrerPolicy="no-referrer"
                   />
                 </button>
@@ -2923,11 +2923,11 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D] disabled:opacity-50"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D] disabled:opacity-50"
                   aria-label="로그인"
                   title="로그인"
                 >
-                  {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserIcon className="h-[18px] w-[18px]" />}
+                  {isLoggingIn ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserIcon className="h-6 w-6" />}
                 </button>
               )}
 
@@ -2938,7 +2938,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.96 }}
                     transition={{ duration: 0.16 }}
-                    className="absolute right-0 top-full z-[80] mt-2 w-32 overflow-hidden rounded-xl bg-[#181818]/96 p-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                    className="absolute right-0 top-full z-[80] mt-2 w-36 overflow-hidden rounded-2xl bg-[#181818]/96 p-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
                   >
                     {isAdminUser && (
                       <button
@@ -2948,9 +2948,9 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
                       >
-                        <Users className="h-3.5 w-3.5" />
+                        <Users className="h-5 w-5" />
                         관리자메뉴
                       </button>
                     )}
@@ -2961,9 +2961,9 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         setIsProfileOpen(false);
                         setIsExpanded(false);
                       }}
-                      className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
                     >
-                      <UserIcon className="h-3.5 w-3.5" />
+                      <UserIcon className="h-5 w-5" />
                       마이페이지
                     </button>
                     <button
@@ -2975,9 +2975,9 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                       }}
-                      className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[11px] font-black text-[#DFA05D] transition-all hover:bg-[#DFA05D]/12"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#DFA05D] transition-all hover:bg-[#DFA05D]/12"
                     >
-                      <LogOut className="h-3.5 w-3.5" />
+                      <LogOut className="h-5 w-5" />
                       로그아웃
                     </button>
                   </motion.div>
@@ -2993,13 +2993,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
+                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
                   isExpanded && "bg-[#DFA05D]/18 text-[#DFA05D]"
                 )}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
               >
-                <Menu className={cn("h-[18px] w-[18px] transition-transform", isExpanded && "rotate-90")} />
+                <Menu className={cn("h-6 w-6 transition-transform", isExpanded && "rotate-90")} />
               </button>
 
               <AnimatePresence>
@@ -3015,7 +3015,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                       href="https://www.flowmusic.app/"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
+                      className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
                       title="Flow Music"
                       aria-label="Flow Music"
                     >
@@ -3025,7 +3025,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                       href="https://elevenlabs.io/app/music/history"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
+                      className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
                       title="ElevenLabs Music History"
                       aria-label="ElevenLabs Music History"
                     >
@@ -3035,7 +3035,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                       href="https://suno.com/create"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
+                      className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white/[0.04] p-0 transition-all hover:bg-white/[0.1]"
                       title="Suno Create"
                       aria-label="Suno Create"
                     >
@@ -8504,7 +8504,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
               {/* Header */}
               <header className="studio-hero-tone pt-14 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
-                <div className="mx-auto w-full max-w-[1320px] px-4 md:px-6 relative">
+                <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
                     <button
@@ -8529,9 +8529,9 @@ ${normalizePromptForDisplay(result.prompt)}
                 </div>
               </header>
 
-            <main className="studio-tone-down mx-auto w-full max-w-[1320px] px-4 md:px-6 pt-6 pb-6 space-y-6">
+            <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {/* Selection Sections */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -8697,7 +8697,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-7 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -8758,23 +8758,23 @@ ${normalizePromptForDisplay(result.prompt)}
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="md:col-span-2 rounded-2xl bg-[var(--card-bg)] border border-[var(--home-card-border)] shadow-card overflow-hidden relative z-[20]">
-              <div className="p-4 md:p-5 flex items-center justify-between gap-3">
+            <div className="md:col-span-2 rounded-[26px] bg-[var(--card-bg)] border border-[var(--home-card-border)] shadow-card overflow-hidden relative z-[20]">
+              <div className="p-5 md:p-6 flex items-center justify-between gap-4">
                 <button
                   type="button"
                   onClick={openStoryboardModal}
                   className="flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-[#AC5045]/12 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="w-5 h-5 text-[#D79084]" />
+                    <div className="w-11 h-11 rounded-2xl bg-[#AC5045]/12 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="w-[22px] h-[22px] text-[#D79084]" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm md:text-base font-black text-[var(--text-primary)]">Storyboard</h3>
+                        <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">Storyboard</h3>
                         <span className="text-xs font-bold text-[var(--text-secondary)]">스토리보드</span>
                       </div>
-                      <p className="text-[11px] md:text-xs text-[var(--text-secondary)] truncate">
+                      <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
                       </p>
                     </div>
@@ -8796,13 +8796,13 @@ ${normalizePromptForDisplay(result.prompt)}
                     title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
                     aria-label={menuLocks.situation ? '스토리보드 잠금 해제' : '스토리보드 잠금'}
                   >
-                    {menuLocks.situation ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                    {menuLocks.situation ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
                   </button>
                   {hasActiveSituation(situation) && (
                     <button
                       type="button"
                       onClick={clearSituation}
-                      className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
                     >
                       초기화
                     </button>
@@ -8861,7 +8861,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 bg-[var(--card-bg)]/95 backdrop-blur-xl shadow-[inset_0_-1px_0_rgba(172,80,69,0.08)]">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <Users className="w-5 h-5 text-[#D79084]" />
+                            <Users className="w-[22px] h-[22px] text-[#D79084]" />
                             <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
                             <span className="text-[11px] font-bold text-[var(--text-tertiary)]">Storyboard</span>
                           </div>
@@ -8885,7 +8885,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               title="적용"
                               aria-label="스토리보드 적용"
                             >
-                              <Check className="w-4 h-4" />
+                              <Check className="w-[18px] h-[18px]" />
                             </button>
                           )}
                           <button
@@ -8895,7 +8895,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             title="닫기"
                             aria-label="스토리보드 닫기"
                           >
-                            <X className="w-4 h-4" />
+                            <X className="w-[18px] h-[18px]" />
                           </button>
                         </div>
                       </div>
@@ -9138,7 +9138,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-brand-orange/70"
                 )}
               >
-                <Languages className="w-4 h-4" />
+                <Languages className="w-[18px] h-[18px]" />
                 직접 작사
               </button>
             </div>
@@ -9347,7 +9347,7 @@ ${normalizePromptForDisplay(result.prompt)}
                               }}
                         className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-[18px] h-[18px]" />
                       </button>
                     </span>
                   );
@@ -9476,7 +9476,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       </span>
                     )}
                     <div className="flex items-center gap-2 text-[#cd8c31] font-mono text-sm tracking-widest uppercase font-bold">
-                      <Music className="w-4 h-4" />
+                      <Music className="w-[18px] h-[18px]" />
                       제목 (Title)
                     </div>
                   </div>
@@ -9549,7 +9549,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
                         )}
                       >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft className="w-[18px] h-[18px]" />
                       </button>
                       <span className="text-sm font-mono font-bold text-[var(--text-secondary)] min-w-[80px] text-center">
                         {historyIndex + 1} / {history.length}
@@ -9562,7 +9562,7 @@ ${normalizePromptForDisplay(result.prompt)}
                           "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
                         )}
                       >
-                        <ArrowRight className="w-4 h-4" />
+                        <ArrowRight className="w-[18px] h-[18px]" />
                       </button>
                     </div>
 
@@ -9719,7 +9719,7 @@ ${normalizePromptForDisplay(result.prompt)}
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#cd8c31] hover:text-white hover:bg-[#cd8c31]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
                 </button>
               </div>
 
@@ -10653,7 +10653,7 @@ function GenreCategorySection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -10714,7 +10714,7 @@ function GenreCategorySection({
                 : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
             )}
           >
-            <Dices className="w-4 h-4" />
+            <Dices className="w-[18px] h-[18px]" />
           </button>
           <button
             onClick={onClear}
@@ -10726,13 +10726,13 @@ function GenreCategorySection({
             onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-2.5 rounded-xl transition-all border shadow-btn",
+              "p-3 rounded-xl transition-all border shadow-btn",
               (!!selectedChild || isRandomized)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
                 : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
             )}
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>
@@ -10821,7 +10821,7 @@ function GenreCategorySection({
         } as React.CSSProperties}
       >
         {selectedChild ? (
-          <p className={cn("text-sm font-black soridraw-selected-summary", sectionAccent.text)}>
+          <p className={cn("text-[15px] font-black soridraw-selected-summary", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
@@ -10888,7 +10888,7 @@ function GenreSelectModal({
             onClick={onClose}
             className="w-9 h-9 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center"
           >
-            <X className="w-4 h-4" />
+            <X className="w-[18px] h-[18px]" />
           </button>
         </div>
 
@@ -11058,7 +11058,7 @@ function CycleSection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -11066,12 +11066,12 @@ function CycleSection({
               <h3
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0", titleClassName ?? "text-[20px]")}
+                className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0", titleClassName ?? "text-[22px]")}
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 {countLabel && (
-                  <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-1 shrink-0">({countLabel})</span>
+                  <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
                 )}
               </h3>
               <AnimatePresence>
@@ -11100,7 +11100,7 @@ function CycleSection({
                 onTouchStart={() => onLongPressStart({ id: `cycle-lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
-                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                  "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
                     ? sectionAccent.selected
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -11108,24 +11108,24 @@ function CycleSection({
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
               >
-                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                {isLocked ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
               </button>
             )}
-            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
-              <Dices className="w-4 h-4" />
+            <button onClick={onRandom} className={cn("p-3 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
+              <Dices className="w-[18px] h-[18px]" />
             </button>
             <button 
               onClick={onClear}
               onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', labelKo: '초기화', description: `${title} 설정을 초기화합니다.` })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2.5 rounded-xl transition-all border shadow-btn",
+                "p-3 rounded-xl transition-all border shadow-btn",
                 (activeSelected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-[18px] h-[18px]" />
             </button>
           </div>
         </div>
@@ -11133,13 +11133,13 @@ function CycleSection({
         <motion.div
           initial={false}
           animate={{
-            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 64) : 64,
+            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden"
+          className="soridraw-expand-content overflow-hidden min-h-[76px]"
         >
-          <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+          <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
             {cycles.map((cycle) => {
               const selectedVariants = cycle.variants.filter((variant) => variant.kind !== 'separator' && selected.includes(variant.id));
               const pointSelectedVariants = cycle.variants.filter((variant) => variant.kind !== 'separator' && pointSelected.includes(variant.id));
@@ -11176,7 +11176,7 @@ function CycleSection({
                   onTouchStart={() => onLongPressStart(hoverItem)}
                   onTouchEnd={onLongPressEnd}
                   className={cn(
-                    "min-h-[48px] rounded-xl border px-3 py-2 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
+                    "min-h-[58px] rounded-2xl border px-4 py-2.5 text-center transition-all flex items-center justify-center relative shadow-btn overflow-visible",
                     selectedVariants.length > 0
                       ? hasHighlightedSelectedVariant
                         ? "bg-sky-500/32 text-[#111111] border-sky-300/35 font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
@@ -11186,7 +11186,7 @@ function CycleSection({
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
-                  <span className="text-[13px] md:text-[13.5px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
+                  <span className="text-[14px] md:text-[15px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
                     {folderLabel}
                   </span>
                   {selectedCountInCycle > 0 && (
@@ -11229,7 +11229,7 @@ function CycleSection({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-4 h-[56px] rounded-2xl border border-dashed px-3 py-2 flex items-center justify-center text-center overflow-hidden transition-all",
+          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
@@ -11252,7 +11252,7 @@ function CycleSection({
             ))}
           </div>
         ) : (
-          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
+          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
         )}
@@ -11629,7 +11629,7 @@ function CycleKeywordPopup({
                       title={isOtherSelected ? '포인트 선택 해제' : '포인트 선택'}
                       aria-label={`${variant.labelKo || variant.label} 포인트 선택`}
                     >
-                      <Zap className="w-4 h-4" />
+                      <Zap className="w-[18px] h-[18px]" />
                     </button>
                   )}
                 </div>
@@ -11749,7 +11749,7 @@ function CategorySection({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -11757,11 +11757,11 @@ function CategorySection({
               <h3 
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
+                className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
+                <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -11790,7 +11790,7 @@ function CategorySection({
                 onTouchStart={() => onLongPressStart({ id: `lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
-                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                  "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
                     ? sectionAccent.selected
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -11798,7 +11798,7 @@ function CategorySection({
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
               >
-                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                {isLocked ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
               </button>
             )}
             <button 
@@ -11811,13 +11811,13 @@ function CategorySection({
               onTouchStart={() => onLongPressStart({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "p-2.5 rounded-xl transition-all shadow-btn",
+                "p-3 rounded-xl transition-all shadow-btn",
                 isRandomized 
                   ? sectionAccent.selected 
                   : "bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover"
               )}
             >
-              <Dices className="w-4 h-4" />
+              <Dices className="w-[18px] h-[18px]" />
             </button>
             {!hidePin && onUnpinAll && (
               <button 
@@ -11829,9 +11829,9 @@ function CategorySection({
                 }}
                 onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
                 onTouchEnd={onLongPressEnd}
-                className="p-2.5 rounded-xl bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover transition-all shadow-btn"
+                className="p-3 rounded-xl bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover transition-all shadow-btn"
               >
-                <PinOff className="w-4 h-4" />
+                <PinOff className="w-[18px] h-[18px]" />
               </button>
             )}
             <button 
@@ -11844,13 +11844,13 @@ function CategorySection({
               onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "p-2.5 rounded-xl transition-all border shadow-btn",
+                "p-3 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-[18px] h-[18px]" />
             </button>
           </div>
         </div>
@@ -11858,11 +11858,11 @@ function CategorySection({
         <motion.div
           initial={false}
           animate={{ 
-            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 40 : 84) : (window.innerWidth < 768 ? 40 : 84),
+            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 48 : 96) : (window.innerWidth < 768 ? 48 : 96),
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden min-h-[40px] md:min-h-[84px]"
+          className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px]"
         >
           <div
             ref={contentRef}
@@ -11885,10 +11885,10 @@ function CategorySection({
 
             const labelLength = String(displayLabel ?? '').replace(/\s+/g, '').length;
             const uniformLabelTextClass = labelLength >= 6
-              ? "text-[10px] md:text-[10.5px] leading-[1.05]"
+              ? "text-[11px] md:text-[11.5px] leading-[1.05]"
               : labelLength >= 4
                 ? "text-[11px] md:text-[11.5px] leading-[1.08]"
-                : "text-[12px] md:text-[12.5px] leading-tight";
+                : "text-[13px] md:text-[13.5px] leading-tight";
 
             if (isKpop) {
               if (kpopMode === 2) {
@@ -11965,8 +11965,8 @@ function CategorySection({
                   }}
                   className={cn(
                     uniformKeywordGrid
-                      ? "w-full min-w-0 h-10 md:h-11 px-1.5 py-1 rounded-xl font-bold transition-all border flex items-center justify-center text-center shadow-btn"
-                      : "px-3.5 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-2 shadow-btn",
+                      ? "w-full min-w-0 h-11 md:h-12 px-2 py-1.5 rounded-xl font-bold transition-all border flex items-center justify-center text-center shadow-btn"
+                      : "px-4 py-3 rounded-xl text-[14px] font-bold transition-all border flex items-center gap-2 shadow-btn",
                     (isKpop || isCitypop) ? "min-w-[120px] justify-center" : "",
                     isSelected
                       ? sectionAccent.selected
@@ -12041,7 +12041,7 @@ function CategorySection({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
+          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
@@ -12074,7 +12074,7 @@ function CategorySection({
               className={cn("shrink-0 w-8 h-8 bg-transparent border-0 transition-colors flex items-center justify-center", sectionAccent.text)}
               aria-label="직접입력 적용"
             >
-              <Check className="w-4 h-4" />
+              <Check className="w-[18px] h-[18px]" />
             </button>
             <button
               type="button"
@@ -12082,15 +12082,15 @@ function CategorySection({
               className="shrink-0 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-red-400 transition-colors flex items-center justify-center"
               aria-label="직접입력 취소"
             >
-              <X className="w-4 h-4" />
+              <X className="w-[18px] h-[18px]" />
             </button>
           </div>
         ) : selected.length > 0 ? (
-          <p className={cn("text-sm font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
+          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
             {selected.map(id => resolveSelectedLabel(id)).join(', ')}
           </p>
         ) : (
-          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.softText)}>
+          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.softText)}>
             키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
           </p>
         )}
@@ -12103,7 +12103,7 @@ function CategorySection({
             className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-brand-orange transition-colors flex items-center justify-center"
             aria-label={`${titleKo || title} 직접 입력`}
           >
-            <Edit2 className="w-4 h-4" />
+            <Edit2 className="w-[18px] h-[18px]" />
           </button>
         )}
       </div>
@@ -13562,7 +13562,7 @@ function SongStructureIntegratedControl({
                       title="변경 적용"
                       aria-label="변경 적용"
                     >
-                      <Check className="w-4 h-4" />
+                      <Check className="w-[18px] h-[18px]" />
                     </button>
                   )}
                   <button
@@ -13571,7 +13571,7 @@ function SongStructureIntegratedControl({
                     aria-label={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "섹션 커스텀 닫기"}
                     title={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "닫기"}
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-[18px] h-[18px]" />
                   </button>
                 </div>
               </div>
@@ -13647,7 +13647,7 @@ function SongStructureIntegratedControl({
                               className="ml-1 inline-flex items-center rounded-md px-1.5 py-1 text-[#A8C49F] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
                               title="내 섹션 수정"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Edit2 className="w-[18px] h-[18px]" />
                             </span>
                           )}
                           {isLocked && <Lock className="w-3 h-3" />}
@@ -13686,7 +13686,7 @@ function SongStructureIntegratedControl({
                               {editingCustomSectionId ? '한글은 설명용, 영어는 실제 가사 태그용입니다.' : '한글 섹션명만 입력하면 영어 태그명은 자동 생성됩니다.'}
                             </p>
                           </div>
-                          <button type="button" onClick={() => closeCustomSectionEditor()} className="p-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => closeCustomSectionEditor()} className="p-2 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-[var(--text-secondary)]"><X className="w-[18px] h-[18px]" /></button>
                         </div>
                         <input
                           value={customSectionDraft.labelKo}
@@ -14058,7 +14058,7 @@ function SongStructureIntegratedControl({
                   onClick={() => closeSavedSectionsModal()}
                   className="w-9 h-9 rounded-xl border border-[var(--modal-soft-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-[18px] h-[18px]" />
                 </button>
               </div>
               <div className="flex-1 min-h-0 p-3 overflow-hidden">
@@ -14101,7 +14101,7 @@ function SongStructureIntegratedControl({
                   onClick={() => closeSaveStructureModal()}
                   className="w-9 h-9 rounded-xl border border-[var(--modal-button-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center justify-center shrink-0"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-[18px] h-[18px]" />
                 </button>
               </div>
               <div className="p-5 space-y-4">
@@ -14739,7 +14739,7 @@ function TagEditModal({
                       {editingCustomTagId ? '한글은 설명용, 영어는 실제 태그용입니다.' : '한글 태그명만 입력하면 영어 실행 태그는 자동 생성됩니다.'}
                     </p>
                   </div>
-                  <button type="button" onClick={() => closeCustomTagEditor()} className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
+                  <button type="button" onClick={() => closeCustomTagEditor()} className="p-2 rounded-xl bg-btn-bg border border-btn-border text-[var(--text-secondary)]"><X className="w-[18px] h-[18px]" /></button>
                 </div>
                 <input
                   value={customTagDraft.labelKo}
@@ -15743,7 +15743,7 @@ function VocalControl({
         <motion.div 
           animate={{ height: contentHeight }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden"
+          className="soridraw-expand-content overflow-hidden min-h-[76px]"
         >
           <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}
@@ -15921,7 +15921,7 @@ function VocalControl({
                           onMouseLeave={() => onHover(null)}
                           className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover/member:opacity-100"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-[18px] h-[18px]" />
                         </button>
                       )}
                     </div>
@@ -15956,7 +15956,7 @@ function VocalControl({
                             "shrink-0 p-1 text-[var(--text-secondary)] transition-colors",
                             member.gender === 'male' ? "group-hover/character:text-[#4B6280]" : "group-hover/character:text-[#73495D]"
                           )}>
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-[18px] h-[18px]" />
                           </div>
                         </div>
                       </button>

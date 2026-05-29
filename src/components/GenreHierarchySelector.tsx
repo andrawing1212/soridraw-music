@@ -716,7 +716,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -724,11 +724,11 @@ export default function GenreHierarchySelector({
               <h3
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
-                className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help min-w-0"
+                className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", genreAccent.bar)} />
                 <span className="truncate">장르</span>
-                <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
+                <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
                   ({selectedCount}/{totalCount})
                 </span>
               </h3>
@@ -767,7 +767,7 @@ export default function GenreHierarchySelector({
                 }
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                  "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
                     ? genreAccent.selected
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover",
@@ -775,7 +775,7 @@ export default function GenreHierarchySelector({
                 title={isLocked ? "잠금 해제" : "메뉴 잠금"}
                 aria-label={isLocked ? "장르 잠금 해제" : "장르 잠금"}
               >
-                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                {isLocked ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
               </button>
             )}
             <button
@@ -791,14 +791,14 @@ export default function GenreHierarchySelector({
               }
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
                 isRandomized
                   ? genreAccent.selected
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover",
               )}
               title="랜덤 선택"
             >
-              <Dices className="w-4 h-4" />
+              <Dices className="w-[18px] h-[18px]" />
             </button>
             <button
               onClick={onClear}
@@ -813,14 +813,14 @@ export default function GenreHierarchySelector({
               }
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2.5 rounded-xl transition-all border shadow-btn",
+                "p-3 rounded-xl transition-all border shadow-btn",
                 selectedCount > 0 || isRandomized
                   ? genreAccent.selectedSoft
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
               )}
               title="초기화"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-[18px] h-[18px]" />
             </button>
           </div>
         </div>
@@ -828,13 +828,13 @@ export default function GenreHierarchySelector({
         <motion.div
           initial={false}
           animate={{
-            height: isExpanded ? forcedHeight || contentHeight || 280 : 64,
+            height: isExpanded ? forcedHeight || contentHeight || 320 : 76,
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden"
+          className="soridraw-expand-content overflow-hidden min-h-[76px]"
         >
-          <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
+          <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
             {groups.map((group) => {
               const hasSelectedMain = group.children.some((main) =>
                 committedGenre.includes(main.id) ||
@@ -858,13 +858,13 @@ export default function GenreHierarchySelector({
                   }
                   onMouseLeave={() => onHover(null)}
                   className={cn(
-                    "min-h-[48px] rounded-xl border px-3 py-2 text-left transition-all flex items-center justify-center shadow-btn",
+                    "min-h-[58px] rounded-2xl border px-4 py-2.5 text-left transition-all flex items-center justify-center shadow-btn",
                     hasSelectedMain
                       ? genreAccent.selected
                       : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                   )}
                 >
-                  <span className="text-[12px] md:text-[13px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                  <span className="text-[13px] md:text-[14.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
                 </button>
@@ -889,7 +889,7 @@ export default function GenreHierarchySelector({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-4 h-[56px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
+          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
@@ -904,11 +904,11 @@ export default function GenreHierarchySelector({
         title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}
       >
         {selectedDisplayLabels.length > 0 ? (
-          <p className={cn("text-sm font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
+          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
             {selectedDisplayLabels.join(" · ")}
           </p>
         ) : (
-          <p className={cn("text-sm font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.softText)}>
+          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.softText)}>
             장르를 선택하세요.
           </p>
         )}

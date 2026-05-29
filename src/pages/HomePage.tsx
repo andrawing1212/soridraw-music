@@ -53,7 +53,7 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
 
   return (
     <main className="min-h-screen overflow-hidden bg-[var(--bg-primary)] text-white">
-      <section className="relative mx-auto flex w-full max-w-[1320px] flex-col gap-8 px-4 pb-16 pt-24 md:px-6 md:pt-28">
+      <section className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-4 pb-16 pt-24 md:px-6 md:pt-28">
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
           <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#171414]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:p-8 lg:p-10">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#D8B88C]/45 to-transparent" />

@@ -4754,11 +4754,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         {libraryViewMode === 'workspace' && (
           <>
         {loading || sharedTrackLoading ? (
-          <div className="!mt-2 border-t border-[#658761]/24 pt-4 flex items-center justify-center py-16 shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
+          <div className="!mt-2 pt-4 flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-[#658761]" />
           </div>
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
-          <div className="!mt-2 border-t border-[#658761]/24 pt-4 flex flex-col items-center justify-center py-16 text-center shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
+          <div className="!mt-2 pt-4 flex flex-col items-center justify-center py-16 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
@@ -4766,7 +4766,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="!mt-2 border-t border-[#658761]/24 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#658761]/16 bg-white/[0.015] shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]"
+            className="!mt-2 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#658761]/16 bg-white/[0.015]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -4779,7 +4779,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="!mt-2 border-t border-[#658761]/24 pt-4 space-y-4 md:space-y-5 shadow-[inset_0_1px_0_rgba(101,135,97,0.08)]">
+          <div className="!mt-2 pt-4 space-y-4 md:space-y-5">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])

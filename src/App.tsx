@@ -4039,10 +4039,7 @@ function App() {
     };
 
     try {
-      // Save rememberLogin preference to localStorage immediately on login attempt
       localStorage.setItem('rememberLogin', String(rememberLogin));
-      
-      await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
 
       // Environment check
       const hostname = window.location.hostname;

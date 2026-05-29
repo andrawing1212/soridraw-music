@@ -3913,6 +3913,32 @@ function App() {
   const handleLogin = async () => {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
+    const showAuthError = (message: string) => {
+      setToast({ message, visible: true });
+      setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 5000);
+    };
+    const getAuthErrorMessage = (error: any) => {
+      const code = error?.code || 'unknown';
+      const currentDomain = window.location.hostname;
+
+      if (code === 'auth/unauthorized-domain') {
+        return `Firebase Auth 승인 도메인에 ${currentDomain}을 추가해야 Google 로그인이 가능합니다.`;
+      }
+      if (code === 'auth/popup-blocked') {
+        return '브라우저가 Google 로그인 팝업을 차단했습니다. redirect 로그인으로 다시 시도합니다.';
+      }
+      if (code === 'auth/popup-closed-by-user') {
+        return 'Google 로그인 팝업이 닫혀 로그인이 취소되었습니다.';
+      }
+      if (code === 'auth/cancelled-popup-request') {
+        return '이전 Google 로그인 팝업 요청이 취소되었습니다. redirect 로그인으로 다시 시도합니다.';
+      }
+      if (code === 'auth/account-exists-with-different-credential') {
+        return '같은 이메일이 이미 다른 로그인 방식으로 가입되어 있습니다. 기존 로그인 방식으로 로그인해주세요.';
+      }
+      return `Google 로그인에 실패했습니다. (${code})`;
+    };
+
     try {
       // Save rememberLogin preference to localStorage immediately on login attempt
       localStorage.setItem('rememberLogin', String(rememberLogin));
@@ -3923,6 +3949,7 @@ function App() {
       const hostname = window.location.hostname;
       const isStudio = hostname.includes('aistudio.google.com') || hostname.includes('googleusercontent.com');
       const isDev = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+      const canUseRedirectFallback = !isStudio && !isDev;
       
       console.log('LOGIN MODE CHECK:', { hostname, isStudio, isDev });
 
@@ -3932,24 +3959,30 @@ function App() {
         result = await signInWithPopup(auth, googleProvider);
       } catch (popupError: any) {
         console.log(`[Auth] Popup attempt failed/cancelled with code: ${popupError.code}`);
+        const authErrorMessage = getAuthErrorMessage(popupError);
         
-        // 1. If user intentionally closed the popup, do not fallback
         if (popupError.code === 'auth/popup-closed-by-user') {
           console.log("[Auth] Login cancelled: User closed the popup.");
+          showAuthError(authErrorMessage);
           return;
         }
 
-        // 2. Fallback to redirect ONLY in non-studio/non-dev environments (Production)
-        // AND only for specific blocking error codes
-        if (!isStudio && !isDev) {
-          if (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/cancelled-popup-request') {
-            console.log("[Auth] Fallback: Initiating signInWithRedirect due to popup blocking/cancellation");
-            await signInWithRedirect(auth, googleProvider);
-            return; // Exit as page will redirect
-          }
+        if (popupError.code === 'auth/unauthorized-domain') {
+          console.error(`[Auth] Unauthorized domain for Firebase Auth: ${hostname}`);
+          showAuthError(authErrorMessage);
+          return;
         }
 
-        // Otherwise, throw error to be handled by outer catch
+        if (
+          canUseRedirectFallback &&
+          (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/cancelled-popup-request')
+        ) {
+          console.log("[Auth] Fallback: Initiating signInWithRedirect due to popup blocking/cancellation");
+          showAuthError(authErrorMessage);
+          await signInWithRedirect(auth, googleProvider);
+          return; // Exit as page will redirect
+        }
+
         throw popupError;
       }
 
@@ -3965,6 +3998,7 @@ function App() {
       }
     } catch (error: any) {
       console.error("Login Error Details:", error);
+      showAuthError(getAuthErrorMessage(error));
     } finally {
       // Small delay in resetting state to allow Auth listeners to update if needed
       setTimeout(() => setIsLoggingIn(false), 500);
@@ -3988,6 +4022,13 @@ function App() {
         }
       } catch (error: any) {
         console.error("Redirect Login Result Error:", error);
+        const code = error?.code || 'unknown';
+        const currentDomain = window.location.hostname;
+        const message = code === 'auth/unauthorized-domain'
+          ? `Firebase Auth 승인 도메인에 ${currentDomain}을 추가해야 Google 로그인이 가능합니다.`
+          : `Google redirect 로그인에 실패했습니다. (${code})`;
+        setToast({ message, visible: true });
+        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 5000);
       } finally {
         setIsLoggingIn(false);
       }

@@ -575,15 +575,55 @@ const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
   badgeAccent: '#658761',
 };
 
-const STUDIO_CATEGORY_ACCENTS: Record<'genre' | 'style' | 'sound' | 'mood' | 'theme' | 'vocal' | 'structure' | 'tempo', StudioSectionAccent> = {
-  genre: STUDIO_ACCENT_AMBER,
-  style: STUDIO_ACCENT_AMBER,
-  sound: STUDIO_ACCENT_AMBER,
-  mood: STUDIO_ACCENT_RED,
-  theme: STUDIO_ACCENT_RED,
-  vocal: STUDIO_ACCENT_GREEN,
-  structure: STUDIO_ACCENT_GREEN,
-  tempo: STUDIO_ACCENT_GREEN,
+type StudioMenuThemeKey = 'amber' | 'red' | 'green';
+type StudioMenuCategory = 'genre' | 'style' | 'sound' | 'mood' | 'theme' | 'vocal' | 'section' | 'structure' | 'tempo';
+
+const STUDIO_MENU_THEME_CLASSES: Record<StudioMenuThemeKey, StudioSectionAccent> = {
+  amber: STUDIO_ACCENT_AMBER,
+  red: STUDIO_ACCENT_RED,
+  green: STUDIO_ACCENT_GREEN,
+};
+
+const STUDIO_MENU_THEME_BY_CATEGORY: Record<StudioMenuCategory, StudioMenuThemeKey> = {
+  genre: 'amber',
+  style: 'amber',
+  sound: 'amber',
+  mood: 'red',
+  theme: 'red',
+  vocal: 'green',
+  section: 'green',
+  structure: 'green',
+  tempo: 'green',
+};
+
+const getMenuThemeClass = (category: StudioMenuCategory): StudioSectionAccent =>
+  STUDIO_MENU_THEME_CLASSES[STUDIO_MENU_THEME_BY_CATEGORY[category]];
+
+const getMenuPanelClass = (category: StudioMenuCategory, state: 'active' | 'rest' | 'hover' = 'rest') => {
+  const theme = getMenuThemeClass(category);
+  if (state === 'active') return theme.summaryActive;
+  if (state === 'hover') return theme.summaryHover;
+  return theme.summaryRest;
+};
+
+const getKeywordChipClass = (category: StudioMenuCategory, isRandom = false) => {
+  const theme = getMenuThemeClass(category);
+  if (isRandom) {
+    return `${theme.selectedSoft} font-bold shadow-[0_8px_18px_rgba(0,0,0,0.10)]`;
+  }
+  return `${theme.selectedSoft} shadow-[0_8px_18px_rgba(0,0,0,0.10)]`;
+};
+
+const STUDIO_CATEGORY_ACCENTS: Record<StudioMenuCategory, StudioSectionAccent> = {
+  genre: getMenuThemeClass('genre'),
+  style: getMenuThemeClass('style'),
+  sound: getMenuThemeClass('sound'),
+  mood: getMenuThemeClass('mood'),
+  theme: getMenuThemeClass('theme'),
+  vocal: getMenuThemeClass('vocal'),
+  section: getMenuThemeClass('section'),
+  structure: getMenuThemeClass('structure'),
+  tempo: getMenuThemeClass('tempo'),
 };
 
 const getStudioSectionAccent = (section?: string): StudioSectionAccent => {
@@ -603,16 +643,16 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
   const normalized = String(typeOrKey || '').toLowerCase();
 
   if (normalized.includes('vocal') || normalized.includes('section') || normalized.includes('structure') || normalized.includes('tempo') || normalized.includes('bpm')) {
-    return 'bg-[#658761]/12 border-black/20 text-[#A8C49F] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
+    return getKeywordChipClass('section', isRandom);
   }
   if (normalized.includes('mood') || normalized.includes('atmosphere') || normalized.includes('theme') || normalized.includes('topic')) {
-    return 'bg-[#AC5045]/12 border-black/20 text-[#D79084] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
+    return getKeywordChipClass('mood', isRandom);
   }
   if (normalized.includes('genre') || normalized === 'subgenre' || normalized.includes('style') || normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
-    return 'bg-[#DFA05D]/12 border-black/20 text-[#E8B878] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
+    return getKeywordChipClass('genre', isRandom);
   }
   if (isRandom) {
-    return 'bg-[#DFA05D]/16 border-black/20 text-[#E8B878] font-bold shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
+    return getKeywordChipClass('genre', true);
   }
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)]';
 };

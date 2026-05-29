@@ -2013,7 +2013,7 @@ ${song.prompt}
 
   return (
     <div 
-      className="soridraw-musicnote-theme mx-auto w-full max-w-[1500px] px-4 md:px-6 pt-28 pb-12 font-sans relative"
+      className="soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative"
       onClickCapture={(e) => {
         if (!isSelectionMode) return;
         const target = e.target as HTMLElement;
@@ -2041,18 +2041,23 @@ ${song.prompt}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      <div className="mb-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 translate-y-2 md:translate-y-3">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
+        className="mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+      >
           <div>
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
-              <HeartIcon className="w-8 h-8 md:w-10 md:h-10 text-[#AC5045] shrink-0" />
+            <h1 className="text-3xl md:text-5xl font-black leading-none tracking-tight text-white font-display flex items-center gap-3">
+              <HeartIcon className="w-9 h-9 text-[#AC5045] shrink-0" />
               <span>Music <span className="text-[#AC5045]">Note</span></span>
             </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
           </div>
 
-        </div>
+      </motion.div>
 
+      <div className="space-y-4 md:space-y-5">
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex items-center gap-2 flex-1 min-w-[260px]">
             <button
@@ -2138,7 +2143,7 @@ ${song.prompt}
       
 
       {favorites.length === 0 ? (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+        <div className="mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">아직 저장된 곡이 없습니다.</p>
           <Link to="/" className="mt-6 text-[#AC5045] font-bold hover:underline">
@@ -2146,12 +2151,12 @@ ${song.prompt}
           </Link>
         </div>
       ) : filteredFavorites.length === 0 ? (
-        <div className="min-h-[30vh] flex flex-col items-center justify-center text-center">
+        <div className="mt-3 min-h-[30vh] flex flex-col items-center justify-center text-center">
           <Search className="w-10 h-10 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="space-y-12">
+        <div className="mt-3 space-y-12">
           <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
@@ -2166,9 +2171,8 @@ ${song.prompt}
               return (
                 <motion.div
                   key={song.id}
-                  layout
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
                   onClick={(e) => {
                     if (longPressTriggeredRef.current) {
                       longPressTriggeredRef.current = false;

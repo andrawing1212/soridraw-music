@@ -4285,10 +4285,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           )}
         </div>
 
-        <div className="mx-auto mt-1 mb-1 flex w-full items-start gap-3 rounded-2xl border border-[#658761]/12 bg-[#658761]/10 px-4 py-3 text-xs leading-relaxed text-[#C7D7C0]/80 shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#A8C49F]/85" />
-          <p>API로 생성된 곡은 일정 기간 후 만료되거나 외부 서버 상태에 따라 재생이 제한될 수 있습니다. 중요한 곡은 생성 직후 다운로드해 보관해주세요.</p>
-        </div>
       </>
     );
   };
@@ -4684,7 +4680,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white font-display flex items-center gap-3">
+              <h1 className="text-3xl md:text-5xl font-black leading-none tracking-tight text-white font-display flex items-center gap-3">
                 <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#658761] shrink-0">
                   <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
                   <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
@@ -4692,7 +4688,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </div>
                 {isSharedView ? '공유된 음악' : <>Suno <span className="text-[#658761]">Library</span></>}
               </h1>
-              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-1">
+              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2">
                 {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
               </p>
             </div>
@@ -4708,15 +4704,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   남은 크레딧 {remainingCredits.toLocaleString()}
                 </div>
               )}
-              <button
-                onClick={() => navigate('/suno-api-settings')}
-                className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-xs font-bold text-white/70 hover:text-[#658761] transition-all"
-                title="Music API 설정"
-              >
-                <Settings className="w-4 h-4" />
-                API 설정
-              </button>
-
             </>
           )}
           </div>
@@ -4733,14 +4720,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   {remainingCredits.toLocaleString()} credit
                 </div>
               )}
-              <button
-                onClick={() => navigate('/suno-api-settings')}
-                className="h-12 flex items-center gap-2 px-4 rounded-xl text-sm font-bold bg-[var(--bg-secondary)] border border-btn-border hover:bg-btn-hover transition-all"
-                title="Music API 설정"
-              >
-                <Settings className="w-4 h-4" />
-                API 설정
-              </button>
             </div>
           )}
         </div>
@@ -4754,11 +4733,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         {libraryViewMode === 'workspace' && (
           <>
         {loading || sharedTrackLoading ? (
-          <div className="!mt-2 pt-4 flex items-center justify-center py-16">
+          <div className="!mt-3 pt-0 flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-[#658761]" />
           </div>
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
-          <div className="!mt-2 pt-4 flex flex-col items-center justify-center py-16 text-center">
+          <div className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
@@ -4766,7 +4745,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="!mt-2 pt-4 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#658761]/16 bg-white/[0.015]"
+            className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#658761]/16 bg-white/[0.015]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -4779,7 +4758,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="!mt-2 pt-4 space-y-4 md:space-y-5">
+          <div className="!mt-3 pt-0 space-y-4 md:space-y-5">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
@@ -5042,7 +5021,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
 
         {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
-          <div className="space-y-5 mt-5">
+          <div className="space-y-5 mt-3">
             {/* Playlist Tabs Layout */}
             
             {libraryViewMode === 'playlist' && (

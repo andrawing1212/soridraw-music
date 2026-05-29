@@ -4408,51 +4408,14 @@ function App() {
   }, []);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
-    const isPC = window.innerWidth >= 1024;
-    if (isPC) {
-      const nextState = !isGenreExpanded;
-      setIsGenreExpanded(nextState);
-      setIsStyleExpanded(nextState);
-      setIsSoundExpanded(nextState);
-    } else {
-      if (section === 'genre') setIsGenreExpanded(!isGenreExpanded);
-      else if (section === 'style') setIsStyleExpanded(!isStyleExpanded);
-      else if (section === 'sound') setIsSoundExpanded(!isSoundExpanded);
-    }
+    if (section === 'genre') setIsGenreExpanded(prev => !prev);
+    else if (section === 'style') setIsStyleExpanded(prev => !prev);
+    else if (section === 'sound') setIsSoundExpanded(prev => !prev);
   };
 
-  const wasDesktopLayoutRef = useRef(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
-
-  useEffect(() => {
-    const syncMainSectionExpansionOnResize = () => {
-      const isPC = window.innerWidth >= 1024;
-      const wasPC = wasDesktopLayoutRef.current;
-
-      if (isPC && !wasPC) {
-        const shouldExpandAll = isGenreExpanded || isStyleExpanded || isSoundExpanded;
-        setIsGenreExpanded(shouldExpandAll);
-        setIsStyleExpanded(shouldExpandAll);
-        setIsSoundExpanded(shouldExpandAll);
-      }
-
-      wasDesktopLayoutRef.current = isPC;
-    };
-
-    syncMainSectionExpansionOnResize();
-    window.addEventListener('resize', syncMainSectionExpansionOnResize);
-    return () => window.removeEventListener('resize', syncMainSectionExpansionOnResize);
-  }, [isGenreExpanded, isStyleExpanded, isSoundExpanded]);
-
   const toggleSubSections = (section: 'mood' | 'theme') => {
-    const isPC = window.innerWidth >= 1024;
-    if (isPC) {
-      const nextState = !isMoodExpanded;
-      setIsMoodExpanded(nextState);
-      setIsThemeExpanded(nextState);
-    } else {
-      if (section === 'mood') setIsMoodExpanded(!isMoodExpanded);
-      else if (section === 'theme') setIsThemeExpanded(!isThemeExpanded);
-    }
+    if (section === 'mood') setIsMoodExpanded(prev => !prev);
+    else if (section === 'theme') setIsThemeExpanded(prev => !prev);
   };
 
   const [genreHeight, setGenreHeight] = useState(0);

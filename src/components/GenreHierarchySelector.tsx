@@ -12,6 +12,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -639,17 +640,10 @@ export default function GenreHierarchySelector({
   useEffect(() => {
     if (!activeGroup) return;
 
-    modalScrollYRef.current = window.scrollY;
-
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalBodyPosition = document.body.style.position;
-    const originalBodyTop = document.body.style.top;
-    const originalBodyWidth = document.body.style.width;
-    const originalBodyTouchAction = document.body.style.touchAction;
-    const originalHtmlOverflow = document.documentElement.style.overflow;
-    const originalHtmlOverscroll =
-      document.documentElement.style.overscrollBehavior;
-
+    // Do not lock or reposition the document body here.
+    // AI Studio preview can hide the portal modal and freeze page scrolling when
+    // body uses position: fixed / top: -scrollY. The modal has its own overlay and
+    // inner scroll area, so Escape handling is enough.
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -657,29 +651,15 @@ export default function GenreHierarchySelector({
       }
     };
 
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${modalScrollYRef.current}px`;
-    document.body.style.width = "100%";
-    document.body.style.touchAction = "none";
-    document.documentElement.style.overflow = "hidden";
-    document.documentElement.style.overscrollBehavior = "none";
-
     window.addEventListener("keydown", handleKeyDown);
-
     return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.body.style.position = originalBodyPosition;
-      document.body.style.top = originalBodyTop;
-      document.body.style.width = originalBodyWidth;
-      document.body.style.touchAction = originalBodyTouchAction;
-      document.documentElement.style.overflow = originalHtmlOverflow;
-      document.documentElement.style.overscrollBehavior =
-        originalHtmlOverscroll;
-
       window.removeEventListener("keydown", handleKeyDown);
-
-      window.scrollTo(0, modalScrollYRef.current);
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.touchAction = "";
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
     };
   }, [activeGroup, hasChangedInModal, pendingMainId, pendingSubId, pendingRemoveSubId, pendingSubIds]);
 
@@ -914,9 +894,16 @@ export default function GenreHierarchySelector({
         )}
       </div>
 
-      <AnimatePresence>
-        {activeGroup && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 overscroll-none">
+      {activeGroup && typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          <motion.div
+            key="genre-hierarchy-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none"
+          >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -929,7 +916,7 @@ export default function GenreHierarchySelector({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", duration: 0.4, bounce: 0.3 }}
-              className="w-full max-w-md rounded-[32px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
+              className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden relative z-10"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
@@ -994,12 +981,12 @@ export default function GenreHierarchySelector({
               </div>
 
               <div
-                className="p-5 space-y-4 max-h-[60vh] overflow-y-auto overscroll-contain custom-scrollbar"
+                className="p-5 md:p-6 space-y-4 max-h-[60vh] md:max-h-[62vh] overflow-y-auto overscroll-contain custom-scrollbar"
                 onWheel={(e) => e.stopPropagation()}
                 onTouchMove={(e) => e.stopPropagation()}
               >
                 {modalStep === "main" && (
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                     {activeGroup.children.map((main) => {
                       const isActiveVisual =
                         committedGenre.includes(main.id) ||
@@ -1024,7 +1011,7 @@ export default function GenreHierarchySelector({
                           <button
                             onClick={() => handleMainClick(main)}
                             className={cn(
-                              "w-full rounded-2xl border p-4 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.02] active:scale-[0.98]",
+                              "w-full min-h-[82px] rounded-2xl border p-4 md:p-5 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.01] active:scale-[0.99]",
                               isActiveVisual
                                 ? genreAccent.selected
                                 : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-[#A47048]/35 text-[var(--text-primary)] shadow-btn",
@@ -1032,12 +1019,12 @@ export default function GenreHierarchySelector({
                             title="세부 장르 열기"
                           >
                             <div className="w-full min-w-0">
-                              <div className="font-bold text-lg tracking-tight break-keep truncate">
+                              <div className="font-bold text-lg md:text-xl tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
                               <div
                                 className={cn(
-                                  "text-xs truncate w-full break-keep",
+                                  "text-xs md:text-[13px] truncate w-full break-keep mt-1",
                                   isActiveVisual
                                     ? "text-[#171717]/75 font-black"
                                     : "text-[var(--text-secondary)]",
@@ -1056,7 +1043,7 @@ export default function GenreHierarchySelector({
                 )}
 
                 {modalStep === "sub" && activeMain && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                     {activeMain.children.map((item) => {
                       const isActiveVisual = pendingSubIds.includes(item.id);
 
@@ -1075,7 +1062,7 @@ export default function GenreHierarchySelector({
                           }
                           onMouseLeave={() => setHoveredModalItem(null)}
                           className={cn(
-                            "px-4 py-4 rounded-2xl font-bold text-sm transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] hover:scale-[1.02] active:scale-[0.98] break-keep",
+                            "px-4 py-4 md:px-5 md:py-5 rounded-2xl font-bold text-sm md:text-base transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] md:min-h-[72px] hover:scale-[1.01] active:scale-[0.99] break-keep",
                             isActiveVisual && "font-black soridraw-selected-strong",
                             isActiveVisual
                               ? genreAccent.selected
@@ -1118,9 +1105,10 @@ export default function GenreHierarchySelector({
                 </div>
               </div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

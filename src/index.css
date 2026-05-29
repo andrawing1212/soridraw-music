@@ -473,3 +473,25 @@ html {
   outline: none !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--page-accent) 42%, transparent), 0 10px 24px rgba(0, 0, 0, 0.16) !important;
 }
+
+
+/* SORIDRAW_EXPAND_ANCHOR_STABILITY_FIX
+   Keep Studio section expansion anchored to the clicked card and prevent
+   browser scroll anchoring from pushing the viewport upward during height animation. */
+.studio-tone-down,
+.studio-tone-down [data-expand-section],
+.studio-tone-down .soridraw-expand-card,
+.studio-tone-down .soridraw-expand-content,
+.studio-tone-down .soridraw-expand-summary {
+  overflow-anchor: none;
+}
+
+.studio-tone-down .soridraw-expand-card {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.studio-tone-down .soridraw-expand-content {
+  will-change: height;
+  transform: translateZ(0);
+}

@@ -62,8 +62,25 @@ function handleExpandableToggle(
   isExpanded: boolean,
   onToggleExpand?: () => void
 ) {
+  event.preventDefault();
+
+  const section = event.currentTarget.closest('[data-expand-section]') as HTMLElement | null;
+  const beforeTop = section?.getBoundingClientRect().top ?? null;
+
   onToggleExpand?.();
   keepExpandableSectionInView(event.currentTarget, isExpanded);
+
+  if (!section || beforeTop === null) return;
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      const afterTop = section.getBoundingClientRect().top;
+      const delta = afterTop - beforeTop;
+      if (Math.abs(delta) > 1) {
+        window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+      }
+    });
+  });
 }
 
 type ModalStep = "main" | "sub";
@@ -699,7 +716,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -815,7 +832,7 @@ export default function GenreHierarchySelector({
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="overflow-hidden"
+          className="soridraw-expand-content overflow-hidden"
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {groups.map((group) => {

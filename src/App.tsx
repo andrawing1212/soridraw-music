@@ -668,8 +668,25 @@ function handleExpandableToggle(
   isExpanded: boolean,
   onToggleExpand?: () => void
 ) {
+  event.preventDefault();
+
+  const section = event.currentTarget.closest('[data-expand-section]') as HTMLElement | null;
+  const beforeTop = section?.getBoundingClientRect().top ?? null;
+
   onToggleExpand?.();
   keepExpandableSectionInView(event.currentTarget, isExpanded);
+
+  if (!section || beforeTop === null) return;
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      const afterTop = section.getBoundingClientRect().top;
+      const delta = afterTop - beforeTop;
+      if (Math.abs(delta) > 1) {
+        window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+      }
+    });
+  });
 }
 
 function useStableContentHeight(
@@ -10628,7 +10645,7 @@ function GenreCategorySection({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(120);
 
-  useStableContentHeight(contentRef, setContentHeight, [isExpanded, groups]);
+  useStableContentHeight(contentRef, setContentHeight, [groups]);
 
   const selectedChild = groups.flatMap((group) => group.children).find((item) => item.id === selectedGenreId) ?? null;
   const selectedGroup = groups.find((group) => group.children.some((item) => item.id === selectedGenreId)) ?? null;
@@ -10636,7 +10653,7 @@ function GenreCategorySection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -10993,7 +11010,7 @@ function CycleSection({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(64);
 
-  useStableContentHeight(contentRef, setContentHeight, [isExpanded, cycles, selected, pointSelected, isPointSelectionMode], onHeightChange);
+  useStableContentHeight(contentRef, setContentHeight, [cycles, selected, pointSelected, isPointSelectionMode], onHeightChange);
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
 
@@ -11041,7 +11058,7 @@ function CycleSection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -11120,7 +11137,7 @@ function CycleSection({
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="overflow-hidden"
+          className="soridraw-expand-content overflow-hidden"
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2 md:gap-2.5">
             {cycles.map((cycle) => {
@@ -11700,7 +11717,7 @@ function CategorySection({
   const sectionAccent = getStudioSectionAccent(titleKo || title);
   const isExpandSummaryActive = isExpanded;
 
-  useStableContentHeight(contentRef, setContentHeight, [isExpanded, items, selected, pinned, uniformKeywordGrid], onHeightChange);
+  useStableContentHeight(contentRef, setContentHeight, [items, selected, pinned, uniformKeywordGrid], onHeightChange);
 
   const resolveSelectedLabel = (id: string) => {
     const customMoodText = getCustomKeywordText(id, CUSTOM_MOOD_PREFIX);
@@ -11732,7 +11749,7 @@ function CategorySection({
   };
 
   return (
-    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -11845,7 +11862,7 @@ function CategorySection({
             opacity: 1
           }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="overflow-hidden min-h-[40px] md:min-h-[84px]"
+          className="soridraw-expand-content overflow-hidden min-h-[40px] md:min-h-[84px]"
         >
           <div
             ref={contentRef}
@@ -15726,7 +15743,7 @@ function VocalControl({
         <motion.div 
           animate={{ height: contentHeight }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="overflow-hidden"
+          className="soridraw-expand-content overflow-hidden"
         >
           <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}

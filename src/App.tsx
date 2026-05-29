@@ -382,7 +382,7 @@ const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefine
   const cleanIds = ids.filter((id): id is string => Boolean(id));
   return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
 };
-import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
 
 type AuthMode = 'login' | 'signup' | 'reset';
 
@@ -4024,13 +4024,13 @@ function App() {
         return `Firebase Auth 승인 도메인에 ${currentDomain}을 추가해야 Google 로그인이 가능합니다.`;
       }
       if (code === 'auth/popup-blocked') {
-        return '브라우저가 Google 로그인 팝업을 차단했습니다. redirect 로그인으로 다시 시도합니다.';
+        return 'Edge에서 팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.';
       }
       if (code === 'auth/popup-closed-by-user') {
         return 'Google 로그인 팝업이 닫혀 로그인이 취소되었습니다.';
       }
       if (code === 'auth/cancelled-popup-request') {
-        return '이전 Google 로그인 팝업 요청이 취소되었습니다. redirect 로그인으로 다시 시도합니다.';
+        return 'Google 로그인 팝업 요청이 취소되었습니다. 다시 시도해주세요.';
       }
       if (code === 'auth/account-exists-with-different-credential') {
         return '같은 이메일이 이미 다른 로그인 방식으로 가입되어 있습니다. 기존 로그인 방식으로 로그인해주세요.';
@@ -4048,7 +4048,6 @@ function App() {
       const hostname = window.location.hostname;
       const isStudio = hostname.includes('aistudio.google.com') || hostname.includes('googleusercontent.com');
       const isDev = hostname.includes('localhost') || hostname.includes('127.0.0.1');
-      const canUseRedirectFallback = !isStudio && !isDev;
       
       console.log('LOGIN MODE CHECK:', { hostname, isStudio, isDev });
 
@@ -4072,14 +4071,9 @@ function App() {
           return;
         }
 
-        if (
-          canUseRedirectFallback &&
-          (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/cancelled-popup-request')
-        ) {
-          console.log("[Auth] Fallback: Initiating signInWithRedirect due to popup blocking/cancellation");
+        if (popupError.code === 'auth/popup-blocked' || popupError.code === 'auth/cancelled-popup-request') {
           showAuthError(authErrorMessage);
-          await signInWithRedirect(auth, googleProvider);
-          return; // Exit as page will redirect
+          return;
         }
 
         throw popupError;

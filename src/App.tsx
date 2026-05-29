@@ -658,31 +658,9 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
 };
 
 
-function keepExpandableSectionInView(trigger: HTMLElement, wasExpanded: boolean) {
-  if (wasExpanded || typeof window === 'undefined') return;
-
-  const section = trigger.closest('[data-expand-section]') as HTMLElement | null;
-  if (!section) return;
-
-  const triggerRect = trigger.getBoundingClientRect();
-  const sectionRect = section.getBoundingClientRect();
-  const edgePadding = 96;
-  const shouldAnchor =
-    sectionRect.top < edgePadding ||
-    triggerRect.bottom > window.innerHeight - edgePadding;
-
-  if (!shouldAnchor) return;
-
-  const anchorSectionTop = () => {
-    const updatedRect = section.getBoundingClientRect();
-    const targetTop = Math.max(0, window.scrollY + updatedRect.top - edgePadding);
-    if (Math.abs(window.scrollY - targetTop) > 2) {
-      window.scrollTo({ top: targetTop, behavior: 'smooth' });
-    }
-  };
-
-  window.requestAnimationFrame(() => window.setTimeout(anchorSectionTop, 80));
-  window.setTimeout(anchorSectionTop, 260);
+function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
+  // Keep expansion purely local. Auto-scroll during height transitions can fight
+  // the browser's scroll anchoring and make the first top-row open feel choppy.
 }
 
 function handleExpandableToggle(
@@ -718,7 +696,6 @@ function useStableContentHeight(
       frameId = requestAnimationFrame(measure);
     };
 
-    measure();
     scheduleMeasure();
     timeoutId = window.setTimeout(measure, 80);
 
@@ -8537,7 +8514,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
             <main className="studio-tone-down mx-auto w-full max-w-[1320px] px-4 md:px-6 pt-6 pb-6 space-y-6">
               {/* Selection Sections */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start [overflow-anchor:none]">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -8703,7 +8680,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 items-start [overflow-anchor:none]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -11064,12 +11041,7 @@ function CycleSection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <motion.div
-      data-expand-section
-      layout="size"
-      transition={{ layout: { duration: 0.25, ease: "easeOut" } }}
-      className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] [overflow-anchor:none]"
-    >
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -11288,7 +11260,7 @@ function CycleSection({
         )}
       </AnimatePresence>
 
-    </motion.div>
+    </div>
   );
 }
 
@@ -11760,12 +11732,7 @@ function CategorySection({
   };
 
   return (
-    <motion.div
-      data-expand-section
-      layout="size"
-      transition={{ layout: { duration: 0.25, ease: "easeOut" } }}
-      className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)] [overflow-anchor:none]"
-    >
+    <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[var(--home-card-border)] flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -12123,7 +12090,7 @@ function CategorySection({
           </button>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 

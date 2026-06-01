@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Settings, Home, Music, RefreshCw, Loader2, AlertCircle, 
+  Settings, Zap, Music, RefreshCw, Loader2, AlertCircle, 
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
@@ -4194,11 +4194,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
-              onClick={() => navigate('/')}
-              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#B8C9B2] hover:bg-white/5 shadow-btn transition-all"
-              title="홈"
+              onClick={() => navigate('/studio')}
+              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#DFA05D] hover:bg-white/5 shadow-btn transition-all"
+              title="스튜디오"
             >
-              <Home className="w-4 h-4" />
+              <Zap className="w-4 h-4" />
             </button>
             <div className="relative flex-1 min-w-0 group overflow-hidden">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] transition-colors" />
@@ -4741,10 +4741,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <div className="flex items-start gap-4 min-w-0">
             {isSharedView && (
               <button
-                onClick={() => navigate('/')}
-                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
+                onClick={() => navigate('/studio')}
+                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#DFA05D] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
               >
-                <Home className="w-4 h-4" />홈
+                <Zap className="w-4 h-4" />스튜디오
               </button>
             )}
             <div className="min-w-0">

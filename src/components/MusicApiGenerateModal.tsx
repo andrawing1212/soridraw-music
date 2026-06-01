@@ -163,9 +163,26 @@ export default function MusicApiGenerateModal({
   const [step, setStep] = useState<1 | 2>(1);
   const stepRef = useRef<1 | 2>(1);
 
-  const setModalStep = (nextStep: 1 | 2) => {
+  const makeModalHistoryState = (nextStep: 1 | 2) => ({
+    __soridrawGenerateModal: true,
+    step: nextStep,
+  });
+
+  const setModalStep = (
+    nextStep: 1 | 2,
+    options?: { pushHistory?: boolean; replaceHistory?: boolean }
+  ) => {
     stepRef.current = nextStep;
     setStep(nextStep);
+
+    if (typeof window !== 'undefined') {
+      const state = makeModalHistoryState(nextStep);
+      if (options?.pushHistory) {
+        window.history.pushState(state, '', window.location.href);
+      } else if (options?.replaceHistory) {
+        window.history.replaceState(state, '', window.location.href);
+      }
+    }
   };
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
@@ -197,7 +214,7 @@ export default function MusicApiGenerateModal({
 
   const handleModalBack = () => {
     if (stepRef.current === 2) {
-      setModalStep(1);
+      setModalStep(1, { replaceHistory: true });
       return;
     }
     onClose();
@@ -214,15 +231,23 @@ export default function MusicApiGenerateModal({
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const modalHistoryState = { __soridrawGenerateModal: true };
-    window.history.pushState(modalHistoryState, '', window.location.href);
+    window.history.pushState(makeModalHistoryState(1), '', window.location.href);
 
-    const onPopState = () => {
-      if (stepRef.current === 2) {
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as { __soridrawGenerateModal?: boolean; step?: 1 | 2 } | null;
+
+      // 마우스 뒤로가기/브라우저 뒤로가기로 2단계에서 1단계 히스토리로 돌아온 경우
+      // 창을 닫지 않고 이전 단계만 보여준다.
+      if (state?.__soridrawGenerateModal && state.step === 1) {
         setModalStep(1);
-        window.history.pushState(modalHistoryState, '', window.location.href);
         return;
       }
+
+      if (stepRef.current === 2) {
+        setModalStep(1, { replaceHistory: true });
+        return;
+      }
+
       onClose();
     };
 
@@ -235,12 +260,14 @@ export default function MusicApiGenerateModal({
     };
 
     window.addEventListener('popstate', onPopState);
+    window.addEventListener('pointerdown', onMouseBackButton, true);
     window.addEventListener('mousedown', onMouseBackButton, true);
     window.addEventListener('mouseup', onMouseBackButton, true);
     window.addEventListener('auxclick', onMouseBackButton, true);
 
     return () => {
       window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('pointerdown', onMouseBackButton, true);
       window.removeEventListener('mousedown', onMouseBackButton, true);
       window.removeEventListener('mouseup', onMouseBackButton, true);
       window.removeEventListener('auxclick', onMouseBackButton, true);
@@ -331,7 +358,7 @@ export default function MusicApiGenerateModal({
     } else if (includeLyrics && lyricLanguages.length === 0) {
       return;
     }
-    setModalStep(2);
+    setModalStep(2, { pushHistory: true });
   };
 
   const handleConfirm = () => {

@@ -2059,7 +2059,7 @@ ${song.prompt}
 
       <div className="space-y-4 md:space-y-5">
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               onClick={() => navigate('/')}
               className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-white transition-all flex items-center justify-center"
@@ -2098,22 +2098,23 @@ ${song.prompt}
             </div>
           </div>
 
-          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+          <div className="flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             <button
               onClick={() => setFavoriteColorFilter('all')}
-              className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#AC5045]/24 text-[#D8A4A2]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              className={`h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#AC5045]/24 text-[#D8A4A2]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
             >
               전체
             </button>
-            <div className="mx-2 h-4 w-px bg-white/10" />
+            <div className="mx-1 h-3 w-px bg-white/10" />
             {FAVORITE_COLOR_OPTIONS.map((color) => (
               <button
                 key={color.value}
                 onClick={() => setFavoriteColorFilter(color.value)}
-                className={`mx-1 h-4 w-4 rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[#2a2a2a]' : 'hover:scale-110'}`}
-                style={{ backgroundColor: color.color }}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[var(--bg-secondary)] scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
                 title={color.label}
-              />
+              >
+                <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color.color }} />
+              </button>
             ))}
 
           </div>

@@ -2507,10 +2507,6 @@ ${song.prompt}
                           {isTitleEditChanged && (
                             <button
                               onClick={handleSave}
-                              onMouseEnter={() => onHover({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
-                              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                              onTouchStart={() => onLongPressStart({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
-                              onTouchEnd={onLongPressEnd}
                               disabled={isTranslating}
                               onMouseEnter={() => onHover({ id: 'detail-title-save', label: '저장', description: '수정한 제목을 저장합니다.' })}
                               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}

@@ -8524,9 +8524,9 @@ ${normalizePromptForDisplay(result.prompt)}
                     className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
                   >
                     <h1 
-                      className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                      className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
-                      <Zap className="w-8 h-8 md:w-9 md:h-9 text-[#c8801b]" />
+                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#c8801b]" />
                       <span>Sori <span className="text-[#c8801b]">Studio</span></span>
                     </h1>
                   </motion.div>

@@ -318,9 +318,9 @@ export default function MusicApiGenerateModal({
         <div className="relative shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <button
             type="button"
-            onClick={step === 1 ? onClose : () => setStep(1)}
+            onClick={onClose}
             className="absolute left-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
-            title={step === 1 ? '닫기' : '뒤로가기'}
+            title="닫기"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>

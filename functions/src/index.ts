@@ -476,7 +476,7 @@ export const deleteSunoApiKey = onRequest(
 );
 
 export const getSunoApiKeyStatus = onRequest(
-  { region: "us-central1" },
+  { region: "us-central1", invoker: "public" },
   async (req, res) => {
     if (handleCors(req, res)) return;
 

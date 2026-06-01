@@ -359,7 +359,7 @@ exports.deleteSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, asy
     });
     res.json(buildSunoApiKeyStatusPayload(deletedData));
 });
-exports.getSunoApiKeyStatus = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
+exports.getSunoApiKeyStatus = (0, https_1.onRequest)({ region: "us-central1", invoker: "public" }, async (req, res) => {
     if (handleCors(req, res))
         return;
     if (req.method !== "POST") {

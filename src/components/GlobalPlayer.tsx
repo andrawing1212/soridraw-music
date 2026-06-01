@@ -975,7 +975,7 @@ export default function GlobalPlayer() {
             ? 'bottom-[18px] right-[-22px] w-[80px] items-end'
             : isSharedPlayerMode || isCompactPlayer
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
-            : 'top-2 left-[168px] w-[305px] items-start'
+            : 'top-2 left-[198px] w-[305px] items-start'
         }`}
       >
         <AnimatePresence mode="popLayout">

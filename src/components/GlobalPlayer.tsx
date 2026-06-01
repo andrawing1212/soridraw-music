@@ -208,6 +208,7 @@ export default function GlobalPlayer() {
   const [localFavoriteActive, setLocalFavoriteActive] = useState(false);
   const [playbackWarning, setPlaybackWarning] = useState<string | null>(null);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const [isMiniPlayerDocked, setIsMiniPlayerDocked] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -392,6 +393,7 @@ export default function GlobalPlayer() {
   }, []);
 
   const handleModeChange = (newMode: 'collapsed' | 'expanded') => {
+    if (newMode === 'expanded') setIsMiniPlayerDocked(false);
     setMode(newMode);
     localStorage.setItem('soridraw_global_player_mode', newMode);
   };
@@ -447,7 +449,19 @@ export default function GlobalPlayer() {
   };
 
 
+  const handleCollapsedMiniDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => {
+    if (!isMobile || mode !== 'collapsed') return;
+    if (info.offset.x < -70 || info.velocity.x < -520) {
+      setIsMiniPlayerDocked(true);
+    }
+  };
 
+  const handleDockedMiniDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => {
+    if (!isMobile || mode !== 'collapsed') return;
+    if (info.offset.x > 34 || info.velocity.x > 360) {
+      setIsMiniPlayerDocked(false);
+    }
+  };
 
   const handleDownload = (url: string, title?: string) => {
     if (!url) {
@@ -911,7 +925,7 @@ export default function GlobalPlayer() {
         ref={playerRef}
         initial={false}
         animate={{ 
-          x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isSharedPlayerMode || isMobile ? '-50%' : 0),
+          x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isMiniPlayerDocked && isMobile ? 0 : (isSharedPlayerMode || isMobile ? '-50%' : 0)),
           y: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.y) : 0
         }}
         className={`fixed z-[100] flex flex-col ${
@@ -919,6 +933,8 @@ export default function GlobalPlayer() {
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
               : 'top-[88px] right-6 w-[370px] max-w-[calc(100vw-40px)]'
+            : isMiniPlayerDocked && isMobile
+            ? 'bottom-[12px] left-[-20px] w-[64px] items-start'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
             : 'top-2 left-[168px] w-[305px] items-start'
@@ -931,8 +947,31 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="relative w-full rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl"
+              drag={isMobile && !isMiniPlayerDocked ? "x" : false}
+              dragConstraints={isMobile && !isMiniPlayerDocked ? { left: -150, right: 0 } : undefined}
+              dragElastic={0.14}
+              onDragEnd={handleCollapsedMiniDragEnd}
+              className={`${isMiniPlayerDocked && isMobile ? 'w-[64px]' : 'w-full'} relative rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl touch-pan-y`}
             >
+              {isMiniPlayerDocked && isMobile ? (
+                <motion.button
+                  type="button"
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 92 }}
+                  dragElastic={0.12}
+                  onDragEnd={handleDockedMiniDragEnd}
+                  onClick={(e) => { e.stopPropagation(); setIsMiniPlayerDocked(false); }}
+                  className="group flex h-[54px] w-[64px] items-center justify-end overflow-hidden rounded-[19px] bg-[#DFA05D] pr-3 text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] cursor-grab active:cursor-grabbing"
+                  aria-label="소형 플레이어 펼치기"
+                  title="소형 플레이어 펼치기"
+                >
+                  <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
+                    {isPlaying ? <Pause className="h-5 w-5 fill-current text-white" /> : <Play className="ml-0.5 h-5 w-5 fill-current text-white" />}
+                  </span>
+                  <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-white/35" />
+                </motion.button>
+              ) : (
+                <>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); clearPlayer(); }}
@@ -949,7 +988,7 @@ export default function GlobalPlayer() {
                     style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                   />
                 </div>
-                <div className="flex h-9 items-center gap-1.5 px-1.5">
+                <div className="flex h-9 items-center gap-1.5 px-1.5 pr-7">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
@@ -1007,6 +1046,8 @@ export default function GlobalPlayer() {
                   </button>
                 </div>
               </div>
+                </>
+              )}
             </motion.div>
           )}
 

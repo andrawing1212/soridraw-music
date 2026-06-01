@@ -228,6 +228,27 @@ const getStoredSunoApiKeyFromDoc = (docData: any): string => pickFirstString(
 
 const hasStoredSunoApiKeyInDoc = (docData: any): boolean => Boolean(getStoredSunoApiKeyFromDoc(docData));
 
+const buildSunoApiKeyStatusPayload = (docData: any = {}) => {
+  const hasStoredKey = hasStoredSunoApiKeyInDoc(docData);
+  const hasSunoApiKey = Boolean(docData?.hasSunoApiKey || docData?.hasMusicApiKey || hasStoredKey);
+  const provider = docData?.provider || docData?.musicApiProvider || null;
+
+  return {
+    ok: true,
+    hasSunoApiKey,
+    hasMusicApiKey: hasSunoApiKey,
+    registered: hasSunoApiKey,
+    hasApiKey: hasSunoApiKey,
+    exists: hasSunoApiKey,
+    provider,
+    updatedAt: timestampToIso(docData?.sunoApiUpdatedAt || docData?.musicApiUpdatedAt),
+    sunoRemainingCredits: typeof docData?.sunoRemainingCredits === "number" ? docData.sunoRemainingCredits : null,
+    sunoRemainingCreditsUpdatedAt: timestampToIso(docData?.sunoRemainingCreditsUpdatedAt),
+    sunoRemainingCreditsSourceTrackId: docData?.sunoRemainingCreditsSourceTrackId || null,
+    sunoRemainingCreditsSourceTaskId: docData?.sunoRemainingCreditsSourceTaskId || null,
+  };
+};
+
 export const saveGoogleGeminiApiKey = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -373,8 +394,9 @@ export const saveSunoApiKey = onRequest(
     }
 
     const db = admin.firestore();
+    const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
 
-    await db.collection('user_api_keys').doc(uid).set({
+    await apiKeyDocRef.set({
       // Keep Music API in the same uid-scoped document as Gemini.
       // Duplicate legacy/explicit field names so every client and function reads the same account-level key.
       sunoApiKey: apiKey.trim(),
@@ -393,14 +415,17 @@ export const saveSunoApiKey = onRequest(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    res.json({
-      ok: true,
-      hasSunoApiKey: true,
-      hasMusicApiKey: true,
-      registered: true,
-      hasApiKey: true,
-      exists: true,
+    const savedSnap = await apiKeyDocRef.get();
+    const savedData = savedSnap.data() || {};
+    console.log("[Music API Key] saved", {
+      uid,
+      docExists: savedSnap.exists,
+      hasStoredKey: hasStoredSunoApiKeyInDoc(savedData),
+      hasSunoApiKey: Boolean(savedData.hasSunoApiKey),
+      hasMusicApiKey: Boolean(savedData.hasMusicApiKey),
     });
+
+    res.json(buildSunoApiKeyStatusPayload(savedData));
   }
 );
 
@@ -418,8 +443,9 @@ export const deleteSunoApiKey = onRequest(
     if (!uid) return;
 
     const db = admin.firestore();
+    const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
 
-    await db.collection('user_api_keys').doc(uid).set({
+    await apiKeyDocRef.set({
       sunoApiKey: admin.firestore.FieldValue.delete(),
       musicApiKey: admin.firestore.FieldValue.delete(),
       hasSunoApiKey: false,
@@ -435,14 +461,17 @@ export const deleteSunoApiKey = onRequest(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    res.json({
-      ok: true,
-      hasSunoApiKey: false,
-      hasMusicApiKey: false,
-      registered: false,
-      hasApiKey: false,
-      exists: false,
+    const deletedSnap = await apiKeyDocRef.get();
+    const deletedData = deletedSnap.data() || {};
+    console.log("[Music API Key] deleted", {
+      uid,
+      docExists: deletedSnap.exists,
+      hasStoredKey: hasStoredSunoApiKeyInDoc(deletedData),
+      hasSunoApiKey: Boolean(deletedData.hasSunoApiKey),
+      hasMusicApiKey: Boolean(deletedData.hasMusicApiKey),
     });
+
+    res.json(buildSunoApiKeyStatusPayload(deletedData));
   }
 );
 
@@ -463,38 +492,18 @@ export const getSunoApiKeyStatus = onRequest(
 
     const docSnap = await db.collection('user_api_keys').doc(uid).get();
 
-    if (!docSnap.exists) {
-      res.json({
-        ok: true,
-        hasSunoApiKey: false,
-        hasMusicApiKey: false,
-        registered: false,
-        hasApiKey: false,
-        exists: false,
-      });
-      return;
-    }
-
-    const docData = docSnap.data() || {};
-    const hasSunoApiKey = Boolean(
-      docData.hasSunoApiKey ||
-      docData.hasMusicApiKey ||
-      hasStoredSunoApiKeyInDoc(docData)
-    );
-    res.json({
-      ok: true,
-      hasSunoApiKey,
-      hasMusicApiKey: hasSunoApiKey,
-      registered: hasSunoApiKey,
-      hasApiKey: hasSunoApiKey,
-      exists: hasSunoApiKey,
-      provider: docData?.provider || docData?.musicApiProvider || null,
-      updatedAt: timestampToIso(docData?.sunoApiUpdatedAt) || timestampToIso(docData?.musicApiUpdatedAt) || timestampToIso(docData?.updatedAt),
-      sunoRemainingCredits: typeof docData?.sunoRemainingCredits === "number" ? docData.sunoRemainingCredits : null,
-      sunoRemainingCreditsUpdatedAt: timestampToIso(docData?.sunoRemainingCreditsUpdatedAt),
-      sunoRemainingCreditsSourceTrackId: docData?.sunoRemainingCreditsSourceTrackId || null,
-      sunoRemainingCreditsSourceTaskId: docData?.sunoRemainingCreditsSourceTaskId || null,
+    const docData = docSnap.exists ? (docSnap.data() || {}) : {};
+    const statusPayload = buildSunoApiKeyStatusPayload(docData);
+    console.log("[Music API Key] status", {
+      uid,
+      docExists: docSnap.exists,
+      hasStoredKey: hasStoredSunoApiKeyInDoc(docData),
+      hasSunoApiKey: Boolean(docData.hasSunoApiKey),
+      hasMusicApiKey: Boolean(docData.hasMusicApiKey),
+      statusHasKey: statusPayload.hasSunoApiKey,
     });
+
+    res.json(statusPayload);
   }
 );
 

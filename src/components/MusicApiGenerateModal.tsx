@@ -127,24 +127,24 @@ export default function MusicApiGenerateModal({
     ? 'border-transparent bg-[#c8801b] text-[#111111] shadow-[0_10px_24px_rgba(200,128,27,0.24)]'
     : 'border-purple-400/60 bg-purple-500/20 text-purple-100';
   const accentIcon = isMain
-    ? 'bg-[#c8801b]/16 border-transparent text-[#c8801b] shadow-[0_8px_22px_rgba(200,128,27,0.12)]'
+    ? 'bg-white/[0.055] border-transparent text-[#c8801b]'
     : 'bg-purple-600/25 border-purple-400/30 text-purple-200';
   const modalSurface = isMain
-    ? 'bg-[#1d1712]/98 shadow-[0_24px_70px_rgba(0,0,0,0.58),0_0_34px_rgba(200,128,27,0.09)]'
+    ? 'bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.58)]'
     : 'bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl';
   const panelSurface = isMain
-    ? 'rounded-2xl bg-[#241b13]/78 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]'
+    ? 'rounded-2xl bg-white/[0.035] overflow-hidden'
     : 'rounded-2xl border border-[var(--border-color)] bg-white/5 overflow-hidden';
   const plainPanelSurface = isMain
-    ? 'rounded-2xl bg-[#241b13]/78 p-3 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]'
+    ? 'rounded-2xl bg-white/[0.035] p-3 sm:p-4'
     : 'rounded-2xl border border-[var(--border-color)] bg-white/5 p-3 sm:p-4';
   const optionRest = isMain
     ? 'border-transparent bg-white/[0.055] text-[var(--text-secondary)] hover:bg-white/[0.08]'
     : 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/5';
   const optionRestLight = isMain
-    ? 'border-transparent bg-white/[0.06] text-[var(--text-secondary)] hover:bg-white/[0.095]'
+    ? 'border-transparent bg-white/[0.055] text-[var(--text-secondary)] hover:bg-white/[0.08]'
     : 'border-[var(--border-color)] bg-white/5 text-[var(--text-secondary)] hover:bg-white/10';
-  const dividerClass = isMain ? 'border-white/[0.07]' : 'border-[var(--border-color)]';
+  const dividerClass = isMain ? 'border-white/[0.06]' : 'border-[var(--border-color)]';
 
   const filteredLanguages = useMemo(() => {
     const source = availableLyricLanguages && availableLyricLanguages.length > 0

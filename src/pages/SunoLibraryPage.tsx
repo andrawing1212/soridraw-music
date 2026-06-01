@@ -5018,6 +5018,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
                           <div className="relative shrink-0 ml-2">
                             <button 
+                              data-floating-menu="true"
+                              onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => { 
                                 e.stopPropagation();
                                 if (multiSelectMode) {
@@ -5429,6 +5431,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         
                         <div className="relative">
                           <button 
+                            data-floating-menu="true"
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (multiSelectMode) {

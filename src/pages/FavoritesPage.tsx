@@ -2338,6 +2338,8 @@ ${song.prompt}
                       )}
 <div className="relative">
                         <button
+                          data-floating-menu="true"
+                          onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
                             setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
@@ -2348,8 +2350,16 @@ ${song.prompt}
                           <MoreVertical className="w-4 h-4" />
                         </button>
 
-                        {activeFavoriteMenuId === song.id && (
-                          <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-[#AC5045]/30 bg-[#181818] py-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        <AnimatePresence>
+                          {activeFavoriteMenuId === song.id && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                              className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-[#AC5045]/30 bg-[#181818] py-2 shadow-2xl"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                             {isBulkMenu ? (
                               <>
                                 <div className="px-4 py-2 text-xs font-bold text-[#AC5045]">선택한 {selectedSongIds.length}곡</div>
@@ -2375,8 +2385,9 @@ ${song.prompt}
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
                               </>
                             )}
-                          </div>
-                        )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </div>

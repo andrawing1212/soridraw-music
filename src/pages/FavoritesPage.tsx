@@ -2098,10 +2098,10 @@ ${song.prompt}
             </div>
           </div>
 
-          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0">
+          <div className="flex h-[46px] w-full md:w-auto items-center justify-between md:justify-start rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             <button
               onClick={() => setFavoriteColorFilter('all')}
-              className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#AC5045]/24 text-[#D8A4A2]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#AC5045]/24 text-[#D8A4A2]' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
             >
               전체
             </button>
@@ -2118,19 +2118,19 @@ ${song.prompt}
 
           </div>
 
-          <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0">
+          <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleSortChange(mode)}
-                className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
+                className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
                   (mode === 'latest' && sortBy === 'latest') ||
                   (mode === 'oldest' && sortBy === 'oldest') ||
                   (mode === 'genre' && sortBy.startsWith('genre')) ||
                   (mode === 'title' && sortBy.startsWith('title')) ||
                   (mode === 'locked' && sortBy.startsWith('locked'))
                     ? 'bg-[#AC5045]/72 text-white'
-                    : 'text-white/50 hover:bg-white/5 hover:text-white'
+                    : 'bg-transparent text-white/50 hover:text-white/75'
                 }`}
               >
                 {mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}
@@ -2186,7 +2186,7 @@ ${song.prompt}
                     }
                   }}
                   className={cn(
-                    "group relative overflow-visible rounded-2xl border border-black/20 bg-[var(--bg-secondary)] transition-all select-none hover:bg-white/[0.03]",
+                    "group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] transition-all select-none hover:bg-[#658761]/[0.035]",
                     isSelectionMode ? "cursor-pointer" : ""
                   )}
                 >

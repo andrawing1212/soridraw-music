@@ -35,6 +35,26 @@ const WORKSPACE_PAGE_SIZE = 10;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
+const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
+
+const readStoredSunoCredits = (uid?: string | null): { credits: number | null; updatedAt: number | null } => {
+  try {
+    const creditRaw = localStorage.getItem(scopedCreditStorageKey(SUNO_REMAINING_CREDITS_KEY, uid))
+      || localStorage.getItem(SUNO_REMAINING_CREDITS_KEY)
+      || '';
+    const updatedRaw = localStorage.getItem(scopedCreditStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY, uid))
+      || localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY)
+      || '';
+    const creditValue = Number(creditRaw);
+    const updatedValue = Number(updatedRaw);
+    return {
+      credits: Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null,
+      updatedAt: Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null,
+    };
+  } catch {
+    return { credits: null, updatedAt: null };
+  }
+};
 
 const getSharedPlayedKeys = (item: any): string[] => {
   const rawKeys = [
@@ -216,22 +236,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
   const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
-  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => {
-    try {
-      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
-      return Number.isFinite(saved) && saved >= 0 ? saved : null;
-    } catch {
-      return null;
-    }
-  });
-  const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => {
-    try {
-      const saved = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
-      return Number.isFinite(saved) && saved > 0 ? saved : null;
-    } catch {
-      return null;
-    }
-  });
+  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).credits);
+  const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).updatedAt);
   const [isSharedView, setIsSharedView] = useState(false);
   const [isSharedOwner, setIsSharedOwner] = useState(false);
   const [sharedTrackLoading, setSharedTrackLoading] = useState(false);
@@ -282,26 +288,32 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   useEffect(() => {
     const readCachedCredits = () => {
-      try {
-        const creditValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_KEY) || '');
-        setRemainingCredits(Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null);
-        const updatedValue = Number(localStorage.getItem(SUNO_REMAINING_CREDITS_UPDATED_AT_KEY) || '');
-        setRemainingCreditsUpdatedAt(Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null);
-      } catch {
-        setRemainingCredits(null);
-        setRemainingCreditsUpdatedAt(null);
-      }
+      const currentUid = (appUser || auth.currentUser || user)?.uid;
+      const cached = readStoredSunoCredits(currentUid);
+      setRemainingCredits(cached.credits);
+      setRemainingCreditsUpdatedAt(cached.updatedAt);
     };
 
-    const handleUpdate = () => readCachedCredits();
+    const handleUpdate = (event?: Event) => {
+      const customEvent = event as CustomEvent<{ remainingCredits?: number | null; updatedAt?: number | null }>;
+      if (customEvent?.detail && Object.prototype.hasOwnProperty.call(customEvent.detail, 'remainingCredits')) {
+        const nextCredits = customEvent.detail.remainingCredits;
+        const nextUpdatedAt = customEvent.detail.updatedAt;
+        setRemainingCredits(typeof nextCredits === 'number' && Number.isFinite(nextCredits) && nextCredits >= 0 ? nextCredits : null);
+        setRemainingCreditsUpdatedAt(typeof nextUpdatedAt === 'number' && Number.isFinite(nextUpdatedAt) && nextUpdatedAt > 0 ? nextUpdatedAt : null);
+        return;
+      }
+      readCachedCredits();
+    };
+
     readCachedCredits();
-    window.addEventListener('storage', handleUpdate);
+    window.addEventListener('storage', handleUpdate as EventListener);
     window.addEventListener('soridraw:suno-credits-updated', handleUpdate as EventListener);
     return () => {
-      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('storage', handleUpdate as EventListener);
       window.removeEventListener('soridraw:suno-credits-updated', handleUpdate as EventListener);
     };
-  }, []);
+  }, [appUser, user]);
 
   const formatCreditCheckedAt = (value: number | null) => {
     if (!value) return '';
@@ -310,6 +322,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } catch {
       return '';
     }
+  };
+
+  const handleCreditShortcutClick = () => {
+    navigate('/my-page?section=music-api');
   };
 
   useEffect(() => {
@@ -4206,7 +4222,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     key={f}
                     onClick={() => setFilter(f)}
                     className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                      filter === f ? 'bg-[#658761]/78 text-white' : 'hover:bg-white/5 opacity-60'
+                      filter === f ? 'bg-[#658761]/78 text-white' : 'bg-transparent text-white/50 hover:text-white/75'
                     }`}
                   >
                     {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
@@ -4293,10 +4309,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (isSharedView) return null;
     return (
       <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
-        <div className="grid grid-cols-3 gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
+        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
             onClick={() => setLibraryViewMode('workspace')}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             워크스페이스
           </button>
@@ -4310,7 +4326,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             플레이리스트
           </button>
@@ -4324,7 +4340,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             공유 플레이리스트
           </button>
@@ -4666,12 +4682,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         
         {!isSharedView && typeof remainingCredits === 'number' && (
           <div className="flex md:hidden items-center justify-end">
-            <div
-              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2]"
-              title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+            <button
+              type="button"
+              onClick={handleCreditShortcutClick}
+              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2] transition-all hover:bg-[#658761]/18 active:scale-[0.98]"
+              title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인 · 마이페이지 크레딧 확인으로 이동` : '마이페이지 크레딧 확인으로 이동'}
             >
               {remainingCredits.toLocaleString()} credit
-            </div>
+            </button>
           </div>
         )}
 
@@ -4708,12 +4726,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           {!isSharedView && (
             <>
               {typeof remainingCredits === 'number' && (
-                <div
-                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#658761]/22 bg-[#658761]/12 text-xs font-bold text-[#B8C9B2]"
-                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+                <button
+                  type="button"
+                  onClick={handleCreditShortcutClick}
+                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#658761]/22 bg-[#658761]/12 text-xs font-bold text-[#B8C9B2] transition-all hover:bg-[#658761]/18 active:scale-[0.98]"
+                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인 · 마이페이지 크레딧 확인으로 이동` : '마이페이지 크레딧 확인으로 이동'}
                 >
                   남은 크레딧 {remainingCredits.toLocaleString()}
-                </div>
+                </button>
               )}
             </>
           )}

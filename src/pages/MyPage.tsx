@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
@@ -196,6 +196,7 @@ function FeatureBadge({ state }: { state: FeatureState }) {
 
 export default function MyPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [profile, setProfile] = useState<AppUserInfo | null>(null);
   const [isApiRegistered, setIsApiRegistered] = useState(() => getLocalApiStatus(auth.currentUser?.uid));
@@ -235,6 +236,24 @@ export default function MyPage() {
       window.removeEventListener('focus', refreshStatus);
     };
   }, [user?.uid]);
+
+
+  useEffect(() => {
+    if (!user) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('section') !== 'music-api') return;
+
+    const scrollToMusicApiSection = () => {
+      const target = document.getElementById('music-api-credit-section');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    const frameId = window.requestAnimationFrame(() => {
+      window.setTimeout(scrollToMusicApiSection, 80);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [location.search, user]);
 
   const planKey = useMemo(() => normalizePlan(profile?.role, profile?.planName), [profile?.role, profile?.planName]);
   const plan = PLAN_CONFIG[planKey];
@@ -350,7 +369,9 @@ export default function MyPage() {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[1.45fr_0.55fr] xl:grid-cols-[1.55fr_0.45fr]">
-          <SunoApiSettingsPanel />
+          <div id="music-api-credit-section" className="scroll-mt-24">
+            <SunoApiSettingsPanel />
+          </div>
 
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-4 md:p-5 shadow-2xl backdrop-blur-xl">
             <h2 className="text-base font-black flex items-center gap-2"><Palette className="w-4 h-4 text-[#BBA8CA]" /> 개인 설정</h2>

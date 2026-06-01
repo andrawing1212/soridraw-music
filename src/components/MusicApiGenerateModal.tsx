@@ -194,6 +194,28 @@ export default function MusicApiGenerateModal({
   }, [onClose]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const currentState = window.history.state;
+    const modalState = { ...(currentState || {}), soridrawGenerateModalOpen: true };
+
+    window.history.pushState(modalState, '', window.location.href);
+
+    const onPopState = () => {
+      onClose();
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (window.history.state?.soridrawGenerateModalOpen) {
+        window.history.replaceState(currentState, '', window.location.href);
+      }
+    };
+  }, [onClose]);
+
+  useEffect(() => {
     const originalBodyOverflow = document.body.style.overflow;
     const originalHtmlOverflow = document.documentElement.style.overflow;
     const originalBodyOverscroll = document.body.style.overscrollBehavior;
@@ -318,7 +340,11 @@ export default function MusicApiGenerateModal({
         <div className="relative shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClose();
+            }}
             className="absolute left-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
             title="닫기"
           >
@@ -333,7 +359,11 @@ export default function MusicApiGenerateModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClose();
+            }}
             className="absolute right-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
             title="닫기"
           >

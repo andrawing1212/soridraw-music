@@ -119,15 +119,15 @@ export default function MusicApiGenerateModal({
   const isMain = variant === 'main';
   const maxCount = maxLyricLanguages ?? (isMain ? 2 : 1);
   const accent = isMain ? 'orange' : 'purple';
-  const accentText = isMain ? 'text-[#c8801b]' : 'text-purple-300';
+  const accentText = isMain ? 'text-[#E7AD68]' : 'text-purple-300';
   const accentBg = isMain
-    ? 'bg-[#c8801b] hover:bg-[#d08a28] text-[#111111] shadow-[0_12px_28px_rgba(200,128,27,0.28)] hover:shadow-[0_16px_34px_rgba(200,128,27,0.34)]'
-    : 'bg-purple-600 hover:bg-purple-500 shadow-purple-900/30';
+    ? 'bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] hover:shadow-[0_16px_34px_rgba(231,173,104,0.28)]'
+    : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/30';
   const accentSelected = isMain
-    ? 'border-transparent bg-[#c8801b] text-[#111111] shadow-[0_10px_24px_rgba(200,128,27,0.24)]'
+    ? 'border-transparent bg-[#E7AD68] !text-[#111111] shadow-[0_10px_24px_rgba(231,173,104,0.20)]'
     : 'border-purple-400/60 bg-purple-500/20 text-purple-100';
   const accentIcon = isMain
-    ? 'bg-white/[0.055] border-transparent text-[#c8801b]'
+    ? 'bg-white/[0.055] border-transparent text-[#E7AD68]'
     : 'bg-purple-600/25 border-purple-400/30 text-purple-200';
   const modalSurface = isMain
     ? 'bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.58)]'
@@ -191,28 +191,6 @@ export default function MusicApiGenerateModal({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const currentState = window.history.state;
-    const modalState = { ...(currentState || {}), soridrawGenerateModalOpen: true };
-
-    window.history.pushState(modalState, '', window.location.href);
-
-    const onPopState = () => {
-      onClose();
-    };
-
-    window.addEventListener('popstate', onPopState);
-
-    return () => {
-      window.removeEventListener('popstate', onPopState);
-      if (window.history.state?.soridrawGenerateModalOpen) {
-        window.history.replaceState(currentState, '', window.location.href);
-      }
-    };
   }, [onClose]);
 
   useEffect(() => {
@@ -340,11 +318,7 @@ export default function MusicApiGenerateModal({
         <div className="relative shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <button
             type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onClose();
-            }}
+            onClick={onClose}
             className="absolute left-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
             title="닫기"
           >
@@ -359,11 +333,7 @@ export default function MusicApiGenerateModal({
 
           <button
             type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onClose();
-            }}
+            onClick={onClose}
             className="absolute right-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
             title="닫기"
           >
@@ -735,7 +705,7 @@ export default function MusicApiGenerateModal({
                   type="button"
                   onClick={handleNext}
                   disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-base sm:text-lg font-black transition-all shadow-lg ${accentBg}`}
+                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg}`}
                 >
                   다음
                 </button>
@@ -788,7 +758,7 @@ export default function MusicApiGenerateModal({
                   type="button"
                   onClick={handleConfirm}
                   disabled={!hasApiKey}
-                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-white text-base sm:text-lg font-black transition-all shadow-lg ${accentBg}`}
+                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg}`}
                 >
                   {isMain ? `${generationCount}곡 생성하기` : (targetMode === 'batch' ? `${musicApiTargets.length}곡 API 생성하기` : '1곡 API 생성하기')}
                 </button>

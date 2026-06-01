@@ -4664,6 +4664,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <div className="mx-auto w-full max-w-[1500px] space-y-4 md:space-y-5">
         
+        {!isSharedView && typeof remainingCredits === 'number' && (
+          <div className="flex md:hidden items-center justify-end">
+            <div
+              className="h-12 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2]"
+              title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
+            >
+              {remainingCredits.toLocaleString()} credit
+            </div>
+          </div>
+        )}
+
         {/* Header Block */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -4708,21 +4719,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           )}
           </div>
         </motion.div>
-
-        <div className="flex md:hidden items-center justify-end gap-3 -mt-2">
-          {!isSharedView && (
-            <div className="flex items-center gap-2">
-              {typeof remainingCredits === 'number' && (
-                <div
-                  className="h-12 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2]"
-                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
-                >
-                  {remainingCredits.toLocaleString()} credit
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
@@ -4842,7 +4838,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 hover:bg-[#658761]/[0.035] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] hover:bg-[#658761]/[0.035] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {

@@ -920,8 +920,8 @@ export default function GlobalPlayer() {
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
               : 'top-[88px] right-6 w-[370px] max-w-[calc(100vw-40px)]'
             : isSharedPlayerMode || isMobile
-            ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[420px] items-center'
-            : 'top-2 left-[168px] w-[205px] items-start'
+            ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
+            : 'top-2 left-[168px] w-[305px] items-start'
         }`}
       >
         <AnimatePresence mode="popLayout">
@@ -931,52 +931,81 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="w-full overflow-hidden rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl"
+              className="relative w-full rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl"
             >
-              <div className="h-[2px] w-full bg-white/10">
-                <div
-                  className="h-full bg-[#DFA05D] transition-none"
-                  style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                />
-              </div>
-              <div className="flex h-9 items-center gap-1.5 px-1.5">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#DFA05D]/20 bg-[#241b12]/70"
-                  title="대형 플레이어 열기"
-                  aria-label="대형 플레이어 열기"
-                >
-                  {shouldUseCoverImage ? (
-                    <img
-                      src={currentTrack.imageUrl}
-                      alt={currentTrack.title}
-                      draggable={false}
-                      onDragStart={(e) => e.preventDefault()}
-                      onError={() => setImageLoadFailed(true)}
-                      className={`h-full w-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]">
-                      <Music className="h-4 w-4 text-white/35" />
-                    </div>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <ScrollText text={currentTrack.title || 'Untitled'} className="text-[10px] font-black text-white/85" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#DFA05D]/18 text-[#DFA05D] shadow-[0_0_12px_rgba(223,160,93,0.18)] transition-all hover:bg-[#DFA05D] hover:text-black"
-                  title={isPlaying ? '일시정지' : '재생'}
-                  aria-label={isPlaying ? '일시정지' : '재생'}
-                >
-                  {isPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />}
-                </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); clearPlayer(); }}
+                className="absolute -right-2 -top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-[#DFA05D]/30 bg-[#211912] text-[#DFA05D]/80 shadow-[0_6px_16px_rgba(0,0,0,0.36),0_0_10px_rgba(223,160,93,0.12)] transition-all hover:bg-[#DFA05D] hover:text-black"
+                title="플레이어 닫기"
+                aria-label="플레이어 닫기"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <div className="overflow-hidden rounded-2xl">
+                <div className="h-[2px] w-full bg-white/10">
+                  <div
+                    className="h-full bg-[#DFA05D] transition-none"
+                    style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                  />
+                </div>
+                <div className="flex h-9 items-center gap-1.5 px-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#DFA05D]/20 bg-[#241b12]/70"
+                    title="대형 플레이어 열기"
+                    aria-label="대형 플레이어 열기"
+                  >
+                    {shouldUseCoverImage ? (
+                      <img
+                        src={currentTrack.imageUrl}
+                        alt={currentTrack.title}
+                        draggable={false}
+                        onDragStart={(e) => e.preventDefault()}
+                        onError={() => setImageLoadFailed(true)}
+                        className={`h-full w-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]">
+                        <Music className="h-4 w-4 text-white/35" />
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <ScrollText text={currentTrack.title || 'Untitled'} className="text-[10px] font-black text-white/85" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); playPrev(); }}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#DFA05D]/75 transition-all hover:bg-[#DFA05D]/14 hover:text-[#DFA05D]"
+                    title="이전 곡"
+                    aria-label="이전 곡"
+                  >
+                    <SkipBack className="h-3.5 w-3.5 fill-current" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#DFA05D]/18 text-[#DFA05D] shadow-[0_0_12px_rgba(223,160,93,0.18)] transition-all hover:bg-[#DFA05D] hover:text-black"
+                    title={isPlaying ? '일시정지' : '재생'}
+                    aria-label={isPlaying ? '일시정지' : '재생'}
+                  >
+                    {isPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); playNext(); }}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#DFA05D]/75 transition-all hover:bg-[#DFA05D]/14 hover:text-[#DFA05D]"
+                    title="다음 곡"
+                    aria-label="다음 곡"
+                  >
+                    <SkipForward className="h-3.5 w-3.5 fill-current" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

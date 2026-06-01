@@ -76,7 +76,7 @@ const fetchFavoriteSunoApiKeyStatus = async (user?: User | null): Promise<boolea
     });
     const result = await res.json().catch(() => null);
     if (res.ok) {
-      const hasKey = Boolean(result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists));
+      const hasKey = Boolean(result && (result.hasSunoApiKey || result.hasMusicApiKey || result.registered || result.hasApiKey || result.exists));
       try {
         if (hasKey) localStorage.setItem(scopedApiStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
         else localStorage.removeItem(scopedApiStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid));

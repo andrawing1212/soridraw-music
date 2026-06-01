@@ -393,7 +393,14 @@ export const saveSunoApiKey = onRequest(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    res.json({ ok: true, hasSunoApiKey: true });
+    res.json({
+      ok: true,
+      hasSunoApiKey: true,
+      hasMusicApiKey: true,
+      registered: true,
+      hasApiKey: true,
+      exists: true,
+    });
   }
 );
 
@@ -428,7 +435,14 @@ export const deleteSunoApiKey = onRequest(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    res.json({ ok: true, hasSunoApiKey: false });
+    res.json({
+      ok: true,
+      hasSunoApiKey: false,
+      hasMusicApiKey: false,
+      registered: false,
+      hasApiKey: false,
+      exists: false,
+    });
   }
 );
 
@@ -450,7 +464,14 @@ export const getSunoApiKeyStatus = onRequest(
     const docSnap = await db.collection('user_api_keys').doc(uid).get();
 
     if (!docSnap.exists) {
-      res.json({ ok: true, hasSunoApiKey: false });
+      res.json({
+        ok: true,
+        hasSunoApiKey: false,
+        hasMusicApiKey: false,
+        registered: false,
+        hasApiKey: false,
+        exists: false,
+      });
       return;
     }
 

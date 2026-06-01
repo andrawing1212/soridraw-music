@@ -288,7 +288,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
       });
       const result = await res.json();
 
-      if (res.ok && result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists)) {
+      if (res.ok && result && (result.hasSunoApiKey || result.hasMusicApiKey || result.registered || result.hasApiKey || result.exists)) {
         setStatusText('등록됨');
         localStorage.setItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
         if (typeof result.sunoRemainingCredits === 'number') {

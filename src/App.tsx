@@ -3145,7 +3145,7 @@ const fetchSunoApiKeyStatusFromServer = async (user: User | null | undefined): P
     });
     const result = await res.json().catch(() => null);
     if (res.ok) {
-      const hasKey = Boolean(result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists));
+      const hasKey = Boolean(result && (result.hasSunoApiKey || result.hasMusicApiKey || result.registered || result.hasApiKey || result.exists));
       try {
         if (hasKey) localStorage.setItem(getUserScopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
         else localStorage.removeItem(getUserScopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid));

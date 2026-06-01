@@ -158,14 +158,8 @@ const extractRemainingCredits = (payload) => {
     }
     return null;
 };
-const getStoredSunoApiKeyFromDoc = (docData) => pickFirstString(
-    docData === null || docData === void 0 ? void 0 : docData.sunoApiKey,
-    docData === null || docData === void 0 ? void 0 : docData.musicApiKey,
-    docData === null || docData === void 0 ? void 0 : docData.suno_api_key,
-    docData === null || docData === void 0 ? void 0 : docData.music_api_key
-);
+const getStoredSunoApiKeyFromDoc = (docData) => pickFirstString(docData === null || docData === void 0 ? void 0 : docData.sunoApiKey, docData === null || docData === void 0 ? void 0 : docData.musicApiKey, docData === null || docData === void 0 ? void 0 : docData.suno_api_key, docData === null || docData === void 0 ? void 0 : docData.music_api_key);
 const hasStoredSunoApiKeyInDoc = (docData) => Boolean(getStoredSunoApiKeyFromDoc(docData));
-
 exports.saveGoogleGeminiApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     var _a;
     if (handleCors(req, res))
@@ -296,7 +290,14 @@ exports.saveSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-    res.json({ ok: true, hasSunoApiKey: true });
+    res.json({
+        ok: true,
+        hasSunoApiKey: true,
+        hasMusicApiKey: true,
+        registered: true,
+        hasApiKey: true,
+        exists: true,
+    });
 });
 exports.deleteSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     if (handleCors(req, res))
@@ -324,7 +325,14 @@ exports.deleteSunoApiKey = (0, https_1.onRequest)({ region: "us-central1" }, asy
         sunoRemainingCreditsSourceTaskId: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-    res.json({ ok: true, hasSunoApiKey: false });
+    res.json({
+        ok: true,
+        hasSunoApiKey: false,
+        hasMusicApiKey: false,
+        registered: false,
+        hasApiKey: false,
+        exists: false,
+    });
 });
 exports.getSunoApiKeyStatus = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     if (handleCors(req, res))
@@ -339,11 +347,20 @@ exports.getSunoApiKeyStatus = (0, https_1.onRequest)({ region: "us-central1" }, 
     const db = admin.firestore();
     const docSnap = await db.collection('user_api_keys').doc(uid).get();
     if (!docSnap.exists) {
-        res.json({ ok: true, hasSunoApiKey: false });
+        res.json({
+            ok: true,
+            hasSunoApiKey: false,
+            hasMusicApiKey: false,
+            registered: false,
+            hasApiKey: false,
+            exists: false,
+        });
         return;
     }
     const docData = docSnap.data() || {};
-    const hasSunoApiKey = Boolean(docData.hasSunoApiKey || docData.hasMusicApiKey || hasStoredSunoApiKeyInDoc(docData));
+    const hasSunoApiKey = Boolean(docData.hasSunoApiKey ||
+        docData.hasMusicApiKey ||
+        hasStoredSunoApiKeyInDoc(docData));
     res.json({
         ok: true,
         hasSunoApiKey,

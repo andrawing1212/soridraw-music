@@ -4363,7 +4363,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   return (
     <div
-      className="soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-32 text-[var(--text-primary)]"
+      className="soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)]"
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         if (target.closest('[data-floating-menu="true"]')) return;
@@ -4662,12 +4662,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      <div className="mx-auto w-full max-w-[1500px] space-y-4 md:space-y-5">
+      <div className="mx-auto w-full max-w-[1500px] space-y-3 md:space-y-5">
         
         {!isSharedView && typeof remainingCredits === 'number' && (
           <div className="flex md:hidden items-center justify-end">
             <div
-              className="h-12 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2]"
+              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2]"
               title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인` : '곡 생성 완료 후 1회 확인된 값'}
             >
               {remainingCredits.toLocaleString()} credit

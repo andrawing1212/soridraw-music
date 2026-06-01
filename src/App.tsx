@@ -7975,11 +7975,9 @@ ${normalizePromptForDisplay(result.prompt)}
 
 
   const floatingActionBarVariants = {
-    initial: { opacity: 0, y: 18, scale: 0.98, filter: 'blur(6px)' },
+    initial: { opacity: 0, y: 16, scale: 0.985, filter: 'blur(6px)' },
     animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
-    exit: (mode: 'collapse' | 'dock') => mode === 'collapse'
-      ? { opacity: 0, x: -260, scaleX: 0.08, filter: 'blur(12px)' }
-      : { opacity: 0, y: 0, scale: 0.98, filter: 'blur(6px)' }
+    exit: { opacity: 0, y: 16, scale: 0.985, filter: 'blur(6px)' }
   };
 
   const setActionButtonHint = (item: CategoryItem) => {
@@ -8035,7 +8033,7 @@ ${normalizePromptForDisplay(result.prompt)}
             "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
               ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-              : "bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] hover:bg-[#E5AA67]"
+              : "bg-[#E7AD68] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
           )}
         >
           {isGenerating ? (
@@ -8503,7 +8501,7 @@ ${normalizePromptForDisplay(result.prompt)}
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-14 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+              <header className="studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
@@ -9234,11 +9232,10 @@ ${normalizePromptForDisplay(result.prompt)}
                   <motion.button
                     key="action-buttons-collapsed-toggle"
                     type="button"
-                    layoutId="action-collapse-ghost-button"
                     initial={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
                     animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
                     exit={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
-                    transition={{ type: "spring", stiffness: 360, damping: 32, mass: 0.8 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                     drag={isActionDragMobile ? "x" : false}
                     dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
                     dragElastic={0.12}
@@ -9252,7 +9249,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group fixed left-[-20px] md:left-[68px] 2xl:left-[calc((100vw-1320px)/2-82px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
+                    className="group fixed left-[-20px] md:left-[24px] 2xl:left-[calc((100vw-1320px)/2-132px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
@@ -9265,7 +9262,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     initial={{ opacity: 0, y: 18, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                    transition={{ type: "spring", stiffness: 330, damping: 34, mass: 0.85 }}
+                    transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                     className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
                   >
                     <div className="relative w-full max-w-4xl pointer-events-auto">
@@ -9275,7 +9272,6 @@ ${normalizePromptForDisplay(result.prompt)}
                         </div>
                       )}
                       <motion.div
-                        layoutId="action-buttons-floating-bar"
                         drag={isActionDragMobile ? "x" : false}
                         dragConstraints={isActionDragMobile ? { left: 0, right: 0 } : undefined}
                         dragElastic={0.16}
@@ -9285,18 +9281,16 @@ ${normalizePromptForDisplay(result.prompt)}
                             setIsActionButtonsCollapsed(true);
                           }
                         }}
-                        custom={isActionButtonsCollapsed ? 'collapse' : 'dock'}
                         variants={floatingActionBarVariants}
                         initial="initial"
                         animate="animate"
                         exit="exit"
                         style={{ transformOrigin: 'left center' }}
-                        transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.9 }}
-                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--card-bg)]/96 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_58px_rgba(0,0,0,0.58),0_7px_20px_rgba(0,0,0,0.38),0_0_0_1px_rgba(255,255,255,0.05)] opacity-100 overflow-hidden"
+                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
                       >
                         <motion.button
-                          layoutId="action-collapse-ghost-button"
-                          type="button"
+                                type="button"
                           onClick={() => setIsActionButtonsCollapsed(true)}
                           onMouseEnter={() => {}}
                           onMouseLeave={() => {}}

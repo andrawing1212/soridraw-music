@@ -2041,6 +2041,7 @@ ${song.prompt}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
+      <div className="md:hidden h-7" aria-hidden="true" />
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}

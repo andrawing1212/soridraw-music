@@ -209,6 +209,8 @@ export default function GlobalPlayer() {
   const [playbackWarning, setPlaybackWarning] = useState<string | null>(null);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [isMiniPlayerDocked, setIsMiniPlayerDocked] = useState(false);
+  const miniPlayerDragJustEndedRef = useRef(false);
+  const miniPlayerDragResetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -216,6 +218,14 @@ export default function GlobalPlayer() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (miniPlayerDragResetTimerRef.current) {
+        window.clearTimeout(miniPlayerDragResetTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -449,18 +459,36 @@ export default function GlobalPlayer() {
   };
 
 
+  const markMiniPlayerDragEnded = () => {
+    miniPlayerDragJustEndedRef.current = true;
+    if (miniPlayerDragResetTimerRef.current) {
+      window.clearTimeout(miniPlayerDragResetTimerRef.current);
+    }
+    miniPlayerDragResetTimerRef.current = window.setTimeout(() => {
+      miniPlayerDragJustEndedRef.current = false;
+    }, 180);
+  };
+
   const handleCollapsedMiniDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => {
     if (!isMobile || mode !== 'collapsed') return;
-    if (info.offset.x < -70 || info.velocity.x < -520) {
+    markMiniPlayerDragEnded();
+    if (info.offset.x > 64 || info.velocity.x > 480) {
       setIsMiniPlayerDocked(true);
     }
   };
 
   const handleDockedMiniDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => {
     if (!isMobile || mode !== 'collapsed') return;
-    if (info.offset.x > 34 || info.velocity.x > 360) {
+    markMiniPlayerDragEnded();
+    if (info.offset.x < -34 || info.velocity.x < -360) {
       setIsMiniPlayerDocked(false);
     }
+  };
+
+  const handleMiniPlayerExpandClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (miniPlayerDragJustEndedRef.current) return;
+    handleModeChange('expanded');
   };
 
   const handleDownload = (url: string, title?: string) => {
@@ -934,7 +962,7 @@ export default function GlobalPlayer() {
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
               : 'top-[88px] right-6 w-[370px] max-w-[calc(100vw-40px)]'
             : isMiniPlayerDocked && isMobile
-            ? 'bottom-[18px] left-[-18px] w-[58px] items-start'
+            ? 'bottom-[18px] right-[-18px] w-[58px] items-end'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
             : 'top-2 left-[168px] w-[305px] items-start'
@@ -948,7 +976,7 @@ export default function GlobalPlayer() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               drag={isMobile && !isMiniPlayerDocked ? "x" : false}
-              dragConstraints={isMobile && !isMiniPlayerDocked ? { left: -150, right: 0 } : undefined}
+              dragConstraints={isMobile && !isMiniPlayerDocked ? { left: 0, right: 150 } : undefined}
               dragElastic={0.14}
               onDragEnd={handleCollapsedMiniDragEnd}
               className={`${isMiniPlayerDocked && isMobile ? 'w-[64px]' : 'w-full'} relative rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl touch-pan-y`}
@@ -957,10 +985,10 @@ export default function GlobalPlayer() {
                 <motion.button
                   type="button"
                   drag="x"
-                  dragConstraints={{ left: 0, right: 96 }}
+                  dragConstraints={{ left: -96, right: 0 }}
                   dragElastic={0.12}
                   onDragEnd={handleDockedMiniDragEnd}
-                  onClick={(e) => { e.stopPropagation(); setIsMiniPlayerDocked(false); }}
+                  onClick={(e) => { e.stopPropagation(); if (!miniPlayerDragJustEndedRef.current) setIsMiniPlayerDocked(false); }}
                   className="group relative flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-full border border-[#DFA05D]/45 bg-[#1b1712] text-[#DFA05D] shadow-[0_8px_20px_rgba(0,0,0,0.34),0_0_14px_rgba(223,160,93,0.12)] cursor-grab active:cursor-grabbing"
                   aria-label="소형 플레이어 펼치기"
                   title="소형 플레이어 펼치기"
@@ -980,7 +1008,7 @@ export default function GlobalPlayer() {
                     </div>
                   )}
                   <span className="pointer-events-none absolute inset-0 rounded-full bg-black/12" />
-                  <span className="pointer-events-none absolute right-1.5 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#DFA05D]/55" />
+                  <span className="pointer-events-none absolute left-1.5 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#DFA05D]/55" />
                 </motion.button>
               ) : (
                 <>
@@ -1003,7 +1031,7 @@ export default function GlobalPlayer() {
                 <div className="flex h-9 items-center gap-1.5 px-1.5 pr-7">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
+                    onClick={handleMiniPlayerExpandClick}
                     className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#DFA05D]/20 bg-[#241b12]/70"
                     title="대형 플레이어 열기"
                     aria-label="대형 플레이어 열기"
@@ -1025,7 +1053,7 @@ export default function GlobalPlayer() {
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
+                    onClick={handleMiniPlayerExpandClick}
                     className="min-w-0 flex-1 text-left"
                   >
                     <ScrollText text={currentTrack.title || 'Untitled'} className="text-[10px] font-black text-white/85" />

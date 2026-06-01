@@ -46,6 +46,51 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 
+
+const PROJECT_ID = 'soridraw-app-866a5';
+const REGION = 'us-central1';
+const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
+const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
+
+const scopedApiStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
+
+const getCachedSunoApiStatus = (uid?: string | null) => {
+  try {
+    return localStorage.getItem(scopedApiStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const fetchFavoriteSunoApiKeyStatus = async (user?: User | null): Promise<boolean> => {
+  if (!user?.uid) return false;
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch(`${BASE_URL}/getSunoApiKeyStatus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({}),
+    });
+    const result = await res.json().catch(() => null);
+    if (res.ok) {
+      const hasKey = Boolean(result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists));
+      try {
+        if (hasKey) localStorage.setItem(scopedApiStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
+        else localStorage.removeItem(scopedApiStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
+      } catch {
+        // localStorage may be unavailable.
+      }
+      return hasKey;
+    }
+  } catch {
+    // Network/server failures fall back to local hint.
+  }
+  return getCachedSunoApiStatus(user.uid);
+};
+
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -278,19 +323,24 @@ export default function FavoritesPage({
   const [isFavoriteMusicApiGenerating, setIsFavoriteMusicApiGenerating] = useState(false);
   const [favoriteMusicApiMessage, setFavoriteMusicApiMessage] = useState<string | null>(null);
   const [isFavoriteMusicApiSectionExpanded, setIsFavoriteMusicApiSectionExpanded] = useState(false);
-  const [hasFavoriteSunoApiKey, setHasFavoriteSunoApiKey] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('soridraw_suno_api_key_registered') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [hasFavoriteSunoApiKey, setHasFavoriteSunoApiKey] = useState<boolean>(() => getCachedSunoApiStatus(user?.uid));
   const [foreignTargetLanguage, setForeignTargetLanguage] = useState<string>('English');
   const [editedTitle, setEditedTitle] = useState('');
   const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
   const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
   const [originalPrompt, setOriginalPrompt] = useState('');
   const [editedPrompt, setEditedPrompt] = useState('');
+
+  useEffect(() => {
+    let isCancelled = false;
+    setHasFavoriteSunoApiKey(getCachedSunoApiStatus(user?.uid));
+    fetchFavoriteSunoApiKeyStatus(user).then((hasKey) => {
+      if (!isCancelled) setHasFavoriteSunoApiKey(hasKey);
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
 
   // 제목/장르 표시 정규화
   const getDisplaySubGenre = (song: any): string => {
@@ -3115,12 +3165,8 @@ ${song.prompt}
                           </button>
 
                           <button
-                            onClick={() => {
-                              try {
-                                setHasFavoriteSunoApiKey(localStorage.getItem('soridraw_suno_api_key_registered') === 'true');
-                              } catch {
-                                setHasFavoriteSunoApiKey(false);
-                              }
+                            onClick={async () => {
+                              setHasFavoriteSunoApiKey(await fetchFavoriteSunoApiKeyStatus(user));
                               setFavoriteMusicApiMessage(null);
                               setShowFavoriteMusicApiModal(true);
                             }}

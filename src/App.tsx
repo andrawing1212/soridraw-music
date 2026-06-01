@@ -3061,17 +3061,15 @@ const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 
 const getUserScopedStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 
-const getStoredGoogleGeminiApiKey = (uid?: string | null): string => {
-  try {
-    return localStorage.getItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid)) || '';
-  } catch {
-    return '';
-  }
+const getStoredGoogleGeminiApiKey = (_uid?: string | null): string => {
+  // 실제 Gemini API Key는 로컬에 보관하지 않는다.
+  // 항상 현재 로그인한 계정(uid) 기준으로 서버에서 다시 가져온다.
+  return '';
 };
 
-const cacheGoogleGeminiApiKey = (uid: string, apiKey: string) => {
+const cacheGoogleGeminiApiKey = (uid: string, _apiKey: string) => {
   try {
-    localStorage.setItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid), apiKey);
+    localStorage.removeItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid));
     localStorage.setItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid), 'true');
   } catch {
     // localStorage may be unavailable.
@@ -3113,14 +3111,12 @@ const fetchGoogleGeminiApiKeyFromServer = async (user: User | null | undefined):
 
 const resolveGoogleGeminiApiKey = async (user: User | null | undefined): Promise<string> => {
   if (!user?.uid) return '';
-  const serverKey = await fetchGoogleGeminiApiKeyFromServer(user);
-  if (serverKey) return serverKey;
-  return getStoredGoogleGeminiApiKey(user.uid);
+  return fetchGoogleGeminiApiKeyFromServer(user);
 };
 
 const hasStoredGoogleGeminiApiKey = (uid?: string | null): boolean => {
   try {
-    return localStorage.getItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true' || !!getStoredGoogleGeminiApiKey(uid);
+    return localStorage.getItem(getUserScopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';
   } catch {
     return false;
   }
@@ -3132,6 +3128,37 @@ const hasStoredSunoApiKey = (uid?: string | null): boolean => {
   } catch {
     return false;
   }
+};
+
+const fetchSunoApiKeyStatusFromServer = async (user: User | null | undefined): Promise<boolean> => {
+  if (!user?.uid) return false;
+
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/getSunoApiKeyStatus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({}),
+    });
+    const result = await res.json().catch(() => null);
+    if (res.ok) {
+      const hasKey = Boolean(result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists));
+      try {
+        if (hasKey) localStorage.setItem(getUserScopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
+        else localStorage.removeItem(getUserScopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
+      } catch {
+        // localStorage may be unavailable.
+      }
+      return hasKey;
+    }
+  } catch {
+    // Network/server failures fall back to the local hint only.
+  }
+
+  return hasStoredSunoApiKey(user.uid);
 };
 
 const GEMINI_MODEL_LABELS: Record<string, string> = {
@@ -3450,15 +3477,20 @@ function App() {
     };
 
     const handleCreditsUpdate = () => readSunoRemainingCreditsCache();
+    let isCancelled = false;
     readSunoRemainingCreditsCache();
     setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
+    fetchSunoApiKeyStatusFromServer(user).then((hasKey) => {
+      if (!isCancelled) setHasSunoApiKey(hasKey);
+    });
     window.addEventListener('storage', handleCreditsUpdate);
     window.addEventListener('soridraw:suno-credits-updated', handleCreditsUpdate as EventListener);
     return () => {
+      isCancelled = true;
       window.removeEventListener('storage', handleCreditsUpdate);
       window.removeEventListener('soridraw:suno-credits-updated', handleCreditsUpdate as EventListener);
     };
-  }, [user?.uid]);
+  }, [user]);
 
   const getPendingSunoCreditTrackIds = useCallback((): string[] => {
     try {
@@ -9866,8 +9898,8 @@ ${normalizePromptForDisplay(result.prompt)}
                           <Settings className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => {
-                            setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
+                          onClick={async () => {
+                            setHasSunoApiKey(await fetchSunoApiKeyStatusFromServer(user));
                             setShowMusicApiModal(true);
                           }}
                           disabled={isMusicApiGenerating}
@@ -12572,12 +12604,13 @@ function SongStructureIntegratedControl({
     try {
       const prevItem = userCustomSections.find((item) => item.id === editingCustomSectionId);
       const shouldAutoGenerate = !rawEn || Boolean(prevItem && rawKo && rawKo !== (prevItem.labelKo || ''));
+      const customSectionGeminiApiKey = shouldAutoGenerate ? await resolveGoogleGeminiApiKey(auth.currentUser) : '';
       const autoMeta = shouldAutoGenerate ? await generateCustomSectionMetadata({
         labelKo,
         description: '',
         kind: 'other',
         context: 'section',
-        geminiApiKey: getStoredGoogleGeminiApiKey(auth.currentUser?.uid),
+        geminiApiKey: customSectionGeminiApiKey,
       }) : null;
       const label = sanitizeCustomLabel(shouldAutoGenerate ? (autoMeta?.labelEn || rawEn || labelKo) : (rawEn || autoMeta?.labelEn || labelKo));
       const tagCue = sanitizeCustomLabel(autoMeta?.tagCue || prevItem?.tagCue || label);
@@ -14520,12 +14553,13 @@ function TagEditModal({
     try {
       const prevItem = localCustomTagsForSection.find((item) => item.id === editingCustomTagId);
       const shouldAutoGenerate = !rawEn || Boolean(prevItem && rawKo && rawKo !== (prevItem.labelKo || ''));
+      const customTagGeminiApiKey = shouldAutoGenerate ? await resolveGoogleGeminiApiKey(auth.currentUser) : '';
       const autoMeta = shouldAutoGenerate
         ? await generateCustomSectionMetadata({
             labelKo,
             description: '',
             context: 'tag',
-            geminiApiKey: getStoredGoogleGeminiApiKey(auth.currentUser?.uid),
+            geminiApiKey: customTagGeminiApiKey,
           })
         : null;
       const englishLabel = sanitizeCustomLabel(shouldAutoGenerate ? (autoMeta?.labelEn || rawEn || labelKo) : (rawEn || autoMeta?.labelEn || labelKo));

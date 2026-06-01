@@ -156,14 +156,48 @@ const formatDate = (value?: number | null) => {
   return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
+const PROJECT_ID = 'soridraw-app-866a5';
+const REGION = 'us-central1';
+const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
+const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
+
 const scopedStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 
 const getLocalApiStatus = (uid?: string | null) => {
   try {
-    return localStorage.getItem(scopedStorageKey('soridraw_suno_api_key_registered', uid)) === 'true';
+    return localStorage.getItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';
   } catch {
     return false;
   }
+};
+
+const fetchSunoApiStatus = async (user?: User | null): Promise<boolean> => {
+  if (!user?.uid) return false;
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch(`${BASE_URL}/getSunoApiKeyStatus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({}),
+    });
+    const result = await res.json().catch(() => null);
+    if (res.ok) {
+      const hasKey = Boolean(result && (result.hasSunoApiKey || result.registered || result.hasApiKey || result.exists));
+      try {
+        if (hasKey) localStorage.setItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
+        else localStorage.removeItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
+      } catch {
+        // localStorage may be unavailable.
+      }
+      return hasKey;
+    }
+  } catch {
+    // Network/server failures fall back to local hint.
+  }
+  return getLocalApiStatus(user.uid);
 };
 
 const getRemainingCredits = (uid?: string | null) => {
@@ -207,6 +241,7 @@ export default function MyPage() {
       setUser(currentUser);
       setIsApiRegistered(getLocalApiStatus(currentUser?.uid));
       setRemainingCredits(getRemainingCredits(currentUser?.uid));
+      fetchSunoApiStatus(currentUser).then(setIsApiRegistered);
     });
     return () => unsubscribe();
   }, []);
@@ -226,6 +261,7 @@ export default function MyPage() {
     const refreshStatus = () => {
       setIsApiRegistered(getLocalApiStatus(user?.uid));
       setRemainingCredits(getRemainingCredits(user?.uid));
+      fetchSunoApiStatus(user).then(setIsApiRegistered);
     };
     window.addEventListener('storage', refreshStatus);
     window.addEventListener('soridraw:suno-credits-updated', refreshStatus as EventListener);

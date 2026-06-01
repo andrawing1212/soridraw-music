@@ -53,17 +53,14 @@ function getMusicApiErrorMessage(result: any): string {
   return result?.error || 'Music API 남은 크레딧 확인에 실패했습니다.';
 }
 
-function getStoredGoogleApiKey(uid?: string | null) {
-  try {
-    return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, uid)) || '';
-  } catch {
-    return '';
-  }
+function getStoredGoogleApiKey(_uid?: string | null) {
+  // 실제 Gemini API Key는 로컬에 저장하지 않는다.
+  return '';
 }
 
 function getStoredGoogleApiKeyStatus(uid?: string | null) {
   try {
-    return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true' || !!getStoredGoogleApiKey(uid);
+    return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';
   } catch {
     return false;
   }
@@ -368,12 +365,12 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
       const result = await res.json();
 
       if (res.ok && result?.ok) {
-        localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid), googleApiKey.trim());
+        localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));
         localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
         setGoogleRegistered(true);
         setGoogleApiKey('');
         setActiveModal(null);
-        setMessage('Google Gemini API Key가 현재 계정 기준으로 저장되었습니다. 같은 아이디로 로그인하면 다른 환경에서도 사용할 수 있습니다.');
+        setMessage('Google Gemini API Key가 현재 계정 기준으로 서버에 저장되었습니다. 같은 아이디로 로그인하면 다른 환경에서도 사용할 수 있습니다.');
         loadGoogleApiKeyStatus(true);
       } else {
         setMessage(result?.error || 'Google API Key 저장에 실패했습니다.');

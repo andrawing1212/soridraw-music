@@ -2176,7 +2176,7 @@ ${song.prompt}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   onMouseEnter={(event) => {
-                    event.currentTarget.style.backgroundColor = '#221a1c';
+                    event.currentTarget.style.backgroundColor = '#171717';
                   }}
                   onMouseLeave={(event) => {
                     event.currentTarget.style.backgroundColor = '';
@@ -2191,7 +2191,10 @@ ${song.prompt}
                       e.stopPropagation();
                       toggleSongSelection(song.id);
                       setPendingSelectionAction(null);
+                      return;
                     }
+
+                    setSelectedSong(song);
                   }}
                   className={cn(
                     "group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
@@ -2328,23 +2331,11 @@ ${song.prompt}
                         </span>
                       )}
 
-                      <div className="relative shrink-0">
-                        {song.isLocked && (
-                          <span className="pointer-events-none absolute -right-1.5 -top-1.5 z-20 inline-flex h-5 w-5 items-center justify-center text-[#AC5045] md:hidden" title="잠김">
-                            <Lock className="w-3.5 h-3.5" />
-                          </span>
-                        )}
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedSong(song);
-                          }}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xs font-black text-white/85 transition-all hover:bg-white/10 hover:text-white md:w-auto md:px-5 md:font-bold"
-                        >
-                          <span className="md:hidden">E</span>
-                          <span className="hidden md:inline">Edit</span>
-                        </button>
-                      </div>
+                      {song.isLocked && (
+                        <span className="inline-flex h-10 w-10 items-center justify-center text-[#AC5045] md:hidden" title="잠김">
+                          <Lock className="w-3.5 h-3.5" />
+                        </span>
+                      )}
 <div className="relative">
                         <button
                           onClick={(event) => {

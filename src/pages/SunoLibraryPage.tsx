@@ -4899,7 +4899,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           data-selection-keep="true"
                           className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseEnter={(event) => {
-                            event.currentTarget.style.backgroundColor = 'rgba(101, 135, 97, 0.075)';
+                            event.currentTarget.style.backgroundColor = '#171717';
                           }}
                           onMouseLeave={(event) => {
                             event.currentTarget.style.backgroundColor = '';

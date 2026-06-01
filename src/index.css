@@ -495,3 +495,11 @@ html {
   will-change: height;
   transform: translateZ(0);
 }
+
+/* SORIDRAW_51_STUDIO_MENU_CARD_COLOR_MATCH
+   Match Studio menu card surfaces to Music Note / Library list card surface.
+   Keep buttons, selected states, popups, spacing and animations unchanged. */
+.dark .studio-tone-down [data-expand-section],
+.dark .studio-tone-down .soridraw-expand-card {
+  background-color: #1a1a1a !important;
+}

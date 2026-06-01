@@ -7975,9 +7975,14 @@ ${normalizePromptForDisplay(result.prompt)}
 
 
   const floatingActionBarVariants = {
-    initial: { opacity: 0, y: 16, scale: 0.985, filter: 'blur(6px)' },
-    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
-    exit: { opacity: 0, y: 16, scale: 0.985, filter: 'blur(6px)' }
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: 10 }
+  };
+
+  const smoothActionPanelTransition = {
+    duration: 0.28,
+    ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
   };
 
   const setActionButtonHint = (item: CategoryItem) => {
@@ -9225,17 +9230,17 @@ ${normalizePromptForDisplay(result.prompt)}
           <div ref={actionButtonsAnchorRef} className="relative h-0" aria-hidden="true" />
 
           {/* Floating / Collapsible Action Buttons */}
-          <AnimatePresence initial={false}>
+          <AnimatePresence initial={false} mode="wait">
             {shouldShowActionButtons && (
               <Portal>
                 {isActionButtonsCollapsed ? (
                   <motion.button
                     key="action-buttons-collapsed-toggle"
                     type="button"
-                    initial={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
-                    animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
-                    exit={{ opacity: 0, x: -10, scale: 0.88, filter: 'blur(8px)' }}
-                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={smoothActionPanelTransition}
                     drag={isActionDragMobile ? "x" : false}
                     dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
                     dragElastic={0.12}
@@ -9249,7 +9254,7 @@ ${normalizePromptForDisplay(result.prompt)}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group fixed left-[-20px] md:left-[24px] 2xl:left-[calc((100vw-1320px)/2-132px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-all hover:brightness-[1.06]"
+                    className="group fixed left-[-20px] md:left-[24px] 2xl:left-[calc((100vw-1320px)/2-132px)] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
@@ -9259,10 +9264,10 @@ ${normalizePromptForDisplay(result.prompt)}
                 ) : (
                   <motion.div
                     key="action-buttons-expanded-bar"
-                    initial={{ opacity: 0, y: 18, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                    transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                    initial={floatingActionBarVariants.initial}
+                    animate={floatingActionBarVariants.animate}
+                    exit={floatingActionBarVariants.exit}
+                    transition={smoothActionPanelTransition}
                     className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
                   >
                     <div className="relative w-full max-w-4xl pointer-events-auto">
@@ -9281,12 +9286,7 @@ ${normalizePromptForDisplay(result.prompt)}
                             setIsActionButtonsCollapsed(true);
                           }
                         }}
-                        variants={floatingActionBarVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        style={{ transformOrigin: 'left center' }}
-                        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ transformOrigin: 'center bottom' }}
                         className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
                       >
                         <motion.button

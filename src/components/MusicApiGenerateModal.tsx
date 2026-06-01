@@ -162,6 +162,11 @@ export default function MusicApiGenerateModal({
 
   const [step, setStep] = useState<1 | 2>(1);
   const stepRef = useRef<1 | 2>(1);
+
+  const setModalStep = (nextStep: 1 | 2) => {
+    stepRef.current = nextStep;
+    setStep(nextStep);
+  };
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
@@ -192,7 +197,7 @@ export default function MusicApiGenerateModal({
 
   const handleModalBack = () => {
     if (stepRef.current === 2) {
-      setStep(1);
+      setModalStep(1);
       return;
     }
     onClose();
@@ -214,15 +219,32 @@ export default function MusicApiGenerateModal({
 
     const onPopState = () => {
       if (stepRef.current === 2) {
-        setStep(1);
+        setModalStep(1);
         window.history.pushState(modalHistoryState, '', window.location.href);
         return;
       }
       onClose();
     };
 
+    const onMouseBackButton = (event: MouseEvent) => {
+      if (event.button !== 3) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      handleModalBack();
+    };
+
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('mousedown', onMouseBackButton, true);
+    window.addEventListener('mouseup', onMouseBackButton, true);
+    window.addEventListener('auxclick', onMouseBackButton, true);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('mousedown', onMouseBackButton, true);
+      window.removeEventListener('mouseup', onMouseBackButton, true);
+      window.removeEventListener('auxclick', onMouseBackButton, true);
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -309,7 +331,7 @@ export default function MusicApiGenerateModal({
     } else if (includeLyrics && lyricLanguages.length === 0) {
       return;
     }
-    setStep(2);
+    setModalStep(2);
   };
 
   const handleConfirm = () => {

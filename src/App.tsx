@@ -8518,14 +8518,18 @@ ${normalizePromptForDisplay(result.prompt)}
                     </button>
                   )}
 
-                  <div className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5">
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
+                  >
                     <h1 
                       className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[45px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
                       <Zap className="w-8 h-8 md:w-9 md:h-9 text-[#c8801b]" />
                       <span>Sori <span className="text-[#c8801b]">Studio</span></span>
                     </h1>
-                  </div>
+                  </motion.div>
                 </div>
               </header>
 

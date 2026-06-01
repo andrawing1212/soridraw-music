@@ -1039,11 +1039,11 @@ export default function GlobalPlayer() {
                     style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                   />
                 </div>
-                <div className="flex h-9 items-center gap-1.5 px-1.5 pr-7">
+                <div className="flex h-[54px] items-center gap-2 px-2 pr-8">
                   <button
                     type="button"
                     onClick={handleMiniPlayerExpandClick}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#DFA05D]/20 bg-[#241b12]/70"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#DFA05D]/20 bg-[#241b12]/70"
                     title="대형 플레이어 열기"
                     aria-label="대형 플레이어 열기"
                   >
@@ -1058,7 +1058,7 @@ export default function GlobalPlayer() {
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-500/10 via-violet-500/10 to-white/[0.03]">
-                        <Music className="h-4 w-4 text-white/35" />
+                        <Music className="h-5 w-5 text-white/35" />
                       </div>
                     )}
                   </button>
@@ -1067,33 +1067,33 @@ export default function GlobalPlayer() {
                     onClick={handleMiniPlayerExpandClick}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <ScrollText text={currentTrack.title || 'Untitled'} className="text-[10px] font-black text-white/85" />
+                    <ScrollText text={currentTrack.title || 'Untitled'} className="text-[11px] font-black text-white/85" />
                   </button>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); playPrev(); }}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#DFA05D]/75 transition-all hover:bg-[#DFA05D]/14 hover:text-[#DFA05D]"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#DFA05D]/75 transition-all hover:bg-[#DFA05D]/14 hover:text-[#DFA05D]"
                     title="이전 곡"
                     aria-label="이전 곡"
                   >
-                    <SkipBack className="h-3.5 w-3.5 fill-current" />
+                    <SkipBack className="h-4 w-4 fill-current" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#DFA05D]/18 text-[#DFA05D] shadow-[0_0_12px_rgba(223,160,93,0.18)] transition-all hover:bg-[#DFA05D] hover:text-black"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#DFA05D]/18 text-[#DFA05D] shadow-[0_0_12px_rgba(223,160,93,0.18)] transition-all hover:bg-[#DFA05D] hover:text-black"
                     title={isPlaying ? '일시정지' : '재생'}
                     aria-label={isPlaying ? '일시정지' : '재생'}
                   >
-                    {isPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />}
+                    {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
                   </button>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); playNext(); }}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#DFA05D]/75 transition-all hover:bg-[#DFA05D]/14 hover:text-[#DFA05D]"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#DFA05D]/75 transition-all hover:bg-[#DFA05D]/14 hover:text-[#DFA05D]"
                     title="다음 곡"
                     aria-label="다음 곡"
                   >
-                    <SkipForward className="h-3.5 w-3.5 fill-current" />
+                    <SkipForward className="h-4 w-4 fill-current" />
                   </button>
                 </div>
               </div>

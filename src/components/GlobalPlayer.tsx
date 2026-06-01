@@ -931,11 +931,11 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="w-full overflow-hidden rounded-2xl border border-white/10 bg-[#151515]/95 shadow-[0_6px_20px_rgba(0,0,0,0.3)] backdrop-blur-xl"
+              className="w-full overflow-hidden rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl"
             >
               <div className="h-[2px] w-full bg-white/10">
                 <div
-                  className="h-full bg-brand-orange transition-none"
+                  className="h-full bg-[#DFA05D] transition-none"
                   style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                 />
               </div>
@@ -943,7 +943,7 @@ export default function GlobalPlayer() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleModeChange('expanded'); }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/40"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#DFA05D]/20 bg-[#241b12]/70"
                   title="대형 플레이어 열기"
                   aria-label="대형 플레이어 열기"
                 >
@@ -971,7 +971,7 @@ export default function GlobalPlayer() {
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-orange/15 text-brand-orange transition-all hover:bg-brand-orange hover:text-white"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#DFA05D]/18 text-[#DFA05D] shadow-[0_0_12px_rgba(223,160,93,0.18)] transition-all hover:bg-[#DFA05D] hover:text-black"
                   title={isPlaying ? '일시정지' : '재생'}
                   aria-label={isPlaying ? '일시정지' : '재생'}
                 >
@@ -987,7 +987,7 @@ export default function GlobalPlayer() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full md:w-[370px] max-h-[82vh] overflow-y-auto overscroll-contain bg-[var(--bg-secondary)] border border-brand-orange/30 rounded-3xl shadow-2xl flex flex-col pt-5 pb-6 px-5 relative scrollbar-hide"
+              className="w-full md:w-[370px] max-h-[82vh] overflow-y-auto overscroll-contain bg-[#1d1913] border border-[#DFA05D]/42 rounded-3xl shadow-[0_22px_55px_rgba(0,0,0,0.55),0_0_30px_rgba(223,160,93,0.10)] flex flex-col pt-5 pb-6 px-5 relative scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', overscrollBehavior: 'contain' }}
             >
               <style>{`
@@ -1001,7 +1001,7 @@ export default function GlobalPlayer() {
                   style={{ backgroundImage: `url(${currentTrack.imageUrl})` }}
                 />
               ) : (
-                 <div className="absolute inset-0 bg-gradient-to-br from-brand-orange/10 to-purple-500/10 opacity-10 pointer-events-none" />
+                 <div className="absolute inset-0 bg-gradient-to-br from-[#DFA05D]/14 via-[#2a2015]/35 to-black/10 opacity-100 pointer-events-none" />
               )}
 
               <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
@@ -1081,7 +1081,7 @@ export default function GlobalPlayer() {
               <button
                 type="button"
                 onClick={() => setShowLyrics((v) => !v)}
-                className="w-full aspect-square mt-6 mb-5 shrink-0 rounded-2xl overflow-hidden shadow-2xl bg-black/25 border border-white/5 flex items-center justify-center relative z-10 text-left group focus:outline-none focus:ring-2 focus:ring-brand-orange/50"
+                className="w-full aspect-square mt-6 mb-5 shrink-0 rounded-2xl overflow-hidden shadow-[0_18px_34px_rgba(0,0,0,0.35)] bg-[#171410] border border-[#DFA05D]/12 flex items-center justify-center relative z-10 text-left group focus:outline-none focus:ring-2 focus:ring-[#DFA05D]/55"
                 aria-label={showLyrics ? '가사 닫기' : '가사 보기'}
               >
                  {shouldUseCoverImage ? (
@@ -1114,7 +1114,7 @@ export default function GlobalPlayer() {
                        className="absolute inset-0 z-10 flex flex-col p-4"
                      >
                        <div className="flex items-center justify-between mb-2 shrink-0">
-                         <span className="text-brand-orange text-sm font-bold">가사</span>
+                         <span className="text-[#DFA05D] text-sm font-bold">가사</span>
                          <span className="text-[11px] text-white/60">다시 누르면 닫힘</span>
                        </div>
 
@@ -1134,7 +1134,7 @@ export default function GlobalPlayer() {
                                  ref={(el) => { lyricLineRefs.current[index] = el; }}
                                  className={`transition-colors duration-300 ${
                                    isSection
-                                     ? 'text-brand-orange/90 font-bold pt-2 pb-0.5 tracking-wide text-[12px]'
+                                     ? 'text-[#DFA05D]/90 font-bold pt-2 pb-0.5 tracking-wide text-[12px]'
                                      : 'text-white/90'
                                  }`}
                                >
@@ -1159,7 +1159,7 @@ export default function GlobalPlayer() {
                      <ScrollText text={currentTrack.title || 'Untitled Track'} className="text-xl font-bold leading-tight" />
                    </div>
                    {canUseFavorite && (
-                     <button onClick={handleToggleFavorite} className={`shrink-0 transition-colors ${isFavoriteActive ? 'text-yellow-400 hover:text-yellow-300' : 'text-white/40 hover:text-brand-orange'}`} title={isFavoriteActive ? '즐겨찾기 해제' : '즐겨찾기'}>
+                     <button onClick={handleToggleFavorite} className={`shrink-0 transition-colors ${isFavoriteActive ? 'text-yellow-400 hover:text-yellow-300' : 'text-white/40 hover:text-[#DFA05D]'}`} title={isFavoriteActive ? '즐겨찾기 해제' : '즐겨찾기'}>
                         <Star className={`w-5 h-5 ${isFavoriteActive ? 'fill-yellow-400' : ''}`} />
                      </button>
                    )}
@@ -1180,9 +1180,9 @@ export default function GlobalPlayer() {
                     max={duration || 100}
                     value={currentTime}
                     onChange={(e) => seek(Number(e.target.value))}
-                    className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-brand-orange [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:opacity-0 group-hover:[&::-webkit-slider-thumb]:opacity-100 transition-all"
+                    className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#DFA05D] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:opacity-0 group-hover:[&::-webkit-slider-thumb]:opacity-100 transition-all"
                     style={{
-                      background: `linear-gradient(to right, #ff8200 ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.1) ${(currentTime / (duration || 1)) * 100}%)`
+                      background: `linear-gradient(to right, #DFA05D ${(currentTime / (duration || 1)) * 100}%, rgba(255,255,255,0.1) ${(currentTime / (duration || 1)) * 100}%)`
                     }}
                   />
                   <div className="flex justify-between text-[10px] font-mono opacity-50 mt-2">
@@ -1192,14 +1192,14 @@ export default function GlobalPlayer() {
                 </div>
 
                 <div className="w-full flex items-center justify-between gap-2 mb-5">
-                   <button onClick={() => setIsShuffle(!isShuffle)} className={`p-2 transition-all ${isShuffle ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}>
+                   <button onClick={() => setIsShuffle(!isShuffle)} className={`p-2 transition-all ${isShuffle ? 'text-[#DFA05D]' : 'text-white/40 hover:text-white/80'}`}>
                       <Shuffle className="w-5 h-5" />
                    </button>
                    <button onClick={playPrev} className="p-2 text-white/80 hover:text-white transition-all hover:scale-110 active:scale-95">
                       <SkipBack className="w-6 h-6 fill-current" />
                    </button>
 
-                   <button onClick={togglePlayPause} className="w-14 h-14 bg-brand-orange text-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-orange/20 shrink-0">
+                   <button onClick={togglePlayPause} className="w-14 h-14 bg-[#DFA05D] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_10px_24px_rgba(223,160,93,0.26)] shrink-0">
                       {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
                    </button>
 
@@ -1208,7 +1208,7 @@ export default function GlobalPlayer() {
                    </button>
                    <button 
                     onClick={() => setRepeatMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')} 
-                    className={`p-2 transition-all ${repeatMode !== 'none' ? 'text-brand-orange' : 'text-white/40 hover:text-white/80'}`}
+                    className={`p-2 transition-all ${repeatMode !== 'none' ? 'text-[#DFA05D]' : 'text-white/40 hover:text-white/80'}`}
                    >
                       {repeatMode === 'one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
                    </button>

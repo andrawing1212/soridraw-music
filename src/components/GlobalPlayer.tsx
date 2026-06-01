@@ -1166,27 +1166,41 @@ export default function GlobalPlayer() {
                    </AnimatePresence>
                  </div>
 
-                 <button 
-                    onPointerDown={handleExpandedDragStart}
-                    onPointerMove={handleExpandedDragMove}
-                    onPointerUp={handleExpandedDragEnd}
-                    onPointerCancel={handleExpandedDragEnd}
-                    className="p-2 px-6 hover:bg-white/10 rounded-full transition-all text-white/50 cursor-grab active:cursor-grabbing"
-                    title="드래그로 이동"
-                 >
-                    <div className="w-8 h-1.5 bg-white/20 rounded-full" />
-                 </button>
-
-                 <div className="flex items-center gap-1">
+                 {isMobile ? (
                    <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleModeChange('collapsed'); }}
-                      className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white"
-                      title="초소형 플레이어로 접기"
-                      aria-label="초소형 플레이어로 접기"
+                      className="p-2.5 hover:bg-white/10 rounded-full transition-all text-white/55 hover:text-white"
+                      title="소형 플레이어로 접기"
+                      aria-label="소형 플레이어로 접기"
                    >
-                      <ChevronDown className="w-5 h-5" />
+                      <ChevronDown className="w-6 h-6" />
                    </button>
+                 ) : (
+                   <button 
+                      onPointerDown={handleExpandedDragStart}
+                      onPointerMove={handleExpandedDragMove}
+                      onPointerUp={handleExpandedDragEnd}
+                      onPointerCancel={handleExpandedDragEnd}
+                      className="p-2 px-6 hover:bg-white/10 rounded-full transition-all text-white/50 cursor-grab active:cursor-grabbing"
+                      title="드래그로 이동"
+                   >
+                      <div className="w-8 h-1.5 bg-white/20 rounded-full" />
+                   </button>
+                 )}
+
+                 <div className="flex items-center gap-1">
+                   {!isMobile && (
+                     <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleModeChange('collapsed'); }}
+                        className="p-2 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-white"
+                        title="초소형 플레이어로 접기"
+                        aria-label="초소형 플레이어로 접기"
+                     >
+                        <ChevronDown className="w-5 h-5" />
+                     </button>
+                   )}
                    <button 
                       type="button"
                       onClick={(e) => { e.stopPropagation(); clearPlayer(); }}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, ChevronLeft, Key, Languages, Music, X, ListMusic, Mic2 } from 'lucide-react';
 
@@ -161,6 +161,7 @@ export default function MusicApiGenerateModal({
   }, [filteredLanguages, isNoLyrics]);
 
   const [step, setStep] = useState<1 | 2>(1);
+  const stepRef = useRef<1 | 2>(1);
   const [includeLyrics, setIncludeLyrics] = useState<boolean>(() => !isNoLyrics);
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
@@ -186,11 +187,42 @@ export default function MusicApiGenerateModal({
   const [perTargetLyricLanguages, setPerTargetLyricLanguages] = useState<Record<string, LanguageCode>>({});
 
   useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
+  const handleModalBack = () => {
+    if (stepRef.current === 2) {
+      setStep(1);
+      return;
+    }
+    onClose();
+  };
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const modalHistoryState = { __soridrawGenerateModal: true };
+    window.history.pushState(modalHistoryState, '', window.location.href);
+
+    const onPopState = () => {
+      if (stepRef.current === 2) {
+        setStep(1);
+        window.history.pushState(modalHistoryState, '', window.location.href);
+        return;
+      }
+      onClose();
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, [onClose]);
 
   useEffect(() => {
@@ -311,16 +343,33 @@ export default function MusicApiGenerateModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 12 }}
         className={`w-full max-w-md max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
-        onMouseDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+          if (event.button === 3) {
+            event.preventDefault();
+            handleModalBack();
+          }
+        }}
+        onAuxClick={(event) => {
+          if (event.button === 3) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleModalBack();
+          }
+        }}
         onWheel={(event) => event.stopPropagation()}
         onTouchMove={(event) => event.stopPropagation()}
       >
         <div className="relative shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-3 sm:pb-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleModalBack();
+            }}
             className="absolute left-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
-            title="닫기"
+            title={step === 2 ? '이전 단계' : '닫기'}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -333,7 +382,11 @@ export default function MusicApiGenerateModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClose();
+            }}
             className="absolute right-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
             title="닫기"
           >

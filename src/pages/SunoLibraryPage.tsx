@@ -4790,7 +4790,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   className="bg-[#151515] border border-black/24 rounded-2xl shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
                 >
                   {/* Group Header */}
-                  <div className="px-4 md:px-6 py-4 border-b border-[#658761]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-black/10 rounded-t-2xl overflow-hidden">
+                  <div className="px-4 md:px-6 py-4 border-b border-[#658761]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-[#171717] rounded-t-2xl overflow-hidden">
                     <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#658761] shrink-0">
                         <Music className="w-5 h-5" />

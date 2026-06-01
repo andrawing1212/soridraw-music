@@ -1125,7 +1125,7 @@ export default function GlobalPlayer() {
                  <div className="absolute inset-0 bg-gradient-to-br from-[#DFA05D]/14 via-[#2a2015]/35 to-black/10 opacity-100 pointer-events-none" />
               )}
 
-              <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
+              <div className="absolute top-2 left-4 right-4 flex items-center justify-between z-20">
                  <div ref={menuRef} className="relative">
                    <button 
                       onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}

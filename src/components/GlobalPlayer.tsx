@@ -192,6 +192,7 @@ export default function GlobalPlayer() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < 1100);
   const playerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const lyricScrollRef = useRef<HTMLDivElement>(null);
@@ -215,6 +216,7 @@ export default function GlobalPlayer() {
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
+      setIsCompactPlayer(window.innerWidth < 1100);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -469,18 +471,26 @@ export default function GlobalPlayer() {
     }, 180);
   };
 
+  const handleCollapsedMiniDrag = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number } }) => {
+    if (!isCompactPlayer || mode !== 'collapsed' || isMiniPlayerDocked) return;
+    if (info.offset.x > 42) {
+      markMiniPlayerDragEnded();
+      setIsMiniPlayerDocked(true);
+    }
+  };
+
   const handleCollapsedMiniDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => {
-    if (!isMobile || mode !== 'collapsed') return;
+    if (!isCompactPlayer || mode !== 'collapsed') return;
     markMiniPlayerDragEnded();
-    if (info.offset.x > 64 || info.velocity.x > 480) {
+    if (info.offset.x > 36 || info.velocity.x > 360) {
       setIsMiniPlayerDocked(true);
     }
   };
 
   const handleDockedMiniDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number }; velocity: { x: number } }) => {
-    if (!isMobile || mode !== 'collapsed') return;
+    if (!isCompactPlayer || mode !== 'collapsed') return;
     markMiniPlayerDragEnded();
-    if (info.offset.x < -34 || info.velocity.x < -360) {
+    if (info.offset.x < -28 || info.velocity.x < -300) {
       setIsMiniPlayerDocked(false);
     }
   };
@@ -953,7 +963,7 @@ export default function GlobalPlayer() {
         ref={playerRef}
         initial={false}
         animate={{ 
-          x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isMiniPlayerDocked && isMobile ? 0 : (isSharedPlayerMode || isMobile ? '-50%' : 0)),
+          x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isMiniPlayerDocked && isCompactPlayer ? 0 : (isSharedPlayerMode || isCompactPlayer ? '-50%' : 0)),
           y: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.y) : 0
         }}
         className={`fixed z-[100] flex flex-col ${
@@ -961,9 +971,9 @@ export default function GlobalPlayer() {
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
               : 'top-[88px] right-6 w-[370px] max-w-[calc(100vw-40px)]'
-            : isMiniPlayerDocked && isMobile
-            ? 'bottom-[18px] right-[-18px] w-[58px] items-end'
-            : isSharedPlayerMode || isMobile
+            : isMiniPlayerDocked && isCompactPlayer
+            ? 'bottom-[18px] right-[-22px] w-[80px] items-end'
+            : isSharedPlayerMode || isCompactPlayer
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
             : 'top-2 left-[168px] w-[305px] items-start'
         }`}
@@ -971,21 +981,22 @@ export default function GlobalPlayer() {
         <AnimatePresence mode="popLayout">
           {mode === 'collapsed' && (
             <motion.div
-              key="collapsed"
+              key={isMiniPlayerDocked && isCompactPlayer ? "collapsed-docked" : "collapsed"}
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              drag={isMobile && !isMiniPlayerDocked ? "x" : false}
-              dragConstraints={isMobile && !isMiniPlayerDocked ? { left: 0, right: 150 } : undefined}
+              drag={isCompactPlayer && !isMiniPlayerDocked ? "x" : false}
+              dragConstraints={isCompactPlayer && !isMiniPlayerDocked ? { left: 0, right: 110 } : undefined}
               dragElastic={0.14}
+              onDrag={handleCollapsedMiniDrag}
               onDragEnd={handleCollapsedMiniDragEnd}
-              className={`${isMiniPlayerDocked && isMobile ? 'w-[64px]' : 'w-full'} relative rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl touch-pan-y`}
+              className={`${isMiniPlayerDocked && isCompactPlayer ? 'w-[58px]' : 'w-full'} relative rounded-2xl border border-[#DFA05D]/25 bg-[#1b1712]/96 shadow-[0_8px_24px_rgba(223,160,93,0.14)] backdrop-blur-xl touch-pan-y`}
             >
-              {isMiniPlayerDocked && isMobile ? (
+              {isMiniPlayerDocked && isCompactPlayer ? (
                 <motion.button
                   type="button"
                   drag="x"
-                  dragConstraints={{ left: -96, right: 0 }}
+                  dragConstraints={{ left: -84, right: 0 }}
                   dragElastic={0.12}
                   onDragEnd={handleDockedMiniDragEnd}
                   onClick={(e) => { e.stopPropagation(); if (!miniPlayerDragJustEndedRef.current) setIsMiniPlayerDocked(false); }}

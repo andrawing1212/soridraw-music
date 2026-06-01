@@ -4200,12 +4200,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </button>
                 ))}
               </div>
-              <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
                 {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
-                    className={`h-9 px-4 rounded-xl text-xs font-bold transition-all ${
+                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
                       filter === f ? 'bg-[#658761]/78 text-white' : 'hover:bg-white/5 opacity-60'
                     }`}
                   >
@@ -4244,7 +4244,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </button>
                 ))}
               </div>
-              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
                 {[
                   { value: 'added', label: '저장순' },
                   { value: 'genre', label: '장르순' },
@@ -4253,7 +4253,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistSortMode(opt.value as any)}
-                    className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
                       playlistSortMode === opt.value
                         ? 'bg-[#658761]/24 text-[#B8C9B2]'
                         : 'text-white/40 hover:text-white/70'
@@ -4271,7 +4271,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
-                    className={`h-9 px-4 text-xs font-bold rounded-xl transition-all ${
+                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
                       playlistVisibilityFilter === opt.value
                         ? 'bg-[#658761]/24 text-[#B8C9B2]'
                         : 'text-white/40 hover:text-white/70'
@@ -4296,7 +4296,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         <div className="grid grid-cols-3 gap-1 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
             onClick={() => setLibraryViewMode('workspace')}
-            className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
           >
             워크스페이스
           </button>
@@ -4310,7 +4310,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
           >
             플레이리스트
           </button>
@@ -4324,7 +4324,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
           >
             공유 플레이리스트
           </button>

@@ -557,9 +557,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
+  const [libraryPlaceholderIndex, setLibraryPlaceholderIndex] = useState(0);
+  const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
+  const librarySearchPlaceholders = [
+    "음악 제목이나 스타일 검색...",
+    "곡 제목으로 검색해보세요...",
+    "장르나 키워드로 검색해보세요...",
+    "제작자 이름으로 검색해보세요..."
+  ];
+  const playlistSearchPlaceholders = [
+    "음악 제목이나 제작자 검색...",
+    "플레이리스트 이름으로 검색해보세요...",
+    "공유 플레이리스트를 찾아보세요...",
+    "곡 제목으로 검색해보세요..."
+  ];
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [showWorkspaceMoreTooltip, setShowWorkspaceMoreTooltip] = useState(false);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setLibraryPlaceholderIndex((prev) => (prev + 1) % librarySearchPlaceholders.length);
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (libraryViewMode === 'workspace') {
       setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
@@ -4178,18 +4200,35 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             >
               <Home className="w-4 h-4" />
             </button>
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
+            <div className="relative flex-1 min-w-0 group overflow-hidden">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] transition-colors" />
               <input
                 type="text"
-                placeholder={isWorkspaceMode ? "음악 제목이나 스타일 검색..." : "음악 제목이나 제작자 검색..."}
                 value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
                 onChange={(e) => {
                   if (isWorkspaceMode) setSearchTerm(e.target.value);
                   else setPlaylistSearchTerm(e.target.value);
                 }}
-                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#658761]/45 transition-all text-sm"
+                onFocus={() => setIsLibrarySearchFocused(true)}
+                onBlur={() => setIsLibrarySearchFocused(false)}
+                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#658761]/45 transition-all text-sm text-[var(--text-primary)]"
               />
+              {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
+                <div className="absolute inset-0 flex items-center pl-11 pr-4 pointer-events-none overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${isWorkspaceMode ? 'workspace' : 'playlist'}-${libraryPlaceholderIndex}`}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.35 }}
+                      className="text-sm text-white/40 whitespace-nowrap"
+                    >
+                      {(isWorkspaceMode ? librarySearchPlaceholders : playlistSearchPlaceholders)[libraryPlaceholderIndex % (isWorkspaceMode ? librarySearchPlaceholders.length : playlistSearchPlaceholders.length)]}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
           </div>
 
@@ -4858,7 +4897,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] hover:bg-[#658761]/[0.035] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.backgroundColor = 'rgba(101, 135, 97, 0.075)';
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.backgroundColor = '';
+                          }}
                           onClick={(e) => {
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {

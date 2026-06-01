@@ -934,7 +934,7 @@ export default function GlobalPlayer() {
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
               : 'top-[88px] right-6 w-[370px] max-w-[calc(100vw-40px)]'
             : isMiniPlayerDocked && isMobile
-            ? 'bottom-[12px] left-[-20px] w-[64px] items-start'
+            ? 'bottom-[18px] left-[-18px] w-[58px] items-start'
             : isSharedPlayerMode || isMobile
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
             : 'top-2 left-[168px] w-[305px] items-start'
@@ -957,18 +957,30 @@ export default function GlobalPlayer() {
                 <motion.button
                   type="button"
                   drag="x"
-                  dragConstraints={{ left: 0, right: 92 }}
+                  dragConstraints={{ left: 0, right: 96 }}
                   dragElastic={0.12}
                   onDragEnd={handleDockedMiniDragEnd}
                   onClick={(e) => { e.stopPropagation(); setIsMiniPlayerDocked(false); }}
-                  className="group flex h-[54px] w-[64px] items-center justify-end overflow-hidden rounded-[19px] bg-[#DFA05D] pr-3 text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] cursor-grab active:cursor-grabbing"
+                  className="group relative flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-full border border-[#DFA05D]/45 bg-[#1b1712] text-[#DFA05D] shadow-[0_8px_20px_rgba(0,0,0,0.34),0_0_14px_rgba(223,160,93,0.12)] cursor-grab active:cursor-grabbing"
                   aria-label="소형 플레이어 펼치기"
                   title="소형 플레이어 펼치기"
                 >
-                  <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
-                    {isPlaying ? <Pause className="h-5 w-5 fill-current text-white" /> : <Play className="ml-0.5 h-5 w-5 fill-current text-white" />}
-                  </span>
-                  <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-white/35" />
+                  {shouldUseCoverImage ? (
+                    <img
+                      src={currentTrack.imageUrl}
+                      alt={currentTrack.title}
+                      draggable={false}
+                      onDragStart={(e) => e.preventDefault()}
+                      onError={() => setImageLoadFailed(true)}
+                      className={`h-full w-full rounded-full object-cover ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-[#DFA05D]/22 via-[#2a2117] to-black/40">
+                      <Music className="h-5 w-5 text-[#DFA05D]/80" />
+                    </div>
+                  )}
+                  <span className="pointer-events-none absolute inset-0 rounded-full bg-black/12" />
+                  <span className="pointer-events-none absolute right-1.5 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[#DFA05D]/55" />
                 </motion.button>
               ) : (
                 <>

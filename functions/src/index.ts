@@ -219,6 +219,15 @@ const extractRemainingCredits = (payload: any): number | null => {
   return null;
 };
 
+const getStoredSunoApiKeyFromDoc = (docData: any): string => pickFirstString(
+  docData?.sunoApiKey,
+  docData?.musicApiKey,
+  docData?.suno_api_key,
+  docData?.music_api_key
+);
+
+const hasStoredSunoApiKeyInDoc = (docData: any): boolean => Boolean(getStoredSunoApiKeyFromDoc(docData));
+
 export const saveGoogleGeminiApiKey = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -366,9 +375,16 @@ export const saveSunoApiKey = onRequest(
     const db = admin.firestore();
 
     await db.collection('user_api_keys').doc(uid).set({
+      // Keep Music API in the same uid-scoped document as Gemini.
+      // Duplicate legacy/explicit field names so every client and function reads the same account-level key.
       sunoApiKey: apiKey.trim(),
+      musicApiKey: apiKey.trim(),
       hasSunoApiKey: true,
+      hasMusicApiKey: true,
       provider: 'sunoapi.org',
+      musicApiProvider: 'sunoapi.org',
+      sunoApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      musicApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       sunoRemainingCredits: admin.firestore.FieldValue.delete(),
       sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.delete(),
       sunoRemainingCreditsSourceTrackId: admin.firestore.FieldValue.delete(),
@@ -398,8 +414,13 @@ export const deleteSunoApiKey = onRequest(
 
     await db.collection('user_api_keys').doc(uid).set({
       sunoApiKey: admin.firestore.FieldValue.delete(),
+      musicApiKey: admin.firestore.FieldValue.delete(),
       hasSunoApiKey: false,
+      hasMusicApiKey: false,
       provider: admin.firestore.FieldValue.delete(),
+      musicApiProvider: admin.firestore.FieldValue.delete(),
+      sunoApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      musicApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       sunoRemainingCredits: admin.firestore.FieldValue.delete(),
       sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.delete(),
       sunoRemainingCreditsSourceTrackId: admin.firestore.FieldValue.delete(),
@@ -433,12 +454,21 @@ export const getSunoApiKeyStatus = onRequest(
       return;
     }
 
-    const docData = docSnap.data();
+    const docData = docSnap.data() || {};
+    const hasSunoApiKey = Boolean(
+      docData.hasSunoApiKey ||
+      docData.hasMusicApiKey ||
+      hasStoredSunoApiKeyInDoc(docData)
+    );
     res.json({
       ok: true,
-      hasSunoApiKey: docData?.hasSunoApiKey || false,
-      provider: docData?.provider || null,
-      updatedAt: timestampToIso(docData?.updatedAt),
+      hasSunoApiKey,
+      hasMusicApiKey: hasSunoApiKey,
+      registered: hasSunoApiKey,
+      hasApiKey: hasSunoApiKey,
+      exists: hasSunoApiKey,
+      provider: docData?.provider || docData?.musicApiProvider || null,
+      updatedAt: timestampToIso(docData?.sunoApiUpdatedAt) || timestampToIso(docData?.musicApiUpdatedAt) || timestampToIso(docData?.updatedAt),
       sunoRemainingCredits: typeof docData?.sunoRemainingCredits === "number" ? docData.sunoRemainingCredits : null,
       sunoRemainingCreditsUpdatedAt: timestampToIso(docData?.sunoRemainingCreditsUpdatedAt),
       sunoRemainingCreditsSourceTrackId: docData?.sunoRemainingCreditsSourceTrackId || null,
@@ -471,7 +501,7 @@ export const getSunoRemainingCredits = onRequest(
     }
 
     const apiKeyData = apiKeyDoc.data() || {};
-    const sunoApiKey = apiKeyData.sunoApiKey;
+    const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
 
     if (!sunoApiKey) {
       res.status(400).json({ error: "Suno API Key is empty.", ok: false });
@@ -584,7 +614,7 @@ export const getSunoRemainingCreditsAfterComplete = onRequest(
     }
 
     const apiKeyData = apiKeyDoc.data() || {};
-    const sunoApiKey = apiKeyData.sunoApiKey;
+    const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
 
     if (!sunoApiKey) {
       res.status(400).json({ error: "Suno API Key is empty.", ok: false });
@@ -698,7 +728,7 @@ export const createSunoTrack = onRequest(
     }
 
     const apiKeyData = apiKeyDoc.data();
-    const sunoApiKey = apiKeyData?.sunoApiKey;
+    const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
 
     if (!sunoApiKey && !dryRun) {
       res.status(400).json({ error: "Suno API Key is empty." });
@@ -906,7 +936,7 @@ export const getSunoTrackStatus = onRequest(
     }
 
     const apiKeyData = apiKeyDoc.data();
-    const sunoApiKey = apiKeyData?.sunoApiKey;
+    const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
 
     if (!sunoApiKey) {
       res.status(400).json({ error: "Suno API Key is empty." });

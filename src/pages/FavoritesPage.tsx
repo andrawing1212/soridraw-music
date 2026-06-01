@@ -2283,7 +2283,19 @@ ${song.prompt}
                               document.addEventListener('mousemove', onMove);
                               document.addEventListener('mouseup', onUp);
                             }}
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (longPressTriggeredRef.current) {
+                                longPressTriggeredRef.current = false;
+                                return;
+                              }
+                              if (isSelectionMode) {
+                                toggleSongSelection(song.id);
+                                setPendingSelectionAction(null);
+                                return;
+                              }
+                              setSelectedSong(song);
+                            }}
                           >
                             {mobileTitleText}
                           </div>

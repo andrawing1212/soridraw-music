@@ -8638,7 +8638,7 @@ ${normalizePromptForDisplay(result.prompt)}
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={window.innerWidth >= 1024 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
               />
           <CycleSection 
@@ -8663,7 +8663,7 @@ ${normalizePromptForDisplay(result.prompt)}
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
-            forcedHeight={window.innerWidth >= 1024 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+            forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
           <CycleSection 
@@ -8718,7 +8718,7 @@ ${normalizePromptForDisplay(result.prompt)}
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
-            forcedHeight={window.innerWidth >= 1024 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+            forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
           />
         </div>
@@ -8756,7 +8756,7 @@ ${normalizePromptForDisplay(result.prompt)}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 1024 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -8786,7 +8786,7 @@ ${normalizePromptForDisplay(result.prompt)}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 1024 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}

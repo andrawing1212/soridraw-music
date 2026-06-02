@@ -337,7 +337,7 @@ const formatStoredCustomStructureText = (structure: any): string => {
   }).join(' → ');
 };
 
-import { generateSong, translateLyrics, generateCustomSectionMetadata } from './services/geminiService';
+import { generateSong, translateTitleAndLyrics, generateCustomSectionMetadata } from './services/geminiService';
 import { 
   collection, 
   query, 
@@ -7517,37 +7517,26 @@ ${normalizePromptForDisplay(result.prompt)}
       }
 
       const currentHistoryIndex = historyIndexRef.current;
-      const translatedLyrics = (await runWithTimeout(
-        translateLyrics(sourceLyrics, label.api, personalGeminiApiKey),
-        45000,
-        'lyrics-language-timeout',
-      )).trim();
-
-      if (!translatedLyrics) {
-        throw new Error('empty-translated-lyrics');
-      }
-
       const sourceTitle = (existingTitleMap[sourceLanguage] || activeSong.koreanTitle || activeSong.englishTitle || activeSong.title || '')
         .replace(/^\[[^\]]+\]\s*/, '')
         .replace(/^['"]|['"]$/g, '')
         .trim();
 
-      let translatedTitle = sourceTitle;
-      if (sourceTitle) {
-        try {
-          translatedTitle = (await runWithTimeout(
-            translateLyrics(sourceTitle, label.api, personalGeminiApiKey),
-            15000,
-            'lyrics-title-timeout',
-          ))
-            .replace(/\n/g, ' ')
-            .replace(/^['"]|['"]$/g, '')
-            .trim() || sourceTitle;
-        } catch (titleError) {
-          console.warn('Failed to translate lyric title. Falling back to source title:', titleError);
-          translatedTitle = sourceTitle;
-        }
+      const translatedBundle = await runWithTimeout(
+        translateTitleAndLyrics(sourceTitle, sourceLyrics, label.api, personalGeminiApiKey),
+        45000,
+        'lyrics-language-timeout',
+      );
+      const translatedLyrics = (translatedBundle.lyrics || '').trim();
+
+      if (!translatedLyrics) {
+        throw new Error('empty-translated-lyrics');
       }
+
+      const translatedTitle = (translatedBundle.title || sourceTitle)
+        .replace(/\n/g, ' ')
+        .replace(/^['"]|['"]$/g, '')
+        .trim() || sourceTitle;
 
       const previousApplied = (activeSong.appliedKeywords || {}) as any;
       const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];

@@ -18088,6 +18088,72 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   return result as SongResult;
 }
 
+
+export async function translateTitleAndLyrics(
+  title: string,
+  lyrics: string,
+  targetLanguage: "korean" | "english" | string,
+  geminiApiKey?: string,
+): Promise<{ title: string; lyrics: string }> {
+  const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
+  const cleanTitle = String(title || "").trim();
+  const cleanLyrics = String(lyrics || "").trim();
+
+  const systemInstruction = `
+You are a professional lyricist and translator.
+Translate the provided song title and lyrics into ${targetLanguage}.
+- Return valid JSON only.
+- title: one short natural translated title. If the source title is empty, return an empty string.
+- lyrics: translated lyrics.
+- Keep the original lyric section tags, structure, and line breaks.
+- Do not translate literally. Keep it natural and lyrical.
+`.trim();
+
+  const ai = getAI(geminiApiKey);
+  let response;
+
+  const generateParams = {
+    model,
+    contents: JSON.stringify({ title: cleanTitle, lyrics: cleanLyrics }),
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          lyrics: { type: Type.STRING },
+        },
+        required: ["title", "lyrics"],
+      },
+    },
+  };
+
+  try {
+    response = await generateContentWithModelFallback(
+      ai,
+      generateParams,
+      "translateTitleAndLyrics",
+    );
+  } catch (error) {
+    handleGeminiError(error, "translateTitleAndLyrics");
+  }
+
+  try {
+    const parsed = JSON.parse(response?.text || "{}");
+    return {
+      title: String(parsed?.title || cleanTitle || "").trim(),
+      lyrics: String(parsed?.lyrics || "").trim(),
+    };
+  } catch (parseError) {
+    console.warn("Failed to parse translateTitleAndLyrics JSON:", parseError, response?.text);
+    return {
+      title: cleanTitle,
+      lyrics: String(response?.text || "").trim(),
+    };
+  }
+}
+
 export async function translateLyrics(
   lyrics: string,
   targetLanguage: "korean" | "english" | string,

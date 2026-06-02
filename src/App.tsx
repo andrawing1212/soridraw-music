@@ -337,7 +337,7 @@ const formatStoredCustomStructureText = (structure: any): string => {
   }).join(' → ');
 };
 
-import { generateSong, translateTitleAndLyrics, generateCustomSectionMetadata } from './services/geminiService';
+import { generateSong, translateTitleAndLyrics, translateLyrics, generateCustomSectionMetadata } from './services/geminiService';
 import { 
   collection, 
   query, 
@@ -7522,21 +7522,51 @@ ${normalizePromptForDisplay(result.prompt)}
         .replace(/^['"]|['"]$/g, '')
         .trim();
 
-      const translatedBundle = await runWithTimeout(
-        translateTitleAndLyrics(sourceTitle, sourceLyrics, label.api, personalGeminiApiKey),
-        45000,
-        'lyrics-language-timeout',
-      );
-      const translatedLyrics = (translatedBundle.lyrics || '').trim();
+      let translatedTitle = sourceTitle;
+      let translatedLyrics = '';
+
+      try {
+        const translatedBundle = await runWithTimeout(
+          translateTitleAndLyrics(sourceTitle, sourceLyrics, label.api, personalGeminiApiKey),
+          45000,
+          'lyrics-language-timeout',
+        );
+        translatedLyrics = (translatedBundle.lyrics || '').trim();
+        translatedTitle = (translatedBundle.title || sourceTitle)
+          .replace(/\n/g, ' ')
+          .replace(/^["']|["']$/g, '')
+          .trim() || sourceTitle;
+      } catch (bundleError) {
+        console.warn('Single-call lyric language generation failed. Retrying lyrics-only fallback:', bundleError);
+      }
+
+      if (!translatedLyrics) {
+        translatedLyrics = (await runWithTimeout(
+          translateLyrics(sourceLyrics, label.api, personalGeminiApiKey),
+          45000,
+          'lyrics-language-timeout',
+        )).trim();
+
+        if (translatedLyrics) {
+          try {
+            translatedTitle = (await runWithTimeout(
+              translateLyrics(sourceTitle, label.api, personalGeminiApiKey),
+              15000,
+              'lyrics-title-timeout',
+            ))
+              .replace(/\n/g, ' ')
+              .replace(/^["']|["']$/g, '')
+              .trim() || sourceTitle;
+          } catch (titleError) {
+            console.warn('Fallback title translation failed. Using source title:', titleError);
+            translatedTitle = sourceTitle;
+          }
+        }
+      }
 
       if (!translatedLyrics) {
         throw new Error('empty-translated-lyrics');
       }
-
-      const translatedTitle = (translatedBundle.title || sourceTitle)
-        .replace(/\n/g, ' ')
-        .replace(/^['"]|['"]$/g, '')
-        .trim() || sourceTitle;
 
       const previousApplied = (activeSong.appliedKeywords || {}) as any;
       const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];

@@ -910,7 +910,6 @@ export default function GlobalPlayer() {
   if (!currentTrack) return null;
 
   const shouldUseCoverImage = Boolean(currentTrack.imageUrl && !imageLoadFailed);
-  const isDesktopStaticMiniPlayer = mode === 'collapsed' && !isMiniPlayerDocked && !isSharedPlayerMode && !isCompactPlayer;
 
   return (
     <>
@@ -967,7 +966,7 @@ export default function GlobalPlayer() {
           x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isMiniPlayerDocked && isCompactPlayer ? 0 : (isSharedPlayerMode || isCompactPlayer ? '-50%' : 0)),
           y: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.y) : 0
         }}
-        className={`${isDesktopStaticMiniPlayer ? 'absolute' : 'fixed'} z-[100] flex flex-col ${
+        className={`fixed z-[100] flex flex-col ${
           mode === 'expanded'
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'
@@ -976,7 +975,7 @@ export default function GlobalPlayer() {
             ? 'bottom-[18px] right-[-22px] w-[80px] items-end'
             : isSharedPlayerMode || isCompactPlayer
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
-            : 'top-[112px] left-[198px] w-[305px] items-start'
+            : 'top-2 left-[198px] w-[305px] items-start'
         }`}
       >
         <AnimatePresence mode="popLayout">

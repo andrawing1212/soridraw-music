@@ -192,7 +192,7 @@ export default function GlobalPlayer() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const COMPACT_MINI_PLAYER_BREAKPOINT = 1100;
+  const COMPACT_MINI_PLAYER_BREAKPOINT = 1320;
   const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
   const playerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -423,7 +423,7 @@ export default function GlobalPlayer() {
 
   useEffect(() => {
     const handleResizeForPlayer = () => {
-      if (!isMobile && window.innerWidth < 1100 && mode === 'expanded') {
+      if (!isMobile && window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT && mode === 'expanded') {
         handleModeChange('collapsed');
       }
     };

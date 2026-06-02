@@ -192,7 +192,7 @@ export default function GlobalPlayer() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const COMPACT_MINI_PLAYER_BREAKPOINT = 900;
+  const COMPACT_MINI_PLAYER_BREAKPOINT = 1100;
   const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
   const playerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -976,7 +976,7 @@ export default function GlobalPlayer() {
             ? 'bottom-[18px] right-[-22px] w-[80px] items-end'
             : isSharedPlayerMode || isCompactPlayer
             ? 'bottom-[12px] left-1/2 w-[calc(100vw-24px)] max-w-[520px] items-center'
-            : 'top-2 left-[clamp(16px,calc(100vw-885px),198px)] w-[305px] items-start'
+            : 'top-2 left-[clamp(16px,calc(100vw-1180px),198px)] w-[305px] items-start'
         }`}
       >
         <AnimatePresence mode="popLayout">

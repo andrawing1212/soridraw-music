@@ -3933,6 +3933,7 @@ function App() {
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [showMainGenerationModal, setShowMainGenerationModal] = useState(false);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
+  const [addingLyricsLanguageTarget, setAddingLyricsLanguageTarget] = useState<LanguageCode | null>(null);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return hasStoredSunoApiKey(auth.currentUser?.uid);
@@ -7464,10 +7465,26 @@ ${normalizePromptForDisplay(result.prompt)}
     return languageOrder.filter((lang) => !generated.includes(lang));
   };
 
+
+  const runWithTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
   const handleAddLyricsLanguage = async (targetLanguage: LanguageCode) => {
     if (!result || isAddingLyricsLanguage) return;
 
-    const existingLanguages = getGeneratedLyricLanguages(result);
+    const activeSong = result;
+    const existingLanguages = getGeneratedLyricLanguages(activeSong);
     if (existingLanguages.includes(targetLanguage)) {
       showToast('이미 생성된 가사 언어입니다.');
       return;
@@ -7477,30 +7494,62 @@ ${normalizePromptForDisplay(result.prompt)}
       return;
     }
 
-    const existingLyricsMap = getLyricsLanguageMap(result);
-    const existingTitleMap = getTitleLanguageMap(result);
+    const existingLyricsMap = getLyricsLanguageMap(activeSong);
+    const existingTitleMap = getTitleLanguageMap(activeSong);
     const sourceLanguage = existingLanguages[0] || 'ko';
-    const sourceLyrics = existingLyricsMap[sourceLanguage]?.trim() || result.lyrics?.korean?.trim() || result.lyrics?.english?.trim() || '';
+    const sourceLyrics = existingLyricsMap[sourceLanguage]?.trim() || activeSong.lyrics?.korean?.trim() || activeSong.lyrics?.english?.trim() || '';
     if (!sourceLyrics) {
       showToast('기준이 될 가사가 없습니다. 먼저 가사가 포함된 곡을 생성해주세요.');
       return;
     }
 
+    const label = lyricLanguageLabels[targetLanguage];
+
     try {
+      setIsAddingLyricsLanguage(true);
+      setAddingLyricsLanguageTarget(targetLanguage);
+
       const personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
       if (!personalGeminiApiKey) {
         showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
         navigate('/my-page');
         return;
       }
-      setIsAddingLyricsLanguage(true);
-      const currentHistoryIndex = historyIndexRef.current;
-      const label = lyricLanguageLabels[targetLanguage];
-      const translatedLyrics = (await translateLyrics(sourceLyrics, label.api, personalGeminiApiKey)).trim();
-      const sourceTitle = (existingTitleMap[sourceLanguage] || result.koreanTitle || result.englishTitle || result.title || '').replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]|['"]$/g, '').trim();
-      const translatedTitle = (await translateLyrics(sourceTitle, label.api, personalGeminiApiKey)).replace(/\n/g, ' ').replace(/^['"]|['"]$/g, '').trim();
 
-      const previousApplied = (result.appliedKeywords || {}) as any;
+      const currentHistoryIndex = historyIndexRef.current;
+      const translatedLyrics = (await runWithTimeout(
+        translateLyrics(sourceLyrics, label.api, personalGeminiApiKey),
+        45000,
+        'lyrics-language-timeout',
+      )).trim();
+
+      if (!translatedLyrics) {
+        throw new Error('empty-translated-lyrics');
+      }
+
+      const sourceTitle = (existingTitleMap[sourceLanguage] || activeSong.koreanTitle || activeSong.englishTitle || activeSong.title || '')
+        .replace(/^\[[^\]]+\]\s*/, '')
+        .replace(/^['"]|['"]$/g, '')
+        .trim();
+
+      let translatedTitle = sourceTitle;
+      if (sourceTitle) {
+        try {
+          translatedTitle = (await runWithTimeout(
+            translateLyrics(sourceTitle, label.api, personalGeminiApiKey),
+            15000,
+            'lyrics-title-timeout',
+          ))
+            .replace(/\n/g, ' ')
+            .replace(/^['"]|['"]$/g, '')
+            .trim() || sourceTitle;
+        } catch (titleError) {
+          console.warn('Failed to translate lyric title. Falling back to source title:', titleError);
+          translatedTitle = sourceTitle;
+        }
+      }
+
+      const previousApplied = (activeSong.appliedKeywords || {}) as any;
       const nextLanguages = Array.from(new Set([...existingLanguages, targetLanguage])).slice(0, 2) as LanguageCode[];
       const nextLyricsByLanguage: Partial<Record<LanguageCode, string>> = {
         ...existingLyricsMap,
@@ -7513,12 +7562,12 @@ ${normalizePromptForDisplay(result.prompt)}
       const firstForeignLanguage = nextLanguages.find((lang) => lang !== 'ko') || previousApplied.secondaryLanguage || 'en';
 
       const nextSong: SongResult = {
-        ...result,
-        koreanTitle: nextTitlesByLanguage.ko || '',
-        englishTitle: firstForeignLanguage ? (nextTitlesByLanguage[firstForeignLanguage as LanguageCode] || result.englishTitle || '') : (result.englishTitle || ''),
+        ...activeSong,
+        koreanTitle: nextTitlesByLanguage.ko || activeSong.koreanTitle || '',
+        englishTitle: firstForeignLanguage ? (nextTitlesByLanguage[firstForeignLanguage as LanguageCode] || activeSong.englishTitle || '') : (activeSong.englishTitle || ''),
         lyrics: {
-          ...(result.lyrics || { korean: '', english: '' }),
-          korean: nextLyricsByLanguage.ko || '',
+          ...(activeSong.lyrics || { korean: '', english: '' }),
+          korean: nextLyricsByLanguage.ko || activeSong.lyrics?.korean || '',
           english: firstForeignLanguage ? (nextLyricsByLanguage[firstForeignLanguage as LanguageCode] || '') : '',
         },
         appliedKeywords: {
@@ -7556,9 +7605,13 @@ ${normalizePromptForDisplay(result.prompt)}
       showToast(`${label.ko} 가사를 추가 생성했습니다.`);
     } catch (error) {
       console.error('Failed to add lyric language:', error);
-      showToast('가사 언어 추가 생성 중 오류가 발생했습니다.');
+      const message = error instanceof Error && error.message.includes('timeout')
+        ? '가사 언어 추가 생성 시간이 너무 오래 걸립니다. 잠시 후 다시 시도해주세요.'
+        : '가사 언어 추가 생성에 실패했습니다. 다시 시도해주세요.';
+      showToast(message);
     } finally {
       setIsAddingLyricsLanguage(false);
+      setAddingLyricsLanguageTarget(null);
     }
   };
 
@@ -9839,7 +9892,7 @@ ${normalizePromptForDisplay(result.prompt)}
                                   disabled={isAddingLyricsLanguage}
                                   className="px-3 py-3 rounded-2xl border border-[#cd8c31]/25 bg-[#cd8c31]/10 hover:bg-[#cd8c31] hover:text-white text-[#cd8c31] text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  {isAddingLyricsLanguage ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
+                                  {addingLyricsLanguageTarget === lang ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
                                 </button>
                               ))}
                             </div>

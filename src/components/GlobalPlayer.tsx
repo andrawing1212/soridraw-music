@@ -192,7 +192,8 @@ export default function GlobalPlayer() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < 1100);
+  const COMPACT_MINI_PLAYER_BREAKPOINT = 1280;
+  const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
   const playerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const lyricScrollRef = useRef<HTMLDivElement>(null);
@@ -216,7 +217,7 @@ export default function GlobalPlayer() {
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
-      setIsCompactPlayer(window.innerWidth < 1100);
+      setIsCompactPlayer(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);

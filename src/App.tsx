@@ -2528,6 +2528,22 @@ export function getTimestampMs(value: any): number {
   return 0;
 }
 
+const formatGeneratedDateTimeLabel = (value: any): string => {
+  const ms = getTimestampMs(value);
+  if (!ms) return '';
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const pad = (num: number) => String(num).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+
+  return `${year}.${month}.${day} ${hours}:${minutes} 생성`;
+};
+
 import { GlobalPlayerProvider } from './contexts/GlobalPlayerContext';
 import GlobalPlayer from './components/GlobalPlayer';
 
@@ -7196,11 +7212,14 @@ const saveRecentSong = async (newSong: any) => {
 
         if (abortControllerRef.current?.signal.aborted) return;
 
-        const newResult: SongResult = {
+        const generatedAt = Date.now();
+        const newResult = {
           ...song,
           genre: finalGenres[0] ?? undefined,
           subGenre: finalGenres,
           prompt: song.prompt,
+          createdAt: generatedAt,
+          updatedAt: generatedAt,
           appliedKeywords: {
             ...song.appliedKeywords,
             genre: [],
@@ -7233,7 +7252,7 @@ const saveRecentSong = async (newSong: any) => {
             }
           },
           randomKeywords
-        };
+        } as SongResult & { createdAt: number; updatedAt: number };
 
         generatedResults.push(newResult);
       }
@@ -9500,11 +9519,6 @@ ${normalizePromptForDisplay(result.prompt)}
 
                 <div className="space-y-4">
                   <div className="flex flex-col items-center gap-2">
-                    {isInLatestGenerationBatch(result) && (
-                      <span className="px-3 py-1 bg-[#cd8c31]/10 text-[#f0c079] text-[10px] font-bold rounded-full border border-[#cd8c31]/25 normal-case tracking-normal mb-1">
-                        최근 생성 곡
-                      </span>
-                    )}
                     <div className="flex items-center gap-2 text-[#cd8c31] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-[18px] h-[18px]" />
                       제목 (Title)
@@ -9544,6 +9558,20 @@ ${normalizePromptForDisplay(result.prompt)}
                       })()}
                     </div>
                   </div>
+                  {(() => {
+                    const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
+                    if (!generatedAtLabel) return null;
+                    return (
+                      <div className="flex justify-center -mt-1 px-4">
+                        <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-secondary)]/80 tracking-tight">
+                          {generatedAtLabel}
+                          {isInLatestGenerationBatch(result) && (
+                            <span className="ml-1 text-[#f0c079] font-bold">(최근 생성곡)</span>
+                          )}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center justify-center gap-3 mt-4">
                     <button
                       onClick={() => {

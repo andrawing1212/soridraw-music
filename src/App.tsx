@@ -3858,27 +3858,17 @@ function App() {
   };
 
   const findRecoverableLocalRecentSongs = (uid: string): SongResult[] => {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined' || !uid) return [];
     const candidates: SongResult[][] = [];
     try {
+      // Only recover data from the current user's scoped cache keys.
+      // Do not scan every soridraw/recent/history/song localStorage key, because that can pull
+      // the previous login user's songs into the new user's studio and then sync them to Firestore.
       const currentCache = loadRecentSongsCache(uid);
       if (currentCache?.history?.length) candidates.push(currentCache.history);
+
       const backup = loadRecentSongsBackup(uid);
       if (backup.length) candidates.push(backup);
-
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i) || '';
-        const lowerKey = key.toLowerCase();
-        if (!lowerKey.includes('soridraw')) continue;
-        if (!(lowerKey.includes('recent') || lowerKey.includes('history') || lowerKey.includes('song'))) continue;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        try {
-          const parsed = JSON.parse(raw);
-          const songs = normalizeRecentSongList(parsed);
-          if (songs.length) candidates.push(songs);
-        } catch {}
-      }
     } catch {}
     return mergeRecentSongLists(...candidates);
   };

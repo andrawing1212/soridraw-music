@@ -1,9 +1,117 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSunoTrackStatus = exports.createSunoTrack = exports.getSunoRemainingCreditsAfterComplete = exports.getSunoRemainingCredits = exports.getSunoApiKeyStatus = exports.deleteSunoApiKey = exports.saveSunoApiKey = exports.getGoogleGeminiApiKey = exports.getGoogleGeminiApiKeyStatus = exports.deleteGoogleGeminiApiKey = exports.saveGoogleGeminiApiKey = void 0;
+exports.getSunoTrackStatus = exports.createSunoTrack = exports.getSunoRemainingCreditsAfterComplete = exports.getSunoRemainingCredits = exports.getSunoApiKeyStatus = exports.deleteSunoApiKey = exports.saveSunoApiKey = exports.getGoogleGeminiApiKey = exports.getGoogleGeminiApiKeyStatus = exports.deleteGoogleGeminiApiKey = exports.saveGoogleGeminiApiKey = exports.backfillMissingAuthUsers = exports.syncAuthUserToFirestore = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 admin.initializeApp();
+exports.syncAuthUserToFirestore = functions.auth.user().onCreate(async (user) => {
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(user.uid);
+    const snap = await userRef.get();
+    const createdAtMs = user.metadata.creationTime
+        ? new Date(user.metadata.creationTime).getTime()
+        : Date.now();
+    const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+    const providerIds = (user.providerData || [])
+        .map((provider) => provider.providerId)
+        .filter(Boolean);
+    const sessionData = {
+        uid: user.uid,
+        email: user.email || "",
+        displayName: user.displayName || "",
+        photoURL: user.photoURL || "",
+        providerIds,
+        lastLoginAt: safeCreatedAt,
+        lastSeenAt: safeCreatedAt,
+        isOnline: false,
+    };
+    if (snap.exists) {
+        await userRef.set(sessionData, { merge: true });
+        return;
+    }
+    await userRef.set(Object.assign(Object.assign({}, sessionData), { createdAt: safeCreatedAt, role: "free", accountStatus: "active", paymentStatus: "none", favoriteCount: 0, songGeneratedCount: 0 }));
+});
+exports.backfillMissingAuthUsers = (0, https_1.onCall)({ region: "us-central1" }, async (request) => {
+    var _a, _b, _c;
+    const requesterUid = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid;
+    if (!requesterUid) {
+        throw new https_1.HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
+    }
+    const db = admin.firestore();
+    const requesterSnap = await db.collection("users").doc(requesterUid).get();
+    if (((_b = requesterSnap.data()) === null || _b === void 0 ? void 0 : _b.role) !== "admin") {
+        throw new https_1.HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+    }
+    const dryRun = ((_c = request.data) === null || _c === void 0 ? void 0 : _c.dryRun) === true;
+    let pageToken;
+    let totalAuthUsers = 0;
+    let existingUserDocs = 0;
+    let missingUserDocs = 0;
+    let createdUserDocs = 0;
+    const failedUsers = [];
+    do {
+        const page = await admin.auth().listUsers(1000, pageToken);
+        for (const authUser of page.users) {
+            totalAuthUsers += 1;
+            const userRef = db.collection("users").doc(authUser.uid);
+            const userSnap = await userRef.get();
+            if (userSnap.exists) {
+                existingUserDocs += 1;
+                continue;
+            }
+            missingUserDocs += 1;
+            if (dryRun)
+                continue;
+            try {
+                const createdAtMs = authUser.metadata.creationTime
+                    ? new Date(authUser.metadata.creationTime).getTime()
+                    : Date.now();
+                const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+                const providerIds = (authUser.providerData || [])
+                    .map((provider) => provider.providerId)
+                    .filter(Boolean);
+                await userRef.set({
+                    uid: authUser.uid,
+                    email: authUser.email || "",
+                    displayName: authUser.displayName || "",
+                    photoURL: authUser.photoURL || "",
+                    providerIds,
+                    createdAt: safeCreatedAt,
+                    lastLoginAt: safeCreatedAt,
+                    lastSeenAt: safeCreatedAt,
+                    isOnline: false,
+                    role: "free",
+                    planTier: "free",
+                    accountStatus: "active",
+                    paymentStatus: "none",
+                    favoriteCount: 0,
+                    songGeneratedCount: 0,
+                    backfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    backfillSource: "auth-list-users",
+                });
+                createdUserDocs += 1;
+            }
+            catch (error) {
+                failedUsers.push({
+                    uid: authUser.uid,
+                    email: authUser.email || "",
+                    error: (error === null || error === void 0 ? void 0 : error.message) || String(error),
+                });
+            }
+        }
+        pageToken = page.pageToken;
+    } while (pageToken);
+    return {
+        ok: failedUsers.length === 0,
+        dryRun,
+        totalAuthUsers,
+        existingUserDocs,
+        missingUserDocs,
+        createdUserDocs,
+        failedUsers,
+    };
+});
 const ALLOWED_ORIGINS = [
     "https://soridraw-music.vercel.app",
     "https://soridraw-app-866a5.web.app",

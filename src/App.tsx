@@ -4097,6 +4097,35 @@ function App() {
     }
   };
 
+  const ensureAuthUserDocument = async (authUser: User) => {
+    const userRef = doc(db, 'users', authUser.uid);
+    const now = Date.now();
+    const sessionData = {
+      uid: authUser.uid,
+      email: authUser.email ?? '',
+      displayName: authUser.displayName ?? '',
+      lastLoginAt: now,
+      lastSeenAt: now,
+      isOnline: true,
+    };
+
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      await updateDoc(userRef, sessionData);
+      return;
+    }
+
+    await setDoc(userRef, {
+      ...sessionData,
+      createdAt: now,
+      role: 'free',
+      accountStatus: 'active',
+      paymentStatus: 'none',
+      favoriteCount: 0,
+      songGeneratedCount: 0,
+    });
+  };
+
   const handleGoogleLogin = async () => {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
@@ -4167,11 +4196,9 @@ function App() {
       if (result?.user) {
         console.log("[Auth] Popup login successful for:", result.user.uid);
         try {
-          await setDoc(doc(db, 'users', result.user.uid), {
-            lastLoginAt: Date.now()
-          }, { merge: true });
+          await ensureAuthUserDocument(result.user);
         } catch (dbErr) {
-          console.error("Failed to record lastLoginAt:", dbErr);
+          console.error("Failed to sync Google user document:", dbErr);
         }
       }
     } catch (error: any) {
@@ -4191,11 +4218,9 @@ function App() {
         if (result?.user) {
           console.log("[Auth] Redirect login successful for:", result.user.uid);
           try {
-            await setDoc(doc(db, 'users', result.user.uid), {
-              lastLoginAt: Date.now()
-            }, { merge: true });
+            await ensureAuthUserDocument(result.user);
           } catch (dbErr) {
-            console.error("Failed to record lastLoginAt after redirect:", dbErr);
+            console.error("Failed to sync Google user document after redirect:", dbErr);
           }
         }
       } catch (error: any) {

@@ -1,7 +1,140 @@
-import { onRequest } from "firebase-functions/v2/https";
+import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
+
+
+export const syncAuthUserToFirestore = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(user.uid);
+  const snap = await userRef.get();
+
+  const createdAtMs = user.metadata.creationTime
+    ? new Date(user.metadata.creationTime).getTime()
+    : Date.now();
+  const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+
+  const providerIds = (user.providerData || [])
+    .map((provider: any) => provider.providerId)
+    .filter(Boolean);
+
+  const sessionData = {
+    uid: user.uid,
+    email: user.email || "",
+    displayName: user.displayName || "",
+    photoURL: user.photoURL || "",
+    providerIds,
+    lastLoginAt: safeCreatedAt,
+    lastSeenAt: safeCreatedAt,
+    isOnline: false,
+  };
+
+  if (snap.exists) {
+    await userRef.set(sessionData, { merge: true });
+    return;
+  }
+
+  await userRef.set({
+    ...sessionData,
+    createdAt: safeCreatedAt,
+    role: "free",
+    accountStatus: "active",
+    paymentStatus: "none",
+    favoriteCount: 0,
+    songGeneratedCount: 0,
+  });
+});
+
+
+export const backfillMissingAuthUsers = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const requesterUid = request.auth?.uid;
+    if (!requesterUid) {
+      throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
+    }
+
+    const db = admin.firestore();
+    const requesterSnap = await db.collection("users").doc(requesterUid).get();
+    if (requesterSnap.data()?.role !== "admin") {
+      throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+    }
+
+    const dryRun = request.data?.dryRun === true;
+    let pageToken: string | undefined;
+    let totalAuthUsers = 0;
+    let existingUserDocs = 0;
+    let missingUserDocs = 0;
+    let createdUserDocs = 0;
+    const failedUsers: Array<{ uid: string; email: string; error: string }> = [];
+
+    do {
+      const page = await admin.auth().listUsers(1000, pageToken);
+      for (const authUser of page.users) {
+        totalAuthUsers += 1;
+        const userRef = db.collection("users").doc(authUser.uid);
+        const userSnap = await userRef.get();
+
+        if (userSnap.exists) {
+          existingUserDocs += 1;
+          continue;
+        }
+
+        missingUserDocs += 1;
+        if (dryRun) continue;
+
+        try {
+          const createdAtMs = authUser.metadata.creationTime
+            ? new Date(authUser.metadata.creationTime).getTime()
+            : Date.now();
+          const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+          const providerIds = (authUser.providerData || [])
+            .map((provider: any) => provider.providerId)
+            .filter(Boolean);
+
+          await userRef.set({
+            uid: authUser.uid,
+            email: authUser.email || "",
+            displayName: authUser.displayName || "",
+            photoURL: authUser.photoURL || "",
+            providerIds,
+            createdAt: safeCreatedAt,
+            lastLoginAt: safeCreatedAt,
+            lastSeenAt: safeCreatedAt,
+            isOnline: false,
+            role: "free",
+            planTier: "free",
+            accountStatus: "active",
+            paymentStatus: "none",
+            favoriteCount: 0,
+            songGeneratedCount: 0,
+            backfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+            backfillSource: "auth-list-users",
+          });
+          createdUserDocs += 1;
+        } catch (error: any) {
+          failedUsers.push({
+            uid: authUser.uid,
+            email: authUser.email || "",
+            error: error?.message || String(error),
+          });
+        }
+      }
+      pageToken = page.pageToken;
+    } while (pageToken);
+
+    return {
+      ok: failedUsers.length === 0,
+      dryRun,
+      totalAuthUsers,
+      existingUserDocs,
+      missingUserDocs,
+      createdUserDocs,
+      failedUsers,
+    };
+  }
+);
 
 const ALLOWED_ORIGINS = [
   "https://soridraw-music.vercel.app",

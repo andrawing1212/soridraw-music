@@ -10,7 +10,7 @@ import {
   where,
   limit
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth, functions, httpsCallable } from '../firebase';
 import { AppUserInfo, UserRole, AccountStatus, PaymentStatus } from '../types';
 import {
   Users,
@@ -212,6 +212,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [isAdmin, setIsAdmin] = useState(isAdminProp || false);
   const [isForceLoggingOut, setIsForceLoggingOut] = useState(false);
   const [forceLogoutResult, setForceLogoutResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isBackfillingUsers, setIsBackfillingUsers] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ totalAuthUsers: number; existingUserDocs: number; missingUserDocs: number; createdUserDocs: number; failedCount: number } | null>(null);
 
   const detailHistoryRef = React.useRef(false);
   const confirmHistoryRef = React.useRef(false);
@@ -486,6 +488,42 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   };
 
 
+  const handleBackfillMissingUsers = async () => {
+    if (!isAdmin || !auth.currentUser) return;
+
+    const confirmed = window.confirm(
+      'Firebase Auth에는 있지만 관리자 회원목록에 없는 누락 회원만 복구할까요? 기존 회원 정보는 덮어쓰지 않습니다.'
+    );
+    if (!confirmed) return;
+
+    setIsBackfillingUsers(true);
+    setBackfillResult(null);
+
+    try {
+      const callable = httpsCallable(functions, 'backfillMissingAuthUsers');
+      const response = await callable({ dryRun: false });
+      const data: any = response.data || {};
+      const failedCount = Array.isArray(data.failedUsers) ? data.failedUsers.length : 0;
+
+      setBackfillResult({
+        totalAuthUsers: Number(data.totalAuthUsers || 0),
+        existingUserDocs: Number(data.existingUserDocs || 0),
+        missingUserDocs: Number(data.missingUserDocs || 0),
+        createdUserDocs: Number(data.createdUserDocs || 0),
+        failedCount,
+      });
+
+      alert(`누락 회원 복구 완료\nAuth 전체: ${data.totalAuthUsers || 0}명\n누락 발견: ${data.missingUserDocs || 0}명\n복구 생성: ${data.createdUserDocs || 0}명\n실패: ${failedCount}명`);
+      await fetchUsers();
+    } catch (error: any) {
+      console.error('Failed to backfill missing auth users:', error);
+      alert(error?.message || '누락 회원 복구에 실패했습니다.');
+    } finally {
+      setIsBackfillingUsers(false);
+    }
+  };
+
+
 const handleForceLogout = async () => {
   console.log("%c[ForceLogout UI] EXECUTION START", "color: orange; font-weight: bold; font-size: 14px;");
   console.log("[ForceLogout UI] Current selectedUser:", selectedUser);
@@ -672,15 +710,33 @@ const handleForceLogout = async () => {
       title="회원 관리"
       description="플랫폼 가입자들의 상태와 등급을 대시보드에서 관리합니다."
       actions={
-        <button 
-          onClick={fetchUsers} 
-          disabled={isLoading}
-          className="p-2.5 rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn disabled:opacity-50"
-        >
-          <RefreshCw className={cn("w-5 h-5", isLoading && "animate-spin")} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleBackfillMissingUsers}
+            disabled={isBackfillingUsers || isLoading}
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-brand-orange/30 bg-brand-orange/10 text-brand-orange text-xs font-black hover:bg-brand-orange/15 shadow-btn disabled:opacity-50"
+            title="Firebase Auth에는 있지만 /users 문서가 없는 회원만 복구"
+          >
+            {isBackfillingUsers ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+            누락회원 복구
+          </button>
+          <button 
+            onClick={fetchUsers} 
+            disabled={isLoading}
+            className="p-2.5 rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover shadow-btn disabled:opacity-50"
+            title="회원목록 새로고침"
+          >
+            <RefreshCw className={cn("w-5 h-5", isLoading && "animate-spin")} />
+          </button>
+        </div>
       }
     >
+      {backfillResult && (
+        <div className="mb-4 rounded-2xl border border-brand-orange/25 bg-brand-orange/10 px-4 py-3 text-xs font-bold text-brand-orange">
+          누락회원 복구 결과: Auth 전체 {backfillResult.totalAuthUsers}명 · 기존 문서 {backfillResult.existingUserDocs}명 · 누락 {backfillResult.missingUserDocs}명 · 생성 {backfillResult.createdUserDocs}명 · 실패 {backfillResult.failedCount}명
+        </div>
+      )}
+
       {/* Summary Stats */}
       <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 md:gap-2 mb-4">
         <motion.div 

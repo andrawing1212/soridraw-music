@@ -5887,8 +5887,8 @@ const toggleCycleVariantSelection = (
     setIsGenreRandomized(true);
   };
 
-  // History state is cached locally first, but Firestore remains the source of truth.
-  // Important: do not treat an empty/poisoned local cache as fresh, or it can hide older generated songs.
+  // History state is cached locally only for the first paint.
+  // Firestore remains the source of truth and is listened to in real time on the Studio page.
   useEffect(() => {
     if (!user) {
       recentSongsReadyToCacheRef.current = false;
@@ -5899,15 +5899,18 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    let isCancelled = false;
+    // Keep the realtime listener limited to Studio so the cost stays bounded.
+    if (location.pathname !== '/studio') {
+      recentSongsReadyToCacheRef.current = false;
+      return;
+    }
+
     recentSongsReadyToCacheRef.current = false;
 
     const cached = loadRecentSongsCache(user.uid);
     const cachedHistory = Array.isArray(cached?.history) ? cached!.history : [];
-    const hasUsableCache = cachedHistory.length > 0;
-    const hasFreshCache = hasUsableCache && Date.now() - (cached?.cachedAt || 0) < RECENT_SONGS_CACHE_TTL_MS;
 
-    if (hasUsableCache) {
+    if (cachedHistory.length > 0) {
       applyRecentSongsState(cachedHistory, {
         preferredIndex: cached?.historyIndex,
         latestBatchId: cached?.latestGenerationBatchId || null,
@@ -5919,52 +5922,36 @@ const toggleCycleVariantSelection = (
       setLatestGenerationBatchId(null);
     }
 
-    if (hasFreshCache) {
-      recentSongsReadyToCacheRef.current = true;
-      return;
-    }
-
-    const loadRecentSongsFromFirestore = async () => {
-      try {
-        const ref = doc(db, "user_recent_songs", user.uid);
-        const snap = await getDoc(ref);
-        if (isCancelled) return;
-
+    const ref = doc(db, "user_recent_songs", user.uid);
+    const unsubscribe = onSnapshot(
+      ref,
+      (snap) => {
         const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
         preserveHistoryIndexOnNextSnapshotRef.current = null;
 
         const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
-        const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-        const finalSongs = mergeRecentSongLists(firestoreSongs, recoverySongs);
-
         const preferredIndex = preservedIndex ?? cached?.historyIndex ?? 0;
-        applyRecentSongsState(finalSongs, {
-          preferredIndex: finalSongs.length ? preferredIndex : -1,
-          latestBatchId: (finalSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+
+        applyRecentSongsState(firestoreSongs, {
+          preferredIndex: firestoreSongs.length ? preferredIndex : -1,
+          latestBatchId: (firestoreSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
         });
 
-        // If Firestore was accidentally overwritten with a shorter list, restore the merged list once.
-        if (finalSongs.length > firestoreSongs.length) {
-          await setDoc(ref, sanitizeForFirestore({ songs: finalSongs }), { merge: true });
-        }
-
         recentSongsReadyToCacheRef.current = true;
-      } catch (error) {
-        // If Firestore fails, keep a usable cache as temporary fallback.
-        // If there is no usable cache, do not save the empty placeholder over the cache.
-        recentSongsReadyToCacheRef.current = hasUsableCache;
-        if (!hasUsableCache) {
-          console.error('Failed to load recent songs:', error);
+      },
+      (error) => {
+        // If Firestore fails, keep the account-scoped local cache as a temporary fallback.
+        recentSongsReadyToCacheRef.current = cachedHistory.length > 0;
+        if (cachedHistory.length === 0) {
+          console.error('Failed to subscribe recent songs:', error);
         }
       }
-    };
-
-    void loadRecentSongsFromFirestore();
+    );
 
     return () => {
-      isCancelled = true;
+      unsubscribe();
     };
-  }, [user]);
+  }, [user, location.pathname]);
 
   useEffect(() => {
     if (!user || !recentSongsReadyToCacheRef.current) return;

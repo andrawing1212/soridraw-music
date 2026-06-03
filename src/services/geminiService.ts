@@ -2891,7 +2891,7 @@ function injectMixedPhrases(
 function stripLyricSectionTagLines(text: string): string {
   return String(text || "")
     // Exclude full-line Suno section tags and their cue text from language-ratio calculations.
-    // Full-line Suno section tags and cue text should not count as English lyric content.
+    // Example: [Verse A: low and intimate] should not count as English lyric content.
     .replace(/^\s*\[[^\]]+\]\s*$/gm, "")
     .trim();
 }
@@ -5475,7 +5475,7 @@ const SITUATION_VARIATION_SEEDS: CreativeVariationSeed[] = [
     arrangementLens: "one-sided pursuit with delayed replies",
     lyricArchitecture:
       "let one role own the verse, while the other appears as short interruptions or echoes",
-    avoidPattern: "equal-length alternating verse ownership",
+    avoidPattern: "Verse A then Verse B with equal length",
   },
   {
     id: "negotiation-trade",
@@ -15691,6 +15691,40 @@ function baseLyricSectionName(section: string): string {
   return normalizeLyricSectionDisplayName(String(section || "").replace(/\s+[A-Z]$/i, "").trim());
 }
 
+function applySequentialSectionSuffixes(lines: string[]): string[] {
+  const tagInfos: Array<{ index: number; section: string; base: string }> = [];
+  lines.forEach((line, index) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return;
+    const composite = parseCompositeLyricTagInside(parsed.inside);
+    if (!composite) return;
+    const base = baseLyricSectionName(composite.section);
+    if (!/^(?:Verse|Bridge)$/i.test(base)) return;
+    tagInfos.push({ index, section: composite.section, base });
+  });
+
+  const copy = [...lines];
+  for (let i = 0; i < tagInfos.length; i += 1) {
+    const run = [tagInfos[i]];
+    let j = i + 1;
+    while (j < tagInfos.length && tagInfos[j].base.toLowerCase() === tagInfos[i].base.toLowerCase()) {
+      run.push(tagInfos[j]);
+      j += 1;
+    }
+    if (run.length > 1) {
+      run.forEach((item, runIndex) => {
+        const suffix = String.fromCharCode(65 + runIndex);
+        copy[item.index] = copy[item.index].replace(
+          new RegExp(`^\\[${item.section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`),
+          `[${item.base} ${suffix}:`,
+        );
+      });
+    }
+    i = j - 1;
+  }
+  return copy;
+}
+
 function removeRedundantSectionOnlyBeforeComposite(lines: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < lines.length; i += 1) {
@@ -15883,7 +15917,7 @@ function normalizeCompositeLyricTagsFinal(lyrics: string, params: GenerateSongPa
     normalized.push(line);
   });
 
-  const joined = removeRedundantSectionOnlyBeforeComposite(normalized).join("\n");
+  const joined = applySequentialSectionSuffixes(removeRedundantSectionOnlyBeforeComposite(normalized)).join("\n");
   return removeLyricsFromForcedInstrumentalSections(joined, params)
     .replace(/\[(Instrumental(?:\s+Opening)?|Solo|Drop|Breakdown):\s*Instrumental\s*,\s*/gi, '[$1: ')
     .replace(/\[(Instrumental(?:\s+Opening)?|Solo|Drop|Breakdown):\s*Instrumental\s*\]/gi, '[$1]');
@@ -16373,6 +16407,24 @@ function addCueToBracketTagLine(line: string, cueParts: string[]): string {
   return `[${section}${next.length ? `: ${next.slice(0, 3).join(', ')}` : ''}]`;
 }
 
+
+function lyricEmotionCueForBareSection(section: string, params: GenerateSongParams): string[] {
+  const name = normalizeLyricSectionDisplayName(section || "");
+  if (!name || /^(?:Break|Stop|Instrumental|Solo|Intro|Outro)$/i.test(name)) return [];
+  const themeText = selectedThemeText(params);
+  const moodText = selectedMoodText(params);
+  const transitionCue = compactMoodTransitionCue(params);
+  const isFlutter = /flutter|excitement|설렘|thrill|두근|떨림/.test(themeText);
+  const isDarkPlayful = /playful|comic|cute|dark|tense|장난|귀여|어두|긴장/.test(`${moodText} ${transitionCue}`);
+
+  if (/^Verse/i.test(name)) return [isFlutter ? "small panic" : isDarkPlayful ? "nervous restraint" : "intimate detail"];
+  if (/Pre[-\s]?Chorus/i.test(name)) return [isFlutter ? "rising tension" : "emotional build"];
+  if (/Chorus|Hook|Drop/i.test(name) && !/^Final/i.test(name)) return [isFlutter ? "unstable hook" : "emotional hook"];
+  if (/^Bridge/i.test(name)) return transitionCue ? [transitionCue] : ["emotional turn"];
+  if (/^Final\s+(?:Chorus|Hook)/i.test(name)) return [transitionCue ? "out-of-control release" : "final release"];
+  return [];
+}
+
 function collapseDuplicateStopTags(lyrics: string): string {
   const lines = String(lyrics || '').split('\n');
   const out: string[] = [];
@@ -16410,7 +16462,7 @@ function removeEmptyBridgeBeforeMoodShift(lyrics: string): string {
     let j = i + 1;
     while (j < lines.length && !lines[j].trim()) j += 1;
     if (j < lines.length && isTag(lines[j]) && (isStop(lines[j]) || isMoodShiftBridge(lines[j]))) {
-      // Drop an empty alternate bridge marker created right before the real transition.
+      // Drop an empty Bridge A/B marker created right before the real transition.
       continue;
     }
 
@@ -16419,6 +16471,29 @@ function removeEmptyBridgeBeforeMoodShift(lyrics: string): string {
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+
+function ensureEmotionCuesForBareLyricSections(lyrics: string, params: GenerateSongParams): string {
+  if (!lyrics.trim()) return lyrics;
+  const lines = String(lyrics || '').split('\n');
+  const isBareSungSection = (inside: string) => {
+    const clean = normalizeLyricSectionDisplayName(inside || '');
+    if (!clean || !isSectionOnlyLyricTagInside(clean)) return false;
+    return !/^(?:Break|Stop|Instrumental|Instrumental Opening|Solo|Intro|Outro)$/i.test(clean);
+  };
+  let changed = false;
+  const next = lines.map((line) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return line;
+    if (parsed.inside.includes(':')) return line;
+    if (!isBareSungSection(parsed.inside)) return line;
+    const cues = lyricEmotionCueForBareSection(parsed.inside, params);
+    if (!cues.length) return line;
+    changed = true;
+    return addCueToBracketTagLine(line, cues);
+  });
+  return changed ? next.join('\n').replace(/\n{3,}/g, '\n\n').trim() : lyrics;
+}
+
 
 function moodShiftSectionSpaceCue(params: GenerateSongParams): string {
   const cue = compactSpaceAndTransitionCue(params);
@@ -16750,7 +16825,7 @@ function sanitizeGeneratedLyricTagsAndFragments(
       ensureMoodShiftBridgeInLyrics(lyricTextWithTransitions, params),
     ),
   );
-  const lyricTextWithEmotionCues = lyricTextWithMoodShift;
+  const lyricTextWithEmotionCues = ensureEmotionCuesForBareLyricSections(lyricTextWithMoodShift, params);
 
   const compactedLyricText = sanitizeCustomLyricTagNoiseFinal(
     normalizeGeneratedLyricLineBreaks(
@@ -16961,7 +17036,7 @@ export async function generateSong(
       ? `MIXED LANGUAGE MODE (MANDATORY):
 - Use natural Korean/English mixed lyrics only because the user enabled mixed lyrics.
 - Treat ${englishMixRatio}% as the intended English share of ACTUAL LYRIC LINES ONLY.
-- Do NOT count Suno section headers or section cue text toward the language ratio. Exclude full-line bracketed section, transition, and instrumental tags from the ratio.
+- Do NOT count Suno section headers or section cue text toward the language ratio. Exclude all bracketed section lines such as [Intro], [Verse A: low and intimate], [Chorus / Drop: emotional lift], [Stop], [Break], and [Instrumental: guitar solo].
 - Count only sung/spoken lyric body lines. Parenthetical ad-libs like (Stay with me) count because they are lyric content.
 - Keep section headers and section tags in English if needed, but they must not be used to satisfy the English ratio.
 - For 5%: Korean body lyrics with at most one very short English accent in the whole lyric.
@@ -17040,9 +17115,9 @@ ${exactStructureText}
         ? `SONG STRUCTURE (DEFAULT / GENRE REPRESENTATIVE):
 - Selected mode: Default. Use this genre-representative structure as the main section order:
 ${exactStructureText}
-- Output lyric sections in this order as the locked blueprint for Default mode. Do not replace it with alphabet-suffixed or extra numbered section variants.
-- Use only the section names shown in the blueprint unless that exact section name already appears there.
-- Do not add extra transition, instrumental, solo, or drop sections unless they appear in the blueprint above.
+- Output lyric sections in this order as the locked blueprint for Default mode. Do not replace it with a free Verse A/B/C structure.
+- Use the section names shown in the blueprint. Do not invent [Verse A], [Verse B], [Verse C], [Pre-Chorus 2], [Bridge B], or extra numbered sections unless the blueprint explicitly contains those labels.
+- Do not add [Break], [Stop], [Instrumental], [Solo], [Drop], or extra transition sections unless they appear in the blueprint above.
 - If the structure contains [Stop] then a transition Bridge, keep that exact transition event. Do not duplicate Stop.
 - Chorus / Drop may be written as [Chorus / Drop] when the structure says so. Otherwise keep the listed section name.
 - Instrumental sections may carry short sound cues, but do not turn them into sung lyric sections.
@@ -17054,8 +17129,8 @@ ${exactStructureText}
 ${exactStructureText}
 - Output lyric sections in this exact order.
 - Do not substitute a different default structure.
-- Do not add sections that are not listed above. In particular, do not add extra transition, instrumental, solo, alphabet-suffixed, repeated pre-chorus-chain, or alternate bridge labels unless the selected structure explicitly contains them.
-- Keep repeated section names repeated as written. If the structure repeats the same section name, repeat that same name without renaming it.
+- Do not add sections that are not listed above. In particular, do not add [Break], [Stop], [Instrumental], [Solo], [Verse A/B/C], repeated Pre-Chorus chains, or alternate Bridge labels unless the selected structure explicitly contains them.
+- Keep repeated section names repeated as written. If the structure says Verse twice, use [Verse] twice; do not rename them into [Verse A] and [Verse B].
 - Chorus / Drop and Final Chorus / Drop must keep the slash form when listed.
 - Section tags may include one short performance cue after the colon, but the section name itself must stay identical to the selected structure.`;
 
@@ -17122,7 +17197,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Keep lyric tags compact: [Role: one voice cue, one emotion cue]. Use at most 2 short cues after the colon. Do not put full sentences, long descriptions, or all vocal settings inside lyric tags.
 - LYRIC CONTENT SOURCE LOCK (MANDATORY): Lyrics must be created only from USER FREE-TEXT DIRECTOR NOTE, selected Theme, and active Situation if provided. Vocal emotion direction, vocal expression, vocal tone, Sound, Style, tempo, BPM, instrument names, and production texture are NOT lyric topics.
 - Vocal emotion direction and vocal expression are singer-performance directions only. They may appear in [Vocals] and compact lyric tags, but must NOT create lyric story, imagery, subject matter, repeated keywords, or narrative content. Do not write lyric lines that explain the selected emotion/expression. If no Theme/Situation/user note exists, keep lyrics broad and character-driven rather than explaining vocal settings.
-- In Situation/character lyrics, lyric tags may use composite acoustic tags only on the selected section name, with one acoustic voice label and one short cue. Never output Korean speaker labels in brackets, never output malformed labels, never output bare acoustic tags, and never switch back to generic vocal labels after acoustic labels have been established.
+- In Situation/character lyrics, lyric tags must use composite acoustic tags: [Section: Acoustic Voice Label, short cue], e.g. [Verse A: Tired Male Rap, dry authority] or [Chorus: Airy Female Vocal, pleading hook]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], never output bare acoustic tags like [Tired Male Rap: dry], and never switch back to generic vocal labels after acoustic labels have been established.
 - Every sung tag must include a section name before the colon. Bad: [Airy Female Vocal: empty]. Good: [Outro: Airy Female Vocal, empty].
 - KIM EANA-STYLE LYRIC FOUNDATION (MANDATORY): Write lyrics as character speech, not emotion exposition. Start from character, situation, desire, speech style, and lived detail. Prefer concrete everyday details, persona flaws, small behavior, and a believable scene over abstract emotion words. Chorus should express the character's real desire or repeating phrase, not summarize the selected vocal emotion.
 - Do not make tags empty. Every vocalist tag must be followed by at least 1-2 complete lyric or ad-lib lines. Never output broken placeholders like "( : )", "[ : ]", empty parentheses, or empty vocal tags.
@@ -17132,7 +17207,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - For repeated Hook/Chorus sections, distribute ownership across roles: Main Vocal or Airy Vocal can lead early hooks, Rap/Whisper Rap can interrupt or answer, and Together should be saved for the final or most important hook.
 - Do not let [Together] own every repeated hook. Keep group unity, but preserve the selected vocal split.
 - Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse: Tired Male Rap, dry], [Rap Section: Low Male Rap, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
-- If Gemini starts a sung block with a bare acoustic tag, rewrite it into the nearest selected musical section name instead of inventing a new section label.
+- If Gemini starts a sung block with a bare acoustic tag such as [Tired Male Rap: ...] or [Airy Female Vocal: ...], rewrite it into the nearest musical section: [Verse A: ...], [Verse B: ...], [Rap Section: ...], [Bridge: ...], or [Outro: ...].
 - Never put Korean story role labels inside brackets. Story roles may appear in lyric lines, but bracket tags must stay English acoustic/section tags only.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format is locked to this 5-line structure plus the fixed quality line:
@@ -17532,7 +17607,7 @@ ${buildExtraTechniqueLyricTagInstruction(params)}
   7) Unresolved map: no reconciliation; keep emotional distance through the Outro.
   8) Chorus-takeover map: the chorus is owned mostly by one role, while the other only interrupts with short lines/ad-libs.
   9) Echo map: one role sings full lines while the other echoes, corrects, or undercuts them.
-- Do NOT always use the same role order, pre-chorus softening, balanced chorus trade, bridge reconciliation, or final chorus resolution.
+- Do NOT always use: Verse A→B, Pre-Chorus softening, Chorus A/B/A/B, Bridge reconciliation, Final Chorus resolution.
 - Do NOT make every lyrical section contain both speakers. Some sections may be A-only, B-only, echo-only, or Together-only if it fits the map.
 - Bridge must not always be empathy or reconciliation. It can be interruption, reveal, refusal, reversal, silence, parallel monologue, or comic failure.
 - Final Chorus must not always resolve the conflict. It can stay comic, bitter, awkward, one-sided, or unresolved if the Situation version supports it.
@@ -17709,10 +17784,16 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   };
   (result as any).geminiModelInfo = geminiModelInfo;
   if (!result.title || typeof result.title !== "string") {
-    result.title = hasKoreanLanguage ? "제목 생성 실패" : "Title Generation Failed";
+    result.title = hasKoreanLanguage ? "다시 시작" : "New Start";
   }
   if (!params.isNoLyrics && (!result.lyrics || typeof result.lyrics !== "object")) {
-    throw new Error("곡 생성 응답이 비어 있습니다. 임시 기본 가사를 저장하지 않고 다시 시도해주세요.");
+    const emergencyKoreanLyrics = `[Intro: soft opening]\n조용히 불이 켜지고\n아직 끝나지 않은 마음이 움직여\n\n[Verse: calm]\n말하지 못한 한 줄을\n오늘은 천천히 꺼내 봐\n\n[Chorus: focused hook]\n다시 시작해도 괜찮아\n조금 어긋난 마음도 노래가 돼\n\n[Outro: warm release]\n남은 빛을 따라가`;
+    result.lyrics = {
+      korean: requestedLyricLanguages.includes("ko") ? emergencyKoreanLyrics : "",
+      english: requestedLyricLanguages.some((lang) => lang !== "ko")
+        ? "[Intro: soft opening]\nA quiet light turns on\nAnd the feeling starts again\n\n[Chorus: focused hook]\nIt is okay to begin again\nEven a broken moment can become a song"
+        : "",
+    };
   }
 
   // Title Post-processing

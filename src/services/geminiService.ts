@@ -17709,16 +17709,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   };
   (result as any).geminiModelInfo = geminiModelInfo;
   if (!result.title || typeof result.title !== "string") {
-    result.title = hasKoreanLanguage ? "다시 시작" : "New Start";
+    result.title = hasKoreanLanguage ? "제목 생성 실패" : "Title Generation Failed";
   }
   if (!params.isNoLyrics && (!result.lyrics || typeof result.lyrics !== "object")) {
-    const emergencyKoreanLyrics = `[Intro: soft opening]\n조용히 불이 켜지고\n아직 끝나지 않은 마음이 움직여\n\n[Verse: calm]\n말하지 못한 한 줄을\n오늘은 천천히 꺼내 봐\n\n[Chorus: focused hook]\n다시 시작해도 괜찮아\n조금 어긋난 마음도 노래가 돼\n\n[Outro: warm release]\n남은 빛을 따라가`;
-    result.lyrics = {
-      korean: requestedLyricLanguages.includes("ko") ? emergencyKoreanLyrics : "",
-      english: requestedLyricLanguages.some((lang) => lang !== "ko")
-        ? "[Intro: soft opening]\nA quiet light turns on\nAnd the feeling starts again\n\n[Chorus: focused hook]\nIt is okay to begin again\nEven a broken moment can become a song"
-        : "",
-    };
+    throw new Error("곡 생성 응답이 비어 있습니다. 임시 기본 가사를 저장하지 않고 다시 시도해주세요.");
   }
 
   // Title Post-processing

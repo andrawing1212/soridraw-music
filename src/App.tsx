@@ -6726,8 +6726,31 @@ const saveRecentSong = async (newSong: any) => {
       }
     }
 
-    const personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
+    if (isGenerating) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setIsGenerating(false);
+      return;
+    }
+
+    // Show the loading state immediately on click.
+    // The Gemini API key lookup can take 1-2 seconds, so it must not block the button feedback.
+    setIsGenerating(true);
+    setResult(prev => (prev ? { ...prev, title: '생성 중...' } : null));
+    abortControllerRef.current = new AbortController();
+
+    let personalGeminiApiKey = '';
+    try {
+      personalGeminiApiKey = await resolveGoogleGeminiApiKey(user);
+    } catch (keyError) {
+      console.error('Failed to resolve Gemini API key:', keyError);
+    }
+
     if (!personalGeminiApiKey) {
+      setIsGenerating(false);
+      abortControllerRef.current = null;
       showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
       navigate('/my-page');
       return;
@@ -6751,22 +6774,11 @@ const saveRecentSong = async (newSong: any) => {
     const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
 
     if (!hasAnySelectedGenre && !hasFreeTextDirectorNote) {
+      setIsGenerating(false);
+      abortControllerRef.current = null;
       showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
       return;
     }
-
-    if (isGenerating) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      setIsGenerating(false);
-      return;
-    }
-
-    setIsGenerating(true);
-    setResult(prev => (prev ? { ...prev, title: '생성 중...' } : null));
-    abortControllerRef.current = new AbortController();
 
     try {
       // Activity indicator
@@ -7228,16 +7240,77 @@ const saveRecentSong = async (newSong: any) => {
 
         if (abortControllerRef.current?.signal.aborted) return;
 
+        const secondaryLyricLanguage = requestedLyricLanguages.find((lang) => lang !== 'ko') as LanguageCode | undefined;
+        let songWithLanguageFallback = song;
+
+        // Korean + foreign-language simultaneous generation can sometimes return only Korean lyrics.
+        // In that case, immediately translate the generated Korean lyrics once so the second lyric card is not empty.
+        if (
+          requestedIncludeLyrics &&
+          requestedLyricLanguages.includes('ko') &&
+          secondaryLyricLanguage &&
+          String(song.lyrics?.korean || '').trim() &&
+          !String(song.lyrics?.english || '').trim()
+        ) {
+          const fallbackLabel = lyricLanguageLabels[secondaryLyricLanguage];
+          const sourceTitle = (song.koreanTitle || song.title || '')
+            .replace(/^\[[^\]]+\]\s*/, '')
+            .replace(/^['"]|['"]$/g, '')
+            .trim();
+
+          try {
+            const fallbackBundle = await runWithTimeout(
+              translateTitleAndLyrics(sourceTitle, song.lyrics.korean, fallbackLabel.api, personalGeminiApiKey),
+              45000,
+              'lyrics-secondary-language-timeout',
+            );
+            const fallbackLyrics = String(fallbackBundle.lyrics || '').trim();
+            if (fallbackLyrics) {
+              const fallbackTitle = String(fallbackBundle.title || sourceTitle)
+                .replace(/\n/g, ' ')
+                .replace(/^["']|["']$/g, '')
+                .trim() || sourceTitle;
+              const previousApplied = (song.appliedKeywords || {}) as any;
+              songWithLanguageFallback = {
+                ...song,
+                englishTitle: fallbackTitle || song.englishTitle || '',
+                lyrics: {
+                  ...(song.lyrics || { korean: '', english: '' }),
+                  english: fallbackLyrics,
+                },
+                appliedKeywords: {
+                  ...previousApplied,
+                  lyricLanguages: requestedLyricLanguages,
+                  titleLanguages: requestedLyricLanguages,
+                  secondaryLanguage: secondaryLyricLanguage,
+                  lyricsByLanguage: {
+                    ...(previousApplied.lyricsByLanguage || {}),
+                    ko: song.lyrics.korean,
+                    [secondaryLyricLanguage]: fallbackLyrics,
+                  },
+                  titlesByLanguage: {
+                    ...(previousApplied.titlesByLanguage || {}),
+                    ko: song.koreanTitle || sourceTitle,
+                    [secondaryLyricLanguage]: fallbackTitle,
+                  },
+                } as any,
+              } as SongResult;
+            }
+          } catch (fallbackError) {
+            console.warn('Secondary lyric fallback generation failed:', fallbackError);
+          }
+        }
+
         const generatedAt = Date.now();
         const newResult = {
-          ...song,
+          ...songWithLanguageFallback,
           genre: finalGenres[0] ?? undefined,
           subGenre: finalGenres,
-          prompt: song.prompt,
+          prompt: songWithLanguageFallback.prompt,
           createdAt: generatedAt,
           updatedAt: generatedAt,
           appliedKeywords: {
-            ...song.appliedKeywords,
+            ...songWithLanguageFallback.appliedKeywords,
             genre: [],
             subGenre: finalGenres,
             ...(hasActiveSituation(situation) ? { situation } : {}),

@@ -16988,7 +16988,9 @@ export async function generateSong(
 - The title language(s) MUST exactly match the selected lyric language(s).
 - ${titleFormatInstruction}
 - If Korean is selected, put Korean lyrics in JSON field lyrics.korean and create a natural Korean title.
-- If a non-Korean language is selected, put that language's lyrics in JSON field lyrics.english, even when the selected language is not English.
+- The JSON field lyrics.english is the SECONDARY LYRIC SLOT. It must contain the full lyrics for the selected non-Korean language (${languageNameMap[secondaryLanguage]}), even when that language is Japanese, Chinese, Spanish, or French.
+- When both Korean and ${languageNameMap[secondaryLanguage]} are selected, BOTH lyrics.korean and lyrics.english must be non-empty full lyric bodies with matching sections.
+- If only Korean is selected, leave lyrics.english empty.
 - If a language is not selected, do not create a title or lyrics for that language.
 - Do not generate unselected lyric languages.
 - In Korean-only mode, lyrics.korean must be Korean-only unless MIXED LANGUAGE MODE is explicitly active.

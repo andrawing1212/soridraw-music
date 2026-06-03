@@ -3614,7 +3614,7 @@ function buildStructureText(
 
   const structureMap: Record<Exclude<SongStructure, "custom">, string> = {
     "1": params ? buildRepresentativeDefaultStructure(params) : "Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus → Chorus → Stop → Bridge → Final Chorus → Outro",
-    "2": BASIC_STRUCTURE,
+    "2": "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro",
     "3": "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro",
   };
 
@@ -7790,7 +7790,12 @@ function rawDirectThemeMoodText(params: GenerateSongParams): string {
 }
 
 function hasDirectThemeOrMoodInput(params: GenerateSongParams): boolean {
-  return Boolean(getDirectThemeInputText(params) || getDirectMoodInputText(params) || String(params.userInput || "").trim());
+  return Boolean(
+    getDirectThemeInputText(params) ||
+      getDirectMoodInputText(params) ||
+      String(params.userInput || "").trim() ||
+      String(params.lyricDraft || "").trim(),
+  );
 }
 
 function directTextAllowsCueFamily(params: GenerateSongParams, family: "message" | "confession" | "breakup" | "street" | "ordinaryUnsaid"): boolean {
@@ -11652,10 +11657,12 @@ function buildUserPrimaryStoryLockInstruction(params: GenerateSongParams): strin
 
   return `USER TEXT PRIORITY LOCK (MANDATORY):
 - The user's ${hasLyricDraft ? "direct lyric draft" : ""}${hasLyricDraft && hasDirectorNote ? " and " : ""}${hasDirectorNote ? "director note" : ""} is the main story source.
+- If the direct lyric draft is written as a short story/brief rather than finished lyrics, treat it as the required lyric story brief: preserve its named people, character roles, relationship, core objects, situation, and growth/ending arc in EVERY generated lyric.
 - Selected themes are secondary lenses only: ${selectedThemes}. Reinterpret them inside the user's text; never let them replace the user's story.
 - Selected moods are emotional/performance color only: ${selectedMoods}. Do NOT copy mood labels such as peaceful, funky, sad, bright, calm, 평화로운, 펑키한, 우울한, 밝은, 차분한 directly into lyric lines.
+- Style, Sound, Vocal, tempo, hook, and production keywords are musical/performance guidance only. They must not add unrelated characters, objects, locations, or story events to the lyrics.
 - If the user text clearly implies war, history, battle, survival, heroism, naval conflict, or historical resolve, reinterpret love/encounter/reunion as loyalty, comradeship, survival, duty, return, or love for country. Do NOT create romance, confession, relationship, everyday conflict, or delayed-confession lenses.
-- If the user text clearly implies romance, comedy, workplace, fantasy, or another topic, keep that topic as the main frame and reinterpret selected themes/moods inside it.
+- If the user text clearly implies romance, comedy, workplace, fantasy, childlike friendship, fairy-story, or another topic, keep that topic as the main frame and reinterpret selected themes/moods inside it.
 - When theme is empty, do NOT invent a random theme. Infer the story only from the user's text and UI selections.
 - Atmosphere and Arrangement must describe the user's actual story conflict, not a random creative variation.`;
 }
@@ -17052,23 +17059,25 @@ export async function generateSong(
 - The user provided finished lyrics or draft lyrics below:
 "${params.lyricDraft}"
 
-- Preserve the user's wording, expressions, imagery, line flow, and emotional tone as much as possible.
-- Do NOT add new story elements, unrelated metaphors, or new narrative directions.
+- Preserve the user's wording, expressions, imagery, line flow, and emotional tone as the main body.
+- Do NOT add new story elements, unrelated metaphors, unrelated objects, or new narrative directions.
 - Do NOT rewrite the lyrics into a different theme.
 - Only:
   - improve minor awkward line breaks if necessary
   - split into song sections if needed
   - repeat existing hook lines only when needed
 - The user's original wording must remain the main body of the lyrics.
-- Reorganize into the selected song structure automatically.`
+- Reorganize into the selected song structure only as a placement task; the structure must not create a different story.`
         : `LYRIC DRAFT PRIORITY (PRIMARY SOURCE):
 - The user provided original lyric ideas below:
 "${params.lyricDraft}"
 
-- Preserve the user's wording, imagery, emotional tone, and key phrases as much as possible.
-- Do NOT discard or replace the user's core lyrical ideas.
-- Expand naturally only where needed to fit the structure and length.
-- Reorganize into the selected song structure automatically.
+- Treat this draft as the primary lyric story source, even when it is a short prose brief instead of finished lyrics.
+- Preserve the user's named people, character roles, relationship, core objects, situation, emotional tone, and story arc.
+- Do NOT discard, replace, or generalize the user's core lyrical ideas.
+- Do NOT add unrelated characters, random places, new fantasy objects, confession/breakup arcs, or generic scenes that are absent from the draft.
+- Expand naturally only where needed to fit the selected structure and length, using details that grow directly from the draft.
+- Reorganize into the selected song structure only as a placement task; the structure must not create a different story.
 - Keep it natural and polished.`
       : "";
 
@@ -17106,8 +17115,9 @@ ${exactStructureText}
         ? `SONG STRUCTURE (DEFAULT / GENRE REPRESENTATIVE):
 - Selected mode: Default. Use this genre-representative structure as the main section order:
 ${exactStructureText}
-- Output lyric sections in this order as closely as possible. Do not replace it with a free Verse A/B/C structure.
-- Use [Verse] for the first verse and reuse [Verse] when it returns; do not output [Verse A], [Verse B], or [Verse C] unless the structure explicitly contains those labels or there are multiple different speakers in a Situation.
+- Output lyric sections in this order as the locked blueprint for Default mode. Do not replace it with a free Verse A/B/C structure.
+- Use the section names shown in the blueprint. Do not invent [Verse A], [Verse B], [Verse C], [Pre-Chorus 2], [Bridge B], or extra numbered sections unless the blueprint explicitly contains those labels.
+- Do not add [Break], [Stop], [Instrumental], [Solo], [Drop], or extra transition sections unless they appear in the blueprint above.
 - If the structure contains [Stop] then a transition Bridge, keep that exact transition event. Do not duplicate Stop.
 - Chorus / Drop may be written as [Chorus / Drop] when the structure says so. Otherwise keep the listed section name.
 - Instrumental sections may carry short sound cues, but do not turn them into sung lyric sections.
@@ -17117,7 +17127,12 @@ ${exactStructureText}
 - Selected mode: ${resolvedStructure === "2" ? "1" : "2"}.
 - Use this exact structure:
 ${exactStructureText}
-- Do not substitute a different default structure.`;
+- Output lyric sections in this exact order.
+- Do not substitute a different default structure.
+- Do not add sections that are not listed above. In particular, do not add [Break], [Stop], [Instrumental], [Solo], [Verse A/B/C], repeated Pre-Chorus chains, or alternate Bridge labels unless the selected structure explicitly contains them.
+- Keep repeated section names repeated as written. If the structure says Verse twice, use [Verse] twice; do not rename them into [Verse A] and [Verse B].
+- Chorus / Drop and Final Chorus / Drop must keep the slash form when listed.
+- Section tags may include one short performance cue after the colon, but the section name itself must stay identical to the selected structure.`;
 
   const systemInstruction = `
 You are a professional music composer and lyricist.
@@ -17293,6 +17308,7 @@ LYRIC SOURCE PRIORITY (MANDATORY):
 - If a Situation is active, its relationship, conflict, character roles, speech direction, version tone, and development are the main lyric story structure. Direct theme/mood/user notes may add the specific topic or tone, but they must not erase the Situation relationship or role logic.
 - The final [Atmosphere] line is a production summary. Do not let abstract or generic Atmosphere wording override the user's concrete story, Situation conflict, mood, speech style, or chosen section flow.
 - Keep lyric structure, section tags, density rules, and character speech quality intact. Do not rewrite lyrics merely to match a generic prompt phrase.
+- STRUCTURE OVERRIDE GUARD: selected section structure is a higher-priority output format than genre adaptation, creative variation, lyric density, or direct-lyrics expansion. Do not add or rename lyric sections just to fit a genre or to create more variety.
 
 LOCKED FINAL PRODUCTION PROMPT:
 ${finalPrompt}

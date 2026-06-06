@@ -8141,14 +8141,14 @@ ${normalizePromptForDisplay(result.prompt)}
         .flatMap((group) => group.children)
         .flatMap((main) => main.children)
         .find((item) => item.id === id);
-      return matched?.label || id;
+      return matched?.labelKo || matched?.label || id;
     });
     const currentMainGenreLabels = selectedGenres.map((id) => {
       const matched = GENRE_HIERARCHY
         .flatMap((group) => group.children)
         .flatMap((main) => main.children)
         .find((item) => item.id === id);
-      return matched?.label || id;
+      return matched?.labelKo || matched?.label || id;
     });
     const combinedGenreLabels = Array.from(new Set([...currentMainGenreLabels, ...currentSubGenreLabels])).filter(Boolean);
     const genreStr = combinedGenreLabels.length > 0 ? combinedGenreLabels.join(', ') : '기본 장르(Pop)';
@@ -8163,134 +8163,339 @@ ${normalizePromptForDisplay(result.prompt)}
     const previewRap = previewIncludeLyrics ? (currentPreviewOptions ? currentPreviewOptions.rapEnabled : rapEnabled) : false;
     const previewGenCount = currentPreviewOptions ? currentPreviewOptions.generationCount : 1;
 
+    // --- 통합 분석 엔진 (Unified Music Interpretation Engine) ---
     const lowerGenres = [...selectedGenres, ...subGenre].map(g => g.toLowerCase());
-    const isEdm = lowerGenres.some(g => g.includes('edm') || g.includes('electro') || g.includes('dance') || g.includes('synth') || g.includes('house') || g.includes('trance') || g.includes('techno') || g.includes('club') || g.includes('bass'));
-    const isHymn = lowerGenres.some(g => g.includes('hymn') || g.includes('chant') || g.includes('church') || g.includes('choir') || g.includes('ccm') || g.includes('gospel') || g.includes('spiritual') || g.includes('sacred'));
-    const isRnb = lowerGenres.some(g => g.includes('r&b') || g.includes('rnb') || g.includes('soul') || g.includes('groove') || g.includes('urban') || g.includes('funk'));
-    const isAcoustic = lowerGenres.some(g => g.includes('acoustic') || g.includes('folk') || g.includes('indie') || g.includes('unplugged') || g.includes('guitar'));
+    
+    // 장르 분류
+    const isEdm = lowerGenres.some(g => g.includes('edm') || g.includes('electro') || g.includes('dance') || g.includes('synth') || g.includes('house') || g.includes('trance') || g.includes('techno') || g.includes('club') || g.includes('bass') || g.includes('future') || g.includes('step'));
+    const isHymn = lowerGenres.some(g => g.includes('hymn') || g.includes('chant') || g.includes('church') || g.includes('choir') || g.includes('ccm') || g.includes('gospel') || g.includes('spiritual') || g.includes('sacred') || g.includes('religion'));
+    const isRnb = lowerGenres.some(g => g.includes('r&b') || g.includes('rnb') || g.includes('soul') || g.includes('groove') || g.includes('urban') || g.includes('funk') || g.includes('citypop'));
+    const isAcoustic = lowerGenres.some(g => g.includes('acoustic') || g.includes('folk') || g.includes('indie') || g.includes('unplugged') || g.includes('guitar') || g.includes('ballad'));
+    const isRock = lowerGenres.some(g => g.includes('rock') || g.includes('metal') || g.includes('grunge') || g.includes('punk') || g.includes('alternat') || g.includes('band'));
+    const isHipHop = lowerGenres.some(g => g.includes('hip') || g.includes('trap') || g.includes('boom') || g.includes('rap') || g.includes('lofi') || g.includes('rhythm'));
+    const isJazz = lowerGenres.some(g => g.includes('jazz') || g.includes('swing') || g.includes('bossanova') || g.includes('blue'));
 
-    const themeName = selectedThemeLabels.length > 0 ? selectedThemeLabels[0] : (userInput.trim() ? '디렉터 기획안' : '선택된 감성');
-    const moodName = selectedMoodLabels.length > 0 ? selectedMoodLabels[0] : '편안하고 아늑한';
+    // 크로스오버 장르 텍스트 구성
+    let crossoverGenreText = genreStr;
+    const genreNames = Array.from(new Set([...selectedGenres, ...subGenre])).map(resolveGenreChipLabel).filter(Boolean);
+    if (genreNames.length > 2) {
+      crossoverGenreText = `${genreNames.slice(0, 2).join(' · ')} 등의 다채로운 사운드가 입체적으로 가공된`;
+    } else if (genreNames.length === 2) {
+      crossoverGenreText = `${genreNames[0]}와 ${genreNames[1]}의 리듬적 특성이 감각적으로 믹싱된`;
+    } else if (genreNames.length === 1) {
+      crossoverGenreText = `${genreNames[0]} 특유의 리드미컬하고 세련된`;
+    }
+
+    // 주제 & 어조 기본 명명
+    const themeName = selectedThemeLabels.length > 0 ? selectedThemeLabels[0] : (userInput.trim() ? `[${userInput.trim().slice(0, 22)}${userInput.trim().length > 22 ? '...' : ''}] 기획안` : '마음의 서사');
+    const moodName = selectedMoodLabels.length > 0 ? selectedMoodLabels.join(', ') : '온화하고 깊이 있는';
+
+    // 1) 보컬 기본 구성 정보 추출 (Vocal Formation Details)
+    let formationText = "보컬";
+    if (vocalMode === 'solo') {
+      if (maleCount === 1 && femaleCount === 0) formationText = "남성 싱글 솔로 보컬";
+      else if (femaleCount === 1 && maleCount === 0) formationText = "여성 싱글 솔로 보컬";
+      else formationText = "솔로 보컬";
+    } else {
+      if (maleCount === 1 && femaleCount === 1) formationText = "남녀가 감미롭게 주거니 받거니 하는 남녀 듀엣(Duo)";
+      else if (maleCount === 2 && femaleCount === 0) formationText = "서로 다른 배역을 완벽히 연기하는 남성 이중창 듀엣(Duo)";
+      else if (femaleCount === 2 && maleCount === 0) formationText = "음역대의 맑은 합을 자랑하는 여성 이중창 듀엣(Duo)";
+      else if (maleCount > 0 && femaleCount > 0) formationText = `남성 ${maleCount}명과 여성 ${femaleCount}명의 다채로운 파트 조합이 돋보이는 혼성 그룹(Group)`;
+      else if (maleCount > 1 && femaleCount === 0) formationText = `남성 ${maleCount}명 구성의 두터운 화성감을 지닌 남성 보컬 그룹(Group)`;
+      else if (femaleCount > 1 && maleCount === 0) formationText = `여성 ${femaleCount}명 교차 가창의 맑고 우아한 라인을 지닌 여성 보컬 그룹(Group)`;
+      else formationText = "성부 구성이 고유히 기포된 조화로운 보컬 세션";
+    }
+
+    // 2) 보컬 캐릭터 강도 및 음원 특성 계산 (Vocal Levels & Styles)
+    const characters = vocalMembers.map(m => m.character).filter(Boolean) as VocalCharacterSelection[];
+    
+    const customTones: string[] = [];
+    const customPersonalities: string[] = [];
+    const customTechniques: string[] = [];
+    
+    let totalEmotion = 0;
+    let totalRange = 0;
+    let totalDelivery = 0;
+    let totalAge = 0;
+    let countWithCharacter = 0;
+    
+    characters.forEach(char => {
+      countWithCharacter++;
+      if (char.voiceToneId) {
+        const t = VOCAL_VOICE_TONES.find(item => item.id === char.voiceToneId);
+        if (t) customTones.push(t.labelKo || t.label);
+      }
+      if (char.customVoiceTone) customTones.push(char.customVoiceTone);
+      
+      if (char.personalityId) {
+        const p = VOCAL_PERSONALITIES.find(item => item.id === char.personalityId);
+        if (p) customPersonalities.push(p.labelKo || p.label);
+      }
+      if (char.customPersonality) customPersonalities.push(char.customPersonality);
+      
+      if (char.techniqueIds && char.techniqueIds.length > 0) {
+        char.techniqueIds.forEach(tid => {
+          const tc = VOCAL_TECHNIQUES.find(item => item.id === tid);
+          if (tc) customTechniques.push(tc.labelKo || tc.label);
+        });
+      }
+      if (char.customTechnique) customTechniques.push(char.customTechnique);
+      
+      if (char.emotionLevel !== undefined) totalEmotion += char.emotionLevel;
+      if (char.rangeLevel !== undefined) totalRange += char.rangeLevel;
+      if (char.deliveryLevel !== undefined) totalDelivery += char.deliveryLevel;
+      if (char.ageLevel !== undefined) totalAge += char.ageLevel;
+    });
+
+    const avgEmotion = countWithCharacter > 0 ? totalEmotion / countWithCharacter : 6;
+    const avgRange = countWithCharacter > 0 ? totalRange / countWithCharacter : 6;
+    const avgDelivery = countWithCharacter > 0 ? totalDelivery / countWithCharacter : 6;
+    const avgAge = countWithCharacter > 0 ? totalAge / countWithCharacter : 6;
+
+    const standardToneLabels: string[] = [];
+    vocalMembers.forEach(m => {
+      if (m.toneId) {
+        const toneObj = VOCAL_TONES.find(t => t.id === m.toneId);
+        if (toneObj) {
+          standardToneLabels.push(toneObj.labelKo || toneObj.label);
+        }
+      }
+    });
+
+    const hasRap = rapEnabled || previewRap;
+
+    let avgBpm = (minBPM + maxBPM) / 2;
+    if (!tempoEnabled) {
+      avgBpm = 100; // default medium
+    }
+
+    const moodString = selectedMoodLabels.join(' ');
+    const isSadOrCool = moodString.match(/슬픈|애틋한|공허한|쓸쓸한|차가운|어두운|우울|눈물|그리운|조용한|사색|차분한|외로운|몽환|신비/);
+    const isWarmOrBright = moodString.match(/따뜻한|편안한|아늑한|행복한|밝은|러블리|사랑|설레는|달콤한|귀여운|포근한|안정|쾌적|희망/);
+    const isEnergeticOrMajestic = moodString.match(/역동|웅장|강렬|벅찬|화려|신나는|경쾌|페스티벌|빠른|축제|댄스|비트|파워/);
+
+    // --- 카드별 내용 도출 시작 ---
+
+    // 1. 곡 해석 요약 (Interpretation Summary)
+    let situationAtm = "한없이 평화로운 한낮의 어느 길목이나 사색에 가만히 잠기는 고요한 밤의 서재";
+    if (isSadOrCool) {
+      situationAtm = "옅은 서리가 내리는 조용한 창가, 누적된 그리움들이 고요하게 소용돌이치는 새벽녘 공간";
+    } else if (isWarmOrBright) {
+      situationAtm = "사랑이 가득 찬 미소처럼 아늑한 햇빛이 가만히 스며드는 차분하고 평화로운 침실";
+    } else if (isEnergeticOrMajestic) {
+      situationAtm = "지평선 너머로 시야가 끝없이 멀어지는 고속도로 위 또는 심장이 타오르는 듯 역동적인 축제의 한가운데";
+    }
+
+    let vocalStyleTxt = "마음을 편안하게 두드리는 담담함";
+    if (avgEmotion < 4) {
+      vocalStyleTxt = "감정을 지극히 아끼고 눌러 아련함을 고백하는 쓸쓸한 절제미";
+    } else if (avgEmotion > 7) {
+      vocalStyleTxt = "참을 수 없이 차오르는 영혼의 파동을 고음역으로 시원하게 터트려 내는 뜨겁고 호소력 비장한 가창";
+    } else if (isSadOrCool) {
+      vocalStyleTxt = "귓가 바로 옆자리에서 나직하게 한숨을 쉬듯 읊조리는 쓸쓸한 정감조";
+    } else if (isWarmOrBright) {
+      vocalStyleTxt = "포근하고 상냥하게 미소 지으며 따스하게 호흡하는 다정한 조근거림";
+    }
+
+    let finalImpression = "과장 없이 정갈한 소리의 원근 구조에 도달해, 듣는 이가 기분 좋은 감정의 정화를 경험하도록 이끕니다.";
+    if (isSadOrCool) {
+      finalImpression = "선율이 물감처럼 아련히 스며들어와, 마음 깊이 잠겨 있던 소중한 추억의 흔적을 비 내리듯 촉촉이 보듬어 주는 감동을 전합니다.";
+    } else if (isWarmOrBright) {
+      finalImpression = "고단했던 일상의 피로를 기분 좋게 씻어내어 안방에 은은한 국산 우유 한 잔을 우린 듯 포근하고 포근한 위로를 속삭여 줍니다.";
+    } else if (isEnergeticOrMajestic) {
+      finalImpression = "온몸의 맥박을 쾌적하고 조화롭게 활성화하며 가슴을 억누르던 답답함을 일시에 해소하는 카타르시스를 선물합니다.";
+    }
+
+    const interpretationSummary = `이 곡은 세련된 [${crossoverGenreText}] 기반의 탄탄한 음악 구조 위에, [${themeName}]이라는 감성의 정수를 수려한 오라로 녹여 낸 수작입니다. 주로 [${situationAtm}]의 영화적 정경을 배경 삼아 일렁이는 세련된 음악 정위감이 매력적이며, 이 곡을 이끄는 [${formationText}]은 [${vocalStyleTxt}]으로 중심선율을 빚어냅니다. 기교와 포장지에 기댈 필요 없이 완전히 정제된 감정을 정량화하여 투영시킴으로써, 최종적으로 [${finalImpression}]`;
+
+    // 2. 예상 분위기 (Expected Atmosphere)
+    let spaceColor = "정갈함과 정서의 깊이를 기품 있게 다져 낸 은은한 모노톤의 수채화빛 조도";
+    let sentimentTemp = "거칠거나 인위적인 자극 없이 언제나 알맞은 중립의 기류를 지키는 온화한 미온";
+    let spaceTexture = "맑은 도화지의 공백처럼 어떤 감정의 대조라도 넉넉히 받아낼 준비가 된 맑고 매끄러운 텍스처";
+
+    if (isSadOrCool) {
+      spaceColor = "사위가 잠든 고요한 깊고 푸근한 남빛 밤하늘과 가느다란 가로등빛이 교차하는 조도";
+      sentimentTemp = "가만히 서늘함을 달래 주듯, 피부 밑을 아주 얇게 어루만지는 살가운 서늘함의 결";
+      spaceTexture = "물기 어린 수채화 종이 위로 선율이 차분히 윤이 나게 침착되며 번져 흐르는 투명한 재질감";
+    } else if (isWarmOrBright) {
+      spaceColor = "방 안 가득 은은하게 퍼지는 아날로그 스탠드의 포근한 크림빛 조명과 주홍빛 온기";
+      sentimentTemp = "몸을 가만히 보듬어 주는 어머니의 품속 같은 더없이 정감 가득한 포근한 온도";
+      spaceTexture = "따스하게 세탁된 순면 원단이나 고수 가공된 부드러운 목재의 자연스러운 질감";
+    } else if (isEnergeticOrMajestic) {
+      spaceColor = "넓은 페스티벌 상공으로 시원하게 뿜어져 흩날리는 금빛 리듬의 눈부신 잔광";
+      sentimentTemp = "심장의 바운더리를 쾌적하게 자극하여 기분 좋은 활력과 온기를 촉발하는 산뜻한 미열";
+      spaceTexture = "탄탄한 대지의 진동과 기분 좋게 귀를 때리는 고밀도의 파형이 입체적으로 레이어된 결";
+    }
+
+    let styleAndInstrAtm = "";
     const styleLabels = getCycleVariantLabel(STYLE_CYCLES, selectedStyles);
     const styleStr = styleLabels.length > 0 ? styleLabels[0] : '';
     const instrLabels = selectedInstrumentSounds.map(getSoundVariantLabelById).filter(Boolean);
     const instrStr = instrLabels.length > 0 ? instrLabels[0] : '';
-
-    // 1. 곡 해석 요약 (Interpretation Summary) - Standalone card, max 3-4 sentences, organic & cohesive
-    let interpretationSummary = "";
-    if (isEdm) {
-      interpretationSummary = `이 곡은 역동적인 EDM 비트 위에 ${themeName}의 감정 영역을 융합하여 세련되게 구축하는 현대적인 일렉트로닉 트랙입니다. 소리의 잔향을 타고 일렁이는 ${moodName} 분위기가 세밀한 비트와 리드 신스를 유기적으로 이끌어갑니다. 기분 좋은 청각적 해방감 속에서 저마다의 서사를 매끄럽게 음미할 수 있는 고유한 구조를 취합니다.`;
-    } else if (isHymn) {
-      interpretationSummary = `이 곡은 장엄하고 경건한 성가 음악의 깊은 울림 위에 ${themeName}의 영조가 흘러드는 사색적이고 의식적인 고백입니다. ${moodName} 정취가 지닌 성스러운 공기가 넓은 공간 속에서 숭고하게 번지며 마음속에 깊은 평온을 가만히 내려놓습니다. 세속의 번잡함을 씻어내는 성스러운 정화의 공간을 선사하도록 구성되어 있습니다.`;
-    } else if (isRnb) {
-      interpretationSummary = `이 곡은 감미로운 R&B 특유의 여백 있는 비트와 리듬 그루브 위에 ${themeName}의 이야기를 아련하게 수놓는 소울풀한 트랙입니다. ${moodName} 색채의 입체적인 무드가 목소리와 악기 세션의 따뜻한 밀도를 타고 흐르며 부드럽게 귓가를 어루만집니다. 억지로 꾸미지 않은 한 편의 편지 같은 다정하고 깊은 공감의 밤을 직조합니다.`;
-    } else if (isAcoustic) {
-      interpretationSummary = `이 곡은 가공 없는 어쿠스틱 악기들의 소박한 선율 속에 ${themeName} 고유의 숨결과 심상을 투명하고 은은하게 전해줍니다. ${moodName} 무드의 온전한 온기가 고전적인 통기타나 건반의 자연스러운 전개와 결합해 긴밀한 위안을 더합니다. 화려한 연출 대신 오직 소리 본연의 담담한 감정선만을 보존하여 아늑한 휴식처를 연출합니다.`;
-    } else {
-      interpretationSummary = `이 곡은 편안하고 귀에 익숙하게 흐르는 팝 양식의 선율 구조 위에 ${themeName}의 은유적 메시지를 세련되게 결합한 조화로운 곡입니다. ${moodName} 감성이 지닌 따뜻한 매력을 촉매 삼아 노랫말과 악기가 이질감 없는 완성도로 함께 도달합니다. 누구나 가볍게 빠져들어 저마다의 소중한 추억을 꺼내보게 이끄는 세련된 연출적 흐름입니다.`;
+    if (styleStr || instrStr) {
+      styleAndInstrAtm = ` 여기에 ${instrStr ? `[${instrStr}] 세션의 풍부한 기류와 ` : ''}${styleStr ? `[${styleStr}] 스타일의 기조가 ` : ''}자연스레 완충을 이룹니다.`;
     }
 
-    // 2. 예상 분위기 (Expected Atmosphere) - Shorter, organic, tailored to genre
-    let expectedAtmosphere = "";
-    if (isEdm) {
-      expectedAtmosphere = `드넓은 페스티벌 한가운데에 서 있는 듯 광활하고 시원하게 뻗은 공간 정위감이 웅장한 사운드의 질감을 완성합니다. ${styleStr ? `${styleStr} 스타일을 매개로 ` : ''}차가운 빌드업 신스와 묵직한 베이스 충격이 유연하게 공존하여 감각적인 해방을 부드럽게 뒤덮습니다.`;
-    } else if (isHymn) {
-      expectedAtmosphere = `성스럽고 잔잔한 높은 공간감이 울려 퍼지며, 엄숙하고 잔잔한 미학적 영감을 귓가에 조용히 머금습니다. 인위적인 소음을 밀어낸 기호의 정적 속에 성스러운 화성과 신성한 침묵의 소리가 조화롭게 스며듭니다.`;
-    } else if (isRnb) {
-      expectedAtmosphere = `귓밑을 타고 번지는 남빛 밤하늘 같은 따스함이 아늑하고 세련된 사운드 주변부의 기류를 온유하게 감싸 안습니다. 둥글고 부드러운 일렉트릭 피아노와 정적인 드럼의 빈 여백 속에서 고유한 온기를 깊고 섬세하게 채워줍니다.`;
-    } else if (isAcoustic) {
-      expectedAtmosphere = `나무 향 가득한 따뜻하고 가벼운 편성이 공기를 은은하고 평화롭게 채웁니다. 장식적인 기계 음향을 과감히 걷어낸 어쿠스틱 터치는 귀에 거칠지 않으며, 속삭이듯 친근한 수채화 물감처럼 내면의 감수성을 오롯이 깨워줍니다.`;
-    } else {
-      expectedAtmosphere = `정돈된 사운드 주변부를 흐르는 입체적인 원근감이 세련되게 균형을 잡는 단정한 연출을 보여줍니다. 과함도 모자람도 없는 절묘한 하모니가 중심 선율의 청아함을 빛내며, 귓가에 촉촉하고 매끄러운 만족을 안겨줍니다.`;
-    }
+    const expectedAtmosphere = `귓가를 가만히 잠식하는 주변의 흐름이 [${spaceColor}]로 오롯이 장식되어 곡 특유의 사색적 심상을 완성합니다. 공간의 전체적인 온도는 [${sentimentTemp}]으로 정렬되어 청자의 시선을 온전히 음악 내부로 집중시키며, 주변 공기를 [${spaceTexture}]로 따스하게 에워쌉니다. 가사의 사실적인 사건 묘단 없이도, 오직 음의 진동과 여운만으로 완벽한 아늑함을 자아내도록 설계되었습니다.${styleAndInstrAtm}`;
 
-    // 3. 예상 보컬 (Expected Vocals) - Dynamically combines Theme, Mood, Tempo and Genre
-    const avgBpm = (minBPM + maxBPM) / 2;
-    const vocalSpeedText = avgBpm < 85 ? '무겁게 가라앉아 아련함을 고백하는 정조' : (avgBpm >= 115 ? '가뿐하고 상쾌하게 멜로디 위를 넘나드는 탄성' : '가장 편안한 산책길의 보폭을 유지하는 독백조');
-
+    // 3. 예상 보컬 (Expected Vocals)
     let expectedVocals = "";
     if (!previewIncludeLyrics) {
-      expectedVocals = `목소리의 자리를 완전히 비워두는 대신 연주와 사운드가 전하는 순수한 기압 변화와 선율 악기 자체의 편안함에 집중하게 만듭니다. 긴밀한 사운드의 잔향만으로 시적인 공백의 호흡을 평온하게 채워나가는 구도입니다.`;
+      expectedVocals = `보컬의 구체적인 가사 가창을 의도적으로 비워둔 연주 중심의 구성입니다. 목소리가 가진 사변적인 지시 명령을 철저히 배제하고, 선율 악기 고유의 내밀한 떨림과 공압의 흐름만을 고스란히 정위시킵니다. 빈 곳에 울려 퍼지는 잔향과 무언(無言)의 깊이 있는 흐름이 청각적 상상력의 여백을 한결 아늑하게 개척해 줍니다.`;
     } else {
-      // Base description on vocal mode
-      let baseVocalRole = "";
-      if (isEdm) {
-        baseVocalRole = `웅장한 비트 사이에서 공간 중앙에 선명히 정위치하여 극적인 가창력을 힘 있게 밀어붙입니다. 후렴 파트에서는 절제하지 않고 풍부하게 쏟아내는 감정으로 충격과 입체감을 더합니다.`;
-      } else if (isHymn) {
-        baseVocalRole = `성가대처럼 차분하게 자리하여 성스럽고 장엄하게 가창합니다. 고음을 내지르기보다 가슴속 깊은 영혼의 호흡을 살려 정갈한 기도를 올리듯 정해진 무게감을 고요히 지켜 나갑니다.`;
-      } else if (isRnb) {
-        baseVocalRole = `리듬의 세련된 여백을 타고 흐르는 끈적이고 유연한 그루브를 선보입니다. 아주 가깝게 밀착한 촉촉한 보이스 톤으로, 감정을 지나치게 드러내지 않고 섬세하게 안쪽으로 삼키며 다정함을 속삭입니다.`;
-      } else if (isAcoustic) {
-        baseVocalRole = `청자 바로 옆자리에 앉아 가만히 귀를 맞대고 이야기하듯 한없이 부드럽게 불어옵니다. 어깨의 힘을 빼고 솔직한 우리 일상의 친근한 숨소리와 나직한 독백투를 마지막 음절까지 신중하게 실어 보냅니다.`;
-      } else {
-        baseVocalRole = `선명한 음색과 뛰어난 멜로디 전달력으로 중심선율을 단단하고 설득력 있게 이끕니다. 가창의 완벽한 징검다리를 타고 편안한 소리와 여운을 우아하게 밀고 당겨 뛰어난 몰입감을 구현해 냅니다.`;
+      const toneParts = [...standardToneLabels, ...customTones, ...customPersonalities].filter(Boolean);
+      const techParts = [...customTechniques].filter(Boolean);
+
+      let toneDesc = "";
+      if (toneParts.length > 0) {
+        toneDesc = `가진 고유의 자산인 [${toneParts.join(', ')}]의 감미롭고 선명한 목소리 톤을 중심 징검다리로 삼습니다.`;
       }
 
-      const mainMember = vocalMode === 'solo' && vocalMembers[0];
-      const genderPrefix = mainMember ? (mainMember.gender === 'female' ? '여성 보컬은 ' : '남성 보컬은 ') : '보컬은 ';
-
-      expectedVocals = `${genderPrefix}${vocalSpeedText}를 온전히 담아냅니다. ${baseVocalRole}`;
-      if (previewRap) {
-        expectedVocals += ` 여기에 물 흐르듯 가담하는 부드러운 랩 파트가 밀도 높은 리듬감을 더하며 변주의 폭을 한층 넓혀 줍니다.`;
+      let rangeDesc = "안정적인 중간 음역대에 위치하여 선율의 기둥을 정교하게 지탱하고,";
+      if (avgRange < 4) {
+        rangeDesc = "가늘게 깔리면서 소리의 묵직한 하단부를 깊이 있게 받쳐 주는 차분하고 중저음역의 독백으로,";
+      } else if (avgRange > 7) {
+        rangeDesc = "청량하고 고운 이슬처럼 귓가를 환하게 깨우는 중고선율의 선명하고 높은 미음으로,";
       }
+
+      let ageDesc = "성숙하고 세련된 보이스 컬러를 다듬어내며,";
+      if (avgAge < 4) {
+        ageDesc = "티 없이 깨끗하고 풋풋한 청춘의 순수한 아우라를 촉촉이 머금어내며,";
+      } else if (avgAge > 7) {
+        ageDesc = "흘러간 시간만큼 아련하고 노련한 호흡 조절력을 고수하는 완성형 베테랑의 숨결로,";
+      }
+
+      let deliveryDesc = "진성과 가성의 적정을 완만하게 결탁하여 매끄러운 멜로디의 굴곡을 완수합니다.";
+      if (avgDelivery < 4) {
+        deliveryDesc = "숨결의 투명함이 다량 공존하는 공기 가창 기조로, 마디마디를 얇고 애틋하게 매만지는 기품을 구사합니다.";
+      } else if (avgDelivery > 7) {
+        deliveryDesc = "리드미컬한 박자감 위에서 말하듯 읊조리는 대사체(Sprechstimme) 기교와 멜로디컬 랩 파트를 유기적으로 장식하여 소리의 감칠맛을 올립니다.";
+      }
+
+      let emotionDesc = "감정을 지나치게 연출하지 않고 정갈하게 수납하는 담박한 흐름을 따르고 있습니다.";
+      if (avgEmotion < 4) {
+        emotionDesc = "울부짖는 전조를 완전 배척하고 감정의 마디마디를 차분하게 가라앉힌 안개조의 서늘하고 성숙한 초연함을 전하고 있으나,";
+      } else if (avgEmotion > 7) {
+        emotionDesc = "가슴 깊은 곳에서 정량화하여 끓여 올린 한 글자 한 글자의 거대한 호소력과 드라마틱한 비장미를 선방에 밀어내며,";
+      }
+
+      let techniqueDesc = "";
+      if (techParts.length > 0) {
+        techniqueDesc = ` 가창 스타일의 마감재에 있어서는 [${techParts.join(', ')}] 등 고혹적인 표현 디테일들이 레이어되어 흔한 기성 음원과 차별되는 보조적 깊이감을 입힙니다.`;
+      }
+
+      let rapText = "";
+      if (hasRap) {
+        rapText = " 중심 성부 사이사이에 자연스럽게 결합하는 유려한 랩 세션이 비트의 밀도를 한층 촘촘하고 즐겁게 다듬으며 리듬의 입체성을 한 차원 고도화해 줍니다.";
+      }
+
+      expectedVocals = `${formationText}은 ${toneDesc} ${rangeDesc} ${ageDesc} ${emotionDesc} ${deliveryDesc}${techniqueDesc}${rapText}`;
     }
 
-    // 4. 예상 전개 (Expected Arrangement) - Differentiated based on genre grouping
-    let expectedArrangement = "";
+    // 4. 예상 전개 (Expected Arrangement)
+    let entryText = "나직하고 투명한 아날로그 악기의 단선율로 여백의 가닥을 평온하게 잡아당기며 문을 연 뒤,";
+    let buildText = "감정의 완만한 누적선을 보조하듯 서정적인 선율 성부들이 한 결씩 차례로 고르게 더해지는 기승전결의 우아함을 그리고,";
+    let climaxText = "전환부(Bridge)의 조심스러운 정돈을 통과해, 마침내 코러스 중심부에서 가장 따뜻하게 포개지는 화성의 합창으로 마음에 잔잔히 안착하며,";
+    let outroText = "종장에서는 장식용 악기를 서서히 수축시켜 한없이 고요한 묵독처럼 잔잔히 여운을 매듭지어 줍니다.";
+
     if (isEdm) {
-      expectedArrangement = `사운드 파트가 층층이 결집하여 서서히 긴장감을 고양하는 구조를 따릅니다. 서서히 고조되는 빌드업(Build-up)을 거친 뒤 후렴 도입부 직전 소리가 매끄럽게 멎었다가 시원하게 터져 나오는 드롭(Drop) 전개로 짜릿한 사운드 쾌감의 절정을 선사합니다.`;
+      entryText = "정교하고 차가운 펄스 성부의 공간 이펙터가 귓가를 감각적으로 누적시키며 곡을 개시하고,";
+      buildText = "BPM의 긴장감을 축축하게 밀고 나아가는 역동적 비트를 탑처럼 겹쌓아 서서히 긴장 고조의 에너지를 축적시킨 후,";
+      climaxText = "도입부 직전에 모든 부가 악기들을 일시에 격리시켜 순간 정적을 꾀한 뒤, 드롭(Drop) 성부가 시원하게 터져 나와 청각적 해방감을 정점에 도달하게 하고,";
+      outroText = "후반부는 비트의 자취를 이지적으로 필터링하며 매끄러운 엠비언스 잔향감과 함께 깔끔하게 마무리 짓습니다.";
     } else if (isHymn) {
-      expectedArrangement = `소박하고 나직하게 피어올라 파도처럼 거대한 하모니의 울림으로 나아가는 웅장한 상승 세션입니다. 인위적인 충격이나 변조 대신 가창자들의 화성이 겹겹이 얹히며 장엄하고 거룩한 아치형 구도를 이룬 뒤 묵직한 잔향을 남기며 안착합니다.`;
+      entryText = "숙연하고 잔잔한 오르간 계열 또는 고결한 어쿠스틱 건반의 거룩한 화성으로 고요히 숨결을 열고,";
+      buildText = "가창자들의 목소리가 겹겹이 층을 지어 퍼지며 넓은 예배당 전체를 파도처럼 에워싸는 웅장한 아치형 구도로 상승을 그립니다.";
+      climaxText = "이후 클라이맥스 파트에서 모든 하모니와 스트링 세션이 완벽한 정위로 교차하며 감정의 경건한 숭고미를 절정으로 끌어올리고,";
+      outroText = "종막은 인위적 자극 없이 거대한 잔향의 웅장함을 남기며 기도하듯 고요히 제자리에 복귀합니다.";
     } else if (isRnb) {
-      expectedArrangement = `단순한 박자에 구애받지 않고 보컬 그루브와 섬세한 여백 위주로 연출됩니다. 후렴 성부에 다다랐을 때 비로소 풍성한 사운드로 가득 차며 공간을 가만히 두드리고 편안한 변주와 사운드 밀착감을 자아냅니다.`;
+      entryText = "감미로운 일렉트릭 피아노의 따뜻하게 풀린 코드 진행이 새벽의 온도로 소리의 바탕을 정비하고,";
+      buildText = "심장 박동과 같이 유연하게 당겨지는 독특한 레이백 그루브를 탑재하여 공간의 깊이와 선율의 호흡폭을 완만하게 팽창시킵니다.";
+      climaxText = "절정 부분에서는 풍요롭고 살가운 코러스 보컬의 입체적인 서포트가 수채 보이스와 교감하여 끈끈하고도 나직한 매력을 직조해 내며,";
+      outroText = "마지막 성부에서는 비트를 걷고 오직 목소리의 가녀린 혼잣말만 한 줄 흘리며 한없이 포근히 페이드아웃됩니다.";
     } else if (isAcoustic) {
-      expectedArrangement = `수채화가 채색되듯 조용하고 온화한 발자국으로 한 궤적을 그립니다. 차분한 도입부가 이야기의 누적에 따라 멜로디의 화성을 완만하게 넓히고, 종장에 도달해서는 자극 없이 아늑한 속삭임의 아웃트로로 고요하게 여정을 매듭짓습니다.`;
-    } else {
-      let structureCurve = "";
-      if (songStructure === 'custom') {
-        structureCurve = `기획 정렬된 고유 구성을 도화지 삼아 마디의 긴장을 유연하게 지탱하며 감상의 깊이를 점진적으로 밀도 있게 이끕니다.`;
-      } else if (songStructure === '2') {
-        structureCurve = `가장 찬란한 후렴이 처음부터 빠르게 전면에서 노래하며 청자의 마음에 확신을 안기고, 이후 다양한 악기의 미세한 변주를 유려하게 음미하도록 돕습니다.`;
-      } else {
-        structureCurve = `조용한 시작부에서 출발해 조심스레 악기 결을 더하고 중심 멜로디에서 활짝 꽃피운 뒤 점차 평화로운 여운으로 유연하게 가라앉는 클래식한 구성입니다.`;
-      }
-      expectedArrangement = `${structureCurve} 선율의 감정이 급격히 뒤흔들리지 않고 부드러운 이음새로 연결되어 마음을 편안하게 지탱해 줍니다.`;
+      entryText = "가공되지 않은 살가운 현의 촉감을 머금은 통기타나 맑고 소박한 어쿠스틱 건반의 소박한 호흡으로 속삭이듯 문을 열고,";
+      buildText = "이야기가 전개될수록 은은한 선율 위로 얇은 현악 레이어와 따뜻한 퍼커션들이 스며들여 자극 없이 마디 곳곳을 꼼꼼히 보수하고,";
+      climaxText = "가장 소중한 노랫말 화성의 후렴구 구절에서 담담하고 평화로운 선율의 한 포기를 고스란히 선물하듯이 꽃피운 뒤,";
+      outroText = "종장에는 스스로 가던 발자국을 미소 지으며 갈무리하듯 아늑하게 소리를 접어 닫습니다.";
+    } else if (isRock) {
+      entryText = "가슴을 지그시 저릿하게 두드리는 일렉트릭 기타 피드백이나 정돈된 심벌 터치로 가늘고 깊게 시동을 지피고,";
+      buildText = "묵직하고 탄탄한 베이스 라인의 인솔 아래 정적을 힘차게 뿜어내는 드럼 비트가 본격 연동하면서 사운드의 선방을 주도하고,";
+      climaxText = "클라이맥스에 달하면 굳걷히 일어서는 라이브 성의 풀 밴드 가열 세션이 빈틈없이 몰아치며 사운드의 시원한 해방을 견고히 분출하고,";
+      outroText = "마지막 타격음이 한 자락 가볍게 울린 뒤, 정돈된 기타 톤의 내밀한 잔향을 남기며 산뜻하게 소리를 보존합니다.";
     }
 
-    // 5. 예상 가사 방향 (Expected Lyric Direction) - Attitudinal direction, no functional jargon or unused langs
+    let speedVibe = "안정적이고 매끄러운 진행 속도";
+    if (tempoEnabled) {
+      if (avgBpm < 85) {
+        speedVibe = `내면을 차분히 관조하는 깊은 호흡을 간직한 슬로우 템포(약 ${Math.round(avgBpm)} BPM)의 깊은 보폭`;
+      } else if (avgBpm >= 115) {
+        speedVibe = `귀에 머물지 않고 산뜻하게 바람을 안고 달리는 청량한 하이 템포(약 ${Math.round(avgBpm)} BPM)의 물리적 진동`;
+      } else {
+        speedVibe = `일상적인 보폭과 부드러운 호조를 이룬 미디엄 템포(약 ${Math.round(avgBpm)} BPM)의 정밀한 심박 수`;
+      }
+    }
+
+    let structureText = "정밀 설계된 표준 구성";
+    if (songStructure === '2') {
+      structureText = "조용한 빌드업 대신 도입부부터 가장 핵심적인 클라이맥스 코러스를 앞장에 과감히 돌출시킨 구성";
+      entryText = "시작 직후 망설임 없이 가장 벅차오르는 중심 테마 멜로디의 화성을 귀에 기분 좋은 행운처럼 터트린 뒤,";
+    } else if (songStructure === 'custom') {
+      structureText = "획일적인 규칙을 걷고 개발자가 정비한 고유의 마디 구성을 도화지 삼아 물 흐르듯 흘러가는 정렬";
+    }
+
+    const expectedArrangement = `이 곡은 [${speedVibe}] 위에서 [${structureText}]에 충실하여 맥박을 유기적으로 흘립니다. 구체적인 사운드 여정은, 먼저 ${entryText} ${buildText} 이윽고 ${climaxText} 최종적으로 ${outroText} 감정선의 층위들이 조각나거나 이탈하는 위화감이 없도록 세밀하게 다듬어져, 한 흐름에 귀에 매끄럽게 안착하는 수려한 에너지를 보존합니다.`;
+
+    // 5. 예상 가사 방향 (Expected Lyric Direction)
     let expectedLyrics = "";
     if (!previewIncludeLyrics) {
-      expectedLyrics = `가사가 은유적으로 비워진 정갈한 연주 음원 구도입니다. 인위적인 문장의 지시를 배제하고 악기 고유의 풍성한 잔향과 하모니의 따스함에만 오롯이 집중하며 청가 각자의 머릿속에 상상의 공간을 한 폭 완성해 나가도록 영도를 열어 둡니다.`;
+      expectedLyrics = "가사 가창을 배제하여 악기의 잔향과 전개의 미용감 자체에 오롯이 주목하게 유도합니다. 지시 언어가 전착하는 서사적 구속력에서 고전히 해방되어, 건반의 청아한 울림과 여백 어린 화성만으로 청자가 직접 머릿속 빈 공간에 나만의 풍경을 아늑하고 고요하게 소조해 갈 수 있도록 문을 넓게 열어 둡니다.";
     } else {
-      const hasOnlyKorean = (previewLyricLangs.length === 1 && previewLyricLangs[0] === 'ko' && !previewIsMix) || (previewLyricLangs.length === 0 && !previewIsMix);
-      if (hasOnlyKorean) {
-        expectedLyrics = `화자는 스쳐 가는 시간이나 차오르는 풍경을 담담히 응시하는 성숙한 발걸음을 보여줍니다. 기쁨이나 상처를 과장된 은유로 늘어놓는 대신, ${themeName}의 순간에 가만히 밀착하여 따스한 교감의 자리를 남깁니다. 우리 언어가 지닌 사려 깊은 깊이를 고수하며 조용히 지탱해 주는 다정한 위로가 될 것입니다.`;
-      } else {
-        const langLabels: string[] = [];
-        if (previewIsMix) {
-          langLabels.push(`한국어와 영어의 조화로운 조화`);
-        } else {
-          previewLyricLangs.forEach(lang => {
-            if (lang === 'en') langLabels.push('영어 가창');
-            if (lang === 'ja') langLabels.push('일본어 가창');
-            if (lang === 'zh') langLabels.push('중국어 가창');
-            if (lang === 'es') langLabels.push('스페인어 가창');
-            if (lang === 'fr') langLabels.push('프랑스어 가창');
-          });
-        }
-        const langStr = langLabels.join(' 및 ') || '선택한 가사 언어 설정';
-        expectedLyrics = `${langStr}을 매개로 삼아 세련된 흐름 속에서 조화로운 소통의 선율을 완성해 갑니다. 감정을 일방적으로 독촉하기보다 섬세한 시적 가치를 고수하며, 귓가에 친절하게 맴돌아 다정한 여운의 흔적을 촉촉하고 매끄럽게 전해 줍니다.`;
+      const languages = previewLyricLangs.filter(Boolean);
+      const isEnglishMix = previewIsMix;
+      
+      let speechStyle = "나직하게 고백을 담아 읊조리는 정갈하고 아늑한 혼잣말 체";
+      let attitude = "기쁨이나 고통을 인위적으로 가공하여 독촉하지 않고, 있는 그대로 삶의 발자국을 응시하며 조용히 안아다 주는 포용의 마음가짐";
+      
+      if (isSadOrCool) {
+        speechStyle = "아련한 비밀 일기장 속 한 쪽을 조심스레 펼쳐 소리 내 보는 혼잣말 투";
+        attitude = "스쳐 지나간 대상에 대한 상실감이나 그리움을 억지로 비틀지 않고, 가만히 내면 깊숙이 소중하게 재워 두는 아련하지만 성숙하고도 조용하고 아름다운 시선";
+      } else if (isWarmOrBright) {
+        speechStyle = "한낮 뺨에 닿는 상상 햇살처럼 편안하게 대화하듯 전해 주는 다정다감한 구어체";
+        attitude = "상대의 시린 발끝에 지긋이 미소 지으며 언제라도 기댈 그늘막을 내어 주는 한없이 무구하고 편안한 시선";
+      } else if (isEnergeticOrMajestic) {
+        speechStyle = "새로운 지평선과 하늘을 품에 안고 활기차게 밀어 올리는 맑고 청량한 호소 투";
+        attitude = "고인 눈물을 닦고 힘차게 기지개를 켜며 내일의 빛을 향해 쾌적하게 페달을 밟아 나가는 희망찬 시선";
       }
+
+      let langDetailText = "이 곡의 화자는 ";
+      if (languages.length === 1 && languages[0] === 'ko' && !isEnglishMix) {
+        langDetailText += "선명한 우리말 고유의 세련된 정서와 시적인 깊이를 입혀, 단 하나의 어색한 번역투 외래어 흔적을 철저히 배제한 채 ";
+      } else if (isEnglishMix) {
+        langDetailText += `한국어의 섬세하고 문학적인 호흡과 영어 특유의 매끄럽고 세련된 운율감을 솜씨 좋게 가로지르며, `;
+      } else if (languages.length > 0) {
+        const langKoNames = languages.map(l => {
+          if (l === 'en') return '영어';
+          if (l === 'ja') return '일본어';
+          if (l === 'zh') return '중국어';
+          if (l === 'es') return '스페인어';
+          if (l === 'fr') return '프랑스어';
+          return l;
+        });
+        langDetailText += `이국적인 어감 고유의 시선과 감수성을 극대화한 [${langKoNames.join('와 ')}] 가창의 감각을 타고 날아서, `;
+      }
+
+      expectedLyrics = `${langDetailText}상투적이지 않은 감수성의 면모를 조용히 도출합니다. 대상과의 은은한 깊은 교감이나 [${themeName}]이라는 온기를 투사하면서, [${speechStyle}]로써 청각적 원근감을 유지한 채, [${attitude}]으로 이야기를 사려 깊게 운용해 감으로써 듣는 이의 마음자리에 편안한 안도감을 한 자락 깔아 줍니다. 특정 가사 문장이나 억지 시나리오를 강제하지 않아도 자연스럽게 전해지는 뭉클한 전 정조입니다.`;
     }
 
-    // 6. 주의할 점 (Points to Note) - Slightly shortened
+    // 6. 주의할 점 (Points to Note)
     const pointsToNote = [
-      "분위기 레이어는 오직 곡의 다채로운 질감과 어조를 다져 주는 보강 도구로서, 인위적인 인물을 강제로 창조하지 않습니다.",
-      "본 미리보기는 선택된 설정들과 매칭된 장르를 기반으로 가장 완성도 높은 구성을 예측하여 미리 제공해 드리는 직관적인 가이드라인입니다."
+      "분위기(Mood) 레이어는 오직 곡의 다채로운 질감과 온도를 보강해 주는 어조 보조 가공재이며, 리릭 내부에 억지 주인공이나 외적 갈등 사건을 멋대로 창조해 내지 않습니다.",
+      "본 미리보기는 선택된 장르, 악기 편성 및 사용자 설정값들을 균형 있게 분석하여 수식한 이상적인 가이드라인입니다. 실제 생성 및 Suno AI의 무드 가중 분포에 따라 악보의 세부 음색 구성은 조화롭고 창의적으로 변동될 수 있습니다."
     ];
 
     if (previewGenCount > 1) {
-      pointsToNote.push(`현재 총 ${previewGenCount}곡의 동시 작곡 중 기준이 되는 이상적인 균형을 안내합니다.`);
+      pointsToNote.push(`현재 총 ${previewGenCount}곡의 동시 작곡을 지정하셨으며, 본 가이드는 각 결과물 중 기준축이 되는 가장 이상적이고 대칭적인 버전을 기준으로 설명합니다.`);
     }
 
     return {

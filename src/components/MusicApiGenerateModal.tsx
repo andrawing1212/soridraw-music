@@ -47,6 +47,14 @@ type MusicApiGenerateModalProps = {
   isKoreanEnglishMix?: boolean;
   englishMixRatio?: number;
   rapEnabled?: boolean;
+  onPreview?: (options: {
+    includeLyrics: boolean;
+    lyricLanguages: LanguageCode[];
+    generationCount: number;
+    isKoreanEnglishMix?: boolean;
+    englishMixRatio?: number;
+    rapEnabled?: boolean;
+  }) => void;
 };
 
 const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; short: string }[] = [
@@ -115,6 +123,7 @@ export default function MusicApiGenerateModal({
   isKoreanEnglishMix = false,
   englishMixRatio = 10,
   rapEnabled = false,
+  onPreview,
 }: MusicApiGenerateModalProps) {
   const isMain = variant === 'main';
   const maxCount = maxLyricLanguages ?? (isMain ? 2 : 1);
@@ -825,14 +834,43 @@ export default function MusicApiGenerateModal({
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg}`}
-                >
-                  다음
-                </button>
+                {isMain && onPreview ? (
+                  <div className="flex gap-2.5 w-full items-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onPreview({
+                          includeLyrics,
+                          lyricLanguages: includeLyrics ? lyricLanguages.slice(0, maxCount) : [],
+                          generationCount,
+                          isKoreanEnglishMix: includeLyrics ? localKoreanEnglishMix : false,
+                          englishMixRatio: localEnglishMixRatio,
+                          rapEnabled: includeLyrics ? localRapEnabled : false,
+                        });
+                      }}
+                      className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[11px] sm:text-base transition-all flex items-center justify-center shrink-0 whitespace-nowrap"
+                    >
+                      미리보기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
+                      className="basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-lg font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center"
+                    >
+                      다음
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
+                    className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg}`}
+                  >
+                    다음
+                  </button>
+                )}
               </motion.div>
             ) : (
               <motion.div

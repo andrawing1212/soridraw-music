@@ -397,6 +397,9 @@ interface GenerateSongParams {
   instrumentalBgmMode?: boolean;
   lyricLanguages?: LanguageCode[];
   geminiApiKey?: string;
+  generationIndex?: number;
+  generationCount?: number;
+  recentStoryMemory?: string[];
 }
 
 type GenerateSongInput =
@@ -4122,13 +4125,17 @@ const DEFAULT_NO_THEME_DIRECTION =
 const TECHNICAL_DIRECTION_LYRICS_GUARD = `
 TECHNICAL DIRECTION GUARD (MANDATORY):
 - Treat genre, style, mood, sound, instrument, vocal, tempo, hook, transition, and arrangement words as production instructions only, unless the user explicitly states they are the story topic.
-- LYRIC CONTENT SOURCE LOCK: the actual lyric event, objects, relationship, setting, and conflict must come from the direct theme input, selected Theme, active Situation, lyric draft, or user director note. Mood direct input only changes tone, pacing, emotional behavior, and point of view unless the user clearly writes a story inside it.
-- If a direct theme/topic sentence exists, it outranks contextual cue-bank scenes. Do not import bedroom-message, street-corner memory, delayed reply, confession, breakup, or everyday conflict templates unless the direct input actually contains that story.
+- LYRIC CONTENT SOURCE LOCK: the actual lyric event, objects, relationship, setting, and conflict must come from the direct theme input, selected Theme, active Situation, lyric draft, or user director note.
+- MOOD INTERPRETATION LOCK: mood choices are not lyric content sources. They must not invent new objects, events, relationships, settings, conflicts, titles, hooks, or repeated lyric phrases. They may reinterpret the already-existing Theme/Situation/direct-input content through emotional temperature, metaphor style, phrasing, pacing, vocal attitude, and scene texture.
+- If a direct theme/topic sentence exists, it outranks automatic context. Do not import any prewritten story template unless the direct input actually contains that story.
 - Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, beat, drop, glitch, neon pulse, melody line, sound layer, R&B groove, anime rock, synthwave, indie-pop production, genre labels.
 - Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 비트, 드롭, 글리치, 네온, 멜로디라인, 사운드레이어, 장르명.
 - These terms should shape performance, phrasing, arrangement, and production, but must NOT become repeated lyric phrases, metaphors, title concepts, or the central story.
-- Selected mood labels are never lyric vocabulary. If the user selected playful/dark/cute/magical or 장난끼/어두운/귀여운/마법같은, do not write those words literally. Translate them into how the character behaves, hides, hesitates, jokes, panics, or changes pressure inside the Theme story.
-- Do not import genre/style/sound imagery into lyrics just because it was selected. For Synthwave/Anime Rock, do not automatically write neon, glitch, synth, anime, melody line, or guitar. If the Theme is 설렘, write the small fluttering event itself, such as a message mistake, delayed reply, trembling fingers, a too-quiet room, or awkward timing.
+- MOOD ROLE LOCK: selected mood labels are NOT story sources. They must not create lyric objects, events, relationships, places, conflicts, titles, hooks, or repeated lyric phrases.
+- Moods are indirect lyric-expression modifiers and production color. They may color how the existing Theme/Situation/direct-input content feels: emotional temperature, vocal pressure, phrasing, pacing, density, brightness/darkness, metaphor style, scene texture, and how strongly the existing story is performed.
+- If a mood suggests a behavior such as hesitation, panic, comedy, loneliness, magic, darkness, or cuteness, apply it as the way the existing Theme story is expressed. Do not invent a new scene, character, object, relationship, place, conflict, title, or hook from the mood itself.
+- The lyric's concrete content must come from Theme, direct input, Situation, lyric draft, or user director note. If those are weak, infer a fresh concrete scene from the Theme first, then let mood reinterpret that scene's tone and phrasing without changing the story source.
+- Do not import genre/style/sound imagery into lyrics just because it was selected. For Synthwave/Anime Rock, do not automatically write neon, glitch, synth, anime, melody line, or guitar. If the Theme is 설렘, infer a fresh concrete moment from the selected theme instead of using a prewritten example scene.
 - If the theme says “everyday freedom,” write about ordinary freedom or self-expression through concrete scenes, not about vocal rhythm or tempo.
 `;
 
@@ -5470,7 +5477,7 @@ const SITUATION_VARIATION_SEEDS: CreativeVariationSeed[] = [
       "where one character keeps chasing and the other keeps delaying",
     vocalLens:
       "let one singer sound persistent while the other dodges or delays",
-    arrangementLens: "one-sided pursuit with delayed replies",
+    arrangementLens: "one-sided pursuit with delayed responses",
     lyricArchitecture:
       "let one role own the verse, while the other appears as short interruptions or echoes",
     avoidPattern: "Verse A then Verse B with equal length",
@@ -5560,7 +5567,7 @@ const SITUATION_VARIATION_SEEDS: CreativeVariationSeed[] = [
     id: "detail-hook-focus",
     genreLens: "with a tiny everyday detail turned into the hook",
     atmosphereLens:
-      "where a small object, errand, message, room, or street detail becomes emotionally oversized",
+      "where one fresh concrete detail from the user's input becomes emotionally oversized",
     vocalLens:
       "let the singer treat one ordinary detail like the whole reason they cannot move on",
     arrangementLens: "detail-led hook with sparse character interruptions",
@@ -5798,7 +5805,7 @@ const SOLO_VARIATION_SEEDS: CreativeVariationSeed[] = [
       "let the singer repeat one object or phrase as if it means more each time",
     arrangementLens: "object-led hook variation",
     lyricArchitecture:
-      "turn a small object, message, street, room, photo, or season detail into the hook engine",
+      "turn one fresh concrete detail inferred from the user's input into the hook engine",
     avoidPattern: "generic emotional hook without a concrete image",
   },
   {
@@ -5869,6 +5876,14 @@ const SOLO_VARIATION_SEEDS: CreativeVariationSeed[] = [
   },
 ];
 
+function stableVariationHash(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
 function pickCreativeVariationSeed(
   params: GenerateSongParams,
 ): CreativeVariationSeed {
@@ -5877,7 +5892,45 @@ function pickCreativeVariationSeed(
     hasSituation(params.situation) && info.isMulti
       ? SITUATION_VARIATION_SEEDS
       : SOLO_VARIATION_SEEDS;
+  if (!pool.length) return SOLO_VARIATION_SEEDS[0];
+
+  const index = Number(params.generationIndex || 0);
+  const count = Number(params.generationCount || 1);
+  if (index > 0 && count > 1) {
+    const signature = [
+      params.genre || '',
+      ...(params.subGenre || []),
+      ...(params.moods || []),
+      ...(params.themes || []),
+      params.userInput || '',
+      params.customThemeInput || '',
+      params.customMoodInput || '',
+      hasSituation(params.situation) ? JSON.stringify(params.situation) : '',
+    ].join('|');
+    const offset = stableVariationHash(signature) % pool.length;
+    return pool[(offset + index - 1) % pool.length] || pool[0];
+  }
+
   return pool[Math.floor(Math.random() * pool.length)] || pool[0];
+}
+
+function buildRecentStoryMemoryInstruction(params: GenerateSongParams): string {
+  const memoryCount = (params.recentStoryMemory || [])
+    .map((item) => cleanupPromptTail(String(item || '').replace(/\s+/g, ' ')))
+    .filter(Boolean)
+    .slice(0, 6)
+    .length;
+
+  if (!memoryCount) {
+    return `RECENT STORY MEMORY:
+- No recent generated song memory was provided. For a single generation, create a fresh angle from the selected keywords without defaulting to the most common cliché.`;
+  }
+
+  return `RECENT STORY MEMORY (ABSTRACT ANTI-CLONE ONLY):
+- Recent generated songs exist, but their titles, objects, scenes, and lyric phrases are intentionally hidden so they are not copied as examples.
+- Use this only as an anti-clone signal: avoid reusing the same central scene type, visible object type, unresolved action type, chorus engine, or ending direction.
+- Keep the selected emotional world, but infer a fresh lived-detail angle from the current input before writing title or lyrics.
+- For one-by-one generation, treat recent memory as a similarity warning. For multi-song generation, also make this attempt distinct from the other attempts in the same batch.`;
 }
 
 function appendPromptLens(base: string, addition: string, max = 160): string {
@@ -6100,13 +6153,13 @@ function variationProductionMeaning(
     "micro-conflict-focus": "small-detail percussion hits, pressure-building synth stabs",
 
     "interruption-cut-in": "sudden cut-ins, stop-start drum shocks, interruption hits",
-    "one-sided-pursuit": "chasing rhythm pulses, delayed reply impacts",
+    "one-sided-pursuit": "chasing rhythm pulses, delayed response impacts",
     "negotiation-trade": "trade-off beat switches, answer-back drum accents",
     "parallel-monologue": "split-channel textures, parallel rhythm beds",
     "late-reveal": "hidden texture layers, delayed reveal swells",
     "unresolved-comedy": "dry percussion pops, awkward pause hits",
     "chorus-takeover": "chorus takeover impacts, front-loaded hook drums",
-    "echo-undercut": "echo stabs, undercut drops, dry reply accents",
+    "echo-undercut": "echo stabs, undercut drops, dry response accents",
     "speaker-flaw-focus": "flaw-exposing pauses, uneven drum pressure",
     "detail-hook-focus": "detail-led motif hits, sparse hook punctuation",
     "role-reversal-focus": "reversal drops, section-flip impacts",
@@ -6116,7 +6169,7 @@ function variationProductionMeaning(
     "together-hook-focus": "brief group-hook lift, separated verse textures",
     "genre-led-structure": "genre-shaped groove shifts, part-specific production color",
     "object-perspective-focus": "object-motif pulses, visible-anchor sound details",
-    "misread-intent-focus": "misread-reply glitches, delayed-response accents",
+    "misread-intent-focus": "misread-response glitches, delayed-response accents",
     "comic-loop-focus": "looped hook accents, recurring offbeat hits",
     "emotional-fakeout-focus": "fakeout swells, redirected bridge textures",
     "status-game-focus": "status-battle drum pressure, control-shifting drops",
@@ -7731,7 +7784,7 @@ function cleanScenePlanPhrase(value: string, max = 120): string {
 
 function buildScenePlanConflictCue(params: GenerateSongParams, scene: string): string {
   const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), scene].join(' ').toLowerCase();
-  if (/(우주인|astronaut|cosmonaut|space traveler|우주를\s*떠도|지구|earth|신호|signal|transmission)/.test(text) && /(메시지|message|send|sending|던지|보내|전송|final)/.test(text)) return 'one final message drifts back toward Earth';
+  if (/(우주인|astronaut|cosmonaut|space traveler|우주를\s*떠도|지구|earth|신호|signal|transmission)/.test(text) && /(메시지|message|send|sending|던지|보내|전송|final)/.test(text)) return 'one final signal drifts back toward Earth';
   if (/운명|destiny|fate|coincidence|우연|필연/.test(text)) return 'trying to deny coincidence while feeling pulled by fate';
   if (/고백|confession|crush|짝사랑|설렘|flutter/.test(text)) return 'wanting to speak first but hiding the most important line';
   if (/이별|breakup|farewell|goodbye|그리움|longing/.test(text)) return 'pretending to move on while one small object keeps the feeling alive';
@@ -7744,7 +7797,7 @@ function buildScenePlanConflictCue(params: GenerateSongParams, scene: string): s
 
 function buildScenePlanChorusCore(params: GenerateSongParams, conflict: string): string {
   const text = [getIntentKeywordText(params), selectedThemeText(params), rawMoodAndDirectInputText(params), conflict].join(' ').toLowerCase();
-  if (/(우주인|astronaut|cosmonaut|space traveler|우주를\s*떠도|지구|earth|신호|signal|transmission)/.test(text) && /(메시지|message|send|sending|던지|보내|전송|final)/.test(text)) return 'a final message keeps drifting back to the blue Earth';
+  if (/(우주인|astronaut|cosmonaut|space traveler|우주를\s*떠도|지구|earth|신호|signal|transmission)/.test(text) && /(메시지|message|send|sending|던지|보내|전송|final)/.test(text)) return 'a final signal keeps fading near the blue Earth';
   if (/운명|destiny|fate|우연|필연/.test(text)) return 'the more I avoid it, the closer it pulls me';
   if (/고백|confession|crush|짝사랑|설렘|flutter/.test(text)) return 'I almost say it, then hide it again';
   if (/이별|breakup|farewell|goodbye/.test(text)) return 'I say I am fine while the details prove otherwise';
@@ -7871,8 +7924,7 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
   const themeCore = buildThemeCoreScene(params);
   const derivedScene = cleanScenePlanPhrase(deriveIntentScene(params), 130);
   // Direct theme/user story text must be the primary scene source. Generic contextual cue-bank scenes
-  // such as bedroom-message hesitation should not override a user-written story like an astronaut
-  // sending a final message back to Earth.
+  // Generic contextual cue-bank scenes should not override a user-written story.
   const rawScene = userTextScene?.scene
     ? cleanScenePlanPhrase(userTextScene.scene, 130)
     : derivedScene || cleanScenePlanPhrase(themeCore.scene, 130) || 'a concrete everyday scene';
@@ -7945,7 +7997,7 @@ function hasExplicitSceneOrObjectInput(params: GenerateSongParams, detailLayer =
     params.situation?.details || '',
   ].join(' ').trim();
   if (!text) return false;
-  return /장면|물건|사물|장소|거리|방|창문|휴대폰|사진|컵|잔|커피|정류장|골목|문|의자|메시지|문자|편지|object|place|room|street|window|photo|message|cup|coffee|station|chair/i.test(text);
+  return /장면|물건|사물|장소|거리|방|창문|휴대폰|사진|컵|잔|커피|정류장|골목|문|의자|편지|object|place|room|street|window|photo|cup|coffee|station|chair/i.test(text);
 }
 
 function shouldUseVariationAtmosphereLens(variation: CreativeVariationSeed, params: GenerateSongParams, detailLayer = ''): boolean {
@@ -8570,6 +8622,71 @@ function compactFiveLineVocalsValue(value: string, params: GenerateSongParams): 
 }
 
 
+
+function isGenericVocalFallbackLine(value: string): boolean {
+  const line = cleanupPromptTail(String(value || '')).toLowerCase();
+  if (!line) return true;
+  return /^(?:natural\s+)?(?:solo\s+)?(?:female\s+|male\s+)?vocal\s+with\s+natural\s+emotional\s+delivery$/.test(line)
+    || /^natural\s+vocal\s+with\s+natural\s+emotional\s+delivery$/.test(line)
+    || /^natural\s+vocal\s+with\s+emotional\s+delivery$/.test(line)
+    || /^natural\s+(?:solo\s+)?vocal\s+with\s+natural\s+delivery$/.test(line);
+}
+
+function buildInterpretiveSoloVocalFallbackLine(value: string, params: GenerateSongParams, interpreted: ThemeMoodInterpretation): string {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isSolo) return value;
+
+  const line = cleanupPromptTail(value);
+  const lower = line.toLowerCase();
+  const isWeakLine = isGenericVocalFallbackLine(line)
+    || /^natural\s+vocal\s+with\s+/.test(lower)
+    || /^natural\s+solo\s+vocal\s+with\s+natural\s+emotional\s+delivery/i.test(line);
+
+  // If the line already carries a genre-specific vocal color and at least one
+  // emotional/phrasing cue, keep it. This repair is only for thin fallback vocals.
+  if (!isWeakLine && /\b(vibrato|phrasing|tone|breath|restraint|tension|warmth|fragile|chant|rubato|runs|resonance|delivery)\b/i.test(line)) {
+    return value;
+  }
+
+  const soloMember = params.vocal?.members?.[0];
+  const gender = soloMember?.gender === 'female'
+    ? 'female'
+    : soloMember?.gender === 'male'
+      ? 'male'
+      : info.gender === 'female'
+        ? 'female'
+        : info.gender === 'male'
+          ? 'male'
+          : 'solo';
+  const subjectSeed = gender === 'female' ? 'female vocal' : gender === 'male' ? 'male vocal' : 'solo vocal';
+  const subject = selectedGenreVocalSubject(params, subjectSeed);
+
+  const genreDefault = compactVocalCueAfterSubject(getGenreDefaultVocalPhrase(params));
+  const performance = buildSelectedVocalPerformancePhrase(params, 4);
+  const artistAccent = buildArtistReferenceVocalAccent(params);
+  const intentCue = buildSoloVocalSongInterpretationCue(params, interpreted);
+  const moodCue = interpreted.vocalCue;
+  const atmosphereCue = interpreted.atmosphereCue
+    ? `carrying ${interpreted.atmosphereCue.replace(/^(?:a|an)\s+/i, '').replace(/\s+scene\b/i, ' atmosphere')}`
+    : '';
+
+  const parts = dedupePromptParts([
+    genreDefault,
+    performance,
+    artistAccent,
+    moodCue,
+    intentCue,
+    atmosphereCue,
+    'single lead vocal focus',
+  ], 7).filter(Boolean);
+
+  if (!parts.length) return value;
+  return compactFiveLineVocalsValue(
+    normalizeVocalPromptEmotion(`${subject} with ${joinPromptPhrase(parts, 'and')}`, params),
+    params,
+  );
+}
+
 function buildSoloInterpretiveVocalLine(baseLine: string, params: GenerateSongParams, interpreted: ThemeMoodInterpretation): string {
   const info = getVocalModeInfo(params.vocal);
   if (!info.isSolo) return baseLine;
@@ -8672,10 +8789,11 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
     ? cleanupPromptTail(`${cleaned} with ${moodVocalCue}`)
     : cleaned;
   const interpretedForSolo = buildSoloInterpretiveVocalLine(withMood, params, interpreted);
-  return compactFiveLineVocalsValue(
+  const compacted = compactFiveLineVocalsValue(
     applyIntentToVocalLine(normalizeVocalPromptEmotion(interpretedForSolo, params), params),
     params,
   );
+  return buildInterpretiveSoloVocalFallbackLine(compacted, params, interpreted);
 }
 
 function getCompactPointSoundPrompts(pointSoundIds: string[] = []): string[] {
@@ -9435,13 +9553,13 @@ function buildDirectInputProtectionInstruction(params: GenerateSongParams): stri
   lines.push("DIRECT INPUT PROTECTION (MANDATORY):");
   if (directTheme) {
     lines.push(`- Direct theme/topic input: ${directTheme}`);
-    lines.push("- Treat the direct theme/topic as the main event, object, conflict, and story seed, even if it is private, strange, niche, comedic, trivial, or very personal. Do not normalize it into a standard love/confession/breakup/message template.");
-    lines.push("- Do not replace it with a generic cue-bank scene such as bedroom-message, street-corner memory, delayed reply, confession, breakup, or ordinary unsaid-feeling unless those exact ideas are explicitly in the direct input.");
+    lines.push("- Treat the direct theme/topic as the main event, object, conflict, and story seed, even if it is private, strange, niche, comedic, trivial, or very personal. Do not normalize it into a standard template.");
+    lines.push("- Do not replace it with a generic cue-bank scene or prewritten story pattern unless that exact idea is explicitly in the direct input.");
     lines.push("- Selected keyword cards may color genre, sound, mood, and pacing only. They must not rewrite the direct topic into a different story.");
   }
   if (directMood) {
     lines.push(`- Direct mood/atmosphere input: ${directMood}`);
-    lines.push("- Treat the direct mood as the emotional temperature, air pressure, character behavior, and pacing. Do not convert it into a new lyric topic, romance plot, message plot, breakup plot, or random relationship arc.");
+    lines.push("- Treat the direct mood as the emotional temperature, air pressure, character behavior, and pacing. Do not convert it into a new lyric topic, fixed plot template, or random relationship arc.");
     lines.push("- Mood card selections are secondary when a direct mood sentence exists; blend them gently only if they do not conflict with the direct mood.");
   }
   if (String(params.userInput || "").trim()) {
@@ -9493,11 +9611,11 @@ type AtmosphereSceneLayers = {
 
 const ATMOSPHERE_PLACE_RULES: Array<[RegExp, string, string[]]> = [
   [/바다|해변|파도|sea|ocean|shore|beach/i, 'seaside', ['sea air', 'quiet waves', 'washed-away footprints']],
-  [/정류장|버스|station|bus stop/i, 'late-night bus stop', ['passing lights', 'a paused step', 'unanswered messages']],
+  [/정류장|버스|station|bus stop/i, 'late-night bus stop', ['passing lights', 'a paused step', 'unanswered silence']],
   [/지하철|subway|metro/i, 'subway ride', ['passing windows', 'cold handles', 'crowded silence']],
   [/골목|거리|street|alley/i, 'small street', ['dim signs', 'slow footsteps', 'familiar corners']],
   [/편의점|convenience/i, 'convenience-store night', ['fluorescent light', 'plastic bags', 'warmed-up food']],
-  [/방|room|bedroom/i, 'private room', ['window light', 'a quiet screen', 'small objects']],
+  [/방|room|bedroom/i, 'private room', ['window light', 'quiet stillness', 'small objects']],
   [/회사|직장|office|work/i, 'office after-hours', ['office lights', 'empty desks', 'last train time']],
   [/차안|자동차|drive|car/i, 'night drive', ['dashboard light', 'passing tunnels', 'quiet seats']],
   [/카페|cafe|coffee/i, 'small cafe', ['cooling coffee', 'table edges', 'window seats']],
@@ -9509,7 +9627,7 @@ const ATMOSPHERE_PLACE_RULES: Array<[RegExp, string, string[]]> = [
 const ATMOSPHERE_STORY_RULES: Array<[RegExp, string, string[]]> = [
   [/화해|reconciliation|reconcile/i, 'reconciliation', ['a careful first step toward each other']],
   [/오해|misunderstanding/i, 'unresolved misunderstanding', ['words that never landed right']],
-  [/고백|confession|crush|짝사랑/i, 'held-back confession', ['unsent words', 'awkward timing']],
+  [/고백|confession|crush|짝사랑/i, 'held-back confession', ['held-back words', 'awkward timing']],
   [/이별|breakup|goodbye/i, 'breakup aftermath', ['what remains after goodbye']],
   [/재회|다시\s*만|reunion|meet again/i, 'reunion after distance', ['a familiar face returning', 'words saved for later']],
   [/가족|family/i, 'family bond', ['old habits at home', 'a quiet shared meal']],
@@ -9803,13 +9921,13 @@ function buildThemeCoreScene(params: GenerateSongParams): { scene: string; detai
   if (has(/flutter|excitement|설렘|thrill|두근|떨림/)) {
     return {
       scene: "a small fluttering mistake",
-      detail: "a changed word, delayed reply, trembling fingers, a too-quiet room, awkward timing",
+      detail: "a small mismatch in behavior, trembling timing, a too-quiet room, awkward timing",
     };
   }
   if (has(/crush|짝사랑|confession|고백/)) {
     return {
       scene: "shy confession or one-sided love hidden in ordinary moments",
-      detail: "unsent messages, delayed replies, a familiar profile photo, awkward timing",
+      detail: "held-back words, familiar distance, awkward timing, a small avoided action",
     };
   }
   if (has(/longing|그리움|waiting|기다림|memory|추억|reminiscence|회상/)) {
@@ -9821,7 +9939,7 @@ function buildThemeCoreScene(params: GenerateSongParams): { scene: string; detai
   if (has(/work|company|after work|퇴근|야근|월요일|회사/)) {
     return {
       scene: "tired everyday life trying to find one small emotional escape",
-      detail: "office lights, last train, convenience-store food, unread messages",
+      detail: "office lights, last train, convenience-store food, end-of-day silence",
     };
   }
   if (has(/family|가족|childhood|어린시절|home|방/)) {
@@ -10114,6 +10232,12 @@ function buildContextualCueBundle(params: GenerateSongParams): ContextualCueBund
     selectedSoundText(params),
   ].join(' ').toLowerCase();
   const has = (pattern: RegExp) => pattern.test(text);
+  const directSceneText = [
+    params.userInput || '',
+    params.customThemeInput || '',
+    hasSituation(params.situation) ? JSON.stringify(params.situation) : '',
+  ].join(' ');
+  const directHasDigitalContact = /휴대폰|핸드폰|폰|메시지|문자|카톡|전송|커서|프로필|답장|send|message|text|cursor|profile/i.test(directSceneText);
 
   const choose = (atmosphereScene: string, arrangementHook: string): ContextualCueBundle => ({
     atmosphereScene: cleanupPromptTail(atmosphereScene),
@@ -10129,8 +10253,8 @@ function buildContextualCueBundle(params: GenerateSongParams): ContextualCueBund
   if (has(/지하철|subway|metro|전철|기차|train|열차/)) {
     return choose('a transit-window scene where motion hides a trembling feeling', 'subway-window memory cue');
   }
-  if (has(/휴대폰|핸드폰|폰|메시지|문자|카톡|전송|커서|프로필|답장|send|message|text|cursor|profile/)) {
-    return choose('a bedroom-message hesitation scene with one unsent line on the screen', 'unsent-message tension');
+  if (directHasDigitalContact) {
+    return choose('a user-specified communication scene where the emotional action comes only from the direct input', 'user-specified communication tension');
   }
   if (has(/사진|photo|photograph|폴라로이드|album|앨범/)) {
     return choose('an old-photo memory scene where a frozen smile opens the old feeling again', 'old-photo memory turn');
@@ -10154,7 +10278,7 @@ function buildContextualCueBundle(params: GenerateSongParams): ContextualCueBund
     return choose('a reverse-FX memory scene where the feeling turns back on itself', 'reverse-FX memory turn');
   }
   if (has(/방|room|bedroom|침대|창문|window/) && has(/고백|confession|짝사랑|crush|설렘|flutter|사랑|love/)) {
-    return choose('an empty-room confession scene where the screen light exposes a hidden feeling', 'empty-room confession hook');
+    return choose('an empty-room emotional scene where a hidden feeling presses against the quiet space', 'empty-room emotional hook');
   }
   if (has(/방|room|bedroom|침대|창문|window/)) {
     return choose('a private-room scene where small objects make the feeling harder to ignore', 'empty-room reflection hook');
@@ -10169,7 +10293,7 @@ function buildContextualCueBundle(params: GenerateSongParams): ContextualCueBund
     return choose('a rainy-street afterimage scene where wet light keeps the memory open', 'rainy-street afterimage');
   }
   if (has(/우주|지구|astronaut|space|earth|헬멧|helmet|신호|signal/)) {
-    return choose('a distant-signal space scene where one final message drifts toward Earth', 'fading-signal space hook');
+    return choose('a distant-space scene where isolation stretches across a fading signal', 'fading-signal space hook');
   }
   if (has(/골목|거리|street|alley|산책|walk|neighborhood/)) {
     return choose('a street-corner memory scene where footsteps keep circling the same feeling', 'street-corner memory hook');
@@ -11376,7 +11500,7 @@ function buildThemeMoodInterpretation(params: GenerateSongParams): ThemeMoodInte
         spaceCue,
       ].filter(Boolean);
       const atmosphereTail = atmosphereTailParts.length ? ` with ${atmosphereTailParts.join(' and ')}` : '';
-      return cleanupPromptTail(`${prefix ? `${prefix} ` : ''}astronaut solitude, a final message drifting back toward Earth${atmosphereTail}`);
+      return cleanupPromptTail(`${prefix ? `${prefix} ` : ''}astronaut solitude, a fading signal drifting back toward Earth${atmosphereTail}`);
     }
     if (isFlutterScene) {
       return cleanupPromptTail(`${moodAngle} tension around ${sceneWithoutArticle}${spaceTail ? `, ${spaceTail}` : ""}`);
@@ -11420,18 +11544,18 @@ function buildThemeMoodLyricInstruction(params: GenerateSongParams): string {
   if (!ctx.lyricSceneCue && !ctx.lyricDetailCue && !ctx.atmosphereCue) return "";
   const situationMode = ctx.strength === "weak";
   const mode = situationMode
-    ? "Use Theme/Mood only as subtle color inside the active Situation. Do not create a new plot from Mood."
-    : "Use Theme as the lyric content source, and use Mood only as emotional behavior, pressure, pacing, and scene temperature.";
+    ? "Use the active Situation as the lyric content source. Use Mood only as subtle interpretation color inside that Situation; do not create a new plot from Mood."
+    : "Use Theme as the lyric content source. Use Mood only to reinterpret that Theme through emotional behavior, pressure, pacing, metaphor style, scene texture, and sentence temperature.";
   return `THEME + MOOD LYRIC BOUNDARY (MANDATORY):
 - ${mode}
 - Lyric story source: ${ctx.lyricSceneCue || "the active situation"}.
 - Allowed concrete details from Theme/Situation: ${ctx.lyricDetailCue || "small visible behavior and everyday objects"}.
-- Mood must NOT become lyric subject matter. It may only decide how the character speaks, hides, hesitates, jokes, panics, softens, or escalates inside the Theme story.
+- Mood must NOT become lyric subject matter. It may decide how the existing Theme/Situation content is expressed: how the character speaks, hides, hesitates, jokes, panics, softens, escalates, breathes, imagines, or phrases the feeling.
 - Do NOT directly repeat selected mood labels, mood English values, genre/style names, sound names, instrument names, hook/transition terms, or production words in lyric lines OR section-tag cues.
-- Section tags may use only compact performance/section-function cues. Convert mood into behavior cues such as hesitant, tense, playful subtext, soft panic, restrained, or emotional lift; do not write literal labels such as magical, dark, cute, synthwave, glitchy, neon, guitar, synth.
-- Prefer lyric section tags that describe emotional execution, not production texture: use [Verse: small panic], [Pre-Chorus: rising tension], [Chorus / Drop: unstable confession], [Bridge: obsessive tension]. Avoid [Verse: fragmented] and [Chorus: glitchy] unless they are rewritten as nervous fragments or unstable tension.
+- Section tags may use only compact performance/section-function cues. Convert mood into behavior cues such as hesitant, tense, playful subtext, soft panic, restrained, or emotional lift; do not write literal mood labels such as magical, dark, cute, synthwave, glitchy, neon, guitar, synth.
+- Lyric section tags should describe emotional execution, not production texture or new story content. Keep them generic enough to fit the Theme/Situation, such as [Verse: restrained], [Pre-Chorus: rising tension], [Chorus / Drop: emotional lift], [Bridge: vulnerable turn].
 - Do NOT turn Genre/Style/Sound into lyric imagery. Keep musical words in the prompt only; lyrics should use ordinary life details from the Theme/Situation.
-- Keep the lyrics aligned with the final [Atmosphere], [Vocals], and [Arrangement], but express that alignment through behavior, place, object, timing, and speech style rather than keyword mentions.`;
+- Keep the lyrics aligned with the final [Atmosphere], [Vocals], and [Arrangement], but express that alignment through the existing story's behavior, timing, speech style, metaphor temperature, and sentence rhythm rather than mood keyword mentions or newly invented mood-based objects.`;
 }
 
 function buildNonSituationStoryClause(
@@ -13846,7 +13970,7 @@ function finalizePromptOpenTail(value: string): string {
     .replace(/\btimeless\b(?!\s+(?:polish|edge|color|warmth))/gi, 'timeless polish')
     .replace(/\bwith\s+(upbeat|open|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful),\s*(open|upbeat|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful)\s+where\b/gi, 'with $1 $2 air where')
     .replace(/\bwith\s+(upbeat|open|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful)\s+where\b/gi, 'with $1 air where')
-    .replace(/\bwith\s+one\s+unsent\s+line\s+on\s+the\s+screen,\s*upbeat,\s*open\s+where\b/gi, 'where one unsent line stays open on the screen with upbeat warmth and')
+    .replace(/\bwith\s+upbeat,\s*open\s+where\b/gi, 'with upbeat open air where')
     .replace(/\bwhere\s+one\s+unsaid\s+feeling\s+pushing\b/gi, 'where one unsaid feeling pushes')
     .replace(/\bwith\s+moody\s+and\s+street\s+noise\b/gi, 'with moody street noise')
     .replace(/\b(?:with|and|where|while|by|through|around|in|on)\s*$/gi, '')
@@ -13886,7 +14010,7 @@ function hardenAtmosphereValidatorText(value: string, params: GenerateSongParams
     .replace(/\bwhere\s+tired\s+routine\s+turns\s+into\s+a\s+private\s+escape\s+with\s+soft\s+brightness\s+where\s+turning\s+tired\s+routine\s+into\s+a\s+small\s+private\s+escape\b/gi, 'where tired routine turns into a soft private escape')
     .replace(/\bwhere\s+turning\s+tired\s+routine\s+into\s+a\s+small\s+private\s+escape\b/gi, 'where tired routine turns into a small private escape')
     .replace(/\bwith\s+(moody|dark|wistful|warm|soft|open|upbeat)\s+and\s+([a-z]+\s+noise)\b/gi, 'with $1 $2')
-    .replace(/\bwith\s+one\s+unsent\s+line\s+on\s+the\s+screen,\s*upbeat,\s*open\s+where\b/gi, 'where one unsent line stays open on the screen with upbeat warmth and')
+    .replace(/\bwith\s+upbeat,\s*open\s+where\b/gi, 'with upbeat open air where')
     .replace(/\bwhere\s+staying\s+calm\s+on\s+the\s+surface\s+while\s+resisting\s+from\s+underneath\b/gi, 'where calm surface hides quiet resistance underneath')
     .replace(/\bwith\s+calm\s+and\s+dreamy\b/gi, 'with calm dreamy air')
     .replace(/\bwith\s+dark\s+and\s+wistful\b/gi, 'with dark wistful air');
@@ -14258,8 +14382,8 @@ function validateFinalAtmosphereLine(value: string, params: GenerateSongParams):
   let line = compressAtmosphereForFinalValidator(value, params)
     .replace(/\bwith\s+([^,]+?),\s*([^,]+?)\s+where\b/gi, 'with $1 and $2 where')
     .replace(/\bwith\s+(upbeat|open|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful)\s+and\s+(upbeat|open|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful)\s+where\b/gi, 'with $1 $2 air where')
-    .replace(/\bwith\s+one\s+unsent\s+line\s+on\s+the\s+screen,\s*upbeat,\s*open\s+where\s+one\s+unsaid\s+feeling\s+pushes\s+against\s+an\s+ordinary\s+moment\b/gi, 'where one unsent line stays open on the screen with upbeat warmth')
-    .replace(/\bwhere\s+the\s+screen\s+light\s+exposes\s+a\s+hidden\s+feeling\s+with\s+powerful,\s*surreal,\s*floating,\s*and\s*blurred\s+reverb\b/gi, 'where screen light exposes hidden feelings in surreal floating air')
+    .replace(/\bwith\s+upbeat,\s*open\s+where\s+one\s+unsaid\s+feeling\s+pushes\s+against\s+an\s+ordinary\s+moment\b/gi, 'where one unsaid feeling pushes against an ordinary moment with upbeat warmth')
+    .replace(/\bwhere\s+a\s+hidden\s+feeling\s+with\s+powerful,\s*surreal,\s*floating,\s*and\s*blurred\s+reverb\b/gi, 'where hidden feelings move through surreal floating air')
     .replace(/\bwith\s+moody\s+street\s+noise\s+where\b/gi, 'with moody street noise where');
 
   line = compressAtmosphereForFinalValidator(line, params);
@@ -14370,7 +14494,8 @@ function validateFinalVocalsLine(value: string, params: GenerateSongParams): str
   const soloSafeLine = enforceExplicitSoloVocalFormation(line, params);
   const hardened = dedupeRepeatedVocalCuePhrases(hardenFinalVocalGrammar(soloSafeLine, params)) || 'Natural solo vocal with human breath';
   const repaired = repairMalformedFinalVocalLine(enforceExplicitSoloVocalFormation(hardened, params), params);
-  return stabilizeSoloCharacterVocalsLine(repaired, params);
+  const characterStable = stabilizeSoloCharacterVocalsLine(repaired, params);
+  return buildInterpretiveSoloVocalFallbackLine(characterStable, params, buildThemeMoodInterpretation(params));
 }
 
 function arrangementCueCountForValidator(value: string): number {
@@ -14388,6 +14513,54 @@ function hasEvidenceForGenericCue(cue: string, params: GenerateSongParams): bool
   if (/night[-\s]?drive|city[-\s]?drive|drive/.test(lower)) return /드라이브|drive|car|차|운전|도로|핸들/.test(text);
   if (/neighborhood[-\s]?walk|walk/.test(lower)) return /산책|walk|골목|street|거리|neighborhood/.test(text);
   return true;
+}
+
+
+function buildInterpretiveArrangementMovementParts(params: GenerateSongParams): string[] {
+  const text = [
+    selectedThemeText(params),
+    selectedMoodText(params),
+    getIntentKeywordText(params),
+    rawMoodAndDirectInputText(params),
+    getSelectedFusionGenres(params).map((genre) => `${genre.id} ${genre.label}`).join(' '),
+  ].join(' ').toLowerCase();
+  const parts: string[] = [];
+  const add = (value: string) => {
+    const clean = cleanupPromptTail(value);
+    if (clean && !parts.some((part) => part.toLowerCase() === clean.toLowerCase())) parts.push(clean);
+  };
+
+  if (/enka|엔카/.test(text)) add('verse held in restrained enka tension');
+  else if (/r&b|rnb|소울|soul/.test(text)) add('verse held in close restrained groove');
+  else add('verse starts with restrained emotional focus');
+
+  if (/불안|anxious|위태|precarious|tense|긴장/.test(text)) add('pre-chorus tightens into fragile pressure');
+  else if (/희망|hope|성장|growth|free|자유/.test(text)) add('pre-chorus lifts the emotional pressure');
+  else add('pre-chorus gradually increases emotional pressure');
+
+  if (/chant|챈트|enka|엔카/.test(text)) add('chorus opens into a short phrase-led refrain');
+  else add('chorus opens into a focused hook release');
+
+  if (/마법|magical|신비|myster|꿈|dream|space|우주|몽환/.test(text)) add('Bridge turns suspended and otherworldly before the final refrain');
+  else if (/슬픈|sad|미련|regret|이별|breakup/.test(text)) add('Bridge turns vulnerable before the final refrain');
+  else add('Bridge shifts the emotion before the final refrain');
+
+  return parts.slice(0, 4);
+}
+
+function strengthenArrangementInterpretiveMovement(value: string, params: GenerateSongParams): string {
+  if (hasSituation(params.situation)) return value;
+  const currentParts = splitArrangementParts(value);
+  const nonTempo = currentParts.filter((part) => !/^\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM$/i.test(part) && !/^\d{2,3}\s*BPM$/i.test(part));
+  const lower = value.toLowerCase();
+  const hasSectionMovement = /\bverse\b|pre[-\s]?chorus|chorus|bridge|final\s+refrain|section\s+flow|builds?\s+(?:into|toward)|turns?\s+(?:fragile|vulnerable|suspended)/i.test(value);
+  const looksThin = nonTempo.length <= 3 || !hasSectionMovement || /\b(?:focused hook|chant-like hook|clear sectional contrast|soft emotional release)\b/i.test(lower);
+  if (!looksThin) return value;
+
+  const additions = buildInterpretiveArrangementMovementParts(params)
+    .filter((part) => !lower.includes(part.toLowerCase()));
+  if (!additions.length) return value;
+  return normalizeArrangementLine(dedupePromptParts([...currentParts, ...additions], 9));
 }
 
 function validateFinalArrangementLine(value: string, params: GenerateSongParams): string {
@@ -14432,6 +14605,7 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
       .slice(0, 2);
     if (addParts.length) finalLine = normalizeArrangementLine([finalLine, ...addParts]);
   }
+  finalLine = strengthenArrangementInterpretiveMovement(finalLine, params);
   return cleanupPromptTail(stripFinalInternalProtectionLanguage(finalLine));
 }
 
@@ -17337,6 +17511,8 @@ CREATIVE VARIATION SEED (MANDATORY, DO NOT OUTPUT AS A SECTION):
 - Do NOT append variation wording to [Vocals]. [Vocals] must contain only natural singer direction and role persona.
 - When Situation text is long, vague, or repeated, compress it into a fresh dramatic angle rather than copying the user's wording. Same Situation can become ghost regret focus, reaper fatigue focus, negotiation focus, object/detail focus, role reversal, or unresolved comedy depending on this generation.
 
+${buildRecentStoryMemoryInstruction(params)}
+
 SITUATION NUANCE VARIATION RULE (MANDATORY):
 - Before writing lyrics, reinterpret the Situation through the current Attempt ID.
 - Choose whose desire leads the song, whose flaw is exposed first, which concrete detail becomes the hook, and who owns the chorus.
@@ -17408,7 +17584,7 @@ ${TECHNICAL_DIRECTION_LYRICS_GUARD}
 IMPORTANT:
 - Do not use real artist names by default. Exception: if the user explicitly wrote an artist/group reference in direct input, preserve it only in [Genre] as “-style” or “-inspired” and also translate it into musical traits; do not place artist names in [Vocals] or lyrics.
 - Do NOT simplify, generalize, or replace the selected arrangement with a default pop form.
-- Treat the final production prompt below as a locked music-production blueprint, not a loose reference. For lyric story content, direct input and selected Theme/Mood remain higher priority than generic prompt summaries.
+- Treat the final production prompt below as a locked music-production blueprint, not a loose reference. For lyric story content, direct input, active Situation, and selected Theme remain higher priority than generic prompt summaries. Selected Mood is an expression-color layer only, not a story source.
 - Resolve conflicts by priority: custom song structure if selected, then USER FREE-TEXT DIRECTOR NOTE, then explicit UI selections, while keeping one coherent song concept.
 - Keep the final result musically coherent as one song concept, not a loose list of tags.
 
@@ -17435,9 +17611,10 @@ INSTRUMENTS ASSEMBLY DIRECTION (MANDATORY):
 - Also preserve STYLE SOUND / SPACE TEXTURE LAYERS as real instrument/texture cues when they are musically relevant. Do not hide space textures only inside [Atmosphere]; cues like wide reverb, room reflections, rain ambience, stage ambience, or distant ambience belong in [Instruments] when selected.
 - It may be more expressive than a plain comma list, but it must still read as instrument/texture cues, not a full mix-description paragraph. Avoid generic mix sentences such as intimate warm natural mix unless they are attached to a concrete sound texture.
 
-MOOD LAYER (EMOTIONAL COLOR ONLY, NOT LYRIC TOPIC):
+MOOD LAYER (INDIRECT EXPRESSION COLOR, NOT LYRIC TOPIC):
 ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
-- Use these mood choices only to color phrasing, emotional pressure, and scene temperature. Do not write the mood words themselves as lyric content.
+- Use these mood choices to color [Atmosphere], [Arrangement], genre mood color, compressed vocal delivery, and the lyric expression layer: phrasing, metaphor style, sentence temperature, pacing, emotional pressure, and scene texture.
+- Do not use mood choices as lyric content sources. They must not invent new lyric objects, events, relationships, places, conflicts, titles, hooks, or repeated lyric phrases. They may only reinterpret the existing Theme/Situation/direct-input content.
 
 VOCAL EXPRESSION STYLE LAYER (VOICE EMOTION / ATTITUDE / PHRASING):
 ${buildSelectedVocalExpressionInstruction(params)}
@@ -17475,9 +17652,9 @@ Expanded story direction: ${themeSentence}`
 ${themeMoodLyricInstruction}
 
 LYRIC SOURCE PRIORITY (MANDATORY):
-- For lyric content, prioritize in this order: 1) active Situation, direct theme input, direct mood input, and USER FREE-TEXT DIRECTOR NOTE; 2) selected Theme/Mood keywords, exact section structure, and vocal setup; 3) the final production prompt's Genre, Vocals, and Arrangement as musical guidance only.
-- If a Situation is active, its relationship, conflict, character roles, speech direction, version tone, and development are the main lyric story structure. Direct theme/mood/user notes may add the specific topic or tone, but they must not erase the Situation relationship or role logic.
-- The final [Atmosphere] line is a production summary. Do not let abstract or generic Atmosphere wording override the user's concrete story, Situation conflict, mood, speech style, or chosen section flow.
+- For lyric content, prioritize in this order: 1) active Situation, direct theme input, lyric draft, and USER FREE-TEXT DIRECTOR NOTE; 2) selected Theme keywords, exact section structure, and vocal setup; 3) selected Mood as indirect expression color only; 4) the final production prompt's Genre, Vocals, and Arrangement as musical guidance only.
+- If a Situation is active, its relationship, conflict, character roles, speech direction, version tone, and development are the main lyric story structure. Direct theme/user notes may add the specific topic. Mood/direct mood may color tone, metaphor, pacing, pressure, and speech style, but must not create or erase the Situation relationship, event, setting, or role logic.
+- The final [Atmosphere] line is a production summary. Do not let abstract or generic Atmosphere wording override the user's concrete story, Situation conflict, theme content, chosen section flow, or lyric draft. Use mood alignment as expression color, not as a new plot.
 - Keep lyric structure, section tags, density rules, and character speech quality intact. Do not rewrite lyrics merely to match a generic prompt phrase.
 
 LOCKED FINAL PRODUCTION PROMPT:
@@ -17701,6 +17878,9 @@ ${lyricDensityInstruction}
 
 [ANTI-TEMPLATE RULE]
 - Same keywords must still produce a different attempt angle each generation. Never treat selected buttons as a fixed lyric/prompt template.
+- First choose ONE fresh story angle for this attempt: a different lived detail, physical place, object, action, relationship distance, confession state, or ending direction. Then make title, hook, lyrics, [Atmosphere], and [Vocals] share that one angle.
+- Variation must happen BETWEEN songs, not inside one song. Do not scatter multiple unrelated scenes in one lyric.
+- If a recent or earlier same-keyword generation used a similar concrete image, object, setting, or unresolved action, choose a different angle that still belongs to the same emotion. Do not name or import the earlier image as lyric material.
 - Do not use a fixed duet template. The singer who owns Verse, Pre-Chorus, Chorus, Bridge, Final Chorus, and Outro must change according to genre and situation.
 - If the previous section was A→B, the next lyrical section should not automatically repeat A→B. Change ownership, interruption timing, solo focus, or hook function.
 - The goal is a different dramatic song design, not only different words.
@@ -17866,7 +18046,7 @@ Write like:
 - Do not rewrite it with a completely new lyric idea.
 - The lyrics should follow the selected theme(s) and explicit narrative details provided by the user.
 - If no explicit theme exists, create a simple original everyday emotional scene without using genre, vocal, sound, tempo, hook, or arrangement instructions as the lyrical topic.
-- Themes define the situation, message, scene, or story.
+- Themes define the situation, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.
 - If custom structure mode is selected, keep the exact custom section order, but apply the Situation to every lyrical section.

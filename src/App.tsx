@@ -61,7 +61,12 @@ import {
   Zap,
   Key,
   Bookmark,
-  Library
+  Library,
+  Compass,
+  Sunset,
+  Activity,
+  PenTool,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
@@ -3922,6 +3927,15 @@ function App() {
 
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [showMainGenerationModal, setShowMainGenerationModal] = useState(false);
+  const [showPreviewPopup, setShowPreviewPopup] = useState(false);
+  const [currentPreviewOptions, setCurrentPreviewOptions] = useState<{
+    includeLyrics: boolean;
+    lyricLanguages: LanguageCode[];
+    generationCount: number;
+    isKoreanEnglishMix: boolean;
+    englishMixRatio: number;
+    rapEnabled: boolean;
+  } | null>(null);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [addingLyricsLanguageTarget, setAddingLyricsLanguageTarget] = useState<LanguageCode | null>(null);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
@@ -7167,6 +7181,29 @@ const saveRecentSong = async (newSong: any) => {
 
       const songPrompt = buildSongPrompt();
 
+      const compactGeneratedStoryMemory = (song: SongResult | null | undefined) => {
+        if (!song) return '';
+        const title = formatUnifiedTitle(song).replace(/\s+/g, ' ').trim();
+        const promptAtmosphere = String(song.prompt || '').split('\n').find((line) => /^\[Atmosphere\]/i.test(line)) || '';
+        const lyricSource = normalizeLyricsForDisplay(song.lyrics?.korean || song.lyrics?.english || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .filter((line) => !/^\[[^\]]+\]$/.test(line))
+          .slice(0, 6)
+          .join(' / ');
+        return [title, promptAtmosphere, lyricSource]
+          .filter(Boolean)
+          .join(' | ')
+          .replace(/\s+/g, ' ')
+          .slice(0, 280);
+      };
+
+      const recentStoryMemoryBase = history
+        .slice(0, 6)
+        .map(compactGeneratedStoryMemory)
+        .filter(Boolean);
+
       const payload = {
         genre: finalGenres[0] ?? selectedGenres[0] ?? subGenre[0] ?? null,
         subGenre: finalGenres,
@@ -7219,10 +7256,18 @@ const saveRecentSong = async (newSong: any) => {
       for (let i = 0; i < requestedGenerationCount; i += 1) {
         if (abortControllerRef.current?.signal.aborted) return;
 
+        const inBatchStoryMemory = generatedResults
+          .map(compactGeneratedStoryMemory)
+          .filter(Boolean);
+
         const song = await generateSong({
           ...payload,
           generationIndex: i + 1,
           generationCount: requestedGenerationCount,
+          recentStoryMemory: [
+            ...inBatchStoryMemory,
+            ...recentStoryMemoryBase,
+          ].slice(0, 8),
         } as any);
 
         if (abortControllerRef.current?.signal.aborted) return;
@@ -7754,7 +7799,6 @@ ${normalizePromptForDisplay(result.prompt)}
       .trim();
   };
 
-
   const normalizePromptForDisplay = (value: string) => {
     const repairLine = (line: string) => {
       let repaired = String(line || '').replace(/\s+/g, ' ').trim();
@@ -7895,8 +7939,6 @@ ${normalizePromptForDisplay(result.prompt)}
     !tempoEnabled ||
     minBPM !== 90 ||
     maxBPM !== 110 ||
-    kpopMode !== 0 ||
-    isKoreanEnglishMix ||
     citypopMode !== 0 ||
     isGenreRandomized ||
     isMoodRandomized ||
@@ -7923,7 +7965,6 @@ ${normalizePromptForDisplay(result.prompt)}
       type: 'genre' as const,
       label: resolveGenreChipLabel(id),
     }));
-
 
   type GlobalSearchType = 'genre' | 'style' | 'sound' | 'mood' | 'theme';
 
@@ -8091,7 +8132,179 @@ ${normalizePromptForDisplay(result.prompt)}
       .slice(0, 60) as Array<(typeof globalSearchIndex)[number] & { score: number }>;
   }, [globalSearchIndex, globalSearchQuery]);
 
-  const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.length > 0 || selectedInstrumentSounds.length > 0 || selectedMoods.length > 0 || selectedThemes.length > 0;
+  const getSongPreviewDetails = () => {
+    const selectedThemeLabels = selectedThemes.map(getThemeKeywordLabel).filter(Boolean);
+    const selectedMoodLabels = selectedMoods.map(getMoodKeywordLabel).filter(Boolean);
+    
+    const currentSubGenreLabels = subGenre.map((id) => {
+      const matched = GENRE_HIERARCHY
+        .flatMap((group) => group.children)
+        .flatMap((main) => main.children)
+        .find((item) => item.id === id);
+      return matched?.label || id;
+    });
+    const currentMainGenreLabels = selectedGenres.map((id) => {
+      const matched = GENRE_HIERARCHY
+        .flatMap((group) => group.children)
+        .flatMap((main) => main.children)
+        .find((item) => item.id === id);
+      return matched?.label || id;
+    });
+    const combinedGenreLabels = Array.from(new Set([...currentMainGenreLabels, ...currentSubGenreLabels])).filter(Boolean);
+    const genreStr = combinedGenreLabels.length > 0 ? combinedGenreLabels.join(', ') : '기본 장르(Pop)';
+
+    // 현재 선택된 미리보기 옵션 추출 (모달 설정이 지정되어 있을 시 우선 반영)
+    const previewIncludeLyrics = currentPreviewOptions 
+      ? currentPreviewOptions.includeLyrics 
+      : !(hasSelectedInstrumentalBgm || isPureInstrumentalBgmGenreSelection([...selectedGenres, ...subGenre]));
+    const previewLyricLangs = currentPreviewOptions ? currentPreviewOptions.lyricLanguages : [];
+    const previewIsMix = previewIncludeLyrics ? (currentPreviewOptions ? currentPreviewOptions.isKoreanEnglishMix : isKoreanEnglishMix) : false;
+    const previewMixRatio = currentPreviewOptions ? currentPreviewOptions.englishMixRatio : englishMixRatio;
+    const previewRap = previewIncludeLyrics ? (currentPreviewOptions ? currentPreviewOptions.rapEnabled : rapEnabled) : false;
+    const previewGenCount = currentPreviewOptions ? currentPreviewOptions.generationCount : 1;
+
+    const lowerGenres = [...selectedGenres, ...subGenre].map(g => g.toLowerCase());
+    const isEdm = lowerGenres.some(g => g.includes('edm') || g.includes('electro') || g.includes('dance') || g.includes('synth') || g.includes('house') || g.includes('trance') || g.includes('techno') || g.includes('club') || g.includes('bass'));
+    const isHymn = lowerGenres.some(g => g.includes('hymn') || g.includes('chant') || g.includes('church') || g.includes('choir') || g.includes('ccm') || g.includes('gospel') || g.includes('spiritual') || g.includes('sacred'));
+    const isRnb = lowerGenres.some(g => g.includes('r&b') || g.includes('rnb') || g.includes('soul') || g.includes('groove') || g.includes('urban') || g.includes('funk'));
+    const isAcoustic = lowerGenres.some(g => g.includes('acoustic') || g.includes('folk') || g.includes('indie') || g.includes('unplugged') || g.includes('guitar'));
+
+    const themeName = selectedThemeLabels.length > 0 ? selectedThemeLabels[0] : (userInput.trim() ? '디렉터 기획안' : '선택된 감성');
+    const moodName = selectedMoodLabels.length > 0 ? selectedMoodLabels[0] : '편안하고 아늑한';
+    const styleLabels = getCycleVariantLabel(STYLE_CYCLES, selectedStyles);
+    const styleStr = styleLabels.length > 0 ? styleLabels[0] : '';
+    const instrLabels = selectedInstrumentSounds.map(getSoundVariantLabelById).filter(Boolean);
+    const instrStr = instrLabels.length > 0 ? instrLabels[0] : '';
+
+    // 1. 곡 해석 요약 (Interpretation Summary) - Standalone card, max 3-4 sentences, organic & cohesive
+    let interpretationSummary = "";
+    if (isEdm) {
+      interpretationSummary = `이 곡은 역동적인 EDM 비트 위에 ${themeName}의 감정 영역을 융합하여 세련되게 구축하는 현대적인 일렉트로닉 트랙입니다. 소리의 잔향을 타고 일렁이는 ${moodName} 분위기가 세밀한 비트와 리드 신스를 유기적으로 이끌어갑니다. 기분 좋은 청각적 해방감 속에서 저마다의 서사를 매끄럽게 음미할 수 있는 고유한 구조를 취합니다.`;
+    } else if (isHymn) {
+      interpretationSummary = `이 곡은 장엄하고 경건한 성가 음악의 깊은 울림 위에 ${themeName}의 영조가 흘러드는 사색적이고 의식적인 고백입니다. ${moodName} 정취가 지닌 성스러운 공기가 넓은 공간 속에서 숭고하게 번지며 마음속에 깊은 평온을 가만히 내려놓습니다. 세속의 번잡함을 씻어내는 성스러운 정화의 공간을 선사하도록 구성되어 있습니다.`;
+    } else if (isRnb) {
+      interpretationSummary = `이 곡은 감미로운 R&B 특유의 여백 있는 비트와 리듬 그루브 위에 ${themeName}의 이야기를 아련하게 수놓는 소울풀한 트랙입니다. ${moodName} 색채의 입체적인 무드가 목소리와 악기 세션의 따뜻한 밀도를 타고 흐르며 부드럽게 귓가를 어루만집니다. 억지로 꾸미지 않은 한 편의 편지 같은 다정하고 깊은 공감의 밤을 직조합니다.`;
+    } else if (isAcoustic) {
+      interpretationSummary = `이 곡은 가공 없는 어쿠스틱 악기들의 소박한 선율 속에 ${themeName} 고유의 숨결과 심상을 투명하고 은은하게 전해줍니다. ${moodName} 무드의 온전한 온기가 고전적인 통기타나 건반의 자연스러운 전개와 결합해 긴밀한 위안을 더합니다. 화려한 연출 대신 오직 소리 본연의 담담한 감정선만을 보존하여 아늑한 휴식처를 연출합니다.`;
+    } else {
+      interpretationSummary = `이 곡은 편안하고 귀에 익숙하게 흐르는 팝 양식의 선율 구조 위에 ${themeName}의 은유적 메시지를 세련되게 결합한 조화로운 곡입니다. ${moodName} 감성이 지닌 따뜻한 매력을 촉매 삼아 노랫말과 악기가 이질감 없는 완성도로 함께 도달합니다. 누구나 가볍게 빠져들어 저마다의 소중한 추억을 꺼내보게 이끄는 세련된 연출적 흐름입니다.`;
+    }
+
+    // 2. 예상 분위기 (Expected Atmosphere) - Shorter, organic, tailored to genre
+    let expectedAtmosphere = "";
+    if (isEdm) {
+      expectedAtmosphere = `드넓은 페스티벌 한가운데에 서 있는 듯 광활하고 시원하게 뻗은 공간 정위감이 웅장한 사운드의 질감을 완성합니다. ${styleStr ? `${styleStr} 스타일을 매개로 ` : ''}차가운 빌드업 신스와 묵직한 베이스 충격이 유연하게 공존하여 감각적인 해방을 부드럽게 뒤덮습니다.`;
+    } else if (isHymn) {
+      expectedAtmosphere = `성스럽고 잔잔한 높은 공간감이 울려 퍼지며, 엄숙하고 잔잔한 미학적 영감을 귓가에 조용히 머금습니다. 인위적인 소음을 밀어낸 기호의 정적 속에 성스러운 화성과 신성한 침묵의 소리가 조화롭게 스며듭니다.`;
+    } else if (isRnb) {
+      expectedAtmosphere = `귓밑을 타고 번지는 남빛 밤하늘 같은 따스함이 아늑하고 세련된 사운드 주변부의 기류를 온유하게 감싸 안습니다. 둥글고 부드러운 일렉트릭 피아노와 정적인 드럼의 빈 여백 속에서 고유한 온기를 깊고 섬세하게 채워줍니다.`;
+    } else if (isAcoustic) {
+      expectedAtmosphere = `나무 향 가득한 따뜻하고 가벼운 편성이 공기를 은은하고 평화롭게 채웁니다. 장식적인 기계 음향을 과감히 걷어낸 어쿠스틱 터치는 귀에 거칠지 않으며, 속삭이듯 친근한 수채화 물감처럼 내면의 감수성을 오롯이 깨워줍니다.`;
+    } else {
+      expectedAtmosphere = `정돈된 사운드 주변부를 흐르는 입체적인 원근감이 세련되게 균형을 잡는 단정한 연출을 보여줍니다. 과함도 모자람도 없는 절묘한 하모니가 중심 선율의 청아함을 빛내며, 귓가에 촉촉하고 매끄러운 만족을 안겨줍니다.`;
+    }
+
+    // 3. 예상 보컬 (Expected Vocals) - Dynamically combines Theme, Mood, Tempo and Genre
+    const avgBpm = (minBPM + maxBPM) / 2;
+    const vocalSpeedText = avgBpm < 85 ? '무겁게 가라앉아 아련함을 고백하는 정조' : (avgBpm >= 115 ? '가뿐하고 상쾌하게 멜로디 위를 넘나드는 탄성' : '가장 편안한 산책길의 보폭을 유지하는 독백조');
+
+    let expectedVocals = "";
+    if (!previewIncludeLyrics) {
+      expectedVocals = `목소리의 자리를 완전히 비워두는 대신 연주와 사운드가 전하는 순수한 기압 변화와 선율 악기 자체의 편안함에 집중하게 만듭니다. 긴밀한 사운드의 잔향만으로 시적인 공백의 호흡을 평온하게 채워나가는 구도입니다.`;
+    } else {
+      // Base description on vocal mode
+      let baseVocalRole = "";
+      if (isEdm) {
+        baseVocalRole = `웅장한 비트 사이에서 공간 중앙에 선명히 정위치하여 극적인 가창력을 힘 있게 밀어붙입니다. 후렴 파트에서는 절제하지 않고 풍부하게 쏟아내는 감정으로 충격과 입체감을 더합니다.`;
+      } else if (isHymn) {
+        baseVocalRole = `성가대처럼 차분하게 자리하여 성스럽고 장엄하게 가창합니다. 고음을 내지르기보다 가슴속 깊은 영혼의 호흡을 살려 정갈한 기도를 올리듯 정해진 무게감을 고요히 지켜 나갑니다.`;
+      } else if (isRnb) {
+        baseVocalRole = `리듬의 세련된 여백을 타고 흐르는 끈적이고 유연한 그루브를 선보입니다. 아주 가깝게 밀착한 촉촉한 보이스 톤으로, 감정을 지나치게 드러내지 않고 섬세하게 안쪽으로 삼키며 다정함을 속삭입니다.`;
+      } else if (isAcoustic) {
+        baseVocalRole = `청자 바로 옆자리에 앉아 가만히 귀를 맞대고 이야기하듯 한없이 부드럽게 불어옵니다. 어깨의 힘을 빼고 솔직한 우리 일상의 친근한 숨소리와 나직한 독백투를 마지막 음절까지 신중하게 실어 보냅니다.`;
+      } else {
+        baseVocalRole = `선명한 음색과 뛰어난 멜로디 전달력으로 중심선율을 단단하고 설득력 있게 이끕니다. 가창의 완벽한 징검다리를 타고 편안한 소리와 여운을 우아하게 밀고 당겨 뛰어난 몰입감을 구현해 냅니다.`;
+      }
+
+      const mainMember = vocalMode === 'solo' && vocalMembers[0];
+      const genderPrefix = mainMember ? (mainMember.gender === 'female' ? '여성 보컬은 ' : '남성 보컬은 ') : '보컬은 ';
+
+      expectedVocals = `${genderPrefix}${vocalSpeedText}를 온전히 담아냅니다. ${baseVocalRole}`;
+      if (previewRap) {
+        expectedVocals += ` 여기에 물 흐르듯 가담하는 부드러운 랩 파트가 밀도 높은 리듬감을 더하며 변주의 폭을 한층 넓혀 줍니다.`;
+      }
+    }
+
+    // 4. 예상 전개 (Expected Arrangement) - Differentiated based on genre grouping
+    let expectedArrangement = "";
+    if (isEdm) {
+      expectedArrangement = `사운드 파트가 층층이 결집하여 서서히 긴장감을 고양하는 구조를 따릅니다. 서서히 고조되는 빌드업(Build-up)을 거친 뒤 후렴 도입부 직전 소리가 매끄럽게 멎었다가 시원하게 터져 나오는 드롭(Drop) 전개로 짜릿한 사운드 쾌감의 절정을 선사합니다.`;
+    } else if (isHymn) {
+      expectedArrangement = `소박하고 나직하게 피어올라 파도처럼 거대한 하모니의 울림으로 나아가는 웅장한 상승 세션입니다. 인위적인 충격이나 변조 대신 가창자들의 화성이 겹겹이 얹히며 장엄하고 거룩한 아치형 구도를 이룬 뒤 묵직한 잔향을 남기며 안착합니다.`;
+    } else if (isRnb) {
+      expectedArrangement = `단순한 박자에 구애받지 않고 보컬 그루브와 섬세한 여백 위주로 연출됩니다. 후렴 성부에 다다랐을 때 비로소 풍성한 사운드로 가득 차며 공간을 가만히 두드리고 편안한 변주와 사운드 밀착감을 자아냅니다.`;
+    } else if (isAcoustic) {
+      expectedArrangement = `수채화가 채색되듯 조용하고 온화한 발자국으로 한 궤적을 그립니다. 차분한 도입부가 이야기의 누적에 따라 멜로디의 화성을 완만하게 넓히고, 종장에 도달해서는 자극 없이 아늑한 속삭임의 아웃트로로 고요하게 여정을 매듭짓습니다.`;
+    } else {
+      let structureCurve = "";
+      if (songStructure === 'custom') {
+        structureCurve = `기획 정렬된 고유 구성을 도화지 삼아 마디의 긴장을 유연하게 지탱하며 감상의 깊이를 점진적으로 밀도 있게 이끕니다.`;
+      } else if (songStructure === '2') {
+        structureCurve = `가장 찬란한 후렴이 처음부터 빠르게 전면에서 노래하며 청자의 마음에 확신을 안기고, 이후 다양한 악기의 미세한 변주를 유려하게 음미하도록 돕습니다.`;
+      } else {
+        structureCurve = `조용한 시작부에서 출발해 조심스레 악기 결을 더하고 중심 멜로디에서 활짝 꽃피운 뒤 점차 평화로운 여운으로 유연하게 가라앉는 클래식한 구성입니다.`;
+      }
+      expectedArrangement = `${structureCurve} 선율의 감정이 급격히 뒤흔들리지 않고 부드러운 이음새로 연결되어 마음을 편안하게 지탱해 줍니다.`;
+    }
+
+    // 5. 예상 가사 방향 (Expected Lyric Direction) - Attitudinal direction, no functional jargon or unused langs
+    let expectedLyrics = "";
+    if (!previewIncludeLyrics) {
+      expectedLyrics = `가사가 은유적으로 비워진 정갈한 연주 음원 구도입니다. 인위적인 문장의 지시를 배제하고 악기 고유의 풍성한 잔향과 하모니의 따스함에만 오롯이 집중하며 청가 각자의 머릿속에 상상의 공간을 한 폭 완성해 나가도록 영도를 열어 둡니다.`;
+    } else {
+      const hasOnlyKorean = (previewLyricLangs.length === 1 && previewLyricLangs[0] === 'ko' && !previewIsMix) || (previewLyricLangs.length === 0 && !previewIsMix);
+      if (hasOnlyKorean) {
+        expectedLyrics = `화자는 스쳐 가는 시간이나 차오르는 풍경을 담담히 응시하는 성숙한 발걸음을 보여줍니다. 기쁨이나 상처를 과장된 은유로 늘어놓는 대신, ${themeName}의 순간에 가만히 밀착하여 따스한 교감의 자리를 남깁니다. 우리 언어가 지닌 사려 깊은 깊이를 고수하며 조용히 지탱해 주는 다정한 위로가 될 것입니다.`;
+      } else {
+        const langLabels: string[] = [];
+        if (previewIsMix) {
+          langLabels.push(`한국어와 영어의 조화로운 조화`);
+        } else {
+          previewLyricLangs.forEach(lang => {
+            if (lang === 'en') langLabels.push('영어 가창');
+            if (lang === 'ja') langLabels.push('일본어 가창');
+            if (lang === 'zh') langLabels.push('중국어 가창');
+            if (lang === 'es') langLabels.push('스페인어 가창');
+            if (lang === 'fr') langLabels.push('프랑스어 가창');
+          });
+        }
+        const langStr = langLabels.join(' 및 ') || '선택한 가사 언어 설정';
+        expectedLyrics = `${langStr}을 매개로 삼아 세련된 흐름 속에서 조화로운 소통의 선율을 완성해 갑니다. 감정을 일방적으로 독촉하기보다 섬세한 시적 가치를 고수하며, 귓가에 친절하게 맴돌아 다정한 여운의 흔적을 촉촉하고 매끄럽게 전해 줍니다.`;
+      }
+    }
+
+    // 6. 주의할 점 (Points to Note) - Slightly shortened
+    const pointsToNote = [
+      "분위기 레이어는 오직 곡의 다채로운 질감과 어조를 다져 주는 보강 도구로서, 인위적인 인물을 강제로 창조하지 않습니다.",
+      "본 미리보기는 선택된 설정들과 매칭된 장르를 기반으로 가장 완성도 높은 구성을 예측하여 미리 제공해 드리는 직관적인 가이드라인입니다."
+    ];
+
+    if (previewGenCount > 1) {
+      pointsToNote.push(`현재 총 ${previewGenCount}곡의 동시 작곡 중 기준이 되는 이상적인 균형을 안내합니다.`);
+    }
+
+    return {
+      genreStr,
+      interpretationSummary,
+      expectedAtmosphere,
+      expectedVocals,
+      expectedArrangement,
+      expectedLyrics,
+      pointsToNote
+    };
+  };
+
+const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.length > 0 || selectedInstrumentSounds.length > 0 || selectedMoods.length > 0 || selectedThemes.length > 0;
 
   const clearGlobalSearchSelections = () => {
     setSelectedGenres([]);
@@ -8156,12 +8369,6 @@ ${normalizePromptForDisplay(result.prompt)}
       _ts: Date.now(),
     });
   };
-
-  const getGlobalSearchBreadcrumbParts = (groupLabel?: string) =>
-    String(groupLabel || '')
-      .split(' · ')
-      .map(part => part.trim())
-      .filter(Boolean);
 
   const getGlobalSearchCategoryClass = (type: GlobalSearchType) => {
     if (type === 'genre') return 'text-brand-orange border-brand-orange/30 bg-brand-orange/10';
@@ -10259,6 +10466,10 @@ ${normalizePromptForDisplay(result.prompt)}
             englishMixRatio={englishMixRatio}
             rapEnabled={rapEnabled}
             onClose={() => setShowMainGenerationModal(false)}
+            onPreview={(options) => {
+              setCurrentPreviewOptions(options);
+              setShowPreviewPopup(true);
+            }}
             onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
               const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
               const nextRatio = Math.max(5, Math.min(90, Number(options?.englishMixRatio ?? englishMixRatio) || 10));
@@ -10302,6 +10513,15 @@ ${normalizePromptForDisplay(result.prompt)}
               setShowMusicApiModal(false);
               generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount, options);
             }}
+          />
+        )}
+      </AnimatePresence>
+      
+      <AnimatePresence>
+        {showPreviewPopup && (
+          <SongPreviewPopup
+            onClose={() => setShowPreviewPopup(false)}
+            details={getSongPreviewDetails()}
           />
         )}
       </AnimatePresence>
@@ -10809,6 +11029,168 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
     </Portal>
   );
 }
+
+
+interface SongPreviewPopupProps {
+  onClose: () => void;
+  details: {
+    genreStr: string;
+    interpretationSummary: string;
+    expectedAtmosphere: string;
+    expectedVocals: string;
+    expectedArrangement: string;
+    expectedLyrics: string;
+    pointsToNote: string[];
+  };
+}
+
+const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ onClose, details }) => {
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black/60 backdrop-blur-sm px-4 sm:px-6 py-6 font-sans"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-2xl max-h-[calc(100dvh-48px)] rounded-[32px] overflow-hidden flex flex-col border border-white/10 bg-[#171717] text-[var(--text-primary)] shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="relative shrink-0 px-6 pt-6 pb-4 border-b border-white/5 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-5 h-5 text-brand-orange animate-pulse" />
+              <h2 className="text-lg md:text-xl font-black tracking-tight text-[var(--text-primary)]">
+                곡 미리보기
+              </h2>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange border border-brand-orange/20">
+                AI 기획 해석
+              </span>
+            </div>
+            <p className="text-xs text-[var(--text-secondary)]">
+              현재 설정된 세부 키워드와 분위기를 바탕으로 설계된 전개 가이드입니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body Content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-4 scrollbar-thin">
+          {/* Genre Chip Bar */}
+          <div className="bg-[#242424]/40 border border-white/5 rounded-2xl p-4 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>
+            <span className="text-sm font-black text-brand-orange">{details.genreStr}</span>
+          </div>
+
+          {/* 곡 해석 요약 (Standalone - Big Card at Top) */}
+          <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all hover:border-white/10">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+              <Compass className="w-5 h-5 text-amber-400" />
+            </div>
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <h4 className="text-xs font-black text-amber-400 font-sans">곡 해석 요약</h4>
+              <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
+                {details.interpretationSummary}
+              </p>
+            </div>
+          </div>
+
+          {/* Bento Grid (2-Column Grid for the 4 Sub-Cards) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 예상 분위기 */}
+            <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all hover:border-white/10">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <Sunset className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <h4 className="text-xs font-black text-emerald-400 font-sans">예상 분위기</h4>
+                <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
+                  {details.expectedAtmosphere}
+                </p>
+              </div>
+            </div>
+
+            {/* 예상 보컬 */}
+            <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all hover:border-white/10">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+                <Mic2 className="w-5 h-5 text-sky-400" />
+              </div>
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <h4 className="text-xs font-black text-sky-400 font-sans">예상 보컬</h4>
+                <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
+                  {details.expectedVocals}
+                </p>
+              </div>
+            </div>
+
+            {/* 예상 전개 */}
+            <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all hover:border-white/10">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+                <Activity className="w-5 h-5 text-purple-400" />
+              </div>
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <h4 className="text-xs font-black text-purple-400 font-sans">예상 전개</h4>
+                <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
+                  {details.expectedArrangement}
+                </p>
+              </div>
+            </div>
+
+            {/* 예상 가사 방향 */}
+            <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all hover:border-white/10">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                <PenTool className="w-5 h-5 text-rose-400" />
+              </div>
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <h4 className="text-xs font-black text-rose-400 font-sans">예상 가사 방향</h4>
+                <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
+                  {details.expectedLyrics}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 주의할 점 */}
+          <div className="p-5 rounded-2xl bg-orange-500/5 border border-orange-500/20 flex gap-4 transition-all">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-orange-400" />
+            </div>
+            <div className="space-y-2 flex-1">
+              <h4 className="text-xs font-black text-orange-400 font-sans">생성 전 주의 사항</h4>
+              <ul className="list-disc pl-4 text-xs font-medium space-y-1.5 text-[var(--text-secondary)] leading-relaxed break-keep">
+                {details.pointsToNote.map((note, idx) => (
+                  <li key={idx}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer and Close Buttons */}
+        <div className="shrink-0 px-6 py-4 border-t border-white/5 bg-[#1f1f1f] flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-3 rounded-full text-sm font-black bg-[#E7AD68] text-[#171717] hover:bg-[#ECB976] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-lg"
+          >
+            확인
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 
 interface GenreCategorySectionProps {

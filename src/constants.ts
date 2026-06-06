@@ -1146,361 +1146,361 @@ export const INSTRUMENT_SOUNDS = SOUND_TEXTURE_CYCLES.flatMap((cycle) =>
 export const MOODS: CategoryItem[] = [
   { 
     id: 'calm', label: 'Calm', labelKo: '차분한', 
-    description: '차분하고 평화롭게 정돈된 감정선으로 고요하고 안정적인 무드를 만듭니다.', 
+    description: '차분하고 평화롭게 정돈된 감정선으로 고요하고 안정적인 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Calm, peaceful, settled, quiet', 
     arrangement: 'minimal movement, stable structure, subtle shifts' 
   },
   { 
     id: 'relaxing', label: 'Relaxing', labelKo: '릴렉스', 
-    description: '편안함과 칠한 여유를 함께 담아 힘을 빼고 자연스럽게 흘러가는 무드를 만듭니다.', 
+    description: '편안함과 칠한 여유를 함께 담아 힘을 빼고 자연스럽게 흘러가는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Relaxed, chill, laid-back, gentle flow', 
     arrangement: 'easy pacing, relaxed groove, effortless progression' 
   },
   { 
     id: 'zen', label: 'Zen', labelKo: '명상적인', 
-    description: '비움과 정적이 느껴지는 절제된 분위기로 맑고 고요한 질감을 만듭니다.', 
+    description: '비움과 정적이 느껴지는 절제된 분위기로 맑고 고요한 질감을 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Spacious, meditative stillness', 
     arrangement: 'minimalist, significant space' 
   },
   { 
     id: 'healing', label: 'Healing', labelKo: '치유되는', 
-    description: '상처를 감싸듯 부드럽게 스며드는 분위기로 위로감 있는 무드를 만듭니다.', 
+    description: '상처를 감싸듯 부드럽게 스며드는 분위기로 위로감 있는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Warm, comforting, therapeutic', 
     arrangement: 'gentle flow, nurturing transitions' 
   },
   { 
     id: 'warm', label: 'Warm', labelKo: '따뜻한', 
-    description: '온기 있게 감싸는 질감으로 부드럽고 포근한 분위기를 만듭니다.', 
+    description: '온기 있게 감싸는 질감으로 부드럽고 포근한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Soft, thick, cozy', 
     arrangement: 'warm structure, harmonic support' 
   },
   { 
     id: 'coziness', label: 'Coziness', labelKo: '아늑한', 
-    description: '작고 포근한 공간에 머무는 듯한 따뜻하고 친밀한 분위기를 만듭니다.', 
+    description: '작고 포근한 공간에 머무는 듯한 따뜻하고 친밀한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Close-up, warm, intimate', 
     arrangement: 'small-space, close-mic feel' 
   },
   { 
     id: 'soft_tender', label: 'Soft Tender', labelKo: '몽글한', 
-    description: '부드럽고 말랑하게 피어나는 따뜻한 감정의 질감을 만듭니다.', 
+    description: '부드럽고 말랑하게 피어나는 따뜻한 감정의 질감을 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Soft, tender, gently warm', 
     arrangement: 'rounded flow, gentle lift' 
   },
   { 
     id: 'tender', label: 'Tender', labelKo: '애틋한', 
-    description: '조심스럽고 다정하지만 어딘가 아픈 애틋한 감정선을 더합니다.', 
+    description: '조심스럽고 다정하지만 어딘가 아픈 애틋한 감정선을 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Tender, affectionate, bittersweet', 
     arrangement: 'soft emotional lift, warm lingering sections' 
   },
   { 
     id: 'bright', label: 'Bright', labelKo: '밝은', 
-    description: '환하게 열리는 인상으로 선명하고 가벼운 분위기를 형성합니다.', 
+    description: '환하게 열리는 인상으로 선명하고 가벼운 분위기를 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Clear, airy, luminous', 
     arrangement: 'uplifting, forward structure' 
   },
   { 
     id: 'hopeful', label: 'Hopeful', labelKo: '희망찬', 
-    description: '앞으로 나아가는 기대감이 느껴지는 밝고 상승감 있는 무드를 형성합니다.', 
+    description: '앞으로 나아가는 기대감이 느껴지는 밝고 상승감 있는 무드를 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Rising shimmer, optimistic', 
     arrangement: 'gradual build, bright resolution' 
   },
   { 
     id: 'cheerful', label: 'Cheerful', labelKo: '쾌활한', 
-    description: '밝고 경쾌하게 튀어 오르는 에너지로 생기 있는 무드를 만듭니다.', 
+    description: '밝고 경쾌하게 튀어 오르는 에너지로 생기 있는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Bouncy, playful energy', 
     arrangement: 'energetic flow, lively accents' 
   },
   { 
     id: 'playful_mischief', label: 'Playful Mischief', labelKo: '장난끼', 
-    description: '가볍게 장난치듯 톡톡 튀는 감정으로 playful한 분위기를 만듭니다.', 
+    description: '가볍게 장난치듯 톡톡 튀는 감정으로 playful한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Playful, mischievous, lighthearted', 
     arrangement: 'bouncy accents, playful breaks' 
   },
   { 
     id: 'cheeky_deadpan', label: 'Cheeky Deadpan', labelKo: '능청미', 
-    description: '능청스럽고 뻔뻔한 듯한 유머로 말맛 있는 코믹한 무드를 더합니다.', 
+    description: '능청스럽고 뻔뻔한 듯한 유머로 말맛 있는 코믹한 무드를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Slyly playful, deadpan humor, cheeky', 
     arrangement: 'dry pauses, witty turnarounds' 
   },
   { 
     id: 'comic_but_sad', label: 'Comic But Sad', labelKo: '웃픈', 
-    description: '웃기지만 어딘가 짠한 감정을 섞어 funny yet bittersweet한 분위기를 만듭니다.', 
+    description: '웃기지만 어딘가 짠한 감정을 섞어 funny yet bittersweet한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Comic but sad, funny yet bittersweet', 
     arrangement: 'light groove with bittersweet turns' 
   },
   { 
     id: 'comedic', label: 'Comedic', labelKo: '코믹한', 
-    description: '가볍고 유쾌한 코미디 감각으로 상황을 재미있게 풀어내는 무드를 만듭니다.', 
+    description: '가볍고 유쾌한 코미디 감각으로 상황을 재미있게 풀어내는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Comedic, playful, humorous', 
     arrangement: 'comic timing, short playful stops' 
   },
   { 
     id: 'quirky', label: 'Quirky', labelKo: '엉뚱한', 
-    description: '예상 밖의 전개와 엉뚱한 매력으로 독특하고 귀여운 분위기를 만듭니다.', 
+    description: '예상 밖의 전개와 엉뚱한 매력으로 독특하고 귀여운 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Quirky, unexpected, oddball', 
     arrangement: 'unexpected accents, quirky shifts' 
   },
   { 
     id: 'cute_mood', label: 'Cute', labelKo: '귀여운', 
-    description: '귀엽고 깜찍하며 발랄한 매력을 담아 작고 밝게 튀는 무드를 만듭니다.', 
+    description: '귀엽고 깜찍하며 발랄한 매력을 담아 작고 밝게 튀는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Cute, adorable, perky, bubbly, sweet', 
     arrangement: 'small bright hooks, perky phrases, playful motion' 
   },
   { 
     id: 'upbeat', label: 'Upbeat', labelKo: '업비트', 
-    description: '경쾌하게 밀고 나가는 에너지로 가볍고 활발한 무드를 만듭니다.', 
+    description: '경쾌하게 밀고 나가는 에너지로 가볍고 활발한 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Crisp, driving, high-energy', 
     arrangement: 'energetic pulse, forward momentum' 
   },
   { 
     id: 'swelling', label: 'Swelling', labelKo: '벅찬', 
-    description: '감정이 차오르며 후반으로 갈수록 크게 벅차오르는 무드를 만듭니다.', 
+    description: '감정이 차오르며 후반으로 갈수록 크게 벅차오르는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Swelling, emotional, overwhelming', 
     arrangement: 'gradual build, final emotional bloom' 
   },
   { 
     id: 'powerful', label: 'Powerful', labelKo: '파워풀', 
-    description: '강한 추진력과 존재감으로 힘 있게 밀어붙이는 분위기를 만듭니다.', 
+    description: '강한 추진력과 존재감으로 힘 있게 밀어붙이는 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Bold, grand, massive', 
     arrangement: 'high-impact, strong emphasis' 
   },
   { 
     id: 'infectious', label: 'Infectious', labelKo: '캐치한', 
-    description: '한 번 들으면 귀에 맴도는 강한 인상으로 반복적인 몰입감을 형성합니다.', 
+    description: '한 번 들으면 귀에 맴도는 강한 인상으로 반복적인 몰입감을 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Catchy, repetitive, magnetic', 
     arrangement: 'infectious, memorable hooks' 
   },
   { 
     id: 'bittersweet', label: 'Bittersweet', labelKo: '달콤씁쓸', 
-    description: '따뜻함과 쓸쓸함이 함께 남는 복합적인 무드와 질감을 형성합니다.', 
+    description: '따뜻함과 쓸쓸함이 함께 남는 복합적인 무드와 질감을 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Complex, mixed colors', 
     arrangement: 'balanced, contrasting dynamics' 
   },
   { 
     id: 'emotional', label: 'Emotional', labelKo: '감성적', 
-    description: '섬세하고 진한 감정 표현이 살아나는 분위기로 몰입감 있는 무드를 형성합니다.', 
+    description: '섬세하고 진한 감정 표현이 살아나는 분위기로 몰입감 있는 무드를 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Rich, immersive, raw depth', 
     arrangement: 'dynamic build, expressive peaks' 
   },
   { 
     id: 'romantic', label: 'Romantic', labelKo: '낭만적', 
-    description: '감미롭고 설레는 정서가 흐르는 분위기로 로맨틱한 무드를 만듭니다.', 
+    description: '감미롭고 설레는 정서가 흐르는 분위기로 로맨틱한 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Lush, sweet, intimate', 
     arrangement: 'smooth flow, graceful builds' 
   },
   { 
     id: 'wistful', label: 'Wistful', labelKo: '아련한', 
-    description: '희미한 여운과 조용한 쓸쓸함, 고독한 거리감을 함께 담아 아련한 무드를 만듭니다.', 
+    description: '희미한 여운과 조용한 쓸쓸함, 고독한 거리감을 함께 담아 아련한 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Wistful, lonely, quiet, faintly emotional', 
     arrangement: 'soft lingering flow, sparse movement, gentle emotional pull' 
   },
   { 
     id: 'restrained', label: 'Restrained', labelKo: '담담한', 
-    description: '감정을 과하게 드러내지 않고 차분히 눌러 담는 무드를 만듭니다.', 
+    description: '감정을 과하게 드러내지 않고 차분히 눌러 담는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Restrained, calm, understated', 
     arrangement: 'controlled dynamics, minimal emotional overflow' 
   },
   { 
     id: 'hollow', label: 'Hollow', labelKo: '공허한', 
-    description: '마음 한쪽이 비어 있는 듯한 거리감과 허전한 여백을 만듭니다.', 
+    description: '마음 한쪽이 비어 있는 듯한 거리감과 허전한 여백을 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Hollow, empty, distant', 
     arrangement: 'open space, restrained low movement' 
   },
   { 
     id: 'melancholic', label: 'Melancholic', labelKo: '우울한', 
-    description: '쓸쓸하고 가라앉은 감정선을 중심으로 무게감 있는 분위기를 만듭니다.', 
+    description: '쓸쓸하고 가라앉은 감정선을 중심으로 무게감 있는 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Lonely, fragile, blue', 
     arrangement: 'slow flow, lingering notes' 
   },
   { 
     id: 'sad', label: 'Sad', labelKo: '슬픈', 
-    description: '슬픔과 상실감이 또렷하게 느껴지는 감정 중심의 무드를 만듭니다.', 
+    description: '슬픔과 상실감이 또렷하게 느껴지는 감정 중심의 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Fragile mourning, heavy weight', 
     arrangement: 'slow, minimal ornaments' 
   },
   { 
     id: 'sorrowful', label: 'Sorrowful', labelKo: '비통한', 
-    description: '가슴이 찢어질 듯한 슬픔과 비통한 분위기를 만듭니다.', 
+    description: '가슴이 찢어질 듯한 슬픔과 비통한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Grieving, heartbreaking', 
     arrangement: 'no climaxes, mourning pace' 
   },
   { 
     id: 'dark', label: 'Dark', labelKo: '어두운', 
-    description: '묵직하고 짙게 가라앉는 분위기로 어둡고 깊은 무드를 만듭니다.', 
+    description: '묵직하고 짙게 가라앉는 분위기로 어둡고 깊은 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Heavy, somber, shadows', 
     arrangement: 'slow-drag, weighted sections' 
   },
   { 
     id: 'moody', label: 'Moody', labelKo: '무디', 
-    description: '감정의 결이 짙게 배어 있는 분위기로 깊고 미묘한 무드를 만듭니다.', 
+    description: '감정의 결이 짙게 배어 있는 분위기로 깊고 미묘한 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Thick, moody, shifting', 
     arrangement: 'shifting structure, emotive turns' 
   },
   { 
     id: 'tense', label: 'Tense', labelKo: '긴장된', 
-    description: '서서히 조여오는 긴장감으로 날카롭고 불안정한 무드감을 형성합니다.', 
+    description: '서서히 조여오는 긴장감으로 날카롭고 불안정한 무드감을 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Sharp, anxious, high-tension', 
     arrangement: 'tight pacing, sudden shifts' 
   },
   { 
     id: 'uneasy', label: 'Uneasy', labelKo: '불안한', 
-    description: '안정되지 못하고 흔들리는 긴장감으로 불안한 감정의 결을 만듭니다.', 
+    description: '안정되지 못하고 흔들리는 긴장감으로 불안한 감정의 결을 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Uneasy, unstable, tense', 
     arrangement: 'uneven pacing, unresolved transitions' 
   },
   { 
     id: 'chilly', label: 'Chilly', labelKo: '서늘한', 
-    description: '차갑게 스며드는 미묘한 긴장감과 서늘한 공기를 더합니다.', 
+    description: '차갑게 스며드는 미묘한 긴장감과 서늘한 공기를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Cold, subtle tension', 
     arrangement: 'cool textures, restrained tension' 
   },
   { 
     id: 'fragile_edge', label: 'Fragile Edge', labelKo: '위태로운', 
-    description: '금방이라도 무너질 듯 흔들리는 섬세하고 위태로운 분위기를 만듭니다.', 
+    description: '금방이라도 무너질 듯 흔들리는 섬세하고 위태로운 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Fragile, unstable, on the edge', 
     arrangement: 'unstable shifts, delicate tension' 
   },
   { 
     id: 'groovy', label: 'Groovy', labelKo: '그루비', 
-    description: '리듬의 탄력과 흐름이 살아 있는 질감으로 자연스럽게 몸을 타는 무드를 만듭니다.', 
+    description: '리듬의 탄력과 흐름이 살아 있는 질감으로 자연스럽게 몸을 타는 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Elastic, rhythmic, pocketed', 
     arrangement: 'groovy pocket, consistent drive' 
   },
   { 
     id: 'funky', label: 'Funky', labelKo: '펑키', 
-    description: '톡톡 튀는 리듬감과 개성 있는 질감으로 활기찬 분위기를 형성합니다.', 
+    description: '톡톡 튀는 리듬감과 개성 있는 질감으로 활기찬 분위기를 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Sharp, funky, rhythmic snap', 
     arrangement: 'syncopated, energetic drive' 
   },
   { 
     id: 'hypnotic', label: 'Hypnotic', labelKo: '몰입감', 
-    description: '반복과 흐름 속에 빨려 들어가듯 깊이 몰입되는 분위기를 만듭니다.', 
+    description: '반복과 흐름 속에 빨려 들어가듯 깊이 몰입되는 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Swirling, hypnotic, trance-like', 
     arrangement: 'repetitive, evolving layers' 
   },
   { 
     id: 'sophisticated', label: 'Sophisticated', labelKo: '세련된', 
-    description: '정교하고 다듬어진 인상으로 도시적이고 세련된 무드를 형성합니다.', 
+    description: '정교하고 다듬어진 인상으로 도시적이고 세련된 무드를 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Polished, urban, refined', 
     arrangement: 'elegant structure, intricate' 
   },
   { 
     id: 'minimalist', label: 'Minimalist', labelKo: '미니멀', 
-    description: '불필요한 요소를 덜어낸 절제된 질감으로 깔끔한 분위기를 만듭니다.', 
+    description: '불필요한 요소를 덜어낸 절제된 질감으로 깔끔한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Bare, minimalist, essential', 
     arrangement: 'simple, focused elements' 
   },
   { 
     id: 'cool', label: 'Cool', labelKo: '시원한', 
-    description: '맑고 선선하게 트인 인상으로 차갑고 세련된 무드를 더합니다.', 
+    description: '맑고 선선하게 트인 인상으로 차갑고 세련된 무드를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Sharp, clear, icy', 
     arrangement: 'detached flow, crisp sections' 
   },
   { 
     id: 'smooth', label: 'Smooth', labelKo: '스무스', 
-    description: '부드럽고 매끄럽게 이어지는 세련된 흐름으로 걸림 없는 질감을 더합니다.', 
+    description: '부드럽고 매끄럽게 이어지는 세련된 흐름으로 걸림 없는 질감을 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Smooth, mellow, polished, flowing', 
     arrangement: 'smooth transitions, fluid movement, flowing sections' 
   },
   { 
     id: 'glossy', label: 'Glossy', labelKo: '글로시', 
-    description: '윤기 있고 반짝이는 세련된 표면감으로 현대적인 무드를 만듭니다.', 
+    description: '윤기 있고 반짝이는 세련된 표면감으로 현대적인 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Glossy, polished, sparkling', 
     arrangement: 'polished lift, sparkling accents' 
   },
   { 
     id: 'nostalgic', label: 'Nostalgic', labelKo: '빈티지', 
-    description: '빈티지한 추억감과 레트로한 아날로그 질감으로 지나간 시간의 무드를 더합니다.', 
+    description: '빈티지한 추억감과 레트로한 아날로그 질감으로 지나간 시간의 무드를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Vintage, retro, analog, misty, faded', 
     arrangement: 'classic pop movement, bittersweet pacing, longing feel' 
   },
   { 
     id: 'lofi', label: 'Lo-fi', labelKo: '로파이', 
-    description: '먼지 낀 듯 낮은 해상도와 친밀한 빈티지 질감의 무드를 더합니다.', 
+    description: '먼지 낀 듯 낮은 해상도와 친밀한 빈티지 질감의 무드를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Lo-fi, dusty, intimate', 
     arrangement: 'simple loop feel, close texture' 
   },
   { 
     id: 'soulful', label: 'Soulful', labelKo: '소울풀', 
-    description: '보컬과 감정 표현에 깊은 온도와 진한 표현력을 더합니다.', 
+    description: '보컬과 감정 표현에 깊은 온도와 진한 표현력을 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Soulful, expressive, warm', 
     arrangement: 'expressive peaks, warm harmonic support' 
   },
   { 
     id: 'urban', label: 'Urban', labelKo: '도시적', 
-    description: '차갑고 세련된 도시의 결을 담아 현대적 분위기를 형성합니다.', 
+    description: '차갑고 세련된 도시의 결을 담아 현대적 분위기를 형성합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Sleek, urban, metropolitan', 
     arrangement: 'modern pulse, sharp transitions' 
   },
   { 
     id: 'cinematic', label: 'Cinematic', labelKo: '시네마틱', 
-    description: '장면이 그려지듯 입체적으로 펼쳐지는 무드와 스케일감을 더합니다.', 
+    description: '장면이 그려지듯 입체적으로 펼쳐지는 무드와 스케일감을 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Epic, grand, wide-screen', 
     arrangement: 'dynamic arc, narrative' 
   },
   { 
     id: 'airy', label: 'Airy', labelKo: '에어리', 
-    description: '가볍고 열린 공기감으로 숨이 트이는 듯한 밝은 여백을 만듭니다.', 
+    description: '가볍고 열린 공기감으로 숨이 트이는 듯한 밝은 여백을 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Airy, light, open', 
     arrangement: 'open space, light movement' 
   },
   { 
     id: 'ambient', label: 'Ambient', labelKo: '앰비언트', 
-    description: '공간감과 여운이 넓게 퍼지는 배경감 중심의 분위기를 더합니다.', 
+    description: '공간감과 여운이 넓게 퍼지는 배경감 중심의 분위기를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Ambient, spacious, atmospheric, airy', 
     arrangement: 'wide space, open reverb, slow evolving layers' 
   },
   { 
     id: 'dreamy_soft', label: 'Dreamy', labelKo: '드리미', 
-    description: '소리 질감이 꿈결처럼 부드럽고 몽환적으로 떠 있는 흐릿한 무드를 만듭니다.', 
+    description: '소리 질감이 꿈결처럼 부드럽고 몽환적으로 떠 있는 흐릿한 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Dreamy, floating, hazy, dreamlike, soft', 
     arrangement: 'blurred transitions, ethereal flow, floating movement' 
   },
   { 
     id: 'ethereal', label: 'Ethereal', labelKo: '에테리얼', 
-    description: '현실에서 살짝 떠 있는 듯한 가볍고 신비로운 초현실적 분위기를 만듭니다.', 
+    description: '현실에서 살짝 떠 있는 듯한 가볍고 신비로운 초현실적 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Ethereal, weightless, otherworldly', 
     arrangement: 'weightless layers, floating transitions' 
   },
   { 
     id: 'mysterious', label: 'Mysterious', labelKo: '신비로운', 
-    description: '정체를 알 수 없는 끌림과 신비한 공기로 mysterious한 분위기를 만듭니다.', 
+    description: '정체를 알 수 없는 끌림과 신비한 공기로 mysterious한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Mysterious, mystical, enchanting', 
     arrangement: 'mystical textures, subtle reveals' 
   },
   { 
     id: 'fantasy', label: 'Fantasy', labelKo: '판타지', 
-    description: '현실에서 벗어난 이야기 세계관처럼 환상적이고 imaginative한 무드를 더합니다.', 
+    description: '현실에서 벗어난 이야기 세계관처럼 환상적이고 imaginative한 무드를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Fantasy-like, magical, storybook', 
     arrangement: 'storybook arc, magical color shifts' 
   },
   { 
     id: 'fairytale', label: 'Fairytale', labelKo: '동화적인', 
-    description: '순수하고 이야기책 같은 정서로 맑고 동화적인 분위기를 만듭니다.', 
+    description: '순수하고 이야기책 같은 정서로 맑고 동화적인 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Fairytale-like, innocent, magical', 
     arrangement: 'gentle storybook progression' 
   },
   { 
     id: 'magical', label: 'Magical', labelKo: '마법같은', 
-    description: '반짝이고 신기한 사건감으로 magical하고 설레는 분위기를 더합니다.', 
+    description: '반짝이고 신기한 사건감으로 magical하고 설레는 분위기를 더합니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Magical, sparkling, wonder-filled', 
     arrangement: 'sparkling lifts, magical transitions' 
   },
   { 
     id: 'surreal', label: 'Surreal', labelKo: '초현실적', 
-    description: '현실의 규칙이 살짝 어긋난 듯한 비현실적이고 dreamlike한 분위기를 만듭니다.', 
+    description: '현실의 규칙이 살짝 어긋난 듯한 비현실적이고 dreamlike한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Surreal, unreal, dreamlike', 
     arrangement: 'off-kilter space, unreal transitions' 
   },
   { 
     id: 'strange', label: 'Strange', labelKo: '기묘한', 
-    description: '낯설고 묘한 긴장감으로 strange하고 curious한 분위기를 만듭니다.', 
+    description: '낯설고 묘한 긴장감으로 strange하고 curious한 분위기를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Strange, uncanny, curious', 
     arrangement: 'curious pauses, eerie small shifts' 
   },
   { 
     id: 'subtle_mystic', label: 'Subtle Mystic', labelKo: '오묘한', 
-    description: '한마디로 정의하기 어려운 미묘함과 신비감을 섞어 오묘한 무드를 만듭니다.', 
+    description: '한마디로 정의하기 어려운 미묘함과 신비감을 섞어 오묘한 무드를 만듭니다 곡의 내용 소재나 사건을 새로 만들지 않고, 이야기의 공기·감정 온도·보컬 태도·전개 압력만 조절합니다.', 
     mood: 'Subtle, mysterious, hard to define', 
     arrangement: 'subtle tension, ambiguous resolution' 
   }
@@ -1508,75 +1508,75 @@ export const MOODS: CategoryItem[] = [
 
 export const THEMES: CategoryItem[] = [
   // 사랑 / 관계
-  { id: 'love', label: 'Love', labelKo: '사랑', description: '사랑이 시작되거나 깊어지는 감정과 관계를 중심으로 한 이야기입니다.' },
-  { id: 'crush', label: 'Crush', labelKo: '짝사랑', description: '혼자만 간직한 마음과 조심스러운 감정을 담은 이야기입니다.' },
-  { id: 'excitement', label: 'Excitement', labelKo: '설렘', description: '새로운 감정이 시작될 때의 떨림과 기대를 담은 이야기입니다.' },
-  { id: 'confession', label: 'Confession', labelKo: '고백', description: '숨겨둔 마음을 꺼내 전하려는 순간과 그 긴장감을 담습니다.' },
-  { id: 'encounter', label: 'Encounter', labelKo: '만남', description: '새로운 인연과 시작의 순간을 그리는 이야기입니다.' },
-  { id: 'breakup', label: 'Breakup', labelKo: '이별', description: '이별의 순간과 그 이후 남겨진 감정을 중심으로 한 이야기입니다.' },
-  { id: 'lingering_attachment', label: 'Lingering Attachment', labelKo: '미련', description: '놓지 못한 마음과 끝난 뒤에도 남아 있는 감정을 표현합니다.' },
-  { id: 'longing', label: 'Longing', labelKo: '그리움', description: '보고 싶은 마음과 잊지 못하는 감정을 중심으로 합니다.' },
-  { id: 'waiting', label: 'Waiting', labelKo: '기다림', description: '오지 않는 사람이나 순간을 기다리는 마음을 담습니다.' },
-  { id: 'reunion', label: 'Reunion', labelKo: '재회', description: '다시 만나는 순간의 감정과 변화를 표현합니다.' },
-  { id: 'misunderstanding', label: 'Misunderstanding', labelKo: '오해', description: '엇갈린 말과 마음 때문에 생기는 거리감과 갈등을 담습니다.' },
-  { id: 'reconciliation', label: 'Reconciliation', labelKo: '화해', description: '상처나 오해를 풀고 다시 다가가는 과정을 표현합니다.' },
-  { id: 'friendship', label: 'Friendship', labelKo: '우정', description: '친구와의 관계와 소중한 순간을 표현합니다.' },
-  { id: 'family', label: 'Family', labelKo: '가족', description: '가족과의 관계와 따뜻한 순간을 담습니다.' },
+  { id: 'love', label: 'Love', labelKo: '사랑', description: '사랑 자체보다 관계가 변하는 온도와 시선을 중심으로 해석합니다. 장면은 특정 고백 상황에 고정하지 않고 가까워짐, 머뭇거림, 돌봄, 거리감, 선택의 변화로 자유롭게 풀어냅니다.' },
+  { id: 'crush', label: 'Crush', labelKo: '짝사랑', description: '혼자 간직한 마음의 조심스러움과 들킬 듯 말 듯한 긴장을 다룹니다. 특정 연락 장면에 고정하지 않고 시선, 행동, 거리, 습관, 우연한 순간으로 해석할 수 있습니다.' },
+  { id: 'excitement', label: 'Excitement', labelKo: '설렘', description: '새로운 감정이 막 생겨나는 떨림과 기대를 중심으로 합니다. 만남, 장소, 몸의 반응, 작은 변화, 리듬감 등으로 다양하게 장면화할 수 있습니다.' },
+  { id: 'confession', label: 'Confession', labelKo: '고백', description: '감춰둔 마음이 드러나려는 관계의 전환점을 다룹니다. 말로 전하는 장면에만 고정하지 않고 침묵, 행동, 선택, 거리감, 타이밍의 변화로 해석합니다.' },
+  { id: 'encounter', label: 'Encounter', labelKo: '만남', description: '새로운 인연이나 상황이 시작되는 첫 접점을 다룹니다. 사람과 사람의 만남뿐 아니라 장소, 기억, 기회, 사건이 처음 열리는 순간으로 확장해 해석합니다.' },
+  { id: 'breakup', label: 'Breakup', labelKo: '이별', description: '관계가 끝나는 순간과 그 이후의 흔들림을 다룹니다. 이별 장면 하나에 고정하지 않고 정리, 부정, 받아들임, 남겨진 습관, 변화한 거리감으로 풀어냅니다.' },
+  { id: 'lingering_attachment', label: 'Lingering Attachment', labelKo: '미련', description: '끝났다고 믿으려 하지만 아직 정리되지 않은 감정을 다룹니다. 특정 연락 장면에 고정하지 않고 사람, 장소, 물건, 습관, 계절감, 몸의 반응으로 표현할 수 있습니다.' },
+  { id: 'longing', label: 'Longing', labelKo: '그리움', description: '멀어진 대상이나 시간에 닿고 싶은 마음을 다룹니다. 직접적인 그리움 표현보다 빈자리, 반복되는 기억, 남은 감각, 닿지 않는 거리감으로 해석합니다.' },
+  { id: 'waiting', label: 'Waiting', labelKo: '기다림', description: '무언가가 오기를 바라는 시간의 결을 다룹니다. 사람을 기다리는 장면에만 고정하지 않고 변화, 대답, 용기, 계절, 결심, 우연을 기다리는 감정으로 확장합니다.' },
+  { id: 'reunion', label: 'Reunion', labelKo: '재회', description: '다시 마주하는 순간의 기대와 어색함, 변화한 마음을 다룹니다. 극적인 재회뿐 아니라 다시 읽히는 기억, 돌아온 감각, 달라진 거리감으로 해석합니다.' },
+  { id: 'misunderstanding', label: 'Misunderstanding', labelKo: '오해', description: '말과 마음이 어긋나 생기는 균열을 다룹니다. 다툼 장면에 고정하지 않고 침묵, 잘못 읽은 신호, 서로 다른 기억, 늦게 알아차린 진심으로 풀어냅니다.' },
+  { id: 'reconciliation', label: 'Reconciliation', labelKo: '화해', description: '상처나 오해를 지나 다시 다가가려는 움직임을 다룹니다. 사과 장면에만 고정하지 않고 마음이 풀리는 과정, 작은 행동, 다시 맞춰지는 호흡으로 해석합니다.' },
+  { id: 'friendship', label: 'Friendship', labelKo: '우정', description: '친구 사이의 유대와 함께 보낸 시간을 다룹니다. 밝은 추억뿐 아니라 서로를 지탱한 순간, 장난, 거리감, 성장, 다시 이어지는 마음으로 확장합니다.' },
+  { id: 'family', label: 'Family', labelKo: '가족', description: '가족 안에서 생기는 애정, 책임, 미안함, 익숙함을 다룹니다. 따뜻함 하나로 고정하지 않고 말하지 못한 마음, 생활감, 돌봄, 세대 차이, 오래된 기억으로 해석합니다.' },
 
   // 감정 / 내면
-  { id: 'loneliness', label: 'Loneliness', labelKo: '외로움', description: '혼자 남겨진 듯한 감정과 공허함을 담습니다.' },
-  { id: 'regret', label: 'Regret', labelKo: '후회', description: '지나간 선택과 행동에 대한 아쉬움과 감정을 표현합니다.' },
-  { id: 'reminiscence', label: 'Reminiscence', labelKo: '회상', description: '과거를 떠올리며 되짚는 기억의 흐름을 담습니다.' },
-  { id: 'obsession', label: 'Obsession', labelKo: '집착', description: '강하게 매달리는 감정과 그로 인한 갈등을 표현합니다.' },
-  { id: 'anger', label: 'Anger', labelKo: '분노', description: '억눌린 감정이 터져 나오는 강렬한 순간을 표현합니다.' },
-  { id: 'anxiety', label: 'Anxiety', labelKo: '불안', description: '미래에 대한 불안과 흔들리는 감정을 담습니다.' },
-  { id: 'hope', label: 'Hope', labelKo: '희망', description: '앞으로 나아가려는 기대와 긍정적인 감정을 표현합니다.' },
-  { id: 'fate', label: 'Fate', labelKo: '운명', description: '정해진 인연과 흐름 속에서의 이야기를 담습니다.' },
-  { id: 'comfort', label: 'Comfort', labelKo: '위로', description: '지친 마음을 달래고 위로하는 이야기를 담습니다.' },
-  { id: 'safe_place', label: 'Safe Place', labelKo: '안식처', description: '편안하게 쉴 수 있는 공간과 마음을 표현합니다.' },
-  { id: 'identity', label: 'Identity', labelKo: '자아', description: '자신을 돌아보고 정체성을 찾아가는 내면의 이야기입니다.' },
-  { id: 'dream', label: 'Dream', labelKo: '꿈', description: '바라고 그리는 미래, 혹은 아직 닿지 못한 목표를 담습니다.' },
-  { id: 'freedom', label: 'Freedom', labelKo: '자유', description: '속박에서 벗어나 자유를 느끼는 순간을 표현합니다.' },
-  { id: 'wandering', label: 'Wandering', labelKo: '방황', description: '길을 잃은 듯 흔들리며 자신만의 방향을 찾는 이야기를 담습니다.' },
-  { id: 'resistance', label: 'Resistance', labelKo: '저항', description: '무언가에 맞서 싸우는 의지와 감정을 담습니다.' },
-  { id: 'endurance', label: 'Endurance', labelKo: '버팀', description: '무너지지 않기 위해 버티는 마음과 시간을 표현합니다.' },
-  { id: 'growth', label: 'Growth', labelKo: '성장', description: '변화하고 발전해가는 과정을 담은 이야기입니다.' },
-  { id: 'change', label: 'Change', labelKo: '변화', description: '익숙한 상태에서 벗어나 달라지는 순간과 감정을 담습니다.' },
+  { id: 'loneliness', label: 'Loneliness', labelKo: '외로움', description: '혼자 남겨진 듯한 감정과 공허한 내부 공간을 다룹니다. 단순한 쓸쓸함보다 주변은 움직이는데 나만 멈춘 듯한 감각, 거리감, 무표정한 일상으로 풀어냅니다.' },
+  { id: 'regret', label: 'Regret', labelKo: '후회', description: '지나간 선택을 되돌아보며 남는 아쉬움과 자책을 다룹니다. 후회하는 말보다 늦게 깨달은 행동, 놓친 타이밍, 바꿀 수 없는 결과와 남은 여운으로 해석합니다.' },
+  { id: 'reminiscence', label: 'Reminiscence', labelKo: '회상', description: '과거를 떠올리며 현재의 감정과 겹쳐 보는 흐름을 다룹니다. 회상 장면 자체보다 기억이 현재의 말투, 행동, 공간, 소리 위에 스며드는 방식으로 풉니다.' },
+  { id: 'obsession', label: 'Obsession', labelKo: '집착', description: '놓지 못하고 반복해서 붙잡는 감정을 다룹니다. 집착을 단순한 과장으로 쓰지 않고 반복 행동, 좁아지는 시야, 스스로도 멈추지 못하는 내면의 압박으로 해석합니다.' },
+  { id: 'anger', label: 'Anger', labelKo: '분노', description: '억눌린 감정이 터지거나 차갑게 응축되는 순간을 다룹니다. 소리치는 장면에만 고정하지 않고 냉정한 말투, 끊어진 호흡, 눌린 에너지, 행동의 날카로움으로 표현합니다.' },
+  { id: 'anxiety', label: 'Anxiety', labelKo: '불안', description: '다가올 일이나 불확실한 관계 앞에서 흔들리는 마음을 다룹니다. 막연한 불안보다 몸의 긴장, 반복 확인, 좁아지는 생각, 작은 신호에 흔들리는 상태로 해석합니다.' },
+  { id: 'hope', label: 'Hope', labelKo: '희망', description: '아직 끝나지 않았다고 믿는 마음과 앞으로 나아가려는 힘을 다룹니다. 밝은 응원만이 아니라 작게 버티는 태도, 다시 선택하는 용기, 미세한 빛의 변화로 표현합니다.' },
+  { id: 'fate', label: 'Fate', labelKo: '운명', description: '우연과 선택이 겹쳐 피할 수 없는 흐름처럼 느껴지는 관계나 사건을 다룹니다. 운명적 만남에 고정하지 않고 반복되는 징후, 이상한 끌림, 되돌아오는 순간으로 해석합니다.' },
+  { id: 'comfort', label: 'Comfort', labelKo: '위로', description: '지친 마음이 조금씩 가라앉고 다시 숨을 고르는 과정을 다룹니다. 직접 위로하는 말보다 함께 있어 주는 공기, 작은 온기, 무너진 마음을 받쳐주는 장면으로 풉니다.' },
+  { id: 'safe_place', label: 'Safe Place', labelKo: '안식처', description: '마음이 방어를 내려놓을 수 있는 심리적 공간을 다룹니다. 특정 장소에 고정하지 않고 사람, 습관, 소리, 시간대, 스스로에게 돌아오는 감각으로 해석합니다.' },
+  { id: 'identity', label: 'Identity', labelKo: '자아', description: '자신이 누구인지 되묻고 다시 정의하려는 내면의 움직임을 다룹니다. 선언보다 흔들림, 비교, 선택, 거울 같은 순간, 이름 붙일 수 없는 감정으로 풀어냅니다.' },
+  { id: 'dream', label: 'Dream', labelKo: '꿈', description: '바라는 미래나 아직 닿지 못한 가능성을 다룹니다. 희망적인 목표에만 고정하지 않고 환상, 불안, 상상, 포기하지 못한 장면, 멀리 있는 빛으로 해석합니다.' },
+  { id: 'freedom', label: 'Freedom', labelKo: '자유', description: '무언가에서 벗어나 자기 호흡을 되찾는 감정을 다룹니다. 탈출 장면에만 고정하지 않고 내려놓음, 선택, 몸이 가벼워지는 감각, 새로운 방향으로 확장합니다.' },
+  { id: 'wandering', label: 'Wandering', labelKo: '방황', description: '방향을 잃은 채 흔들리지만 계속 움직이는 시간을 다룹니다. 길 잃음 자체보다 선택하지 못함, 잠시 멈춤, 다시 걷는 몸, 불확실한 마음의 흐름으로 해석합니다.' },
+  { id: 'resistance', label: 'Resistance', labelKo: '저항', description: '외부의 압력이나 내면의 한계에 맞서는 감정을 다룹니다. 싸움 장면에 고정하지 않고 버티는 태도, 거부하는 말투, 꺾이지 않는 리듬, 조용한 반항으로 풉니다.' },
+  { id: 'endurance', label: 'Endurance', labelKo: '버팀', description: '무너지지 않기 위해 오래 버티는 마음을 다룹니다. 강한 의지보다 지친 상태에서도 놓지 않는 작은 행동, 반복되는 하루, 숨을 고르는 힘으로 해석합니다.' },
+  { id: 'growth', label: 'Growth', labelKo: '성장', description: '변화하며 조금씩 넓어지는 마음과 시간을 다룹니다. 성공 서사에 고정하지 않고 서툰 시도, 넘어짐, 알아차림, 관계의 변화, 이전의 나를 지나가는 과정으로 풉니다.' },
+  { id: 'change', label: 'Change', labelKo: '변화', description: '익숙한 상태에서 벗어나 다른 방향으로 움직이는 순간을 다룹니다. 극적인 변신보다 흔들림, 결심 전후의 공기, 작은 선택이 만들어내는 감정의 이동으로 해석합니다.' },
 
   // 시간 / 기억
-  { id: 'childhood', label: 'Childhood', labelKo: '어린시절', description: '어린 시절의 기억과 순수한 감정을 표현합니다.' },
-  { id: 'youth', label: 'Youth', labelKo: '청춘', description: '청춘의 빛나는 순간과 고민을 담습니다.' },
-  { id: 'hometown', label: 'Hometown', labelKo: '고향', description: '고향에 대한 기억과 그리움을 표현합니다.' },
-  { id: 'memory', label: 'Memory', labelKo: '추억', description: '지나간 기억과 그 속의 감정을 중심으로 합니다.' },
-  { id: 'time', label: 'Time', labelKo: '시간', description: '흐르는 시간 속에서 변화하는 감정을 담습니다.' },
-  { id: 'season', label: 'Season', labelKo: '계절', description: '계절의 변화와 그에 따른 감정의 흐름을 표현합니다.' },
-  { id: 'rain', label: 'Rain', labelKo: '비', description: '비와 함께 떠오르는 감정과 분위기를 담습니다.' },
-  { id: 'night', label: 'Night', labelKo: '밤', description: '밤이라는 시간 속에서 일어나는 감정과 사건을 담습니다.' },
-  { id: 'dawn', label: 'Dawn', labelKo: '새벽', description: '조용하고 고요한 새벽의 감정과 분위기를 표현합니다.' },
+  { id: 'childhood', label: 'Childhood', labelKo: '어린시절', description: '어린 시절의 기억과 순수함이 현재의 감정과 만나는 지점을 다룹니다. 향수에만 고정하지 않고 잃어버린 감각, 오래된 약속, 아직 남아 있는 어린 마음으로 풉니다.' },
+  { id: 'youth', label: 'Youth', labelKo: '청춘', description: '청춘의 빛과 불안, 무모함과 아름다움을 함께 다룹니다. 찬란함 하나로 고정하지 않고 실패, 속도, 우정, 사랑, 미래 앞의 흔들림으로 해석합니다.' },
+  { id: 'hometown', label: 'Hometown', labelKo: '고향', description: '돌아가고 싶은 마음과 이미 달라진 장소의 감정을 다룹니다. 고향 그리움에만 고정하지 않고 냄새, 말투, 거리감, 떠난 사람의 시선으로 풀어냅니다.' },
+  { id: 'memory', label: 'Memory', labelKo: '추억', description: '지나간 기억이 현재 감정에 남기는 흔적을 다룹니다. 회상 자체보다 기억이 되살아나는 계기, 왜곡된 장면, 남은 감각, 현재의 선택에 미치는 영향으로 해석합니다.' },
+  { id: 'time', label: 'Time', labelKo: '시간', description: '흐르는 시간 속에서 변하거나 남아 있는 감정을 다룹니다. 시간의 흐름을 설명하기보다 기다림, 늦음, 반복, 멈춘 듯한 순간, 지나간 뒤의 깨달음으로 풉니다.' },
+  { id: 'season', label: 'Season', labelKo: '계절', description: '계절의 변화가 감정의 온도와 기억을 바꾸는 방식을 다룹니다. 계절 풍경에 고정하지 않고 공기, 빛, 냄새, 옷깃, 다시 돌아오는 감각으로 해석합니다.' },
+  { id: 'rain', label: 'Rain', labelKo: '비', description: '비가 만드는 소리와 흐려진 시야, 씻겨 내려가거나 더 짙어지는 감정을 다룹니다. 슬픔에만 고정하지 않고 고요함, 해방감, 기억의 번짐으로 풉니다.' },
+  { id: 'night', label: 'Night', labelKo: '밤', description: '밤이라는 시간 속에서 선명해지는 감정과 감춰진 마음을 다룹니다. 어둠 자체보다 낮에는 숨겼던 생각, 느려지는 시간, 혼자 남은 감각으로 해석합니다.' },
+  { id: 'dawn', label: 'Dawn', labelKo: '새벽', description: '하루가 끝나고 시작되기 전의 애매한 감정대를 다룹니다. 고요함에만 고정하지 않고 피로, 결심, 후회, 작은 회복, 아직 이름 붙지 않은 마음으로 풉니다.' },
 
   // 일상 / 현실감
-  { id: 'small_happiness', label: 'Small Happiness', labelKo: '소확행', description: '일상 속 작은 행복과 소소한 만족을 담은 이야기입니다.' },
-  { id: 'weekend', label: 'Weekend', labelKo: '주말', description: '여유롭고 자유로운 주말의 순간을 그린 이야기입니다.' },
-  { id: 'monday', label: 'Monday', labelKo: '월요일', description: '새로운 한 주의 시작과 그에 얽힌 피로감, 다짐, 현실감을 담습니다.' },
-  { id: 'after_work', label: 'After Work', labelKo: '퇴근', description: '하루를 마치고 돌아가는 길에서 느껴지는 감정을 담습니다.' },
-  { id: 'overtime', label: 'Overtime', labelKo: '야근', description: '늦은 시간까지 이어지는 일과 지친 마음, 웃픈 현실감을 표현합니다.' },
-  { id: 'company_life', label: 'Company Life', labelKo: '회사생활', description: '직장 안에서 겪는 관계, 피로, 농담, 현실적인 감정을 담습니다.' },
-  { id: 'eating_alone', label: 'Eating Alone', labelKo: '혼자밥', description: '혼자 보내는 식사 시간 속 외로움과 소소한 위안을 표현합니다.' },
-  { id: 'drinking_party', label: 'Drinking Party', labelKo: '술자리', description: '술자리에서 풀리는 말과 감정, 관계의 어색함이나 솔직함을 담습니다.' },
-  { id: 'gift', label: 'Gift', labelKo: '선물', description: '주고받는 마음과 의미를 담은 따뜻한 이야기입니다.' },
+  { id: 'small_happiness', label: 'Small Happiness', labelKo: '소확행', description: '일상 속 아주 작은 만족과 마음이 풀리는 순간을 다룹니다. 귀여운 행복에만 고정하지 않고 반복된 하루 안의 작은 보상, 숨 돌림, 사소한 빛으로 해석합니다.' },
+  { id: 'weekend', label: 'Weekend', labelKo: '주말', description: '일상에서 잠시 풀려나는 시간과 자유로운 호흡을 다룹니다. 휴식 장면에만 고정하지 않고 늦은 시작, 미뤄둔 마음, 느슨한 관계, 작은 모험으로 풀어냅니다.' },
+  { id: 'monday', label: 'Monday', labelKo: '월요일', description: '새로운 한 주가 시작될 때의 피로와 다짐, 현실감을 다룹니다. 월요병에만 고정하지 않고 다시 버티려는 마음, 반복의 무게, 작은 리셋으로 해석합니다.' },
+  { id: 'after_work', label: 'After Work', labelKo: '퇴근', description: '하루를 끝내고 자기 자신에게 돌아오는 시간을 다룹니다. 퇴근길에 고정하지 않고 풀리는 긴장, 남은 말, 혼자만의 회복, 하루의 잔상으로 풉니다.' },
+  { id: 'overtime', label: 'Overtime', labelKo: '야근', description: '늦게까지 이어지는 일과 지친 마음의 웃픈 현실감을 다룹니다. 회사 풍경에만 고정하지 않고 무너진 리듬, 농담으로 버티는 태도, 조용한 피로로 해석합니다.' },
+  { id: 'company_life', label: 'Company Life', labelKo: '회사생활', description: '직장 안의 관계와 역할, 피로와 농담이 섞인 현실감을 다룹니다. 단순 풍자에만 고정하지 않고 눈치, 책임, 반복, 작은 자존심으로 풀어냅니다.' },
+  { id: 'eating_alone', label: 'Eating Alone', labelKo: '혼자밥', description: '혼자 보내는 식사 시간의 공허함과 이상한 평온함을 다룹니다. 외로움에만 고정하지 않고 스스로를 돌보는 행동, 생활의 리듬, 작은 위안으로 해석합니다.' },
+  { id: 'drinking_party', label: 'Drinking Party', labelKo: '술자리', description: '술자리에서 느슨해지는 말과 숨겨진 감정을 다룹니다. 취한 고백에 고정하지 않고 어색함, 농담, 관계의 균열, 뒤늦게 나오는 진심으로 풉니다.' },
+  { id: 'gift', label: 'Gift', labelKo: '선물', description: '주고받는 물건보다 그 안에 담긴 마음과 거리감을 다룹니다. 따뜻함에만 고정하지 않고 고르던 시간, 말하지 못한 의미, 부담, 기억으로 해석합니다.' },
 
   // 장소 / 이동
-  { id: 'city', label: 'City', labelKo: '도시', description: '도시 속 삶과 그 안에서의 감정과 장면을 담습니다.' },
-  { id: 'alley', label: 'Alley', labelKo: '골목', description: '좁은 골목길에서 생기는 거리감과 생활감 있는 장면을 담습니다.' },
-  { id: 'bus_stop', label: 'Bus Stop', labelKo: '정류장', description: '기다림과 지나가는 풍경이 겹치는 정류장의 순간을 표현합니다.' },
-  { id: 'subway', label: 'Subway', labelKo: '지하철', description: '이동하는 사람들 속에서 느끼는 고독, 설렘, 현실감을 담습니다.' },
-  { id: 'convenience_store', label: 'Convenience Store', labelKo: '편의점', description: '작은 생활 공간에서 마주치는 소소한 감정과 현실감을 표현합니다.' },
-  { id: 'cafe', label: 'Cafe', labelKo: '카페', description: '카페에서의 여유롭고 감성적인 순간을 그린 이야기입니다.' },
-  { id: 'room', label: 'Room', labelKo: '방', description: '혼자만의 방 안에서 떠오르는 생각과 감정을 담습니다.' },
-  { id: 'walk', label: 'Walk', labelKo: '산책', description: '가볍게 걸으며 떠오르는 생각과 감정을 담은 이야기입니다.' },
-  { id: 'drive', label: 'Drive', labelKo: '드라이브', description: '이동하는 시간 속에서 느껴지는 감정과 풍경을 담습니다.' },
-  { id: 'travel', label: 'Travel', labelKo: '여행', description: '새로운 장소에서의 경험과 감정을 담습니다.' },
-  { id: 'sea', label: 'Sea', labelKo: '바다', description: '넓은 바다 앞에서 느끼는 해방감, 그리움, 고요함을 표현합니다.' },
+  { id: 'city', label: 'City', labelKo: '도시', description: '도시 속에서 스치는 사람과 공간, 속도감이 만드는 감정을 다룹니다. 네온 밤거리에만 고정하지 않고 익명성, 소음, 이동, 외로움과 활기를 함께 풉니다.' },
+  { id: 'alley', label: 'Alley', labelKo: '골목', description: '좁은 길목과 생활감 속에서 생기는 거리와 기억을 다룹니다. 골목 풍경에만 고정하지 않고 우연, 망설임, 돌아가는 길, 익숙한 냄새로 해석합니다.' },
+  { id: 'bus_stop', label: 'Bus Stop', labelKo: '정류장', description: '머무름과 이동 사이에 놓인 기다림의 시간을 다룹니다. 정류장 풍경에만 고정하지 않고 지나가는 선택, 놓친 타이밍, 잠깐의 기대감으로 풉니다.' },
+  { id: 'subway', label: 'Subway', labelKo: '지하철', description: '이동하는 사람들 사이에서 생기는 고독과 속도감을 다룹니다. 지하철 장면에만 고정하지 않고 스치는 관계, 반복된 출퇴근, 잠깐의 상상으로 해석합니다.' },
+  { id: 'convenience_store', label: 'Convenience Store', labelKo: '편의점', description: '작은 생활 공간에서 마주치는 현실감과 위안을 다룹니다. 편의점 자체보다 늦은 시간의 선택, 작은 소비, 우연한 만남, 혼자 버티는 마음으로 풉니다.' },
+  { id: 'cafe', label: 'Cafe', labelKo: '카페', description: '잠시 머무르며 마음을 정리하거나 누군가를 기다리는 감정을 다룹니다. 감성적인 공간에만 고정하지 않고 소음, 거리감, 말의 타이밍, 혼자 있는 시간을 포함합니다.' },
+  { id: 'room', label: 'Room', labelKo: '방', description: '혼자만의 공간에서 감정이 증폭되거나 정리되는 시간을 다룹니다. 방 안 장면에 고정하지 않고 내부 독백, 숨겨둔 행동, 멈춘 시간, 자기와 마주하는 순간으로 해석합니다.' },
+  { id: 'walk', label: 'Walk', labelKo: '산책', description: '걷는 동안 생각과 감정이 조금씩 움직이는 과정을 다룹니다. 산책 풍경에만 고정하지 않고 머뭇거림, 정리, 도망, 회복, 방향 전환으로 풉니다.' },
+  { id: 'drive', label: 'Drive', labelKo: '드라이브', description: '이동하는 시간과 풍경이 감정의 속도를 바꾸는 순간을 다룹니다. 드라이브 풍경에만 고정하지 않고 떠남, 망설임, 해방, 동행, 침묵으로 해석합니다.' },
+  { id: 'travel', label: 'Travel', labelKo: '여행', description: '새로운 장소에서 자기 감정이 낯설게 드러나는 경험을 다룹니다. 여행의 설렘에만 고정하지 않고 도피, 발견, 이방감, 회복, 관계의 변화로 풉니다.' },
+  { id: 'sea', label: 'Sea', labelKo: '바다', description: '넓은 바다 앞에서 감정이 작아지거나 풀려나는 순간을 다룹니다. 해방감에만 고정하지 않고 그리움, 고요, 압도감, 정리, 다시 시작하는 마음으로 해석합니다.' },
 ];
 
 export const BASE_PROMPTS = [

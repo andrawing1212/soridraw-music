@@ -848,7 +848,8 @@ export default function MusicApiGenerateModal({
                           rapEnabled: includeLyrics ? localRapEnabled : false,
                         });
                       }}
-                      className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[11px] sm:text-base transition-all flex items-center justify-center shrink-0 whitespace-nowrap"
+                      className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[11px] sm:text-base transition-all flex items-center justify-center shrink-0 whitespace-nowrap outline-none select-none"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       미리보기
                     </button>
@@ -856,7 +857,8 @@ export default function MusicApiGenerateModal({
                       type="button"
                       onClick={handleNext}
                       disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                      className="basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-lg font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center"
+                      className="basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-lg font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center outline-none select-none"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       다음
                     </button>
@@ -866,7 +868,8 @@ export default function MusicApiGenerateModal({
                     type="button"
                     onClick={handleNext}
                     disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                    className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg}`}
+                    className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg} outline-none select-none`}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
                   >
                     다음
                   </button>

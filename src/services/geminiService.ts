@@ -2190,7 +2190,7 @@ const VOCAL_CHARACTER_SCALE_PROMPTS: VocalCharacterScaleConfig[] = [
     'vocal trills and quick ornaments',
     'deep emotional vibrato',
     'vocal bends, slurred slides, and unique turns',
-    'context-aware experimental vocal technique such as sprechgesang, yodel-like flips, glitchy phrasing, whisper-noise texture, cracked distorted edges, or unstable pitch texture',
+    'context-aware experimental vocal technique',
   ] },
 ];
 
@@ -2216,9 +2216,7 @@ function getVocalCharacterScalePhrases(character: any): string[] {
 
     if (Number.isFinite(secondaryValue) && secondarySafe !== ornamentConfig.defaultValue) {
       const secondaryPhrase = ornamentConfig.steps[secondarySafe - 1] || '';
-      if (secondaryPhrase) parts.push(`secondary technique: ${secondaryPhrase}`);
-    } else if (Number.isFinite(mainValue) && mainSafe !== ornamentConfig.defaultValue) {
-      parts.push('optional compatible secondary vocal habit chosen from a nearby or musically related technique, only if it fits the genre, mood, and character');
+      if (secondaryPhrase) parts.push(secondaryPhrase);
     }
   }
 
@@ -2891,7 +2889,7 @@ function injectMixedPhrases(
 function stripLyricSectionTagLines(text: string): string {
   return String(text || "")
     // Exclude full-line Suno section tags and their cue text from language-ratio calculations.
-    // Example: bracketed section and vocal cue tags should not count as English lyric content.
+    // Example: [Verse A: low and intimate] should not count as English lyric content.
     .replace(/^\s*\[[^\]]+\]\s*$/gm, "")
     .trim();
 }
@@ -5475,7 +5473,7 @@ const SITUATION_VARIATION_SEEDS: CreativeVariationSeed[] = [
     arrangementLens: "one-sided pursuit with delayed replies",
     lyricArchitecture:
       "let one role own the verse, while the other appears as short interruptions or echoes",
-    avoidPattern: "mechanical split verses with equal length",
+    avoidPattern: "Verse A then Verse B with equal length",
   },
   {
     id: "negotiation-trade",
@@ -8186,6 +8184,98 @@ function renderStableAtmosphereLine(
   ), params);
 }
 
+function isGenericAtmosphereFallbackLine(value: string): boolean {
+  const line = cleanupPromptTail(String(value || '')).toLowerCase();
+  if (!line) return true;
+  return /^(?:balanced emotional air|balanced emotional color|emotional scene|a clear emotional scene|an emotional scene|a balanced emotional scene|clear emotional scene)$/i.test(line)
+    || /^balanced\s+(?:air|mood|tone)$/i.test(line);
+}
+
+function hasAtmosphereInterpretationSignal(params: GenerateSongParams): boolean {
+  return Boolean(
+    hasSituation(params.situation) ||
+    hasDirectThemeOrMoodInput(params) ||
+    hasUserPrimaryStoryText(params) ||
+    selectedThemeText(params) ||
+    selectedMoodText(params) ||
+    getAtmosphereSpaceCues(params).length ||
+    buildThemeMoodInterpretation(params).atmosphereCue ||
+    buildPromptIntent(params).sceneCore
+  );
+}
+
+function buildIntentConnectedAtmosphereLine(params: GenerateSongParams, original = ''): string {
+  if (hasSituation(params.situation)) {
+    return normalizeAtmospherePromptLine(buildSituationAtmosphere(params)) || cleanupPromptTail(original) || 'balanced emotional air';
+  }
+
+  if (hasDirectThemeOrMoodInput(params)) {
+    return buildNaturalDirectAtmosphereFallback(params);
+  }
+
+  const scenePlan = buildInternalScenePlan(params, params.userInput || selectedThemeText(params) || selectedMoodText(params) || '');
+  const contextual = !hasUserPrimaryStoryText(params) ? buildContextualCueBundle(params) : { atmosphereScene: '', arrangementHook: '' };
+  const intent = buildPromptIntent(params);
+  const interpreted = buildThemeMoodInterpretation(params);
+  const layerScene = buildAtmosphereFromSceneLayers(params).replace(/^a\s+/i, '').replace(/,\s+with\s+.*$/i, '');
+
+  const scene = cleanScenePlanPhrase(
+    contextual.atmosphereScene ||
+    scenePlan.scene ||
+    intent.sceneCore ||
+    (layerScene && !/one concrete everyday emotional scene/i.test(layerScene) ? `a ${layerScene}` : '') ||
+    deriveIntentScene(params) ||
+    original ||
+    'one concrete emotional scene',
+    105,
+  );
+
+  const textureParts = dedupePromptParts([
+    interpreted.atmosphereCue,
+    intent.atmosphereTone,
+    ...getAtmosphereSpaceCues(params),
+  ], 8)
+    .map((part) => cleanScenePlanPhrase(part, 48))
+    .filter(Boolean)
+    .filter((part) => !scene.toLowerCase().includes(part.toLowerCase()))
+    .slice(0, 2);
+
+  const conflict = cleanScenePlanPhrase(
+    scenePlan.conflict ||
+    intent.contrast ||
+    (interpreted.vocalCue ? `${interpreted.vocalCue} stays under the surface` : '') ||
+    'one visible detail carries the hidden feeling',
+    95,
+  );
+
+  const sentence = cleanupPromptTail([
+    scene,
+    textureParts.length ? `with ${joinPromptPhrase(textureParts, 'and')}` : '',
+    conflict && !scene.toLowerCase().includes(conflict.toLowerCase()) ? `where ${conflict}` : '',
+  ].filter(Boolean).join(' '));
+
+  const normalized = normalizeAtmospherePromptLine(sentence);
+  return isGenericAtmosphereFallbackLine(normalized) ? (cleanupPromptTail(original) || sentence || 'balanced emotional air') : normalized;
+}
+
+function buildSoloVocalSongInterpretationCue(params: GenerateSongParams, interpreted: ThemeMoodInterpretation): string {
+  const intent = buildPromptIntent(params);
+  const contextual = !hasUserPrimaryStoryText(params) && !hasSituation(params.situation)
+    ? buildContextualCueBundle(params)
+    : { atmosphereScene: '', arrangementHook: '' };
+  const scenePlan = buildInternalScenePlan(params, params.userInput || selectedThemeText(params) || selectedMoodText(params) || '');
+  const scene = cleanScenePlanPhrase(contextual.atmosphereScene || scenePlan.scene || intent.sceneCore || '', 70);
+  const emotion = cleanScenePlanPhrase(intent.emotionalCore || interpreted.vocalCue || interpreted.atmosphereCue || '', 62);
+  const delivery = cleanScenePlanPhrase(interpreted.vocalCue || intent.vocalDelivery || '', 52);
+
+  if (scene && emotion && !/balanced emotional color/i.test(emotion)) {
+    return cleanupPromptTail(`carrying ${emotion} inside ${scene}`);
+  }
+  if (delivery && scene) return cleanupPromptTail(`${delivery} shaped by ${scene}`);
+  if (emotion && !/balanced emotional color/i.test(emotion)) return cleanupPromptTail(`carrying ${emotion}`);
+  return '';
+}
+
 function buildFiveLineAtmosphereValue(
   params: GenerateSongParams,
   detailLayer: string,
@@ -8232,8 +8322,12 @@ function buildFiveLineAtmosphereValue(
         .filter(Boolean)
         .join(", ");
 
-  const intendedAtmosphere = applyIntentToAtmosphereLine(atmosphere || "balanced emotional air", params);
-  return renderStableAtmosphereLine(params, intendedAtmosphere, scenePlan);
+  const fallbackAtmosphere = buildIntentConnectedAtmosphereLine(params, atmosphere);
+  const intendedAtmosphere = applyIntentToAtmosphereLine(atmosphere || fallbackAtmosphere, params);
+  const rendered = renderStableAtmosphereLine(params, intendedAtmosphere, scenePlan);
+  return isGenericAtmosphereFallbackLine(rendered) && hasAtmosphereInterpretationSignal(params)
+    ? buildIntentConnectedAtmosphereLine(params, rendered)
+    : rendered;
 }
 
 function removeArrangementTermsFromVocalLine(value: string): string {
@@ -8475,6 +8569,93 @@ function compactFiveLineVocalsValue(value: string, params: GenerateSongParams): 
   return dedupeRepeatedVocalCuePhrases(cleanupPromptTail(line)) || 'Natural vocal with emotional delivery';
 }
 
+
+function buildSoloInterpretiveVocalLine(baseLine: string, params: GenerateSongParams, interpreted: ThemeMoodInterpretation): string {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isSolo) return baseLine;
+
+  const soloMember = params.vocal?.members?.[0];
+  const hasCharacterCue = soloMember ? hasVocalCharacterSelection(soloMember) : false;
+  if (!hasCharacterCue) return baseLine;
+
+  const base = cleanupPromptTail(baseLine);
+  if (!base) return baseLine;
+
+  const songInterpretationCue = buildSoloVocalSongInterpretationCue(params, interpreted);
+  const interpretationParts = dedupePromptParts([
+    interpreted.vocalCue ? `${interpreted.vocalCue}` : '',
+    songInterpretationCue,
+  ], 3)
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (!interpretationParts.length) return base;
+
+  const alreadyCovered = interpretationParts.every((part) =>
+    base.toLowerCase().includes(part.toLowerCase().replace(/^carrying\s+/i, '').slice(0, 24)),
+  );
+  if (alreadyCovered) return base;
+
+  return cleanupPromptTail(`${base}, ${joinPromptPhrase(interpretationParts, 'and')}`);
+}
+
+
+function stabilizeSoloCharacterVocalsLine(value: string, params: GenerateSongParams): string {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isSolo) return value;
+
+  const soloMember = params.vocal?.members?.[0];
+  if (!soloMember || !hasVocalCharacterSelection(soloMember)) return value;
+
+  const line = cleanupPromptTail(value);
+  const characterPrompt = cleanupPromptTail(buildVocalCharacterPrompt(soloMember, params, false));
+  if (!characterPrompt) return value;
+
+  const characterParts = characterPrompt
+    .split(/,\s*|\s+and\s+/i)
+    .map((part) => cleanupPromptTail(part).toLowerCase())
+    .filter((part) => part.length >= 5)
+    .slice(0, 6);
+  const lowerLine = line.toLowerCase();
+  const hasCharacterTrace = characterParts.some((part) => lowerLine.includes(part.slice(0, Math.min(22, part.length))));
+  const isGenericSoloFallback = /\bnatural\s+(?:female\s+|male\s+)?vocal\s+with\s+natural\s+emotional\s+delivery\b/i.test(line)
+    || /\bnatural\s+emotional\s+delivery\b/i.test(line)
+    || (!/\bsolo\b/i.test(line) && /\b(?:female|male)\s+vocal\b/i.test(line));
+
+  if (!isGenericSoloFallback && hasCharacterTrace) return line;
+
+  const gender = soloMember?.gender === "female"
+    ? "female"
+    : soloMember?.gender === "male"
+      ? "male"
+      : info.gender === "female"
+        ? "female"
+        : info.gender === "male"
+          ? "male"
+          : "solo";
+  const subject = gender === "female" ? "Natural female solo vocal" : gender === "male" ? "Natural male solo vocal" : "Natural solo vocal";
+  const interpreted = buildThemeMoodInterpretation(params);
+  const genreDefault = compactVocalCueAfterSubject(getGenreDefaultVocalPhrase(params));
+  const performance = buildSelectedVocalPerformancePhrase(params, 5);
+  const artistAccent = buildArtistReferenceVocalAccent(params);
+  const interpretation = cleanupPromptTail(joinPromptPhrase(dedupePromptParts([
+    interpreted.vocalCue,
+    buildSoloVocalSongInterpretationCue(params, interpreted),
+  ], 2), 'and'));
+
+  const parts = dedupePromptParts([
+    characterPrompt,
+    genreDefault,
+    performance,
+    artistAccent,
+    interpretation,
+    'single lead vocal focus',
+  ], 7).filter(Boolean);
+  const rebuilt = cleanupPromptTail(`${subject} with ${joinPromptPhrase(parts, 'and')}`);
+  return compactFiveLineVocalsValue(normalizeVocalPromptEmotion(rebuilt, params), params);
+}
+
 function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: string): string {
   const situationActive = hasSituation(params.situation);
   const base = situationActive
@@ -8490,8 +8671,9 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
   const withMood = moodVocalCue
     ? cleanupPromptTail(`${cleaned} with ${moodVocalCue}`)
     : cleaned;
+  const interpretedForSolo = buildSoloInterpretiveVocalLine(withMood, params, interpreted);
   return compactFiveLineVocalsValue(
-    applyIntentToVocalLine(normalizeVocalPromptEmotion(withMood, params), params),
+    applyIntentToVocalLine(normalizeVocalPromptEmotion(interpretedForSolo, params), params),
     params,
   );
 }
@@ -14092,6 +14274,9 @@ function validateFinalAtmosphereLine(value: string, params: GenerateSongParams):
   let rescued = rescueBrokenDirectAtmosphereLine(protectedLine, params);
   rescued = stripFinalInternalProtectionLanguage(rescued);
   if (isBrokenFinalPromptPhrase(rescued)) rescued = buildNaturalDirectAtmosphereFallback(params);
+  if (isGenericAtmosphereFallbackLine(rescued) && hasAtmosphereInterpretationSignal(params)) {
+    rescued = buildIntentConnectedAtmosphereLine(params, protectedLine);
+  }
   return cleanupPromptTail(rescued);
 }
 
@@ -14184,7 +14369,8 @@ function validateFinalVocalsLine(value: string, params: GenerateSongParams): str
 
   const soloSafeLine = enforceExplicitSoloVocalFormation(line, params);
   const hardened = dedupeRepeatedVocalCuePhrases(hardenFinalVocalGrammar(soloSafeLine, params)) || 'Natural solo vocal with human breath';
-  return repairMalformedFinalVocalLine(enforceExplicitSoloVocalFormation(hardened, params), params);
+  const repaired = repairMalformedFinalVocalLine(enforceExplicitSoloVocalFormation(hardened, params), params);
+  return stabilizeSoloCharacterVocalsLine(repaired, params);
 }
 
 function arrangementCueCountForValidator(value: string): number {
@@ -15573,8 +15759,8 @@ function normalizeSungSectionCuePart(cue: string, sectionName: string): string {
     return isBridgeSection ? 'emotional lift' : '';
   }
   if (/stage[-\s]?light.*collapse|collapse.*imagery|조명.*붕괴/i.test(original)) return 'soft collapse';
-  if (/mood\s+shift/i.test(original)) return isBridgeSection ? 'emotional turn' : 'emotional shift';
-  if (/soft\s+collapse\s+turn/i.test(original)) return 'soft collapse';
+  if (/\bmood\s+shift\b/i.test(original)) return isBridgeSection ? 'emotional turn' : 'emotional shift';
+  if (/\bsoft\s+collapse\s+turn\b/i.test(original)) return 'soft collapse';
   return original;
 }
 
@@ -15682,6 +15868,40 @@ function chooseSectionForBareAcousticTag(currentSection: string): string {
 
 function baseLyricSectionName(section: string): string {
   return normalizeLyricSectionDisplayName(String(section || "").replace(/\s+[A-Z]$/i, "").trim());
+}
+
+function applySequentialSectionSuffixes(lines: string[]): string[] {
+  const tagInfos: Array<{ index: number; section: string; base: string }> = [];
+  lines.forEach((line, index) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return;
+    const composite = parseCompositeLyricTagInside(parsed.inside);
+    if (!composite) return;
+    const base = baseLyricSectionName(composite.section);
+    if (!/^(?:Verse|Bridge)$/i.test(base)) return;
+    tagInfos.push({ index, section: composite.section, base });
+  });
+
+  const copy = [...lines];
+  for (let i = 0; i < tagInfos.length; i += 1) {
+    const run = [tagInfos[i]];
+    let j = i + 1;
+    while (j < tagInfos.length && tagInfos[j].base.toLowerCase() === tagInfos[i].base.toLowerCase()) {
+      run.push(tagInfos[j]);
+      j += 1;
+    }
+    if (run.length > 1) {
+      run.forEach((item, runIndex) => {
+        const suffix = String.fromCharCode(65 + runIndex);
+        copy[item.index] = copy[item.index].replace(
+          new RegExp(`^\\[${item.section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`),
+          `[${item.base} ${suffix}:`,
+        );
+      });
+    }
+    i = j - 1;
+  }
+  return copy;
 }
 
 function removeRedundantSectionOnlyBeforeComposite(lines: string[]): string[] {
@@ -15876,7 +16096,7 @@ function normalizeCompositeLyricTagsFinal(lyrics: string, params: GenerateSongPa
     normalized.push(line);
   });
 
-  const joined = removeRedundantSectionOnlyBeforeComposite(normalized).join("\n");
+  const joined = applySequentialSectionSuffixes(removeRedundantSectionOnlyBeforeComposite(normalized)).join("\n");
   return removeLyricsFromForcedInstrumentalSections(joined, params)
     .replace(/\[(Instrumental(?:\s+Opening)?|Solo|Drop|Breakdown):\s*Instrumental\s*,\s*/gi, '[$1: ')
     .replace(/\[(Instrumental(?:\s+Opening)?|Solo|Drop|Breakdown):\s*Instrumental\s*\]/gi, '[$1]');
@@ -16367,6 +16587,23 @@ function addCueToBracketTagLine(line: string, cueParts: string[]): string {
 }
 
 
+function lyricEmotionCueForBareSection(section: string, params: GenerateSongParams): string[] {
+  const name = normalizeLyricSectionDisplayName(section || "");
+  if (!name || /^(?:Break|Stop|Instrumental|Solo|Intro|Outro)$/i.test(name)) return [];
+  const themeText = selectedThemeText(params);
+  const moodText = selectedMoodText(params);
+  const transitionCue = compactMoodTransitionCue(params);
+  const isFlutter = /flutter|excitement|설렘|thrill|두근|떨림/.test(themeText);
+  const isDarkPlayful = /playful|comic|cute|dark|tense|장난|귀여|어두|긴장/.test(`${moodText} ${transitionCue}`);
+
+  if (/^Verse/i.test(name)) return [isFlutter ? "small panic" : isDarkPlayful ? "nervous restraint" : "intimate detail"];
+  if (/Pre[-\s]?Chorus/i.test(name)) return [isFlutter ? "rising tension" : "emotional build"];
+  if (/Chorus|Hook|Drop/i.test(name) && !/^Final/i.test(name)) return [isFlutter ? "unstable hook" : "emotional hook"];
+  if (/^Bridge/i.test(name)) return transitionCue ? [transitionCue] : ["emotional turn"];
+  if (/^Final\s+(?:Chorus|Hook)/i.test(name)) return [transitionCue ? "out-of-control release" : "final release"];
+  return [];
+}
+
 function collapseDuplicateStopTags(lyrics: string): string {
   const lines = String(lyrics || '').split('\n');
   const out: string[] = [];
@@ -16404,7 +16641,7 @@ function removeEmptyBridgeBeforeMoodShift(lyrics: string): string {
     let j = i + 1;
     while (j < lines.length && !lines[j].trim()) j += 1;
     if (j < lines.length && isTag(lines[j]) && (isStop(lines[j]) || isMoodShiftBridge(lines[j]))) {
-      // Drop an empty bridge marker created right before the real transition.
+      // Drop an empty Bridge A/B marker created right before the real transition.
       continue;
     }
 
@@ -16412,6 +16649,28 @@ function removeEmptyBridgeBeforeMoodShift(lyrics: string): string {
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function ensureEmotionCuesForBareLyricSections(lyrics: string, params: GenerateSongParams): string {
+  if (!lyrics.trim()) return lyrics;
+  const lines = String(lyrics || '').split('\n');
+  const isBareSungSection = (inside: string) => {
+    const clean = normalizeLyricSectionDisplayName(inside || '');
+    if (!clean || !isSectionOnlyLyricTagInside(clean)) return false;
+    return !/^(?:Break|Stop|Instrumental|Instrumental Opening|Solo|Intro|Outro)$/i.test(clean);
+  };
+  let changed = false;
+  const next = lines.map((line) => {
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return line;
+    if (parsed.inside.includes(':')) return line;
+    if (!isBareSungSection(parsed.inside)) return line;
+    const cues = lyricEmotionCueForBareSection(parsed.inside, params);
+    if (!cues.length) return line;
+    changed = true;
+    return addCueToBracketTagLine(line, cues);
+  });
+  return changed ? next.join('\n').replace(/\n{3,}/g, '\n\n').trim() : lyrics;
 }
 
 
@@ -16745,7 +17004,7 @@ function sanitizeGeneratedLyricTagsAndFragments(
       ensureMoodShiftBridgeInLyrics(lyricTextWithTransitions, params),
     ),
   );
-  const lyricTextWithEmotionCues = lyricTextWithMoodShift;
+  const lyricTextWithEmotionCues = ensureEmotionCuesForBareLyricSections(lyricTextWithMoodShift, params);
 
   const compactedLyricText = sanitizeCustomLyricTagNoiseFinal(
     normalizeGeneratedLyricLineBreaks(
@@ -16956,7 +17215,7 @@ export async function generateSong(
       ? `MIXED LANGUAGE MODE (MANDATORY):
 - Use natural Korean/English mixed lyrics only because the user enabled mixed lyrics.
 - Treat ${englishMixRatio}% as the intended English share of ACTUAL LYRIC LINES ONLY.
-- Do NOT count Suno section headers or section cue text toward the language ratio. Exclude all bracketed section lines such as section headers, vocal cue tags, transition tags, and instrumental tags.
+- Do NOT count Suno section headers or section cue text toward the language ratio. Exclude all bracketed section lines such as [Intro], [Verse A: low and intimate], [Chorus / Drop: emotional lift], [Stop], [Break], and [Instrumental: guitar solo].
 - Count only sung/spoken lyric body lines. Parenthetical ad-libs like (Stay with me) count because they are lyric content.
 - Keep section headers and section tags in English if needed, but they must not be used to satisfy the English ratio.
 - For 5%: Korean body lyrics with at most one very short English accent in the whole lyric.
@@ -17033,8 +17292,8 @@ ${exactStructureText}
         ? `SONG STRUCTURE (DEFAULT / GENRE REPRESENTATIVE):
 - Selected mode: Default. Use this genre-representative structure as the main section order:
 ${exactStructureText}
-- Output lyric sections in this order as closely as possible. Do not replace it with a free letter-suffix section structure.
-- Use the selected section names as-is when a section returns. Do not invent letter-suffix section variants unless the selected structure explicitly contains those exact labels.
+- Output lyric sections in this order as closely as possible. Do not replace it with a free Verse A/B/C structure.
+- Use [Verse] for the first verse and reuse [Verse] when it returns; do not output [Verse A], [Verse B], or [Verse C] unless the structure explicitly contains those labels or there are multiple different speakers in a Situation.
 - If the structure contains [Stop] then a transition Bridge, keep that exact transition event. Do not duplicate Stop.
 - Chorus / Drop may be written as [Chorus / Drop] when the structure says so. Otherwise keep the listed section name.
 - Instrumental sections may carry short sound cues, but do not turn them into sung lyric sections.
@@ -17109,7 +17368,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - Keep lyric tags compact: [Role: one voice cue, one emotion cue]. Use at most 2 short cues after the colon. Do not put full sentences, long descriptions, or all vocal settings inside lyric tags.
 - LYRIC CONTENT SOURCE LOCK (MANDATORY): Lyrics must be created only from USER FREE-TEXT DIRECTOR NOTE, selected Theme, and active Situation if provided. Vocal emotion direction, vocal expression, vocal tone, Sound, Style, tempo, BPM, instrument names, and production texture are NOT lyric topics.
 - Vocal emotion direction and vocal expression are singer-performance directions only. They may appear in [Vocals] and compact lyric tags, but must NOT create lyric story, imagery, subject matter, repeated keywords, or narrative content. Do not write lyric lines that explain the selected emotion/expression. If no Theme/Situation/user note exists, keep lyrics broad and character-driven rather than explaining vocal settings.
-- In Situation/character lyrics, lyric tags must use composite acoustic tags in the form [Section: Acoustic Voice Label, short cue]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], never output bare acoustic tags like [Tired Male Rap: dry], and never switch back to generic vocal labels after acoustic labels have been established.
+- In Situation/character lyrics, lyric tags must use composite acoustic tags: [Section: Acoustic Voice Label, short cue], e.g. [Verse A: Tired Male Rap, dry authority] or [Chorus: Airy Female Vocal, pleading hook]. Never output Korean speaker labels in brackets, never output malformed labels like [저승사자:, ], never output bare acoustic tags like [Tired Male Rap: dry], and never switch back to generic vocal labels after acoustic labels have been established.
 - Every sung tag must include a section name before the colon. Bad: [Airy Female Vocal: empty]. Good: [Outro: Airy Female Vocal, empty].
 - KIM EANA-STYLE LYRIC FOUNDATION (MANDATORY): Write lyrics as character speech, not emotion exposition. Start from character, situation, desire, speech style, and lived detail. Prefer concrete everyday details, persona flaws, small behavior, and a believable scene over abstract emotion words. Chorus should express the character's real desire or repeating phrase, not summarize the selected vocal emotion.
 - Do not make tags empty. Every vocalist tag must be followed by at least 1-2 complete lyric or ad-lib lines. Never output broken placeholders like "( : )", "[ : ]", empty parentheses, or empty vocal tags.
@@ -17119,7 +17378,7 @@ SITUATION / THEME SEPARATION RULE (MANDATORY):
 - For repeated Hook/Chorus sections, distribute ownership across roles: Main Vocal or Airy Vocal can lead early hooks, Rap/Whisper Rap can interrupt or answer, and Together should be saved for the final or most important hook.
 - Do not let [Together] own every repeated hook. Keep group unity, but preserve the selected vocal split.
 - Every lyric block must belong to a section tag. In custom structures, each sung structural block should use a composite section tag such as [Hook: Clear Female Vocal, aching], [Verse: Tired Male Rap, dry], [Rap Section: Low Male Rap, husky off-beat], [Bridge: Airy Female Vocal, fragile]. For instrumental blocks, use section-only tags such as [Drop] or [Intro]. For parallel monologue, keep [Hook]/[Chorus] owned by one main acoustic role; the other role may add at most one short parenthetical interruption, not alternating full lines.
-- If Gemini starts a sung block with a bare acoustic tag, rewrite it into the nearest musical section using the composite format [Section: Acoustic Voice Label, short cue]. Do not invent A/B/C section suffixes while doing this.
+- If Gemini starts a sung block with a bare acoustic tag such as [Tired Male Rap: ...] or [Airy Female Vocal: ...], rewrite it into the nearest musical section: [Verse A: ...], [Verse B: ...], [Rap Section: ...], [Bridge: ...], or [Outro: ...].
 - Never put Korean story role labels inside brackets. Story roles may appear in lyric lines, but bracket tags must stay English acoustic/section tags only.
 - Final production prompt must be English-only. Do not mix Korean words into the music prompt, even if the UI input is Korean. Translate role names, mood, story, and development nuance into concise English. Lyrics may stay Korean, but the production prompt must not.
 - Final production prompt format is locked to this 5-line structure plus the fixed quality line:
@@ -17518,7 +17777,7 @@ ${buildExtraTechniqueLyricTagInstruction(params)}
   7) Unresolved map: no reconciliation; keep emotional distance through the Outro.
   8) Chorus-takeover map: the chorus is owned mostly by one role, while the other only interrupts with short lines/ad-libs.
   9) Echo map: one role sings full lines while the other echoes, corrects, or undercuts them.
-- Do NOT always use the same fixed arc, repeated softening, repeated hook alternation, reconciliation bridge, or final resolution.
+- Do NOT always use: Verse A→B, Pre-Chorus softening, Chorus A/B/A/B, Bridge reconciliation, Final Chorus resolution.
 - Do NOT make every lyrical section contain both speakers. Some sections may be A-only, B-only, echo-only, or Together-only if it fits the map.
 - Bridge must not always be empathy or reconciliation. It can be interruption, reveal, refusal, reversal, silence, parallel monologue, or comic failure.
 - Final Chorus must not always resolve the conflict. It can stay comic, bitter, awkward, one-sided, or unresolved if the Situation version supports it.

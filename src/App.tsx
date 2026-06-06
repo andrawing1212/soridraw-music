@@ -15309,7 +15309,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '트릴', prompt: 'vocal trills and quick ornaments', hintKo: '빠른 장식음 (트릴)' },
       { labelKo: '깊은비브라토', prompt: 'deep emotional vibrato', hintKo: '깊고 넓은 떨림 (비브라토)' },
       { labelKo: '벤딩슬러', prompt: 'vocal bends, slurred slides, and unique turns', hintKo: '음을 꺾고 미끄러뜨림 (벤딩/슬러)' },
-      { labelKo: '실험창법', prompt: 'context-aware experimental vocal technique such as sprechgesang, yodel-like flips, glitchy phrasing, whisper-noise texture, cracked distorted edges, or unstable pitch texture', hintKo: '장르와 상황에 맞는 특수 창법 (실험창법)' },
+      { labelKo: '실험창법', prompt: 'context-aware experimental vocal technique', hintKo: '장르와 상황에 맞는 특수 창법 (실험창법)' },
     ],
   },
 ];
@@ -15358,9 +15358,7 @@ const getVocalCharacterScalePromptParts = (character?: VocalMember['character'])
 
     if (Number.isFinite(secondaryValue) && !isVocalCharacterScaleDefaultLevel(ornamentConfig, secondarySafeValue)) {
       const prompt = ornamentConfig.steps[secondarySafeValue - 1]?.prompt;
-      if (prompt) parts.push(`secondary technique: ${prompt}`);
-    } else if (Number.isFinite(mainValue) && !isVocalCharacterScaleDefaultLevel(ornamentConfig, mainSafeValue)) {
-      parts.push('optional compatible secondary vocal habit chosen from a nearby or musically related technique, only if it fits the genre, mood, and character');
+      if (prompt) parts.push(prompt);
     }
   }
 

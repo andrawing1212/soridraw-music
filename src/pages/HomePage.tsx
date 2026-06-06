@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Wand2, Library, Heart, User, ArrowRight, Music2, Mic2 } from 'lucide-react';
+import { Sparkles, Wand2, Library, Heart, User as UserIcon, ArrowRight, Music2, Mic2 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 
 type HomePageProps = {
@@ -35,7 +35,7 @@ const quickCards = [
     title: '마이페이지',
     desc: 'API 연결, 플랜, 사용량, 개인 설정 관리',
     path: '/my-page',
-    icon: User,
+    icon: UserIcon,
     accent: 'from-[#C08A5D]/82 to-[#AC6B69]/78',
   },
 ];

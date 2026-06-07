@@ -70,6 +70,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
+import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 
 // Portal component for top-level rendering
 function Portal({ children }: { children: React.ReactNode }) {
@@ -8463,6 +8464,36 @@ ${normalizePromptForDisplay(result.prompt)}
 
     if (previewGenCount > 1) {
       pointsToNote.push(`현재 총 ${previewGenCount}곡의 동시 작곡을 지정하셨으며, 본 가이드는 각 결과물 중 기준축이 되는 가장 이상적이고 대칭적인 버전을 기준으로 설명합니다.`);
+    }
+
+    // --- Dynamic Song Preview Engine Resolution ---
+    try {
+      const intentInput = {
+        selectedGenre: Array.from(new Set([...selectedGenres, ...subGenre])),
+        selectedStyles,
+        selectedSounds: selectedInstrumentSounds,
+        selectedMoods,
+        selectedThemes,
+        selectedVocalTags: [],
+        lyricsLength,
+        includeLyrics: previewIncludeLyrics,
+        lyricLanguages: previewLyricLangs,
+        bilingualMix: previewIsMix,
+        englishMixRatio: previewMixRatio,
+        rapEnabled: previewRap,
+        directInput: userInput
+      };
+
+      const intent = buildPreviewSongIntent(intentInput);
+      const cards = renderPreviewCards(intent);
+
+      if (previewGenCount > 1) {
+        cards.pointsToNote.push(`현재 총 ${previewGenCount}곡의 동시 작곡을 지정하셨으며, 본 가이드는 각 결과물 중 기준축이 되는 가장 이상적이고 대칭적인 버전을 기준으로 설명합니다.`);
+      }
+
+      return cards;
+    } catch (e) {
+      console.error("SongPreviewEngine dynamic resolution failed, falling back to static presentation:", e);
     }
 
     return {

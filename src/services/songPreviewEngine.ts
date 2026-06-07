@@ -1003,34 +1003,172 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   }
 
   // 3) Combined Summary Header Overwrite (genreDirection)
-  if (hasStoryboard || hasVocalMembers) {
-    let whoDescription = "설정된 보컬 캐스트";
-    if (hasVocalMembers) {
-      const count = input.vocalMembers!.length;
-      const maleCount = input.vocalMembers!.filter(m => m.gender === 'male').length;
-      const femaleCount = input.vocalMembers!.filter(m => m.gender === 'female').length;
-      if (count === 1) {
-        whoDescription = `${input.vocalMembers![0].gender === 'male' ? '남성 솔로 보컬' : '여성 솔로 보컬'}`;
-      } else if (count === 2) {
-        whoDescription = `${maleCount === 1 && femaleCount === 1 ? '남녀 듀엣' : '감미로운 듀엣'}`;
-      } else {
-        whoDescription = "다채로운 성부의 그룹";
+  // [STUDIO-010E-FIX-1 / v2] 짧고 세련된 매칭 장르 1줄 요약 구성 (기본 장르 + 스타일 퓨전 영향 반영)
+  function formatStyleToGenreModifier(styleLabel: string): { prefix?: string; middle?: string } {
+    const label = styleLabel.trim();
+    if (label.includes("보컬") || label.includes("표현") || label.includes("가창") || label.includes("창법")) {
+      if (label.includes("섬세한")) return { prefix: "섬세한" };
+      if (label.includes("속삭임")) return { prefix: "나지막한" };
+      if (label.includes("울먹이는")) return { prefix: "애절한" };
+      if (label.includes("툭 던지는")) return { prefix: "덤덤한" };
+      if (label.includes("눌러 참는")) return { prefix: "절제된" };
+      if (label.includes("애원하는")) return { prefix: "간절한" };
+      if (label.includes("차가운")) return { prefix: "차가운" };
+      if (label.includes("무심한")) return { prefix: "무심한" };
+      if (label.includes("나른한")) return { prefix: "나른한" };
+      return {};
+    }
+    if (label === "브릿팝" || label === "Britpop") return { prefix: "브릿팝 감성의" };
+    if (label === "록" || label === "Rock") return { prefix: "록 밴드 질감의" };
+    if (label === "오케스트라") return { prefix: "웅장한 오케스트럴" };
+    if (label.includes("피아노")) return { prefix: "피아노 선율의" };
+    if (label === "베드룸 팝") return { prefix: "아늑한 베드룸" };
+    if (label === "슈게이즈") return { prefix: "슈게이즈 풍의" };
+    if (label === "앰비언트 팝") return { prefix: "몽환적인 앰비언트" };
+    if (label.includes("허스키 R&B")) return { prefix: "허스키 R&B 감성의" };
+    if (label.includes("다크 트랩") || label === "다크 트랩") return { middle: "다크 트랩" };
+    if (label.includes("신스웨이브") || label.includes("신스")) return { prefix: "레트로 신스" };
+    if (label.includes("붐뱁")) return { middle: "사이버 붐뱁" };
+    if (label.includes("K-아이돌")) return { prefix: "K-아이돌 풍의" };
+    if (label.includes("J-아이돌")) return { prefix: "J-아이돌 풍의" };
+    if (label.includes("애니 오프닝")) return { prefix: "애니 오프닝 풍" };
+    
+    if (label.length <= 4) {
+      return { prefix: `${label} 감성의` };
+    }
+    return { prefix: `${label} 스타일의` };
+  }
+
+  let moodPrefix = "";
+  if (moods.length > 0) {
+    const m = moods[0];
+    const mId = m.id;
+    const mLabel = m.label || "";
+    if (mId === "hollow" || mLabel.includes("공허") || mLabel.includes("쓸쓸") || mLabel.includes("어두")) {
+      moodPrefix = "어두운";
+    } else if (mId === "warm" || mLabel.includes("따뜻") || mLabel.includes("편안") || mLabel.includes("포근")) {
+      moodPrefix = "따뜻한";
+    } else if (mId === "uneasy" || mLabel.includes("불안") || mLabel.includes("위태") || mLabel.includes("차가")) {
+      moodPrefix = "차가운";
+    } else if (mLabel.includes("몽환") || mLabel.includes("환상") || mLabel.includes("우주") || mLabel.includes("신비")) {
+      moodPrefix = "몽환적인";
+    } else if (mLabel.includes("청량") || mLabel.includes("시원") || mLabel.includes("맑")) {
+      moodPrefix = "시원한";
+    } else {
+      moodPrefix = mLabel.endsWith("한") || mLabel.endsWith("운") || mLabel.endsWith("인") ? mLabel : `${mLabel} 감성의`;
+    }
+  }
+
+  let stylePrefix = "";
+  let styleMiddle = "";
+  if (styles.length > 0) {
+    const s1 = styles[0];
+    const f1 = formatStyleToGenreModifier(s1.label);
+    if (f1.prefix) stylePrefix = f1.prefix;
+    if (f1.middle) styleMiddle = f1.middle;
+
+    if (styles.length > 1) {
+      const s2 = styles[1];
+      const f2 = formatStyleToGenreModifier(s2.label);
+      if (f2.prefix && !stylePrefix) {
+        stylePrefix = f2.prefix;
+      } else if (f2.prefix && stylePrefix && !stylePrefix.includes(f2.prefix.replace(" 감성의", ""))) {
+        if (s1.label === "브릿팝" && s2.label === "록") {
+          stylePrefix = "멜로딕 록 밴드";
+        } else {
+          stylePrefix = `${s1.label}·${s2.label} 풍의`;
+        }
+      }
+      if (f2.middle && !styleMiddle) {
+        styleMiddle = f2.middle;
       }
     }
-    
-    let sitDescriptionText = "";
-    if (hasStoryboard) {
-      const sit = input.situation!;
-      const rel = sit.relationship ? ` (${sit.relationship})` : "";
-      const charA = sit.targetA || "화자";
-      const charB = sit.targetB || "상대";
-      sitDescriptionText = `${charA}와 ${charB}의 이야기${rel}에서 파생된 ${sit.description || '눈물 어린 순간'}`;
-    } else {
-      sitDescriptionText = "선택된 시적 테마";
+  }
+
+  let genreBaseName = "대중 팝";
+  if (genres.length > 0) {
+    const mainGenre = genres[0];
+    let mainLabel = mainGenre.label || "";
+    if (mainLabel === "네오소울") {
+      mainLabel = "네오소울 R&B";
     }
     
-    genreDirection = `${whoDescription}을 내세워 ${sitDescriptionText}의 감정선을 담아 노래하는 세련된 곡`;
+    if (genres.length > 1) {
+      let subLabel = genres[1].label || "";
+      if (subLabel === "네오소울") subLabel = "네오소울";
+      
+      if (mainLabel.includes("R&B") && subLabel.includes("하우스")) {
+        genreBaseName = "어쿠스틱 하우스 R&B";
+      } else if (mainLabel.includes("R&B") && (subLabel.includes("힙합") || subLabel.includes("소울"))) {
+        genreBaseName = "R&B 소울";
+      } else {
+        genreBaseName = `${mainLabel} ${subLabel}`;
+      }
+    } else {
+      if (styles.length > 0) {
+        const sL = styles[0].label || "";
+        if (sL.includes("다크 트랩") && mainLabel.includes("R&B")) {
+          genreBaseName = "다크 트랩 R&B";
+          styleMiddle = ""; // already in genreBaseName
+        } else if (sL.includes("신스웨이브") && mainLabel.includes("시티팝")) {
+          genreBaseName = "시티팝";
+          stylePrefix = "레트로 신스";
+        } else if (sL.includes("붐뱁") && mainLabel.includes("힙합")) {
+          genreBaseName = "붐뱁 힙합";
+          styleMiddle = ""; // already in genreBaseName
+        } else {
+          genreBaseName = mainLabel;
+        }
+      } else {
+        genreBaseName = mainLabel;
+      }
+    }
   }
+
+  // Combine them naturally: [MoodPrefix] [StylePrefix] [StyleMiddle] [GenreBaseName]
+  // Concatenate MoodPrefix and StylePrefix nicely if both exist
+  let leadingPrefix = "";
+  if (moodPrefix && stylePrefix) {
+    if (moodPrefix === "따뜻한" && stylePrefix === "아늑한 베드룸") {
+      leadingPrefix = "따뜻하고 아늑한 베드룸";
+    } else if (moodPrefix.endsWith("한") && stylePrefix.endsWith("한")) {
+      const mTrimmed = moodPrefix.slice(0, -1);
+      leadingPrefix = `${mTrimmed}고 ${stylePrefix}`;
+    } else {
+      leadingPrefix = `${moodPrefix} ${stylePrefix}`;
+    }
+  } else if (moodPrefix) {
+    leadingPrefix = moodPrefix;
+  } else if (stylePrefix) {
+    leadingPrefix = stylePrefix;
+  }
+
+  let generatedGenreStr = `${leadingPrefix} ${styleMiddle} ${genreBaseName}`.trim();
+  
+  // Clean double spaces and duplicate words
+  generatedGenreStr = generatedGenreStr.replace(/\s+/g, ' ');
+  
+  if (generatedGenreStr.startsWith("시원한 시원한")) {
+    generatedGenreStr = generatedGenreStr.replace("시원한 시원한", "시원한");
+  }
+  if (generatedGenreStr.startsWith("레트로 레트로")) {
+    generatedGenreStr = generatedGenreStr.replace("레트로 레트로", "레트로");
+  }
+  if (generatedGenreStr.startsWith("몽환적인 몽환적인")) {
+    generatedGenreStr = generatedGenreStr.replace("몽환적인 몽환적인", "몽환적인");
+  }
+
+  // If both leading prefixes and other strings are too long, make sure it stays under 35 chars
+  if (generatedGenreStr.length > 35) {
+    if (moodPrefix && stylePrefix && `${stylePrefix} ${styleMiddle} ${genreBaseName}`.length <= 35) {
+      generatedGenreStr = `${stylePrefix} ${styleMiddle} ${genreBaseName}`.trim().replace(/\s+/g, ' ');
+    }
+    if (generatedGenreStr.length > 35 && moodPrefix) {
+      generatedGenreStr = `${moodPrefix} ${styleMiddle} ${genreBaseName}`.trim().replace(/\s+/g, ' ');
+    }
+  }
+
+  genreDirection = generatedGenreStr;
 
   return {
     genreDirection,

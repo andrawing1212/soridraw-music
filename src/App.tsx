@@ -10727,14 +10727,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
       
-      <AnimatePresence>
-        {showPreviewPopup && (
-          <SongPreviewPopup
-            onClose={() => setShowPreviewPopup(false)}
-            details={getSongPreviewDetails()}
-          />
-        )}
-      </AnimatePresence>
+      <SongPreviewPopup
+        isOpen={showPreviewPopup}
+        onClose={() => setShowPreviewPopup(false)}
+        details={getSongPreviewDetails()}
+      />
 
       <AnimatePresence>
         {isBanModalOpen && (
@@ -11242,6 +11239,7 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
 
 
 interface SongPreviewPopupProps {
+  isOpen: boolean;
   onClose: () => void;
   details: {
     genreStr: string;
@@ -11254,7 +11252,7 @@ interface SongPreviewPopupProps {
   };
 }
 
-const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ onClose, details }) => {
+const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, details }) => {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 640;
@@ -11272,192 +11270,196 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ onClose, details })
 
   // Dynamic Framer Motion Configuration to Prevent Mobile Flashing
   const backdropVariants = {
-    initial: isMobile ? { opacity: 1 } : { opacity: 0 },
+    initial: { opacity: 0 },
     animate: { opacity: 1 },
-    exit: isMobile ? { opacity: 1 } : { opacity: 0 },
+    exit: { opacity: 0 },
   };
 
-  const backdropTransition = isMobile ? { duration: 0.01 } : { duration: 0.16 };
+  const backdropTransition = { duration: 0.15 };
 
   const contentVariants = {
-    initial: isMobile ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 16 },
+    initial: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 },
     animate: { opacity: 1, scale: 1, y: 0 },
-    exit: isMobile ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 16 },
+    exit: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 },
   };
 
   const contentTransition = isMobile 
-    ? { duration: 0.01 } 
+    ? { duration: 0.12 } 
     : { duration: 0.22, ease: [0.16, 1, 0.3, 1] };
 
   return (
     <Portal>
-      <div
-        className={`fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden font-sans select-none ${
-          isMobile ? "px-3 py-4" : "px-4 sm:px-6 py-6"
-        }`}
-        style={{ WebkitTapHighlightColor: 'transparent' }}
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-      >
-        <motion.div
-          key="song-preview-backdrop"
-          initial={backdropVariants.initial}
-          animate={backdropVariants.animate}
-          exit={backdropVariants.exit}
-          transition={backdropTransition}
-          className={
-            isMobile
-              ? "absolute inset-0 bg-transparent cursor-pointer"
-              : "absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
-          }
-          onClick={onClose}
-          style={{ WebkitTapHighlightColor: 'transparent' }}
-        />
-        <motion.div
-          key="song-preview-content"
-          initial={contentVariants.initial}
-          animate={contentVariants.animate}
-          exit={contentVariants.exit}
-          transition={contentTransition}
-          className="w-full max-w-2xl max-h-[calc(100dvh-48px)] rounded-[32px] overflow-hidden flex flex-col border border-white/10 bg-[#171717] text-[var(--text-primary)] shadow-2xl relative z-10"
-          style={{
-            WebkitTapHighlightColor: 'transparent',
-            willChange: 'auto',
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="relative shrink-0 px-6 pt-6 pb-4 border-b border-white/5 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-5 h-5 text-brand-orange animate-pulse" />
-                <h2 className="text-lg md:text-xl font-black tracking-tight text-[var(--text-primary)]">
-                  곡 미리보기
-                </h2>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange border border-brand-orange/20">
-                  AI 기획 해석
-                </span>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)]">
-                현재 설정된 세부 키워드와 분위기를 바탕으로 설계된 전개 가이드입니다.
-              </p>
-            </div>
-            <button
-              type="button"
+      <AnimatePresence>
+        {isOpen && (
+          <div
+            className={`fixed inset-0 z-[20000] flex items-center justify-center overflow-x-hidden overflow-y-hidden font-sans select-none ${
+              isMobile ? "px-3 py-4" : "px-4 sm:px-6 py-6"
+            }`}
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) onClose();
+            }}
+          >
+            <motion.div
+              key="song-preview-backdrop"
+              initial={backdropVariants.initial}
+              animate={backdropVariants.animate}
+              exit={backdropVariants.exit}
+              transition={backdropTransition}
+              className={
+                isMobile
+                  ? "absolute inset-0 bg-black/85 cursor-pointer"
+                  : "absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              }
               onClick={onClose}
-              className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all cursor-pointer"
               style={{ WebkitTapHighlightColor: 'transparent' }}
+            />
+            <motion.div
+              key="song-preview-content"
+              initial={contentVariants.initial}
+              animate={contentVariants.animate}
+              exit={contentVariants.exit}
+              transition={contentTransition}
+              className="w-full max-w-2xl max-h-[calc(100dvh-48px)] rounded-[32px] overflow-x-hidden overflow-y-hidden flex flex-col border border-white/10 bg-[#171717] text-[var(--text-primary)] shadow-2xl relative z-10 p-0 min-w-0"
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+                willChange: 'auto',
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <X className="w-5 h-5" />
-            </button>
+              {/* Header */}
+              <div className="relative shrink-0 px-6 pt-6 pb-4 border-b border-white/5 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
+                <div className="min-w-0 flex-1 pr-4">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <Sparkles className="w-5 h-5 text-brand-orange animate-pulse shrink-0" />
+                    <h2 className="text-lg md:text-xl font-black tracking-tight text-[var(--text-primary)] truncate">
+                      곡 미리보기
+                    </h2>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange border border-brand-orange/20 shrink-0">
+                      AI 기획 해석
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] whitespace-normal break-words max-w-full">
+                    현재 설정된 세부 키워드와 분위기를 바탕으로 설계된 전개 가이드입니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all cursor-pointer shrink-0"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body Content */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5 space-y-4 scrollbar-thin min-w-0 max-w-full">
+                {/* Genre Chip Bar */}
+                <div className="bg-[#242424]/40 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden">
+                  <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>
+                  <span className="text-sm font-black text-brand-orange break-words whitespace-normal min-w-0 max-w-full leading-snug">{details.genreStr}</span>
+                </div>
+
+                {/* 곡 해석 요약 (Standalone - Big Card at Top) */}
+                <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                    <Compass className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
+                    <h4 className="text-xs font-black text-amber-400 font-sans tracking-tight">곡 해석 요약</h4>
+                    <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
+                      {details.interpretationSummary}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bento Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 max-w-full">
+                  {/* 예상 분위기 */}
+                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                      <Sunset className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
+                      <h4 className="text-xs font-black text-emerald-400 font-sans tracking-tight">예상 분위기</h4>
+                      <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
+                        {details.expectedAtmosphere}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 예상 보컬 */}
+                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+                      <Mic2 className="w-5 h-5 text-sky-400" />
+                    </div>
+                    <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
+                      <h4 className="text-xs font-black text-sky-400 font-sans tracking-tight">예상 보컬</h4>
+                      <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
+                        {details.expectedVocals}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 예상 전개 */}
+                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+                      <Activity className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
+                      <h4 className="text-xs font-black text-purple-400 font-sans tracking-tight">예상 전개</h4>
+                      <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
+                        {details.expectedArrangement}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 예상 가사 방향 */}
+                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                      <PenTool className="w-5 h-5 text-rose-400" />
+                    </div>
+                    <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
+                      <h4 className="text-xs font-black text-rose-400 font-sans tracking-tight">예상 가사 방향</h4>
+                      <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
+                        {details.expectedLyrics}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 주의할 점 */}
+                <div className="p-5 rounded-2xl bg-orange-500/5 border border-orange-500/20 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-orange-400" />
+                  </div>
+                  <div className="space-y-2 flex-1 min-w-0 overflow-hidden">
+                    <h4 className="text-xs font-black text-orange-400 font-sans tracking-tight">생성 전 주의 사항</h4>
+                    <ul className="list-disc pl-4 text-xs font-medium space-y-1.5 text-[var(--text-secondary)] leading-relaxed break-words whitespace-normal min-w-0 max-w-full">
+                      {details.pointsToNote.map((note, idx) => (
+                        <li key={idx} className="break-words whitespace-normal max-w-full leading-relaxed">{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer and Close Buttons */}
+              <div className="shrink-0 px-6 py-4 border-t border-white/5 bg-[#1f1f1f] flex justify-end min-w-0 max-w-full overflow-hidden">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-3 rounded-full text-sm font-black bg-[#E7AD68] text-[#171717] hover:bg-[#ECB976] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-lg outline-none select-none shrink-0"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  확인
+                </button>
+              </div>
+            </motion.div>
           </div>
-
-          {/* Body Content */}
-          <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-5 space-y-4 scrollbar-thin">
-            {/* Genre Chip Bar */}
-            <div className="bg-[#242424]/40 border border-white/5 rounded-2xl p-4 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>
-              <span className="text-sm font-black text-brand-orange">{details.genreStr}</span>
-            </div>
-
-            {/* 곡 해석 요약 (Standalone - Big Card at Top) */}
-            <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                <Compass className="w-5 h-5 text-amber-400" />
-              </div>
-              <div className="space-y-1.5 flex-1 min-w-0">
-                <h4 className="text-xs font-black text-amber-400 font-sans">곡 해석 요약</h4>
-                <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
-                  {details.interpretationSummary}
-                </p>
-              </div>
-            </div>
-
-            {/* Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 예상 분위기 */}
-              <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <Sunset className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <h4 className="text-xs font-black text-emerald-400 font-sans">예상 분위기</h4>
-                  <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
-                    {details.expectedAtmosphere}
-                  </p>
-                </div>
-              </div>
-
-              {/* 예상 보컬 */}
-              <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
-                  <Mic2 className="w-5 h-5 text-sky-400" />
-                </div>
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <h4 className="text-xs font-black text-sky-400 font-sans">예상 보컬</h4>
-                  <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
-                    {details.expectedVocals}
-                  </p>
-                </div>
-              </div>
-
-              {/* 예상 전개 */}
-              <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
-                  <Activity className="w-5 h-5 text-purple-400" />
-                </div>
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <h4 className="text-xs font-black text-purple-400 font-sans">예상 전개</h4>
-                  <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
-                    {details.expectedArrangement}
-                  </p>
-                </div>
-              </div>
-
-              {/* 예상 가사 방향 */}
-              <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
-                  <PenTool className="w-5 h-5 text-rose-400" />
-                </div>
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <h4 className="text-xs font-black text-rose-400 font-sans">예상 가사 방향</h4>
-                  <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-keep">
-                    {details.expectedLyrics}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 주의할 점 */}
-            <div className="p-5 rounded-2xl bg-orange-500/5 border border-orange-500/20 flex gap-4 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-orange-400" />
-              </div>
-              <div className="space-y-2 flex-1">
-                <h4 className="text-xs font-black text-orange-400 font-sans">생성 전 주의 사항</h4>
-                <ul className="list-disc pl-4 text-xs font-medium space-y-1.5 text-[var(--text-secondary)] leading-relaxed break-keep">
-                  {details.pointsToNote.map((note, idx) => (
-                    <li key={idx}>{note}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer and Close Buttons */}
-          <div className="shrink-0 px-6 py-4 border-t border-white/5 bg-[#1f1f1f] flex justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3 rounded-full text-sm font-black bg-[#E7AD68] text-[#171717] hover:bg-[#ECB976] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-lg"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              확인
-            </button>
-          </div>
-        </motion.div>
-      </div>
+        )}
+      </AnimatePresence>
     </Portal>
   );
 };

@@ -10667,63 +10667,67 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
       <AnimatePresence>
         {showMainGenerationModal && (
-          <MusicApiGenerateModal
-            variant="main"
-            hasApiKey={true}
-            isNoLyrics={hasSelectedInstrumentalBgm}
-            maxLyricLanguages={hasSelectedInstrumentalBgm ? 0 : 2}
-            isKoreanEnglishMix={isKoreanEnglishMix}
-            englishMixRatio={englishMixRatio}
-            rapEnabled={rapEnabled}
-            onClose={() => setShowMainGenerationModal(false)}
-            onPreview={(options) => {
-              setCurrentPreviewOptions(options);
-              setShowPreviewPopup(true);
-            }}
-            onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
-              const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
-              const nextRatio = Math.max(5, Math.min(90, Number(options?.englishMixRatio ?? englishMixRatio) || 10));
-              const nextRap = includeLyrics ? Boolean(options?.rapEnabled ?? rapEnabled) : rapEnabled;
-              setIsKoreanEnglishMix(nextMix);
-              setEnglishMixRatio(nextRatio);
-              setRapEnabled(nextRap);
-              setShowMainGenerationModal(false);
-              handleGenerate({
-                includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
-                lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
-                generationCount,
-                isKoreanEnglishMix: nextMix,
-                englishMixRatio: nextRatio,
-                rapEnabled: nextRap,
-              });
-            }}
-          />
+          <div style={{ display: showPreviewPopup ? 'none' : 'block' }}>
+            <MusicApiGenerateModal
+              variant="main"
+              hasApiKey={true}
+              isNoLyrics={hasSelectedInstrumentalBgm}
+              maxLyricLanguages={hasSelectedInstrumentalBgm ? 0 : 2}
+              isKoreanEnglishMix={isKoreanEnglishMix}
+              englishMixRatio={englishMixRatio}
+              rapEnabled={rapEnabled}
+              onClose={() => setShowMainGenerationModal(false)}
+              onPreview={(options) => {
+                setCurrentPreviewOptions(options);
+                setShowPreviewPopup(true);
+              }}
+              onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
+                const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
+                const nextRatio = Math.max(5, Math.min(90, Number(options?.englishMixRatio ?? englishMixRatio) || 10));
+                const nextRap = includeLyrics ? Boolean(options?.rapEnabled ?? rapEnabled) : rapEnabled;
+                setIsKoreanEnglishMix(nextMix);
+                setEnglishMixRatio(nextRatio);
+                setRapEnabled(nextRap);
+                setShowMainGenerationModal(false);
+                handleGenerate({
+                  includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
+                  lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
+                  generationCount,
+                  isKoreanEnglishMix: nextMix,
+                  englishMixRatio: nextRatio,
+                  rapEnabled: nextRap,
+                });
+              }}
+            />
+          </div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showMusicApiModal && (
-          <MusicApiGenerateModal
-            variant="musicApi"
-            hasApiKey={hasSunoApiKey}
-            remainingCredits={sunoRemainingCredits}
-            isNoLyrics={(!result?.lyrics?.korean && !result?.lyrics?.english) || (result?.lyrics?.korean === "" && result?.lyrics?.english === "")}
-            availableLyricLanguages={(() => {
-              const langs: LanguageCode[] = [];
-              const generated = (((result?.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]);
-              const generatedSecondary = generated.find((lang) => lang !== 'ko');
-              if (result?.lyrics?.korean && (generated.length === 0 || generated.includes('ko'))) langs.push('ko');
-              if (result?.lyrics?.english) langs.push(generatedSecondary || 'en');
-              return Array.from(new Set(langs));
-            })()}
-            maxLyricLanguages={1}
-            musicApiTargets={getMusicApiTargetOptions()}
-            onClose={() => setShowMusicApiModal(false)}
-            onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
-              setShowMusicApiModal(false);
-              generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount, options);
-            }}
-          />
+          <div style={{ display: showPreviewPopup ? 'none' : 'block' }}>
+            <MusicApiGenerateModal
+              variant="musicApi"
+              hasApiKey={hasSunoApiKey}
+              remainingCredits={sunoRemainingCredits}
+              isNoLyrics={(!result?.lyrics?.korean && !result?.lyrics?.english) || (result?.lyrics?.korean === "" && result?.lyrics?.english === "")}
+              availableLyricLanguages={(() => {
+                const langs: LanguageCode[] = [];
+                const generated = (((result?.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]);
+                const generatedSecondary = generated.find((lang) => lang !== 'ko');
+                if (result?.lyrics?.korean && (generated.length === 0 || generated.includes('ko'))) langs.push('ko');
+                if (result?.lyrics?.english) langs.push(generatedSecondary || 'en');
+                return Array.from(new Set(langs));
+              })()}
+              maxLyricLanguages={1}
+              musicApiTargets={getMusicApiTargetOptions()}
+              onClose={() => setShowMusicApiModal(false)}
+              onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
+                setShowMusicApiModal(false);
+                generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount, options);
+              }}
+            />
+          </div>
         )}
       </AnimatePresence>
       
@@ -11270,21 +11274,21 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
 
   // Dynamic Framer Motion Configuration to Prevent Mobile Flashing
   const backdropVariants = {
-    initial: { opacity: 0 },
+    initial: isMobile ? { opacity: 1 } : { opacity: 0 },
     animate: { opacity: 1 },
-    exit: { opacity: 0 },
+    exit: isMobile ? { opacity: 1 } : { opacity: 0 },
   };
 
-  const backdropTransition = { duration: 0.15 };
+  const backdropTransition = isMobile ? { duration: 0 } : { duration: 0.15 };
 
   const contentVariants = {
-    initial: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 },
+    initial: isMobile ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 16 },
     animate: { opacity: 1, scale: 1, y: 0 },
-    exit: isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 16 },
+    exit: isMobile ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 16 },
   };
 
   const contentTransition = isMobile 
-    ? { duration: 0.12 } 
+    ? { duration: 0 } 
     : { duration: 0.22, ease: [0.16, 1, 0.3, 1] };
 
   return (

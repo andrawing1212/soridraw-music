@@ -714,7 +714,7 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   let emotionalCore = "억지로 꾸미지 않아 더 다정하게 다가오는 깊이 있는 정서";
   let moodColor = "너무 밝거나 어둡지 않게 균위가 잡힌 다정한 중간 톤";
   let vocalDirection = "목소리가 편안하고 가사 소리가 선명히 들리는 표준형 가창";
-  let arrangementFlow = "익숙한 전주로 담백하게 기용하여 후렴구에서 한결 풍성해진 후 산뜻하게 매듭짓는 전개";
+  let arrangementFlow = "익숙한 도입에서 점진적으로 분위기를 전개하고 한결 풍성한 입체감을 더해 매끄럽게 매듭지어집니다.";
   let lyricDirection = "귓가에 부드럽게 쏙 들어오도록 단락을 잘 맞춘 기본 편전 구성";
   let finalImpression = "세련된 멜로디와 정겨운 연주가 함께 어우러져 한결 풍성한 여운을 전해주는 구도";
 
@@ -1130,25 +1130,7 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
     }
   }
 
-  // Combine them naturally: [MoodPrefix] [StylePrefix] [StyleMiddle] [GenreBaseName]
-  // Concatenate MoodPrefix and StylePrefix nicely if both exist
-  let leadingPrefix = "";
-  if (moodPrefix && stylePrefix) {
-    if (moodPrefix === "따뜻한" && stylePrefix === "아늑한 베드룸") {
-      leadingPrefix = "따뜻하고 아늑한 베드룸";
-    } else if (moodPrefix.endsWith("한") && stylePrefix.endsWith("한")) {
-      const mTrimmed = moodPrefix.slice(0, -1);
-      leadingPrefix = `${mTrimmed}고 ${stylePrefix}`;
-    } else {
-      leadingPrefix = `${moodPrefix} ${stylePrefix}`;
-    }
-  } else if (moodPrefix) {
-    leadingPrefix = moodPrefix;
-  } else if (stylePrefix) {
-    leadingPrefix = stylePrefix;
-  }
-
-  let generatedGenreStr = `${leadingPrefix} ${styleMiddle} ${genreBaseName}`.trim();
+  let generatedGenreStr = `${moodPrefix ? moodPrefix + ' ' : ''}${genreBaseName}`.trim();
   
   // Clean double spaces and duplicate words
   generatedGenreStr = generatedGenreStr.replace(/\s+/g, ' ');
@@ -1161,16 +1143,6 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   }
   if (generatedGenreStr.startsWith("몽환적인 몽환적인")) {
     generatedGenreStr = generatedGenreStr.replace("몽환적인 몽환적인", "몽환적인");
-  }
-
-  // If both leading prefixes and other strings are too long, make sure it stays under 35 chars
-  if (generatedGenreStr.length > 35) {
-    if (moodPrefix && stylePrefix && `${stylePrefix} ${styleMiddle} ${genreBaseName}`.length <= 35) {
-      generatedGenreStr = `${stylePrefix} ${styleMiddle} ${genreBaseName}`.trim().replace(/\s+/g, ' ');
-    }
-    if (generatedGenreStr.length > 35 && moodPrefix) {
-      generatedGenreStr = `${moodPrefix} ${styleMiddle} ${genreBaseName}`.trim().replace(/\s+/g, ' ');
-    }
   }
 
   genreDirection = generatedGenreStr;
@@ -1250,7 +1222,7 @@ export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
     vibeFeeling = "전체적으로 마음이 한결 다정해지고 고요해지는 기분 좋은 편안함이 느껴집니다.";
   }
 
-  const interpretationSummary = `이 곡은 ${intent.genreDirection} 스타일의 음악입니다. 주요 악기로는 ${instruments} 연주를 중심에 두고 흘러갑니다. ${vocalAttitude} ${vibeFeeling}`;
+  const interpretationSummary = `이 곡은 ${intent.genreDirection} 스타일의 음악입니다. 주요 악기로는 ${instruments} 연주를 중심에 두고 흘러갑니다.`;
 
   // 1) S1: Air and Temp based on Mood + Instruments
   let s1 = "";
@@ -1315,10 +1287,7 @@ export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
 
   const expectedLyrics = intent.lyricDirection;
 
-  const pointsToNote = [
-    `파이널 믹싱 작업 시 ${instruments} 연주 파트들이 서로 뭉개지거나 성량이 충돌하지 않도록 소리의 중심 대역을 말끔히 정돈해 더욱 깨끗하고 선명한 사운드를 연출합니다.`,
-    `불필요하게 복잡하게 잔뜩 채운 구성보다, 노랫말과 악기 본래의 매력이 하나하나 포근하고 진솔하게 전달될 수 있게 깔끔하고 단단한 세 편성을 지향합니다.`
-  ];
+  const pointsToNote: string[] = [];
 
   if (intent.warnings.length > 0) {
     pointsToNote.push(...intent.warnings);

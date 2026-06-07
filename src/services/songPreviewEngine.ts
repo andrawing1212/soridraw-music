@@ -4,7 +4,12 @@ import {
   GENRE_HIERARCHY,
   GENRES,
   STYLE_CYCLES,
+  VOCAL_TECHNIQUES,
+  VOCAL_VOICE_TONES,
+  VOCAL_PERSONALITIES,
 } from "../constants";
+import { VOCAL_TONES } from "../constants/vocalTones";
+import { VocalMember, SituationConfig } from "../types";
 
 /**
  * -------------------------------------------------------------
@@ -71,6 +76,8 @@ export interface PreviewInput {
   rapEnabled: boolean;
   directInput?: string;
   customPrompt?: string;
+  vocalMembers?: VocalMember[];
+  situation?: SituationConfig;
 }
 
 export interface PreviewSongIntent {
@@ -550,6 +557,134 @@ export function collectPreviewMeaningData(input: PreviewInput): PreviewMeaningDa
   return result;
 }
 
+function getRolesKo(roles: string[]): string {
+  if (!roles || roles.length === 0) return "보컬";
+  const map: Record<string, string> = {
+    main: "메인 보컬",
+    lead: "리드 보컬",
+    sub: "서브 보컬",
+    rapper: "래퍼",
+  };
+  return roles.map(r => map[r] || r).join(" 겸 ");
+}
+
+function buildVocalMemberDescription(m: VocalMember, index: number, total: number): string {
+  const genderKo = m.gender === 'male' ? '남성' : '여성';
+  const roleKo = getRolesKo(m.roles);
+  
+  let toneLabel = "";
+  if (m.toneId) {
+    const toneObj = VOCAL_TONES.find((t: any) => t.id === m.toneId);
+    if (toneObj) toneLabel = toneObj.labelKo || toneObj.label;
+  }
+  
+  const char = m.character;
+  if (char) {
+    let vocalToneStr = "";
+    if (char.voiceToneId) {
+      const v = VOCAL_VOICE_TONES.find((item: any) => item.id === char.voiceToneId);
+      if (v) vocalToneStr = v.labelKo || v.label;
+    }
+    if (char.customVoiceTone) vocalToneStr = char.customVoiceTone;
+
+    let personalityStr = "";
+    if (char.personalityId) {
+      const p = VOCAL_PERSONALITIES.find((item: any) => item.id === char.personalityId);
+      if (p) personalityStr = p.labelKo || p.label;
+    }
+    if (char.customPersonality) personalityStr = char.customPersonality;
+
+    let techParts: string[] = [];
+    if (char.techniqueIds && char.techniqueIds.length > 0) {
+      char.techniqueIds.forEach((tid: string) => {
+        const tc = VOCAL_TECHNIQUES.find((item: any) => item.id === tid);
+        if (tc) techParts.push(tc.labelKo || tc.label);
+      });
+    }
+    if (char.customTechnique) techParts.push(char.customTechnique);
+
+    // Levels
+    let levelDescs: string[] = [];
+    
+    // Emotion
+    if (char.emotionLevel !== undefined) {
+      if (char.emotionLevel > 7) {
+        levelDescs.push("감정이 아주 진하고 깊게 묻어나며 절절하게 터뜨리는 호소력");
+      } else if (char.emotionLevel < 4) {
+        levelDescs.push("감정을 극도로 절제하고 덤덤하게 내뱉는 차분한 창법");
+      } else {
+        levelDescs.push("안정적이고 은은해 편안하게 와닿는 감정 완급 조절");
+      }
+    }
+    
+    // Range
+    if (char.rangeLevel !== undefined) {
+      if (char.rangeLevel > 7) {
+        levelDescs.push("높고 시원하게 치솟는 청량함");
+      } else if (char.rangeLevel < 4) {
+        levelDescs.push("낮고 포근하며 부드럽게 감싸는 중저음");
+      } else {
+        levelDescs.push("안정적인 고유 성부 음역");
+      }
+    }
+
+    // Delivery / Breath
+    if (char.deliveryLevel !== undefined) {
+      if (char.deliveryLevel > 7) {
+        levelDescs.push("가사 전달이 타이트하고 직관적인 선명한 딜리버리");
+      } else if (char.deliveryLevel < 4) {
+        levelDescs.push("숨소리를 풍부하게 머금고 나지막이 속삭이는 높은 호흡감");
+      }
+    }
+
+    let vibeAttrs: string[] = [];
+    if (vocalToneStr) vibeAttrs.push(vocalToneStr);
+    if (personalityStr) vibeAttrs.push(personalityStr);
+    
+    const baseDesc = `${genderKo} ${roleKo}${toneLabel ? ` (${toneLabel})` : ''}`;
+    const mainAttrText = vibeAttrs.length > 0 ? `${vibeAttrs.join(', ')} 느낌의 매력을 바탕으로 ` : '';
+    const levelText = levelDescs.length > 0 ? levelDescs.join(', ') : '';
+    const techText = techParts.length > 0 ? `, 표현 기교인 ${techParts.join('와 ')}를 가미함` : '';
+
+    return `- **제${index + 1}보컬 (${baseDesc})**: ${mainAttrText}${levelText}${techText}을 품고 정성스럽게 가창합니다.`;
+  } else {
+    const toneText = toneLabel ? `${toneLabel} 톤의 ` : '';
+    return `- **제${index + 1}보컬 (${genderKo} ${roleKo})**: ${toneText}익숙하고 따뜻한 어조로 파트를 담담하게 일구어가며 조화를 맞춥니다.`;
+  }
+}
+
+function buildVocalFormationSummary(members: VocalMember[], rapEnabled: boolean): string {
+  const maleCount = members.filter(m => m.gender === 'male').length;
+  const femaleCount = members.filter(m => m.gender === 'female').length;
+  const count = members.length;
+  const hasRap = rapEnabled || members.some(m => m.roles.includes('rapper'));
+  
+  if (count === 1) {
+    const m = members[0];
+    const genderKo = m.gender === 'male' ? '남성' : '여성';
+    const roleKo = getRolesKo(m.roles);
+    return `${genderKo} 싱글 단독 솔로 보컬 구도로, 오직 한 목소리의 깊이와 세세한 다이내믹에 곡의 온전한 주의를 집중하게 만듭니다${hasRap ? " (리드미컬한 랩 세션이 포함되어 듣는 재미를 더함)" : ""}`;
+  } else if (count === 2) {
+    if (maleCount === 1 && femaleCount === 1) {
+      return `아름답고 섬세한 남녀 혼성 듀엣(Duo) 구성으로, 두 보컬이 서로 대화하듯 노랫말을 화답하며 번갈아 나타나 곡의 입체감을 불어넣습니다`;
+    } else if (maleCount === 2) {
+      return `두터운 화음이 매력적인 남성 이중창 듀엣(Duo) 구성으로, 음이 낮고 넓게 퍼지는 풍성한 성부 배치가 돋보입니다`;
+    } else if (femaleCount === 2) {
+      return `맑고 우아하게 어우러지는 여성 이중창 듀엣(Duo) 구성으로, 높은 멜로디의 맑은 음역들이 촘촘히 겹쳐져 전방위적인 화색을 더합니다`;
+    } else {
+      return `서로 다른 매력의 두 보컬이 만나 선순환하는 듀엣(Duo) 구성`;
+    }
+  } else {
+    if (maleCount > 0 && femaleCount > 0) {
+      return `남성 ${maleCount}명과 여성 ${femaleCount}명이 함께 목소리를 맞춰 전개하는 다채로운 혼성 그룹(Group) 입체 가창 포맷입니다`;
+    } else if (maleCount > 0) {
+      return `남성 ${maleCount}명으로 배치된 두터운 보색과 남성적 코러스 레이어가 웅장하게 물결치는 보컬 그룹(Group) 포맷입니다`;
+    } else {
+      return `여성 ${femaleCount}명의 유려하고 밝은 선율들이 화사하게 날아오르며 극의 활색을 뿜어내는 여성 보컬 그룹(Group) 포맷입니다`;
+    }
+  }
+}
+
 /**
  * Builds the abstract PreviewSongIntent combining and adjusting values
  */
@@ -754,6 +889,147 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   }
   if (!input.includeLyrics && input.selectedVocalTags.length > 0) {
     warnings.push("가사가 없는 연주 전용(instrumental) 곡인데 보컬의 특징이나 기법이 함께 체크되었습니다. 사람 목소리로 기사를 노래하기보다, 목소리를 악기처럼 짧게 자른 컴퓨터 이펙트 소리(보이스 찹)나 메인 가락을 바꾸는 연주자 기법을 어울리게 엮어 보심을 추천합니다.");
+  }
+
+  // ==========================================
+  // VOCAL & STORYBOARD/SITUATION DYNAMIC COUPLING
+  // ==========================================
+  const hasVocalMembers = input.vocalMembers && input.vocalMembers.length > 0;
+  const hasStoryboard = input.situation && input.situation.enabled && (
+    input.situation.targetA || input.situation.targetB || input.situation.relationship || input.situation.description
+  );
+
+  if (input.includeLyrics) {
+    // 1) Vocal Cast Overwrite / Enhancement
+    if (hasVocalMembers) {
+      const formationSummary = buildVocalFormationSummary(input.vocalMembers!, input.rapEnabled);
+      const membersDetailArray = input.vocalMembers!.map((m, i) => buildVocalMemberDescription(m, i, input.vocalMembers!.length));
+      
+      let parts: string[] = [
+        `이번 트랙은 **${formationSummary}**를 기본 뼈대로 삼고 있습니다. 구체적인 보컬 캐릭터 구성은 다음과 같이 디자인되어 가사의 뉘앙스를 온전히 어루만집니다.`,
+        membersDetailArray.join('\n'),
+      ];
+      
+      const rapperCount = input.vocalMembers!.filter(m => m.roles.includes('rapper')).length;
+      if (rapperCount > 0) {
+        parts.push(`곡의 전반에 멜로디 파트뿐만 아니라 비트 위에 감각적으로 잘게 쪼개는 딕션의 래핑이 자연스레 흐르며, 사운드의 속도감과 쫄깃하고 트렌디한 질감을 조율합니다.`);
+      }
+      
+      vocalDirection = parts.join('\n\n');
+    }
+
+    // 2) Storyboard Overwrite / Enhancement
+    if (hasStoryboard) {
+      const sit = input.situation!;
+      const charA = sit.targetA || "화자";
+      const charB = sit.targetB || "상대방";
+      const rel = sit.relationship ? `${sit.relationship}` : "";
+      const sitDesc = sit.description || "";
+      const dev = sit.development || sit.developmentCustom || sit.developmentPreset || "";
+      const details = sit.details || sit.detailCustom || "";
+      
+      // Sliders
+      let dialogueText = "독백과 소통이 균형을 이루는 중간 형태";
+      if (sit.storyDialogueBalance !== undefined) {
+        if (sit.storyDialogueBalance > 7) {
+          dialogueText = `${charA}의 깊은 내면에 머물며 지나간 순간을 조용히 되뇌며 긴 호흡으로 읊어 내리는 고독한 독백 구조의 노랫말`;
+        } else if (sit.storyDialogueBalance < 4) {
+          dialogueText = `${charA}와 ${charB}가 서로 대사를 주거니 받거니 하며 전개되는 한 편의 극적 연출과 같은 연극적 대화(티키타카) 구도`;
+        } else {
+          dialogueText = `말을 상대방에게 부드럽게 건네듯 풀어 나가며, 화자 스스로도 서정성에 젖는 조화롭고 자연스러운 복합 전개`;
+        }
+      }
+      
+      let realityText = "";
+      if (sit.storyRealityScale !== undefined) {
+        if (sit.storyRealityScale > 7) {
+          realityText = "영화나 꿈속의 일들을 마주하는 듯 극적이고 아름답게 미화된 드라마틱 시네마 세계관";
+        } else if (sit.storyRealityScale < 4) {
+          realityText = "주변에서 쉽게 부딪히는 익숙하고 아기자기한 감정을 담담히 그리는 피부 밀착형 리얼리즘 일상";
+        }
+      }
+      
+      let sincereText = "";
+      if (sit.storyPlayfulSincere !== undefined) {
+        if (sit.storyPlayfulSincere > 7) {
+          sincereText = "한 구절 한 소절마다 숨을 조심스레 고르고 깊고 무거운 마음의 진심만을 고백하는 애틋함";
+        } else if (sit.storyPlayfulSincere < 4) {
+          sincereText = "살짝 옅은 미소와 위트 있는 어구들을 군데군데 엮어 지나치게 무겁지 않게 청량감을 전하려는 센스";
+        }
+      }
+      
+      let speakerAttitudeText = "";
+      if (sit.speakerAStyle || sit.speakerAAttitude || sit.attitudeA) {
+        speakerAttitudeText = `${charA}는 주로 ${sit.speakerAStyle || ''} ${sit.speakerAAttitude || sit.attitudeA || ''} 태도를 유지하여 캐릭터에 생명을 불어넣습니다.`;
+      }
+      if (sit.speakerBStyle || sit.speakerBAttitude || sit.attitudeB) {
+        speakerAttitudeText += ` 이에 화답하여 ${charB}는 ${sit.speakerBStyle || ''} ${sit.speakerBAttitude || sit.attitudeB || ''} 뉘앙스로 서로 대칭을 이룹니다.`;
+      }
+      
+      let lyricParts: string[] = [
+        `이번 트랙의 노랫말은 단순 장르의 전형적인 구성을 완전히 탈피하여, **${charA}와 ${charB} 두 사람의 ${rel || '아련한 서사'}**를 아름답고 촘촘하게 추종합니다.`,
+      ];
+      if (sitDesc) lyricParts.push(`**상황적 배경**: ${sitDesc}`);
+      if (details) lyricParts.push(`**세부 묘사 스케치**: ${details}`);
+      
+      lyricParts.push(`**스토리 및 가사 전개 원칙**:`);
+      lyricParts.push(`- **대화 및 소사**: ${dialogueText}`);
+      if (realityText) lyricParts.push(`- **서사 강도**: ${realityText}`);
+      if (sincereText) lyricParts.push(`- **정서 색감**: ${sincereText}`);
+      if (speakerAttitudeText) lyricParts.push(`- **인물의 태도 및 대조**: ${speakerAttitudeText}`);
+      
+      lyricDirection = lyricParts.join('\n\n');
+
+      // emotionalCore
+      let emoParts: string[] = [];
+      if (rel) emoParts.push(`${charA}와 ${charB}의 관계인 ${rel}의 기류`);
+      if (sitDesc) emoParts.push(sitDesc);
+      if (sincereText) emoParts.push(sincereText);
+      
+      if (emoParts.length > 0) {
+        emotionalCore = `${emoParts.join(' 속에서 우러나오는 ')}를 배경으로 설계해 청중의 정적 자극을 극대화한 독창적인 마음 깊이`;
+      }
+
+      // arrangementFlow
+      if (dev) {
+        arrangementFlow = `스토리 극 전개 양상을 아름답게 대변해 주는 ${dev}의 흐름을 전조 삼아 엮어집니다. 이를 토대로, ${arrangementFlow}`;
+      } else {
+        arrangementFlow = `${charA}와 ${charB}의 극적인 심상 감정 흐름에 유기적으로 발맞추며 고조되었다가 담담히 수그러드는 전개를 바탕 삼고 있으며, ${arrangementFlow}`;
+      }
+
+      // finalImpression
+      finalImpression = `단순한 한 곡의 가창을 넘어 ${charA}의 목소리를 빌려 전하는 아름다운 서정 단편소설 한 편을 감상한 듯한 깊은 영화적 아스라함과 온화한 울림의 순간`;
+    }
+  }
+
+  // 3) Combined Summary Header Overwrite (genreDirection)
+  if (hasStoryboard || hasVocalMembers) {
+    let whoDescription = "설정된 보컬 캐스트";
+    if (hasVocalMembers) {
+      const count = input.vocalMembers!.length;
+      const maleCount = input.vocalMembers!.filter(m => m.gender === 'male').length;
+      const femaleCount = input.vocalMembers!.filter(m => m.gender === 'female').length;
+      if (count === 1) {
+        whoDescription = `${input.vocalMembers![0].gender === 'male' ? '남성 솔로 보컬' : '여성 솔로 보컬'}`;
+      } else if (count === 2) {
+        whoDescription = `${maleCount === 1 && femaleCount === 1 ? '남녀 듀엣' : '감미로운 듀엣'}`;
+      } else {
+        whoDescription = "다채로운 성부의 그룹";
+      }
+    }
+    
+    let sitDescriptionText = "";
+    if (hasStoryboard) {
+      const sit = input.situation!;
+      const rel = sit.relationship ? ` (${sit.relationship})` : "";
+      const charA = sit.targetA || "화자";
+      const charB = sit.targetB || "상대";
+      sitDescriptionText = `${charA}와 ${charB}의 이야기${rel}에서 파생된 ${sit.description || '눈물 어린 순간'}`;
+    } else {
+      sitDescriptionText = "선택된 시적 테마";
+    }
+    
+    genreDirection = `${whoDescription}을 내세워 ${sitDescriptionText}의 감정선을 담아 노래하는 세련된 곡`;
   }
 
   return {

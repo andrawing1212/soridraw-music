@@ -8481,7 +8481,9 @@ ${normalizePromptForDisplay(result.prompt)}
         bilingualMix: previewIsMix,
         englishMixRatio: previewMixRatio,
         rapEnabled: previewRap,
-        directInput: userInput
+        directInput: userInput,
+        vocalMembers,
+        situation
       };
 
       const intent = buildPreviewSongIntent(intentInput);

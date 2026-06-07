@@ -94,6 +94,8 @@ export interface PreviewSongIntent {
   lyricDirection: string;
   finalImpression: string;
   warnings: string[];
+  vocalMembers?: VocalMember[];
+  situation?: SituationConfig;
 }
 
 export interface PreviewCards {
@@ -1183,7 +1185,9 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
     arrangementFlow,
     lyricDirection,
     finalImpression,
-    warnings
+    warnings,
+    vocalMembers: input.vocalMembers,
+    situation: input.situation
   };
 }
 
@@ -1194,7 +1198,53 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
 export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
   const instruments = intent.coreInstruments.length > 0 ? intent.coreInstruments.join(', ') : '주요 악기';
 
-  const interpretationSummary = `이 곡은 ${intent.genreDirection}의 매력을 조화롭게 살려내며, 전반적인 분위기를 친절하게 이끌어주는 제작 안내서입니다. 특히 ${intent.fusionDirection}의 요소를 세심하게 가미하여 흔하거나 뻔하지 않은 신선함을 선사하며, 사용자님의 창작 의도가 한층 돋보이도록 촘촘히 조율했습니다. 중심을 든든하게 잡아줄 ${instruments} 연주와 억지로 꾸미지 않아 편안하게 스며드는 ${intent.emotionalCore}의 내적 울림이 아름답게 조화를 이룬 맞춤 안내입니다.`;
+  let vocalAttitude = "보컬은 너무 튀지 않도록 전체 소리 뒤편에 자연스럽게 숨어 노래합니다.";
+
+  const hasVocalMembers = intent.vocalMembers && intent.vocalMembers.length > 0;
+  if (hasVocalMembers) {
+    const firstMember = intent.vocalMembers![0];
+    const genderLabel = firstMember.gender === 'male' ? '남성 보컬' : '여성 보컬';
+    
+    let styleText = "가까이에서 속삭이듯 말하듯 담담하게 가사를 들려줍니다.";
+    const char = firstMember.character;
+    if (char) {
+      if (char.emotionLevel !== undefined && char.emotionLevel > 7) {
+        styleText = "감정을 깊게 터뜨리며 슬프고 애절한 창법으로 노래를 부릅니다.";
+      } else if (char.emotionLevel !== undefined && char.emotionLevel < 4) {
+        styleText = "감정을 한껏 누그러뜨리고 편안하게 말하듯이 무심하게 가사를 전달합니다.";
+      } else if (char.deliveryLevel !== undefined && char.deliveryLevel < 4) {
+        styleText = "숨소리를 많이 보태어 귓가에 조용히 소통하듯 노래합니다.";
+      } else if (char.rangeLevel !== undefined && char.rangeLevel > 7) {
+        styleText = "시원하고 탄탄한 고음을 질러가며 노래의 분위기를 한층 돋웁니다.";
+      }
+    }
+    
+    if (intent.vocalMembers!.length === 2) {
+      vocalAttitude = "두 보컬이 대화를 주고받듯 번갈아 노래를 불러 지루할 틈이 없습니다.";
+    } else if (intent.vocalMembers!.length > 2) {
+      vocalAttitude = "여러 명의 보컬이 입체적인 레이어를 쌓아가며 풍성한 소리를 냅니다.";
+    } else {
+      vocalAttitude = `${genderLabel}은 ${styleText}`;
+    }
+  } else {
+    const isVocalDisabled = intent.warnings.some(w => w.includes("연주 전용") || w.includes("instrumental") || w.includes("가사가 없는"));
+    if (isVocalDisabled) {
+      vocalAttitude = "악기 소리로 채우는 연주 전용 트랙이라 가창 보컬은 따로 포함되지 않습니다.";
+    }
+  }
+
+  let vibeFeeling = "전체적으로 아기자기하고 편안한 여운을 부드럽게 남깁니다.";
+  if (intent.genreDirection.includes("어두운") || intent.genreDirection.includes("차가운")) {
+    vibeFeeling = "전체적으로 쓸쓸하고 차가우면서도 깊은 여운을 끝까지 끌고 갑니다.";
+  } else if (intent.genreDirection.includes("몽환적인")) {
+    vibeFeeling = "전체적으로 꿈을 꾸듯 묘하고 아름다운 분위기를 끝까지 풍깁니다.";
+  } else if (intent.genreDirection.includes("시원한")) {
+    vibeFeeling = "전체적으로 막힌 가슴이 다 뚫릴 만큼 시원하고 청량한 느낌을 안겨줍니다.";
+  } else if (intent.genreDirection.includes("따뜻한") || intent.genreDirection.includes("포근한")) {
+    vibeFeeling = "전체적으로 마음이 한결 다정해지고 고요해지는 기분 좋은 편안함이 느껴집니다.";
+  }
+
+  const interpretationSummary = `이 곡은 ${intent.genreDirection} 스타일의 음악입니다. 주요 악기로는 ${instruments} 연주를 중심에 두고 흘러갑니다. ${vocalAttitude} ${vibeFeeling}`;
 
   const expectedAtmosphere = `곡 전체의 감성적인 깊이와 온도는 주로 ${intent.moodColor}로 따뜻하면서도 확실하게 유지됩니다. 특히 ${intent.soundTexture}를 분위기에 걸맞게 깔아두어 자칫 심심하고 비어 보일 수 있는 소리 사이사이의 빈틈을 부드럽고 여유롭게 메워 놓았습니다. 귀가 따갑거나 피로할 수 있는 거친 소리들은 깔끔하게 다듬고, 듣는 이가 눈을 감았을 때 눈앞에 아름다운 장면이나 추억이 아련하게 스케치되도록 한층 정성스레 정돈했습니다.`;
 

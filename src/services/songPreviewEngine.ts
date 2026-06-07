@@ -114,7 +114,7 @@ export const PREVIEW_MEANING_DATASET: Record<string, PreviewMeaningData> = {
     id: "uk_garage_rnb",
     label: "UK 개러지 R&B",
     category: "genre",
-    musicalRole: "세련되고 도시적인 야간 감성의 댄서블 R&B",
+    musicalRole: "세련된 도시 밤거리가 떠오르는 댄서블 R&B",
     plainMeaning: "잘게 쪼개지는 투스텝 개러지 드럼 비트와 부드러운 R&B 보컬 멜로디의 융합",
     genreImpact: "정통 R&B의 솔풀한 코드 진행에 영국 클럽 댄스 그루브가 이식되어 트렌디한 질감 형성",
     rhythmImpact: "싱코페이션(당김음)이 살아있는 리드미컬하고 속도감 있는 리듬 루프",
@@ -565,18 +565,18 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   const vocals = dataset.filter(d => d.category === 'vocal_technique');
 
   // 디폴트 문장 스펙 정의
-  let genreDirection = "정교하게 균형 잡힌 다이내믹 팝";
-  let fusionDirection = "대중적인 장르 뼈대 위에 배치된 유려한 리듬";
-  let styleFusionDirection = "장르 본연의 음악성에 무게를 둔 깔끔한 가이드라인";
-  let finalGenreInterpretation = "대중적인 감각을 관통하는 세련된 완성도의 트랙";
+  let genreDirection = "박자와 멜로디의 균형이 아주 잘 갖춰진 대중 팝";
+  let fusionDirection = "대중적인 장르 구성 위에 흥겨운 리듬을 얹은 편안한 스타일";
+  let styleFusionDirection = "장르 고유의 장점을 잘 살린 깔끔하고 세련된 일치감";
+  let finalGenreInterpretation = "대중적인 감성과 조화로움을 고루 들려주는 완성도 높은 곡";
   let coreInstruments = ["피아노", "어쿠스틱 드럼", "신스 패드"];
-  let soundTexture = "상용 음원 규격의 풍부하고 깔끔한 컴프레션 텍스처";
-  let emotionalCore = "과장하지 않는 보편적인 깊이의 마음선";
-  let moodColor = "밝지도 어둡지도 않은 중립적인 톤 앤 매너";
-  let vocalDirection = "편안한 발성과 가사가 명료하게 들리는 대중적 가창 포맷";
-  let arrangementFlow = "인트로에서 빌드업을 거쳐 절정(코러스)과 아우트로로 안착하는 정석 가이드라인";
-  let lyricDirection = "구조적 대구를 이루어 전달력을 높이는 깔끔한 벌스-코러스 전개";
-  let finalImpression = "세련된 곡조와 매력적인 연주가 조화를 이루며 청자에게 단단한 여운을 선물할 트랙";
+  let soundTexture = "귀가 피로하지 않게 깔끔히 정돈하여 균형을 맞춘 소리 질감";
+  let emotionalCore = "억지로 꾸미지 않아 더 다정하게 다가오는 깊이 있는 정서";
+  let moodColor = "너무 밝거나 어둡지 않게 균위가 잡힌 다정한 중간 톤";
+  let vocalDirection = "목소리가 편안하고 가사 소리가 선명히 들리는 표준형 가창";
+  let arrangementFlow = "익숙한 전주로 담백하게 기용하여 후렴구에서 한결 풍성해진 후 산뜻하게 매듭짓는 전개";
+  let lyricDirection = "귓가에 부드럽게 쏙 들어오도록 단락을 잘 맞춘 기본 편전 구성";
+  let finalImpression = "세련된 멜로디와 정겨운 연주가 함께 어우러져 한결 풍성한 여운을 전해주는 구도";
 
   // 2) 장르 핵심 데이터 연동 (리듬, 악기, 전개, 가사 어조, 에너지 밀도)
   const primaryGenre = genres[0];
@@ -605,14 +605,14 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
       lyricDirection = primaryGenre.lyricImpact;
     }
     if (primaryGenre.energyImpact) {
-      emotionalCore = `${primaryGenre.energyImpact}를 배경삼은 ${primaryGenre.moodImpact || '장르 고유의 정초'}`;
+      emotionalCore = `${primaryGenre.energyImpact}를 배경으로 삼은 ${primaryGenre.moodImpact || '장르 고유의 다정한 감수성'}`;
     }
   }
 
   // 복수 장르 선택 시 융합 방향성 조율
   if (genres.length > 1) {
     const backupGenre = genres[1];
-    fusionDirection = `${primaryGenre.label} 고유의 지지대 위에 ${backupGenre.label} 특색의 매끄러운 바운스가 정교히 맞물리는 입체적 크로스오버`;
+    fusionDirection = `${primaryGenre.label} 특유의 든든한 기초 위에 ${backupGenre.label} 고유의 맛과 분위기가 매끄럽고 자연스레 합쳐진 멋스러운 융합 사운드`;
   }
 
   // 3) 스타일 결합 분석 (시대감, 편곡 결, 사운드 색, 대중성/실험성, 장르 융합 방향)
@@ -625,19 +625,19 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
     const s2 = primaryStyles[1];
 
     if (s2) {
-      styleFusionDirection = `${s1.label}과 ${s2.label}의 시대적 질감을 교차해 ${genreLabel}에 가감했습니다. 구체적으로는 ${s1.styleEra} 및 ${s2.styleEra}의 상호작용이 감돈다`;
-      fusionDirection = `${primaryGenre ? primaryGenre.label : '메인 테마'}에 ${s1.label}과 ${s2.label}을 감각적으로 이식해 ${s1.styleFusionImpact || '새로운 장르 감성'}을 열어내도록 고안되었습니다`;
+      styleFusionDirection = `${s1.label}과 ${s2.label} 고유의 감성을 교차해 장르를 더 입체적으로 꾸몄습니다. 구체적으로는 ${s1.styleEra} 및 ${s2.styleEra}의 장점이 부드럽게 감돕니다`;
+      fusionDirection = `${primaryGenre ? primaryGenre.label : '중심 테마'}에 ${s1.label}과 ${s2.label}의 어조를 조화롭게 녹여내어 ${s1.styleFusionImpact || '새롭고 따뜻한 감성'}을 들려드리게끔 마련했습니다`;
     } else {
-      styleFusionDirection = `${s1.label} 특유의 ${s1.styleEra}이 온전히 숨 쉬어, ${s1.styleFusionImpact || '독특한 융합 지대'}를 열어 보입니다`;
-      fusionDirection = `${genreLabel} 고유의 그루브 위에 ${s1.label}의 ${s1.styleFusionImpact || '세련된 감성'}을 더해 퓨전의 완성도를 대뜸 올렸습니다`;
+      styleFusionDirection = `${s1.label} 특유의 ${s1.styleEra}적인 멋이 잘 담겨 있어, ${s1.styleFusionImpact || '신선하고 새로운 들을 거리'}를 열어냅니다`;
+      fusionDirection = `${genreLabel} 고유의 기분 좋은 리듬감 위에 ${s1.label}의 ${s1.styleFusionImpact || '세련된 감성'}을 조화로이 더해 완성도를 기분 좋게 챙겼습니다`;
     }
 
     // 편곡 결 (styleArrangement) 및 사운드 색 (styleSoundColor) 반영
-    soundTexture = `${soundTexture} 및 ${s1.styleSoundColor || '세련된 정위감'}과 빈티지한 잔향의 조화`;
+    soundTexture = `${soundTexture} 및 ${s1.styleSoundColor || '귀가 편안한 균형감'}과 빈티지하고 촉촉한 잔향이 함께 감돕니다`;
     arrangementFlow = `${s1.styleArrangement || arrangementFlow}. 또한, ${arrangementFlow}`;
     
     if (s1.styleAppeal) {
-      finalImpression = `${s1.styleAppeal}을 지향하여, 감상의 끝에 가창자의 잔상이 단단하고 세련되며 포근하게 스며드는 여운의 완착점`;
+      finalImpression = `${s1.styleAppeal}을 목표로 삼아, 감상이 완전히 끝난 하이라이트 뒤에도 가창자의 잔상이 포근하고 감미롭게 퍼지는 여운의 순간`;
     }
   }
 
@@ -669,19 +669,19 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
     finalGenreInterpretation = "대중문화 감각을 관통하는 세련된 사운드 밸런스";
   }
 
-  // 5) 분 분위기(Mood) 반영 보정
+  // 5) 분위기(Mood) 반영 보정
   if (moods.length > 0) {
     const primaryMood = moods[0];
-    moodColor = `${primaryMood.label} 감성의 사운드 톤 앤 매너`;
+    moodColor = `${primaryMood.label} 감성이 녹아든 사운드 분위기`;
     if (primaryMood.id === 'hollow') {
-      soundTexture += " 및 쓸쓸한 온도의 넓고 서늘한 입체 리버브 잔향";
-      moodColor = "스튜디오 외부까지 메아리치듯 멀어지는 듯한 아스라한 공간 다이내믹";
+      soundTexture += " 및 쓸쓸함이 묻어나는 아련하고 넓은 공간 울림 효과";
+      moodColor = "소리가 먼 곳에서 메아리쳐 오듯 은은하고 아스라한 느낌";
     } else if (primaryMood.id === 'warm') {
-      soundTexture += " 및 둥글둥글한 중음역 포근함";
-      moodColor = "난로 앞 소파에 기댄 듯 귓가를 온화하게 안아주는 포근한 톤";
+      soundTexture += " 및 귀를 따스하게 해주는 둥글고 모나지 않은 파형";
+      moodColor = "벽난로 앞 소파에 앉은 대화처럼 조용조용 귓가를 감싸 안는 다정한 톤";
     } else if (primaryMood.id === 'uneasy') {
-      soundTexture += " 및 위태로운 흔들림이 담긴 마찰 주파수";
-      moodColor = "안개 속을 걷듯 해결되지 않는 아슬아슬한 극적 서스펜디드 텐션";
+      soundTexture += " 및 살짝 위태롭게 흔들려 아슬아슬함이 묻어나는 독특한 소리 톤";
+      moodColor = "안개 속을 천천히 걷는 것처럼 신비롭고 긴장되게 퍼지는 어조 조율";
     }
   }
 
@@ -732,28 +732,28 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   }
 
   // 9) 템포 계산
-  let tempoLabel = "정교한 맞춤형 다이내믹 템포";
+  let tempoLabel = "곡에 알맞은 다이내믹 속도감 가이드";
   const t = input.tempo;
   if (t && t.enabled) {
     const avg = Math.round((t.min + t.max) / 2);
     if (avg < 80) {
-      tempoLabel = `느린 호흡 (${t.min}-${t.max} BPM)이 직조한 사색적이며 깊은 완곡 템포 궤적`;
+      tempoLabel = `느린 호흡 (${t.min}-${t.max} BPM)의 빠르기로, 깊은 생각에 조용히 젖어들기 좋은 은은하고 편안한 템포`;
     } else if (avg >= 80 && avg <= 119) {
-      tempoLabel = `미디엄 템포 (${t.min}-${t.max} BPM)가 가져오는 대단히 편근하고 자연적인 심박 무드`;
+      tempoLabel = `중간 빠르기 (${t.min}-${t.max} BPM)의 속도로, 일상의 심장 박동처럼 무척 편안하고 자연스러운 속도감`;
     } else {
-      tempoLabel = `질주하는 업템포 (${t.min}-${t.max} BPM)가 선사하는 활기하고 에너제틱하게 튕겨내는 리듬 스탠스`;
+      tempoLabel = `밀고 나가는 빠른 템포 (${t.min}-${t.max} BPM)로, 들뜰 때처럼 리듬을 타며 활기를 일깨우는 에너제틱한 속도감`;
     }
   } else {
-    tempoLabel = "장르에 가장 완전하게 최적화된 마스터링 템포";
+    tempoLabel = "해당 장르를 들려주기에 가장 이상적인 추천 빠르기";
   }
-  arrangementFlow = `${tempoLabel} 하에, ${arrangementFlow}`;
+  arrangementFlow = `${tempoLabel}를 기준으로 맞물리며, ${arrangementFlow}`;
 
   // 10) 충돌 경고 분석
   if (input.selectedGenre.includes('uk_garage_rnb') && input.selectedMoods.includes('warm')) {
-    warnings.push("세련되고 차가운 클럽 감성의 UK 개러지 리듬에 따뜻하고 포근한 어쿠스틱 계열의 무드가 더해져 역설적이면서 예술적인 크로스오버를 자아냅니다. 조심스러운 주파수 배분이 연출됩니다.");
+    warnings.push("시크한 도시적인 분위기의 UK 개러지 비트에 따뜻하고 안락한 느낌을 더하면, 묘하게 미적 매력이 어우러지는 아주 독특하고 개성 넘치는 융합이 생겨납니다. 두 뉘앙스가 고루 살아나도록 소리 배율을 균형 있게 다듬어 줍니다.");
   }
   if (!input.includeLyrics && input.selectedVocalTags.length > 0) {
-    warnings.push("가사가 없는 instrumental 설정임에도 보컬 특색이 인입되었습니다. 보컬 보이스 대신 음향 보이스 찹이나 메인 리모트 악기 주 선율에 기법 장식을 배치 조율합니다.");
+    warnings.push("가사가 없는 연주 전용(instrumental) 곡인데 보컬의 특징이나 기법이 함께 체크되었습니다. 사람 목소리로 기사를 노래하기보다, 목소리를 악기처럼 짧게 자른 컴퓨터 이펙트 소리(보이스 찹)나 메인 가락을 바꾸는 연주자 기법을 어울리게 엮어 보심을 추천합니다.");
   }
 
   return {
@@ -778,11 +778,11 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
  * 대괄호 `[]` 기호를 전부 자연스럽게 탈피한 프리미엄 한국어 제작 브리핑을 조형합니다.
  */
 export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
-  const instruments = intent.coreInstruments.length > 0 ? intent.coreInstruments.join(', ') : '전술 세션 악기';
+  const instruments = intent.coreInstruments.length > 0 ? intent.coreInstruments.join(', ') : '주요 악기';
 
-  const interpretationSummary = `본 작품은 ${intent.genreDirection}의 음률 지형도를 정밀하게 추종하는 고해상 기획 해석을 골자로 합니다. ${intent.fusionDirection}의 퓨전 접점을 수려하게 가로지르며, 기성의 보편적인 선율 노선을 정교히 피하고 사용자 기획 정서를 극대화하도록 안배되었습니다. 특히 전개 전반의 조타수가 될 ${instruments} 편성과 결코 과장됨 없이 수줍게 전진하는 ${intent.emotionalCore}의 내적 울림을 아름답게 밀집 배치한 고유 해석본입니다.`;
+  const interpretationSummary = `이 곡은 ${intent.genreDirection}의 매력을 조화롭게 살려내며, 전반적인 분위기를 친절하게 이끌어주는 제작 안내서입니다. 특히 ${intent.fusionDirection}의 요소를 세심하게 가미하여 흔하거나 뻔하지 않은 신선함을 선사하며, 사용자님의 창작 의도가 한층 돋보이도록 촘촘히 조율했습니다. 중심을 든든하게 잡아줄 ${instruments} 연주와 억지로 꾸미지 않아 편안하게 스며드는 ${intent.emotionalCore}의 내적 울림이 아름답게 조화를 이룬 맞춤 안내입니다.`;
 
-  const expectedAtmosphere = `음원 특유의 온도와 감성적 배치는 ${intent.moodColor}로 공고히 구현됩니다. 특히 ${intent.soundTexture}를 배경삼아, 심심할 수 있는 파형의 골짜기마다 세련된 여백 압력을 보정해 넣었습니다. 청각적 자극을 이성적으로 깎아내고 온화하게 머무는 잔향감이 청중에게 입체적인 서사를 떠올리게 하도록 각고의 노력을 들였습니다.`;
+  const expectedAtmosphere = `곡 전체의 감성적인 깊이와 온도는 주로 ${intent.moodColor}로 따뜻하면서도 확실하게 유지됩니다. 특히 ${intent.soundTexture}를 분위기에 걸맞게 깔아두어 자칫 심심하고 비어 보일 수 있는 소리 사이사이의 빈틈을 부드럽고 여유롭게 메워 놓았습니다. 귀가 따갑거나 피로할 수 있는 거친 소리들은 깔끔하게 다듬고, 듣는 이가 눈을 감았을 때 눈앞에 아름다운 장면이나 추억이 아련하게 스케치되도록 한층 정성스레 정돈했습니다.`;
 
   const expectedVocals = intent.vocalDirection;
 
@@ -791,8 +791,8 @@ export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
   const expectedLyrics = intent.lyricDirection;
 
   const pointsToNote = [
-    `파이널 믹싱 단계에서 ${instruments} 파트 간의 주파수 대역 충돌 현상을 극단적으로 상쇄해 극치에 달구어진 주파수 균형을 이룹니다.`,
-    `어색하게 과도한 조성이 아닌, 소리 각각의 밀착감과 명료도를 극대로 끌어낸 소수 편성 제작 가이드를 온전히 충족합니다.`
+    `파이널 믹싱 작업 시 ${instruments} 연주 파트들이 서로 뭉개지거나 성량이 충돌하지 않도록 소리의 중심 대역을 말끔히 정돈해 더욱 깨끗하고 선명한 사운드를 연출합니다.`,
+    `불필요하게 복잡하게 잔뜩 채운 구성보다, 노랫말과 악기 본래의 매력이 하나하나 포근하고 진솔하게 전달될 수 있게 깔끔하고 단단한 세 편성을 지향합니다.`
   ];
 
   if (intent.warnings.length > 0) {

@@ -96,6 +96,10 @@ export interface PreviewSongIntent {
   warnings: string[];
   vocalMembers?: VocalMember[];
   situation?: SituationConfig;
+  moodId?: string;
+  selectedMoods?: { id: string; label: string }[];
+  selectedThemes?: { id: string; label: string }[];
+  rawInput?: PreviewInput;
 }
 
 export interface PreviewCards {
@@ -1187,7 +1191,11 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
     finalImpression,
     warnings,
     vocalMembers: input.vocalMembers,
-    situation: input.situation
+    situation: input.situation,
+    moodId: moods.length > 0 ? moods[0].id : undefined,
+    selectedMoods: moods.map(m => ({ id: m.id, label: m.label })),
+    selectedThemes: themes.map(t => ({ id: t.id, label: t.label })),
+    rawInput: input
   };
 }
 
@@ -1196,63 +1204,258 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
  * 대괄호 `[]` 기호를 전부 자연스럽게 탈피한 프리미엄 한국어 제작 브리핑을 조형합니다.
  */
 export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
-  const instruments = intent.coreInstruments.length > 0 ? intent.coreInstruments.join(', ') : '주요 악기';
+  const input = intent.rawInput;
+  const instruments = intent.coreInstruments.length > 0 ? intent.coreInstruments.slice(0, 3).join(', ') : '주요 악기';
 
-  let vocalAttitude = "보컬은 너무 튀지 않도록 전체 소리 뒤편에 자연스럽게 숨어 노래합니다.";
+  // 1) 곡 해석 요약 (3~4문장)
+  // 장르/스타일 퓨전, 핵심 사운드, 보컬 태도, 전체 인상 조합
+  const genresText = intent.genreDirection || "장르 고유의";
+  
+  let m1 = `이 곡은 ${genresText} 감성의 분위기를 담아낸 음악입니다.`;
+  let m2 = `사운드 전개에는 ${instruments} 연주 파트가 중심적인 기둥 역할을 맡아 흘러갑니다.`;
+  let m3 = "보컬은 전체적인 리듬과 악기의 선율에 맞춰 조화롭고 편안한 호흡으로 노랫말을 채웁니다.";
+  
+  if (input) {
+    if (!input.includeLyrics) {
+      m3 = "악기 본연의 선율미에 무게중심을 둔 연주 전용(Instrumental) 모드로, 분위기에 흐릿한 여운을 남깁니다.";
+    } else if (input.vocalMembers && input.vocalMembers.length > 0) {
+      const counts = input.vocalMembers.length;
+      const first = input.vocalMembers[0];
+      const genderKo = first.gender === 'male' ? '남성' : '여성';
+      const roleKo = first.roles && first.roles.length > 0 ? getRolesKo(first.roles) : "보컬";
+      
+      let characterDesc = "";
+      if (first.character) {
+        if (first.character.emotionLevel !== undefined && first.character.emotionLevel > 7) {
+          characterDesc = "풍성한 성량과 호소력 짙은 감정 표현으로";
+        } else if (first.character.emotionLevel !== undefined && first.character.emotionLevel < 4) {
+          characterDesc = "덤덤하고 절제된 담백한 보이스 톤으로";
+        } else if (first.character.deliveryLevel !== undefined && first.character.deliveryLevel < 4) {
+          characterDesc = "나직하게 속삭이는 편안한 매력의 호흡법으로";
+        } else {
+          characterDesc = "자연스럽게 발성을 제어하는 어조로";
+        }
+      } else {
+        characterDesc = "깔끔하고 세련된 기량으로";
+      }
+      
+      if (counts === 1) {
+        m3 = `보컬은 단독 솔로 형태의 ${genderKo} ${roleKo}이 주축이 되어, ${characterDesc} 노랫말의 감정선을 깊게 끌고 갑니다.`;
+      } else if (counts === 2) {
+        m3 = `보컬은 서로 대조와 합을 이룬 이중창 듀엣 구도로, ${genderKo} 가창자를 비롯한 파트 교차를 통해 입체적인 가창을 뽐냅니다.`;
+      } else {
+        m3 = `보컬은 다채로운 파트 전개를 선보이는 그룹 구성원들이 서로 화색을 얹어 한층 더 풍성하고 짜임새 있는 성부를 들려줍니다.`;
+      }
+    }
+  }
+  
+  let m4 = "선택한 장르와 사운드를 중심으로 곡의 기본 방향이 잡힙니다.";
+  if (intent.selectedMoods && intent.selectedMoods.length > 0) {
+    const primaryMood = intent.selectedMoods[0].label;
+    m4 = `곡 전반에 스며든 ${primaryMood} 기류가 연주 사운드와 자연스레 교류하여 신선한 귀 울림을 선사합니다.`;
+  } else if (intent.selectedThemes && intent.selectedThemes.length > 0) {
+    const primaryTheme = intent.selectedThemes[0].label;
+    m4 = `노랫말 속에 ${primaryTheme} 정서가 조화롭게 녹아들어, 감상이 끝날 때까지 다채로운 심상을 풍길 것입니다.`;
+  }
+  
+  const interpretationSummary = `${m1} ${m2} ${m3} ${m4}`;
 
-  const hasVocalMembers = intent.vocalMembers && intent.vocalMembers.length > 0;
-  if (hasVocalMembers) {
-    const firstMember = intent.vocalMembers![0];
-    const genderLabel = firstMember.gender === 'male' ? '남성 보컬' : '여성 보컬';
+  // 2) 예상 분위기 (2~3문장)
+  // 분위기 키워드 -> 밝기/어두움/온도/공간감/무게감
+  // 주제 키워드 -> 감정 방향
+  // 사운드 키워드 -> 소리 질감
+  let s1 = "선택한 장르와 소리를 중심으로 곡의 고유한 공간 분위기가 연출됩니다.";
+  let s2 = "";
+  let s3 = "";
+  
+  const moodId = intent.moodId || (intent.selectedMoods && intent.selectedMoods.length > 0 ? intent.selectedMoods[0].id : "");
+  const isHollow = moodId === 'hollow' || intent.genreDirection.includes("어두운") || intent.genreDirection.includes("차가운");
+  const isWarm = moodId === 'warm' || moodId === 'coziness' || moodId === 'soft_tender' || moodId === 'tender' || moodId === 'healing' || intent.genreDirection.includes("따뜻한") || intent.genreDirection.includes("포근한");
+  const isUneasy = moodId === 'uneasy';
+  const isBright = moodId === 'bright' || moodId === 'hopeful' || moodId === 'cheerful';
+  
+  const instName = intent.coreInstruments && intent.coreInstruments.length > 1
+    ? `${intent.coreInstruments[0]}와 ${intent.coreInstruments[1]}`
+    : (intent.coreInstruments && intent.coreInstruments[0] ? intent.coreInstruments[0] : "악기");
+
+  if (isHollow) {
+    s1 = `${instName} 소리가 차분하고 쓸쓸하게 스며 들어가며 깊고 고요한 밤의 공기를 자아냅니다.`;
+  } else if (isWarm) {
+    s1 = `${instName} 선율이 공간에 포근히 번져 나가면서 아늑하고 온화한 방 안의 온기를 가득 머금게 합니다.`;
+  } else if (isUneasy) {
+    s1 = `다소 이질적인 ${instName}의 잔향이 겹쳐지면서 불확실한 서늘함과 팽팽한 긴장감의 기류를 형성합니다.`;
+  } else if (isBright) {
+    s1 = `맑게 트인 ${instName} 울림이 전해져 오며 눈앞이 서서히 개는 듯 상쾌하고 다정한 온도의 공기가 흐릅니다.`;
+  } else {
+    s1 = `단정하고 모나지 않은 ${instName} 소리를 위주로 가만히 마음 놓기 좋은 온화한 균형의 공기가 연출됩니다.`;
+  }
+  
+  const mainThemeId = intent.selectedThemes && intent.selectedThemes.length > 0 ? intent.selectedThemes[0].id : "";
+  const themeLabel = intent.selectedThemes && intent.selectedThemes.length > 0 ? intent.selectedThemes[0].label : "";
+  
+  if (mainThemeId === 'rain' || themeLabel.includes('비')) {
+    s2 = "창밖에 촉촉한 빗소리가 듣기 편하게 떨어지듯 가만히 가라앉는 그리움으로 전체의 감정을 조율해줍니다.";
+  } else if (mainThemeId === 'hometown' || mainThemeId === 'memory' || themeLabel.includes('고향') || themeLabel.includes('추억') || themeLabel.includes('기억')) {
+    s2 = "지나간 흔적들이나 오랜 정서들을 마주보는 듯하여 마음 깊이 묵직하고 애틋한 감정 방향을 형성합니다.";
+  } else if (mainThemeId === 'fantasy' || mainThemeId === 'fantasy_bgm' || mainThemeId === 'dark_fantasy' || themeLabel.includes('판타지')) {
+    s2 = "잠시 현실에서 멀어진 것처럼 몽롱하면서도 신비한 감성이 온전히 사운드에 번지게 유도합니다.";
+  } else if (mainThemeId === 'love' || mainThemeId === 'crush' || mainThemeId === 'excitement' || mainThemeId === 'confession' || themeLabel.includes('사랑') || themeLabel.includes('설렘') || themeLabel.includes('고백')) {
+    s2 = "우러나오는 애정과 기대를 바탕으로, 무거움보다는 미소가 머무는 기분 밝은 감정선으로 무게를 정돈합니다.";
+  } else if (mainThemeId === 'separation' || mainThemeId === 'regret' || mainThemeId === 'loneliness' || themeLabel.includes('이별') || themeLabel.includes('후회') || themeLabel.includes('외로움') || themeLabel.includes('슬픔')) {
+    s2 = "아련한 그리움의 매듭들이 톤 다운된 잔향 속에 배어 있어 차분하면서도 묵직함이 고스란히 묻어납니다.";
+  } else {
+    s2 = "낙차가 생기지 않고 부드럽게 사운드가 흘러가, 무리가 없이 편안히 정서에 젖어들기 좋은 중간적 무게를 선사합니다.";
+  }
+  
+  if (isHollow || mainThemeId === 'fantasy' || mainThemeId === 'dark_fantasy') {
+    s3 = "소리가 넓은 공간 속에 사방으로 퍼져나가며 조그만 여백을 두고 지켜보는 듯 일정한 거리감을 자아냅니다.";
+  } else if (isWarm || moodId === 'coziness' || moodId === 'calm' || mainThemeId === 'love') {
+    s3 = "방 안에서 도란도란 이야기를 나누듯 가깝고 친근해 귓가 바로 옆에서 연주받는 따듯한 온감을 형성합니다.";
+  } else if (isUneasy) {
+    s3 = "소리가 가깝게 닿으면서도 저음의 서늘한 잔향이 옆으로 넓게 빠져나가 입체적 구도의 거리를 만듭니다.";
+  } else if (isBright) {
+    s3 = "바람이 불어오듯 시원하고 선명하며, 사운드의 전달력을 한층 높인 선명하고 편안한 입구를 열어놓습니다.";
+  } else {
+    s3 = "악기와 감정이 청자를 밀어붙이지 않아 적정한 거리 속에서 시원스레 귀에 안착합니다.";
+  }
+  
+  const expectedAtmosphere = `${s1} ${s2} ${s3}`;
+
+  // 3) 예상 보컬 (성별/역할/창법/호흡/톤/랩 여부/감정 게이지, 숨지 않는 보컬 위치)
+  let expectedVocals = "선택한 보컬 스타일에 부합하는 매끄러운 목소리 연출이 이뤄집니다.";
+  
+  if (input && !input.includeLyrics) {
+    expectedVocals = "가창 보컬을 제외한 기악 연주 중심의 트랙으로 설계되어, 오직 편곡 악기들의 다채로운 선율 전개와 리듬으로만 가슴 깊은 여운을 선사할 예정입니다.";
+  } else if (input && input.vocalMembers && input.vocalMembers.length > 0) {
+    const list = input.vocalMembers;
     
-    let styleText = "가까이에서 속삭이듯 말하듯 담담하게 가사를 들려줍니다.";
-    const char = firstMember.character;
+    // 첫번째 보컬 대표 특성 추출
+    const mainVoc = list[0];
+    const genderStr = mainVoc.gender === 'male' ? '남성' : '여성';
+    const roleStr = mainVoc.roles && mainVoc.roles.length > 0 ? getRolesKo(mainVoc.roles) : "보컬";
+    
+    let positionText = "악기와 목소리가 알맞은 자리에 잘 개어져 안정적인 수평을 이룹니다.";
+    let styleText = "안정적이고 자연스러운 발성으로 노랫말을 들려줍니다.";
+    
+    const char = mainVoc.character;
     if (char) {
       if (char.emotionLevel !== undefined && char.emotionLevel > 7) {
-        styleText = "감정을 깊게 터뜨리며 슬프고 애절한 창법으로 노래를 부릅니다.";
-      } else if (char.emotionLevel !== undefined && char.emotionLevel < 4) {
-        styleText = "감정을 한껏 누그러뜨리고 편안하게 말하듯이 무심하게 가사를 전달합니다.";
-      } else if (char.deliveryLevel !== undefined && char.deliveryLevel < 4) {
-        styleText = "숨소리를 많이 보태어 귓가에 조용히 소통하듯 노래합니다.";
+        positionText = "보컬이 가장 전면으로 나와 감정을 절절히 토하며 사운드의 중심축을 강력하게 이끌어 줄 생각입니다.";
+        styleText = "가슴 아픈 흔들림이나 활기찬 호소력을 극대화하여 문장 하나하나의 호흡도 깊게 매만집니다.";
       } else if (char.rangeLevel !== undefined && char.rangeLevel > 7) {
-        styleText = "시원하고 탄탄한 고음을 질러가며 노래의 분위기를 한층 돋웁니다.";
+        positionText = "높고 맑은 음역대를 타고 시원하고 에너제틱하게 뻗어 올라, 편곡의 입체감을 단숨에 높여줍니다.";
+        styleText = "어려운 고역 부근도 무리 없이 밀고 나가며 시원하고 해방감이 넘치는 가창을 들려줍니다.";
+      } else if (char.deliveryLevel !== undefined && char.deliveryLevel < 4) {
+        positionText = "귓가 바로 옆에서 호흡을 섞어 조용히 소통하듯 아주 밀접하고 따뜻한 어조의 거리감을 조형합니다.";
+        styleText = "숨소리의 방출 양을 늘리고 나직이 읊조려, 조용한 방 안에서 비밀을 나누는 듯 편안한 느낌을 전합니다.";
+      } else if (isHollow || mainThemeId === 'fantasy') {
+        positionText = "넓게 번지는 잔향 효과를 띠며 악기 사운드 속에서 부드럽게 감싸 안는 아련한 배치에 놓입니다.";
+        styleText = "목소리에 힘을 살짝 빼고 쓸쓸하게 한 음씩 내려놓아 편곡 분위기 속에 매끄럽게 교차됩니다.";
+      } else if (input.rapEnabled || mainVoc.roles.includes('rapper')) {
+        positionText = "비트감이 뚜렷한 드럼과 베이스의 반복 축에 딱 맞아떨어지는 완벽히 리드미컬하고 일치되는 랩 위치를 잡습니다.";
+        styleText = "가사 딕션을 정교하게 조율하여, 웅장하거나 빠른 반주 기하 위에서도 명쾌한 속도감을 들려줍니다.";
       }
     }
     
-    if (intent.vocalMembers!.length === 2) {
-      vocalAttitude = "두 보컬이 대화를 주고받듯 번갈아 노래를 불러 지루할 틈이 없습니다.";
-    } else if (intent.vocalMembers!.length > 2) {
-      vocalAttitude = "여러 명의 보컬이 입체적인 레이어를 쌓아가며 풍성한 소리를 냅니다.";
+    let membersDesc = "";
+    if (list.length === 1) {
+      membersDesc = `이 곡은 ${genderStr} 솔로인 ${roleStr}이 마이크를 잡아 ${styleText} 특히 ${positionText}`;
+    } else if (list.length === 2) {
+      membersDesc = `이 곡은 서로 다른 매력의 이중창 듀엣 구도로 대화하듯 노랫말을 서로 화답합니다. 이끄는 ${genderStr} 가창자의 스타일은 ${styleText} 전체 흐름에서 ${positionText}`;
     } else {
-      vocalAttitude = `${genderLabel}은 ${styleText}`;
+      membersDesc = `이 곡은 여러 명의 성부가 다채롭게 얹어지는 조화로운 그룹 가창 포맷입니다. 주축 보컬은 주로 ${styleText} 사운드가 풍성해지는 와중에도 ${positionText}`;
     }
+    
+    expectedVocals = membersDesc;
   } else {
-    const isVocalDisabled = intent.warnings.some(w => w.includes("연주 전용") || w.includes("instrumental") || w.includes("가사가 없는"));
-    if (isVocalDisabled) {
-      vocalAttitude = "악기 소리로 채우는 연주 전용 트랙이라 가창 보컬은 따로 포함되지 않습니다.";
+    expectedVocals = "선택한 장르와 보컬 톤 조합에 잘 조화되는 목소리가 중심에 오릅니다. 과도하게 튀지 않으면서도 가사 전달력을 고스란히 살려, 편곡 하이라이트 구간에 귀에 기분 좋게 닿도록 마무리됩니다.";
+  }
+
+  // 4) 예상 전개 (추천 템포 등 기계적 문장 배제, 템포/장르/섹션/스타일 흐름으로 초반/후렴/브릿지/마지막 전개)
+  let expectedArrangement = "선택한 장르와 템포 성향에 맞춰 곡의 유기적 흐름이 채워집니다.";
+  
+  if (input) {
+    let speedText = "장르에 어울리는 자연스럽고 원활한 속도로 진행됩니다.";
+    if (input.tempo && input.tempo.enabled) {
+      const min = input.tempo.min;
+      const max = input.tempo.max;
+      const avg = (min + max) / 2;
+      if (avg < 80) {
+        speedText = `눈 내리는 밤처럼 조용한 저녁걸음만큼 은근하고 느린 흐름(BPM ${min}~${max})을 타며 생각에 고요히 젖어들기 좋습니다.`;
+      } else if (avg >= 80 && avg <= 119) {
+        speedText = `심장 고동이나 일상적인 발걸음처럼 무척이나 편안하고 일관적인 중간 빠르기(BPM ${min}~${max})의 자연스러움을 보여줍니다.`;
+      } else {
+        speedText = `바람을 가르며 드라이브를 즐기듯 시원하고 활기 넘치는 빠른 템포(BPM ${min}~${max})로 리듬의 쾌감을 밀어붙입니다.`;
+      }
+    }
+    
+    let sectionsText = "기본적인 파트 흐름에 따라 흘러갑니다.";
+    if (input.selectedSections && input.selectedSections.length > 0) {
+      const names = input.selectedSections.map((s: any) => s.labelKo || s.label || s.id).join(' - ');
+      sectionsText = `선택된 구성 단계(${names})의 배치 논리를 깔끔히 정비하여 흐름을 만듭니다.`;
+    }
+    
+    expectedArrangement = `곡은 ${speedText} ${sectionsText}\n- **초반부(도입)**: 인트로 부분에서 잔잔한 멜로디 악기가 가볍게 공간의 공기감을 잡고, 노랫말을 담담히 꺼낼 수 있도록 안정적인 출발을 이끕니다.\n- **후렴구(하이라이트)**: 곡의 가장 중심부에 이르면 드럼 비트나 단단한 세션 악기들이 가세해, 보컬의 열량과 사운드를 풍성하게 폭발시키며 듣는 이에게 인상적인 포인트를 자극합니다.\n- **중후반(브릿지)**: 후렴을 지난 시점에 가벼운 연주 솔로나 환기 파트를 배치하여, 일률적인 반복에서 벗어난 매끄러운 다이내믹 흐름을 이뤄내며 집중력을 한층 극대화합니다.\n- **아웃트로(매듭)**: 곡의 하이라이트가 마감된 뒤에는 보컬의 잔향과 악기가 우아하고 부드럽게 감정을 안아 내려놓으며 여운 속에 소리가 차분히 잦아듭니다.`;
+  }
+
+  // 5) 예상 가사 방향 (주제/스토리보드/언어/가사밀도에 맞춰 말투/후렴/표현법 설명)
+  let expectedLyrics = "선택한 주제와 스토리 구도에 발을 맞춰 노랫말이 작성됩니다.";
+  
+  if (input) {
+    if (!input.includeLyrics) {
+      expectedLyrics = "오가닉 기악 악기의 멜로디와 사운드에 온전한 무게를 두고자 별도의 가사 작사는 생략하여 진행됩니다.";
+    } else {
+      let langText = "한국어 노랫말을 기본 중심뼈대로 하여";
+      if (input.lyricLanguages && input.lyricLanguages.length > 0) {
+        if (input.lyricLanguages.includes('en') && !input.lyricLanguages.includes('ko')) {
+          langText = "트렌디하고 세련된 영문 구어체들을 기본 뼈대로 삼으며";
+        } else if (input.lyricLanguages.includes('ja')) {
+          langText = "자연스레 서정성이 스미는 일어 가사 문장들을 기조로 하여";
+        }
+        
+        if (input.bilingualMix) {
+          langText = `감성이 풍부한 한국어 정조를 중심에 두고, 감각적인 영문 프레이징이 약 ${input.englishMixRatio || 30}% 가량 알맞게 안착하는 하이브리드 언어 진행을 바탕으로`;
+        }
+      }
+      
+      let attitudeText = "귀에 조용히 감기도록 자연스러운 일상적 구어체 화법을 취합니다.";
+      let themeEmotion = "편안히 일상의 사소한 시선과 풍경을 다듬는 정서입니다.";
+      
+      const sit = input.situation;
+      if (sit && sit.enabled) {
+        const charA = sit.targetA || "화자";
+        const charB = sit.targetB || "상대방";
+        const rel = sit.relationship ? `${sit.relationship}` : "";
+        
+        themeEmotion = `${charA}와 ${charB} 두 사람의 ${rel || '미묘한 관계적 마음'}의 서정 스케치를 차용하여, 단순 사건 나열 대신 진정성 있는 어투로 풀어봅니다.`;
+        
+        if (sit.storyPlayfulSincere !== undefined) {
+          if (sit.storyPlayfulSincere > 7) {
+            attitudeText = "사랑의 화려한 미사여구를 최대한 배제하고, 눈빛의 멈춤이나 가만히 한숨을 쉬는 눈동자처럼 가슴 흔드는 진심만을 읊는 조용한 밀도의 어법을 지향합니다.";
+          } else if (sit.storyPlayfulSincere < 4) {
+            attitudeText = "지나치게 침침하지 않도록 일상의 가볍고 정겨운 입말이나 웃음을 머금은 장난을 적재적소에 가미해, 어깨 힘을 뺀 청량하고 신선한 운율을 전합니다.";
+          }
+        }
+        
+        if (sit.storyDialogueBalance !== undefined) {
+          if (sit.storyDialogueBalance > 7) {
+            attitudeText += " 주로 혼자 외로이 되뇌는 애틋한 독백 구조를 취해 내적인 고조를 극대화합니다.";
+          } else if (sit.storyDialogueBalance < 4) {
+            attitudeText += " 서로가 친근히 노랫말을 건네며 받아치는 연극적 대화체 분할을 갖춰 한 폭의 뚜렷한 서사 선율을 만듭니다.";
+          }
+        }
+      } else if (intent.selectedThemes && intent.selectedThemes.length > 0) {
+        themeEmotion = `인위적인 슬픔 극화 대신, 선택하신 ${intent.selectedThemes[0].label} 고유의 자연스러운 정취와 공기에 조용히 위로받는 시적 구절들을 중시합니다.`;
+      }
+      
+      let densityText = "음표의 굴곡과 박자 당김음의 호흡에 잘 흩어지도록 가사 문장의 길이를 깔끔히 분사해 안도감을 줍니다.";
+      if (input.rapEnabled) {
+        densityText = "리드미컬하고 압축 넘치는 래핑 구간이 결합하여, 가사적 정보량과 박진감을 한층 더 입체적이고 트렌디한 수준으로 돋우어 냅니다.";
+      }
+      
+      expectedLyrics = `곡의 작사는 ${langText} 흘러가게 됩니다.\n- **가사 지향점**: ${themeEmotion}\n- **어조와 어법**: ${attitudeText}\n- **운율감 조화**: ${densityText}`;
     }
   }
-
-  let vibeFeeling = "전체적으로 아기자기하고 편안한 여운을 부드럽게 남깁니다.";
-  if (intent.genreDirection.includes("어두운") || intent.genreDirection.includes("차가운")) {
-    vibeFeeling = "전체적으로 쓸쓸하고 차가우면서도 깊은 여운을 끝까지 끌고 갑니다.";
-  } else if (intent.genreDirection.includes("몽환적인")) {
-    vibeFeeling = "전체적으로 꿈을 꾸듯 묘하고 아름다운 분위기를 끝까지 풍깁니다.";
-  } else if (intent.genreDirection.includes("시원한")) {
-    vibeFeeling = "전체적으로 막힌 가슴이 다 뚫릴 만큼 시원하고 청량한 느낌을 안겨줍니다.";
-  } else if (intent.genreDirection.includes("따뜻한") || intent.genreDirection.includes("포근한")) {
-    vibeFeeling = "전체적으로 마음이 한결 다정해지고 고요해지는 기분 좋은 편안함이 느껴집니다.";
-  }
-
-  const interpretationSummary = `이 곡은 ${intent.genreDirection} 스타일의 음악입니다. 주요 악기로는 ${instruments} 연주를 중심에 두고 흘러갑니다. ${vocalAttitude} ${vibeFeeling}`;
-
-  const expectedAtmosphere = `곡 전체의 감성적인 깊이와 온도는 주로 ${intent.moodColor}로 따뜻하면서도 확실하게 유지됩니다. 특히 ${intent.soundTexture}를 분위기에 걸맞게 깔아두어 자칫 심심하고 비어 보일 수 있는 소리 사이사이의 빈틈을 부드럽고 여유롭게 메워 놓았습니다. 귀가 따갑거나 피로할 수 있는 거친 소리들은 깔끔하게 다듬고, 듣는 이가 눈을 감았을 때 눈앞에 아름다운 장면이나 추억이 아련하게 스케치되도록 한층 정성스레 정돈했습니다.`;
-
-  const expectedVocals = intent.vocalDirection;
-
-  const expectedArrangement = intent.arrangementFlow;
-
-  const expectedLyrics = intent.lyricDirection;
 
   const pointsToNote = [
     `파이널 믹싱 작업 시 ${instruments} 연주 파트들이 서로 뭉개지거나 성량이 충돌하지 않도록 소리의 중심 대역을 말끔히 정돈해 더욱 깨끗하고 선명한 사운드를 연출합니다.`,

@@ -1293,6 +1293,10 @@ export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
     pointsToNote.push(...intent.warnings);
   }
 
+  if (pointsToNote.length === 0) {
+    pointsToNote.push("'미리보기'는 실제 생성 전, 선택한 키워드를 바탕으로 곡의 방향을 미리 보여주는 안내입니다. 실제 생성 결과와는 다를수있으니 참고용으로만 봐주세요.");
+  }
+
   return {
     genreStr: intent.genreDirection,
     interpretationSummary,

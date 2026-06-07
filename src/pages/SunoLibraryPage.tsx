@@ -1421,7 +1421,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
         if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
-        await updatePlaylistItemColor(user.uid, playlistId, itemId, color === 'gray' ? null : color);
+        await updatePlaylistItemColor(user.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
 
       pendingWorkspaceColorKeysRef.current.clear();
@@ -1475,7 +1475,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       for (const [key, color] of playlistEntries) {
         const [, playlistId, itemId] = key.split(':');
         if (!playlistId || !itemId || playlistId === 'unknown' || itemId === 'unknown') continue;
-        await updatePlaylistItemColor(currentUser.uid, playlistId, itemId, color === 'gray' ? null : color);
+        await updatePlaylistItemColor(currentUser.uid, playlistId, itemId, (color === 'gray' ? null : color) as any);
       }
 
       pendingWorkspaceColorKeysRef.current.clear();

@@ -9,6 +9,7 @@ export interface CategoryItem {
   promptCore?: string;
   mood?: string;
   arrangement?: string;
+  kind?: 'separator';
   _ts?: number;
 }
 
@@ -263,6 +264,7 @@ export interface CustomSectionItem {
   id: string;
   section: CustomSectionType | string;
   tags: string[];
+  customId?: string;
 }
 
 export interface VocalSectionTagOption {

@@ -396,6 +396,8 @@ interface GenerateSongParams {
   includeLyrics?: boolean;
   instrumentalBgmMode?: boolean;
   lyricLanguages?: LanguageCode[];
+  customThemeInput?: string;
+  customMoodInput?: string;
   geminiApiKey?: string;
   generationIndex?: number;
   generationCount?: number;
@@ -13224,7 +13226,7 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
     rawNote,
   );
   const genre = genreColorParts.length
-    ? `${mainGenre} with ${joinPromptPhrase(genreColorParts, 'and', 3)}`
+    ? `${mainGenre} with ${joinPromptPhrase(genreColorParts.slice(0, 3), 'and')}`
     : mainGenre;
 
   const limit = (values: string[], max: number) =>

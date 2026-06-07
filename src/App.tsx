@@ -181,7 +181,7 @@ import {
   VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
@@ -790,7 +790,7 @@ const sanitizeStoryboardSituation = (value?: SituationConfig | null): SituationC
   });
   STORYBOARD_SLIDER_FIELDS.forEach((field) => {
     const raw = base[field];
-    if (raw === undefined || raw === null || raw === '' || Number(raw) === STORYBOARD_SLIDER_DEFAULT) {
+    if (raw === undefined || raw === null || (raw as any) === '' || Number(raw) === STORYBOARD_SLIDER_DEFAULT) {
       delete base[field];
     } else {
       base[field] = snapStoryboardSliderValue(Math.max(0, Math.min(100, Number(raw))));
@@ -5860,7 +5860,7 @@ const toggleCycleVariantSelection = (
       new Set(
         Object.values(recommendedSoundComboAppliedIdsRef.current)
           .flat()
-          .filter((id) => selectedInstrumentSounds.includes(id) && !recommenderIds.has(id))
+          .filter((id: any) => selectedInstrumentSounds.includes(id) && !recommenderIds.has(id))
       )
     );
   }, [selectedInstrumentSounds]);
@@ -7035,9 +7035,30 @@ const saveRecentSong = async (newSong: any) => {
         const selectedStyleText = styleLabels.length > 0 ? styleLabels.join(', ') : 'Core style kept close to the root genre';
         const selectedSoundText = soundTextureLabels.length > 0 ? soundTextureLabels.join(', ') : 'Balanced mainstream arrangement with tasteful detail';
         const selectedStyleIds = new Set(effectiveStyleIds);
-        const selectedSoundFamilies = new Set(finalInstrumentSounds.map((id) => SOUND_TEXTURE_CYCLE_LOOKUP[id]?.id).filter(Boolean));
+        const selectedSoundFamilies = new Set(finalInstrumentSounds.map((id) => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[id]?.id).filter(Boolean));
         const hasStyleId = (...ids: string[]) => ids.some((id) => selectedStyleIds.has(id));
-        const hasSoundFamily = (...ids: string[]) => ids.some((id) => selectedSoundFamilies.has(id));
+        const hasSoundFamily = (...ids: string[]) => {
+          return ids.some((id) => {
+            if (id === 'drums-family') return finalInstrumentSounds.some(v => v.includes('kick') || v.includes('drum'));
+            if (id === 'snare-family') return finalInstrumentSounds.some(v => v.includes('snare') || v.includes('rimshot'));
+            if (id === 'hihats-family') return finalInstrumentSounds.some(v => v.includes('hi-hat') || v.includes('hihat'));
+            if (id === 'bass-family') return finalInstrumentSounds.some(v => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[v]?.id === 'bass-instruments');
+            if (id === 'texture-family') return finalInstrumentSounds.some(v => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[v]?.id === 'texture-effects');
+            if (id === 'ambience-family') return finalInstrumentSounds.some(v => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[v]?.id === 'texture-effects');
+            return selectedSoundFamilies.has(id);
+          });
+        };
+        const getLabelsForSubgroup = (filterFn: (variantId: string) => boolean) => {
+          const matched: string[] = [];
+          SOUND_TEXTURE_CYCLES.forEach(cycle => {
+            cycle.variants.forEach(variant => {
+              if (finalInstrumentSounds.includes(variant.id) && filterFn(variant.id)) {
+                matched.push(variant.label);
+              }
+            });
+          });
+          return matched;
+        };
         const structureSignalText = [
           ...finalGenres,
           ...subGenre,
@@ -7088,16 +7109,16 @@ const saveRecentSong = async (newSong: any) => {
                 : '90–112 BPM';
 
         const drums = [
-          hasSoundFamily('drums-family') ? `Primary drum character shaped by ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'drums-family'), finalInstrumentSounds).join(', ') || 'Drums'}` : null,
-          hasSoundFamily('snare-family') ? `Snare detail using ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'snare-family'), finalInstrumentSounds).join(', ')}` : null,
-          hasSoundFamily('hihats-family') ? `Hi-hat motion using ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'hihats-family'), finalInstrumentSounds).join(', ')}` : null,
+          hasSoundFamily('drums-family') ? `Primary drum character shaped by ${getLabelsForSubgroup(id => id.includes('kick') || id.includes('drum')).join(', ') || 'Drums'}` : null,
+          hasSoundFamily('snare-family') ? `Snare detail using ${getLabelsForSubgroup(id => id.includes('snare') || id.includes('rimshot')).join(', ')}` : null,
+          hasSoundFamily('hihats-family') ? `Hi-hat motion using ${getLabelsForSubgroup(id => id.includes('hi-hat') || id.includes('hihat')).join(', ')}` : null,
           !hasSoundFamily('drums-family', 'snare-family', 'hihats-family') && hasBalladStyle ? 'Soft live-pop drums with restrained movement and emotional pacing' : null,
           !hasSoundFamily('drums-family', 'snare-family', 'hihats-family') && !hasBalladStyle ? 'Clean modern drums supporting the topline without overcrowding the mix' : null,
         ].filter(Boolean).join(', ');
 
         const bass = [
           hasSoundFamily('bass-family')
-            ? `Bass focus built around ${getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'bass-family'), finalInstrumentSounds).join(', ')}`
+            ? `Bass focus built around ${getLabelsForSubgroup(id => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[id]?.id === 'bass-instruments').join(', ')}`
             : (hasBalladStyle ? 'Warm supportive low end following the emotional chord movement' : 'Warm melodic bass supporting the harmony'),
           hasStyleId('g-funk', 'funk', 'p-funk') ? 'keep the groove elastic and rhythm-led' : null,
           hasStyleId('trap-style', 'hip-hop', 'boom-bap-style') ? 'let the low end lock firmly with the beat' : null,
@@ -7110,8 +7131,8 @@ const saveRecentSong = async (newSong: any) => {
         ].filter(Boolean).join(', ');
 
         const texture = [
-          hasSoundFamily('texture-family') ? getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'texture-family'), finalInstrumentSounds).join(', ') : null,
-          hasSoundFamily('ambience-family') ? getCycleVariantLabel(SOUND_TEXTURE_CYCLES.filter(c => c.id === 'ambience-family'), finalInstrumentSounds).join(', ') : null,
+          hasSoundFamily('texture-family') ? getLabelsForSubgroup(id => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[id]?.id === 'texture-effects').join(', ') : null,
+          hasSoundFamily('ambience-family') ? getLabelsForSubgroup(id => (SOUND_TEXTURE_CYCLE_LOOKUP as any)[id]?.id === 'texture-effects').join(', ') : null,
           !hasSoundFamily('texture-family', 'ambience-family') && hasBalladStyle ? 'Emotion-first, gently rising, and spacious' : null,
           !hasSoundFamily('texture-family', 'ambience-family') && !hasBalladStyle ? 'Balanced, clear, and commercially polished' : null,
         ].filter(Boolean).join(', ');
@@ -7207,7 +7228,7 @@ const saveRecentSong = async (newSong: any) => {
       const payload = {
         genre: finalGenres[0] ?? selectedGenres[0] ?? subGenre[0] ?? null,
         subGenre: finalGenres,
-        isKpopSelected: ([...selectedGenres, ...subGenre] ?? []).includes('kpop'),
+        isKpopSelected: [...selectedGenres, ...subGenre].includes('kpop'),
         moods: finalMoods.map(getMoodKeywordLabel),
         themes: themeLabels,
         ...(hasActiveSituation(situation) ? { situation } : {}),
@@ -8527,6 +8548,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     if (type === 'sound') return 'text-sky-300 border-sky-400/30 bg-sky-500/10';
     if (type === 'mood') return 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10';
     return 'text-[#C995AC] border-fuchsia-400/30 bg-fuchsia-500/10';
+  };
+
+  const getGlobalSearchBreadcrumbParts = (groupLabel: string): string[] => {
+    if (!groupLabel) return [];
+    return groupLabel.split('>').map((p) => p.trim()).filter(Boolean);
   };
 
 
@@ -9941,7 +9967,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
                   <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 scale-90 sm:scale-100 origin-top-right items-end">
                     {(() => {
-                      const CopyBtn = ({ text, type, label, description }: { text: string, type: string, label: string, description: string }) => (
+                      const CopyBtn = ({ text, type, label, description }: { text: string, type: string, label: string, description: string, key?: any }) => (
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -11139,7 +11165,7 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
                 <YoutubeIcon className="w-6 h-6 text-red-500" />
                 가이드 템플릿
               </h2>
-              <button onClick={() => closeTagModal()} className="p-2 hover:bg-btn-hover rounded-full transition-colors">
+              <button onClick={onClose} className="p-2 hover:bg-btn-hover rounded-full transition-colors">
                 <X className="w-5 h-5 text-[var(--text-secondary)]" />
               </button>
             </div>
@@ -13189,7 +13215,7 @@ function SongStructureIntegratedControl({
       container.scrollTop += scrollStep;
     }
 
-    const sectionNodes = Array.from(container.querySelectorAll<HTMLElement>('[data-reorder-section-id]'));
+    const sectionNodes = Array.from(container.querySelectorAll<HTMLElement>('[data-reorder-section-id]')) as HTMLElement[];
     if (sectionNodes.length <= 1) return;
 
     let targetIndex = sectionNodes.length - 1;

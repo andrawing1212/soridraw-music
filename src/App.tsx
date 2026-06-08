@@ -8582,6 +8582,9 @@ ${normalizePromptForDisplay(result.prompt)}
         englishMixRatio: previewMixRatio,
         rapEnabled: previewRap,
         directInput: userInput,
+        vocalMode,
+        maleCount,
+        femaleCount,
         vocalMembers,
         situation
       };

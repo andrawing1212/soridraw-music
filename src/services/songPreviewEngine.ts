@@ -64,6 +64,9 @@ export interface PreviewInput {
   selectedVocalTags: string[];
   selectedVocalCharacter?: any;
   selectedSections?: any[];
+  vocalMode?: string;
+  maleCount?: number;
+  femaleCount?: number;
   tempo?: { enabled: boolean; min: number; max: number };
   lyricsLength?: string;
   includeLyrics: boolean;
@@ -307,6 +310,35 @@ function joinKo(list: string[], fallback = ""): string {
   return `${values.slice(0, -1).join(', ')}와 ${values[values.length - 1]}`;
 }
 
+
+const STYLE_SUBGENRE_GROUP_IDS = new Set([
+  "fusion-genre",
+  "rhythm-bounce",
+  "rap-beat-texture",
+  "synth-space",
+  "band-live",
+  "cinematic-scene",
+]);
+
+const STYLE_VOCAL_GROUP_IDS = new Set(["vocal-expression"]);
+const STYLE_HOOK_GROUP_IDS = new Set(["hook-addiction"]);
+const STYLE_TEXTURE_GROUP_IDS = new Set(["space-texture", "era-texture", "stage-shift"]);
+const STYLE_ARRANGEMENT_GROUP_IDS = new Set(["groove-flow"]);
+
+function quoteList(list: string[], max = 4): string {
+  const values = take(list, max);
+  if (values.length === 0) return "";
+  return values.join(", ");
+}
+
+function sentenceList(lines: Array<string | undefined | null>): string {
+  return lines
+    .map((line) => compactText(line || ""))
+    .filter(Boolean)
+    .map((line) => /[.!?。]$/.test(line) ? line : `${line}.`)
+    .join(" ");
+}
+
 function isGenreLike(label: string, id = "", groupId = ""): boolean {
   const text = `${label} ${id} ${groupId}`.toLowerCase();
   return (
@@ -386,14 +418,35 @@ function buildMoodVocalPressure(moodLabels: string[]): string {
   return "곡의 분위기에 맞춰 과하지 않게 감정을 조절합니다";
 }
 
-function buildVocalRoleText(members: VocalMember[]): string {
+function vocalRoleTextFromCounts(maleCount = 0, femaleCount = 0, vocalMode = ""): string {
+  const total = maleCount + femaleCount;
+  if (total <= 0) return "";
+  if (total === 1) {
+    if (maleCount === 1) return "남성 솔로 보컬";
+    if (femaleCount === 1) return "여성 솔로 보컬";
+  }
+  if (maleCount > 0 && femaleCount > 0) {
+    if (total === 2) return "남녀 듀엣 보컬";
+    return `남성 ${maleCount}명과 여성 ${femaleCount}명의 혼성 보컬`;
+  }
+  if (total === 2) return `${maleCount > 0 ? "남성" : "여성"} 듀엣 보컬`;
+  if (vocalMode === "group" || total >= 3) return `${maleCount > 0 ? "남성" : "여성"} ${total}인 보컬 그룹`;
+  return `${maleCount > 0 ? "남성" : "여성"} 보컬`;
+}
+
+function buildVocalRoleText(members: VocalMember[], fallback?: { maleCount?: number; femaleCount?: number; vocalMode?: string }): string {
   const maleCount = members.filter((m) => m.gender === "male").length;
   const femaleCount = members.filter((m) => m.gender === "female").length;
-  if (members.length === 0) return "";
+  if (members.length === 0) {
+    return vocalRoleTextFromCounts(fallback?.maleCount || 0, fallback?.femaleCount || 0, fallback?.vocalMode || "");
+  }
   if (members.length === 1) return `${members[0].gender === "male" ? "남성" : "여성"} 솔로 보컬`;
-  if (maleCount > 0 && femaleCount > 0) return "남녀가 함께 부르는 보컬 구성";
-  if (members.length === 2) return `${maleCount > 0 ? "남성" : "여성"} 듀엣`;
-  return `${members.length}인 보컬 그룹`;
+  if (maleCount > 0 && femaleCount > 0) {
+    if (members.length === 2) return "남녀 듀엣 보컬";
+    return `남성 ${maleCount}명과 여성 ${femaleCount}명의 혼성 보컬`;
+  }
+  if (members.length === 2) return `${maleCount > 0 ? "남성" : "여성"} 듀엣 보컬`;
+  return `${maleCount > 0 ? "남성" : "여성"} ${members.length}인 보컬 그룹`;
 }
 
 function collectDirectVocalChoices(members: VocalMember[]): string[] {
@@ -456,27 +509,35 @@ function buildVocalSummary(
   if (!input.includeLyrics) return "연주 전용 설정이라 노래 보컬은 중심에 두지 않습니다.";
 
   const members = input.vocalMembers || [];
-  const directChoices = collectDirectVocalChoices(members);
+  const roleText = buildVocalRoleText(members, {
+    maleCount: input.maleCount,
+    femaleCount: input.femaleCount,
+    vocalMode: input.vocalMode,
+  });
+  const directChoices = collectDirectVocalChoices(members).filter((item) => item !== roleText);
   const styleChoices = take(styleVocalLabels, 3);
   const genreGrammar = buildGenreVocalGrammar(genreLabels);
   const moodPressure = buildMoodVocalPressure(moodLabels);
   const hasRap = input.rapEnabled || members.some((m) => m.roles?.includes("rapper"));
 
-  const selectedCore = take([...directChoices, ...styleChoices, ...(hasRap ? ["랩 흐름"] : [])], 6);
+  const roleLine = roleText
+    ? `보컬은 ${roleText}을 기준으로 합니다.`
+    : "보컬은 장르의 기본 보컬 톤을 기준으로 합니다.";
 
-  if (selectedCore.length > 0) {
-    const exactSelected = joinKo(selectedCore.slice(0, 4));
-    const styleLine = styleChoices.length > 0 && directChoices.length > 0
-      ? `스타일에서 고른 ${joinKo(styleChoices)} 느낌도 함께 섞입니다.`
-      : "";
-    return unique([
-      `${exactSelected}을 중심으로 보컬이 정리됩니다.`,
-      `${genreGrammar} 위에서 ${moodPressure}.`,
-      styleLine,
-    ]).filter(Boolean).join(" ");
-  }
+  const selectedStyleLine = styleChoices.length > 0
+    ? `${quoteList(styleChoices)} 보컬의 목소리와 창법을 중심으로, ${genreGrammar}을 함께 살립니다.`
+    : directChoices.length > 0
+      ? `${quoteList(directChoices)} 설정을 중심으로, ${genreGrammar}을 함께 살립니다.`
+      : `${genreGrammar}을 바탕으로 보컬 방향을 잡습니다.`;
 
-  return `${genreGrammar}을 바탕으로, ${moodPressure}.`;
+  const rapLine = hasRap ? "랩 설정이 함께 켜져 있으면 말맛과 리듬 전달도 보컬 흐름에 반영됩니다." : "";
+
+  return sentenceList([
+    roleLine,
+    selectedStyleLine,
+    moodPressure,
+    rapLine,
+  ]);
 }
 
 function buildSituationSummary(situation?: SituationConfig): string[] {
@@ -497,16 +558,16 @@ function buildSituationSummary(situation?: SituationConfig): string[] {
   return take(parts, 4);
 }
 
-function styleDisplayCue(item: LookupItem | undefined, label: string): string {
-  return previewText(item?.descriptionKo || label, label);
+function styleDisplayCue(_item: LookupItem | undefined, label: string): string {
+  return previewText(label, label);
 }
 
-function soundDisplayCue(item: LookupItem | undefined, label: string): string {
-  return previewText(item?.descriptionKo || label, label);
+function soundDisplayCue(_item: LookupItem | undefined, label: string): string {
+  return previewText(label, label);
 }
 
-function moodDisplayCue(item: LookupItem | undefined, label: string): string {
-  return previewText(item?.descriptionKo || label, label);
+function moodDisplayCue(_item: LookupItem | undefined, label: string): string {
+  return previewText(label, label);
 }
 
 function createEmptyParts(): PreviewPromptParts {
@@ -537,7 +598,6 @@ function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
     const genre = findGenreById(id);
     const label = labelOf(genre, id);
     addToPart(parts, "genre", label, label, true);
-    if (genre?.description) addToPart(parts, "arrangement", genre.description, label);
   });
 
   (input.selectedStyles || []).forEach((id) => {
@@ -545,44 +605,62 @@ function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
     const label = labelOf(item, id);
     if (!label) return;
 
-    const genreLike = isGenreLike(label, id, groupId || "");
-    const vocalLike = isVocalLike(label, id, groupId || "");
+    const group = groupId || "";
+    const displayCue = styleDisplayCue(item, label);
+    const vocalLike = isVocalLike(label, id, group);
     const instrumentLike = isInstrumentLike(label, id);
 
-    const displayCue = styleDisplayCue(item, label);
-
-    if (genreLike && !vocalLike && !instrumentLike) {
+    // 스타일 메뉴의 왼쪽 줄은 장르/서브장르 성격으로 보고 [Genre]에 우선 반영한다.
+    if (STYLE_SUBGENRE_GROUP_IDS.has(group)) {
       addToPart(parts, "genre", label, label);
       addToPart(parts, "arrangement", displayCue, label);
       return;
     }
 
+    // 보컬 라인은 곡 질감이나 장르가 아니라 보컬 상태에만 반영한다.
+    if (STYLE_VOCAL_GROUP_IDS.has(group) || vocalLike) {
+      addToPart(parts, "vocals", label, label, true);
+      return;
+    }
+
+    if (STYLE_HOOK_GROUP_IDS.has(group)) {
+      addToPart(parts, "lyrics", label, label, true);
+      addToPart(parts, "arrangement", label, label);
+      return;
+    }
+
+    if (STYLE_TEXTURE_GROUP_IDS.has(group)) {
+      addToPart(parts, "atmosphere", label, label, true);
+      if (instrumentLike || item?.sound) addToPart(parts, "instruments", label, label);
+      else addToPart(parts, "instruments", displayCue, label);
+      return;
+    }
+
+    if (STYLE_ARRANGEMENT_GROUP_IDS.has(group)) {
+      addToPart(parts, "arrangement", label, label, true);
+      return;
+    }
+
     if (instrumentLike || item?.sound) {
       addToPart(parts, "instruments", label, label, true);
+      return;
     }
-    if (vocalLike) {
-      addToPart(parts, "vocals", label, label, true);
-    }
-    if (item?.mood || (!genreLike && !instrumentLike && !vocalLike)) {
-      addToPart(parts, "atmosphere", displayCue, label);
-    }
-    if (item?.style && !vocalLike) {
-      addToPart(parts, "arrangement", label, label);
-    }
+
+    addToPart(parts, "atmosphere", displayCue, label);
   });
 
   (input.selectedSounds || []).forEach((id) => {
     const sound = findSoundById(id);
     const label = labelOf(sound, id);
     addToPart(parts, "instruments", label, label, true);
-    if (sound?.descriptionKo || sound?.description) addToPart(parts, "atmosphere", soundDisplayCue(sound, label), label);
+    addToPart(parts, "atmosphere", soundDisplayCue(sound, label), label);
   });
 
   (input.selectedMoods || []).forEach((id) => {
     const mood = findMoodById(id);
     const label = labelOf(mood, id);
     addToPart(parts, "atmosphere", label, label, true);
-    if (mood?.arrangement) addToPart(parts, "arrangement", moodDisplayCue(mood, label), label);
+    if (mood?.arrangement) addToPart(parts, "arrangement", label, label);
   });
 
   (input.selectedThemes || []).forEach((id) => {
@@ -613,7 +691,9 @@ function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
     addToPart(parts, "arrangement", "랩 구간의 리듬감", "랩 옵션");
     addToPart(parts, "lyrics", "짧고 리듬감 있는 문장", "랩 옵션");
   }
-  addToPart(parts, "lyrics", lyricLanguageText(input), "가사 옵션", true);
+  if (!input.includeLyrics) {
+    addToPart(parts, "lyrics", "가사 없이 악기와 전개 중심", "가사 옵션", true);
+  }
 
   return parts;
 }
@@ -626,8 +706,8 @@ export function resolveGenrePreviewMeaning(genreId: string): PreviewMeaningData 
     label,
     category: "genre",
     musicalRole: label,
-    plainMeaning: genre?.description || `${label} 기반의 음악 방향`,
-    arrangementImpact: genre?.description,
+    plainMeaning: `${label} 기반의 음악 방향`,
+    arrangementImpact: label,
     weight: 1,
   };
 }
@@ -640,12 +720,12 @@ export function resolveStylePreviewMeaning(styleId: string): PreviewMeaningData 
     label,
     category: "style",
     musicalRole: label,
-    plainMeaning: item?.descriptionKo || item?.description || label,
+    plainMeaning: label,
     genreImpact: isGenreLike(label, styleId, groupId || "") ? label : undefined,
-    instrumentImpact: item?.sound,
+    instrumentImpact: label,
     vocalImpact: isVocalLike(label, styleId, groupId || "") ? label : undefined,
-    moodImpact: item?.mood,
-    arrangementImpact: item?.style,
+    moodImpact: label,
+    arrangementImpact: label,
     styleFusionImpact: isGenreLike(label, styleId, groupId || "") ? label : undefined,
     weight: 0.8,
   };
@@ -658,12 +738,63 @@ export function collectPreviewMeaningData(input: PreviewInput): PreviewMeaningDa
   ];
 }
 
+
+function isHookLabel(label: string): boolean {
+  return /후렴|훅|hook|따라|반복|중독|코러스|chorus/i.test(label);
+}
+
+function cleanLyricThemeLabels(labels: string[]): string[] {
+  return take(labels.filter((label) => {
+    const text = compactText(label);
+    if (!text) return false;
+    if (/가사 없이|가사 옵션|리듬감 있는 문장/i.test(text)) return false;
+    if (isHookLabel(text)) return false;
+    return true;
+  }), 4);
+}
+
+function buildAtmosphereSummary(moodLabels: string[], textureLabels: string[], themeLabels: string[]): string {
+  const moodText = quoteList(moodLabels, 4);
+  const textureText = quoteList(textureLabels, 3);
+  const themeText = quoteList(themeLabels, 4);
+
+  return sentenceList([
+    moodText
+      ? `${moodText} 분위기가 전체 공기를 이끕니다`
+      : "선택한 장르와 사운드에 맞춰 곡의 기본 분위기가 잡힙니다",
+    textureText
+      ? `${textureText} 보컬/사운드 질감이 곡의 배경을 더 풍성하게 만듭니다`
+      : "악기와 질감은 분위기를 해치지 않는 방향으로 정리됩니다",
+    themeText
+      ? `특히 ${themeText} 주제와 어울려 곡의 감정 방향을 잡아줍니다`
+      : "주제는 억지 사건보다 감정의 방향으로 반영됩니다",
+  ]);
+}
+
+function buildLyricDirectionSummary(input: PreviewInput, lyricLabels: string[]): string {
+  if (!input.includeLyrics) return "가사 미포함 설정이라, 이야기는 악기와 전개 중심으로 전달됩니다.";
+
+  const hookLabels = take(lyricLabels.filter(isHookLabel), 2);
+  const themeLabels = cleanLyricThemeLabels(lyricLabels);
+
+  const baseLine = themeLabels.length > 0
+    ? `${quoteList(themeLabels, 4)} 선택한 주제에 맞도록 이야기를 만들고, 그에 맞는 감정과 분위기가 가사에 적용됩니다`
+    : "선택한 주제와 분위기에 맞도록 이야기를 만들고, 말투와 감정선을 가사에 적용합니다";
+
+  const hookLine = hookLabels.length > 0
+    ? `이어서, 후렴 라인은 ${quoteList(hookLabels, 2)} 방향으로 이 곡만의 특색을 더 살려줍니다`
+    : "후렴은 곡의 중심 감정이 자연스럽게 남도록 정리됩니다";
+
+  return sentenceList([baseLine, hookLine]);
+}
+
 export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
   const parts = buildPreviewPromptParts(input);
   const genreDirection = genrePhrase(parts.genre.main, parts.genre.support, [...parts.atmosphere.main, ...parts.atmosphere.support]);
   const coreInstruments = take([...parts.instruments.main, ...parts.instruments.support], 4);
   const moodLabels = take([...parts.atmosphere.main, ...parts.atmosphere.support], 4);
-  const lyricLabels = take([...parts.lyrics.main, ...parts.lyrics.support], 4);
+  const allLyricLabels = unique([...parts.lyrics.main, ...parts.lyrics.support]);
+  const lyricLabels = take(allLyricLabels, 4);
   const arrangementLabels = take([...parts.arrangement.main, ...parts.arrangement.support], 4);
   const vocalLabels = take([...parts.vocals.main, ...parts.vocals.support], 3);
 
@@ -687,9 +818,7 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
     ? `${arrangementLabels[0]}. ${arrangementLabels.slice(1, 3).join(' ')}`.trim()
     : "초반은 무리 없이 시작하고, 후렴에서 선택한 장르의 힘을 조금 더 드러냅니다.";
 
-  const lyricDirection = input.includeLyrics
-    ? `${lyricLanguageText(input)}. ${lyricLabels.length > 0 ? `${joinKo(lyricLabels)} 감정을 말투와 후렴 방향에 반영합니다.` : "가사의 말투와 반복 방식은 선택한 장르와 분위기에 맞춥니다."}`
-    : lyricLanguageText(input);
+  const lyricDirection = buildLyricDirectionSummary(input, allLyricLabels);
 
   const finalImpression = `${genreDirection} 안에서 ${coreInstruments[0] || "핵심 사운드"}와 ${vocalLabels[0] || "보컬"}이 중심을 잡는 곡입니다.`;
 
@@ -724,22 +853,20 @@ export function buildPreviewSongIntent(input: PreviewInput): PreviewSongIntent {
 export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
   const parts = intent.previewPromptParts;
   const instruments = take(intent.coreInstruments, 3);
-  const moodItems = parts ? take([...parts.atmosphere.main, ...parts.atmosphere.support], 3) : [];
-  const lyricItems = parts ? take([...parts.lyrics.main, ...parts.lyrics.support], 3) : [];
+  const moodItems = parts ? take(parts.atmosphere.main, 4) : [];
+  const textureItems = parts ? take([...parts.instruments.main, ...parts.atmosphere.support], 4) : instruments;
+  const allLyricItems = parts ? unique([...parts.lyrics.main, ...parts.lyrics.support]) : [];
+  const lyricItems = cleanLyricThemeLabels(allLyricItems);
   const arrangementItems = parts ? take([...parts.arrangement.main, ...parts.arrangement.support], 3) : [];
 
   const interpretationLines = [
     `이 곡은 ${intent.genreDirection}입니다.`,
-    instruments.length > 0 ? `${joinKo(instruments)}가 주요 사운드로 쓰입니다.` : "선택한 장르에 맞는 기본 사운드가 중심이 됩니다.",
-    intent.vocalDirection ? `${intent.vocalDirection}` : "보컬은 장르와 분위기에 맞춰 자연스럽게 정리됩니다.",
-    `${intent.moodColor}`,
+    instruments.length > 0 ? `${quoteList(instruments, 3)} 사운드를 중심으로 곡의 기본 색을 잡습니다.` : "선택한 장르에 맞는 기본 사운드가 중심이 됩니다.",
+    intent.vocalDirection || "보컬은 장르와 분위기에 맞춰 자연스럽게 정리됩니다.",
+    lyricItems.length > 0 ? `${quoteList(lyricItems, 4)} 주제와 어울려 전체 감정 방향이 정리됩니다.` : `${intent.moodColor}`,
   ];
 
-  const atmosphereLines = [
-    moodItems.length > 0 ? `${joinKo(moodItems)} 느낌이 곡의 공기를 만듭니다.` : "선택한 장르와 사운드에 맞춰 분위기가 잡힙니다.",
-    instruments.length > 0 ? `${joinKo(instruments.slice(0, 2))}가 그 분위기를 실제 소리로 받쳐줍니다.` : "악기와 질감은 분위기를 해치지 않는 방향으로 정리됩니다.",
-    lyricItems.length > 0 ? `${joinKo(lyricItems)} 감정이 분위기의 중심에 놓입니다.` : "주제는 가사 사건을 억지로 만들기보다 감정 방향으로만 반영됩니다.",
-  ];
+  const atmosphereSummary = buildAtmosphereSummary(moodItems, textureItems, lyricItems);
 
   const arrangementLines = [
     arrangementItems[0] || "초반은 선택한 장르의 기본 흐름으로 시작합니다.",
@@ -755,11 +882,11 @@ export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
 
   return {
     genreStr: intent.genreDirection,
-    interpretationSummary: unique(interpretationLines).join(" "),
-    expectedAtmosphere: unique(atmosphereLines).join(" "),
+    interpretationSummary: sentenceList(unique(interpretationLines)),
+    expectedAtmosphere: atmosphereSummary,
     expectedVocals: intent.vocalDirection || "보컬은 선택한 장르와 분위기에 맞춰 자연스럽게 정리됩니다.",
-    expectedArrangement: unique(arrangementLines).join(" "),
-    expectedLyrics: unique(lyricLines).join(" "),
+    expectedArrangement: sentenceList(unique(arrangementLines)),
+    expectedLyrics: sentenceList(unique(lyricLines)),
     pointsToNote,
   };
 }

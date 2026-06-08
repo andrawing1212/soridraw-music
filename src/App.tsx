@@ -10754,6 +10754,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               englishMixRatio={englishMixRatio}
               rapEnabled={rapEnabled}
               onClose={() => closeMainGenerationModal()}
+              suspendHistoryHandling={showPreviewPopup}
               onPreview={(options) => {
                 setCurrentPreviewOptions(options);
                 setShowPreviewPopup(true);
@@ -10798,6 +10799,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               })()}
               maxLyricLanguages={1}
               musicApiTargets={getMusicApiTargetOptions()}
+              suspendHistoryHandling={showPreviewPopup}
               onClose={() => closeMusicApiModal()}
               onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
                 closeMusicApiModal();

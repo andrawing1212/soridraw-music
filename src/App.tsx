@@ -4006,7 +4006,22 @@ function App() {
     const handleStudioModalPopState = (event: PopStateEvent) => {
       if (showPreviewPopup && previewPopupHistoryPushedRef.current) {
         event.stopImmediatePropagation();
+        const nextModalName = (event.state as { modal?: string } | null)?.modal;
         closePreviewPopup('history');
+
+        // Android/Chrome can return from the preview modal to the visible generation modal
+        // without leaving a valid modal history entry behind. In that case, the next
+        // hardware back press may exit the app instead of closing the generation modal.
+        if (showMainGenerationModal) {
+          if (nextModalName === 'main-generation-options') {
+            mainGenerationModalHistoryPushedRef.current = true;
+          } else {
+            window.setTimeout(() => {
+              mainGenerationModalHistoryPushedRef.current = true;
+              pushStudioModalHistory('main-generation-options');
+            }, 0);
+          }
+        }
         return;
       }
 
@@ -4024,7 +4039,7 @@ function App() {
 
     window.addEventListener('popstate', handleStudioModalPopState, true);
     return () => window.removeEventListener('popstate', handleStudioModalPopState, true);
-  }, [showPreviewPopup, showMainGenerationModal, showMusicApiModal, closePreviewPopup, closeMainGenerationModal, closeMusicApiModal]);
+  }, [showPreviewPopup, showMainGenerationModal, showMusicApiModal, closePreviewPopup, closeMainGenerationModal, closeMusicApiModal, pushStudioModalHistory]);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return hasStoredSunoApiKey(auth.currentUser?.uid);

@@ -3932,6 +3932,8 @@ function App() {
   const mainGenerationModalHistoryPushedRef = useRef(false);
   const musicApiModalHistoryPushedRef = useRef(false);
   const previewPopupHistoryPushedRef = useRef(false);
+  const showMainGenerationModalRef = useRef(false);
+  const showMusicApiModalRef = useRef(false);
   const [currentPreviewOptions, setCurrentPreviewOptions] = useState<{
     includeLyrics: boolean;
     lyricLanguages: LanguageCode[];
@@ -3951,6 +3953,14 @@ function App() {
       // Embedded previews can block history changes; the modal still works without it.
     }
   }, []);
+
+  useEffect(() => {
+    showMainGenerationModalRef.current = showMainGenerationModal;
+  }, [showMainGenerationModal]);
+
+  useEffect(() => {
+    showMusicApiModalRef.current = showMusicApiModal;
+  }, [showMusicApiModal]);
 
   const closeMainGenerationModal = useCallback((source: 'ui' | 'history' = 'ui') => {
     if (source === 'ui' && mainGenerationModalHistoryPushedRef.current) {
@@ -4006,21 +4016,18 @@ function App() {
     const handleStudioModalPopState = (event: PopStateEvent) => {
       if (showPreviewPopup && previewPopupHistoryPushedRef.current) {
         event.stopImmediatePropagation();
-        const nextModalName = (event.state as { modal?: string } | null)?.modal;
         closePreviewPopup('history');
 
-        // Android/Chrome can return from the preview modal to the visible generation modal
-        // without leaving a valid modal history entry behind. In that case, the next
-        // hardware back press may exit the app instead of closing the generation modal.
-        if (showMainGenerationModal) {
-          if (nextModalName === 'main-generation-options') {
-            mainGenerationModalHistoryPushedRef.current = true;
-          } else {
-            window.setTimeout(() => {
-              mainGenerationModalHistoryPushedRef.current = true;
-              pushStudioModalHistory('main-generation-options');
-            }, 0);
-          }
+        // Mobile Chrome can consume the preview history entry and leave the previous
+        // generation modal visible without an active modal history entry. Push a fresh
+        // history entry immediately so the next hardware Back closes that modal instead
+        // of exiting the app. This mirrors the stable behavior of keyword popups.
+        if (showMainGenerationModalRef.current) {
+          mainGenerationModalHistoryPushedRef.current = true;
+          pushStudioModalHistory('main-generation-options');
+        } else if (showMusicApiModalRef.current) {
+          musicApiModalHistoryPushedRef.current = true;
+          pushStudioModalHistory('music-api-generation-options');
         }
         return;
       }

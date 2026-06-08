@@ -144,11 +144,78 @@ export const PREVIEW_MEANING_DATASET: Record<string, PreviewMeaningData> = {};
 
 const DEFAULT_NOTE = "'미리보기'는 실제 생성 전, 선택한 키워드를 바탕으로 곡의 방향을 미리 보여주는 안내입니다. 실제 생성 결과와는 다를수있으니 참고용으로만 봐주세요.";
 
+const CUSTOM_MOOD_PREFIX = "__custom_mood__:";
+const CUSTOM_THEME_PREFIX = "__custom_theme__:";
+
+function decodeLooseURIComponent(value: string): string {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (!/%[0-9A-Fa-f]{2}/.test(text)) return text;
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+function decodeCustomPreviewKeyword(value?: string | null): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const prefixes = [CUSTOM_MOOD_PREFIX, CUSTOM_THEME_PREFIX, "__custom_mood__", "__custom_theme__"];
+  for (const prefix of prefixes) {
+    const index = raw.indexOf(prefix);
+    if (index >= 0) {
+      const encoded = raw.slice(index + prefix.length).replace(/^[:_\s-]+/, "").trim();
+      return decodeLooseURIComponent(encoded);
+    }
+  }
+
+  return decodeLooseURIComponent(raw);
+}
+
+const RAW_ENGLISH_CUE_MAP: Array<[RegExp, string]> = [
+  [/dark enclosed reflections/gi, "어둡고 폐쇄적인 울림"],
+  [/short breath[- ]led vocal fragments/gi, "짧은 호흡으로 끊기는 보컬 조각"],
+  [/broken sentence vocal delivery/gi, "문장마다 끊어 부르는 보컬"],
+  [/post[- ]rock band/gi, "포스트록 밴드"],
+  [/dark synth layer/gi, "어둡게 깔리는 신스 레이어"],
+  [/expansive cinematic/gi, "넓고 영화적인"],
+  [/heavy,? uneasy/gi, "무겁고 불안한"],
+  [/layered guitars/gi, "겹겹이 쌓이는 기타"],
+  [/gradual crescendos/gi, "점점 커지는 전개"],
+  [/recorder/gi, "리코더"],
+  [/vocal fragments/gi, "보컬 조각"],
+  [/vocal delivery/gi, "보컬 전달"],
+  [/synth layer/gi, "신스 레이어"],
+];
+
+function preferKoreanSegment(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  const parts = text.split(/\s+(?:-|–|—)\s+|\s*:\s+/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 1) return text;
+
+  const koreanParts = parts
+    .map((part) => ({ part, score: (part.match(/[가-힣]/g) || []).length }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return koreanParts[0]?.part || text;
+}
+
+function replaceRawEnglishCues(value: string): string {
+  return RAW_ENGLISH_CUE_MAP.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+}
+
 function compactText(value?: string | null): string {
-  return (value || "")
+  const decoded = decodeCustomPreviewKeyword(value);
+  const koreanPreferred = preferKoreanSegment(decoded);
+  return replaceRawEnglishCues(koreanPreferred)
     .replace(/\*\*/g, "")
     .replace(/\[[^\]]+\]/g, "")
     .replace(/\(([A-Za-z0-9_.,&/\-\s]+)\)/g, "")
+    .replace(/_{2,}custom_(?:mood|theme)_{2}:?/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 }

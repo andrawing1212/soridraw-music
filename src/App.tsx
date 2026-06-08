@@ -8252,6 +8252,21 @@ ${normalizePromptForDisplay(result.prompt)}
     const combinedGenreLabels = Array.from(new Set([...currentMainGenreLabels, ...currentSubGenreLabels])).filter(Boolean);
     const genreStr = combinedGenreLabels.length > 0 ? combinedGenreLabels.join(', ') : '기본 장르(Pop)';
 
+    const uniquePreviewLabels = (items: Array<string | null | undefined>) => Array.from(new Set(items.map((item) => String(item || '').trim()).filter(Boolean)));
+    const baseSelectedKeywordGroups = [
+      { id: 'genre', label: '장르', items: combinedGenreLabels },
+      { id: 'style', label: '스타일', items: uniquePreviewLabels(filterSelectableIds(selectedStyles).map((id) => getStyleVariantLabelById(id))) },
+      { id: 'sound', label: '사운드', items: uniquePreviewLabels([
+        ...filterSelectableIds(selectedInstrumentSounds).map((id) => getSoundVariantLabelById(id)),
+        ...filterSelectableIds(selectedPointSounds).map((id) => {
+          const label = getSoundVariantLabelById(id);
+          return label ? `포인트: ${label}` : '';
+        }),
+      ]) },
+      { id: 'mood', label: '분위기', items: selectedMoodLabels },
+      { id: 'theme', label: '주제', items: selectedThemeLabels },
+    ];
+
     // 현재 선택된 미리보기 옵션 추출 (모달 설정이 지정되어 있을 시 우선 반영)
     const previewIncludeLyrics = currentPreviewOptions 
       ? currentPreviewOptions.includeLyrics 
@@ -8261,6 +8276,14 @@ ${normalizePromptForDisplay(result.prompt)}
     const previewMixRatio = currentPreviewOptions ? currentPreviewOptions.englishMixRatio : englishMixRatio;
     const previewRap = previewIncludeLyrics ? (currentPreviewOptions ? currentPreviewOptions.rapEnabled : rapEnabled) : false;
     const previewGenCount = currentPreviewOptions ? currentPreviewOptions.generationCount : 1;
+    const selectedKeywordGroups = [
+      ...baseSelectedKeywordGroups,
+      { id: 'option', label: '옵션', items: uniquePreviewLabels([
+        previewIncludeLyrics === false ? '가사 없음' : '',
+        previewIsMix ? '한/영 혼합' : '',
+        previewRap ? '랩 ON' : '',
+      ]) },
+    ].filter((group) => group.items.length > 0);
 
     // --- 통합 분석 엔진 (Unified Music Interpretation Engine) ---
     const lowerGenres = [...selectedGenres, ...subGenre].map(g => g.toLowerCase());
@@ -8570,7 +8593,10 @@ ${normalizePromptForDisplay(result.prompt)}
         cards.pointsToNote.push(`현재 총 ${previewGenCount}곡의 동시 작곡을 지정하셨으며, 본 가이드는 각 결과물 중 기준축이 되는 가장 이상적이고 대칭적인 버전을 기준으로 설명합니다.`);
       }
 
-      return cards;
+      return {
+        ...cards,
+        selectedKeywordGroups,
+      };
     } catch (e) {
       console.error("SongPreviewEngine dynamic resolution failed, falling back to static presentation:", e);
     }
@@ -8582,7 +8608,8 @@ ${normalizePromptForDisplay(result.prompt)}
       expectedVocals,
       expectedArrangement,
       expectedLyrics,
-      pointsToNote
+      pointsToNote,
+      selectedKeywordGroups
     };
   };
 
@@ -11332,6 +11359,7 @@ interface SongPreviewPopupProps {
     expectedArrangement: string;
     expectedLyrics: string;
     pointsToNote: string[];
+    selectedKeywordGroups?: Array<{ id: string; label: string; items: string[] }>;
   };
 }
 
@@ -11350,6 +11378,17 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  const getPreviewKeywordTextClass = (id: string) => {
+    if (id === 'genre') return 'text-[#E7AD68]';
+    if (id === 'style') return 'text-[#C9A7FF]';
+    if (id === 'sound') return 'text-[#8FC7FF]';
+    if (id === 'mood') return 'text-[#9EDFA3]';
+    if (id === 'theme') return 'text-[#F0A6C8]';
+    return 'text-[#D8C2A0]';
+  };
+
+  const hasPreviewKeywords = Array.isArray(details.selectedKeywordGroups) && details.selectedKeywordGroups.some((group) => group.items.length > 0);
 
   // Dynamic Framer Motion Configuration to Prevent Mobile Flashing
   const backdropVariants = {
@@ -11438,6 +11477,22 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
 
               {/* Body Content */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5 space-y-4 scrollbar-thin min-w-0 max-w-full">
+                {hasPreviewKeywords && (
+                  <div className="bg-white/[0.025] rounded-2xl px-4 py-3 min-w-0 max-w-full overflow-hidden">
+                    <div className="text-[10px] font-black text-[var(--text-secondary)] mb-1.5">선택 키워드</div>
+                    <div className="flex flex-wrap gap-x-2.5 gap-y-1.5 text-[10.5px] leading-snug min-w-0 max-w-full">
+                      {details.selectedKeywordGroups?.map((group) => (
+                        <span key={group.id} className="inline-flex flex-wrap items-baseline gap-x-1.5 min-w-0 max-w-full">
+                          <span className={cn('font-black shrink-0', getPreviewKeywordTextClass(group.id))}>{group.label}</span>
+                          <span className="font-semibold text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
+                            {group.items.join(' · ')}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Genre Chip Bar */}
                 <div className="bg-white/[0.035] rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden">
                   <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>

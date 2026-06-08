@@ -360,73 +360,123 @@ function lyricLanguageText(input: PreviewInput): string {
   return "한국어 가사 중심으로 감정과 말맛을 잡습니다";
 }
 
-function buildVocalSummary(input: PreviewInput, moodLabels: string[], genreLabels: string[]): string {
+function buildGenreVocalGrammar(genreLabels: string[]): string {
+  const text = genreLabels.join(" ").toLowerCase();
+  if (/r&b|rnb|soul|소울/.test(text)) return "리듬의 빈칸을 부드럽게 타고 감정을 길게 남기는 장르 보컬감";
+  if (/hip|rap|trap|drill|boom|힙합|랩|트랩|드릴|붐뱁/.test(text)) return "박자와 말맛을 또렷하게 살리는 리듬 중심 보컬감";
+  if (/rock|metal|punk|band|록|메탈|밴드|펑크/.test(text)) return "악기 밀도 위에서도 감정선이 묻히지 않는 단단한 보컬감";
+  if (/jazz|재즈/.test(text)) return "박자를 살짝 밀고 당기며 여유를 남기는 보컬감";
+  if (/ballad|발라드/.test(text)) return "호흡과 끝음을 길게 살리는 감정 중심 보컬감";
+  if (/house|garage|edm|dance|disco|funk|하우스|개러지|댄스|디스코|펑크/.test(text)) return "비트 위에서 가볍게 움직이며 리듬을 선명하게 잡는 보컬감";
+  if (/synth|city|pop|indie|신스|시티|팝|인디/.test(text)) return "멜로디를 깔끔하게 타면서 분위기를 해치지 않는 보컬감";
+  return "선택한 장르의 기본 흐름에 맞는 보컬감";
+}
+
+function buildMoodVocalPressure(moodLabels: string[]): string {
+  const text = moodLabels.join(" ");
+  if (/어두|차가|공허|쓸쓸|외로|고독|불안|위태|긴장|서늘|폐쇄/i.test(text)) {
+    return "감정을 크게 터뜨리기보다 눌러 담아 긴장감을 남깁니다";
+  }
+  if (/따뜻|포근|치유|편안|몽환|아련|추억|사랑|후회|그리움/i.test(text)) {
+    return "호흡과 끝음을 부드럽게 남겨 감정의 여운을 살립니다";
+  }
+  if (/밝|청량|신나는|경쾌|희망|상쾌/i.test(text)) {
+    return "발음을 또렷하게 열어 밝은 에너지가 앞으로 나오게 합니다";
+  }
+  return "곡의 분위기에 맞춰 과하지 않게 감정을 조절합니다";
+}
+
+function buildVocalRoleText(members: VocalMember[]): string {
+  const maleCount = members.filter((m) => m.gender === "male").length;
+  const femaleCount = members.filter((m) => m.gender === "female").length;
+  if (members.length === 0) return "";
+  if (members.length === 1) return `${members[0].gender === "male" ? "남성" : "여성"} 솔로 보컬`;
+  if (maleCount > 0 && femaleCount > 0) return "남녀가 함께 부르는 보컬 구성";
+  if (members.length === 2) return `${maleCount > 0 ? "남성" : "여성"} 듀엣`;
+  return `${members.length}인 보컬 그룹`;
+}
+
+function collectDirectVocalChoices(members: VocalMember[]): string[] {
+  const directParts: string[] = [];
+  if (members.length === 0) return directParts;
+
+  const roleText = buildVocalRoleText(members);
+  if (roleText) directParts.push(roleText);
+
+  members.slice(0, 2).forEach((member) => {
+    const tone = member.toneId ? VOCAL_TONES.find((t: any) => t.id === member.toneId) : undefined;
+    if (tone) directParts.push(tone.labelKo || tone.label);
+
+    const char = member.character;
+    if (!char) return;
+
+    if (char.voiceToneId) {
+      const v = VOCAL_VOICE_TONES.find((item: any) => item.id === char.voiceToneId);
+      if (v) directParts.push(v.labelKo || v.label);
+    }
+    if (char.customVoiceTone) directParts.push(char.customVoiceTone);
+
+    if (char.personalityId) {
+      const p = VOCAL_PERSONALITIES.find((item: any) => item.id === char.personalityId);
+      if (p) directParts.push(p.labelKo || p.label);
+    }
+    if (char.customPersonality) directParts.push(char.customPersonality);
+
+    if (char.techniqueIds?.length) {
+      char.techniqueIds.slice(0, 2).forEach((tid) => {
+        const technique = VOCAL_TECHNIQUES.find((item: any) => item.id === tid);
+        if (technique) directParts.push(technique.labelKo || technique.label);
+      });
+    }
+    if (char.customTechnique) directParts.push(char.customTechnique);
+
+    if (char.emotionLevel !== undefined) {
+      if (char.emotionLevel >= 8) directParts.push("감정을 진하게 드러내는 표현");
+      else if (char.emotionLevel <= 3) directParts.push("감정을 눌러 담는 절제된 표현");
+    }
+    if (char.deliveryLevel !== undefined) {
+      if (char.deliveryLevel <= 3) directParts.push("숨을 많이 섞는 호흡감");
+      else if (char.deliveryLevel >= 8) directParts.push("선명하게 앞으로 나오는 전달력");
+    }
+    if (char.rangeLevel !== undefined) {
+      if (char.rangeLevel >= 8) directParts.push("높게 열리는 음역");
+      else if (char.rangeLevel <= 3) directParts.push("낮고 가까운 음역");
+    }
+  });
+
+  return take(directParts, 6);
+}
+
+function buildVocalSummary(
+  input: PreviewInput,
+  moodLabels: string[],
+  genreLabels: string[],
+  styleVocalLabels: string[] = []
+): string {
   if (!input.includeLyrics) return "연주 전용 설정이라 노래 보컬은 중심에 두지 않습니다.";
 
   const members = input.vocalMembers || [];
-  const directParts: string[] = [];
+  const directChoices = collectDirectVocalChoices(members);
+  const styleChoices = take(styleVocalLabels, 3);
+  const genreGrammar = buildGenreVocalGrammar(genreLabels);
+  const moodPressure = buildMoodVocalPressure(moodLabels);
+  const hasRap = input.rapEnabled || members.some((m) => m.roles?.includes("rapper"));
 
-  if (members.length > 0) {
-    const maleCount = members.filter((m) => m.gender === "male").length;
-    const femaleCount = members.filter((m) => m.gender === "female").length;
-    if (members.length === 1) {
-      directParts.push(`${members[0].gender === "male" ? "남성" : "여성"} 솔로 보컬`);
-    } else if (maleCount > 0 && femaleCount > 0) {
-      directParts.push("남녀가 함께 부르는 보컬 구성");
-    } else if (members.length === 2) {
-      directParts.push(`${maleCount > 0 ? "남성" : "여성"} 듀엣`);
-    } else {
-      directParts.push(`${members.length}인 보컬 그룹`);
-    }
+  const selectedCore = take([...directChoices, ...styleChoices, ...(hasRap ? ["랩 흐름"] : [])], 6);
 
-    const first = members[0];
-    const tone = first.toneId ? VOCAL_TONES.find((t: any) => t.id === first.toneId) : undefined;
-    if (tone) directParts.push(`${tone.labelKo || tone.label} 톤`);
-
-    const char = first.character;
-    if (char) {
-      if (char.voiceToneId) {
-        const v = VOCAL_VOICE_TONES.find((item: any) => item.id === char.voiceToneId);
-        if (v) directParts.push(v.labelKo || v.label);
-      }
-      if (char.customVoiceTone) directParts.push(char.customVoiceTone);
-      if (char.personalityId) {
-        const p = VOCAL_PERSONALITIES.find((item: any) => item.id === char.personalityId);
-        if (p) directParts.push(p.labelKo || p.label);
-      }
-      if (char.customPersonality) directParts.push(char.customPersonality);
-      if (char.techniqueIds?.length) {
-        char.techniqueIds.slice(0, 2).forEach((tid) => {
-          const technique = VOCAL_TECHNIQUES.find((item: any) => item.id === tid);
-          if (technique) directParts.push(technique.labelKo || technique.label);
-        });
-      }
-      if (char.customTechnique) directParts.push(char.customTechnique);
-      if (char.emotionLevel !== undefined) {
-        if (char.emotionLevel >= 8) directParts.push("감정을 진하게 드러내는 표현");
-        else if (char.emotionLevel <= 3) directParts.push("감정을 눌러 담는 절제된 표현");
-      }
-      if (char.deliveryLevel !== undefined && char.deliveryLevel <= 3) {
-        directParts.push("숨을 많이 섞는 호흡감");
-      }
-      if (char.rangeLevel !== undefined) {
-        if (char.rangeLevel >= 8) directParts.push("높게 열리는 음역");
-        else if (char.rangeLevel <= 3) directParts.push("낮고 가까운 음역");
-      }
-    }
+  if (selectedCore.length > 0) {
+    const exactSelected = joinKo(selectedCore.slice(0, 4));
+    const styleLine = styleChoices.length > 0 && directChoices.length > 0
+      ? `스타일에서 고른 ${joinKo(styleChoices)} 느낌도 함께 섞입니다.`
+      : "";
+    return unique([
+      `${exactSelected}을 중심으로 보컬이 정리됩니다.`,
+      `${genreGrammar} 위에서 ${moodPressure}.`,
+      styleLine,
+    ]).filter(Boolean).join(" ");
   }
 
-  if (input.rapEnabled || members.some((m) => m.roles?.includes("rapper"))) {
-    directParts.push("랩 흐름");
-  }
-
-  if (directParts.length > 0) {
-    const main = joinKo(take(directParts, 4));
-    return `${main}을 중심으로, ${genreLabels[0] || "선택한 장르"} 안에서 감정을 전달합니다.`;
-  }
-
-  const moodText = moodLabels.length > 0 ? `${joinKo(take(moodLabels, 2))} 분위기에 맞춰` : "곡 분위기에 맞춰";
-  return `${moodText} 장르에 어울리는 자연스러운 보컬 톤으로 정리됩니다.`;
+  return `${genreGrammar}을 바탕으로, ${moodPressure}.`;
 }
 
 function buildSituationSummary(situation?: SituationConfig): string[] {
@@ -547,8 +597,10 @@ function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
     addToPart(parts, "vocals", vocal?.label || id, vocal?.label || id, true);
   });
 
-  const vocalSummary = buildVocalSummary(input, [...parts.atmosphere.main, ...parts.atmosphere.support], parts.genre.main);
-  addToPart(parts, "vocals", vocalSummary, "보컬 직접 선택", true);
+  const existingVocalHints = take(parts.vocals.main, 4);
+  const vocalSummary = buildVocalSummary(input, [...parts.atmosphere.main, ...parts.atmosphere.support], parts.genre.main, existingVocalHints);
+  parts.vocals.main = unique([vocalSummary, ...parts.vocals.main]);
+  parts.vocals.sourceLabels.push("보컬 요약");
 
   const situationParts = buildSituationSummary(input.situation);
   situationParts.forEach((item) => {

@@ -11417,10 +11417,10 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
       <AnimatePresence>
         {isOpen && (
           <div
-            className={`fixed inset-0 z-[20000] flex items-center justify-center overflow-x-hidden overflow-y-hidden font-sans select-none ${
+            className={`fixed inset-0 z-[20000] flex items-center justify-center overflow-x-hidden overflow-y-hidden font-sans select-text ${
               isMobile ? "px-3 py-4" : "px-4 sm:px-6 py-6"
             }`}
-            style={{ WebkitTapHighlightColor: 'transparent' }}
+            style={{ WebkitTapHighlightColor: 'transparent', userSelect: 'text', WebkitUserSelect: 'text' }}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) onClose();
             }}
@@ -11449,6 +11449,8 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               style={{
                 WebkitTapHighlightColor: 'transparent',
                 willChange: 'auto',
+                userSelect: 'text',
+                WebkitUserSelect: 'text',
               }}
               onMouseDown={(e) => e.stopPropagation()}
             >
@@ -11479,9 +11481,9 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               </div>
 
               {/* Body Content */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5 space-y-4 scrollbar-thin min-w-0 max-w-full">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5 space-y-4 scrollbar-thin min-w-0 max-w-full select-text">
                 {hasPreviewKeywords && (
-                  <div className="bg-white/[0.025] rounded-2xl px-4 py-3 min-w-0 max-w-full overflow-hidden">
+                  <div className="bg-white/[0.025] rounded-2xl px-4 py-3 min-w-0 max-w-full overflow-hidden select-text">
                     <div className="text-[10px] font-black text-[var(--text-secondary)] mb-1.5">선택 키워드</div>
                     <div className="flex flex-wrap gap-x-2.5 gap-y-1.5 text-[10.5px] leading-snug min-w-0 max-w-full">
                       {details.selectedKeywordGroups?.map((group) => (
@@ -11497,13 +11499,13 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 )}
 
                 {/* Genre Chip Bar */}
-                <div className="bg-white/[0.035] rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden">
+                <div className="bg-white/[0.035] rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden select-text">
                   <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>
                   <span className="text-sm font-black text-[#E7AD68] break-words whitespace-normal min-w-0 max-w-full leading-snug">{details.genreStr}</span>
                 </div>
 
                 {/* 곡 해석 요약 (Standalone - Big Card at Top) */}
-                <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                   <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
                     <Compass className="w-5 h-5 text-[#E7AD68]" />
                   </div>
@@ -11518,7 +11520,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 {/* Bento Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 max-w-full">
                   {/* 예상 분위기 */}
-                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
                       <Sunset className="w-5 h-5 text-[#E7AD68]" />
                     </div>
@@ -11531,7 +11533,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   </div>
 
                   {/* 예상 보컬 */}
-                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
                       <Mic2 className="w-5 h-5 text-[#E7AD68]" />
                     </div>
@@ -11544,7 +11546,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   </div>
 
                   {/* 예상 전개 */}
-                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
                       <Activity className="w-5 h-5 text-[#E7AD68]" />
                     </div>
@@ -11557,7 +11559,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   </div>
 
                   {/* 예상 가사 방향 */}
-                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
                       <PenTool className="w-5 h-5 text-[#E7AD68]" />
                     </div>
@@ -11571,7 +11573,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 </div>
 
                 {/* 주의할 점 */}
-                <div className="p-5 rounded-2xl bg-[#2A1A0D] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden shadow-[inset_0_0_0_1px_rgba(231,173,104,0.10),0_14px_34px_rgba(0,0,0,0.18)]">
+                <div className="p-5 rounded-2xl bg-[#2A1A0D] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden shadow-[inset_0_0_0_1px_rgba(231,173,104,0.10),0_14px_34px_rgba(0,0,0,0.18)] select-text">
                   <div className="w-10 h-10 rounded-xl bg-[#E7AD68]/18 flex items-center justify-center shrink-0 shadow-[0_0_18px_rgba(231,173,104,0.16)]">
                     <AlertTriangle className="w-5 h-5 text-[#F2B15D]" />
                   </div>

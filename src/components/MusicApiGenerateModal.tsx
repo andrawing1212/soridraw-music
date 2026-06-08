@@ -55,6 +55,7 @@ type MusicApiGenerateModalProps = {
     englishMixRatio?: number;
     rapEnabled?: boolean;
   }) => void;
+  suspendHistoryHandling?: boolean;
 };
 
 const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; short: string }[] = [
@@ -124,6 +125,7 @@ export default function MusicApiGenerateModal({
   englishMixRatio = 10,
   rapEnabled = false,
   onPreview,
+  suspendHistoryHandling = false,
 }: MusicApiGenerateModalProps) {
   const isMain = variant === 'main';
   const maxCount = maxLyricLanguages ?? (isMain ? 2 : 1);
@@ -172,6 +174,11 @@ export default function MusicApiGenerateModal({
   const [step, setStep] = useState<1 | 2>(1);
   const stepRef = useRef<1 | 2>(1);
   const backInputGuardUntilRef = useRef(0);
+  const suspendHistoryHandlingRef = useRef(suspendHistoryHandling);
+
+  useEffect(() => {
+    suspendHistoryHandlingRef.current = suspendHistoryHandling;
+  }, [suspendHistoryHandling]);
 
   const startBackInputGuard = (duration = 600) => {
     backInputGuardUntilRef.current = Date.now() + duration;
@@ -253,6 +260,14 @@ export default function MusicApiGenerateModal({
     window.history.pushState(makeModalHistoryState(1), '', window.location.href);
 
     const onPopState = (event: PopStateEvent) => {
+      // 곡 미리보기 팝업이 위에 떠 있을 때는 App.tsx의 미리보기 핸들러가
+      // 뒤로가기를 먼저 처리해야 한다. 여기서 잡으면 미리보기 대신 생성옵션이 닫힌다.
+      if (suspendHistoryHandlingRef.current) return;
+
+      // 생성옵션 모달이 열려 있을 때는 전역 앱 뒤로가기/종료 핸들러로
+      // 이벤트가 넘어가지 않게 이 모달이 먼저 소비한다.
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       const state = event.state as { __soridrawGenerateModal?: boolean; step?: 1 | 2 } | null;
 
       // 마우스 뒤로가기 버튼은 pointerdown/mousedown/mouseup/auxclick 등이
@@ -290,14 +305,14 @@ export default function MusicApiGenerateModal({
       handleModalBack();
     };
 
-    window.addEventListener('popstate', onPopState);
+    window.addEventListener('popstate', onPopState, true);
     window.addEventListener('pointerdown', onMouseBackButton, true);
     window.addEventListener('mousedown', onMouseBackButton, true);
     window.addEventListener('mouseup', onMouseBackButton, true);
     window.addEventListener('auxclick', onMouseBackButton, true);
 
     return () => {
-      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('popstate', onPopState, true);
       window.removeEventListener('pointerdown', onMouseBackButton, true);
       window.removeEventListener('mousedown', onMouseBackButton, true);
       window.removeEventListener('mouseup', onMouseBackButton, true);

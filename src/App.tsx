@@ -11513,13 +11513,13 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 </div>
 
                 {/* 주의할 점 */}
-                <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                  <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-[#E7AD68]" />
+                <div className="p-5 rounded-2xl bg-[#2A1A0D] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden shadow-[inset_0_0_0_1px_rgba(231,173,104,0.10),0_14px_34px_rgba(0,0,0,0.18)]">
+                  <div className="w-10 h-10 rounded-xl bg-[#E7AD68]/18 flex items-center justify-center shrink-0 shadow-[0_0_18px_rgba(231,173,104,0.16)]">
+                    <AlertTriangle className="w-5 h-5 text-[#F2B15D]" />
                   </div>
                   <div className="space-y-2 flex-1 min-w-0 overflow-hidden">
-                    <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">생성 전 주의 사항</h4>
-                    <ul className="list-disc pl-4 text-xs font-medium space-y-1.5 text-[var(--text-secondary)] leading-relaxed break-words whitespace-normal min-w-0 max-w-full">
+                    <h4 className="text-xs font-black text-[#F2B15D] font-sans tracking-tight">생성 전 주의 사항</h4>
+                    <ul className="list-disc pl-4 text-xs font-semibold space-y-1.5 text-[#F0D2A3] leading-relaxed break-words whitespace-normal min-w-0 max-w-full marker:text-[#F2B15D]">
                       {details.pointsToNote.map((note, idx) => (
                         <li key={idx} className="break-words whitespace-normal max-w-full leading-relaxed">{note}</li>
                       ))}

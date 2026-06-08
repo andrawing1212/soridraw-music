@@ -3929,6 +3929,9 @@ function App() {
   const [showMusicApiModal, setShowMusicApiModal] = useState(false);
   const [showMainGenerationModal, setShowMainGenerationModal] = useState(false);
   const [showPreviewPopup, setShowPreviewPopup] = useState(false);
+  const mainGenerationModalHistoryPushedRef = useRef(false);
+  const musicApiModalHistoryPushedRef = useRef(false);
+  const previewPopupHistoryPushedRef = useRef(false);
   const [currentPreviewOptions, setCurrentPreviewOptions] = useState<{
     includeLyrics: boolean;
     lyricLanguages: LanguageCode[];
@@ -3939,6 +3942,89 @@ function App() {
   } | null>(null);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [addingLyricsLanguageTarget, setAddingLyricsLanguageTarget] = useState<LanguageCode | null>(null);
+
+  const pushStudioModalHistory = useCallback((modalName: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.history.pushState({ ...(window.history.state || {}), modal: modalName, studioModal: true }, '', window.location.href);
+    } catch {
+      // Embedded previews can block history changes; the modal still works without it.
+    }
+  }, []);
+
+  const closeMainGenerationModal = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && mainGenerationModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setShowMainGenerationModal(false);
+    mainGenerationModalHistoryPushedRef.current = false;
+  }, []);
+
+  const closeMusicApiModal = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && musicApiModalHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setShowMusicApiModal(false);
+    musicApiModalHistoryPushedRef.current = false;
+  }, []);
+
+  const closePreviewPopup = useCallback((source: 'ui' | 'history' = 'ui') => {
+    if (source === 'ui' && previewPopupHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    setShowPreviewPopup(false);
+    previewPopupHistoryPushedRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (showMainGenerationModal && !mainGenerationModalHistoryPushedRef.current) {
+      pushStudioModalHistory('main-generation-options');
+      mainGenerationModalHistoryPushedRef.current = true;
+    }
+  }, [showMainGenerationModal, pushStudioModalHistory]);
+
+  useEffect(() => {
+    if (showMusicApiModal && !musicApiModalHistoryPushedRef.current) {
+      pushStudioModalHistory('music-api-generation-options');
+      musicApiModalHistoryPushedRef.current = true;
+    }
+  }, [showMusicApiModal, pushStudioModalHistory]);
+
+  useEffect(() => {
+    if (showPreviewPopup && !previewPopupHistoryPushedRef.current) {
+      pushStudioModalHistory('song-preview');
+      previewPopupHistoryPushedRef.current = true;
+    }
+  }, [showPreviewPopup, pushStudioModalHistory]);
+
+  useEffect(() => {
+    if (!showPreviewPopup && !showMainGenerationModal && !showMusicApiModal) return;
+
+    const handleStudioModalPopState = (event: PopStateEvent) => {
+      if (showPreviewPopup && previewPopupHistoryPushedRef.current) {
+        event.stopImmediatePropagation();
+        closePreviewPopup('history');
+        return;
+      }
+
+      if (showMainGenerationModal && mainGenerationModalHistoryPushedRef.current) {
+        event.stopImmediatePropagation();
+        closeMainGenerationModal('history');
+        return;
+      }
+
+      if (showMusicApiModal && musicApiModalHistoryPushedRef.current) {
+        event.stopImmediatePropagation();
+        closeMusicApiModal('history');
+      }
+    };
+
+    window.addEventListener('popstate', handleStudioModalPopState, true);
+    return () => window.removeEventListener('popstate', handleStudioModalPopState, true);
+  }, [showPreviewPopup, showMainGenerationModal, showMusicApiModal, closePreviewPopup, closeMainGenerationModal, closeMusicApiModal]);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return hasStoredSunoApiKey(auth.currentUser?.uid);
@@ -10676,7 +10762,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isKoreanEnglishMix={isKoreanEnglishMix}
               englishMixRatio={englishMixRatio}
               rapEnabled={rapEnabled}
-              onClose={() => setShowMainGenerationModal(false)}
+              onClose={() => closeMainGenerationModal()}
               onPreview={(options) => {
                 setCurrentPreviewOptions(options);
                 setShowPreviewPopup(true);
@@ -10688,7 +10774,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setIsKoreanEnglishMix(nextMix);
                 setEnglishMixRatio(nextRatio);
                 setRapEnabled(nextRap);
-                setShowMainGenerationModal(false);
+                closeMainGenerationModal();
                 handleGenerate({
                   includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
                   lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
@@ -10721,9 +10807,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               })()}
               maxLyricLanguages={1}
               musicApiTargets={getMusicApiTargetOptions()}
-              onClose={() => setShowMusicApiModal(false)}
+              onClose={() => closeMusicApiModal()}
               onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
-                setShowMusicApiModal(false);
+                closeMusicApiModal();
                 generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount, options);
               }}
             />
@@ -10733,7 +10819,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       
       <SongPreviewPopup
         isOpen={showPreviewPopup}
-        onClose={() => setShowPreviewPopup(false)}
+        onClose={() => closePreviewPopup()}
         details={getSongPreviewDetails()}
       />
 

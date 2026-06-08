@@ -175,6 +175,11 @@ export default function MusicApiGenerateModal({
   const stepRef = useRef<1 | 2>(1);
   const backInputGuardUntilRef = useRef(0);
   const suspendHistoryHandlingRef = useRef(suspendHistoryHandling);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     suspendHistoryHandlingRef.current = suspendHistoryHandling;
@@ -243,16 +248,16 @@ export default function MusicApiGenerateModal({
     }
 
     if (isBackInputGuardActive()) return;
-    onClose();
+    onCloseRef.current();
   };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -293,7 +298,7 @@ export default function MusicApiGenerateModal({
         return;
       }
 
-      onClose();
+      onCloseRef.current();
     };
 
     const onMouseBackButton = (event: MouseEvent) => {
@@ -318,7 +323,7 @@ export default function MusicApiGenerateModal({
       window.removeEventListener('mouseup', onMouseBackButton, true);
       window.removeEventListener('auxclick', onMouseBackButton, true);
     };
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     const originalBodyOverflow = document.body.style.overflow;

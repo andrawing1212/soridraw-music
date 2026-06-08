@@ -10753,7 +10753,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isKoreanEnglishMix={isKoreanEnglishMix}
               englishMixRatio={englishMixRatio}
               rapEnabled={rapEnabled}
-              onClose={() => closeMainGenerationModal()}
+              onClose={closeMainGenerationModal}
               suspendHistoryHandling={showPreviewPopup}
               onPreview={(options) => {
                 setCurrentPreviewOptions(options);
@@ -10800,7 +10800,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               maxLyricLanguages={1}
               musicApiTargets={getMusicApiTargetOptions()}
               suspendHistoryHandling={showPreviewPopup}
-              onClose={() => closeMusicApiModal()}
+              onClose={closeMusicApiModal}
               onConfirm={(titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
                 closeMusicApiModal();
                 generateMusic(titleLang, includeLyrics, lyricLanguages, generationCount, options);

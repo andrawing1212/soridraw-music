@@ -3962,20 +3962,16 @@ function App() {
     showMusicApiModalRef.current = showMusicApiModal;
   }, [showMusicApiModal]);
 
-  const closeMainGenerationModal = useCallback((source: 'ui' | 'history' = 'ui') => {
-    if (source === 'ui' && mainGenerationModalHistoryPushedRef.current) {
-      window.history.back();
-      return;
-    }
+  const closeMainGenerationModal = useCallback((_source: 'ui' | 'history' = 'ui') => {
+    // MusicApiGenerateModal owns its own browser-history entry.
+    // App-level history entries here caused Mobile Chrome Back to skip the modal
+    // and leave the app after returning from the preview popup.
     setShowMainGenerationModal(false);
     mainGenerationModalHistoryPushedRef.current = false;
   }, []);
 
-  const closeMusicApiModal = useCallback((source: 'ui' | 'history' = 'ui') => {
-    if (source === 'ui' && musicApiModalHistoryPushedRef.current) {
-      window.history.back();
-      return;
-    }
+  const closeMusicApiModal = useCallback((_source: 'ui' | 'history' = 'ui') => {
+    // MusicApiGenerateModal owns its own browser-history entry.
     setShowMusicApiModal(false);
     musicApiModalHistoryPushedRef.current = false;
   }, []);
@@ -3990,18 +3986,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (showMainGenerationModal && !mainGenerationModalHistoryPushedRef.current) {
-      pushStudioModalHistory('main-generation-options');
-      mainGenerationModalHistoryPushedRef.current = true;
+    if (!showMainGenerationModal) {
+      mainGenerationModalHistoryPushedRef.current = false;
     }
-  }, [showMainGenerationModal, pushStudioModalHistory]);
+  }, [showMainGenerationModal]);
 
   useEffect(() => {
-    if (showMusicApiModal && !musicApiModalHistoryPushedRef.current) {
-      pushStudioModalHistory('music-api-generation-options');
-      musicApiModalHistoryPushedRef.current = true;
+    if (!showMusicApiModal) {
+      musicApiModalHistoryPushedRef.current = false;
     }
-  }, [showMusicApiModal, pushStudioModalHistory]);
+  }, [showMusicApiModal]);
 
   useEffect(() => {
     if (showPreviewPopup && !previewPopupHistoryPushedRef.current) {
@@ -4011,42 +4005,17 @@ function App() {
   }, [showPreviewPopup, pushStudioModalHistory]);
 
   useEffect(() => {
-    if (!showPreviewPopup && !showMainGenerationModal && !showMusicApiModal) return;
+    if (!showPreviewPopup) return;
 
     const handleStudioModalPopState = (event: PopStateEvent) => {
-      if (showPreviewPopup && previewPopupHistoryPushedRef.current) {
-        event.stopImmediatePropagation();
-        closePreviewPopup('history');
-
-        // Mobile Chrome can consume the preview history entry and leave the previous
-        // generation modal visible without an active modal history entry. Push a fresh
-        // history entry immediately so the next hardware Back closes that modal instead
-        // of exiting the app. This mirrors the stable behavior of keyword popups.
-        if (showMainGenerationModalRef.current) {
-          mainGenerationModalHistoryPushedRef.current = true;
-          pushStudioModalHistory('main-generation-options');
-        } else if (showMusicApiModalRef.current) {
-          musicApiModalHistoryPushedRef.current = true;
-          pushStudioModalHistory('music-api-generation-options');
-        }
-        return;
-      }
-
-      if (showMainGenerationModal && mainGenerationModalHistoryPushedRef.current) {
-        event.stopImmediatePropagation();
-        closeMainGenerationModal('history');
-        return;
-      }
-
-      if (showMusicApiModal && musicApiModalHistoryPushedRef.current) {
-        event.stopImmediatePropagation();
-        closeMusicApiModal('history');
-      }
+      if (!previewPopupHistoryPushedRef.current) return;
+      event.stopImmediatePropagation();
+      closePreviewPopup('history');
     };
 
     window.addEventListener('popstate', handleStudioModalPopState, true);
     return () => window.removeEventListener('popstate', handleStudioModalPopState, true);
-  }, [showPreviewPopup, showMainGenerationModal, showMusicApiModal, closePreviewPopup, closeMainGenerationModal, closeMusicApiModal, pushStudioModalHistory]);
+  }, [showPreviewPopup, closePreviewPopup]);
   const [hasSunoApiKey, setHasSunoApiKey] = useState(() => {
     try {
       return hasStoredSunoApiKey(auth.currentUser?.uid);

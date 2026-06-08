@@ -148,8 +148,26 @@ function compactText(value?: string | null): string {
   return (value || "")
     .replace(/\*\*/g, "")
     .replace(/\[[^\]]+\]/g, "")
+    .replace(/\(([A-Za-z0-9_.,&/\-\s]+)\)/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function looksLikeRawEnglishCue(value: string): boolean {
+  const text = compactText(value);
+  if (!text) return false;
+  const allowed = text.replace(/R&B|J-Pop|K-Pop|K-Indie|EDM|UK|BPM|808|Y2K|Lo-fi|lo-fi/gi, "");
+  const words = allowed.match(/[A-Za-z]{3,}/g) || [];
+  const koreanChars = (allowed.match(/[가-힣]/g) || []).length;
+  return words.length >= 2 && koreanChars < 3;
+}
+
+function previewText(value?: string | null, sourceLabel?: string): string {
+  const clean = compactText(value);
+  const source = compactText(sourceLabel);
+  if (!clean) return source;
+  if (looksLikeRawEnglishCue(clean) && source) return source;
+  return clean;
 }
 
 function unique(list: string[]): string[] {
@@ -362,6 +380,18 @@ function buildSituationSummary(situation?: SituationConfig): string[] {
   return take(parts, 4);
 }
 
+function styleDisplayCue(item: LookupItem | undefined, label: string): string {
+  return previewText(item?.descriptionKo || label, label);
+}
+
+function soundDisplayCue(item: LookupItem | undefined, label: string): string {
+  return previewText(item?.descriptionKo || label, label);
+}
+
+function moodDisplayCue(item: LookupItem | undefined, label: string): string {
+  return previewText(item?.descriptionKo || label, label);
+}
+
 function createEmptyParts(): PreviewPromptParts {
   const part = (): PreviewPromptPart => ({ main: [], support: [], sourceLabels: [] });
   return {
@@ -375,12 +405,12 @@ function createEmptyParts(): PreviewPromptParts {
 }
 
 function addToPart(parts: PreviewPromptParts, key: PreviewPromptPartKey, value?: string, source?: string, main = false): void {
-  const clean = compactText(value);
+  const clean = previewText(value, source);
   if (!clean) return;
   const target = parts[key];
   if (main) target.main.push(clean);
   else target.support.push(clean);
-  if (source) target.sourceLabels.push(source);
+  if (source) target.sourceLabels.push(compactText(source));
 }
 
 function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
@@ -402,25 +432,25 @@ function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
     const vocalLike = isVocalLike(label, id, groupId || "");
     const instrumentLike = isInstrumentLike(label, id);
 
+    const displayCue = styleDisplayCue(item, label);
+
     if (genreLike && !vocalLike && !instrumentLike) {
       addToPart(parts, "genre", label, label);
-      addToPart(parts, "arrangement", item?.style || item?.descriptionKo || item?.description, label);
-      if (item?.sound) addToPart(parts, "instruments", item.sound, label);
-      if (item?.mood) addToPart(parts, "atmosphere", item.mood, label);
+      addToPart(parts, "arrangement", displayCue, label);
       return;
     }
 
     if (instrumentLike || item?.sound) {
-      addToPart(parts, "instruments", item?.sound || label, label, true);
+      addToPart(parts, "instruments", label, label, true);
     }
     if (vocalLike) {
-      addToPart(parts, "vocals", item?.style || label, label, true);
+      addToPart(parts, "vocals", label, label, true);
     }
     if (item?.mood || (!genreLike && !instrumentLike && !vocalLike)) {
-      addToPart(parts, "atmosphere", item?.mood || item?.descriptionKo || label, label);
+      addToPart(parts, "atmosphere", displayCue, label);
     }
     if (item?.style && !vocalLike) {
-      addToPart(parts, "arrangement", item.style, label);
+      addToPart(parts, "arrangement", label, label);
     }
   });
 
@@ -428,14 +458,14 @@ function buildPreviewPromptParts(input: PreviewInput): PreviewPromptParts {
     const sound = findSoundById(id);
     const label = labelOf(sound, id);
     addToPart(parts, "instruments", label, label, true);
-    if (sound?.descriptionKo || sound?.description) addToPart(parts, "atmosphere", sound.descriptionKo || sound.description, label);
+    if (sound?.descriptionKo || sound?.description) addToPart(parts, "atmosphere", soundDisplayCue(sound, label), label);
   });
 
   (input.selectedMoods || []).forEach((id) => {
     const mood = findMoodById(id);
     const label = labelOf(mood, id);
     addToPart(parts, "atmosphere", label, label, true);
-    if (mood?.arrangement) addToPart(parts, "arrangement", mood.arrangement, label);
+    if (mood?.arrangement) addToPart(parts, "arrangement", moodDisplayCue(mood, label), label);
   });
 
   (input.selectedThemes || []).forEach((id) => {

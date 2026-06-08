@@ -11403,7 +11403,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               animate={contentVariants.animate}
               exit={contentVariants.exit}
               transition={contentTransition}
-              className="w-full max-w-2xl max-h-[calc(100dvh-48px)] rounded-[32px] overflow-x-hidden overflow-y-hidden flex flex-col border border-white/10 bg-[#171717] text-[var(--text-primary)] shadow-2xl relative z-10 p-0 min-w-0"
+              className="w-full max-w-2xl max-h-[calc(100dvh-48px)] rounded-[32px] overflow-x-hidden overflow-y-hidden flex flex-col bg-[var(--card-bg)] text-[var(--text-primary)] shadow-[0_24px_70px_rgba(0,0,0,0.58)] relative z-10 p-0 min-w-0"
               style={{
                 WebkitTapHighlightColor: 'transparent',
                 willChange: 'auto',
@@ -11411,14 +11411,14 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               onMouseDown={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="relative shrink-0 px-6 pt-6 pb-4 border-b border-white/5 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
+              <div className="relative shrink-0 px-6 pt-6 pb-4 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
                 <div className="min-w-0 flex-1 pr-4">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <Sparkles className="w-5 h-5 text-brand-orange animate-pulse shrink-0" />
+                    <Sparkles className="w-5 h-5 text-[#E7AD68] shrink-0" />
                     <h2 className="text-lg md:text-xl font-black tracking-tight text-[var(--text-primary)] truncate">
                       곡 미리보기
                     </h2>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange border border-brand-orange/20 shrink-0">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/[0.055] text-[#E7AD68] shrink-0">
                       AI 기획 해석
                     </span>
                   </div>
@@ -11429,7 +11429,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all cursor-pointer shrink-0"
+                  className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.055] transition-all cursor-pointer shrink-0"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   <X className="w-5 h-5" />
@@ -11439,18 +11439,18 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               {/* Body Content */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-6 py-5 space-y-4 scrollbar-thin min-w-0 max-w-full">
                 {/* Genre Chip Bar */}
-                <div className="bg-[#242424]/40 border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden">
+                <div className="bg-white/[0.035] rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden">
                   <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>
-                  <span className="text-sm font-black text-brand-orange break-words whitespace-normal min-w-0 max-w-full leading-snug">{details.genreStr}</span>
+                  <span className="text-sm font-black text-[#E7AD68] break-words whitespace-normal min-w-0 max-w-full leading-snug">{details.genreStr}</span>
                 </div>
 
                 {/* 곡 해석 요약 (Standalone - Big Card at Top) */}
-                <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                    <Compass className="w-5 h-5 text-amber-400" />
+                <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
+                    <Compass className="w-5 h-5 text-[#E7AD68]" />
                   </div>
                   <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                    <h4 className="text-xs font-black text-amber-400 font-sans tracking-tight">곡 해석 요약</h4>
+                    <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">곡 해석 요약</h4>
                     <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                       {details.interpretationSummary}
                     </p>
@@ -11460,12 +11460,12 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 {/* Bento Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 max-w-full">
                   {/* 예상 분위기 */}
-                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                      <Sunset className="w-5 h-5 text-emerald-400" />
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
+                      <Sunset className="w-5 h-5 text-[#E7AD68]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-emerald-400 font-sans tracking-tight">예상 분위기</h4>
+                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 분위기</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedAtmosphere}
                       </p>
@@ -11473,12 +11473,12 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   </div>
 
                   {/* 예상 보컬 */}
-                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
-                      <Mic2 className="w-5 h-5 text-sky-400" />
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
+                      <Mic2 className="w-5 h-5 text-[#E7AD68]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-sky-400 font-sans tracking-tight">예상 보컬</h4>
+                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 보컬</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedVocals}
                       </p>
@@ -11486,12 +11486,12 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   </div>
 
                   {/* 예상 전개 */}
-                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
-                      <Activity className="w-5 h-5 text-purple-400" />
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
+                      <Activity className="w-5 h-5 text-[#E7AD68]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-purple-400 font-sans tracking-tight">예상 전개</h4>
+                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 전개</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedArrangement}
                       </p>
@@ -11499,12 +11499,12 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   </div>
 
                   {/* 예상 가사 방향 */}
-                  <div className="p-5 rounded-2xl bg-[#202020]/80 border border-white/5 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                    <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
-                      <PenTool className="w-5 h-5 text-rose-400" />
+                  <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
+                      <PenTool className="w-5 h-5 text-[#E7AD68]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-rose-400 font-sans tracking-tight">예상 가사 방향</h4>
+                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 가사 방향</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedLyrics}
                       </p>
@@ -11513,12 +11513,12 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 </div>
 
                 {/* 주의할 점 */}
-                <div className="p-5 rounded-2xl bg-orange-500/5 border border-orange-500/20 flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-orange-400" />
+                <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden">
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-[#E7AD68]" />
                   </div>
                   <div className="space-y-2 flex-1 min-w-0 overflow-hidden">
-                    <h4 className="text-xs font-black text-orange-400 font-sans tracking-tight">생성 전 주의 사항</h4>
+                    <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">생성 전 주의 사항</h4>
                     <ul className="list-disc pl-4 text-xs font-medium space-y-1.5 text-[var(--text-secondary)] leading-relaxed break-words whitespace-normal min-w-0 max-w-full">
                       {details.pointsToNote.map((note, idx) => (
                         <li key={idx} className="break-words whitespace-normal max-w-full leading-relaxed">{note}</li>
@@ -11529,11 +11529,11 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               </div>
 
               {/* Footer and Close Buttons */}
-              <div className="shrink-0 px-6 py-4 border-t border-white/5 bg-[#1f1f1f] flex justify-end min-w-0 max-w-full overflow-hidden">
+              <div className="shrink-0 px-6 py-4 bg-black/10 flex justify-end min-w-0 max-w-full overflow-hidden">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-3 rounded-full text-sm font-black bg-[#E7AD68] text-[#171717] hover:bg-[#ECB976] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-lg outline-none select-none shrink-0"
+                  className="px-6 py-3 rounded-full text-sm font-black bg-[#E7AD68] text-[#111111] hover:bg-[#ECB976] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_10px_24px_rgba(231,173,104,0.20)] outline-none select-none shrink-0"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   확인

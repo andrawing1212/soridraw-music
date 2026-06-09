@@ -5307,6 +5307,116 @@ function getMultiVocalTotal(params: GenerateSongParams): number {
   return Math.max(info.total || 0, existingMembers.length);
 }
 
+function compactSupportingMemberRoleCue(
+  params: GenerateSongParams,
+  member: any,
+  index: number,
+  total: number,
+): string {
+  const rawRole = member?.roles?.[0] || getDefaultMultiVocalRole(index, total, Boolean(params.vocal?.rap));
+  const gender = member?.gender || getMemberGenderLabel(params, index);
+  const roleName = compactRoleNameForVocalLine(rawRole, index === 0 ? 'main' : 'sub');
+  const genderText = gender === 'female' ? 'female' : gender === 'male' ? 'male' : '';
+  if (/rap/i.test(roleName)) return [genderText, 'rap adds rhythmic contrast'].filter(Boolean).join(' ');
+  if (/lead|main/i.test(roleName)) return [genderText, 'lead supports the main melody'].filter(Boolean).join(' ');
+  if (/sub/i.test(roleName)) return [genderText, 'sub supports harmony and response'].filter(Boolean).join(' ');
+  return [genderText, `${roleName} supports the ensemble`].filter(Boolean).join(' ');
+}
+
+function buildSupportingMemberCue(
+  params: GenerateSongParams,
+  members: any[],
+  total: number,
+  startIndex = 0,
+): string {
+  const support = members
+    .map((member, offset) => compactSupportingMemberRoleCue(params, member, startIndex + offset, total))
+    .filter(Boolean);
+  if (!support.length) return '';
+
+  const counts = new Map<string, number>();
+  support.forEach((item) => counts.set(item, (counts.get(item) || 0) + 1));
+  const grouped = Array.from(counts.entries()).map(([item, count]) => {
+    if (count <= 1) return item;
+    if (/female sub supports harmony and response/i.test(item)) return `${count} female sub vocals support harmony and response`;
+    if (/male sub supports harmony and response/i.test(item)) return `${count} male sub vocals support harmony and response`;
+    return `${count} ${item}`;
+  });
+  return grouped.slice(0, 3).join('; ');
+}
+
+function compactVocalExpressionForMultiPrompt(cue: VocalExpressionCue): string {
+  const text = `${cue.short} ${cue.tag} ${cue.label}`.toLowerCase();
+  if (/emotional rise|rising emotion|감정 고조/.test(text)) return 'emotional rise';
+  if (/whisper|속삭/.test(text)) return 'whispered feel';
+  if (/held|restrained|눌러|참/.test(text)) return 'held-back restraint';
+  if (/cold|차가/.test(text)) return 'cold distance';
+  if (/delicate|섬세/.test(text)) return 'delicate expression';
+  if (/tear|울먹|fragile/.test(text)) return 'tearful fragility';
+  if (/pleading|애원/.test(text)) return 'pleading pull';
+  if (/lazy|relaxed|나른/.test(text)) return 'relaxed phrasing';
+  if (/rough|gritty|거친/.test(text)) return 'rough pressure';
+  if (/dreamy|몽롱/.test(text)) return 'dreamy softness';
+  if (/spoken|conversational|말하/.test(text)) return 'spoken phrasing';
+  if (/sarcastic|비꼬/.test(text)) return 'sarcastic edge';
+  if (/nasal|비성/.test(text)) return 'nasal color';
+  if (/breath|숨/.test(text)) return 'breath-led tension';
+  return cleanupPromptTail(cue.tag || firstPromptWord(cue.short) || cue.label).replace(/\.$/, '');
+}
+
+function buildMultiVocalExpressionLine(params: GenerateSongParams): string {
+  const cues = getSelectedVocalExpressionCues(params)
+    .map(compactVocalExpressionForMultiPrompt)
+    .filter(Boolean);
+  const unique = Array.from(new Set(cues)).slice(0, 4);
+  if (!unique.length) return '';
+  return `Vocal line adds ${unique.join(', ')}`;
+}
+
+function buildRichGroupMemberVocalSplit(params: GenerateSongParams): string {
+  const existingMembers = params.vocal?.members ?? [];
+  const total = getMultiVocalTotal(params);
+  if (total < 3) return '';
+
+  const characterSegments: string[] = [];
+  const supportingMembers: any[] = [];
+  existingMembers.forEach((member: any, index: number) => {
+    if (hasVocalCharacterSelection(member) && characterSegments.length < 3) {
+      characterSegments.push(compactMemberVocalCue(params, member, index, total, 6));
+    } else {
+      supportingMembers.push(member);
+    }
+  });
+
+  const supportCue = buildSupportingMemberCue(
+    params,
+    supportingMembers,
+    total,
+    existingMembers.findIndex((member: any) => supportingMembers.includes(member)) >= 0
+      ? existingMembers.findIndex((member: any) => supportingMembers.includes(member))
+      : characterSegments.length,
+  );
+  const hasRap = Boolean(params.vocal?.rap) || existingMembers.some((member: any) => /rap/i.test(String(member?.roles?.join(' ') || '')));
+  const styleLine = buildMultiVocalExpressionLine(params);
+
+  const segments = characterSegments.slice(0, 3);
+  if (supportCue) segments.push(supportCue);
+  if (!segments.length) {
+    const lead = existingMembers[0] ? compactMemberVocalCue(params, existingMembers[0], 0, total, 2) : 'lead carries the story';
+    const response = existingMembers[1] ? compactMemberVocalCue(params, existingMembers[1], 1, total, 2) : 'sub vocals answer softly';
+    segments.push(lead, response, hasRap ? 'rap adds rhythmic contrast' : 'harmony supports the hook');
+  } else if (hasRap && !segments.join(' ').toLowerCase().includes('rap')) {
+    segments.push('rap adds rhythmic contrast');
+  }
+
+  const tail = [
+    styleLine,
+    'clear main/sub/rap separation and clean hook blend',
+  ].filter(Boolean).join('; ');
+
+  return cleanupPromptTail(`${total}-vocal setup: ${segments.join('; ')}; ${tail}.`);
+}
+
 function buildCompressedMemberVocalSplit(params: GenerateSongParams): string {
   const info = getVocalModeInfo(params.vocal);
   if (!info.isMulti) return '';
@@ -5316,11 +5426,8 @@ function buildCompressedMemberVocalSplit(params: GenerateSongParams): string {
   if (total < 2) return '';
 
   if (total >= 3) {
-    const hasRap = Boolean(params.vocal?.rap) || existingMembers.some((member: any) => /rap/i.test(String(member?.roles?.join(' ') || '')));
-    const lead = existingMembers[0] ? compactMemberVocalCue(params, existingMembers[0], 0, total, 2) : 'lead carries the story';
-    const response = existingMembers[1] ? compactMemberVocalCue(params, existingMembers[1], 1, total, 2) : 'sub vocals answer softly';
-    const rap = hasRap ? 'rap adds rhythmic contrast' : 'harmony supports the hook';
-    return cleanupPromptTail(`Mixed ensemble: ${lead}, ${response}; ${rap}; clear role separation and clean hook blend.`);
+    const richGroup = buildRichGroupMemberVocalSplit(params);
+    if (richGroup) return richGroup;
   }
 
   const firstMember = existingMembers[0];
@@ -5390,11 +5497,20 @@ function buildCompressedSituationVocalSplit(
   const info = getVocalModeInfo(params.vocal);
   const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
   if (info.total >= 3) {
-    const lead = compactSituationRoleCue(params, roleEntries[0].role, 0, matchedIndexes[0], 2);
-    const secondRole = roleEntries[1]?.role ? compactSituationRoleCue(params, roleEntries[1].role, 1, matchedIndexes[1], 2) : 'sub vocals answer the story';
+    const total = getMultiVocalTotal(params);
+    const first = compactSituationRoleCue(params, roleEntries[0].role, 0, matchedIndexes[0], 6);
+    const second = roleEntries[1]?.role
+      ? compactSituationRoleCue(params, roleEntries[1].role, 1, matchedIndexes[1], 6)
+      : 'sub vocals answer the story';
+    const storyMemberIndexes = new Set(matchedIndexes.filter((index) => index >= 0));
+    const supportingMembers = (params.vocal?.members ?? []).filter((_member: any, index: number) => !storyMemberIndexes.has(index));
+    const supportCue = buildSupportingMemberCue(params, supportingMembers, total, 2);
     const hasRap = Boolean(params.vocal?.rap) || (params.vocal?.members ?? []).some((member: any) => /rap/i.test(String(member?.roles?.join(' ') || '')));
-    const rap = hasRap ? 'rap adds rhythmic contrast' : 'ensemble supports the hook';
-    return cleanupPromptTail(`Story ensemble: ${lead}; ${secondRole}; ${rap}; ${ownershipRule}.`);
+    const styleLine = buildMultiVocalExpressionLine(params);
+    const segments = [first, second, supportCue].filter(Boolean);
+    if (hasRap && !segments.join(' ').toLowerCase().includes('rap')) segments.push('rap adds rhythmic contrast');
+    const tail = [styleLine, ownershipRule, 'clear story-role separation'].filter(Boolean).join('; ');
+    return cleanupPromptTail(`Story ${total}-vocal setup: ${segments.join('; ')}; ${tail}.`);
   }
 
   const hasCharacter = hasAnyVocalCharacterMember(params);

@@ -5248,8 +5248,10 @@ function compactMultiVocalCueBits(value: string, max = 3): string[] {
 
   if (/reluctant authority|tired authority|command|authoritative|권위/.test(raw)) add('reluctant authority');
   if (/pleading regret|fragile restraint|애원|후회/.test(raw)) add('pleading regret');
-  if (/teen|youth|young|10대|어린/.test(raw)) add('teen-like color');
+  if (/teen|youth|10대|어린/.test(raw)) add('teen-like color');
+  if (/young[-\s]?adult|young|젊/.test(raw)) add('young adult color');
   if (/thin.*high|very high|high vocal range|높은|고음/.test(raw)) add('thin high range');
+  if (/high[-\s]?mid|mid[-\s]?high|높은\s*보통|높은\s*중/.test(raw)) add('high-mid range');
   if (/bright|lively|clear|밝|청아/.test(raw)) add('bright tone');
   if (/lazy|relaxed|laid[-\s]?back|나른|릴렉스/.test(raw)) add('relaxed tone');
   if (/airy.*falsetto|falsetto|head[-\s]?voice|가성|두성/.test(raw)) add('airy falsetto');
@@ -5257,7 +5259,9 @@ function compactMultiVocalCueBits(value: string, max = 3): string[] {
   if (/breath|inhaled|half[-\s]?air|airy|숨|호흡/.test(raw)) add('fragile breath');
   if (/microtonal|slid|slide|bending|bend|glissando|slurring|꺾|벤딩/.test(raw)) add('melodic bends');
   if (/urgent|early|anticipat|성급|빠른 진입/.test(raw)) add('urgent entries');
-  if (/chest|흉성/.test(raw)) add('chest voice');
+  if (/sincere|진심/.test(raw)) add('sincere tone');
+  if (/cute|귀여/.test(raw)) add('cute color');
+  if (/chest|흉성|진성/.test(raw)) add('chest voice');
   if (/sharp|edge|날카/.test(raw)) add('sharp edge');
   if (/dry|plain|담백|건조/.test(raw)) add('dry tone');
   if (/warm|soft|smooth|부드|따뜻/.test(raw)) add('soft warmth');
@@ -5325,8 +5329,8 @@ function buildCompressedMemberVocalSplit(params: GenerateSongParams): string {
     return 'Natural duet vocals; lead and response alternate clearly, with clean hook harmony and emotion matched to the genre.';
   }
 
-  const first = compactMemberVocalCue(params, firstMember, 0, total, firstMember && hasVocalCharacterSelection(firstMember) ? 3 : 2);
-  const second = compactMemberVocalCue(params, secondMember, 1, total, secondMember && hasVocalCharacterSelection(secondMember) ? 3 : 2);
+  const first = compactMemberVocalCue(params, firstMember, 0, total, firstMember && hasVocalCharacterSelection(firstMember) ? 5 : 2);
+  const second = compactMemberVocalCue(params, secondMember, 1, total, secondMember && hasVocalCharacterSelection(secondMember) ? 5 : 2);
   const blend = hasAnyVocalCharacterMember(params)
     ? 'clean role separation, restrained contrast, hook blend'
     : 'clear lead-response phrasing, gentle harmony, hook blend';
@@ -5356,15 +5360,27 @@ function compactSituationRoleCue(
   ].filter(Boolean).join(', ');
   const roleDirection = mergeRoleDirection(role, rawStyleSource);
   const fallbackTone = inferSituationVocalTone(role, roleIndex);
-  const cueBits = compactMultiVocalCueBits(
-    [roleDirection, fallbackTone, characterPrompt].filter(Boolean).join(', '),
-    maxBits,
+  // For storyboard + vocal-character mode, keep BOTH sides alive:
+  // 1) the story-role attitude (ex. Grim Reaper reluctant authority)
+  // 2) the selected voice-character color (ex. teen-like, thin high, chest voice).
+  // The previous rich compression let Gemini re-summarize this line, so the final
+  // prompt could lose either the storyboard or the vocal character. Keep this
+  // extraction deterministic and only compact the number of cue bits.
+  const roleBits = compactMultiVocalCueBits(
+    [roleDirection, fallbackTone].filter(Boolean).join(', '),
+    characterPrompt ? 2 : maxBits,
   );
+  const characterBits = characterPrompt
+    ? compactMultiVocalCueBits(characterPrompt, Math.max(4, maxBits))
+    : [];
+  const cueBits = Array.from(new Set([...roleBits, ...characterBits]))
+    .slice(0, characterPrompt ? Math.max(maxBits, 6) : maxBits);
   const genderText = gender === 'female' ? 'female' : gender === 'male' ? 'male' : '';
   const roleText = /rap|래/i.test(`${fallbackTone} ${member?.roles?.join(' ') || ''}`) ? 'rap' : 'vocal';
   const vocalType = [genderText, roleText].filter(Boolean).join(' ');
   return cleanupPromptTail(`${vocalType} as ${roleName}${cueBits.length ? ` with ${cueBits.join(', ')}` : ''}`);
 }
+
 
 function buildCompressedSituationVocalSplit(
   params: GenerateSongParams,
@@ -5381,12 +5397,14 @@ function buildCompressedSituationVocalSplit(
     return cleanupPromptTail(`Story ensemble: ${lead}; ${secondRole}; ${rap}; ${ownershipRule}.`);
   }
 
-  const first = compactSituationRoleCue(params, roleEntries[0].role, 0, matchedIndexes[0], 3);
-  const second = compactSituationRoleCue(params, roleEntries[1].role, 1, matchedIndexes[1], 3);
-  const relation = hasAnyVocalCharacterMember(params)
-    ? 'call-and-response tension'
-    : 'role-driven dialogue tension';
-  return cleanupPromptTail(`Story duet: ${first} vs ${second}; separated sections, ${relation}, ${ownershipRule}.`);
+  const hasCharacter = hasAnyVocalCharacterMember(params);
+  const richDuoBits = hasCharacter ? 7 : 3;
+  const first = compactSituationRoleCue(params, roleEntries[0].role, 0, matchedIndexes[0], richDuoBits);
+  const second = compactSituationRoleCue(params, roleEntries[1].role, 1, matchedIndexes[1], richDuoBits);
+  const relation = hasCharacter
+    ? 'separated sections, call-and-response tension, single-owner hooks'
+    : `separated sections, role-driven dialogue tension, ${ownershipRule}`;
+  return cleanupPromptTail(`Story duet: ${first} vs ${second}; ${relation}.`);
 }
 
 function buildRuleBasedCompressedMultiVocals(params: GenerateSongParams): string {
@@ -8738,7 +8756,7 @@ function compactFiveLineVocalsValue(value: string, params: GenerateSongParams): 
     .trim();
 
   const info = getVocalModeInfo(params.vocal);
-  const multiLimit = info.total >= 3 ? 340 : 450;
+  const multiLimit = info.total >= 3 ? 340 : 620;
   if (info.isMulti && (line.length > multiLimit || /voice character:/i.test(line))) {
     const compressed = buildRuleBasedCompressedMultiVocals(params);
     if (compressed) line = compressed;
@@ -15114,6 +15132,15 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
   map.instruments = sanitizeBackgroundOnlyBgmInstrumentsLine(validateFinalInstrumentLine(map.instruments || 'balanced band and synth texture', validationParams), validationParams);
   map.atmosphere = sanitizeBackgroundOnlyBgmAtmosphereLine(validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', validationParams), validationParams);
   map.vocals = sanitizeBackgroundOnlyBgmVocalsLine(validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', validationParams), validationParams);
+  // In 2+ vocal mode, keep the final [Vocals] line rule-based instead of letting
+  // Gemini freely re-summarize it. This preserves storyboard roles and selected
+  // vocal-character details while still staying under the 1000-character ceiling.
+  const stableMultiVocals = getVocalModeInfo(validationParams.vocal).isMulti
+    ? buildRuleBasedCompressedMultiVocals(validationParams)
+    : '';
+  if (stableMultiVocals) {
+    map.vocals = stableMultiVocals;
+  }
   map.arrangement = sanitizeBackgroundOnlyBgmArrangementLine(validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', validationParams), validationParams);
 
   // Final guard: if the current selection is a normal song, stale Instrumental BGM language
@@ -15124,14 +15151,18 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
     map.vocals = cleanupPromptTail(buildFiveLineVocalsValue(validationParams, '')) || 'Natural solo vocal with human breath';
   }
 
-  return removeAudioQualityLineWhenPromptIsNearLimit(enforceEnglishProductionPrompt([
+  const finalPromptLines = [
     `[Genre] ${map.genre}`,
     `[Instruments] ${map.instruments}`,
     `[Atmosphere] ${map.atmosphere}`,
     `[Vocals] ${map.vocals}`,
     `[Arrangement] ${map.arrangement}`,
-    `[Audio quality improved to masterpiece]`,
-  ].join('\n')));
+  ];
+  if (!getVocalModeInfo(validationParams.vocal).isMulti) {
+    finalPromptLines.push('[Audio quality improved to masterpiece]');
+  }
+
+  return removeAudioQualityLineWhenPromptIsNearLimit(enforceEnglishProductionPrompt(finalPromptLines.join('\n')));
 }
 
 

@@ -173,6 +173,7 @@ export default function MusicApiGenerateModal({
 
   const [step, setStep] = useState<1 | 2>(1);
   const stepRef = useRef<1 | 2>(1);
+  const modalHistoryIdRef = useRef(`generate-modal-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const backInputGuardUntilRef = useRef(0);
   const suspendHistoryHandlingRef = useRef(suspendHistoryHandling);
   const onCloseRef = useRef(onClose);
@@ -193,6 +194,7 @@ export default function MusicApiGenerateModal({
 
   const makeModalHistoryState = (nextStep: 1 | 2) => ({
     __soridrawGenerateModal: true,
+    modalHistoryId: modalHistoryIdRef.current,
     step: nextStep,
   });
 
@@ -273,13 +275,16 @@ export default function MusicApiGenerateModal({
       // 이벤트가 넘어가지 않게 이 모달이 먼저 소비한다.
       event.stopPropagation();
       event.stopImmediatePropagation();
-      const state = event.state as { __soridrawGenerateModal?: boolean; step?: 1 | 2 } | null;
+      const state = event.state as { __soridrawGenerateModal?: boolean; modalHistoryId?: string; step?: 1 | 2 } | null;
+      const isCurrentModalHistory = Boolean(
+        state?.__soridrawGenerateModal && state.modalHistoryId === modalHistoryIdRef.current
+      );
 
       // 마우스 뒤로가기 버튼은 pointerdown/mousedown/mouseup/auxclick 등이
       // 한 번의 입력에서 연속으로 발생할 수 있다. 2단계에서 1단계로 이동한 직후
       // 같은 입력이 popstate까지 이어져 창 닫기로 중복 처리되지 않게 막는다.
       if (isBackInputGuardActive()) {
-        if (state?.__soridrawGenerateModal && state.step === 1) {
+        if (isCurrentModalHistory && state.step === 1) {
           setModalStep(1);
         }
         return;
@@ -287,7 +292,7 @@ export default function MusicApiGenerateModal({
 
       // 마우스 뒤로가기/브라우저 뒤로가기로 2단계에서 1단계 히스토리로 돌아온 경우
       // 창을 닫지 않고 이전 단계만 보여준다.
-      if (state?.__soridrawGenerateModal && state.step === 1) {
+      if (isCurrentModalHistory && state.step === 1) {
         setModalStep(1);
         return;
       }

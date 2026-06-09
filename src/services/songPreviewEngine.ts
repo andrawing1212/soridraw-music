@@ -820,15 +820,26 @@ function pointSoundLabelsFromInput(input: PreviewInput): string[] {
   return take((input.selectedPointSounds || []).map((id) => labelOf(findSoundById(id), id)).filter(Boolean), 3);
 }
 
+function arrangementStyleCues(parts: PreviewPromptParts, max = 3): string[] {
+  return take(
+    [...parts.arrangement.main, ...parts.arrangement.support]
+      .filter((item) => !isTempoArrangementText(item))
+      .filter((item) => !/랩 구간|랩 옵션|포인트/i.test(item))
+      .filter((item) => isHookLabel(item) || /전환|반전|빌드|고조|드롭|브레이크|업템포|탄력|리듬감|챈트|클라이맥스/i.test(item)),
+    max
+  );
+}
+
+function buildArrangementHighlightLine(parts: PreviewPromptParts): string {
+  const cues = arrangementStyleCues(parts, 3);
+  if (cues.length === 0) return "";
+  return `전개에는 ${joinKo(cues)} 흐름이 함께 반영됩니다`;
+}
+
 function buildArrangementSummary(input: PreviewInput, parts: PreviewPromptParts, genreDirection: string): string {
   const tempoLine = buildTempoArrangementSentence(input.tempo);
   const pointSounds = pointSoundLabelsFromInput(input);
-  const arrangementCues = take(
-    [...parts.arrangement.main, ...parts.arrangement.support]
-      .filter((item) => !isTempoArrangementText(item))
-      .filter((item) => !/랩 구간|랩 옵션|포인트/i.test(item)),
-    2
-  );
+  const arrangementCues = arrangementStyleCues(parts, 2);
   const instrumentCues = take([...parts.instruments.main, ...parts.instruments.support], 3);
 
   const startLine = `${withObjectParticle(genreDirection)} 기본 바탕으로 초반부가 전개됩니다`;
@@ -922,10 +933,12 @@ export function renderPreviewCards(intent: PreviewSongIntent): PreviewCards {
   const textureItems = parts ? take([...parts.instruments.main, ...parts.atmosphere.support], 4) : instruments;
   const allLyricItems = parts ? unique([...parts.lyrics.main, ...parts.lyrics.support]) : [];
   const lyricItems = cleanLyricThemeLabels(allLyricItems);
+  const arrangementHighlightLine = parts ? buildArrangementHighlightLine(parts) : "";
   const interpretationLines = [
     `이 곡은 ${intent.genreDirection}입니다.`,
     instruments.length > 0 ? `${quoteList(instruments, 3)} 사운드를 중심으로 곡의 기본 색을 잡습니다.` : "선택한 장르에 맞는 기본 사운드가 중심이 됩니다.",
     intent.vocalDirection || "보컬은 장르와 분위기에 맞춰 자연스럽게 정리됩니다.",
+    arrangementHighlightLine,
     lyricItems.length > 0 ? `${quoteList(lyricItems, 4)} 주제와 어울려 전체 감정 방향이 정리됩니다.` : `${intent.moodColor}`,
   ];
 

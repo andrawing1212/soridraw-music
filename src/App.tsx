@@ -8572,6 +8572,7 @@ ${normalizePromptForDisplay(result.prompt)}
         selectedGenre: Array.from(new Set([...selectedGenres, ...subGenre])),
         selectedStyles,
         selectedSounds: selectedInstrumentSounds,
+        selectedPointSounds,
         selectedMoods,
         selectedThemes,
         selectedVocalTags: [],
@@ -8586,7 +8587,12 @@ ${normalizePromptForDisplay(result.prompt)}
         maleCount,
         femaleCount,
         vocalMembers,
-        situation
+        situation,
+        tempo: {
+          enabled: true,
+          min: minBPM,
+          max: maxBPM,
+        }
       };
 
       const intent = buildPreviewSongIntent(intentInput);

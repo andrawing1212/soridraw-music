@@ -5007,12 +5007,27 @@ const toggleCycleVariantSelection = (
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
-  const [isCycleKeywordPopupOpen, setIsCycleKeywordPopupOpen] = useState(false);
+  const [cycleKeywordPopupOpenMap, setCycleKeywordPopupOpenMap] = useState<Record<string, boolean>>({});
+  const isCycleKeywordPopupOpen = useMemo(() => Object.values(cycleKeywordPopupOpenMap).some(Boolean), [cycleKeywordPopupOpenMap]);
   const [isVocalCharacterModalOpen, setIsVocalCharacterModalOpen] = useState(false);
   const [isActionBarBlockedByModal, setIsActionBarBlockedByModal] = useState(false);
   const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
   const shouldShowActionButtons = !isActionBarBlockedByModal && !isAnyModalOpen;
+
+  const handleCycleKeywordModalStateChange = useCallback((sectionKey: string, isOpen: boolean) => {
+    setCycleKeywordPopupOpenMap((prev) => {
+      if (isOpen) {
+        if (prev[sectionKey]) return prev;
+        return { ...prev, [sectionKey]: true };
+      }
+
+      if (!prev[sectionKey]) return prev;
+      const next = { ...prev };
+      delete next[sectionKey];
+      return next;
+    });
+  }, []);
 
   const syncActionBarModalBlock = useCallback((isOpen: boolean) => {
     if (actionBarModalReleaseTimerRef.current !== null) {
@@ -5059,7 +5074,7 @@ const toggleCycleVariantSelection = (
         storyboardOpenTimerRef.current = null;
       }
       setIsStructureModalOpen(false);
-      setIsCycleKeywordPopupOpen(false);
+      setCycleKeywordPopupOpenMap({});
       setIsVocalCharacterModalOpen(false);
       setIsActionBarBlockedByModal(false);
       if (actionBarModalReleaseTimerRef.current !== null) {
@@ -9360,7 +9375,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
             forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
-            onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
+            onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('style', isOpen); }}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -9415,7 +9430,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
             forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
-            onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsCycleKeywordPopupOpen(isOpen); }}
+            onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('sound', isOpen); }}
           />
         </div>
 
@@ -14816,7 +14831,8 @@ function SongStructureIntegratedControl({
                       <div
                         ref={currentStructureScrollRef}
                         className={cn(
-                          "flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 overflow-y-auto custom-scrollbar flex flex-col gap-2 overscroll-contain",
+                          "flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 custom-scrollbar flex flex-col gap-2 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]",
+                          hasDraftStructureSelection ? "overflow-y-auto overscroll-y-auto" : "overflow-visible",
                           isReorderDragging && "cursor-grabbing select-none"
                         )}
                       >

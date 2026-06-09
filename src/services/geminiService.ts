@@ -5225,88 +5225,205 @@ function getVocalSplitEmotion(
   return index === 0 ? "with clear character focus" : "with contrasting delivery";
 }
 
+
+function hasAnyVocalCharacterMember(params: GenerateSongParams): boolean {
+  return Boolean((params.vocal?.members ?? []).some((member: any) => hasVocalCharacterSelection(member)));
+}
+
+function compactRoleNameForVocalLine(role: string, fallback: string): string {
+  const normalized = rawVocalRoleBase(role || fallback);
+  if (/rap/i.test(normalized)) return 'rap';
+  if (/main/i.test(normalized)) return 'lead';
+  if (/lead/i.test(normalized)) return 'lead';
+  if (/sub/i.test(normalized)) return 'sub';
+  return 'vocal';
+}
+
+function compactMultiVocalCueBits(value: string, max = 3): string[] {
+  const raw = String(value || '').toLowerCase();
+  const tags: string[] = [];
+  const add = (tag: string) => {
+    if (tags.length < max && tag && !tags.includes(tag)) tags.push(tag);
+  };
+
+  if (/reluctant authority|tired authority|command|authoritative|권위/.test(raw)) add('reluctant authority');
+  if (/pleading regret|fragile restraint|애원|후회/.test(raw)) add('pleading regret');
+  if (/teen|youth|young|10대|어린/.test(raw)) add('teen-like color');
+  if (/thin.*high|very high|high vocal range|높은|고음/.test(raw)) add('thin high range');
+  if (/bright|lively|clear|밝|청아/.test(raw)) add('bright tone');
+  if (/lazy|relaxed|laid[-\s]?back|나른|릴렉스/.test(raw)) add('relaxed tone');
+  if (/airy.*falsetto|falsetto|head[-\s]?voice|가성|두성/.test(raw)) add('airy falsetto');
+  if (/nasal|비성/.test(raw)) add('nasal focus');
+  if (/breath|inhaled|half[-\s]?air|airy|숨|호흡/.test(raw)) add('fragile breath');
+  if (/microtonal|slid|slide|bending|bend|glissando|slurring|꺾|벤딩/.test(raw)) add('melodic bends');
+  if (/urgent|early|anticipat|성급|빠른 진입/.test(raw)) add('urgent entries');
+  if (/chest|흉성/.test(raw)) add('chest voice');
+  if (/sharp|edge|날카/.test(raw)) add('sharp edge');
+  if (/dry|plain|담백|건조/.test(raw)) add('dry tone');
+  if (/warm|soft|smooth|부드|따뜻/.test(raw)) add('soft warmth');
+  if (/husky|rough|gritty|허스키|거친/.test(raw)) add('husky grain');
+  if (/rap|talk|spoken|말하듯|래/.test(raw)) add('talk-rap flow');
+  if (/restrain|controlled|calm|절제|차분/.test(raw)) add('restrained control');
+  if (/power|belt|strong|폭발|강한/.test(raw)) add('strong lift');
+
+  if (!tags.length) {
+    const compact = compactVocalToneForPrompt(value)
+      .replace(/\b(?:male|female|vocal|voice|tone|delivery|emotion)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    compact.split(/\s+/).filter(Boolean).slice(0, max).forEach(add);
+  }
+  return tags.slice(0, max);
+}
+
+function compactMemberVocalCue(
+  params: GenerateSongParams,
+  member: any,
+  index: number,
+  total: number,
+  maxBits = 3,
+): string {
+  const rawRole = member?.roles?.[0] || getDefaultMultiVocalRole(index, total, Boolean(params.vocal?.rap));
+  const gender = member?.gender || getMemberGenderLabel(params, index);
+  const roleName = compactRoleNameForVocalLine(rawRole, index === 0 ? 'main' : 'lead');
+  const characterPrompt = member && hasVocalCharacterSelection(member)
+    ? buildVocalCharacterPrompt(member, params, false)
+    : '';
+  const toneSource = characterPrompt || (member?.toneId ? describeVocalToneForSplit(member.toneId, rawRole, gender) : makeVocalSplitTone('', rawRole, gender));
+  const cueBits = compactMultiVocalCueBits(toneSource, maxBits);
+  const head = [gender === 'female' ? 'female' : gender === 'male' ? 'male' : '', roleName].filter(Boolean).join(' ');
+  return cleanupPromptTail(`${head}${cueBits.length ? ` with ${cueBits.join(', ')}` : ''}`);
+}
+
+function getMultiVocalTotal(params: GenerateSongParams): number {
+  const info = getVocalModeInfo(params.vocal);
+  const existingMembers = params.vocal?.members ?? [];
+  if (info.mode === 'duo' && info.total === 0 && existingMembers.length === 0) return 2;
+  if (info.mode === 'group' && info.total === 0 && existingMembers.length === 0) return 4;
+  return Math.max(info.total || 0, existingMembers.length);
+}
+
+function buildCompressedMemberVocalSplit(params: GenerateSongParams): string {
+  const info = getVocalModeInfo(params.vocal);
+  if (!info.isMulti) return '';
+
+  const existingMembers = params.vocal?.members ?? [];
+  const total = getMultiVocalTotal(params);
+  if (total < 2) return '';
+
+  if (total >= 3) {
+    const hasRap = Boolean(params.vocal?.rap) || existingMembers.some((member: any) => /rap/i.test(String(member?.roles?.join(' ') || '')));
+    const lead = existingMembers[0] ? compactMemberVocalCue(params, existingMembers[0], 0, total, 2) : 'lead carries the story';
+    const response = existingMembers[1] ? compactMemberVocalCue(params, existingMembers[1], 1, total, 2) : 'sub vocals answer softly';
+    const rap = hasRap ? 'rap adds rhythmic contrast' : 'harmony supports the hook';
+    return cleanupPromptTail(`Mixed ensemble: ${lead}, ${response}; ${rap}; clear role separation and clean hook blend.`);
+  }
+
+  const firstMember = existingMembers[0];
+  const secondMember = existingMembers[1];
+  if (!firstMember && !secondMember) {
+    return 'Natural duet vocals; lead and response alternate clearly, with clean hook harmony and emotion matched to the genre.';
+  }
+
+  const first = compactMemberVocalCue(params, firstMember, 0, total, firstMember && hasVocalCharacterSelection(firstMember) ? 3 : 2);
+  const second = compactMemberVocalCue(params, secondMember, 1, total, secondMember && hasVocalCharacterSelection(secondMember) ? 3 : 2);
+  const blend = hasAnyVocalCharacterMember(params)
+    ? 'clean role separation, restrained contrast, hook blend'
+    : 'clear lead-response phrasing, gentle harmony, hook blend';
+  return cleanupPromptTail(`Natural duet: ${first} vs ${second}; ${blend}.`);
+}
+
+function compactSituationRoleCue(
+  params: GenerateSongParams,
+  role: string,
+  roleIndex: number,
+  memberIndex = roleIndex,
+  maxBits = 2,
+): string {
+  const roleName = compactRoleForPrompt(role);
+  const member = params.vocal?.members?.[memberIndex];
+  const gender = getMemberGenderLabel(params, memberIndex);
+  const characterPrompt = member && hasVocalCharacterSelection(member)
+    ? buildVocalCharacterPrompt(member, params, false)
+    : '';
+  const rawStyleSource = [
+    params.situation?.speakers?.[roleIndex]?.speechStyle,
+    params.situation?.speakers?.[roleIndex]?.attitude,
+    roleIndex === 0 ? params.situation?.speakerAStyle : params.situation?.speakerBStyle,
+    roleIndex === 0
+      ? params.situation?.speakerAAttitude || params.situation?.attitudeA
+      : params.situation?.speakerBAttitude || params.situation?.attitudeB,
+  ].filter(Boolean).join(', ');
+  const roleDirection = mergeRoleDirection(role, rawStyleSource);
+  const fallbackTone = inferSituationVocalTone(role, roleIndex);
+  const cueBits = compactMultiVocalCueBits(
+    [roleDirection, fallbackTone, characterPrompt].filter(Boolean).join(', '),
+    maxBits,
+  );
+  const genderText = gender === 'female' ? 'female' : gender === 'male' ? 'male' : '';
+  const roleText = /rap|래/i.test(`${fallbackTone} ${member?.roles?.join(' ') || ''}`) ? 'rap' : 'vocal';
+  const vocalType = [genderText, roleText].filter(Boolean).join(' ');
+  return cleanupPromptTail(`${vocalType} as ${roleName}${cueBits.length ? ` with ${cueBits.join(', ')}` : ''}`);
+}
+
+function buildCompressedSituationVocalSplit(
+  params: GenerateSongParams,
+  roleEntries: SituationRoleEntry[],
+  ownershipRule: string,
+): string {
+  const info = getVocalModeInfo(params.vocal);
+  const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
+  if (info.total >= 3) {
+    const lead = compactSituationRoleCue(params, roleEntries[0].role, 0, matchedIndexes[0], 2);
+    const secondRole = roleEntries[1]?.role ? compactSituationRoleCue(params, roleEntries[1].role, 1, matchedIndexes[1], 2) : 'sub vocals answer the story';
+    const hasRap = Boolean(params.vocal?.rap) || (params.vocal?.members ?? []).some((member: any) => /rap/i.test(String(member?.roles?.join(' ') || '')));
+    const rap = hasRap ? 'rap adds rhythmic contrast' : 'ensemble supports the hook';
+    return cleanupPromptTail(`Story ensemble: ${lead}; ${secondRole}; ${rap}; ${ownershipRule}.`);
+  }
+
+  const first = compactSituationRoleCue(params, roleEntries[0].role, 0, matchedIndexes[0], 3);
+  const second = compactSituationRoleCue(params, roleEntries[1].role, 1, matchedIndexes[1], 3);
+  const relation = hasAnyVocalCharacterMember(params)
+    ? 'call-and-response tension'
+    : 'role-driven dialogue tension';
+  return cleanupPromptTail(`Story duet: ${first} vs ${second}; separated sections, ${relation}, ${ownershipRule}.`);
+}
+
+function buildRuleBasedCompressedMultiVocals(params: GenerateSongParams): string {
+  if (!getVocalModeInfo(params.vocal).isMulti) return '';
+  if (hasSituation(params.situation)) {
+    const targetA = String(params.situation?.targetA || '').trim();
+    const targetB = String(params.situation?.targetB || '').trim();
+    const speakers = params.situation?.speakers ?? [];
+    const targetRoles = [targetA, targetB]
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((role, index) => {
+        const speaker = speakers[index];
+        return {
+          role,
+          genderHint: speaker?.gender && speaker.gender !== 'any' ? speaker.gender : inferRoleGenderFromText(role),
+        } as SituationRoleEntry;
+      });
+    const speakerRoles = speakers
+      .slice(0, 2)
+      .map((speaker, index) => ({
+        role: String(speaker.role || (index === 0 ? targetA : targetB) || speaker.id || `Character ${index + 1}`).trim(),
+        genderHint: speaker.gender && speaker.gender !== 'any' ? speaker.gender : inferRoleGenderFromText(String(speaker.role || '')),
+      } as SituationRoleEntry))
+      .filter((entry) => Boolean(entry.role));
+    const roleEntries = targetRoles.length ? targetRoles : speakerRoles;
+    if (roleEntries.length >= 2) {
+      return buildCompressedSituationVocalSplit(params, roleEntries, 'single-owner hooks when selected');
+    }
+  }
+  return buildCompressedMemberVocalSplit(params);
+}
+
 function buildMemberVocalSplit(params: GenerateSongParams): string {
   const info = getVocalModeInfo(params.vocal);
   if (!info.isMulti) return "";
-
-  const existingMembers = params.vocal?.members ?? [];
-  const isRandomDuo = info.mode === "duo" && info.total === 0 && existingMembers.length === 0;
-  const isRandomGroup = info.mode === "group" && info.total === 0 && existingMembers.length === 0;
-  const total = isRandomDuo ? 2 : isRandomGroup ? 4 : Math.max(info.total || 0, existingMembers.length);
-  if (total < 2) return "";
-
-  const usedLabels = new Set<string>();
-  const members = Array.from({ length: Math.min(total, 5) }, (_, index) => {
-    const member = existingMembers[index];
-    const gender =
-      member?.gender ||
-      (isRandomDuo || isRandomGroup
-        ? "vocal"
-        : info.gender === "female"
-          ? "female"
-          : info.gender === "male"
-            ? "male"
-            : index < info.female
-              ? "female"
-              : "male");
-    const rawRole =
-      member?.roles?.[0] ||
-      getDefaultMultiVocalRole(index, total, Boolean(params.vocal?.rap));
-    const roleLabel = rawVocalRoleBase(rawRole);
-    const characterPrompt = member ? buildVocalCharacterPrompt(member, params, false) : "";
-
-    // Vocal Character is the new source of truth. When selected, it must appear
-    // directly in the final [Vocals] line instead of being buried as a soft rule
-    // for Gemini. This prevents fallback outputs such as "Natural male vocal" or
-    // the old "Main Vocal / Harmony Vocal" template from overriding the user's
-    // character choices.
-    if (characterPrompt) {
-      const genderWord = gender === "male" ? "male" : gender === "female" ? "female" : "vocal";
-      const label = buildCharacterVocalLabel(member, index, params, usedLabels);
-      return {
-        label,
-        tone: `${genderWord} vocal with ${characterPrompt}`,
-        emotion: "",
-        gender,
-        hasCharacter: true,
-      };
-    }
-
-    const tone = member?.toneId
-      ? describeVocalToneForSplit(member.toneId, rawRole, gender)
-      : makeVocalSplitTone("", rawRole, gender);
-    const baseEmotion = getVocalSplitEmotion(params, rawRole, index, tone).replace(/^with\s+/i, "");
-    const vocalExpressionCue = adaptVocalExpressionCueForRole(
-      pickVocalExpressionCueForRole(params, rawRole, tone, index),
-      rawRole,
-      tone,
-    );
-    const emotionWithStyle = mergeVocalExpressionIntoEmotion(baseEmotion, vocalExpressionCue);
-    const emotion = emotionWithStyle;
-    const label = vocalLabelFromRoleTone(rawRole, `${tone} ${vocalExpressionCue?.short || ""}`, usedLabels);
-    return { label, tone, emotion, gender, hasCharacter: false };
-  });
-
-  const hasCharacterMembers = members.some((member) => member.hasCharacter);
-  const head = hasCharacterMembers
-    ? `${total} ${info.gender === "female" ? "female" : info.gender === "male" ? "male" : "mixed"} vocal character split`
-    : isRandomDuo
-      ? `${total}-vocalist duo split with contrasting tones chosen to match the song`
-      : isRandomGroup
-        ? `${total}-voice group vocal split with suitable voices chosen to match the genre`
-        : `${total} ${info.gender === "female" ? "female" : info.gender === "male" ? "male" : "mixed"} vocal split`;
-  const body = members
-    .map((member) =>
-      `${member.label} (${member.tone}${member.emotion ? `, ${member.emotion}` : ""})`,
-    )
-    .join(", ");
-  const genreVocalDNA = hasCharacterMembers ? getGenreVocalDNAPhrase(params) : "";
-  const sharedGenreDNA = genreVocalDNA
-    ? ` Both carry ${genreVocalDNA}.`
-    : "";
-  const overallPerformance = hasCharacterMembers ? "" : buildSelectedVocalPerformancePhrase(params, 10);
-  const overall = overallPerformance ? ` Overall vocal habits: ${overallPerformance}.` : "";
-  return `${head}: ${body}.${sharedGenreDNA}${overall} Keep roles separated by section.`;
+  return buildCompressedMemberVocalSplit(params);
 }
 
 function roleVoiceAgeColor(role: string): string {
@@ -8620,6 +8737,13 @@ function compactFiveLineVocalsValue(value: string, params: GenerateSongParams): 
     .replace(/\s{2,}/g, ' ')
     .trim();
 
+  const info = getVocalModeInfo(params.vocal);
+  const multiLimit = info.total >= 3 ? 340 : 450;
+  if (info.isMulti && (line.length > multiLimit || /voice character:/i.test(line))) {
+    const compressed = buildRuleBasedCompressedMultiVocals(params);
+    if (compressed) line = compressed;
+  }
+
   return dedupeRepeatedVocalCuePhrases(cleanupPromptTail(line)) || 'Natural vocal with emotional delivery';
 }
 
@@ -11780,28 +11904,15 @@ function buildSituationVocals(params: GenerateSongParams): string {
   }
 
   if (roleEntries.length >= 2) {
-    const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
-    const first = buildCharacterVocalSplitItem(
-      params,
-      roleEntries[0].role,
-      0,
-      matchedIndexes[0],
-    );
-    const second = buildCharacterVocalSplitItem(
-      params,
-      roleEntries[1].role,
-      1,
-      matchedIndexes[1],
-    );
     const development = String(
       situation?.developmentCustom || situation?.developmentPreset || situation?.development || "",
     );
     const dev = arrangementDevelopmentToEnglish(development);
     const isParallelMonologue = /평행|독백|parallel|monologue/.test(`${development} ${dev}`.toLowerCase());
     const ownershipRule = isParallelMonologue
-      ? "separate sections, single-owner hooks"
-      : "separate sections, call-response only if chosen";
-    return `2-character split: ${first}; ${second}. ${ownershipRule}`;
+      ? "single-owner hooks"
+      : "call-response only if chosen";
+    return buildCompressedSituationVocalSplit(params, roleEntries, ownershipRule);
   }
 
   if (roleEntries.length === 1) {
@@ -14491,6 +14602,13 @@ function validateFinalVocalsLine(value: string, params: GenerateSongParams): str
       .slice(0, shouldApplyLargeGroupVocalCompression(params) ? 1 : 2)
       .join(', ');
     if (compactAccent) line = cleanupPromptTail(`${line}, ${compactAccent}`);
+  }
+
+  const multiInfo = getVocalModeInfo(params.vocal);
+  const finalMultiLimit = multiInfo.total >= 3 ? 340 : 450;
+  if (multiInfo.isMulti && (line.length > finalMultiLimit || /voice character:/i.test(line))) {
+    const compressed = buildRuleBasedCompressedMultiVocals(params);
+    if (compressed) line = compressed;
   }
 
   const soloSafeLine = enforceExplicitSoloVocalFormation(line, params);

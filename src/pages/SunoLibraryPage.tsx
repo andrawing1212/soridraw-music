@@ -32,6 +32,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 const WORKSPACE_PAGE_SIZE = 10;
+const SUNO_AUDIO_URL_RECOVERY_AFTER_MS = 13 * 24 * 60 * 60 * 1000; // 2주 잠김 전후로 1곡 단위 복구
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
@@ -235,6 +236,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
+  const [audioUrlRecovering, setAudioUrlRecovering] = useState<string | null>(null);
   const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
   const [remainingCredits, setRemainingCredits] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).credits);
   const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).updatedAt);
@@ -1687,6 +1689,40 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return null;
   };
 
+  const toMillis = (value: any): number => {
+    if (!value) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (typeof value?.toDate === 'function') {
+      const parsed = value.toDate().getTime();
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (typeof value?.seconds === 'number') {
+      return value.seconds * 1000;
+    }
+    return 0;
+  };
+
+  const getAudioUrlRecoveryBaseTime = (group: any): number => {
+    return toMillis(group?.lastAudioUrlRecoveredAt)
+      || toMillis(group?.completedAt)
+      || toMillis(group?.createdAt)
+      || 0;
+  };
+
+  const shouldRecoverAudioUrlBeforePlay = (group: any, item: any): boolean => {
+    if (isSharedView || !group?.taskId) return false;
+    const currentUrl = getAudioUrl(item, group);
+    if (!currentUrl) return true;
+
+    const baseTime = getAudioUrlRecoveryBaseTime(group);
+    if (!baseTime) return false;
+    return Date.now() - baseTime >= SUNO_AUDIO_URL_RECOVERY_AFTER_MS;
+  };
+
   const getPlaylistItemSourceTrack = (item: any) => {
     if (!item || item.sourceType === 'shared_track') return null;
 
@@ -2089,7 +2125,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return reason;
   };
 
-  const syncStatusResponseToFirestore = async (trackId: string, taskId: string, data: any) => {
+  const syncStatusResponseToFirestore = async (trackId: string, taskId: string, data: any, options: { markAudioUrlRecovered?: boolean } = {}) => {
     const currentUser = auth.currentUser;
     if (!currentUser || !trackId) return { status: null as string | null, raw: '' };
 
@@ -2101,6 +2137,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     };
 
     if (taskId) updatePayload.taskId = taskId;
+    if (options.markAudioUrlRecovered) {
+      updatePayload.lastAudioUrlRecoveredAt = serverTimestamp();
+      updatePayload.lastAudioUrlRecoveryAttemptAt = serverTimestamp();
+    }
 
     if (resolved.status === 'failed') {
       updatePayload.status = 'failed';
@@ -2174,16 +2214,29 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return list;
   }, [filteredTracks, filter, workspaceColorFilter]);
 
-  const handlePlayTrack = (track: any, subIndex: number = 0) => {
-    const items = extractSunoData(track);
-    const item = items[subIndex] || {};
-    const url = getAudioUrl(item, track);
-    const title = getTitle(item, track, subIndex);
-    const imageUrl = getImageUrl(item, track);
-    const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
+  const handlePlayTrack = async (track: any, subIndex: number = 0) => {
+    let playGroup = track;
+    let items = extractSunoData(playGroup);
+    let item = items[subIndex] || {};
+    let url = getAudioUrl(item, playGroup);
+
+    if (shouldRecoverAudioUrlBeforePlay(playGroup, item)) {
+      const restored = await recoverLibraryAudioUrl(playGroup, subIndex, { silent: false, playAfter: true });
+      if (restored?.url) {
+        playGroup = restored.group;
+        item = restored.item;
+        url = restored.url;
+      } else if (!url) {
+        return;
+      }
+    }
+
+    const title = getTitle(item, playGroup, subIndex);
+    const imageUrl = getImageUrl(item, playGroup);
+    const creatorMeta = resolveCreatorSnapshot(playGroup, item, { fallbackToCurrentUser: true });
 
     if (url) {
-      markWorkspaceItemPlayed(track, subIndex);
+      markWorkspaceItemPlayed(playGroup, subIndex);
       const newQueue = allPlayables.map(p => {
         const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
         return {
@@ -2204,14 +2257,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         url,
         title,
         imageUrl,
-        parent: { ...track, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        parent: { ...playGroup, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
         index: subIndex,
         creatorDisplayId: creatorMeta.creatorDisplayId,
         ownerNickname: creatorMeta.ownerNickname,
         creatorNickname: creatorMeta.creatorNickname,
         ownerEmail: creatorMeta.ownerEmail,
         creatorEmail: creatorMeta.creatorEmail,
-        lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
+        lyrics: item?.lyrics || item?.lyricsText || playGroup?.lyrics || playGroup?.lyricsText || null
       }, newQueue);
     }
   };
@@ -2358,6 +2411,89 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } finally {
       checkingIdsRef.current.delete(trackId);
       setStatusChecking(null);
+    }
+  };
+
+  const recoverLibraryAudioUrl = async (group: any, subIndex: number = 0, options: { silent?: boolean; playAfter?: boolean } = {}) => {
+    const trackId = String(group?.id || group?.trackId || '').trim();
+    const taskId = String(group?.taskId || '').trim();
+    const recoveryKey = `${trackId}:${subIndex}`;
+
+    if (!trackId || !taskId) {
+      if (!options.silent) showToast('복구할 Task ID가 없습니다.');
+      return null as null | { group: any; item: any; url: string };
+    }
+    if (isSharedView) {
+      if (!options.silent) showToast('공유곡은 원본 라이브러리에서만 복구할 수 있습니다.');
+      return null as null | { group: any; item: any; url: string };
+    }
+    if (checkingIdsRef.current.has(trackId)) {
+      return null as null | { group: any; item: any; url: string };
+    }
+
+    try {
+      checkingIdsRef.current.add(trackId);
+      setAudioUrlRecovering(recoveryKey);
+      if (!options.silent) showToast('재생 URL을 다시 연결하는 중입니다.');
+
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        if (!options.silent) showToast('로그인이 필요합니다.');
+        return null as null | { group: any; item: any; url: string };
+      }
+
+      const token = await currentUser.getIdToken();
+      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ trackId, taskId })
+      });
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        const message = data?.error || data?.message || 'Music API 재조회 실패';
+        if (!options.silent) showToast(`재생 URL 복구 실패: ${message}`);
+        return null as null | { group: any; item: any; url: string };
+      }
+
+      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data, { markAudioUrlRecovered: true }) : { status: null, raw: '' };
+      const nextSunoData = extractStatusSunoData(data);
+      const nextGroup = {
+        ...group,
+        status: resolved.status || group?.status,
+        sunoData: nextSunoData || group?.sunoData,
+        audioUrl: data?.audioUrl || group?.audioUrl,
+        streamAudioUrl: data?.streamAudioUrl || data?.audioUrl || group?.streamAudioUrl,
+        imageUrl: data?.imageUrl || group?.imageUrl,
+        lastAudioUrlRecoveredAt: new Date().toISOString(),
+      };
+      const nextItems = extractSunoData(nextGroup);
+      const nextItem = nextItems[subIndex] || nextItems.find((candidate: any) => getAudioUrl(candidate, nextGroup)) || {};
+      const nextUrl = getAudioUrl(nextItem, nextGroup);
+
+      if (nextUrl) {
+        if (!options.silent) showToast('재생 URL을 다시 연결했습니다.');
+        return { group: nextGroup, item: nextItem, url: nextUrl };
+      }
+
+      if (!options.silent) showToast('Music API에서 새 재생 URL을 받지 못했습니다.');
+      return null as null | { group: any; item: any; url: string };
+    } catch (error) {
+      console.error('recoverLibraryAudioUrl failed:', error);
+      if (!options.silent) showToast('재생 URL 복구 중 오류가 발생했습니다.');
+      return null as null | { group: any; item: any; url: string };
+    } finally {
+      checkingIdsRef.current.delete(trackId);
+      setAudioUrlRecovering(null);
     }
   };
 
@@ -4874,6 +5010,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           <span className="hidden sm:inline">{group.status === 'failed' || group.status === 'cancelled' || group.status === 'canceled' ? '재확인' : '상태 확인'}</span>
                         </button>
                       )}
+                      {!isSharedView && group.taskId && (group.status === 'completed' || group.status === 'success') && (
+                        <button
+                          type="button"
+                          onClick={() => recoverLibraryAudioUrl(group, 0, { silent: false })}
+                          disabled={audioUrlRecovering?.startsWith(`${group.id}:`) || statusChecking === group.id}
+                          className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg bg-[#658761]/10 hover:bg-[#658761]/18 text-[10px] font-bold text-[#B8C9B2] border border-[#658761]/20 transition-all disabled:opacity-50"
+                          title="만료된 재생 URL 복구"
+                        >
+                          {audioUrlRecovering?.startsWith(`${group.id}:`) ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          <span className="hidden sm:inline">재생복구</span>
+                        </button>
+                      )}
                       {!isSharedView && !group.taskId && <span className="hidden md:inline text-[10px] opacity-30">Task ID 없음</span>}
                     </div>
                   </div>
@@ -4886,6 +5034,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const hasValidDuration = duration !== null;
                       const isFailed = group.status === 'failed';
                       const isCompleted = Boolean(audioUrl && (group.status === 'completed' || group.status === 'success' || hasValidDuration));
+                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (group.status === 'completed' || group.status === 'success' || hasValidDuration);
+                      const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
                       const isPending = !isFailed && !audioUrl;
                       const sunoVersionLabel = getSunoModelVersionLabel(item, group);
                       
@@ -4913,6 +5063,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                              if (audioUrl) {
                                if (isCurrent) togglePlayPause();
                                else handlePlayTrack(group, idx);
+                             } else if (canRecoverPlaybackUrl) {
+                               handlePlayTrack(group, idx);
                              }
                           }}
                         >
@@ -4920,7 +5072,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             imageUrl={getImageUrl(item, group)}
                             isActive={isCurrent}
                             isPlaying={isPlaying}
-                            disabled={!audioUrl}
+                            disabled={!canPlayOrRecover}
                             durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -4931,6 +5083,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               if (audioUrl) {
                                 if (isCurrent) togglePlayPause();
                                 else handlePlayTrack(group, idx);
+                              } else if (canRecoverPlaybackUrl) {
+                                handlePlayTrack(group, idx);
                               }
                             }}
                           />

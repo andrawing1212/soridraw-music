@@ -4191,7 +4191,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return (
       <>
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="-mt-2 md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               onClick={() => navigate('/studio')}

@@ -1647,7 +1647,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getAudioUrl = (item: any, group: any) => {
-    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || item?.stream_audio_url || item?.sourceAudioUrl || item?.source_audio_url || item?.sourceStreamAudioUrl || item?.source_stream_audio_url || group?.audioUrl || group?.streamAudioUrl || group?.audio_url || group?.stream_audio_url || '';
+    return item?.audioUrl
+      || item?.streamAudioUrl
+      || item?.audio_url
+      || item?.stream_audio_url
+      || item?.sourceAudioUrl
+      || item?.source_audio_url
+      || item?.sourceStreamAudioUrl
+      || item?.source_stream_audio_url
+      || item?.url
+      || item?.src
+      || group?.audioUrl
+      || group?.streamAudioUrl
+      || group?.audio_url
+      || group?.stream_audio_url
+      || group?.sourceAudioUrl
+      || group?.source_audio_url
+      || group?.sourceStreamAudioUrl
+      || group?.source_stream_audio_url
+      || group?.url
+      || group?.src
+      || '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -1679,7 +1699,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getImageUrl = (item: any, group: any) => {
-    return item?.imageUrl || item?.image_url || group?.imageUrl || '';
+    return item?.imageUrl
+      || item?.image_url
+      || item?.coverUrl
+      || item?.cover_url
+      || item?.sourceImageUrl
+      || item?.source_image_url
+      || group?.imageUrl
+      || group?.image_url
+      || group?.coverUrl
+      || group?.cover_url
+      || group?.sourceImageUrl
+      || group?.source_image_url
+      || '';
   };
 
   const getDuration = (item: any, group: any) => {
@@ -1997,9 +2029,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     return [{
-      audioUrl: group?.audioUrl || group?.streamAudioUrl,
+      audioUrl: group?.audioUrl || group?.streamAudioUrl || group?.sourceAudioUrl || group?.source_audio_url || group?.url || group?.src,
+      streamAudioUrl: group?.streamAudioUrl || group?.stream_audio_url || group?.sourceStreamAudioUrl || group?.source_stream_audio_url,
+      sourceAudioUrl: group?.sourceAudioUrl || group?.source_audio_url,
       title: group?.title,
-      imageUrl: group?.imageUrl,
+      imageUrl: group?.imageUrl || group?.image_url || group?.coverUrl || group?.cover_url || group?.sourceImageUrl || group?.source_image_url,
       duration: getDuration(group, group),
       hidden: !!group?.hidden
     }];
@@ -2065,6 +2099,51 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return { status: null, raw };
   };
 
+  const normalizeRecoveredSunoItem = (item: any) => {
+    if (!item || typeof item !== 'object') return item;
+
+    const audioUrl = item.audioUrl
+      || item.audio_url
+      || item.streamAudioUrl
+      || item.stream_audio_url
+      || item.sourceAudioUrl
+      || item.source_audio_url
+      || item.sourceStreamAudioUrl
+      || item.source_stream_audio_url
+      || item.url
+      || item.src
+      || '';
+    const streamAudioUrl = item.streamAudioUrl
+      || item.stream_audio_url
+      || item.audioUrl
+      || item.audio_url
+      || item.sourceStreamAudioUrl
+      || item.source_stream_audio_url
+      || item.sourceAudioUrl
+      || item.source_audio_url
+      || item.url
+      || item.src
+      || '';
+    const imageUrl = item.imageUrl
+      || item.image_url
+      || item.coverUrl
+      || item.cover_url
+      || item.sourceImageUrl
+      || item.source_image_url
+      || item.thumbnailUrl
+      || item.thumbnail_url
+      || '';
+
+    return {
+      ...item,
+      ...(audioUrl ? { audioUrl } : {}),
+      ...(streamAudioUrl ? { streamAudioUrl } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+    };
+  };
+
+  const hasRecoveredPlayableUrl = (item: any) => Boolean(String(getAudioUrl(item, item) || '').trim());
+
   const extractStatusSunoData = (data: any) => {
     const candidates = [
       data?.sunoData,
@@ -2079,8 +2158,45 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       data?.data?.response?.tracks,
       data?.audios,
       data?.data?.audios,
+      data?.audio,
+      data?.data?.audio,
+      data?.songs,
+      data?.data?.songs,
+      data?.records,
+      data?.data?.records,
+      data?.items,
+      data?.data?.items,
+      data?.data?.response?.data,
+      data?.response?.data,
+      data?.result?.data,
+      data?.data?.result?.data,
     ];
-    return candidates.find((value) => Array.isArray(value) && value.length > 0) || null;
+
+    const directArray = candidates.find((value) => Array.isArray(value) && value.length > 0);
+    if (directArray) return directArray.map(normalizeRecoveredSunoItem);
+
+    const collected: any[] = [];
+    const visit = (value: any, depth = 0) => {
+      if (!value || depth > 6 || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.slice(0, 20).forEach((entry) => visit(entry, depth + 1));
+        return;
+      }
+
+      const normalized = normalizeRecoveredSunoItem(value);
+      if (hasRecoveredPlayableUrl(normalized)) {
+        collected.push(normalized);
+        return;
+      }
+
+      Object.values(value).forEach((entry) => visit(entry, depth + 1));
+    };
+
+    visit(data);
+    if (collected.length > 0) return collected;
+
+    const single = normalizeRecoveredSunoItem(data);
+    return hasRecoveredPlayableUrl(single) ? [single] : null;
   };
 
   const isMeaningfulSunoFailureText = (value: any) => {
@@ -2152,7 +2268,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       updatePayload.status = 'completed';
       updatePayload.completedAt = serverTimestamp();
       const nextSunoData = extractStatusSunoData(data);
-      if (nextSunoData) updatePayload.sunoData = nextSunoData;
+      if (nextSunoData) {
+        const primaryItem = nextSunoData[0] || {};
+        const primaryUrl = String(getAudioUrl(primaryItem, primaryItem) || '').trim();
+        const primaryImageUrl = String(getImageUrl(primaryItem, primaryItem) || '').trim();
+        updatePayload.sunoData = nextSunoData;
+        if (primaryUrl) {
+          updatePayload.audioUrl = primaryUrl;
+          updatePayload.streamAudioUrl = primaryItem.streamAudioUrl || primaryItem.stream_audio_url || primaryUrl;
+        }
+        if (primaryImageUrl) updatePayload.imageUrl = primaryImageUrl;
+      }
     } else if (resolved.status === 'processing') {
       updatePayload.status = 'processing';
     }
@@ -2228,7 +2354,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         playGroup = restored.group;
         item = restored.item;
         url = restored.url;
-      } else if (!url) {
+      } else {
         return;
       }
     }
@@ -2533,37 +2659,42 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
       const nextSunoData = extractStatusSunoData(data);
+      const primaryRecoveredItem = Array.isArray(nextSunoData) ? (nextSunoData[0] || {}) : {};
+      const primaryRecoveredUrl = String(getAudioUrl(primaryRecoveredItem, primaryRecoveredItem) || '').trim();
+      const primaryRecoveredImageUrl = String(getImageUrl(primaryRecoveredItem, primaryRecoveredItem) || '').trim();
       const nextGroup = {
         ...group,
         status: resolved.status || group?.status,
         sunoData: nextSunoData || group?.sunoData,
-        audioUrl: data?.audioUrl || group?.audioUrl,
-        streamAudioUrl: data?.streamAudioUrl || data?.audioUrl || group?.streamAudioUrl,
-        imageUrl: data?.imageUrl || group?.imageUrl,
+        audioUrl: data?.audioUrl || data?.audio_url || primaryRecoveredUrl || group?.audioUrl,
+        streamAudioUrl: data?.streamAudioUrl || data?.stream_audio_url || primaryRecoveredItem?.streamAudioUrl || primaryRecoveredUrl || group?.streamAudioUrl,
+        sourceAudioUrl: data?.sourceAudioUrl || data?.source_audio_url || primaryRecoveredItem?.sourceAudioUrl || group?.sourceAudioUrl,
+        imageUrl: data?.imageUrl || data?.image_url || primaryRecoveredImageUrl || group?.imageUrl,
       };
       const nextItems = extractSunoData(nextGroup);
       const nextItem = nextItems[subIndex] || nextItems.find((candidate: any) => getAudioUrl(candidate, nextGroup)) || {};
       const nextUrl = String(getAudioUrl(nextItem, nextGroup) || '').trim();
+      const sameUrl = Boolean(previousUrl && nextUrl && nextUrl === previousUrl);
 
-      if (nextUrl) {
-        const sameUrl = previousUrl && nextUrl === previousUrl;
+      if (nextUrl && !sameUrl) {
         try {
           const recoveryUpdate: any = {
+            sunoData: nextItems,
+            audioUrl: nextUrl,
+            streamAudioUrl: nextItem?.streamAudioUrl || nextItem?.stream_audio_url || nextUrl,
+            imageUrl: getImageUrl(nextItem, nextGroup) || nextGroup?.imageUrl || null,
+            lastAudioUrlRecoveredAt: serverTimestamp(),
             lastAudioUrlRecoveryAttemptAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           };
-          if (!sameUrl) recoveryUpdate.lastAudioUrlRecoveredAt = serverTimestamp();
           await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), recoveryUpdate);
         } catch (stampError) {
           console.warn('audio url recovery stamp update failed:', stampError);
         }
 
-        if (!options.silent) {
-          showToast(sameUrl
-            ? 'Music API가 기존 재생 URL만 다시 내려줬습니다. 재생이 계속 안 되면 원본 URL 자체가 만료된 상태일 수 있습니다.'
-            : '재생 URL을 다시 연결했습니다.');
-        }
-        return { group: nextGroup, item: nextItem, url: nextUrl, sameUrl } as any;
+        setTracks((prev) => prev.map((candidate: any) => String(candidate?.id || candidate?.trackId || '') === trackId ? nextGroup : candidate));
+        if (!options.silent) showToast('재생 URL을 다시 연결했습니다.');
+        return { group: nextGroup, item: nextItem, url: nextUrl, sameUrl: false } as any;
       }
 
       try {
@@ -2575,7 +2706,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         console.warn('audio url recovery attempt stamp update failed:', stampError);
       }
 
-      if (!options.silent) showToast('Music API에서 새 재생 URL을 받지 못했습니다.');
+      if (!options.silent) {
+        showToast(sameUrl
+          ? '복구 실패: Music API가 기존 만료 URL만 다시 내려줬습니다. 새 URL이 없어서 재생하지 않았습니다.'
+          : '복구 실패: Music API에서 새 재생 URL을 받지 못했습니다.');
+      }
       return null as null | { group: any; item: any; url: string };
     } catch (error) {
       console.error('recoverLibraryAudioUrl failed:', error);

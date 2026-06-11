@@ -2361,30 +2361,32 @@ ${song.prompt}
         </div>
       </div>
 
-      <div className="mt-4 flex w-full max-w-[560px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shadow-[var(--shadow-md)] overflow-x-auto hide-scrollbar" data-selection-keep="true">
-        {musicNoteTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => {
-              setMusicNoteViewMode(tab.id);
-              setVisibleCount(15);
-              exitSelectionMode('manual');
-            }}
-            onMouseEnter={() => onHover({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description, _ts: Date.now() })}
-            onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-            onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
-            onTouchEnd={onLongPressEnd}
-            className={cn(
-              'h-10 min-w-[132px] flex-1 shrink-0 rounded-xl px-4 text-sm font-bold transition-all',
-              musicNoteViewMode === tab.id
-                ? 'bg-[#AC5045]/70 text-white shadow-[0_10px_24px_rgba(172,80,69,0.18)]'
-                : 'bg-transparent text-white/58 hover:text-white/80'
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mt-4 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none shadow-[var(--shadow-md)]">
+          {musicNoteTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setMusicNoteViewMode(tab.id);
+                setVisibleCount(15);
+                exitSelectionMode('manual');
+              }}
+              onMouseEnter={() => onHover({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description, _ts: Date.now() })}
+              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+              onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
+              onTouchEnd={onLongPressEnd}
+              className={cn(
+                'min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
+                musicNoteViewMode === tab.id
+                  ? 'bg-[#AC5045]/78 text-white shadow-lg'
+                  : 'text-white/60 hover:text-white'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {musicNoteViewMode === 'myNote' ? (

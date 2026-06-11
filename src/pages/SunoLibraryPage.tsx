@@ -696,6 +696,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const autoCheckCountsRef = React.useRef<Map<string, number>>(new Map());
   const autoCheckLastRunAtRef = React.useRef<Map<string, number>>(new Map());
   const firstAudioDetectedAtRef = React.useRef<Map<string, number>>(new Map());
+  const playbackRecoveryAttemptedRef = React.useRef<Map<string, number>>(new Map());
   const modalHistoryPushedRef = React.useRef(false);
   const multiSelectHistoryPushedRef = React.useRef(false);
 
@@ -1707,8 +1708,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getAudioUrlRecoveryBaseTime = (group: any): number => {
-    return toMillis(group?.lastAudioUrlRecoveredAt)
-      || toMillis(group?.completedAt)
+    // 재생 URL 복구 기준은 원래 완성/생성 시점으로 본다.
+    // 실패한 복구 시도 시간이 기준을 덮으면 오래된 만료 URL이 복구 대상에서 빠질 수 있다.
+    return toMillis(group?.completedAt)
       || toMillis(group?.createdAt)
       || 0;
   };
@@ -2269,6 +2271,67 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
+  const retryPlaybackWithRecoveredUrl = async (group: any, subIndex: number, failedUrl: string) => {
+    const restored = await recoverLibraryAudioUrl(group, subIndex, { silent: false, playAfter: true });
+    if (!restored?.url) return;
+
+    const restoredUrl = String(restored.url || '').trim();
+    if (!restoredUrl || restoredUrl === String(failedUrl || '').trim()) {
+      return;
+    }
+
+    const restoredGroup = restored.group;
+    const restoredItem = restored.item || extractSunoData(restoredGroup)[subIndex] || {};
+    const title = getTitle(restoredItem, restoredGroup, subIndex);
+    const imageUrl = getImageUrl(restoredItem, restoredGroup);
+    const creatorMeta = resolveCreatorSnapshot(restoredGroup, restoredItem, { fallbackToCurrentUser: true });
+
+    playTrack({
+      url: restoredUrl,
+      title,
+      imageUrl,
+      parent: { ...restoredGroup, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+      index: subIndex,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      lyrics: restoredItem?.lyrics || restoredItem?.lyricsText || restoredGroup?.lyrics || restoredGroup?.lyricsText || null
+    } as any);
+  };
+
+  useEffect(() => {
+    if (isSharedView) return;
+
+    const handlePlaybackUnavailable = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail || {};
+      const failedTrackId = String(detail.trackId || '').trim();
+      const failedUrl = String(detail.url || '').trim();
+      if (!failedTrackId && !failedUrl) return;
+
+      const group = tracks.find((candidate: any) => {
+        if (failedTrackId && String(candidate?.id || candidate?.trackId || '').trim() === failedTrackId) return true;
+        if (!failedUrl) return false;
+        return extractSunoData(candidate).some((item: any) => String(getAudioUrl(item, candidate) || '').trim() === failedUrl);
+      });
+      if (!group?.taskId) return;
+
+      const items = extractSunoData(group);
+      const foundIndex = items.findIndex((item: any) => String(getAudioUrl(item, group) || '').trim() === failedUrl);
+      const matchedIndex = foundIndex >= 0 ? foundIndex : 0;
+      const eventKey = `${group.id || group.trackId}:${matchedIndex}:${failedUrl}`;
+      const lastAttemptAt = playbackRecoveryAttemptedRef.current.get(eventKey) || 0;
+      if (lastAttemptAt && Date.now() - lastAttemptAt < 5 * 60 * 1000) return;
+      playbackRecoveryAttemptedRef.current.set(eventKey, Date.now());
+
+      retryPlaybackWithRecoveredUrl(group, matchedIndex, failedUrl);
+    };
+
+    window.addEventListener('soridraw:audio-playback-unavailable', handlePlaybackUnavailable as EventListener);
+    return () => window.removeEventListener('soridraw:audio-playback-unavailable', handlePlaybackUnavailable as EventListener);
+  }, [tracks, isSharedView]);
+
   useEffect(() => {
     if (isSharedView || !user) return;
 
@@ -2418,6 +2481,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const trackId = String(group?.id || group?.trackId || '').trim();
     const taskId = String(group?.taskId || '').trim();
     const recoveryKey = `${trackId}:${subIndex}`;
+    const currentItems = extractSunoData(group);
+    const currentItem = currentItems[subIndex] || currentItems.find((candidate: any) => getAudioUrl(candidate, group)) || {};
+    const previousUrl = String(getAudioUrl(currentItem, group) || '').trim();
 
     if (!trackId || !taskId) {
       if (!options.silent) showToast('복구할 Task ID가 없습니다.');
@@ -2465,7 +2531,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         return null as null | { group: any; item: any; url: string };
       }
 
-      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data, { markAudioUrlRecovered: true }) : { status: null, raw: '' };
+      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
       const nextSunoData = extractStatusSunoData(data);
       const nextGroup = {
         ...group,
@@ -2474,15 +2540,39 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         audioUrl: data?.audioUrl || group?.audioUrl,
         streamAudioUrl: data?.streamAudioUrl || data?.audioUrl || group?.streamAudioUrl,
         imageUrl: data?.imageUrl || group?.imageUrl,
-        lastAudioUrlRecoveredAt: new Date().toISOString(),
       };
       const nextItems = extractSunoData(nextGroup);
       const nextItem = nextItems[subIndex] || nextItems.find((candidate: any) => getAudioUrl(candidate, nextGroup)) || {};
-      const nextUrl = getAudioUrl(nextItem, nextGroup);
+      const nextUrl = String(getAudioUrl(nextItem, nextGroup) || '').trim();
 
       if (nextUrl) {
-        if (!options.silent) showToast('재생 URL을 다시 연결했습니다.');
-        return { group: nextGroup, item: nextItem, url: nextUrl };
+        const sameUrl = previousUrl && nextUrl === previousUrl;
+        try {
+          const recoveryUpdate: any = {
+            lastAudioUrlRecoveryAttemptAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+          if (!sameUrl) recoveryUpdate.lastAudioUrlRecoveredAt = serverTimestamp();
+          await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), recoveryUpdate);
+        } catch (stampError) {
+          console.warn('audio url recovery stamp update failed:', stampError);
+        }
+
+        if (!options.silent) {
+          showToast(sameUrl
+            ? 'Music API가 기존 재생 URL만 다시 내려줬습니다. 재생이 계속 안 되면 원본 URL 자체가 만료된 상태일 수 있습니다.'
+            : '재생 URL을 다시 연결했습니다.');
+        }
+        return { group: nextGroup, item: nextItem, url: nextUrl, sameUrl } as any;
+      }
+
+      try {
+        await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), {
+          lastAudioUrlRecoveryAttemptAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (stampError) {
+        console.warn('audio url recovery attempt stamp update failed:', stampError);
       }
 
       if (!options.silent) showToast('Music API에서 새 재생 URL을 받지 못했습니다.');

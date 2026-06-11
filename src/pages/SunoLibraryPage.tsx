@@ -4756,7 +4756,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </div>
                 {isSharedView ? '공유된 음악' : <>Suno <span className="text-[#658761]">Library</span></>}
               </h1>
-              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2">
+              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">
                 {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
               </p>
             </div>

@@ -2272,7 +2272,7 @@ ${song.prompt}
               <HeartIcon className="w-9 h-9 text-[#AC5045] shrink-0" />
               <span>Music <span className="text-[#AC5045]">Note</span></span>
             </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
           </div>
 
       </motion.div>

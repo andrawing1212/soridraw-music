@@ -3772,7 +3772,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const hasWorkspace = selectedTrackList.some((selection) => selection.context === 'workspace');
     const title = hasWorkspace ? '선택한 곡을 휴지통으로 이동' : '선택한 곡을 리스트에서 삭제';
     const message = hasWorkspace
-      ? '선택한 워크스페이스 곡을 휴지통으로 이동할까요?'
+      ? '선택한 뮤직 스페이스 곡을 휴지통으로 이동할까요?'
       : '선택한 곡을 현재 플레이리스트에서 삭제할까요? 원곡은 삭제되지 않습니다.';
 
     setBulkMenuState(null);
@@ -4353,7 +4353,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             onClick={() => setLibraryViewMode('workspace')}
             className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
-            워크스페이스
+            뮤직 스페이스
           </button>
           <button
             onClick={() => {
@@ -5553,14 +5553,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </h2>
                 <p className="text-[var(--text-secondary)] mb-6 max-w-sm">
                   {activePlaylistSection === 'normal' 
-                    ? '워크스페이스에서 플레이리스트 저장을 눌러 곡을 추가하세요.' 
+                    ? '뮤직 스페이스에서 플레이리스트 저장을 눌러 곡을 추가하세요.' 
                     : '공유받은 곡에서 플레이리스트 저장을 누르면 여기에 추가됩니다.'}
                 </p>
                 <button
                   onClick={() => setLibraryViewMode('workspace')}
                   className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all"
                 >
-                  워크스페이스로 이동
+                  뮤직 스페이스로 이동
                 </button>
               </div>
             )}

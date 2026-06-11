@@ -2361,8 +2361,8 @@ ${song.prompt}
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
-        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none shadow-[var(--shadow-md)]">
+      <div className="mt-4 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
             <button
               key={tab.id}
@@ -2394,7 +2394,7 @@ ${song.prompt}
       ) : musicNoteViewMode === 'sharedNote' ? (
         renderMusicNotePendingView('sharedNote')
       ) : favorites.length === 0 ? (
-        <div className="mt-5 md:mt-6 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+        <div className="mt-[17px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">아직 저장된 곡이 없습니다.</p>
           <Link to="/" className="mt-6 text-[#AC5045] font-bold hover:underline">
@@ -2402,12 +2402,12 @@ ${song.prompt}
           </Link>
         </div>
       ) : filteredFavorites.length === 0 ? (
-        <div className="mt-5 md:mt-6 min-h-[30vh] flex flex-col items-center justify-center text-center">
+        <div className="mt-[17px] md:mt-[21px] min-h-[30vh] flex flex-col items-center justify-center text-center">
           <Search className="w-10 h-10 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="mt-5 md:mt-6 space-y-12">
+        <div className="mt-[17px] md:mt-[21px] space-y-12">
           <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);

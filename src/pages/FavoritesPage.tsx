@@ -3163,7 +3163,7 @@ ${song.prompt}
                         disabled={!sunoUrlInputs[index].trim()}
                         className={cn(
                           'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                          sunoUrlMainIndex === index ? 'border-[#D8A4A2]/45 bg-[#AC6B69]/18 text-[#D8A4A2] max-md:border-[#FF927F]/60 max-md:bg-[#FF6F5F]/26 max-md:text-[#FFD7CF]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                          sunoUrlMainIndex === index ? 'border-[#D8A4A2]/45 bg-[#AC6B69]/18 text-[#D8A4A2] border-[#FF927F]/60 bg-[#FF6F5F]/26 text-[#FFD7CF]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
                         )}
                       >
                         {sunoUrlMainIndex === index ? '1순위' : '1순위로'}
@@ -3224,7 +3224,6 @@ ${song.prompt}
               }}
             >
               <style>{`
-                @media (max-width: 767px) {
                   .musicnote-edit-mobile-boost {
                     --mn-edit-hot: #FF6F5F;
                     --mn-edit-hot-2: #FF927F;
@@ -3269,7 +3268,6 @@ ${song.prompt}
                   .musicnote-edit-mobile-boost .mn-mobile-edit-color-wash {
                     opacity: 1 !important;
                   }
-                }
               `}</style>
               <div className="mn-mobile-edit-color-wash pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200" style={{
                 background: 'radial-gradient(circle at top, rgba(255, 111, 95, 0.14), transparent 34%), radial-gradient(circle at bottom right, rgba(255, 146, 127, 0.10), transparent 30%)'
@@ -3278,7 +3276,7 @@ ${song.prompt}
 
               <div className="relative flex items-center justify-between gap-4 border-b border-black/20 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#D8A4A2] max-md:text-[#FF927F]">music note detail</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#D8A4A2] text-[#FF927F]">music note detail</div>
                   <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">디테일 & Edit</h3>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
@@ -3474,7 +3472,7 @@ ${song.prompt}
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2] max-md:text-[#FF927F]">suno link</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2] text-[#FF927F]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
                       <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
@@ -3535,7 +3533,7 @@ ${song.prompt}
                             </div>
 
                             <div className="min-w-0 p-3">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75 max-md:text-[#FF927F]">suno url {index + 1}</div>
+                              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75 text-[#FF927F]">suno url {index + 1}</div>
                               <p className="mt-1 truncate text-sm font-semibold text-white/82">
                                 {link?.title || (link ? `수노 URL ${index + 1} 연결됨` : `수노 URL ${index + 1}`)}
                               </p>
@@ -3560,7 +3558,7 @@ ${song.prompt}
                             disabled={!detailSunoUrlInputs[index].trim()}
                             className={cn(
                               'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                              detailSunoUrlMainIndex === index ? 'border-[#D8A4A2]/45 bg-[#AC6B69]/18 text-[#D8A4A2] max-md:border-[#FF927F]/60 max-md:bg-[#FF6F5F]/26 max-md:text-[#FFD7CF]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                              detailSunoUrlMainIndex === index ? 'border-[#D8A4A2]/45 bg-[#AC6B69]/18 text-[#D8A4A2] border-[#FF927F]/60 bg-[#FF6F5F]/26 text-[#FFD7CF]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
                             )}
                           >
                             {detailSunoUrlMainIndex === index ? '1순위' : '1순위로'}
@@ -3576,11 +3574,11 @@ ${song.prompt}
                             if (!event.target.value.trim() && detailSunoUrlMainIndex === index) setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
                           }}
                           placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
-                          className="w-full rounded-2xl border border-black/20 bg-black/15 px-4 py-3 text-sm text-white/78 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/35 max-md:focus:border-[#FF927F]/70"
+                          className="w-full rounded-2xl border border-black/20 bg-black/15 px-4 py-3 text-sm text-white/78 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/35 focus:border-[#FF927F]/70"
                         />
                       </div>
                     ))}
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] max-md:border-[#FF927F]/60 max-md:bg-[#FF6F5F]/26 max-md:text-[#FFD7CF] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
+                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] border-[#FF927F]/60 bg-[#FF6F5F]/26 text-[#FFD7CF] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
                       <Check className="h-4 w-4" />
                       저장
                     </button>

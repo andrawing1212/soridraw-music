@@ -1313,51 +1313,41 @@ export default function FavoritesPage({
   useEffect(() => {
     if (selectedSong) {
       const selectedSongId = String(selectedSong.id || '');
-      const isNewSelectedSong = activeFavoriteEditorSongIdRef.current !== selectedSongId;
+      const sourceTitle = selectedSong.title || '';
+      const sourceKorean = selectedSong.lyrics?.korean || '';
+      const sourceEnglish = selectedSong.lyrics?.english || '';
+      const sourcePrompt = selectedSong.prompt || '';
 
-      if (isNewSelectedSong) {
-        activeFavoriteEditorSongIdRef.current = selectedSongId;
-        favoriteEditorReadySongIdRef.current = null;
-        skipNextFavoriteDraftSaveRef.current = true;
-      }
+      // Always hydrate the editor from the currently opened song itself.
+      // Do not restore cross-screen drafts here: stale drafts were able to attach
+      // song A's fields to song B and then save them on browser back navigation.
+      activeFavoriteEditorSongIdRef.current = selectedSongId;
+      favoriteEditorReadySongIdRef.current = selectedSongId;
+      popupOpenedSongIdRef.current = selectedSongId;
+      skipNextFavoriteDraftSaveRef.current = false;
 
-      // Set original lyrics per song id. A single boolean can keep the previous song's
-      // originals alive and cause the next song to be saved with the wrong draft.
-      if (popupOpenedSongIdRef.current !== selectedSongId) {
-        setOriginalLyricsKo(selectedSong.lyrics.korean);
-        setOriginalLyricsEn(selectedSong.lyrics.english);
-        setOriginalTitle(selectedSong.title);
-        setOriginalPrompt(selectedSong.prompt || '');
-        popupOpenedSongIdRef.current = selectedSongId;
-      }
-
-      const draft = drafts[selectedSong.id];
-      if (draft) {
-        setEditedTitle(draft.title);
-        setEditedKoreanLyrics(draft.korean);
-        setEditedEnglishLyrics(draft.english);
-        setEditedPrompt(draft.prompt);
-        setIsEditing(draft.isEditing);
-        setActiveEditSection(draft.activeEditSection ?? null);
-        setForeignTargetLanguage(draft.foreignTargetLanguage || inferForeignLyricTargetLanguage(draft.english || selectedSong.lyrics.english));
-        const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
-        setDetailSunoUrlInputs(nextSunoState.inputs);
-        setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
-        setDetailSunoUrlError('');
-      } else {
-        setEditedTitle(selectedSong.title);
-        setEditedKoreanLyrics(selectedSong.lyrics.korean);
-        setEditedEnglishLyrics(selectedSong.lyrics.english);
-        setEditedPrompt(selectedSong.prompt || '');
-        setIsEditing(false);
-        setActiveEditSection(null);
-        setForeignTargetLanguage(inferForeignLyricTargetLanguage(selectedSong.lyrics.english));
-        const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
-        setDetailSunoUrlInputs(nextSunoState.inputs);
-        setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
-        setDetailSunoUrlError('');
-      }
+      setOriginalLyricsKo(sourceKorean);
+      setOriginalLyricsEn(sourceEnglish);
+      setOriginalTitle(sourceTitle);
+      setOriginalPrompt(sourcePrompt);
+      setEditedTitle(sourceTitle);
+      setEditedKoreanLyrics(sourceKorean);
+      setEditedEnglishLyrics(sourceEnglish);
+      setEditedPrompt(sourcePrompt);
+      setIsEditing(false);
+      setActiveEditSection(null);
+      setForeignTargetLanguage(inferForeignLyricTargetLanguage(sourceEnglish));
+      const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
+      setDetailSunoUrlInputs(nextSunoState.inputs);
+      setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
+      setDetailSunoUrlError('');
       setIsSyncEnabled(false);
+      setDrafts(prev => {
+        if (!prev[selectedSongId]) return prev;
+        const next = { ...prev };
+        delete next[selectedSongId];
+        return next;
+      });
     } else {
       setOriginalLyricsKo('');
       setOriginalLyricsEn('');
@@ -1376,35 +1366,9 @@ export default function FavoritesPage({
     }
   }, [selectedSong]);
 
-  // Update draft whenever edit state changes, but only after the current song's
-  // edit fields have been hydrated. This prevents song A's edit values from being
-  // cached under song B when the detail screen switches or closes quickly.
-  useEffect(() => {
-    if (!selectedSong?.id) return;
-
-    const selectedSongId = String(selectedSong.id || '');
-    if (activeFavoriteEditorSongIdRef.current !== selectedSongId) return;
-
-    if (skipNextFavoriteDraftSaveRef.current) {
-      skipNextFavoriteDraftSaveRef.current = false;
-      return;
-    }
-
-    favoriteEditorReadySongIdRef.current = selectedSongId;
-
-    setDrafts(prev => ({
-      ...prev,
-      [selectedSong.id]: {
-        title: editedTitle,
-        korean: editedKoreanLyrics,
-        english: editedEnglishLyrics,
-        prompt: editedPrompt,
-        isEditing: isEditing,
-        activeEditSection,
-        foreignTargetLanguage
-      }
-    }));
-  }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, editedPrompt, isEditing, activeEditSection, foreignTargetLanguage, selectedSong]);
+  // Data safety: do not auto-cache text edit drafts by song id.
+  // The previous draft cache could briefly pair the old song's edit fields with
+  // the newly opened song's id, which caused destructive overwrite on back.
 
   const buildFavoriteDraftPayload = async () => {
     if (!selectedSong?.id) return null;
@@ -1486,6 +1450,7 @@ export default function FavoritesPage({
     }
 
     return {
+      targetSongId: selectedSongId,
       updates,
       nextSong,
       finalKorean,
@@ -1515,7 +1480,7 @@ export default function FavoritesPage({
 
     favoriteDraftCommitRef.current = true;
     try {
-      await updateFavorite(selectedSong.id, payload.updates);
+      await updateFavorite(payload.targetSongId, payload.updates);
 
       setSelectedSong(payload.nextSong);
       setOriginalTitle(payload.nextSong.title);
@@ -1526,7 +1491,7 @@ export default function FavoritesPage({
       setEditedEnglishLyrics(payload.finalEnglish);
       setDrafts(prev => {
         const next = { ...prev };
-        delete next[selectedSong.id];
+        delete next[payload.targetSongId];
         return next;
       });
     } finally {
@@ -1535,7 +1500,10 @@ export default function FavoritesPage({
   };
 
   const handleSave = async () => {
-    await applyFavoriteDraftLocally();
+    await commitFavoriteDraftIfNeeded();
+    setIsEditing(false);
+    setActiveEditSection(null);
+    setIsSyncEnabled(false);
   };
 
   const handleRestoreOriginal = () => {
@@ -1843,7 +1811,15 @@ export default function FavoritesPage({
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
 
-    await commitFavoriteDraftIfNeeded();
+    // Closing with the browser/app back button must never write to Firestore.
+    // Only the explicit check/save button commits edits. This protects existing
+    // Music Note data from cross-song overwrites during history navigation.
+    setDrafts(prev => {
+      if (!selectedSong?.id || !prev[selectedSong.id]) return prev;
+      const next = { ...prev };
+      delete next[selectedSong.id];
+      return next;
+    });
 
     setSelectedSong(null);
     detailHistoryPushedRef.current = false;

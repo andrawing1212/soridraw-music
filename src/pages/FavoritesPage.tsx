@@ -3425,7 +3425,7 @@ ${song.prompt}
                     <div className="min-w-0">
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
-                      <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 작은 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
+                      <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {getFavoriteSunoShareUrl(selectedSong) && (
@@ -3436,20 +3436,20 @@ ${song.prompt}
                     </div>
                   </div>
                   {getFavoriteSunoLinks(selectedSong).length > 0 && (
-                    <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {[0, 1].map((index) => {
                         const link = getFavoriteSunoLinks(selectedSong)[index];
                         const isMain = getFavoriteSunoMainIndex(selectedSong) === index;
                         return (
                           <div
-                            key={`suno-compact-preview-${index}`}
+                            key={`suno-cover-preview-${index}`}
                             className={cn(
-                              'flex min-w-0 items-center gap-3 rounded-2xl border bg-black/15 p-3',
+                              'overflow-hidden rounded-2xl border bg-black/15',
                               link ? 'border-white/10' : 'border-white/[0.055] opacity-55',
                               isMain && link ? 'ring-1 ring-[#D8A4A2]/35' : ''
                             )}
                           >
-                            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-black/25">
+                            <div className="relative aspect-[16/9] bg-black/25">
                               {link?.coverUrl ? (
                                 <img
                                   src={link.coverUrl}
@@ -3458,8 +3458,8 @@ ${song.prompt}
                                   loading="lazy"
                                 />
                               ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white/30">
-                                  없음
+                                <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/32">
+                                  {link ? '커버 이미지 없음' : `수노 URL ${index + 1} 미등록`}
                                 </div>
                               )}
 
@@ -3467,37 +3467,31 @@ ${song.prompt}
                                 <button
                                   type="button"
                                   onClick={() => openFavoriteSunoLinkAt(selectedSong, index)}
-                                  className="absolute inset-0 flex items-center justify-center bg-black/18 transition-all hover:bg-black/32"
+                                  className="absolute inset-0 flex items-center justify-center bg-black/10 transition-all hover:bg-black/24"
                                   title={`수노 URL ${index + 1} 열기`}
                                 >
-                                  <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/58 text-white shadow-[0_6px_16px_rgba(0,0,0,0.35)] backdrop-blur">
-                                    <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
+                                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-[0_8px_22px_rgba(0,0,0,0.35)] backdrop-blur">
+                                    <Play className="ml-0.5 h-5 w-5 fill-current" />
                                   </span>
                                 </button>
                               )}
+
+                              {link && (
+                                <div className="absolute left-2 top-2 rounded-full border border-black/20 bg-black/55 px-2 py-1 text-[10px] font-black text-white/86 backdrop-blur">
+                                  {isMain ? '1순위' : '2순위'}
+                                </div>
+                              )}
                             </div>
 
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#D8A4A2]/75">suno url {index + 1}</span>
-                                {link && (
-                                  <span className={cn(
-                                    'inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[10px] font-black',
-                                    isMain ? 'border-[#D8A4A2]/35 bg-[#AC6B69]/18 text-[#D8A4A2]' : 'border-white/10 bg-white/[0.035] text-white/45'
-                                  )}>
-                                    {isMain ? '1순위' : '2순위'}
-                                  </span>
-                                )}
-                              </div>
+                            <div className="min-w-0 p-3">
+                              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75">suno url {index + 1}</div>
                               <p className="mt-1 truncate text-sm font-semibold text-white/82">
                                 {link?.title || (link ? `수노 URL ${index + 1} 연결됨` : `수노 URL ${index + 1}`)}
                               </p>
-                              <div className="mt-1 flex min-w-0 items-center gap-2">
-                                {link?.durationText && (
-                                  <span className="shrink-0 text-xs font-semibold text-[#D8A4A2]/80">{link.durationText}</span>
-                                )}
-                                <span className="min-w-0 truncate text-xs text-white/35">{link?.url || 'URL을 입력하면 커버를 불러옵니다.'}</span>
-                              </div>
+                              {link?.durationText && (
+                                <p className="mt-1 text-xs font-semibold text-[#D8A4A2]/80">곡 길이 {link.durationText}</p>
+                              )}
+                              <p className="mt-1 truncate text-xs text-white/35">{link?.url || 'URL을 입력하면 커버를 불러옵니다.'}</p>
                             </div>
                           </div>
                         );

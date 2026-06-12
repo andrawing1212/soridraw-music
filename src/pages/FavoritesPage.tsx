@@ -1447,7 +1447,7 @@ export default function FavoritesPage({
       window.setTimeout(() => {
         longPressTriggeredRef.current = false;
       }, 80);
-    }, 3000);
+    }, 900);
   };
 
   const handleCardLongPressEnd = () => {

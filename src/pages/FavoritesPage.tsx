@@ -46,7 +46,6 @@ import { db } from '../firebase';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
-import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -366,7 +365,6 @@ export default function FavoritesPage({
   onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
   onLongPressEnd: () => void;
 }) {
-  const { playTrack, setIsSharedPlayerMode } = useGlobalPlayer();
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
@@ -740,43 +738,6 @@ export default function FavoritesPage({
     return String(song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || '').trim();
   };
 
-  const isBlockedFavoriteAudioUrl = (value: any): boolean => {
-    const raw = String(value || '').trim().toLowerCase();
-    if (!raw) return true;
-
-    return /(?:^|\/)(?:sil|silent|silence)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw)
-      || /(?:^|\/)(?:blank|empty|placeholder)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw);
-  };
-
-  const normalizePlayableFavoriteAudioUrl = (value: any): string => {
-    const raw = String(value || '').trim();
-    if (!raw || isBlockedFavoriteAudioUrl(raw)) return '';
-    if (!/^https?:\/\//i.test(raw)) return '';
-    return raw;
-  };
-
-  const getFavoriteOriginalAudioUrl = (song: any): string => {
-    return normalizePlayableFavoriteAudioUrl(
-      song?.audioUrl
-      || song?.audio_url
-      || song?.streamAudioUrl
-      || song?.stream_audio_url
-      || song?.sourceAudioUrl
-      || song?.source_audio_url
-      || song?.musicUrl
-      || song?.music_url
-      || song?.url
-    );
-  };
-
-  const getFavoriteSunoAudioUrl = (song: any): string => {
-    return normalizePlayableFavoriteAudioUrl(song?.sunoAudioUrl || song?.sunoStreamAudioUrl || song?.sunoAudio_url || '');
-  };
-
-  const getFavoritePlayableAudioUrl = (song: any): string => {
-    return getFavoriteOriginalAudioUrl(song) || getFavoriteSunoAudioUrl(song);
-  };
-
   const getFavoriteSunoDurationText = (song: any): string => {
     const savedText = String(song?.sunoDurationText || '').trim();
     if (savedText) return savedText;
@@ -793,7 +754,7 @@ export default function FavoritesPage({
   const shouldRefreshFavoriteSunoMetadata = (song: any): boolean => {
     if (!getFavoriteSunoShareUrl(song)) return false;
     const title = String(song?.sunoTitle || '');
-    return !getFavoriteSunoCoverUrl(song) || !getFavoritePlayableAudioUrl(song) || !getFavoriteSunoDurationText(song) || /&#\d+;|&#x[0-9a-f]+;/i.test(title);
+    return !getFavoriteSunoCoverUrl(song) || !getFavoriteSunoDurationText(song) || /&#\d+;|&#x[0-9a-f]+;/i.test(title);
   };
 
   const fetchFavoriteSunoShareMetadata = async (normalizedUrl: string) => {
@@ -821,7 +782,6 @@ export default function FavoritesPage({
         title: typeof payload.sunoTitle === 'string' ? payload.sunoTitle.trim() : '',
         durationSeconds: typeof payload.sunoDurationSeconds === 'number' ? payload.sunoDurationSeconds : null,
         durationText: typeof payload.sunoDurationText === 'string' ? payload.sunoDurationText.trim() : '',
-        audioUrl: typeof payload.sunoAudioUrl === 'string' ? payload.sunoAudioUrl.trim() : '',
       };
     } catch (error) {
       console.warn('[Suno URL metadata] fetch failed', error);
@@ -836,30 +796,6 @@ export default function FavoritesPage({
       return;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const playFavoriteSunoAudioOrOpen = (song: any) => {
-    const audioUrl = getFavoritePlayableAudioUrl(song);
-    if (!audioUrl) {
-      showFavoriteToast('내부 재생 URL이 없습니다. 수노에서 열기 버튼으로 확인해주세요.');
-      return;
-    }
-
-    setIsSharedPlayerMode(false);
-    playTrack({
-      url: audioUrl,
-      title: song?.title || song?.sunoTitle || 'Suno track',
-      imageUrl: getFavoriteSunoCoverUrl(song) || song?.imageUrl || song?.image_url || '',
-      duration: Number(song?.sunoDurationSeconds || song?.duration || 0) || undefined,
-      lyrics: song?.lyrics || song?.lyricsText || '',
-      parent: {
-        ...song,
-        sourceType: getFavoriteOriginalAudioUrl(song) ? 'favorite_original_audio' : 'favorite_suno',
-        audioUrl,
-        streamAudioUrl: audioUrl,
-        imageUrl: getFavoriteSunoCoverUrl(song) || song?.imageUrl || song?.image_url || '',
-      },
-    });
   };
 
   const openFavoriteSunoUrlEditor = (song: any) => {
@@ -894,8 +830,6 @@ export default function FavoritesPage({
       sunoTitle: metadata?.title || song?.sunoTitle || null,
       sunoDurationSeconds: metadata?.durationSeconds || song?.sunoDurationSeconds || null,
       sunoDurationText: metadata?.durationText || getFavoriteSunoDurationText(song) || null,
-      sunoAudioUrl: normalizePlayableFavoriteAudioUrl(metadata?.audioUrl) || null,
-      sunoAudioFetchedAt: Date.now(),
       sunoCoverFetchedAt: Date.now(),
     };
     await updateFavorite(song.id, updates);
@@ -917,8 +851,6 @@ export default function FavoritesPage({
       sunoTitle: null,
       sunoDurationSeconds: null,
       sunoDurationText: null,
-      sunoAudioUrl: null,
-      sunoAudioFetchedAt: null,
       sunoCoverFetchedAt: null,
     };
     await updateFavorite(song.id, updates);
@@ -2758,7 +2690,7 @@ ${song.prompt}
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          playFavoriteSunoAudioOrOpen(song);
+                          openFavoriteSunoUrl(song);
                         }}
                         onMouseEnter={() => onHover({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}

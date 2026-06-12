@@ -738,6 +738,25 @@ export default function FavoritesPage({
     return String(song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || '').trim();
   };
 
+  const getFavoriteSunoDurationText = (song: any): string => {
+    const savedText = String(song?.sunoDurationText || '').trim();
+    if (savedText) return savedText;
+
+    const seconds = Number(song?.sunoDurationSeconds || 0);
+    if (!Number.isFinite(seconds) || seconds <= 0) return '';
+
+    const rounded = Math.round(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const rest = rounded % 60;
+    return `${minutes}:${String(rest).padStart(2, '0')}`;
+  };
+
+  const shouldRefreshFavoriteSunoMetadata = (song: any): boolean => {
+    if (!getFavoriteSunoShareUrl(song)) return false;
+    const title = String(song?.sunoTitle || '');
+    return !getFavoriteSunoCoverUrl(song) || !getFavoriteSunoDurationText(song) || /&#\d+;|&#x[0-9a-f]+;/i.test(title);
+  };
+
   const fetchFavoriteSunoShareMetadata = async (normalizedUrl: string) => {
     if (!user?.uid) return null;
 
@@ -761,6 +780,8 @@ export default function FavoritesPage({
       return {
         coverUrl: typeof payload.sunoCoverUrl === 'string' ? payload.sunoCoverUrl.trim() : '',
         title: typeof payload.sunoTitle === 'string' ? payload.sunoTitle.trim() : '',
+        durationSeconds: typeof payload.sunoDurationSeconds === 'number' ? payload.sunoDurationSeconds : null,
+        durationText: typeof payload.sunoDurationText === 'string' ? payload.sunoDurationText.trim() : '',
       };
     } catch (error) {
       console.warn('[Suno URL metadata] fetch failed', error);
@@ -805,8 +826,10 @@ export default function FavoritesPage({
     const updates = {
       sunoShareUrl: normalized,
       sunoShareUrlUpdatedAt: Date.now(),
-      sunoCoverUrl: metadata?.coverUrl || null,
-      sunoTitle: metadata?.title || null,
+      sunoCoverUrl: metadata?.coverUrl || getFavoriteSunoCoverUrl(song) || null,
+      sunoTitle: metadata?.title || song?.sunoTitle || null,
+      sunoDurationSeconds: metadata?.durationSeconds || song?.sunoDurationSeconds || null,
+      sunoDurationText: metadata?.durationText || getFavoriteSunoDurationText(song) || null,
       sunoCoverFetchedAt: Date.now(),
     };
     await updateFavorite(song.id, updates);
@@ -826,6 +849,8 @@ export default function FavoritesPage({
       sunoShareUrlUpdatedAt: Date.now(),
       sunoCoverUrl: null,
       sunoTitle: null,
+      sunoDurationSeconds: null,
+      sunoDurationText: null,
       sunoCoverFetchedAt: null,
     };
     await updateFavorite(song.id, updates);
@@ -3173,9 +3198,18 @@ ${song.prompt}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {getFavoriteSunoShareUrl(selectedSong) && (
-                        <button type="button" onClick={() => openFavoriteSunoUrl(selectedSong)} className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/10 px-3 text-sm font-semibold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/16">
-                          <Play className="h-4 w-4 fill-current" />
-                          수노에서 열기
+                        <button type="button" onClick={() => openFavoriteSunoUrl(selectedSong)} className="inline-flex h-10 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/10 px-3 text-sm font-semibold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/16">
+                          {getFavoriteSunoCoverUrl(selectedSong) ? (
+                            <img
+                              src={getFavoriteSunoCoverUrl(selectedSong)}
+                              alt=""
+                              className="-ml-1 h-7 w-7 rounded-xl object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <Play className="h-4 w-4 fill-current" />
+                          )}
+                          <span>수노에서 열기</span>
                         </button>
                       )}
                       {getFavoriteSunoShareUrl(selectedSong) && (
@@ -3196,6 +3230,9 @@ ${song.prompt}
                       <div className="min-w-0">
                         <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75">suno cover</div>
                         <p className="mt-1 truncate text-sm font-semibold text-white/82">{selectedSong?.sunoTitle || '수노 커버 이미지가 연결되었습니다.'}</p>
+                        {getFavoriteSunoDurationText(selectedSong) && (
+                          <p className="mt-1 text-xs font-semibold text-[#D8A4A2]/80">곡 길이 {getFavoriteSunoDurationText(selectedSong)}</p>
+                        )}
                         <p className="mt-1 text-xs text-white/38">수노 URL에서 자동으로 가져온 커버 URL입니다.</p>
                       </div>
                     </div>
@@ -3207,7 +3244,7 @@ ${song.prompt}
                       placeholder="https://suno.com/song/..."
                       className="min-w-0 flex-1 rounded-2xl border border-black/20 bg-black/15 px-4 py-3 text-sm text-white/78 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/35"
                     />
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrl(selectedSong, detailSunoUrlInput, 'detail')} disabled={!detailSunoUrlInput.trim() || detailSunoUrlInput.trim() === getFavoriteSunoShareUrl(selectedSong)} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
+                    <button type="button" onClick={() => saveFavoriteSunoShareUrl(selectedSong, detailSunoUrlInput, 'detail')} disabled={!detailSunoUrlInput.trim() || (detailSunoUrlInput.trim() === getFavoriteSunoShareUrl(selectedSong) && !shouldRefreshFavoriteSunoMetadata(selectedSong))} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
                       <Check className="h-4 w-4" />
                       저장
                     </button>

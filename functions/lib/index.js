@@ -281,9 +281,12 @@ const normalizeSunoSharePageUrl = (value) => {
     return url.toString();
 };
 const decodeHtmlEntities = (value) => value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
 const getMetaTagContent = (html, attrName, attrValue) => {
@@ -314,12 +317,164 @@ const normalizeMetadataUrl = (value, baseUrl) => {
         return "";
     }
 };
+const formatDurationText = (seconds) => {
+    if (!Number.isFinite(seconds) || seconds <= 0)
+        return "";
+    const rounded = Math.round(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const rest = rounded % 60;
+    return `${minutes}:${String(rest).padStart(2, "0")}`;
+};
+const normalizeDurationSeconds = (value) => {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0 && value < 36000) {
+        return Math.round(value);
+    }
+    const raw = pickFirstString(value);
+    if (!raw)
+        return null;
+    const trimmed = raw.trim();
+    const isoMatch = trimmed.match(/^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/i);
+    if (isoMatch) {
+        const hours = Number(isoMatch[1] || 0);
+        const minutes = Number(isoMatch[2] || 0);
+        const seconds = Number(isoMatch[3] || 0);
+        const total = (hours * 3600) + (minutes * 60) + seconds;
+        return total > 0 && total < 36000 ? Math.round(total) : null;
+    }
+    const timeMatch = trimmed.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/);
+    if (timeMatch) {
+        const hours = Number(timeMatch[1] || 0);
+        const minutes = Number(timeMatch[2] || 0);
+        const seconds = Number(timeMatch[3] || 0);
+        const total = (hours * 3600) + (minutes * 60) + seconds;
+        return total > 0 && total < 36000 ? total : null;
+    }
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric) && numeric > 0 && numeric < 36000) {
+        return Math.round(numeric);
+    }
+    return null;
+};
+const findDurationInValue = (value, depth = 0) => {
+    if (depth > 8 || value == null)
+        return null;
+    const direct = normalizeDurationSeconds(value);
+    if (direct)
+        return direct;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findDurationInValue(item, depth + 1);
+            if (found)
+                return found;
+        }
+        return null;
+    }
+    if (typeof value !== "object")
+        return null;
+    const durationKeys = [
+        "duration",
+        "duration_s",
+        "durationS",
+        "duration_sec",
+        "durationSec",
+        "duration_secs",
+        "durationSecs",
+        "duration_seconds",
+        "durationSeconds",
+        "durationInSeconds",
+        "duration_ms",
+        "durationMs",
+        "clipDuration",
+        "clip_duration",
+        "audioDuration",
+        "audio_duration",
+        "playtime",
+        "length",
+        "lengthSeconds",
+    ];
+    for (const key of durationKeys) {
+        if (!(key in value))
+            continue;
+        const raw = value[key];
+        const normalized = key.toLowerCase().includes("ms") && typeof raw === "number"
+            ? normalizeDurationSeconds(raw / 1000)
+            : normalizeDurationSeconds(raw);
+        if (normalized)
+            return normalized;
+    }
+    for (const key of Object.keys(value)) {
+        const found = findDurationInValue(value[key], depth + 1);
+        if (found)
+            return found;
+    }
+    return null;
+};
+const extractDurationFromJsonScripts = (html) => {
+    const scriptRegex = /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    while ((match = scriptRegex.exec(html))) {
+        const raw = decodeHtmlEntities(match[1] || "").trim();
+        if (!raw)
+            continue;
+        try {
+            const parsed = JSON.parse(raw);
+            const found = findDurationInValue(parsed);
+            if (found)
+                return found;
+        }
+        catch (_a) {
+            // Ignore non-JSON script content.
+        }
+    }
+    const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (nextDataMatch === null || nextDataMatch === void 0 ? void 0 : nextDataMatch[1]) {
+        try {
+            const parsed = JSON.parse(decodeHtmlEntities(nextDataMatch[1]).trim());
+            const found = findDurationInValue(parsed);
+            if (found)
+                return found;
+        }
+        catch (_b) {
+            // Ignore invalid Next.js payload.
+        }
+    }
+    return null;
+};
+const extractDurationFromLooseHtml = (html) => {
+    const patterns = [
+        /"duration(?:Seconds|_seconds|_s|S|Sec|_sec)?"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"duration(?:Seconds|_seconds|_s|S|Sec|_sec)?"\s*:\s*"([^"]+)"/i,
+        /"durationMs"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"audioDuration"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"clipDuration"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"playtime"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"lengthSeconds"\s*:\s*"?(\d+(?:\.\d+)?)"?/i,
+        /property=["']music:duration["'][^>]*content=["']([^"']+)["']/i,
+        /name=["']duration["'][^>]*content=["']([^"']+)["']/i,
+    ];
+    for (const pattern of patterns) {
+        const match = html.match(pattern);
+        if (!(match === null || match === void 0 ? void 0 : match[1]))
+            continue;
+        const isMs = /durationMs/i.test(pattern.source);
+        const normalized = isMs
+            ? normalizeDurationSeconds(Number(match[1]) / 1000)
+            : normalizeDurationSeconds(match[1]);
+        if (normalized)
+            return normalized;
+    }
+    return null;
+};
 const extractSunoShareMetadataFromHtml = (html, pageUrl) => {
     const coverUrl = normalizeMetadataUrl(pickFirstString(getMetaTagContent(html, "property", "og:image"), getMetaTagContent(html, "name", "twitter:image")), pageUrl);
     const title = pickFirstString(getMetaTagContent(html, "property", "og:title"), getMetaTagContent(html, "name", "twitter:title"));
+    const durationSeconds = extractDurationFromJsonScripts(html) || extractDurationFromLooseHtml(html);
+    const durationText = durationSeconds ? formatDurationText(durationSeconds) : "";
     return {
         coverUrl,
         title,
+        durationSeconds,
+        durationText,
     };
 };
 const buildSunoApiKeyStatusPayload = (docData = {}) => {
@@ -595,6 +750,8 @@ exports.fetchSunoShareMetadata = (0, https_1.onRequest)({ region: "us-central1",
             sunoShareUrl: shareUrl,
             sunoCoverUrl: metadata.coverUrl || null,
             sunoTitle: metadata.title || null,
+            sunoDurationSeconds: metadata.durationSeconds || null,
+            sunoDurationText: metadata.durationText || null,
             fetchedAt: new Date().toISOString(),
         });
     }

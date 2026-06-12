@@ -3156,7 +3156,7 @@ ${song.prompt}
                 {[0, 1].map((index) => (
                   <div key={`suno-url-modal-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-white/72">수노 URL {index + 1}</span>
+                      <span className="inline-flex h-7 items-center rounded-full border border-[#FF927F]/45 bg-[#FF6F5F]/18 px-3 text-xs font-black text-[#FFD7CF] shadow-[0_6px_18px_rgba(255,111,95,0.12)]">수노 URL {index + 1}</span>
                       <button
                         type="button"
                         onClick={() => setSunoUrlMainIndex(index as 0 | 1)}
@@ -3550,7 +3550,7 @@ ${song.prompt}
                     {[0, 1].map((index) => (
                       <div key={`detail-suno-url-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-white/72">수노 URL {index + 1}</span>
+                          <span className="inline-flex h-7 items-center rounded-full border border-[#FF927F]/45 bg-[#FF6F5F]/18 px-3 text-xs font-black text-[#FFD7CF] shadow-[0_6px_18px_rgba(255,111,95,0.12)]">수노 URL {index + 1}</span>
                           <button
                             type="button"
                             onClick={() => setDetailSunoUrlMainIndex(index as 0 | 1)}

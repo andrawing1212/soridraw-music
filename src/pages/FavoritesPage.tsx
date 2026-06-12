@@ -2624,13 +2624,13 @@ ${song.prompt}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-white transition-all hover:text-[#D8A4A2] md:ml-0 md:w-12 md:rounded-xl md:bg-[#AC5045]/14 md:text-[#D8A4A2] md:hover:bg-[#AC5045]/22"
+                        className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#AC5045]/16 text-[#D8A4A2] transition-all hover:bg-[#AC5045]/24 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#AC5045]/14 md:hover:bg-[#AC5045]/22 shadow-[0_0_0_1px_rgba(172,80,69,0.10)]"
                         title="수노에서 열기"
                       >
                         <Play className="w-5 h-5 fill-current" />
                       </button>
                     ) : (
-                      <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-[#AC5045] md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
+                      <div className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[#AC5045] md:ml-0 md:h-12 md:w-12 md:bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.035)]">
                         <Music className="w-5 h-5" />
                       </div>
                     )}
@@ -2664,7 +2664,7 @@ ${song.prompt}
                       </div>
                     )}
 
-                                        <div className="flex-1 min-w-0 pr-1 md:pr-0">
+                                        <div className="flex-1 min-w-0 pl-1 pr-1 md:pl-0 md:pr-0">
                       <div
                         data-no-card-long-press="true"
                         className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 select-text cursor-text"
@@ -2678,12 +2678,12 @@ ${song.prompt}
                         }}
                       >
                         <div className="md:hidden min-w-0 leading-tight select-text cursor-text">
-                          <div className="text-sm font-extrabold text-white truncate">
+                          <div className="text-[13px] font-extrabold text-white truncate">
                             {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
                           </div>
                           <div
                             data-no-card-long-press="true"
-                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-178px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[15px] font-bold text-white/92 md:max-w-none select-text cursor-text"
+                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-192px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[14px] font-bold text-white/92 md:max-w-none select-text cursor-text"
                             onMouseDown={(event) => {
                               const point = getLongPressPoint(event);
                               if (point) cardClickStartPointRef.current = point;
@@ -2698,7 +2698,7 @@ ${song.prompt}
                         </div>
                         <h3
                           data-no-card-long-press="true"
-                          className="hidden md:block text-base font-bold text-white truncate select-text cursor-text"
+                          className="hidden md:block text-[15px] font-bold text-white truncate select-text cursor-text"
                           onMouseDown={(event) => {
                             const point = getLongPressPoint(event);
                             if (point) cardClickStartPointRef.current = point;

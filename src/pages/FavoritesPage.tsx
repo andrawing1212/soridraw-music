@@ -734,6 +734,40 @@ export default function FavoritesPage({
     }
   };
 
+  const getFavoriteSunoCoverUrl = (song: any): string => {
+    return String(song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || '').trim();
+  };
+
+  const fetchFavoriteSunoShareMetadata = async (normalizedUrl: string) => {
+    if (!user?.uid) return null;
+
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`${BASE_URL}/fetchSunoShareMetadata`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ url: normalizedUrl }),
+      });
+
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) {
+        console.warn('[Suno URL metadata] fetch failed', payload);
+        return null;
+      }
+
+      return {
+        coverUrl: typeof payload.sunoCoverUrl === 'string' ? payload.sunoCoverUrl.trim() : '',
+        title: typeof payload.sunoTitle === 'string' ? payload.sunoTitle.trim() : '',
+      };
+    } catch (error) {
+      console.warn('[Suno URL metadata] fetch failed', error);
+      return null;
+    }
+  };
+
   const openFavoriteSunoUrl = (song: any) => {
     const url = getFavoriteSunoShareUrl(song);
     if (!url) {
@@ -767,7 +801,14 @@ export default function FavoritesPage({
       else setSunoUrlError(message);
       return;
     }
-    const updates = { sunoShareUrl: normalized, sunoShareUrlUpdatedAt: Date.now() };
+    const metadata = await fetchFavoriteSunoShareMetadata(normalized);
+    const updates = {
+      sunoShareUrl: normalized,
+      sunoShareUrlUpdatedAt: Date.now(),
+      sunoCoverUrl: metadata?.coverUrl || null,
+      sunoTitle: metadata?.title || null,
+      sunoCoverFetchedAt: Date.now(),
+    };
     await updateFavorite(song.id, updates);
     if (selectedSong?.id === song.id) {
       setSelectedSong({ ...(selectedSong || {}), ...updates });
@@ -780,7 +821,13 @@ export default function FavoritesPage({
 
   const removeFavoriteSunoShareUrl = async (song: any, source: 'modal' | 'detail' = 'modal') => {
     if (!song?.id) return;
-    const updates = { sunoShareUrl: null, sunoShareUrlUpdatedAt: Date.now() };
+    const updates = {
+      sunoShareUrl: null,
+      sunoShareUrlUpdatedAt: Date.now(),
+      sunoCoverUrl: null,
+      sunoTitle: null,
+      sunoCoverFetchedAt: null,
+    };
     await updateFavorite(song.id, updates);
     if (selectedSong?.id === song.id) {
       setSelectedSong({ ...(selectedSong || {}), ...updates });
@@ -3138,6 +3185,21 @@ ${song.prompt}
                       )}
                     </div>
                   </div>
+                  {getFavoriteSunoCoverUrl(selectedSong) && (
+                    <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-3">
+                      <img
+                        src={getFavoriteSunoCoverUrl(selectedSong)}
+                        alt="수노 커버 이미지"
+                        className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                        loading="lazy"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75">suno cover</div>
+                        <p className="mt-1 truncate text-sm font-semibold text-white/82">{selectedSong?.sunoTitle || '수노 커버 이미지가 연결되었습니다.'}</p>
+                        <p className="mt-1 text-xs text-white/38">수노 URL에서 자동으로 가져온 커버 URL입니다.</p>
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-4 flex flex-col gap-2 md:flex-row">
                     <input
                       value={detailSunoUrlInput}

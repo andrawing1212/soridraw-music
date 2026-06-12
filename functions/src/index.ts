@@ -361,6 +361,77 @@ const getStoredSunoApiKeyFromDoc = (docData: any): string => pickFirstString(
 
 const hasStoredSunoApiKeyInDoc = (docData: any): boolean => Boolean(getStoredSunoApiKeyFromDoc(docData));
 
+const normalizeSunoSharePageUrl = (value: any): string => {
+  const raw = pickFirstString(value);
+  if (!raw) throw new Error("Suno URL is required.");
+
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  const url = new URL(withProtocol);
+  const host = url.hostname.toLowerCase();
+
+  if (!host.includes("suno.com") && !host.includes("suno.ai")) {
+    throw new Error("Only Suno share URLs are supported.");
+  }
+
+  return url.toString();
+};
+
+const decodeHtmlEntities = (value: string): string => value
+  .replace(/&amp;/g, "&")
+  .replace(/&quot;/g, '"')
+  .replace(/&#39;/g, "'")
+  .replace(/&lt;/g, "<")
+  .replace(/&gt;/g, ">");
+
+const getMetaTagContent = (html: string, attrName: "property" | "name", attrValue: string): string => {
+  const metaTagRegex = /<meta\s+[^>]*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = metaTagRegex.exec(html))) {
+    const tag = match[0];
+    const attrRegex = new RegExp(`${attrName}\\s*=\\s*["']${attrValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`, "i");
+    if (!attrRegex.test(tag)) continue;
+
+    const contentMatch = tag.match(/content\s*=\s*(["'])([\s\S]*?)\1/i);
+    if (contentMatch?.[2]) return decodeHtmlEntities(contentMatch[2].trim());
+  }
+
+  return "";
+};
+
+const normalizeMetadataUrl = (value: string, baseUrl: string): string => {
+  const raw = pickFirstString(value);
+  if (!raw) return "";
+
+  try {
+    const resolved = new URL(raw, baseUrl);
+    if (!["http:", "https:"].includes(resolved.protocol)) return "";
+    return resolved.toString();
+  } catch {
+    return "";
+  }
+};
+
+const extractSunoShareMetadataFromHtml = (html: string, pageUrl: string) => {
+  const coverUrl = normalizeMetadataUrl(
+    pickFirstString(
+      getMetaTagContent(html, "property", "og:image"),
+      getMetaTagContent(html, "name", "twitter:image")
+    ),
+    pageUrl
+  );
+
+  const title = pickFirstString(
+    getMetaTagContent(html, "property", "og:title"),
+    getMetaTagContent(html, "name", "twitter:title")
+  );
+
+  return {
+    coverUrl,
+    title,
+  };
+};
+
 const buildSunoApiKeyStatusPayload = (docData: any = {}) => {
   const hasStoredKey = hasStoredSunoApiKeyInDoc(docData);
   const hasSunoApiKey = Boolean(docData?.hasSunoApiKey || docData?.hasMusicApiKey || hasStoredKey);
@@ -637,6 +708,81 @@ export const getSunoApiKeyStatus = onRequest(
     });
 
     res.json(statusPayload);
+  }
+);
+
+export const fetchSunoShareMetadata = onRequest(
+  { region: "us-central1", invoker: "public" },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method Not Allowed", ok: false });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+
+    let shareUrl = "";
+    try {
+      shareUrl = normalizeSunoSharePageUrl(req.body?.url || req.body?.sunoShareUrl);
+    } catch (error: any) {
+      res.status(400).json({
+        ok: false,
+        error: error?.message || "Invalid Suno URL.",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 9000);
+
+    try {
+      const pageRes = await fetch(shareUrl, {
+        method: "GET",
+        redirect: "follow",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; SORIDRAW/1.0; +https://soridraw.web.app)",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      });
+
+      const finalUrl = pageRes.url || shareUrl;
+      const html = await pageRes.text();
+
+      if (!pageRes.ok) {
+        res.status(502).json({
+          ok: false,
+          error: "Unable to fetch Suno share page.",
+          status: pageRes.status,
+        });
+        return;
+      }
+
+      const metadata = extractSunoShareMetadataFromHtml(html, finalUrl);
+      res.json({
+        ok: true,
+        sunoShareUrl: shareUrl,
+        sunoCoverUrl: metadata.coverUrl || null,
+        sunoTitle: metadata.title || null,
+        fetchedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("[Suno metadata] fetch failed", {
+        uid,
+        shareUrl,
+        message: error?.message || String(error),
+      });
+      res.status(502).json({
+        ok: false,
+        error: "Suno cover metadata could not be fetched.",
+        details: error?.message || String(error),
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 );
 

@@ -1,0 +1,121 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f0f0f;
+  color: #fff;
+}
+* { box-sizing: border-box; }
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #0f0f0f;
+}
+.shell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f0f;
+}
+.topbar {
+  height: 50px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: radial-gradient(circle at left, rgba(172,80,69,0.18), transparent 45%), rgba(20,20,20,0.95);
+}
+.brand { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.mark {
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  border-radius: 13px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(172,80,69,0.20);
+  color: #D8A4A2;
+  font-weight: 900;
+}
+.brand strong { display: block; font-size: 13px; line-height: 1.1; letter-spacing: 0.08em; }
+.brand span { display: block; margin-top: 2px; font-size: 10px; color: rgba(255,255,255,0.45); }
+.actions { display: flex; align-items: center; gap: 6px; }
+button {
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.045);
+  color: rgba(255,255,255,0.78);
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+  transition: 0.14s ease;
+}
+button:hover {
+  border-color: rgba(216,164,162,0.42);
+  background: rgba(172,80,69,0.14);
+  color: #fff;
+}
+.actions button { width: 34px; height: 34px; font-size: 16px; }
+#toggleEnv.collapsed { transform: rotate(-90deg); }
+.env {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(15,15,15,0.92);
+}
+.env.collapsed {
+  display: none;
+}
+.env button { height: 32px; font-size: 11px; }
+.env button.active {
+  background: rgba(172,80,69,0.28);
+  border-color: rgba(216,164,162,0.34);
+  color: #F2C4C1;
+}
+.frame-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #0b0b0b;
+}
+iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b0b0b;
+}
+
+
+/* SORIDRAW v22 safe custom scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(224, 161, 77, 0.58) rgba(10, 10, 10, 0.72);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(8, 8, 8, 0.74);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(236, 177, 84, 0.82), rgba(126, 78, 31, 0.7));
+  border: 2px solid rgba(8, 8, 8, 0.78);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(255, 195, 102, 0.95), rgba(154, 94, 36, 0.86));
+}

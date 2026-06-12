@@ -97,7 +97,15 @@ function cn(...inputs: ClassValue[]) {
 }
 
 
-function SunoUrlGuideCard({ compact = false }: { compact?: boolean }) {
+function SunoUrlGuideCard({ compact = false, collapsible = false }: { compact?: boolean; collapsible?: boolean }) {
+  const [isGuideExpanded, setIsGuideExpanded] = useState(() => {
+    if (!collapsible) return true;
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 767px)').matches;
+  });
+
+  const showGuideContent = !collapsible || isGuideExpanded;
+
   return (
     <div className={cn(
       'rounded-[24px] border border-white/10 bg-white/[0.025] p-4',
@@ -106,28 +114,48 @@ function SunoUrlGuideCard({ compact = false }: { compact?: boolean }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#D8A4A2]/75">guide</div>
-          <h5 className="mt-1 text-sm font-bold text-white">수노 링크 복사 방법</h5>
-          <p className="mt-1 text-xs leading-5 text-white/45">수노 곡 카드의 메뉴에서 공유 링크를 복사한 뒤, 이 입력칸에 그대로 붙여 넣으면 됩니다.</p>
+          <h5 className="mt-1 text-sm font-bold text-white">{showGuideContent ? '수노 링크 복사 방법' : '수노 URL 연결 방법'}</h5>
+          {showGuideContent && (
+            <p className="mt-1 text-xs leading-5 text-white/45">수노 곡 카드의 메뉴에서 공유 링크를 복사한 뒤, 이 입력칸에 그대로 붙여 넣으면 됩니다.</p>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => window.open('https://suno.com/create', '_blank', 'noopener,noreferrer')}
-          className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[11px] font-semibold text-white/72 transition-all hover:border-[#D8A4A2]/35 hover:text-white"
-        >
-          SUNO 열기
-        </button>
+        {showGuideContent && (
+          <button
+            type="button"
+            onClick={() => window.open('https://suno.com/create', '_blank', 'noopener,noreferrer')}
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[11px] font-semibold text-white/72 transition-all hover:border-[#D8A4A2]/35 hover:text-white"
+          >
+            SUNO 열기
+          </button>
+        )}
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1.1fr)_132px]">
-        <div className="space-y-2 text-xs text-white/62">
-          <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#AC6B69]/16 text-[11px] font-bold text-[#D8A4A2]">1</span><span>수노에서 원하는 곡 카드의 <span className="font-semibold text-white/84">...</span> 메뉴를 누르세요.</span></div>
-          <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#AC6B69]/16 text-[11px] font-bold text-[#D8A4A2]">2</span><span><span className="font-semibold text-white/84">Share → Copy Link</span> 순서로 링크를 복사하세요.</span></div>
-          <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#AC6B69]/16 text-[11px] font-bold text-[#D8A4A2]">3</span><span>복사한 주소를 여기 입력하고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
+      {showGuideContent && (
+        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1.1fr)_132px]">
+          <div className="space-y-2 text-xs text-white/62">
+            <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#AC6B69]/16 text-[11px] font-bold text-[#D8A4A2]">1</span><span>수노에서 원하는 곡 카드의 <span className="font-semibold text-white/84">...</span> 메뉴를 누르세요.</span></div>
+            <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#AC6B69]/16 text-[11px] font-bold text-[#D8A4A2]">2</span><span><span className="font-semibold text-white/84">Share → Copy Link</span> 순서로 링크를 복사하세요.</span></div>
+            <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#AC6B69]/16 text-[11px] font-bold text-[#D8A4A2]">3</span><span>복사한 주소를 여기 입력하고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+            <img src="/suno-copy-link-guide.png" alt="Suno 링크 복사 방법 예시" className="h-full w-full object-cover object-top" />
+          </div>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-          <img src="/suno-copy-link-guide.png" alt="Suno 링크 복사 방법 예시" className="h-full w-full object-cover object-top" />
+      )}
+
+      {collapsible && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setIsGuideExpanded((prev) => !prev)}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/25 bg-[#AC6B69]/10 px-4 text-xs font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/16 hover:text-white"
+            aria-expanded={isGuideExpanded}
+          >
+            {isGuideExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {isGuideExpanded ? '접기' : '수노 URL 연결 방법'}
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -2662,13 +2690,9 @@ ${song.prompt}
                                 <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D45A66] hover:text-[#F07882] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
                                 {getFavoriteSunoShareUrl(song) ? (
-                                  <>
-                                    <button onClick={() => executeFavoriteMenuAction('sunoOpen', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Play className="w-4 h-4 fill-current" />수노에서 열기</button>
-                                    <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 수정</button>
-                                    <button onClick={() => executeFavoriteMenuAction('sunoRemove', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/65 hover:bg-white/5 flex items-center gap-3"><Link2Off className="w-4 h-4" />수노 URL 제거</button>
-                                  </>
+                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 수정/제거</button>
                                 ) : (
-                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
+                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
@@ -3018,7 +3042,7 @@ ${song.prompt}
                   ) : (
                     <p className="mt-2 text-xs text-white/35">URL이 등록되면 뮤직노트 목록의 음표 아이콘이 ▶ 버튼으로 바뀝니다.</p>
                   )}
-                  <SunoUrlGuideCard />
+                  <SunoUrlGuideCard collapsible />
                 </section>
 
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">

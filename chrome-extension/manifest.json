@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "SORIDRAW Side Panel Test",
+  "version": "1.1.4",
+  "description": "SORIDRAW side panel: autoplay only the center play button inside the bottom Suno player controls.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "scripting",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://soridraw.web.app/*",
+    "https://soridraw-music.vercel.app/*",
+    "https://soridraw-music-git-preview-andrawing1212.vercel.app/*",
+    "https://suno.com/*",
+    "https://www.suno.com/*"
+  ],
+  "action": {
+    "default_title": "SORIDRAW Side Panel"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://soridraw.web.app/*",
+        "https://soridraw-music.vercel.app/*",
+        "https://soridraw-music-git-preview-andrawing1212.vercel.app/*"
+      ],
+      "js": [
+        "page-bridge.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://soridraw.web.app/*",
+        "https://soridraw-music.vercel.app/*",
+        "https://soridraw-music-git-preview-andrawing1212.vercel.app/*"
+      ],
+      "js": [
+        "soridraw-content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://suno.com/*",
+        "https://www.suno.com/*"
+      ],
+      "js": [
+        "suno-content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src https://soridraw.web.app https://soridraw-music.vercel.app https://soridraw-music-git-preview-andrawing1212.vercel.app; media-src https: http: blob: data:; connect-src https: http:;"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "page-bridge.js"
+      ],
+      "matches": [
+        "https://soridraw.web.app/*",
+        "https://soridraw-music.vercel.app/*",
+        "https://soridraw-music-git-preview-andrawing1212.vercel.app/*"
+      ]
+    }
+  ]
+}

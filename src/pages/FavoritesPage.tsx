@@ -1432,22 +1432,31 @@ export default function FavoritesPage({
       return;
     }
 
-    if (isSelectionMode || isScrollingRef.current) return;
+    if (isScrollingRef.current) return;
 
     selectionLongPressTimerRef.current = setTimeout(() => {
       if (isScrollingRef.current) return;
 
       longPressTriggeredRef.current = true;
-      setIsSelectionMode(true);
-      setSelectedSongIds(prev => prev.includes(song.id) ? prev : [...prev, song.id]);
-      setPendingSelectionAction(null);
-      setActiveFavoriteMenuId(null);
-      setActiveFavoriteColorMenuId(null);
+
+      if (isSelectionMode) {
+        setIsSelectionMode(false);
+        setSelectedSongIds([]);
+        setPendingSelectionAction(null);
+        setActiveFavoriteMenuId(null);
+        setActiveFavoriteColorMenuId(null);
+      } else {
+        setIsSelectionMode(true);
+        setSelectedSongIds(prev => prev.includes(song.id) ? prev : [...prev, song.id]);
+        setPendingSelectionAction(null);
+        setActiveFavoriteMenuId(null);
+        setActiveFavoriteColorMenuId(null);
+      }
 
       window.setTimeout(() => {
         longPressTriggeredRef.current = false;
       }, 80);
-    }, 900);
+    }, 800);
   };
 
   const handleCardLongPressEnd = () => {
@@ -2518,7 +2527,7 @@ ${song.prompt}
                           toggleSongSelection(song.id);
                         }}
                         className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'border-[#AC5045] bg-[#AC5045]/15 text-[#AC5045]' : 'border-black/25 text-white/30 hover:border-white/40'
+                          isSelected ? 'border-[#D8A4A2]/75 bg-[#D8A4A2]/20 text-[#D8A4A2] shadow-[0_0_0_1px_rgba(216,164,162,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'
                         }`}
                       >
                         {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}

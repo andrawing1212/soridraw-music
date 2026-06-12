@@ -4938,7 +4938,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center transition-all ${isSelected ? 'text-[#658761]' : 'text-white/35 hover:text-white/70'}`}
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                               title={isSelected ? '선택 해제' : '선택'}
                             >
                               {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}

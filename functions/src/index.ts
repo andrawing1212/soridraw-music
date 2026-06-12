@@ -571,6 +571,146 @@ const extractDurationFromLooseHtml = (html: string): number | null => {
   return null;
 };
 
+
+const normalizeSunoAudioUrl = (value: any, baseUrl: string): string => {
+  const resolved = normalizeMetadataUrl(pickFirstString(value), baseUrl);
+  if (!resolved) return "";
+
+  try {
+    const url = new URL(resolved);
+    const path = decodeURIComponent(url.pathname || "").toLowerCase();
+    const host = url.hostname.toLowerCase();
+
+    const hasAudioExtension = /\.(mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(url.href);
+    const isSunoCdn = host.includes("suno") || host.includes("sunoai") || host.includes("cdn");
+    const hasAudioLikePath = /(audio|stream|song|media|clip|mp3|m4a)/i.test(path);
+
+    if (hasAudioExtension) return resolved;
+    if (isSunoCdn && hasAudioLikePath && !/(image|avatar|cover|artwork|png|jpg|jpeg|webp|gif)/i.test(path)) return resolved;
+  } catch {
+    return "";
+  }
+
+  return "";
+};
+
+const findAudioUrlInValue = (value: any, baseUrl: string, depth = 0): string => {
+  if (depth > 8 || value == null) return "";
+
+  if (typeof value === "string") {
+    return normalizeSunoAudioUrl(value, baseUrl);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findAudioUrlInValue(item, baseUrl, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (typeof value !== "object") return "";
+
+  const audioKeys = [
+    "audioUrl",
+    "audio_url",
+    "streamAudioUrl",
+    "stream_audio_url",
+    "sourceAudioUrl",
+    "source_audio_url",
+    "downloadUrl",
+    "download_url",
+    "playUrl",
+    "play_url",
+    "mediaUrl",
+    "media_url",
+    "mp3Url",
+    "mp3_url",
+    "songUrl",
+    "song_url",
+    "audio",
+    "audioSrc",
+    "audio_src",
+    "src",
+  ];
+
+  for (const key of audioKeys) {
+    if (!(key in value)) continue;
+    const found = findAudioUrlInValue(value[key], baseUrl, depth + 1);
+    if (found) return found;
+  }
+
+  for (const key of Object.keys(value)) {
+    const lowerKey = key.toLowerCase();
+    if (!/(audio|stream|mp3|download|media|song|play)/.test(lowerKey)) continue;
+    const found = findAudioUrlInValue(value[key], baseUrl, depth + 1);
+    if (found) return found;
+  }
+
+  return "";
+};
+
+const extractAudioUrlFromJsonScripts = (html: string, pageUrl: string): string => {
+  const scriptRegex = /<script[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = scriptRegex.exec(html))) {
+    const raw = decodeHtmlEntities(match[1] || "").trim();
+    if (!raw) continue;
+
+    try {
+      const parsed = JSON.parse(raw);
+      const found = findAudioUrlInValue(parsed, pageUrl);
+      if (found) return found;
+    } catch {
+      // Ignore non-JSON script content.
+    }
+  }
+
+  const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch?.[1]) {
+    try {
+      const parsed = JSON.parse(decodeHtmlEntities(nextDataMatch[1]).trim());
+      const found = findAudioUrlInValue(parsed, pageUrl);
+      if (found) return found;
+    } catch {
+      // Ignore invalid Next.js payload.
+    }
+  }
+
+  return "";
+};
+
+const extractAudioUrlFromLooseHtml = (html: string, pageUrl: string): string => {
+  const patterns = [
+    /<audio[^>]+src=["']([^"']+)["']/i,
+    /"audioUrl"\s*:\s*"([^"]+)"/i,
+    /"audio_url"\s*:\s*"([^"]+)"/i,
+    /"streamAudioUrl"\s*:\s*"([^"]+)"/i,
+    /"stream_audio_url"\s*:\s*"([^"]+)"/i,
+    /"sourceAudioUrl"\s*:\s*"([^"]+)"/i,
+    /"source_audio_url"\s*:\s*"([^"]+)"/i,
+    /"downloadUrl"\s*:\s*"([^"]+)"/i,
+    /"playUrl"\s*:\s*"([^"]+)"/i,
+    /"mediaUrl"\s*:\s*"([^"]+)"/i,
+    /"mp3Url"\s*:\s*"([^"]+)"/i,
+    /"mp3_url"\s*:\s*"([^"]+)"/i,
+    /"songUrl"\s*:\s*"([^"]+)"/i,
+    /"song_url"\s*:\s*"([^"]+)"/i,
+    /(https?:\/\/[^"'<>\s]+?\.(?:mp3|m4a|wav|aac|ogg|flac)(?:\?[^"'<>\s]*)?)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (!match?.[1]) continue;
+    const found = normalizeSunoAudioUrl(decodeHtmlEntities(match[1]), pageUrl);
+    if (found) return found;
+  }
+
+  return "";
+};
+
+
 const extractSunoShareMetadataFromHtml = (html: string, pageUrl: string) => {
   const coverUrl = normalizeMetadataUrl(
     pickFirstString(
@@ -587,12 +727,14 @@ const extractSunoShareMetadataFromHtml = (html: string, pageUrl: string) => {
 
   const durationSeconds = extractDurationFromJsonScripts(html) || extractDurationFromLooseHtml(html);
   const durationText = durationSeconds ? formatDurationText(durationSeconds) : "";
+  const audioUrl = extractAudioUrlFromJsonScripts(html, pageUrl) || extractAudioUrlFromLooseHtml(html, pageUrl);
 
   return {
     coverUrl,
     title,
     durationSeconds,
     durationText,
+    audioUrl,
   };
 };
 
@@ -933,6 +1075,7 @@ export const fetchSunoShareMetadata = onRequest(
         sunoTitle: metadata.title || null,
         sunoDurationSeconds: metadata.durationSeconds || null,
         sunoDurationText: metadata.durationText || null,
+        sunoAudioUrl: metadata.audioUrl || null,
         fetchedAt: new Date().toISOString(),
       });
     } catch (error: any) {

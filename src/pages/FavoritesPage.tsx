@@ -339,6 +339,17 @@ function buildLyricContentOnlyTranslationTarget(targetLanguage: string): string 
   return `${targetLanguage}. Translate only the actual lyric content. Keep any section header line exactly unchanged, including bracketed or parenthesized labels such as [Intro], [Verse 1], [Chorus / Drop], (Intro), (Verse 1), and similar song-structure markers. Do not translate, rewrite, remove, or add section headers. Preserve all line breaks.`;
 }
 
+type FavoriteSunoLink = {
+  url: string;
+  title?: string | null;
+  coverUrl?: string | null;
+  durationSeconds?: number | null;
+  durationText?: string | null;
+  rank?: 1 | 2;
+  updatedAt?: number;
+  fetchedAt?: number;
+};
+
 
 export default function FavoritesPage({ 
   favorites, 
@@ -397,9 +408,11 @@ export default function FavoritesPage({
   const [originalPrompt, setOriginalPrompt] = useState('');
   const [editedPrompt, setEditedPrompt] = useState('');
   const [sunoUrlEditorSong, setSunoUrlEditorSong] = useState<any | null>(null);
-  const [sunoUrlInput, setSunoUrlInput] = useState('');
+  const [sunoUrlInputs, setSunoUrlInputs] = useState<[string, string]>(['', '']);
+  const [sunoUrlMainIndex, setSunoUrlMainIndex] = useState<0 | 1>(0);
   const [sunoUrlError, setSunoUrlError] = useState('');
-  const [detailSunoUrlInput, setDetailSunoUrlInput] = useState('');
+  const [detailSunoUrlInputs, setDetailSunoUrlInputs] = useState<[string, string]>(['', '']);
+  const [detailSunoUrlMainIndex, setDetailSunoUrlMainIndex] = useState<0 | 1>(0);
   const [detailSunoUrlError, setDetailSunoUrlError] = useState('');
 
   useEffect(() => {
@@ -714,8 +727,68 @@ export default function FavoritesPage({
   };
 
 
+  const normalizeFavoriteSunoLink = (link: any, index = 0): FavoriteSunoLink | null => {
+    const rawUrl = String(link?.url || link?.sunoShareUrl || link?.sunoUrl || '').trim();
+    if (!rawUrl) return null;
+
+    const rankValue = Number(link?.rank);
+    return {
+      url: rawUrl,
+      title: typeof link?.title === 'string' ? link.title : null,
+      coverUrl: typeof link?.coverUrl === 'string' ? link.coverUrl : null,
+      durationSeconds: typeof link?.durationSeconds === 'number' ? link.durationSeconds : null,
+      durationText: typeof link?.durationText === 'string' ? link.durationText : null,
+      rank: rankValue === 1 || rankValue === 2 ? rankValue as 1 | 2 : (index === 0 ? 1 : 2),
+      updatedAt: typeof link?.updatedAt === 'number' ? link.updatedAt : undefined,
+      fetchedAt: typeof link?.fetchedAt === 'number' ? link.fetchedAt : undefined,
+    };
+  };
+
+  const getFavoriteSunoLinks = (song: any): FavoriteSunoLink[] => {
+    const list = Array.isArray(song?.sunoLinks)
+      ? song.sunoLinks.map((link: any, index: number) => normalizeFavoriteSunoLink(link, index)).filter(Boolean) as FavoriteSunoLink[]
+      : [];
+
+    if (list.length > 0) return list.slice(0, 2);
+
+    const legacyUrl = String(song?.sunoShareUrl || song?.sunoUrl || song?.sunoSongUrl || '').trim();
+    if (!legacyUrl) return [];
+
+    return [{
+      url: legacyUrl,
+      title: song?.sunoTitle || null,
+      coverUrl: song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || null,
+      durationSeconds: typeof song?.sunoDurationSeconds === 'number' ? song.sunoDurationSeconds : null,
+      durationText: song?.sunoDurationText || null,
+      rank: 1,
+      updatedAt: song?.sunoShareUrlUpdatedAt || undefined,
+      fetchedAt: song?.sunoCoverFetchedAt || undefined,
+    }];
+  };
+
+  const getFavoriteSunoMainIndex = (song: any): 0 | 1 => {
+    const links = getFavoriteSunoLinks(song);
+    if (links.length <= 1) return 0;
+
+    const saved = Number(song?.mainSunoIndex);
+    if (saved === 0 || saved === 1) return saved as 0 | 1;
+
+    const rankOneIndex = links.findIndex(link => Number(link.rank) === 1);
+    return rankOneIndex === 1 ? 1 : 0;
+  };
+
+  const getFavoriteMainSunoLink = (song: any): FavoriteSunoLink | null => {
+    const links = getFavoriteSunoLinks(song);
+    if (!links.length) return null;
+    return links[getFavoriteSunoMainIndex(song)] || links[0] || null;
+  };
+
+  const getFavoriteSunoLinkCount = (song: any): number => {
+    return getFavoriteSunoLinks(song).filter(link => String(link?.url || '').trim()).length;
+  };
+
   const getFavoriteSunoShareUrl = (song: any): string => {
-    return String(song?.sunoShareUrl || song?.sunoUrl || song?.sunoSongUrl || '').trim();
+    return String(getFavoriteMainSunoLink(song)?.url || '').trim();
   };
 
   const normalizeFavoriteSunoShareUrl = (value: string): string => {
@@ -735,14 +808,15 @@ export default function FavoritesPage({
   };
 
   const getFavoriteSunoCoverUrl = (song: any): string => {
-    return String(song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || '').trim();
+    return String(getFavoriteMainSunoLink(song)?.coverUrl || song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || '').trim();
   };
 
   const getFavoriteSunoDurationText = (song: any): string => {
-    const savedText = String(song?.sunoDurationText || '').trim();
+    const mainLink = getFavoriteMainSunoLink(song);
+    const savedText = String(mainLink?.durationText || song?.sunoDurationText || '').trim();
     if (savedText) return savedText;
 
-    const seconds = Number(song?.sunoDurationSeconds || 0);
+    const seconds = Number(mainLink?.durationSeconds || song?.sunoDurationSeconds || 0);
     if (!Number.isFinite(seconds) || seconds <= 0) return '';
 
     const rounded = Math.round(seconds);
@@ -753,7 +827,7 @@ export default function FavoritesPage({
 
   const shouldRefreshFavoriteSunoMetadata = (song: any): boolean => {
     if (!getFavoriteSunoShareUrl(song)) return false;
-    const title = String(song?.sunoTitle || '');
+    const title = String(getFavoriteMainSunoLink(song)?.title || song?.sunoTitle || '');
     return !getFavoriteSunoCoverUrl(song) || !getFavoriteSunoDurationText(song) || /&#\d+;|&#x[0-9a-f]+;/i.test(title);
   };
 
@@ -789,6 +863,14 @@ export default function FavoritesPage({
     }
   };
 
+  const buildFavoriteSunoEditorState = (song: any): { inputs: [string, string]; mainIndex: 0 | 1 } => {
+    const links = getFavoriteSunoLinks(song);
+    return {
+      inputs: [links[0]?.url || '', links[1]?.url || ''],
+      mainIndex: getFavoriteSunoMainIndex(song),
+    };
+  };
+
   const openFavoriteSunoUrl = (song: any) => {
     const url = getFavoriteSunoShareUrl(song);
     if (!url) {
@@ -798,53 +880,140 @@ export default function FavoritesPage({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const openFavoriteSunoLinkAt = (song: any, index: number) => {
+    const links = getFavoriteSunoLinks(song);
+    const url = String(links[index]?.url || '').trim();
+    if (!url) {
+      showFavoriteToast(`수노 URL ${index + 1}이 없습니다.`);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const openFavoriteSunoUrlEditor = (song: any) => {
+    const next = buildFavoriteSunoEditorState(song);
     setSunoUrlEditorSong(song);
-    setSunoUrlInput(getFavoriteSunoShareUrl(song));
+    setSunoUrlInputs(next.inputs);
+    setSunoUrlMainIndex(next.mainIndex);
     setSunoUrlError('');
     setActiveFavoriteMenuId(null);
   };
 
   const closeFavoriteSunoUrlEditor = () => {
     setSunoUrlEditorSong(null);
-    setSunoUrlInput('');
+    setSunoUrlInputs(['', '']);
+    setSunoUrlMainIndex(0);
     setSunoUrlError('');
   };
 
-  const saveFavoriteSunoShareUrl = async (song: any, rawUrl: string, source: 'modal' | 'detail' = 'modal') => {
+  const saveFavoriteSunoShareUrls = async (song: any, rawUrls: [string, string], requestedMainIndex: 0 | 1, source: 'modal' | 'detail' = 'modal') => {
     if (!song?.id) return;
-    let normalized = '';
-    try {
-      normalized = normalizeFavoriteSunoShareUrl(rawUrl);
-    } catch (error: any) {
-      const message = error?.message || '수노 URL 형식을 확인해주세요.';
+
+    const normalizedSlots: (string | null)[] = [];
+    const seen = new Set<string>();
+
+    for (const raw of rawUrls) {
+      const value = String(raw || '').trim();
+      if (!value) {
+        normalizedSlots.push(null);
+        continue;
+      }
+
+      let normalized = '';
+      try {
+        normalized = normalizeFavoriteSunoShareUrl(value);
+      } catch (error: any) {
+        const message = error?.message || '수노 URL 형식을 확인해주세요.';
+        if (source === 'detail') setDetailSunoUrlError(message);
+        else setSunoUrlError(message);
+        return;
+      }
+
+      if (seen.has(normalized)) {
+        const message = '같은 수노 URL이 중복되어 있습니다.';
+        if (source === 'detail') setDetailSunoUrlError(message);
+        else setSunoUrlError(message);
+        return;
+      }
+
+      seen.add(normalized);
+      normalizedSlots.push(normalized);
+    }
+
+    const filled = normalizedSlots
+      .map((url, index) => ({ url, index }))
+      .filter((item): item is { url: string; index: number } => !!item.url);
+
+    if (!filled.length) {
+      const message = '수노 URL을 1개 이상 입력해주세요.';
       if (source === 'detail') setDetailSunoUrlError(message);
       else setSunoUrlError(message);
       return;
     }
-    const metadata = await fetchFavoriteSunoShareMetadata(normalized);
+
+    const mainSlotIndex = normalizedSlots[requestedMainIndex] ? requestedMainIndex : filled[0].index;
+    const existingLinks = getFavoriteSunoLinks(song);
+    const now = Date.now();
+
+    const links: FavoriteSunoLink[] = [];
+    for (const item of filled) {
+      const existing = existingLinks.find(link => link.url === item.url);
+      const metadata = await fetchFavoriteSunoShareMetadata(item.url);
+
+      links.push({
+        url: item.url,
+        title: metadata?.title || existing?.title || null,
+        coverUrl: metadata?.coverUrl || existing?.coverUrl || null,
+        durationSeconds: metadata?.durationSeconds ?? existing?.durationSeconds ?? null,
+        durationText: metadata?.durationText || existing?.durationText || null,
+        rank: item.index === mainSlotIndex ? 1 : 2,
+        updatedAt: now,
+        fetchedAt: now,
+      });
+    }
+
+    const rawMainIndex = links.findIndex(link => link.rank === 1);
+    const mainIndex = (rawMainIndex === 1 ? 1 : 0) as 0 | 1;
+    const mainLink = links[mainIndex] || links[0];
+
     const updates = {
-      sunoShareUrl: normalized,
-      sunoShareUrlUpdatedAt: Date.now(),
-      sunoCoverUrl: metadata?.coverUrl || getFavoriteSunoCoverUrl(song) || null,
-      sunoTitle: metadata?.title || song?.sunoTitle || null,
-      sunoDurationSeconds: metadata?.durationSeconds || song?.sunoDurationSeconds || null,
-      sunoDurationText: metadata?.durationText || getFavoriteSunoDurationText(song) || null,
-      sunoCoverFetchedAt: Date.now(),
+      sunoLinks: links,
+      mainSunoIndex: mainIndex,
+      sunoLinkCount: links.length,
+      sunoShareUrl: mainLink?.url || null,
+      sunoShareUrlUpdatedAt: now,
+      sunoCoverUrl: mainLink?.coverUrl || null,
+      sunoTitle: mainLink?.title || null,
+      sunoDurationSeconds: mainLink?.durationSeconds || null,
+      sunoDurationText: mainLink?.durationText || null,
+      sunoCoverFetchedAt: now,
     };
+
     await updateFavorite(song.id, updates);
+
+    const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
     if (selectedSong?.id === song.id) {
-      setSelectedSong({ ...(selectedSong || {}), ...updates });
-      setDetailSunoUrlInput(normalized);
+      setSelectedSong(nextSong);
+      const nextState = buildFavoriteSunoEditorState(nextSong);
+      setDetailSunoUrlInputs(nextState.inputs);
+      setDetailSunoUrlMainIndex(nextState.mainIndex);
       setDetailSunoUrlError('');
     }
+
     if (source === 'modal') closeFavoriteSunoUrlEditor();
-    showFavoriteToast('수노 URL을 연결했습니다.');
+    showFavoriteToast(links.length > 1 ? '수노 URL 2곡을 연결했습니다.' : '수노 URL을 연결했습니다.');
+  };
+
+  const saveFavoriteSunoShareUrl = async (song: any, rawUrl: string, source: 'modal' | 'detail' = 'modal') => {
+    await saveFavoriteSunoShareUrls(song, [rawUrl, ''], 0, source);
   };
 
   const removeFavoriteSunoShareUrl = async (song: any, source: 'modal' | 'detail' = 'modal') => {
     if (!song?.id) return;
     const updates = {
+      sunoLinks: [],
+      mainSunoIndex: 0,
+      sunoLinkCount: 0,
       sunoShareUrl: null,
       sunoShareUrlUpdatedAt: Date.now(),
       sunoCoverUrl: null,
@@ -856,7 +1025,8 @@ export default function FavoritesPage({
     await updateFavorite(song.id, updates);
     if (selectedSong?.id === song.id) {
       setSelectedSong({ ...(selectedSong || {}), ...updates });
-      setDetailSunoUrlInput('');
+      setDetailSunoUrlInputs(['', '']);
+      setDetailSunoUrlMainIndex(0);
       setDetailSunoUrlError('');
     }
     if (source === 'modal') closeFavoriteSunoUrlEditor();
@@ -1157,7 +1327,9 @@ export default function FavoritesPage({
         setIsEditing(draft.isEditing);
         setActiveEditSection(draft.activeEditSection ?? null);
         setForeignTargetLanguage(draft.foreignTargetLanguage || inferForeignLyricTargetLanguage(draft.english || selectedSong.lyrics.english));
-        setDetailSunoUrlInput(getFavoriteSunoShareUrl(selectedSong));
+        const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
+        setDetailSunoUrlInputs(nextSunoState.inputs);
+        setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
         setDetailSunoUrlError('');
       } else {
         setEditedTitle(selectedSong.title);
@@ -1167,7 +1339,9 @@ export default function FavoritesPage({
         setIsEditing(false);
         setActiveEditSection(null);
         setForeignTargetLanguage(inferForeignLyricTargetLanguage(selectedSong.lyrics.english));
-        setDetailSunoUrlInput(getFavoriteSunoShareUrl(selectedSong));
+        const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
+        setDetailSunoUrlInputs(nextSunoState.inputs);
+        setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
         setDetailSunoUrlError('');
       }
       setIsSyncEnabled(false);
@@ -1179,7 +1353,8 @@ export default function FavoritesPage({
       popupOpenedRef.current = false;
       setActiveEditSection(null);
       setForeignTargetLanguage('English');
-      setDetailSunoUrlInput('');
+      setDetailSunoUrlInputs(['', '']);
+      setDetailSunoUrlMainIndex(0);
       setDetailSunoUrlError('');
       setIsSyncEnabled(false);
     }
@@ -1639,7 +1814,8 @@ export default function FavoritesPage({
     setIsEditing(false);
     setActiveEditSection(null);
     setIsSyncEnabled(false);
-    setDetailSunoUrlInput('');
+    setDetailSunoUrlInputs(['', '']);
+    setDetailSunoUrlMainIndex(0);
     setDetailSunoUrlError('');
 
     if (shouldPopOverlayHistory) {
@@ -1661,7 +1837,9 @@ export default function FavoritesPage({
     setEditedKoreanLyrics(selectedSong.lyrics.korean);
     setEditedEnglishLyrics(selectedSong.lyrics.english);
     setEditedPrompt(selectedSong.prompt || '');
-    setDetailSunoUrlInput(getFavoriteSunoShareUrl(selectedSong));
+    const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
+    setDetailSunoUrlInputs(nextSunoState.inputs);
+    setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
     setDetailSunoUrlError('');
     setDrafts(prev => {
       const next = { ...prev };
@@ -2699,6 +2877,11 @@ ${song.prompt}
                         className="-ml-1 relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#C76559]/24 text-[#F2B8AE] transition-all hover:bg-[#C76559]/34 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#C76559]/22 md:hover:bg-[#C76559]/30 shadow-[0_0_0_1px_rgba(216,164,162,0.16)]"
                         title="수노에서 열기"
                       >
+                        {getFavoriteSunoLinkCount(song) > 1 && (
+                          <span className="absolute right-0.5 top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#D8A4A2] px-1 text-[9px] font-black leading-none text-[#211615] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
+                            {getFavoriteSunoLinkCount(song)}
+                          </span>
+                        )}
                         {getFavoriteSunoCoverUrl(song) ? (
                           <>
                             <img
@@ -2969,17 +3152,47 @@ ${song.prompt}
                   <button type="button" onClick={closeFavoriteSunoUrlEditor} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/65 transition-all hover:text-white"><X className="h-4 w-4" /></button>
                 </div>
               </div>
-              <div className="mt-5">
-                <input autoFocus value={sunoUrlInput} onChange={(event) => { setSunoUrlInput(event.target.value); setSunoUrlError(''); }} placeholder="https://suno.com/song/..." className="w-full rounded-2xl border border-black/20 bg-black/20 px-4 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/45" />
-                {sunoUrlError ? <p className="mt-2 text-xs font-semibold text-red-300">{sunoUrlError}</p> : <p className="mt-2 text-xs leading-5 text-white/38">등록 후 목록의 음표 아이콘이 ▶ 버튼으로 바뀌며, 클릭하면 수노 페이지를 새 창으로 엽니다.</p>}
+              <div className="mt-5 space-y-3">
+                {[0, 1].map((index) => (
+                  <div key={`suno-url-modal-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-white/72">수노 URL {index + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSunoUrlMainIndex(index as 0 | 1)}
+                        disabled={!sunoUrlInputs[index].trim()}
+                        className={cn(
+                          'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                          sunoUrlMainIndex === index ? 'border-[#D8A4A2]/45 bg-[#AC6B69]/18 text-[#D8A4A2]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                        )}
+                      >
+                        {sunoUrlMainIndex === index ? '1순위' : '1순위로'}
+                      </button>
+                    </div>
+                    <input
+                      autoFocus={index === 0}
+                      value={sunoUrlInputs[index]}
+                      onChange={(event) => {
+                        const next = [...sunoUrlInputs] as [string, string];
+                        next[index] = event.target.value;
+                        setSunoUrlInputs(next);
+                        setSunoUrlError('');
+                        if (!event.target.value.trim() && sunoUrlMainIndex === index) setSunoUrlMainIndex(index === 0 ? 1 : 0);
+                      }}
+                      placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
+                      className="w-full rounded-2xl border border-black/20 bg-black/20 px-4 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/45"
+                    />
+                  </div>
+                ))}
+                {sunoUrlError ? <p className="mt-2 text-xs font-semibold text-red-300">{sunoUrlError}</p> : <p className="mt-2 text-xs leading-5 text-white/38">수노에서 한 번에 생성된 2곡까지 연결할 수 있습니다. 1순위 곡이 목록의 메인 커버/재생 대상이 됩니다.</p>}
                 <SunoUrlGuideCard compact />
               </div>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 {getFavoriteSunoShareUrl(sunoUrlEditorSong) && (
-                  <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Trash2 className="h-4 w-4" />제거</button>
+                  <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Trash2 className="h-4 w-4" />전체 제거</button>
                 )}
                 <button type="button" onClick={closeFavoriteSunoUrlEditor} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/70 transition-all hover:text-white">취소</button>
-                <button type="button" onClick={() => saveFavoriteSunoShareUrl(sunoUrlEditorSong, sunoUrlInput)} disabled={!sunoUrlInput.trim()} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/35 bg-[#AC6B69]/14 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/22 disabled:cursor-not-allowed disabled:opacity-35"><Check className="h-4 w-4" />저장</button>
+                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={!sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/35 bg-[#AC6B69]/14 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/22 disabled:cursor-not-allowed disabled:opacity-35"><Check className="h-4 w-4" />저장</button>
               </div>
             </motion.div>
           </motion.div>
@@ -3212,24 +3425,9 @@ ${song.prompt}
                     <div className="min-w-0">
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
-                      <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 보관합니다. 앱 내부 재생이 아니라 수노 페이지로 여는 용도입니다.</p>
+                      <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {getFavoriteSunoShareUrl(selectedSong) && (
-                        <button type="button" onClick={() => openFavoriteSunoUrl(selectedSong)} className="inline-flex h-10 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/10 px-3 text-sm font-semibold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/16">
-                          {getFavoriteSunoCoverUrl(selectedSong) ? (
-                            <img
-                              src={getFavoriteSunoCoverUrl(selectedSong)}
-                              alt=""
-                              className="-ml-1 h-7 w-7 rounded-xl object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <Play className="h-4 w-4 fill-current" />
-                          )}
-                          <span>수노에서 열기</span>
-                        </button>
-                      )}
                       {getFavoriteSunoShareUrl(selectedSong) && (
                         <button type="button" onClick={() => removeFavoriteSunoShareUrl(selectedSong, 'detail')} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/62 transition-all hover:text-red-400" title="수노 URL 제거">
                           <Trash2 className="h-4 w-4" />
@@ -3237,32 +3435,101 @@ ${song.prompt}
                       )}
                     </div>
                   </div>
-                  {getFavoriteSunoCoverUrl(selectedSong) && (
-                    <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-3">
-                      <img
-                        src={getFavoriteSunoCoverUrl(selectedSong)}
-                        alt="수노 커버 이미지"
-                        className="h-16 w-16 shrink-0 rounded-xl object-cover"
-                        loading="lazy"
-                      />
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75">suno cover</div>
-                        <p className="mt-1 truncate text-sm font-semibold text-white/82">{selectedSong?.sunoTitle || '수노 커버 이미지가 연결되었습니다.'}</p>
-                        {getFavoriteSunoDurationText(selectedSong) && (
-                          <p className="mt-1 text-xs font-semibold text-[#D8A4A2]/80">곡 길이 {getFavoriteSunoDurationText(selectedSong)}</p>
-                        )}
-                        <p className="mt-1 text-xs text-white/38">수노 URL에서 자동으로 가져온 커버 URL입니다.</p>
-                      </div>
+                  {getFavoriteSunoLinks(selectedSong).length > 0 && (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {[0, 1].map((index) => {
+                        const link = getFavoriteSunoLinks(selectedSong)[index];
+                        const isMain = getFavoriteSunoMainIndex(selectedSong) === index;
+                        return (
+                          <div
+                            key={`suno-cover-preview-${index}`}
+                            className={cn(
+                              'overflow-hidden rounded-2xl border bg-black/15',
+                              link ? 'border-white/10' : 'border-white/[0.055] opacity-55',
+                              isMain && link ? 'ring-1 ring-[#D8A4A2]/35' : ''
+                            )}
+                          >
+                            <div className="relative aspect-[16/9] bg-black/25">
+                              {link?.coverUrl ? (
+                                <img
+                                  src={link.coverUrl}
+                                  alt={`수노 URL ${index + 1} 커버`}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/32">
+                                  {link ? '커버 이미지 없음' : `수노 URL ${index + 1} 미등록`}
+                                </div>
+                              )}
+
+                              {link?.url && (
+                                <button
+                                  type="button"
+                                  onClick={() => openFavoriteSunoLinkAt(selectedSong, index)}
+                                  className="absolute inset-0 flex items-center justify-center bg-black/10 transition-all hover:bg-black/24"
+                                  title={`수노 URL ${index + 1} 열기`}
+                                >
+                                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-[0_8px_22px_rgba(0,0,0,0.35)] backdrop-blur">
+                                    <Play className="ml-0.5 h-5 w-5 fill-current" />
+                                  </span>
+                                </button>
+                              )}
+
+                              {link && (
+                                <div className="absolute left-2 top-2 rounded-full border border-black/20 bg-black/55 px-2 py-1 text-[10px] font-black text-white/86 backdrop-blur">
+                                  {isMain ? '1순위' : '2순위'}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 p-3">
+                              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#D8A4A2]/75">suno url {index + 1}</div>
+                              <p className="mt-1 truncate text-sm font-semibold text-white/82">
+                                {link?.title || (link ? `수노 URL ${index + 1} 연결됨` : `수노 URL ${index + 1}`)}
+                              </p>
+                              {link?.durationText && (
+                                <p className="mt-1 text-xs font-semibold text-[#D8A4A2]/80">곡 길이 {link.durationText}</p>
+                              )}
+                              <p className="mt-1 truncate text-xs text-white/35">{link?.url || 'URL을 입력하면 커버를 불러옵니다.'}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
-                  <div className="mt-4 flex flex-col gap-2 md:flex-row">
-                    <input
-                      value={detailSunoUrlInput}
-                      onChange={(event) => { setDetailSunoUrlInput(event.target.value); setDetailSunoUrlError(''); }}
-                      placeholder="https://suno.com/song/..."
-                      className="min-w-0 flex-1 rounded-2xl border border-black/20 bg-black/15 px-4 py-3 text-sm text-white/78 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/35"
-                    />
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrl(selectedSong, detailSunoUrlInput, 'detail')} disabled={!detailSunoUrlInput.trim() || (detailSunoUrlInput.trim() === getFavoriteSunoShareUrl(selectedSong) && !shouldRefreshFavoriteSunoMetadata(selectedSong))} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
+                  <div className="mt-4 grid gap-3">
+                    {[0, 1].map((index) => (
+                      <div key={`detail-suno-url-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-white/72">수노 URL {index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setDetailSunoUrlMainIndex(index as 0 | 1)}
+                            disabled={!detailSunoUrlInputs[index].trim()}
+                            className={cn(
+                              'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                              detailSunoUrlMainIndex === index ? 'border-[#D8A4A2]/45 bg-[#AC6B69]/18 text-[#D8A4A2]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                            )}
+                          >
+                            {detailSunoUrlMainIndex === index ? '1순위' : '1순위로'}
+                          </button>
+                        </div>
+                        <input
+                          value={detailSunoUrlInputs[index]}
+                          onChange={(event) => {
+                            const next = [...detailSunoUrlInputs] as [string, string];
+                            next[index] = event.target.value;
+                            setDetailSunoUrlInputs(next);
+                            setDetailSunoUrlError('');
+                            if (!event.target.value.trim() && detailSunoUrlMainIndex === index) setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
+                          }}
+                          placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
+                          className="w-full rounded-2xl border border-black/20 bg-black/15 px-4 py-3 text-sm text-white/78 outline-none transition-all placeholder:text-white/25 focus:border-[#AC6B69]/35"
+                        />
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
                       <Check className="h-4 w-4" />
                       저장
                     </button>
@@ -3270,7 +3537,7 @@ ${song.prompt}
                   {detailSunoUrlError ? (
                     <p className="mt-2 text-xs font-semibold text-red-300">{detailSunoUrlError}</p>
                   ) : (
-                    <p className="mt-2 text-xs text-white/35">URL이 등록되면 뮤직노트 목록의 음표 아이콘이 ▶ 버튼으로 바뀝니다.</p>
+                    <p className="mt-2 text-xs text-white/35">1순위 수노 URL이 뮤직노트 목록의 메인 커버와 재생 대상이 됩니다.</p>
                   )}
                   <SunoUrlGuideCard collapsible />
                 </section>

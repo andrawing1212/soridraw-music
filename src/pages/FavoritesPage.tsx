@@ -3073,7 +3073,7 @@ ${song.prompt}
                                 ) : (
                                   <button onClick={() => executeFavoriteMenuAction('unlock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
                                 )}
-                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D45A66] hover:text-[#F07882] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
+                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D45A66] hover:text-[#F07882] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡으로 보내기</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
                                 {getFavoriteSunoShareUrl(song) ? (
                                   <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 수정/제거</button>
@@ -3263,6 +3263,20 @@ ${song.prompt}
                   .musicnote-edit-mobile-boost textarea:focus {
                     border-color: rgba(255, 146, 127, 0.62) !important;
                     box-shadow: 0 0 0 1px rgba(255, 146, 127, 0.18), 0 0 22px rgba(255, 111, 95, 0.16) !important;
+                  }
+
+
+                  .musicnote-edit-mobile-boost .mn-next-apply-boost {
+                    border-color: rgba(96, 215, 255, 0.68) !important;
+                    background: linear-gradient(135deg, rgba(48, 174, 255, 0.34), rgba(88, 238, 255, 0.20)) !important;
+                    color: #D9FAFF !important;
+                    box-shadow: 0 0 0 1px rgba(96, 215, 255, 0.20), 0 10px 30px rgba(48, 174, 255, 0.18) !important;
+                    filter: saturate(1.28) brightness(1.12);
+                  }
+
+                  .musicnote-edit-mobile-boost .mn-next-apply-boost:hover {
+                    background: linear-gradient(135deg, rgba(48, 174, 255, 0.44), rgba(88, 238, 255, 0.28)) !important;
+                    box-shadow: 0 0 0 1px rgba(96, 215, 255, 0.28), 0 12px 34px rgba(48, 174, 255, 0.24) !important;
                   }
 
                   .musicnote-edit-mobile-boost .mn-mobile-edit-color-wash {

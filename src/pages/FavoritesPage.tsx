@@ -2624,13 +2624,13 @@ ${song.prompt}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#AC5045]/16 text-[#D8A4A2] transition-all hover:bg-[#AC5045]/24 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#AC5045]/14 md:hover:bg-[#AC5045]/22 shadow-[0_0_0_1px_rgba(172,80,69,0.10)]"
+                        className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#C76559]/24 text-[#F2B8AE] transition-all hover:bg-[#C76559]/34 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#C76559]/22 md:hover:bg-[#C76559]/30 shadow-[0_0_0_1px_rgba(216,164,162,0.16)]"
                         title="수노에서 열기"
                       >
                         <Play className="w-5 h-5 fill-current" />
                       </button>
                     ) : (
-                      <div className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[#AC5045] md:ml-0 md:h-12 md:w-12 md:bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.035)]">
+                      <div className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.08] text-[#E98F7F] md:ml-0 md:h-12 md:w-12 md:bg-white/[0.07] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]">
                         <Music className="w-5 h-5" />
                       </div>
                     )}

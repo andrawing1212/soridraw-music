@@ -841,7 +841,7 @@ export default function FavoritesPage({
   const playFavoriteSunoAudioOrOpen = (song: any) => {
     const audioUrl = getFavoritePlayableAudioUrl(song);
     if (!audioUrl) {
-      openFavoriteSunoUrl(song);
+      showFavoriteToast('내부 재생 URL이 없습니다. 수노에서 열기 버튼으로 확인해주세요.');
       return;
     }
 

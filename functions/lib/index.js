@@ -466,9 +466,16 @@ const extractDurationFromLooseHtml = (html) => {
     return null;
 };
 
+const isBlockedSunoAudioUrl = (value) => {
+    const raw = pickFirstString(value).toLowerCase();
+    if (!raw)
+        return true;
+    return /(?:^|\/)(?:sil|silent|silence)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw)
+        || /(?:^|\/)(?:blank|empty|placeholder)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw);
+};
 const normalizeSunoAudioUrl = (value, baseUrl) => {
     const resolved = normalizeMetadataUrl(pickFirstString(value), baseUrl);
-    if (!resolved)
+    if (!resolved || isBlockedSunoAudioUrl(resolved))
         return "";
     try {
         const url = new URL(resolved);

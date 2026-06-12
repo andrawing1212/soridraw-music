@@ -740,8 +740,41 @@ export default function FavoritesPage({
     return String(song?.sunoCoverUrl || song?.sunoImageUrl || song?.sunoArtworkUrl || '').trim();
   };
 
+  const isBlockedFavoriteAudioUrl = (value: any): boolean => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return true;
+
+    return /(?:^|\\/)(?:sil|silent|silence)[-_]?\\d*\\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw)
+      || /(?:^|\\/)(?:blank|empty|placeholder)[-_]?\\d*\\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw);
+  };
+
+  const normalizePlayableFavoriteAudioUrl = (value: any): string => {
+    const raw = String(value || '').trim();
+    if (!raw || isBlockedFavoriteAudioUrl(raw)) return '';
+    if (!/^https?:\/\//i.test(raw)) return '';
+    return raw;
+  };
+
+  const getFavoriteOriginalAudioUrl = (song: any): string => {
+    return normalizePlayableFavoriteAudioUrl(
+      song?.audioUrl
+      || song?.audio_url
+      || song?.streamAudioUrl
+      || song?.stream_audio_url
+      || song?.sourceAudioUrl
+      || song?.source_audio_url
+      || song?.musicUrl
+      || song?.music_url
+      || song?.url
+    );
+  };
+
   const getFavoriteSunoAudioUrl = (song: any): string => {
-    return String(song?.sunoAudioUrl || song?.sunoStreamAudioUrl || song?.sunoAudio_url || '').trim();
+    return normalizePlayableFavoriteAudioUrl(song?.sunoAudioUrl || song?.sunoStreamAudioUrl || song?.sunoAudio_url || '');
+  };
+
+  const getFavoritePlayableAudioUrl = (song: any): string => {
+    return getFavoriteOriginalAudioUrl(song) || getFavoriteSunoAudioUrl(song);
   };
 
   const getFavoriteSunoDurationText = (song: any): string => {
@@ -760,7 +793,7 @@ export default function FavoritesPage({
   const shouldRefreshFavoriteSunoMetadata = (song: any): boolean => {
     if (!getFavoriteSunoShareUrl(song)) return false;
     const title = String(song?.sunoTitle || '');
-    return !getFavoriteSunoCoverUrl(song) || !getFavoriteSunoAudioUrl(song) || !getFavoriteSunoDurationText(song) || /&#\d+;|&#x[0-9a-f]+;/i.test(title);
+    return !getFavoriteSunoCoverUrl(song) || !getFavoritePlayableAudioUrl(song) || !getFavoriteSunoDurationText(song) || /&#\d+;|&#x[0-9a-f]+;/i.test(title);
   };
 
   const fetchFavoriteSunoShareMetadata = async (normalizedUrl: string) => {
@@ -806,7 +839,7 @@ export default function FavoritesPage({
   };
 
   const playFavoriteSunoAudioOrOpen = (song: any) => {
-    const audioUrl = getFavoriteSunoAudioUrl(song);
+    const audioUrl = getFavoritePlayableAudioUrl(song);
     if (!audioUrl) {
       openFavoriteSunoUrl(song);
       return;
@@ -821,7 +854,7 @@ export default function FavoritesPage({
       lyrics: song?.lyrics || song?.lyricsText || '',
       parent: {
         ...song,
-        sourceType: 'favorite_suno',
+        sourceType: getFavoriteOriginalAudioUrl(song) ? 'favorite_original_audio' : 'favorite_suno',
         audioUrl,
         streamAudioUrl: audioUrl,
         imageUrl: getFavoriteSunoCoverUrl(song) || song?.imageUrl || song?.image_url || '',
@@ -861,7 +894,7 @@ export default function FavoritesPage({
       sunoTitle: metadata?.title || song?.sunoTitle || null,
       sunoDurationSeconds: metadata?.durationSeconds || song?.sunoDurationSeconds || null,
       sunoDurationText: metadata?.durationText || getFavoriteSunoDurationText(song) || null,
-      sunoAudioUrl: metadata?.audioUrl || getFavoriteSunoAudioUrl(song) || null,
+      sunoAudioUrl: normalizePlayableFavoriteAudioUrl(metadata?.audioUrl) || null,
       sunoAudioFetchedAt: Date.now(),
       sunoCoverFetchedAt: Date.now(),
     };

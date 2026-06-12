@@ -572,9 +572,17 @@ const extractDurationFromLooseHtml = (html: string): number | null => {
 };
 
 
+const isBlockedSunoAudioUrl = (value: any): boolean => {
+  const raw = pickFirstString(value).toLowerCase();
+  if (!raw) return true;
+
+  return /(?:^|\/)(?:sil|silent|silence)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw)
+    || /(?:^|\/)(?:blank|empty|placeholder)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw);
+};
+
 const normalizeSunoAudioUrl = (value: any, baseUrl: string): string => {
   const resolved = normalizeMetadataUrl(pickFirstString(value), baseUrl);
-  if (!resolved) return "";
+  if (!resolved || isBlockedSunoAudioUrl(resolved)) return "";
 
   try {
     const url = new URL(resolved);

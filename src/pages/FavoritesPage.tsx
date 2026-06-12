@@ -1394,6 +1394,19 @@ export default function FavoritesPage({
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeFavoriteMenuId) return;
+
+    const closeMoreMenuOnBack = () => {
+      setActiveFavoriteMenuId(null);
+    };
+
+    window.addEventListener('popstate', closeMoreMenuOnBack);
+    return () => {
+      window.removeEventListener('popstate', closeMoreMenuOnBack);
+    };
+  }, [activeFavoriteMenuId]);
+
   const clearSelectionLongPressTimer = () => {
     if (selectionLongPressTimerRef.current) {
       clearTimeout(selectionLongPressTimerRef.current);
@@ -2337,8 +2350,16 @@ ${song.prompt}
     <div 
       className="soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative"
       onClickCapture={(e) => {
-        if (!isSelectionMode) return;
         const target = e.target as HTMLElement;
+
+        if (activeFavoriteMenuId && !target.closest('[data-more-menu-panel="true"]')) {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveFavoriteMenuId(null);
+          return;
+        }
+
+        if (!isSelectionMode) return;
         if (target.closest('[data-selection-keep="true"]')) return;
         exitSelectionMode('history');
       }}
@@ -2751,6 +2772,7 @@ ${song.prompt}
                         <AnimatePresence>
                           {activeFavoriteMenuId === song.id && (
                             <motion.div
+                              data-more-menu-panel="true"
                               initial={{ opacity: 0, scale: 0.9, y: -10 }}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.9, y: -10 }}
@@ -2864,7 +2886,7 @@ ${song.prompt}
               </div>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 {getFavoriteSunoShareUrl(sunoUrlEditorSong) && (
-                  <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Link2Off className="h-4 w-4" />제거</button>
+                  <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Trash2 className="h-4 w-4" />제거</button>
                 )}
                 <button type="button" onClick={closeFavoriteSunoUrlEditor} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/70 transition-all hover:text-white">취소</button>
                 <button type="button" onClick={() => saveFavoriteSunoShareUrl(sunoUrlEditorSong, sunoUrlInput)} disabled={!sunoUrlInput.trim()} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/35 bg-[#AC6B69]/14 px-4 text-sm font-bold text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/22 disabled:cursor-not-allowed disabled:opacity-35"><Check className="h-4 w-4" />저장</button>
@@ -3111,7 +3133,7 @@ ${song.prompt}
                       )}
                       {getFavoriteSunoShareUrl(selectedSong) && (
                         <button type="button" onClick={() => removeFavoriteSunoShareUrl(selectedSong, 'detail')} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/62 transition-all hover:text-red-400" title="수노 URL 제거">
-                          <Link2Off className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       )}
                     </div>

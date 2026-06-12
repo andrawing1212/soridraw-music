@@ -649,10 +649,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       }
     };
 
+    const handlePopState = () => {
+      setActiveMenuState(null);
+      setActivePlaylistItemMenu(null);
+      setBulkMenuState(null);
+    };
+
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handlePopState);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, [multiSelectMode]);
 
@@ -4516,6 +4524,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       className="soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)]"
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
+        const hasOpenMoreMenu = Boolean(activeMenuState || activePlaylistItemMenu || bulkMenuState);
+
+        if (hasOpenMoreMenu && !target.closest('[data-more-menu-panel="true"]')) {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveMenuState(null);
+          setActivePlaylistItemMenu(null);
+          setBulkMenuState(null);
+          return;
+        }
+
         if (target.closest('[data-floating-menu="true"]')) return;
 
         if (multiSelectMode && !target.closest('[data-selection-keep="true"]')) {
@@ -5564,7 +5583,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <MoreVertical className="w-4 h-4" />
                           </button>
                           {activePlaylistItemMenu === item.id && (
-                            <div data-floating-menu="true" className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-black/15 text-sm py-1">
+                            <div data-floating-menu="true" data-more-menu-panel="true" className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-black/15 text-sm py-1">
                               <button 
                                 disabled={isUnavailable}
                                 onClick={(e) => { 
@@ -5808,7 +5827,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" className="absolute z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -6004,7 +6023,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 right: activeMenuState.position.right,

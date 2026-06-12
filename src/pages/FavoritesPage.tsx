@@ -2696,10 +2696,28 @@ ${song.prompt}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#C76559]/24 text-[#F2B8AE] transition-all hover:bg-[#C76559]/34 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#C76559]/22 md:hover:bg-[#C76559]/30 shadow-[0_0_0_1px_rgba(216,164,162,0.16)]"
+                        className="-ml-1 relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#C76559]/24 text-[#F2B8AE] transition-all hover:bg-[#C76559]/34 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#C76559]/22 md:hover:bg-[#C76559]/30 shadow-[0_0_0_1px_rgba(216,164,162,0.16)]"
                         title="수노에서 열기"
                       >
-                        <Play className="w-5 h-5 fill-current" />
+                        {getFavoriteSunoCoverUrl(song) ? (
+                          <>
+                            <img
+                              src={getFavoriteSunoCoverUrl(song)}
+                              alt=""
+                              className="absolute inset-0 h-full w-full object-cover opacity-95 transition-transform duration-300 group-hover:scale-105"
+                              loading="lazy"
+                              onError={(event) => {
+                                event.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            <span className="absolute inset-0 bg-black/18" />
+                            <span className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/45 text-white shadow-[0_0_12px_rgba(0,0,0,0.35)]">
+                              <Play className="h-3 w-3 translate-x-[1px] fill-current" />
+                            </span>
+                          </>
+                        ) : (
+                          <Play className="w-5 h-5 fill-current" />
+                        )}
                       </button>
                     ) : (
                       <div className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.08] text-[#E98F7F] md:ml-0 md:h-12 md:w-12 md:bg-white/[0.07] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]">

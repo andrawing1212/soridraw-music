@@ -744,8 +744,8 @@ export default function FavoritesPage({
     const raw = String(value || '').trim().toLowerCase();
     if (!raw) return true;
 
-    return /(?:^|\\/)(?:sil|silent|silence)[-_]?\\d*\\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw)
-      || /(?:^|\\/)(?:blank|empty|placeholder)[-_]?\\d*\\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw);
+    return /(?:^|\/)(?:sil|silent|silence)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw)
+      || /(?:^|\/)(?:blank|empty|placeholder)[-_]?\d*\.(?:mp3|m4a|wav|aac|ogg|flac)(?:$|[?#])/i.test(raw);
   };
 
   const normalizePlayableFavoriteAudioUrl = (value: any): string => {

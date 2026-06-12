@@ -2612,6 +2612,29 @@ ${song.prompt}
                       </button>
                     )}
 
+                    {getFavoriteSunoShareUrl(song) ? (
+                      <button
+                        data-no-card-long-press="true"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openFavoriteSunoUrl(song);
+                        }}
+                        onMouseEnter={() => onHover({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
+                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                        onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-white transition-all hover:text-[#D8A4A2] md:ml-0 md:w-12 md:rounded-xl md:bg-[#AC5045]/14 md:text-[#D8A4A2] md:hover:bg-[#AC5045]/22"
+                        title="수노에서 열기"
+                      >
+                        <Play className="w-5 h-5 fill-current" />
+                      </button>
+                    ) : (
+                      <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-[#AC5045] md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
+                        <Music className="w-5 h-5" />
+                      </div>
+                    )}
+
                     <button
                       data-no-card-long-press="true"
                       onClick={(event) => {
@@ -2641,30 +2664,7 @@ ${song.prompt}
                       </div>
                     )}
 
-                    {getFavoriteSunoShareUrl(song) ? (
-                      <button
-                        data-no-card-long-press="true"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openFavoriteSunoUrl(song);
-                        }}
-                        onMouseEnter={() => onHover({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
-                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-white transition-all hover:text-[#D8A4A2] md:ml-0 md:w-12 md:rounded-xl md:bg-[#AC5045]/14 md:text-[#D8A4A2] md:hover:bg-[#AC5045]/22"
-                        title="수노에서 열기"
-                      >
-                        <Play className="w-5 h-5 fill-current" />
-                      </button>
-                    ) : (
-                      <div className="-ml-2 flex h-12 w-6 shrink-0 items-center justify-center text-[#AC5045] md:ml-0 md:w-12 md:rounded-xl md:bg-white/5">
-                        <Music className="w-5 h-5" />
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0 pr-1 md:pr-0">
+                                        <div className="flex-1 min-w-0 pr-1 md:pr-0">
                       <div
                         data-no-card-long-press="true"
                         className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 select-text cursor-text"

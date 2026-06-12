@@ -393,7 +393,10 @@ export default function FavoritesPage({
   const [originalLyricsKo, setOriginalLyricsKo] = useState('');
   const [originalLyricsEn, setOriginalLyricsEn] = useState('');
   const [originalTitle, setOriginalTitle] = useState('');
-  const popupOpenedRef = useRef(false);
+  const popupOpenedSongIdRef = useRef<string | null>(null);
+  const activeFavoriteEditorSongIdRef = useRef<string | null>(null);
+  const favoriteEditorReadySongIdRef = useRef<string | null>(null);
+  const skipNextFavoriteDraftSaveRef = useRef(false);
   const [isInfoExpanded, setIsInfoExpanded] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null>(null);
   const [showFavoriteMusicApiModal, setShowFavoriteMusicApiModal] = useState(false);
@@ -1309,13 +1312,23 @@ export default function FavoritesPage({
 
   useEffect(() => {
     if (selectedSong) {
-      // Set original lyrics when a song is selected (only if not already set for this song)
-      if (!popupOpenedRef.current) {
+      const selectedSongId = String(selectedSong.id || '');
+      const isNewSelectedSong = activeFavoriteEditorSongIdRef.current !== selectedSongId;
+
+      if (isNewSelectedSong) {
+        activeFavoriteEditorSongIdRef.current = selectedSongId;
+        favoriteEditorReadySongIdRef.current = null;
+        skipNextFavoriteDraftSaveRef.current = true;
+      }
+
+      // Set original lyrics per song id. A single boolean can keep the previous song's
+      // originals alive and cause the next song to be saved with the wrong draft.
+      if (popupOpenedSongIdRef.current !== selectedSongId) {
         setOriginalLyricsKo(selectedSong.lyrics.korean);
         setOriginalLyricsEn(selectedSong.lyrics.english);
         setOriginalTitle(selectedSong.title);
         setOriginalPrompt(selectedSong.prompt || '');
-        popupOpenedRef.current = true;
+        popupOpenedSongIdRef.current = selectedSongId;
       }
 
       const draft = drafts[selectedSong.id];
@@ -1350,7 +1363,10 @@ export default function FavoritesPage({
       setOriginalLyricsEn('');
       setOriginalTitle('');
       setOriginalPrompt('');
-      popupOpenedRef.current = false;
+      popupOpenedSongIdRef.current = null;
+      activeFavoriteEditorSongIdRef.current = null;
+      favoriteEditorReadySongIdRef.current = null;
+      skipNextFavoriteDraftSaveRef.current = false;
       setActiveEditSection(null);
       setForeignTargetLanguage('English');
       setDetailSunoUrlInputs(['', '']);
@@ -1360,26 +1376,48 @@ export default function FavoritesPage({
     }
   }, [selectedSong]);
 
-  // Update draft whenever edit state changes
+  // Update draft whenever edit state changes, but only after the current song's
+  // edit fields have been hydrated. This prevents song A's edit values from being
+  // cached under song B when the detail screen switches or closes quickly.
   useEffect(() => {
-    if (selectedSong) {
-      setDrafts(prev => ({
-        ...prev,
-        [selectedSong.id]: {
-          title: editedTitle,
-          korean: editedKoreanLyrics,
-          english: editedEnglishLyrics,
-          prompt: editedPrompt,
-          isEditing: isEditing,
-          activeEditSection,
-          foreignTargetLanguage
-        }
-      }));
+    if (!selectedSong?.id) return;
+
+    const selectedSongId = String(selectedSong.id || '');
+    if (activeFavoriteEditorSongIdRef.current !== selectedSongId) return;
+
+    if (skipNextFavoriteDraftSaveRef.current) {
+      skipNextFavoriteDraftSaveRef.current = false;
+      return;
     }
+
+    favoriteEditorReadySongIdRef.current = selectedSongId;
+
+    setDrafts(prev => ({
+      ...prev,
+      [selectedSong.id]: {
+        title: editedTitle,
+        korean: editedKoreanLyrics,
+        english: editedEnglishLyrics,
+        prompt: editedPrompt,
+        isEditing: isEditing,
+        activeEditSection,
+        foreignTargetLanguage
+      }
+    }));
   }, [editedTitle, editedKoreanLyrics, editedEnglishLyrics, editedPrompt, isEditing, activeEditSection, foreignTargetLanguage, selectedSong]);
 
   const buildFavoriteDraftPayload = async () => {
-    if (!selectedSong) return null;
+    if (!selectedSong?.id) return null;
+
+    const selectedSongId = String(selectedSong.id || '');
+    if (
+      activeFavoriteEditorSongIdRef.current !== selectedSongId ||
+      favoriteEditorReadySongIdRef.current !== selectedSongId ||
+      popupOpenedSongIdRef.current !== selectedSongId
+    ) {
+      console.warn('favorite draft commit blocked: stale editor state', { selectedSongId });
+      return null;
+    }
 
     let finalKorean = editedKoreanLyrics;
     let finalEnglish = editedEnglishLyrics;

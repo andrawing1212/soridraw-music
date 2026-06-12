@@ -649,7 +649,10 @@ export default function FavoritesPage({
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const selectionLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const cardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
+  const suppressNextCardClickRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
   const selectionHistoryPushedRef = useRef(false);
   const detailHistoryPushedRef = useRef(false);
@@ -1396,6 +1399,46 @@ export default function FavoritesPage({
       clearTimeout(selectionLongPressTimerRef.current);
       selectionLongPressTimerRef.current = null;
     }
+    selectionLongPressStartPointRef.current = null;
+  };
+
+  const getLongPressPoint = (event: React.MouseEvent | React.TouchEvent) => {
+    if ('touches' in event) {
+      const touch = event.touches[0] || event.changedTouches[0];
+      return touch ? { x: touch.clientX, y: touch.clientY } : null;
+    }
+
+    return { x: event.clientX, y: event.clientY };
+  };
+
+  const handleCardLongPressMove = (event: React.MouseEvent | React.TouchEvent) => {
+    if (!selectionLongPressTimerRef.current || !selectionLongPressStartPointRef.current) return;
+
+    const point = getLongPressPoint(event);
+    if (!point) {
+      clearSelectionLongPressTimer();
+      return;
+    }
+
+    const dx = point.x - selectionLongPressStartPointRef.current.x;
+    const dy = point.y - selectionLongPressStartPointRef.current.y;
+    const movedDistance = Math.sqrt(dx * dx + dy * dy);
+
+    // 누른 지점에서 벗어나면 길게 누르기 진입/해제 실행 취소
+    if (movedDistance > 10) {
+      clearSelectionLongPressTimer();
+    }
+  };
+
+  const shouldIgnoreFavoriteCardClickFromPointerTravel = (event: React.MouseEvent) => {
+    if (!cardClickStartPointRef.current) return false;
+
+    const dx = event.clientX - cardClickStartPointRef.current.x;
+    const dy = event.clientY - cardClickStartPointRef.current.y;
+    const movedDistance = Math.sqrt(dx * dx + dy * dy);
+    cardClickStartPointRef.current = null;
+
+    return movedDistance > 10;
   };
 
   const toggleSongSelection = (songId: string) => {
@@ -1434,10 +1477,16 @@ export default function FavoritesPage({
 
     if (isScrollingRef.current) return;
 
+    const startPoint = getLongPressPoint(event);
+    if (!startPoint) return;
+    selectionLongPressStartPointRef.current = startPoint;
+    cardClickStartPointRef.current = startPoint;
+
     selectionLongPressTimerRef.current = setTimeout(() => {
       if (isScrollingRef.current) return;
 
       longPressTriggeredRef.current = true;
+      suppressNextCardClickRef.current = true;
 
       if (isSelectionMode) {
         setIsSelectionMode(false);
@@ -1452,10 +1501,6 @@ export default function FavoritesPage({
         setActiveFavoriteMenuId(null);
         setActiveFavoriteColorMenuId(null);
       }
-
-      window.setTimeout(() => {
-        longPressTriggeredRef.current = false;
-      }, 80);
     }, 800);
   };
 
@@ -2484,9 +2529,11 @@ ${song.prompt}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   onMouseDown={(event) => handleCardLongPressStart(event, song)}
+                  onMouseMove={handleCardLongPressMove}
                   onMouseUp={handleCardLongPressEnd}
                   onMouseLeave={handleCardLongPressEnd}
                   onTouchStart={(event) => handleCardLongPressStart(event, song)}
+                  onTouchMove={handleCardLongPressMove}
                   onTouchEnd={handleCardLongPressEnd}
                   onTouchCancel={handleCardLongPressEnd}
                   onContextMenu={(event) => {
@@ -2499,8 +2546,18 @@ ${song.prompt}
                     event.currentTarget.style.backgroundColor = '';
                   }}
                   onClick={(e) => {
-                    if (longPressTriggeredRef.current) {
+                    if (longPressTriggeredRef.current || suppressNextCardClickRef.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
                       longPressTriggeredRef.current = false;
+                      suppressNextCardClickRef.current = false;
+                      cardClickStartPointRef.current = null;
+                      return;
+                    }
+
+                    if (shouldIgnoreFavoriteCardClickFromPointerTravel(e)) {
+                      e.preventDefault();
+                      e.stopPropagation();
                       return;
                     }
 
@@ -2587,61 +2644,52 @@ ${song.prompt}
                     )}
 
                     <div className="flex-1 min-w-0 pr-1 md:pr-0">
-                      <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2">
-                        <div className="md:hidden min-w-0 leading-tight">
+                      <div
+                        data-no-card-long-press="true"
+                        className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 select-text cursor-text"
+                        onMouseDown={(event) => {
+                          const point = getLongPressPoint(event);
+                          if (point) cardClickStartPointRef.current = point;
+                        }}
+                        onTouchStart={(event) => {
+                          const point = getLongPressPoint(event);
+                          if (point) cardClickStartPointRef.current = point;
+                        }}
+                      >
+                        <div className="md:hidden min-w-0 leading-tight select-text cursor-text">
                           <div className="text-sm font-extrabold text-white truncate">
                             {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
                           </div>
                           <div
-                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-178px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[15px] font-bold text-white/92 md:max-w-none"
+                            data-no-card-long-press="true"
+                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-178px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[15px] font-bold text-white/92 md:max-w-none select-text cursor-text"
                             onMouseDown={(event) => {
-                              event.stopPropagation();
-                              const target = event.currentTarget;
-                              const startX = event.pageX;
-                              const startScrollLeft = target.scrollLeft;
-                              let moved = false;
-
-                              const onMove = (moveEvent: MouseEvent) => {
-                                const deltaX = moveEvent.pageX - startX;
-                                if (Math.abs(deltaX) > 3) moved = true;
-                                target.scrollLeft = startScrollLeft - deltaX;
-                              };
-
-                              const onUp = () => {
-                                if (moved) {
-                                  longPressTriggeredRef.current = true;
-                                  window.setTimeout(() => {
-                                    longPressTriggeredRef.current = false;
-                                  }, 0);
-                                }
-                                document.removeEventListener('mousemove', onMove);
-                                document.removeEventListener('mouseup', onUp);
-                              };
-
-                              document.addEventListener('mousemove', onMove);
-                              document.addEventListener('mouseup', onUp);
+                              const point = getLongPressPoint(event);
+                              if (point) cardClickStartPointRef.current = point;
                             }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (longPressTriggeredRef.current) {
-                                longPressTriggeredRef.current = false;
-                                return;
-                              }
-                              if (isSelectionMode) {
-                                toggleSongSelection(song.id);
-                                setPendingSelectionAction(null);
-                                return;
-                              }
-                              setSelectedSong(song);
+                            onTouchStart={(event) => {
+                              const point = getLongPressPoint(event);
+                              if (point) cardClickStartPointRef.current = point;
                             }}
                           >
                             {mobileTitleText}
                           </div>
                         </div>
-                        <h3 className="hidden md:block text-base font-bold text-white truncate">
+                        <h3
+                          data-no-card-long-press="true"
+                          className="hidden md:block text-base font-bold text-white truncate select-text cursor-text"
+                          onMouseDown={(event) => {
+                            const point = getLongPressPoint(event);
+                            if (point) cardClickStartPointRef.current = point;
+                          }}
+                          onTouchStart={(event) => {
+                            const point = getLongPressPoint(event);
+                            if (point) cardClickStartPointRef.current = point;
+                          }}
+                        >
                           {getCombinedFavoriteTitle(song)}
                         </h3>
-                        <span className="hidden md:inline text-[10px] text-white/35 shrink-0">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
+                        <span className="hidden md:inline text-[10px] text-white/35 shrink-0 select-none cursor-default">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
                       <div className="mt-2 flex items-center gap-2 min-w-0">
                         <div

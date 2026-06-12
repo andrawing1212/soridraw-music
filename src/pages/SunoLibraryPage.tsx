@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -623,6 +623,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number; anchorEl?: HTMLElement | null } | null>(null);
   const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
   const selectedTrackCount = selectedTrackList.length;
+  const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const libraryLongPressTriggeredRef = useRef(false);
+  const librarySuppressNextCardClickRef = useRef(false);
 
   useEffect(() => {
     const closeFloatingMenus = () => {
@@ -2645,6 +2650,96 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setBulkMenuState(null);
     setBulkShareModalOpen(false);
     setBulkMoveModalOpen(false);
+  };
+
+  const clearLibraryLongPressTimer = () => {
+    if (libraryLongPressTimerRef.current) {
+      clearTimeout(libraryLongPressTimerRef.current);
+      libraryLongPressTimerRef.current = null;
+    }
+    libraryLongPressStartPointRef.current = null;
+  };
+
+  const getLibraryLongPressPoint = (event: any) => {
+    if ('touches' in event) {
+      const touch = event.touches?.[0] || event.changedTouches?.[0];
+      return touch ? { x: touch.clientX, y: touch.clientY } : null;
+    }
+
+    return { x: event.clientX, y: event.clientY };
+  };
+
+  const handleLibraryCardLongPressStart = (event: any, selection: MultiSelectedTrack) => {
+    clearLibraryLongPressTimer();
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
+      return;
+    }
+
+    const startPoint = getLibraryLongPressPoint(event);
+    if (!startPoint) return;
+    libraryLongPressStartPointRef.current = startPoint;
+    libraryCardClickStartPointRef.current = startPoint;
+
+    libraryLongPressTimerRef.current = setTimeout(() => {
+      libraryLongPressTriggeredRef.current = true;
+      librarySuppressNextCardClickRef.current = true;
+
+      if (multiSelectMode) {
+        clearMultiSelect();
+      } else {
+        enterMultiSelectWith(selection);
+      }
+    }, 800);
+  };
+
+  const handleLibraryCardLongPressMove = (event: any) => {
+    if (!libraryLongPressTimerRef.current || !libraryLongPressStartPointRef.current) return;
+
+    const point = getLibraryLongPressPoint(event);
+    if (!point) {
+      clearLibraryLongPressTimer();
+      return;
+    }
+
+    const dx = point.x - libraryLongPressStartPointRef.current.x;
+    const dy = point.y - libraryLongPressStartPointRef.current.y;
+    const movedDistance = Math.sqrt(dx * dx + dy * dy);
+
+    if (movedDistance > 10) {
+      clearLibraryLongPressTimer();
+    }
+  };
+
+  const handleLibraryCardLongPressEnd = () => {
+    clearLibraryLongPressTimer();
+  };
+
+  const consumeLibrarySuppressedClick = (event: any) => {
+    if (!libraryLongPressTriggeredRef.current && !librarySuppressNextCardClickRef.current) return false;
+
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    libraryLongPressTriggeredRef.current = false;
+    librarySuppressNextCardClickRef.current = false;
+    libraryCardClickStartPointRef.current = null;
+    return true;
+  };
+
+  const shouldIgnoreLibraryCardClickFromPointerTravel = (event: any) => {
+    if (!libraryCardClickStartPointRef.current) return false;
+    if (typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+      libraryCardClickStartPointRef.current = null;
+      return false;
+    }
+
+    const dx = event.clientX - libraryCardClickStartPointRef.current.x;
+    const dy = event.clientY - libraryCardClickStartPointRef.current.y;
+    const movedDistance = Math.sqrt(dx * dx + dy * dy);
+    libraryCardClickStartPointRef.current = null;
+
+    return movedDistance > 10;
   };
 
   const getPlaylistItemVisibilityState = (item: any): 'public' | 'private' => {
@@ -4898,6 +4993,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
                           className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          onMouseDown={(event) => handleLibraryCardLongPressStart(event, selection)}
+                          onMouseMove={handleLibraryCardLongPressMove}
+                          onMouseUp={handleLibraryCardLongPressEnd}
+                          onMouseLeave={handleLibraryCardLongPressEnd}
+                          onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
+                          onTouchMove={handleLibraryCardLongPressMove}
+                          onTouchEnd={handleLibraryCardLongPressEnd}
+                          onTouchCancel={handleLibraryCardLongPressEnd}
                           onMouseEnter={(event) => {
                             event.currentTarget.style.backgroundColor = '#171717';
                           }}
@@ -4905,6 +5008,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             event.currentTarget.style.backgroundColor = '';
                           }}
                           onClick={(e) => {
+                             if (consumeLibrarySuppressedClick(e)) return;
+                             if (shouldIgnoreLibraryCardClickFromPointerTravel(e)) return;
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {
                                toggleSelectedTrack(selection);
@@ -4937,6 +5042,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           {multiSelectMode && (
                             <button
                               type="button"
+                              data-no-card-long-press="true"
                               onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
                               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                               title={isSelected ? '선택 해제' : '선택'}
@@ -5227,7 +5333,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return (
                     <div 
                       key={item.id} 
-                      onClick={() => {
+                      onMouseDown={(event) => handleLibraryCardLongPressStart(event, selection)}
+                      onMouseMove={handleLibraryCardLongPressMove}
+                      onMouseUp={handleLibraryCardLongPressEnd}
+                      onMouseLeave={handleLibraryCardLongPressEnd}
+                      onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
+                      onTouchMove={handleLibraryCardLongPressMove}
+                      onTouchEnd={handleLibraryCardLongPressEnd}
+                      onTouchCancel={handleLibraryCardLongPressEnd}
+                      onClick={(event) => {
+                        if (consumeLibrarySuppressedClick(event)) return;
+                        if (shouldIgnoreLibraryCardClickFromPointerTravel(event)) return;
                         if (multiSelectMode) toggleSelectedTrack(selection);
                       }}
                       data-selection-keep="true"
@@ -5317,8 +5433,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       {multiSelectMode && (
                         <button
                           type="button"
+                          data-no-card-long-press="true"
                           onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
-                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center transition-all ${isSelected ? 'text-[#658761]' : 'text-white/35 hover:text-white/70'}`}
+                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                           title={isSelected ? '선택 해제' : '선택'}
                         >
                           {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}

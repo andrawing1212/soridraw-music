@@ -1424,9 +1424,30 @@ export default function FavoritesPage({
     setSelectedSongIds(allSongIds);
   };
 
-  const handleCardLongPressStart = (_e: React.MouseEvent | React.TouchEvent, _song: any) => {
-    // 보관함 선택모드는 라이브러리와 동일하게 ... 메뉴의 '선택'으로만 진입합니다.
+  const handleCardLongPressStart = (event: React.MouseEvent | React.TouchEvent, song: any) => {
     clearSelectionLongPressTimer();
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
+      return;
+    }
+
+    if (isSelectionMode || isScrollingRef.current) return;
+
+    selectionLongPressTimerRef.current = setTimeout(() => {
+      if (isScrollingRef.current) return;
+
+      longPressTriggeredRef.current = true;
+      setIsSelectionMode(true);
+      setSelectedSongIds(prev => prev.includes(song.id) ? prev : [...prev, song.id]);
+      setPendingSelectionAction(null);
+      setActiveFavoriteMenuId(null);
+      setActiveFavoriteColorMenuId(null);
+
+      window.setTimeout(() => {
+        longPressTriggeredRef.current = false;
+      }, 80);
+    }, 3000);
   };
 
   const handleCardLongPressEnd = () => {
@@ -2436,7 +2457,7 @@ ${song.prompt}
         </div>
       ) : (
         <div className="mt-[13px] md:mt-[21px] space-y-12">
-          <div className="space-y-4" data-selection-keep="true">
+          <div className="space-y-4">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id, song);
@@ -2450,8 +2471,18 @@ ${song.prompt}
               return (
                 <motion.div
                   key={song.id}
+                  data-selection-keep="true"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
+                  onMouseDown={(event) => handleCardLongPressStart(event, song)}
+                  onMouseUp={handleCardLongPressEnd}
+                  onMouseLeave={handleCardLongPressEnd}
+                  onTouchStart={(event) => handleCardLongPressStart(event, song)}
+                  onTouchEnd={handleCardLongPressEnd}
+                  onTouchCancel={handleCardLongPressEnd}
+                  onContextMenu={(event) => {
+                    if (isSelectionMode) event.preventDefault();
+                  }}
                   onMouseEnter={(event) => {
                     event.currentTarget.style.backgroundColor = '#171717';
                   }}
@@ -2481,6 +2512,7 @@ ${song.prompt}
                   <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
                     {isSelectionMode && (
                       <button
+                        data-no-card-long-press="true"
                         onClick={(event) => {
                           event.stopPropagation();
                           toggleSongSelection(song.id);
@@ -2494,6 +2526,7 @@ ${song.prompt}
                     )}
 
                     <button
+                      data-no-card-long-press="true"
                       onClick={(event) => {
                         event.stopPropagation();
                         setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
@@ -2523,6 +2556,7 @@ ${song.prompt}
 
                     {getFavoriteSunoShareUrl(song) ? (
                       <button
+                        data-no-card-long-press="true"
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();

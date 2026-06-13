@@ -2952,25 +2952,32 @@ ${song.prompt}
                     )}
 
                                         <div className="flex-1 min-w-0 pl-1 pr-1 md:pl-0 md:pr-0">
-                      <div
-                        data-no-card-long-press="true"
-                        className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 select-text cursor-text"
-                        onMouseDown={(event) => {
-                          const point = getLongPressPoint(event);
-                          if (point) cardClickStartPointRef.current = point;
-                        }}
-                        onTouchStart={(event) => {
-                          const point = getLongPressPoint(event);
-                          if (point) cardClickStartPointRef.current = point;
-                        }}
-                      >
-                        <div className="md:hidden min-w-0 leading-tight select-text cursor-text">
-                          <div className="text-[13px] font-extrabold text-white truncate">
+                      <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 cursor-default">
+                        <div className="md:hidden min-w-0 leading-tight cursor-default">
+                          <div className="text-[13px] font-extrabold text-white truncate select-none cursor-default">
                             {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
                           </div>
-                          <div
+                          <div className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-192px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[14px] font-bold text-white/92 md:max-w-none cursor-default">
+                            <span
+                              data-no-card-long-press="true"
+                              className="inline-block max-w-full select-text cursor-text"
+                              onMouseDown={(event) => {
+                                const point = getLongPressPoint(event);
+                                if (point) cardClickStartPointRef.current = point;
+                              }}
+                              onTouchStart={(event) => {
+                                const point = getLongPressPoint(event);
+                                if (point) cardClickStartPointRef.current = point;
+                              }}
+                            >
+                              {mobileTitleText}
+                            </span>
+                          </div>
+                        </div>
+                        <h3 className="hidden md:block min-w-0 text-[15px] font-bold text-white truncate cursor-default">
+                          <span
                             data-no-card-long-press="true"
-                            className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-192px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[14px] font-bold text-white/92 md:max-w-none select-text cursor-text"
+                            className="inline-block max-w-full truncate align-bottom select-text cursor-text"
                             onMouseDown={(event) => {
                               const point = getLongPressPoint(event);
                               if (point) cardClickStartPointRef.current = point;
@@ -2980,22 +2987,8 @@ ${song.prompt}
                               if (point) cardClickStartPointRef.current = point;
                             }}
                           >
-                            {mobileTitleText}
-                          </div>
-                        </div>
-                        <h3
-                          data-no-card-long-press="true"
-                          className="hidden md:block text-[15px] font-bold text-white truncate select-text cursor-text"
-                          onMouseDown={(event) => {
-                            const point = getLongPressPoint(event);
-                            if (point) cardClickStartPointRef.current = point;
-                          }}
-                          onTouchStart={(event) => {
-                            const point = getLongPressPoint(event);
-                            if (point) cardClickStartPointRef.current = point;
-                          }}
-                        >
-                          {getCombinedFavoriteTitle(song)}
+                            {getCombinedFavoriteTitle(song)}
+                          </span>
                         </h3>
                         <span className="hidden md:inline text-[10px] text-white/35 shrink-0 select-none cursor-default">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>

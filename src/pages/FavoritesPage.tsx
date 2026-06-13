@@ -417,6 +417,10 @@ export default function FavoritesPage({
   const [detailSunoUrlInputs, setDetailSunoUrlInputs] = useState<[string, string]>(['', '']);
   const [detailSunoUrlMainIndex, setDetailSunoUrlMainIndex] = useState<0 | 1>(0);
   const [detailSunoUrlError, setDetailSunoUrlError] = useState('');
+  const detailScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const detailSunoUrlSectionRef = useRef<HTMLElement | null>(null);
+  const pendingDetailSunoUrlScrollRef = useRef(false);
+  const [isDetailSunoUrlHighlighted, setIsDetailSunoUrlHighlighted] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -664,6 +668,7 @@ export default function FavoritesPage({
   const favoriteUserRef = useRef<User | null>(user);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
+  const recentlyUnlockedFavoriteIdsRef = useRef<Set<string>>(new Set());
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectionLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const cardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -893,13 +898,27 @@ export default function FavoritesPage({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const scrollDetailToSunoUrlSection = (behavior: ScrollBehavior = 'smooth') => {
+    window.setTimeout(() => {
+      detailSunoUrlSectionRef.current?.scrollIntoView({ behavior, block: 'start' });
+      window.setTimeout(() => detailScrollContainerRef.current?.scrollBy({ top: -10, behavior }), 40);
+    }, 80);
+  };
+
   const openFavoriteSunoUrlEditor = (song: any) => {
-    const next = buildFavoriteSunoEditorState(song);
-    setSunoUrlEditorSong(song);
-    setSunoUrlInputs(next.inputs);
-    setSunoUrlMainIndex(next.mainIndex);
+    // Mobile safety: do not open the old tall URL-only modal.
+    // Open Detail & Edit and move to the embedded SUNO URL section instead.
+    pendingDetailSunoUrlScrollRef.current = true;
+    setIsDetailSunoUrlHighlighted(true);
+    setSelectedSong(song);
+    setSunoUrlEditorSong(null);
     setSunoUrlError('');
     setActiveFavoriteMenuId(null);
+
+    if (selectedSong?.id === song?.id) {
+      scrollDetailToSunoUrlSection();
+      window.setTimeout(() => setIsDetailSunoUrlHighlighted(false), 1400);
+    }
   };
 
   const closeFavoriteSunoUrlEditor = () => {
@@ -948,6 +967,10 @@ export default function FavoritesPage({
       .filter((item): item is { url: string; index: number } => !!item.url);
 
     if (!filled.length) {
+      if (source === 'detail' && getFavoriteSunoShareUrl(song)) {
+        await removeFavoriteSunoShareUrl(song, 'detail');
+        return;
+      }
       const message = '수노 URL을 1개 이상 입력해주세요.';
       if (source === 'detail') setDetailSunoUrlError(message);
       else setSunoUrlError(message);
@@ -1366,6 +1389,15 @@ export default function FavoritesPage({
     }
   }, [selectedSong]);
 
+  useEffect(() => {
+    if (!selectedSong || !pendingDetailSunoUrlScrollRef.current) return;
+
+    pendingDetailSunoUrlScrollRef.current = false;
+    scrollDetailToSunoUrlSection('auto');
+    const timer = window.setTimeout(() => setIsDetailSunoUrlHighlighted(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [selectedSong]);
+
   // Data safety: do not auto-cache text edit drafts by song id.
   // The previous draft cache could briefly pair the old song's edit fields with
   // the newly opened song's id, which caused destructive overwrite on back.
@@ -1518,8 +1550,42 @@ export default function FavoritesPage({
   const handleToggleLock = async (song: any) => {
     const newLockedState = !song.isLocked;
     await updateFavorite(song.id, { isLocked: newLockedState });
+
+    if (newLockedState) {
+      recentlyUnlockedFavoriteIdsRef.current.delete(song.id);
+    } else {
+      recentlyUnlockedFavoriteIdsRef.current.add(song.id);
+    }
+
     if (selectedSong && selectedSong.id === song.id) {
       setSelectedSong({ ...selectedSong, isLocked: newLockedState });
+    }
+  };
+
+  const forceDeleteUnlockedFavoriteIfNeeded = (song: any) => {
+    if (!song?.id) return;
+
+    const canForceDelete = recentlyUnlockedFavoriteIdsRef.current.has(song.id);
+    if (!canForceDelete) {
+      onHover({
+        id: 'favorite-locked-delete-blocked',
+        label: '삭제 불가',
+        description: '잠긴 곡은 삭제할 수 없습니다.',
+        _ts: Date.now(),
+      });
+      return;
+    }
+
+    const confirmed = window.confirm('잠금 상태에 오류가 있습니다. 강제로 삭제할까요?');
+    if (!confirmed) return;
+
+    recentlyUnlockedFavoriteIdsRef.current.delete(song.id);
+    toggleFavorite({ ...song, isLocked: false, __forceDeleteFavoriteById: true } as any);
+
+    if (selectedSong?.id === song.id) {
+      setSelectedSong(null);
+      setConfirmDeleteSong(false);
+      detailHistoryPushedRef.current = false;
     }
   };
 
@@ -1529,7 +1595,10 @@ export default function FavoritesPage({
   };
 
   const handlePopupDelete = async (song: any) => {
-    if (song.isLocked) return;
+    if (song.isLocked) {
+      forceDeleteUnlockedFavoriteIfNeeded(song);
+      return;
+    }
     
     if (!confirmDeleteSong) {
       setConfirmDeleteSong(true);
@@ -2492,7 +2561,11 @@ ${song.prompt}
     }
 
     if (action === 'delete') {
-      if (!song.isLocked) toggleFavorite(song);
+      if (song.isLocked) {
+        forceDeleteUnlockedFavoriteIfNeeded(song);
+      } else {
+        toggleFavorite(song);
+      }
     }
   };
 
@@ -3082,11 +3155,7 @@ ${song.prompt}
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D45A66] hover:text-[#F07882] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
-                                {getFavoriteSunoShareUrl(song) ? (
-                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 수정/제거</button>
-                                ) : (
-                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
-                                )}
+                                <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D8A4A2] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
                               </>
@@ -3314,7 +3383,7 @@ ${song.prompt}
                 </div>
               </div>
 
-              <div className="relative flex-1 overflow-y-auto overscroll-contain custom-scrollbar px-4 py-4 md:px-8 md:py-7 space-y-5" style={{ overscrollBehavior: 'contain' }}>
+              <div ref={detailScrollContainerRef} className="relative flex-1 overflow-y-auto overscroll-contain custom-scrollbar px-4 py-4 md:px-8 md:py-7 space-y-5" style={{ overscrollBehavior: 'contain' }}>
                 <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-5 py-5 md:px-7 md:py-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -3446,7 +3515,7 @@ ${song.prompt}
                     <button
                       data-detail-delete-button="true"
                       onClick={() => handlePopupDelete(selectedSong)}
-                      disabled={selectedSong.isLocked || isEditing}
+                      disabled={isEditing}
                       onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
                       onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                       onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
@@ -3475,20 +3544,14 @@ ${song.prompt}
                   </div>
                 </section>
 
-                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FFB5AA]/60 shadow-[0_0_0_1px_rgba(255,181,170,0.22),0_18px_52px_rgba(255,111,95,0.22)]')}>
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#D8A4A2] text-[#FF927F]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
                       <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {getFavoriteSunoShareUrl(selectedSong) && (
-                        <button type="button" onClick={() => removeFavoriteSunoShareUrl(selectedSong, 'detail')} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/62 transition-all hover:text-red-400" title="수노 URL 제거">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
+                    <div className="hidden" />
                   </div>
                   {getFavoriteSunoLinks(selectedSong).length > 0 && (
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -3584,7 +3647,7 @@ ${song.prompt}
                         />
                       </div>
                     ))}
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] border-[#FF927F]/60 bg-[#FF6F5F]/26 text-[#FFD7CF] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
+                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#AC6B69]/30 bg-[#AC6B69]/12 px-4 text-sm font-bold text-[#D8A4A2] border-[#FF927F]/60 bg-[#FF6F5F]/26 text-[#FFD7CF] transition-all hover:bg-[#AC6B69]/18 disabled:cursor-not-allowed disabled:opacity-35">
                       <Check className="h-4 w-4" />
                       저장
                     </button>
@@ -3592,7 +3655,7 @@ ${song.prompt}
                   {detailSunoUrlError ? (
                     <p className="mt-2 text-xs font-semibold text-red-300">{detailSunoUrlError}</p>
                   ) : (
-                    <p className="mt-2 text-xs text-white/35">1순위 수노 URL이 뮤직노트 목록의 메인 커버와 재생 대상이 됩니다.</p>
+                    <p className="mt-2 text-xs text-white/35">1순위 수노 URL이 뮤직노트 목록의 메인 커버와 재생 대상이 됩니다. 두 URL을 모두 비우고 저장하면 연결이 해제됩니다.</p>
                   )}
                   <SunoUrlGuideCard collapsible />
                 </section>

@@ -5412,14 +5412,22 @@ const toggleCycleVariantSelection = (
     // Activity indicator
     updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
 
-    const existingFav = favorites.find(f => f.title === song.title && f.prompt === song.prompt);
+    const favoriteDeleteId = (song as any)?.id;
+    const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
+    const existingFavById = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
+    const existingFav = existingFavById || favorites.find(f => f.title === song.title && f.prompt === song.prompt);
 
     try {
       if (existingFav) {
-        if (existingFav.isLocked) {
+        if (existingFav.isLocked && !forceDeleteFavoriteById) {
           showToast('잠긴 곡은 삭제할 수 없습니다.');
           return;
         }
+
+        if (existingFav.isLocked && forceDeleteFavoriteById) {
+          await updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false });
+        }
+
         await deleteDoc(doc(db, 'favorites', existingFav.id));
         
         // Decrement favoriteCount in users document

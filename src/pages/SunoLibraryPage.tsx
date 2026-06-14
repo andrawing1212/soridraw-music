@@ -840,6 +840,24 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         return;
       }
 
+      const cacheKey = `soridraw_suno_tracks_cache_${resolvedUser.uid}`;
+      let cachedTracks: any[] = [];
+      try {
+        const cachedJson = localStorage.getItem(cacheKey);
+        if (cachedJson) {
+          cachedTracks = JSON.parse(cachedJson);
+        }
+      } catch (e) {
+        console.error('Failed to parse cached suno_tracks:', e);
+      }
+
+      if (Array.isArray(cachedTracks) && cachedTracks.length > 0) {
+        setTracks(cachedTracks);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       const q = query(
         collection(db, 'suno_tracks', resolvedUser.uid, 'tracks')
       );
@@ -858,6 +876,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         setTracks(list);
         setLoading(false);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(list));
+        } catch (e) {
+          console.error('Failed to save suno_tracks to cache:', e);
+        }
       }, (error) => {
         console.error('Error fetching tracks:', error);
         setLoading(false);
@@ -5015,11 +5038,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           onMouseDown={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onMouseMove={handleLibraryCardLongPressMove}
                           onMouseUp={handleLibraryCardLongPressEnd}
-                          onMouseLeave={handleLibraryCardLongPressEnd}
                           onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onTouchMove={handleLibraryCardLongPressMove}
                           onTouchEnd={handleLibraryCardLongPressEnd}
                           onTouchCancel={handleLibraryCardLongPressEnd}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.backgroundColor = '#171717';
+                          }}
+                          onMouseLeave={(event) => {
+                            handleLibraryCardLongPressEnd();
+                            event.currentTarget.style.backgroundColor = '';
+                          }}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e)) return;
                              if (shouldIgnoreLibraryCardClickFromPointerTravel(e)) return;

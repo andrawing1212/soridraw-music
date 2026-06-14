@@ -5372,7 +5372,24 @@ const toggleCycleVariantSelection = (
         syncUserDoc();
 
         // Fetch favorites for the user
+        const cacheKey = `soridraw_favorites_cache_${currentUser.uid}`;
+        let cachedFavs: any[] = [];
+        try {
+          const cachedJson = localStorage.getItem(cacheKey);
+          if (cachedJson) {
+            cachedFavs = JSON.parse(cachedJson);
+          }
+        } catch (e) {
+          console.error('Failed to parse cached favorites:', e);
+        }
+
+        if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
+          setFavorites(cachedFavs);
+        } else {
+          setFavorites([]);
+        }
         setIsFavoritesLoading(true);
+
         const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
         unsubFavs = onSnapshot(q, (snapshot) => {
           const favs = snapshot.docs
@@ -5384,6 +5401,11 @@ const toggleCycleVariantSelection = (
             });
           setFavorites(favs);
           setIsFavoritesLoading(false);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(favs));
+          } catch (e) {
+            console.error('Failed to save favorites to cache:', e);
+          }
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, 'favorites');
           setIsFavoritesLoading(false);

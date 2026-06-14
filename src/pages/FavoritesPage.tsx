@@ -2857,7 +2857,7 @@ ${song.prompt}
         renderMusicNotePendingView('myNote')
       ) : musicNoteViewMode === 'sharedNote' ? (
         renderMusicNotePendingView('sharedNote')
-      ) : isFavoritesLoading ? (
+      ) : (isFavoritesLoading && favorites.length === 0) ? (
         <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Loader2 className="w-12 h-12 text-[#AC5045] animate-spin mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>

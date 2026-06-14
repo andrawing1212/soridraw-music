@@ -5015,17 +5015,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           onMouseDown={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onMouseMove={handleLibraryCardLongPressMove}
                           onMouseUp={handleLibraryCardLongPressEnd}
+                          onMouseLeave={handleLibraryCardLongPressEnd}
                           onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onTouchMove={handleLibraryCardLongPressMove}
                           onTouchEnd={handleLibraryCardLongPressEnd}
                           onTouchCancel={handleLibraryCardLongPressEnd}
-                          onMouseEnter={(event) => {
-                            event.currentTarget.style.backgroundColor = '#171717';
-                          }}
-                          onMouseLeave={(event) => {
-                            handleLibraryCardLongPressEnd();
-                            event.currentTarget.style.backgroundColor = '';
-                          }}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e)) return;
                              if (shouldIgnoreLibraryCardClickFromPointerTravel(e)) return;

@@ -36,7 +36,8 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Settings
+  Settings,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -362,7 +363,8 @@ export default function FavoritesPage({
   onHover,
   hoveredItem,
   onLongPressStart,
-  onLongPressEnd
+  onLongPressEnd,
+  isFavoritesLoading = false
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
@@ -375,6 +377,7 @@ export default function FavoritesPage({
   hoveredItem: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string; _ts?: number } | null;
   onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
   onLongPressEnd: () => void;
+  isFavoritesLoading?: boolean;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -2831,7 +2834,7 @@ ${song.prompt}
               onClick={() => {
                 setMusicNoteViewMode(tab.id);
                 setVisibleCount(15);
-                exitSelectionMode('manual');
+                exitSelectionMode('ui');
               }}
               onMouseEnter={() => onHover({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description, _ts: Date.now() })}
               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
@@ -2854,6 +2857,11 @@ ${song.prompt}
         renderMusicNotePendingView('myNote')
       ) : musicNoteViewMode === 'sharedNote' ? (
         renderMusicNotePendingView('sharedNote')
+      ) : isFavoritesLoading ? (
+        <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+          <Loader2 className="w-12 h-12 text-[#AC5045] animate-spin mb-4" />
+          <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>
+        </div>
       ) : favorites.length === 0 ? (
         <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
@@ -2889,7 +2897,6 @@ ${song.prompt}
                   onMouseDown={(event) => handleCardLongPressStart(event, song)}
                   onMouseMove={handleCardLongPressMove}
                   onMouseUp={handleCardLongPressEnd}
-                  onMouseLeave={handleCardLongPressEnd}
                   onTouchStart={(event) => handleCardLongPressStart(event, song)}
                   onTouchMove={handleCardLongPressMove}
                   onTouchEnd={handleCardLongPressEnd}
@@ -2901,6 +2908,7 @@ ${song.prompt}
                     event.currentTarget.style.backgroundColor = '#171717';
                   }}
                   onMouseLeave={(event) => {
+                    handleCardLongPressEnd();
                     event.currentTarget.style.backgroundColor = '';
                   }}
                   onClick={(e) => {

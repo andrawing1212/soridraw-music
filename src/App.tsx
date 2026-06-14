@@ -3384,6 +3384,7 @@ function App() {
   const [latestGenerationBatchId, setLatestGenerationBatchId] = useState<string | null>(null);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
   const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
@@ -5371,6 +5372,7 @@ const toggleCycleVariantSelection = (
         syncUserDoc();
 
         // Fetch favorites for the user
+        setIsFavoritesLoading(true);
         const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
         unsubFavs = onSnapshot(q, (snapshot) => {
           const favs = snapshot.docs
@@ -5381,11 +5383,14 @@ const toggleCycleVariantSelection = (
               return bTime - aTime;
             });
           setFavorites(favs);
+          setIsFavoritesLoading(false);
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, 'favorites');
+          setIsFavoritesLoading(false);
         });
       } else {
         setFavorites([]);
+        setIsFavoritesLoading(false);
         setUserRole('free');
       }
     });
@@ -10677,6 +10682,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <FavoritesPageLazy
                   favorites={favorites}
+                  isFavoritesLoading={isFavoritesLoading}
                   toggleFavorite={toggleFavorite}
                   updateFavorite={updateFavorite}
                   clearAllFavorites={clearAllFavorites}

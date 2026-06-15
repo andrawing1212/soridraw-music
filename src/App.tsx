@@ -8055,7 +8055,7 @@ ${normalizePromptForDisplay(result.prompt)}
   ) => {
     const isEditing = isRecentSongSectionEditing(focus);
     const wrapperClass = variant === 'title-mobile'
-      ? 'ml-auto flex items-center justify-end gap-1'
+      ? 'flex items-center justify-center gap-1'
       : 'flex items-center justify-center gap-1';
 
     if (isEditing) {
@@ -8090,7 +8090,7 @@ ${normalizePromptForDisplay(result.prompt)}
     }
 
     const baseClass = variant === 'title-mobile'
-      ? 'ml-auto flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
+      ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
       : variant === 'title-desktop'
         ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
         : 'flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
@@ -10601,11 +10601,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="flex justify-center pt-1.5">
+                            <div className="flex justify-center pt-1">
                               {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                             </div>
 
-                            <div className="absolute right-0 top-[-18px] flex flex-col gap-2">
+                            <div className="absolute right-0 top-[-36px] flex flex-col gap-2">
                               {entries.map((entry) => {
                                 const langLabel = entry.lang.toUpperCase();
                                 const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;

@@ -10570,7 +10570,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       />
                     </div>
                   ) : (
-                    <div className="space-y-1 pt-0">
+                    <div className="relative min-h-[76px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10578,45 +10578,57 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const primaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#f0c079]' : 'text-[var(--text-primary)]');
                         const secondaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#cd8c31]' : 'text-[#cd8c31]/90');
 
-                        return entries.map((entry, index) => {
-                          const langLabel = entry.lang.toUpperCase();
-                          const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
-                          const copyType = `mobile-title-${entry.lang}`;
-                          const titleClassName = index === 0 ? primaryClass : secondaryClass;
-                          const titleSizeClass = index === 0
-                            ? 'text-[18px] leading-[1.2]'
-                            : 'text-[15px] leading-[1.15]';
-                          const rowHeightClass = index === 0 ? 'min-h-[38px]' : 'min-h-[36px]';
+                        return (
+                          <>
+                            <div className="flex min-h-[70px] flex-col items-center justify-center gap-0.5 px-[66px]">
+                              {entries.map((entry, index) => {
+                                const titleClassName = index === 0 ? primaryClass : secondaryClass;
+                                const titleSizeClass = index === 0
+                                  ? 'text-[18px] leading-[1.08]'
+                                  : 'text-[15px] leading-[1.02]';
 
-                          return (
-                            <div key={entry.lang} className={`relative flex items-center justify-center px-[66px] ${rowHeightClass}`}>
-                              <h2 className={`min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
-                                {entry.line}
-                              </h2>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const genrePrefix = getResolvedGenre(result) || getSubGenre(result) || 'Song';
-                                  copyToClipboard(`[${genrePrefix}] ${entry.line}`, copyType);
-                                }}
-                                onMouseEnter={() =>
-                                  setHoveredItem({
-                                    id: `copy-${copyType}`,
-                                    label: `${langName} 제목 복사`,
-                                    description: `${langName} 제목 한 줄을 복사합니다.`,
-                                  })
-                                }
-                                onMouseLeave={() => setHoveredItem(null)}
-                                className="absolute right-0 top-1/2 flex h-[34px] w-[58px] -translate-y-1/2 items-center justify-center gap-1 rounded-xl bg-white/5 px-1.5 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
-                                title={`${langLabel} 제목 복사`}
-                              >
-                                {copiedType === copyType ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-75" />}
-                                <span className="text-[11px] font-extrabold opacity-90">{langLabel}</span>
-                              </button>
+                                return (
+                                  <h2 key={entry.lang} className={`w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                    {entry.line}
+                                  </h2>
+                                );
+                              })}
                             </div>
-                          );
-                        });
+
+                            <div className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col gap-2">
+                              {entries.map((entry) => {
+                                const langLabel = entry.lang.toUpperCase();
+                                const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
+                                const copyType = `mobile-title-${entry.lang}`;
+
+                                return (
+                                  <button
+                                    key={entry.lang}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const genrePrefix = getResolvedGenre(result) || getSubGenre(result) || 'Song';
+                                      copyToClipboard(`[${genrePrefix}] ${entry.line}`, copyType);
+                                    }}
+                                    onMouseEnter={() =>
+                                      setHoveredItem({
+                                        id: `copy-${copyType}`,
+                                        label: `${langName} 제목 복사`,
+                                        description: `${langName} 제목 한 줄을 복사합니다.`,
+                                      })
+                                    }
+                                    onMouseLeave={() => setHoveredItem(null)}
+                                    className="flex h-[34px] w-[58px] items-center justify-center gap-1 rounded-xl bg-white/5 px-1.5 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                                    title={`${langLabel} 제목 복사`}
+                                  >
+                                    {copiedType === copyType ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-75" />}
+                                    <span className="text-[11px] font-extrabold opacity-90">{langLabel}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        );
                       })()}
                     </div>
                   )}
@@ -10706,8 +10718,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 <div className="hidden sm:block space-y-4 pt-0">
                   <div className="flex flex-col items-center gap-2">
-                    <div className="flex items-center gap-2 text-[#cd8c31] font-mono text-sm tracking-widest uppercase font-bold">
-                      <Music className="w-[18px] h-[18px]" />
+                    <div className="flex items-center gap-2 text-[var(--text-primary)] font-mono text-sm tracking-widest uppercase font-bold">
+                      <Music className="w-[18px] h-[18px] text-[#cd8c31]" />
                       제목 (Title)
                     </div>
                   </div>

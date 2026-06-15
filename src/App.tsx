@@ -10541,9 +10541,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <span className="text-[11px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
                     </button>
 
-                    <div className="absolute right-0 top-[41px] z-20 flex justify-end">
-                      {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
-                    </div>
                   </div>
 
                   <div className="flex mt-1.5 items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
@@ -10572,9 +10569,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
                         placeholder="외국어 제목"
                       />
+                      <div className="flex justify-center pt-1">
+                        {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
+                      </div>
                     </div>
                   ) : (
-                    <div className="relative min-h-[80px] pt-0">
+                    <div className="relative min-h-[118px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10584,8 +10584,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <>
-                            <div className="flex min-h-[60px] items-start justify-center px-[70px] pt-0">
-                              <div className="inline-flex max-w-full flex-col items-center gap-[8px] text-center">
+                            <div className="flex min-h-[58px] items-start justify-center px-[70px] pt-0">
+                              <div className="inline-flex max-w-full flex-col items-center gap-[7px] text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
                                   const titleSizeClass = index === 0
@@ -10601,7 +10601,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="absolute right-0 top-[-10px] flex flex-col gap-2">
+                            <div className="flex justify-center pt-1.5">
+                              {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
+                            </div>
+
+                            <div className="absolute right-0 top-[-18px] flex flex-col gap-2">
                               {entries.map((entry) => {
                                 const langLabel = entry.lang.toUpperCase();
                                 const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;

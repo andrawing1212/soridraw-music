@@ -10552,14 +10552,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
                   </div>
 
-                  <div className="flex justify-center pt-0.5">
+                  <div className="flex justify-center pt-0.5 pb-2">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
                   </div>
 
                   {isRecentSongSectionEditing('title') && recentSongEditDraft ? (
-                    <div className="space-y-1.5 pt-0 px-1">
+                    <div className="space-y-1.5 pt-1.5 px-1">
                       <input
                         value={recentSongEditDraft.koreanTitle}
                         onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
@@ -10574,7 +10574,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       />
                     </div>
                   ) : (
-                    <div className="relative min-h-[76px] pt-0">
+                    <div className="relative min-h-[84px] pt-1">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10584,7 +10584,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <>
-                            <div className="flex min-h-[56px] items-start justify-center px-[70px] pt-[2px]">
+                            <div className="flex min-h-[64px] items-start justify-center px-[70px] pt-[2px]">
                               <div className="inline-flex max-w-full flex-col items-center gap-[8px] text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;

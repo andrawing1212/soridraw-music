@@ -10569,12 +10569,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
                         placeholder="외국어 제목"
                       />
-                      <div className="flex justify-center pt-1">
+                      <div className="flex justify-center pt-0">
                         {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                       </div>
                     </div>
                   ) : (
-                    <div className="relative min-h-[118px] pt-0">
+                    <div className="relative min-h-[92px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10584,7 +10584,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <>
-                            <div className="flex min-h-[58px] items-start justify-center px-[70px] pt-0">
+                            <div className="flex min-h-[50px] items-start justify-center px-[70px] pt-0">
                               <div className="inline-flex max-w-full flex-col items-center gap-[7px] text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
@@ -10601,7 +10601,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="flex justify-center pt-1">
+                            <div className="flex justify-center pt-0">
                               {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                             </div>
 

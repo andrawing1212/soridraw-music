@@ -10519,8 +10519,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <span className="text-[13px] font-extrabold whitespace-nowrap">보관함</span>
                     </button>
 
-                    <div className="flex min-w-0 translate-y-[2px] items-center justify-center gap-1 text-[#cd8c31] font-mono text-[13px] tracking-[0.12em] uppercase font-bold">
-                      <Music className="w-[17px] h-[17px] shrink-0" />
+                    <div className="flex min-w-0 translate-y-[2px] items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
+                      <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
                       <span className="whitespace-nowrap">제목</span>
                       <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
                     </div>
@@ -10570,7 +10570,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       />
                     </div>
                   ) : (
-                    <div className="space-y-0 pt-0">
+                    <div className="space-y-1 pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10586,7 +10586,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           const titleSizeClass = index === 0
                             ? 'text-[18px] leading-[1.2]'
                             : 'text-[15px] leading-[1.15]';
-                          const rowHeightClass = index === 0 ? 'min-h-[31px]' : 'min-h-[27px]';
+                          const rowHeightClass = index === 0 ? 'min-h-[38px]' : 'min-h-[36px]';
 
                           return (
                             <div key={entry.lang} className={`relative flex items-center justify-center px-[66px] ${rowHeightClass}`}>
@@ -10597,7 +10597,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  copyToClipboard(entry.line, copyType);
+                                  const genrePrefix = getResolvedGenre(result) || getSubGenre(result) || 'Song';
+                                  copyToClipboard(`[${genrePrefix}] ${entry.line}`, copyType);
                                 }}
                                 onMouseEnter={() =>
                                   setHoveredItem({

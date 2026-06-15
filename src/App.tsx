@@ -10314,17 +10314,17 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
-                          className="inline-flex min-h-[40px] items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
+                          className="inline-flex min-h-[44px] items-center gap-2 px-4 py-3 sm:min-h-[40px] sm:px-3.5 sm:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
                           title={`${label} 복사`}
                         >
-                          {copiedType === type ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 opacity-70" />}
-                          <span className="text-[11px] sm:text-xs font-bold opacity-85">{label}</span>
+                          {copiedType === type ? <Check className="w-5 h-5 sm:w-4 sm:h-4 text-green-500" /> : <Copy className="w-5 h-5 sm:w-4 sm:h-4 opacity-70" />}
+                          <span className="text-xs sm:text-xs font-bold opacity-85">{label}</span>
                         </button>
                       );
 
                       return (
                         <>
-                          <div className="flex w-full gap-2">
+                          <div className="flex w-full flex-col items-end gap-2 sm:flex-row">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -10339,10 +10339,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })
                               }
                               onMouseLeave={() => setHoveredItem(null)}
-                              className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
+                              className="order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5"
                               title="생성곡 수정"
                             >
                               <Edit2 className="w-5 h-5 opacity-80" />
+                              <span className="hidden sm:block text-sm font-bold">수정</span>
                             </button>
                             <button 
                               onClick={(e) => {
@@ -10358,10 +10359,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })
                               }
                               onMouseLeave={() => setHoveredItem(null)}
-                              className="flex flex-1 min-h-[40px] items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                              className="order-1 flex min-h-[44px] items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/20 shadow-sm sm:order-2 sm:flex-1 sm:min-h-[40px] sm:px-3.5 sm:py-2.5"
                             >
-                              {copiedType === 'title' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 opacity-85" />}
-                              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-tight">전체복사</span>
+                              {copiedType === 'title' ? <Check className="w-5 h-5 sm:w-4 sm:h-4 text-green-500" /> : <Copy className="w-5 h-5 sm:w-4 sm:h-4 opacity-85" />}
+                              <span className="text-xs sm:text-xs font-bold uppercase tracking-tight">전체복사</span>
                             </button>
                           </div>
                           
@@ -10402,7 +10403,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 pt-40 sm:pt-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-[#cd8c31] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-[18px] h-[18px]" />

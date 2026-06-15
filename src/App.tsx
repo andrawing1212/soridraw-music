@@ -8090,7 +8090,7 @@ ${normalizePromptForDisplay(result.prompt)}
     }
 
     const baseClass = variant === 'title-mobile'
-      ? 'ml-auto flex h-[42px] w-[42px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
+      ? 'ml-auto flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
       : variant === 'title-desktop'
         ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
         : 'flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
@@ -8107,7 +8107,7 @@ ${normalizePromptForDisplay(result.prompt)}
         className={baseClass}
         title={label}
       >
-        <Edit2 className={variant === 'title-mobile' ? 'w-[22px] h-[22px] opacity-85' : 'w-5 h-5 opacity-80'} />
+        <Edit2 className={variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
         {variant !== 'title-mobile' && <span className="hidden sm:block md:block text-sm font-bold">수정</span>}
       </button>
     );
@@ -10502,7 +10502,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
 
                 <div className="sm:hidden space-y-1.5 pt-0">
-                  <div className="grid grid-cols-[88px_minmax(0,1fr)_88px] items-center gap-1.5">
+                  <div className="relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -10513,10 +10513,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[40px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-2 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
+                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-1.5 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
                     >
-                      <HeartIcon className="w-[17px] h-[17px]" />
-                      <span className="text-[12px] font-extrabold whitespace-nowrap">보관함</span>
+                      <HeartIcon className="w-[16px] h-[16px]" />
+                      <span className="text-[11px] font-extrabold whitespace-nowrap">보관함</span>
                     </button>
 
                     <div aria-hidden="true" />
@@ -10535,25 +10535,27 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[40px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-2 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
-                      {copiedType === 'title' ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-85" />}
-                      <span className="text-[12px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
+                      {copiedType === 'title' ? <Check className="w-[16px] h-[16px] text-green-500" /> : <Copy className="w-[16px] h-[16px] opacity-85" />}
+                      <span className="text-[11px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
                     </button>
+
+                    <div className="absolute right-0 top-[41px] z-20 flex justify-end">
+                      {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
+                    </div>
                   </div>
 
-                  <div className="flex translate-y-[2px] items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
+                  <div className="flex mt-1.5 items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
                     <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
                     <span className="whitespace-nowrap">제목</span>
                     <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
                   </div>
 
-                  <div className="grid grid-cols-[48px_minmax(0,1fr)_48px] items-center gap-1.5 pt-0">
-                    <div aria-hidden="true" className="h-[38px] w-[48px]" />
-                    <p className="min-w-0 truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
+                  <div className="flex justify-center pt-0.5">
+                    <p className="max-w-[calc(100%-80px)] truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
-                    {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                   </div>
 
                   {isRecentSongSectionEditing('title') && recentSongEditDraft ? (
@@ -10572,7 +10574,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       />
                     </div>
                   ) : (
-                    <div className="relative min-h-[72px] pt-0">
+                    <div className="relative min-h-[76px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10582,8 +10584,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <>
-                            <div className="flex min-h-[46px] items-start justify-center px-[66px] pt-[2px]">
-                              <div className="inline-flex max-w-full flex-col items-start gap-[3px]">
+                            <div className="flex min-h-[56px] items-start justify-center px-[70px] pt-[2px]">
+                              <div className="inline-flex max-w-full flex-col items-center gap-[8px] text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
                                   const titleSizeClass = index === 0
@@ -10591,7 +10593,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                     : 'text-[15px] leading-[1.08]';
 
                                   return (
-                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-left font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
                                       {entry.line}
                                     </h2>
                                   );

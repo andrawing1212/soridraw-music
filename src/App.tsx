@@ -10308,7 +10308,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
           <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
@@ -10431,8 +10431,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
 
-                <div className="sm:hidden space-y-4 pt-0">
-                  <div className="grid grid-cols-[104px_minmax(0,1fr)_104px] items-center gap-2">
+                <div className="sm:hidden space-y-2.5 pt-0">
+                  <div className="grid grid-cols-[92px_minmax(0,1fr)_92px] items-center gap-1.5">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -10443,16 +10443,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[46px] w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--hover-bg)] px-2.5 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
+                      className="flex h-[42px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-2 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
                     >
-                      <HeartIcon className="w-5 h-5" />
-                      <span className="text-[14px] font-extrabold whitespace-nowrap">보관함</span>
+                      <HeartIcon className="w-[18px] h-[18px]" />
+                      <span className="text-[13px] font-extrabold whitespace-nowrap">보관함</span>
                     </button>
 
-                    <div className="flex min-w-0 items-center justify-center gap-1.5 text-[#cd8c31] font-mono text-[13px] tracking-[0.14em] uppercase font-bold">
-                      <Music className="w-[18px] h-[18px] shrink-0" />
+                    <div className="flex min-w-0 translate-y-[2px] items-center justify-center gap-1 text-[#cd8c31] font-mono text-[13px] tracking-[0.12em] uppercase font-bold">
+                      <Music className="w-[17px] h-[17px] shrink-0" />
                       <span className="whitespace-nowrap">제목</span>
-                      <span className="text-[10px] tracking-[0.12em] whitespace-nowrap">(Title)</span>
+                      <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
                     </div>
 
                     <button 
@@ -10469,16 +10469,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[46px] w-full items-center justify-center gap-1.5 rounded-xl bg-[#cd8c31]/10 px-2.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      className="flex h-[42px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-2 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
-                      {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-85" />}
-                      <span className="text-[14px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
+                      {copiedType === 'title' ? <Check className="w-[18px] h-[18px] text-green-500" /> : <Copy className="w-[18px] h-[18px] opacity-85" />}
+                      <span className="text-[13px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-2 pt-1">
-                    <div aria-hidden="true" className="h-[48px] w-[56px]" />
-                    <p className="min-w-0 truncate text-center text-[15px] font-extrabold text-[#cd8c31]/90 tracking-tight">
+                  <div className="grid grid-cols-[48px_minmax(0,1fr)_48px] items-center gap-1.5 pt-0 -mt-0.5">
+                    <div aria-hidden="true" className="h-[42px] w-[48px]" />
+                    <p className="min-w-0 truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
                     <button
@@ -10495,14 +10495,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="ml-auto flex h-[48px] w-[48px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                      className="ml-auto flex h-[42px] w-[42px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
                       title="생성곡 수정"
                     >
-                      <Edit2 className="w-6 h-6 opacity-85" />
+                      <Edit2 className="w-[22px] h-[22px] opacity-85" />
                     </button>
                   </div>
 
-                  <div className="space-y-2 pt-1">
+                  <div className="space-y-1 pt-0">
                     {(() => {
                       const entries = getTitleOnlyEntriesForDisplay(result);
                       const isRecent = isInLatestGenerationBatch(result);
@@ -10517,9 +10517,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const titleClassName = index === 0 ? primaryClass : secondaryClass;
 
                         return (
-                          <div key={entry.lang} className="grid grid-cols-[58px_minmax(0,1fr)_58px] items-center gap-2 px-1">
-                            <div aria-hidden="true" className="h-[44px] w-[58px]" />
-                            <h2 className={`min-w-0 truncate text-center text-[18px] font-extrabold leading-tight ${titleClassName}`}>
+                          <div key={entry.lang} className="grid grid-cols-[64px_minmax(0,1fr)_64px] items-center gap-1.5 px-0.5">
+                            <div aria-hidden="true" className="h-[40px] w-[64px]" />
+                            <h2 className={`min-w-0 truncate text-center text-[17px] font-extrabold leading-tight ${titleClassName}`}>
                               {entry.line}
                             </h2>
                             <button
@@ -10536,11 +10536,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })
                               }
                               onMouseLeave={() => setHoveredItem(null)}
-                              className="ml-auto flex h-[44px] min-w-[58px] items-center justify-center gap-1.5 rounded-xl bg-white/5 px-2.5 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                              className="ml-auto flex h-[40px] w-[64px] items-center justify-center gap-1.5 rounded-xl bg-white/5 px-2 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
                               title={`${langLabel} 제목 복사`}
                             >
-                              {copiedType === copyType ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-75" />}
-                              <span className="text-[13px] font-extrabold opacity-90">{langLabel}</span>
+                              {copiedType === copyType ? <Check className="w-[18px] h-[18px] text-green-500" /> : <Copy className="w-[18px] h-[18px] opacity-75" />}
+                              <span className="text-[12px] font-extrabold opacity-90">{langLabel}</span>
                             </button>
                           </div>
                         );

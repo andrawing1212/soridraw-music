@@ -10601,7 +10601,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="absolute right-0 top-0 flex flex-col gap-2">
+                            <div className="absolute right-0 top-[-10px] flex flex-col gap-2">
                               {entries.map((entry) => {
                                 const langLabel = entry.lang.toUpperCase();
                                 const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;

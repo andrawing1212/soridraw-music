@@ -3392,6 +3392,7 @@ function App() {
     secondaryLyrics: string;
   };
   const [isRecentSongEditOpen, setIsRecentSongEditOpen] = useState(false);
+  const [recentSongInlineEditMode, setRecentSongInlineEditMode] = useState<RecentSongEditFocus | null>(null);
   const [recentSongEditDraft, setRecentSongEditDraft] = useState<RecentSongEditDraft | null>(null);
   const [recentSongEditFocus, setRecentSongEditFocus] = useState<RecentSongEditFocus>('title');
   const [isSavingRecentSongEdit, setIsSavingRecentSongEdit] = useState(false);
@@ -7934,12 +7935,14 @@ ${normalizePromptForDisplay(result.prompt)}
       secondaryLyrics: lyricsMap[secondaryLanguage] || result.lyrics?.english || '',
     });
     setRecentSongEditFocus(focus);
-    setIsRecentSongEditOpen(true);
+    setRecentSongInlineEditMode(focus);
+    setIsRecentSongEditOpen(false);
   };
 
   const closeRecentSongEditor = () => {
     if (isSavingRecentSongEdit) return;
     setIsRecentSongEditOpen(false);
+    setRecentSongInlineEditMode(null);
     setRecentSongEditDraft(null);
   };
 
@@ -8030,6 +8033,7 @@ ${normalizePromptForDisplay(result.prompt)}
       }
 
       setIsRecentSongEditOpen(false);
+      setRecentSongInlineEditMode(null);
       setRecentSongEditDraft(null);
       showToast('생성곡 수정본이 저장되었습니다.');
     } catch (error) {
@@ -8038,6 +8042,91 @@ ${normalizePromptForDisplay(result.prompt)}
     } finally {
       setIsSavingRecentSongEdit(false);
     }
+  };
+
+  const isRecentSongSectionEditing = (focus: RecentSongEditFocus) => recentSongInlineEditMode === focus && !!recentSongEditDraft;
+
+  const renderRecentSongInlineEditActions = (
+    focus: RecentSongEditFocus,
+    hoverId: string,
+    label: string,
+    description: string,
+    variant: 'title-desktop' | 'title-mobile' | 'section' = 'section'
+  ) => {
+    const isEditing = isRecentSongSectionEditing(focus);
+    const wrapperClass = variant === 'title-mobile'
+      ? 'ml-auto flex items-center justify-end gap-1'
+      : 'flex items-center justify-center gap-1';
+
+    if (isEditing) {
+      return (
+        <div className={wrapperClass}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              saveRecentSongEdit();
+            }}
+            disabled={isSavingRecentSongEdit}
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#cd8c31]/15 text-[#f0c079] border border-[#cd8c31]/25 transition-all active:scale-95 disabled:opacity-50"
+            title="수정 저장"
+          >
+            {isSavingRecentSongEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeRecentSongEditor();
+            }}
+            disabled={isSavingRecentSongEdit}
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-[var(--text-secondary)] border border-white/10 transition-all hover:bg-white/10 active:scale-95 disabled:opacity-50"
+            title="수정 취소"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      );
+    }
+
+    const baseClass = variant === 'title-mobile'
+      ? 'ml-auto flex h-[42px] w-[42px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
+      : variant === 'title-desktop'
+        ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
+        : 'flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          openRecentSongEditor(focus);
+        }}
+        onMouseEnter={() => setHoveredItem({ id: hoverId, label, description })}
+        onMouseLeave={() => setHoveredItem(null)}
+        className={baseClass}
+        title={label}
+      >
+        <Edit2 className={variant === 'title-mobile' ? 'w-[22px] h-[22px] opacity-85' : 'w-5 h-5 opacity-80'} />
+        {variant !== 'title-mobile' && <span className="hidden sm:block md:block text-sm font-bold">수정</span>}
+      </button>
+    );
+  };
+
+  const updateRecentSongTitleDraft = (field: 'koreanTitle' | 'secondaryTitle', value: string) => {
+    setRecentSongEditDraft((prev) => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const getRecentSongLyricsDraftValue = (lang: LanguageCode) => {
+    if (!recentSongEditDraft) return '';
+    return lang === 'ko' ? recentSongEditDraft.koreanLyrics : recentSongEditDraft.secondaryLyrics;
+  };
+
+  const updateRecentSongLyricsDraftValue = (lang: LanguageCode, value: string) => {
+    setRecentSongEditDraft((prev) => {
+      if (!prev) return prev;
+      return lang === 'ko' ? { ...prev, koreanLyrics: value } : { ...prev, secondaryLyrics: value };
+    });
   };
 
   const isInLatestGenerationBatch = (song: SongResult | null = result) => {
@@ -10353,26 +10442,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       return (
                         <>
                           <div className="flex w-full flex-col items-end gap-2 sm:flex-row">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openRecentSongEditor('title');
-                              }}
-                              onMouseEnter={() =>
-                                setHoveredItem({
-                                  id: 'edit-generated-title',
-                                  label: '생성곡 수정',
-                                  description: '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                                })
-                              }
-                              onMouseLeave={() => setHoveredItem(null)}
-                              className="order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5"
-                              title="생성곡 수정"
-                            >
-                              <Edit2 className="w-5 h-5 opacity-80" />
-                              <span className="hidden sm:block text-sm font-bold">수정</span>
-                            </button>
+                            {renderRecentSongInlineEditActions('title', 'edit-generated-title', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-desktop')}
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -10481,75 +10551,74 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <p className="min-w-0 truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openRecentSongEditor('title');
-                      }}
-                      onMouseEnter={() =>
-                        setHoveredItem({
-                          id: 'edit-generated-title-mobile',
-                          label: '생성곡 수정',
-                          description: '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                        })
-                      }
-                      onMouseLeave={() => setHoveredItem(null)}
-                      className="ml-auto flex h-[42px] w-[42px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
-                      title="생성곡 수정"
-                    >
-                      <Edit2 className="w-[22px] h-[22px] opacity-85" />
-                    </button>
+                    {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                   </div>
 
-                  <div className="space-y-0 pt-0">
-                    {(() => {
-                      const entries = getTitleOnlyEntriesForDisplay(result);
-                      const isRecent = isInLatestGenerationBatch(result);
-                      const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
-                      const primaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#f0c079]' : 'text-[var(--text-primary)]');
-                      const secondaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#cd8c31]' : 'text-[#cd8c31]/90');
+                  {isRecentSongSectionEditing('title') && recentSongEditDraft ? (
+                    <div className="space-y-1.5 pt-0 px-1">
+                      <input
+                        value={recentSongEditDraft.koreanTitle}
+                        onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                        className="w-full rounded-xl border border-[#cd8c31]/25 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                        placeholder="한국어 제목"
+                      />
+                      <input
+                        value={recentSongEditDraft.secondaryTitle}
+                        onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                        className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                        placeholder="외국어 제목"
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-0 pt-0">
+                      {(() => {
+                        const entries = getTitleOnlyEntriesForDisplay(result);
+                        const isRecent = isInLatestGenerationBatch(result);
+                        const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
+                        const primaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#f0c079]' : 'text-[var(--text-primary)]');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#cd8c31]' : 'text-[#cd8c31]/90');
 
-                      return entries.map((entry, index) => {
-                        const langLabel = entry.lang.toUpperCase();
-                        const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
-                        const copyType = `mobile-title-${entry.lang}`;
-                        const titleClassName = index === 0 ? primaryClass : secondaryClass;
-                        const titleSizeClass = index === 0
-                          ? 'text-[18px] leading-[1.2]'
-                          : 'text-[15px] leading-[1.15]';
-                        const rowHeightClass = index === 0 ? 'min-h-[31px]' : 'min-h-[27px]';
+                        return entries.map((entry, index) => {
+                          const langLabel = entry.lang.toUpperCase();
+                          const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
+                          const copyType = `mobile-title-${entry.lang}`;
+                          const titleClassName = index === 0 ? primaryClass : secondaryClass;
+                          const titleSizeClass = index === 0
+                            ? 'text-[18px] leading-[1.2]'
+                            : 'text-[15px] leading-[1.15]';
+                          const rowHeightClass = index === 0 ? 'min-h-[31px]' : 'min-h-[27px]';
 
-                        return (
-                          <div key={entry.lang} className={`relative flex items-center justify-center px-[66px] ${rowHeightClass}`}>
-                            <h2 className={`min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
-                              {entry.line}
-                            </h2>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyToClipboard(entry.line, copyType);
-                              }}
-                              onMouseEnter={() =>
-                                setHoveredItem({
-                                  id: `copy-${copyType}`,
-                                  label: `${langName} 제목 복사`,
-                                  description: `${langName} 제목 한 줄을 복사합니다.`,
-                                })
-                              }
-                              onMouseLeave={() => setHoveredItem(null)}
-                              className="absolute right-0 top-1/2 flex h-[34px] w-[58px] -translate-y-1/2 items-center justify-center gap-1 rounded-xl bg-white/5 px-1.5 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
-                              title={`${langLabel} 제목 복사`}
-                            >
-                              {copiedType === copyType ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-75" />}
-                              <span className="text-[11px] font-extrabold opacity-90">{langLabel}</span>
-                            </button>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
+                          return (
+                            <div key={entry.lang} className={`relative flex items-center justify-center px-[66px] ${rowHeightClass}`}>
+                              <h2 className={`min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                {entry.line}
+                              </h2>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(entry.line, copyType);
+                                }}
+                                onMouseEnter={() =>
+                                  setHoveredItem({
+                                    id: `copy-${copyType}`,
+                                    label: `${langName} 제목 복사`,
+                                    description: `${langName} 제목 한 줄을 복사합니다.`,
+                                  })
+                                }
+                                onMouseLeave={() => setHoveredItem(null)}
+                                className="absolute right-0 top-1/2 flex h-[34px] w-[58px] -translate-y-1/2 items-center justify-center gap-1 rounded-xl bg-white/5 px-1.5 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                                title={`${langLabel} 제목 복사`}
+                              >
+                                {copiedType === copyType ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-75" />}
+                                <span className="text-[11px] font-extrabold opacity-90">{langLabel}</span>
+                              </button>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
 
                   {(() => {
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
@@ -10644,6 +10713,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <div className="h-auto min-h-[60px] flex items-center justify-center w-full px-4 mt-2">
                     <div className="w-full max-w-2xl text-center flex flex-col items-center">
                       {(() => {
+                        if (isRecentSongSectionEditing('title') && recentSongEditDraft) {
+                          return (
+                            <div className="w-full max-w-2xl space-y-2 px-4 sm:px-10">
+                              <input
+                                value={recentSongEditDraft.koreanTitle}
+                                onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                                className="w-full rounded-2xl border border-[#cd8c31]/25 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                placeholder="한국어 제목"
+                              />
+                              <input
+                                value={recentSongEditDraft.secondaryTitle}
+                                onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                                className="w-full rounded-2xl border border-[#cd8c31]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                placeholder="외국어 제목"
+                              />
+                            </div>
+                          );
+                        }
+
                         const lines = getTitleLinesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
@@ -10906,16 +10994,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     음악 프롬프트
                   </h3>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openRecentSongEditor('prompt')}
-                      onMouseEnter={() => setHoveredItem({ id: 'edit-generated-prompt', label: '프롬프트 수정', description: '보관함 저장 전 음악 프롬프트를 수정합니다.' })}
-                      onMouseLeave={() => setHoveredItem(null)}
-                      className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn"
-                    >
-                      <Edit2 className="w-5 h-5 opacity-80" />
-                      <span className="hidden md:block text-sm font-bold">수정</span>
-                    </button>
+                    {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 음악 프롬프트를 수정합니다.', 'section')}
                     <button
                       onClick={() => copyToClipboard(normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
@@ -10927,10 +11006,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                   </div>
                 </div>
-                <div className="p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
-                  <pre className="whitespace-pre-wrap font-mono text-[var(--text-secondary)] leading-relaxed text-sm w-full">
-                    {normalizePromptForDisplay(result.prompt)}
-                  </pre>
+                <div className="p-5 sm:p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+                  {isRecentSongSectionEditing('prompt') && recentSongEditDraft ? (
+                    <textarea
+                      value={recentSongEditDraft.prompt}
+                      onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, prompt: event.target.value } : prev)}
+                      className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#cd8c31]/25 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                      placeholder="음악 프롬프트를 수정하세요"
+                    />
+                  ) : (
+                    <pre className="whitespace-pre-wrap font-mono text-[var(--text-secondary)] leading-relaxed text-sm w-full">
+                      {normalizePromptForDisplay(result.prompt)}
+                    </pre>
+                  )}
                 </div>
               </div>
 
@@ -10991,16 +11079,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 {label} 가사
                               </h3>
                               <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => openRecentSongEditor('lyrics')}
-                                  onMouseEnter={() => setHoveredItem({ id: `edit-${copyType}`, label: `${label} 가사 수정`, description: '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.' })}
-                                  onMouseLeave={() => setHoveredItem(null)}
-                                  className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn"
-                                >
-                                  <Edit2 className="w-5 h-5 opacity-80" />
-                                  <span className="hidden md:block text-sm font-bold">수정</span>
-                                </button>
+                                {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
                                 <button
                                   onClick={() => copyToClipboard(lyricsText, copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
@@ -11012,12 +11091,23 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 </button>
                               </div>
                             </div>
-                            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
-                              <div className="flex-1" />
-                              <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                                {normalizeLyricsForDisplay(lyricsText)}
-                              </pre>
-                              <div className="flex-1" />
+                            <div className="flex-1 p-5 sm:p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                              {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
+                                <textarea
+                                  value={getRecentSongLyricsDraftValue(lang)}
+                                  onChange={(event) => updateRecentSongLyricsDraftValue(lang, event.target.value)}
+                                  className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#cd8c31]/25 bg-black/20 p-4 font-sans text-sm md:text-base leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                  placeholder={`${label} 가사를 수정하세요`}
+                                />
+                              ) : (
+                                <>
+                                  <div className="flex-1" />
+                                  <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
+                                    {normalizeLyricsForDisplay(lyricsText)}
+                                  </pre>
+                                  <div className="flex-1" />
+                                </>
+                              )}
                             </div>
                           </div>
                         );

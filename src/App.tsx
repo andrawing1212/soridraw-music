@@ -8053,6 +8053,34 @@ ${normalizePromptForDisplay(result.prompt)}
     return formatDisplayTitle(getSubGenre(song), rawTitle);
   };
 
+  const getTitleOnlyLineByLanguage = (song: SongResult, lang: LanguageCode): string => {
+    const rawTitle = getTitleByLanguage(song, lang);
+    if (!rawTitle) return '';
+    const plainTitle = stripDisplayTitlePart(rawTitle);
+    return plainTitle ? `'${plainTitle}'` : '';
+  };
+
+  const getTitleOnlyEntriesForDisplay = (song: SongResult): Array<{ lang: LanguageCode; line: string }> => {
+    const generatedLanguages = getGeneratedLyricLanguages(song);
+    const displayLanguages = getDisplayLyricLanguages(song);
+    const addedLanguage = ((song.appliedKeywords as any)?.addedLyricsLanguage || '') as LanguageCode;
+    const orderedLanguages = [
+      ...displayLanguages,
+      ...(addedLanguage ? [addedLanguage] : []),
+      ...generatedLanguages,
+    ].filter((lang, index, arr) => Boolean(lang) && arr.indexOf(lang) === index) as LanguageCode[];
+
+    const entries = orderedLanguages
+      .map((lang) => ({ lang, line: getTitleOnlyLineByLanguage(song, lang) }))
+      .filter((entry) => Boolean(entry.line));
+
+    if (entries.length > 0) return entries.slice(0, 2);
+
+    if (song.koreanTitle) return [{ lang: 'ko', line: `'${stripDisplayTitlePart(song.koreanTitle)}'` }];
+    if (song.englishTitle) return [{ lang: 'en', line: `'${stripDisplayTitlePart(song.englishTitle)}'` }];
+    return [{ lang: 'ko', line: `'${stripDisplayTitlePart(song.title || 'Untitled')}'` }];
+  };
+
   const getTitleLinesForDisplay = (song: SongResult): string[] => {
     const generatedLanguages = getGeneratedLyricLanguages(song);
     const displayLanguages = getDisplayLyricLanguages(song);
@@ -10281,7 +10309,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
               {/* Title Card */}
               <div className="bg-[var(--card-bg)] rounded-3xl p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
-          <div className="absolute top-4 left-4 flex items-center gap-3 z-10">
+          <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -10298,7 +10326,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">보관함</span>
                     </button>
                   </div>
-                  <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 origin-top-right items-end">
+                  <div className="absolute top-4 right-4 z-10 hidden flex-col gap-2 origin-top-right items-end sm:flex">
                     {(() => {
                       const CopyBtn = ({ text, type, label, description }: { text: string, type: string, label: string, description: string, key?: any }) => (
                         <button 
@@ -10403,7 +10431,198 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
 
-                <div className="space-y-4 pt-40 sm:pt-0">
+                <div className="sm:hidden space-y-5 pt-0">
+                  <div className="grid grid-cols-[minmax(104px,1fr)_auto_minmax(104px,1fr)] items-center gap-2">
+                    <button
+                      onClick={() => navigate('/history')}
+                      onMouseEnter={() =>
+                        setHoveredItem({
+                          id: 'go-history-mobile',
+                          label: '보관함으로 이동',
+                          description: '보관함 페이지로 이동합니다.',
+                        })
+                      }
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex h-[52px] items-center justify-center gap-2 rounded-xl bg-[var(--hover-bg)] px-3 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
+                    >
+                      <HeartIcon className="w-6 h-6" />
+                      <span className="text-[15px] font-extrabold whitespace-nowrap">보관함</span>
+                    </button>
+
+                    <div className="flex min-w-[92px] items-center justify-center gap-1.5 text-[#cd8c31] font-mono text-[13px] tracking-[0.16em] uppercase font-bold">
+                      <Music className="w-[19px] h-[19px] shrink-0" />
+                      <span className="whitespace-nowrap">제목</span>
+                      <span className="text-[11px] tracking-[0.14em]">(Title)</span>
+                    </div>
+
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const text = formatUnifiedTitle(result);
+                        copyToClipboard(text, 'title');
+                      }}
+                      onMouseEnter={() =>
+                        setHoveredItem({
+                          id: 'copy-title-mobile',
+                          label: '전체 제목 복사',
+                          description: '장르를 포함한 전체 제목을 복사합니다.',
+                        })
+                      }
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex h-[52px] items-center justify-center gap-2 rounded-xl bg-[#cd8c31]/10 px-3 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                    >
+                      {copiedType === 'title' ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6 opacity-85" />}
+                      <span className="text-[15px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                    <div className="min-w-0 pl-[112px] text-center">
+                      <p className="truncate text-[13px] font-bold text-[#cd8c31]/85 tracking-tight">
+                        [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRecentSongEditor('title');
+                      }}
+                      onMouseEnter={() =>
+                        setHoveredItem({
+                          id: 'edit-generated-title-mobile',
+                          label: '생성곡 수정',
+                          description: '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                        })
+                      }
+                      onMouseLeave={() => setHoveredItem(null)}
+                      className="flex h-[52px] w-[52px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                      title="생성곡 수정"
+                    >
+                      <Edit2 className="w-6 h-6 opacity-85" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    {getTitleOnlyEntriesForDisplay(result).map((entry) => {
+                      const langLabel = entry.lang.toUpperCase();
+                      const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
+                      const copyType = `mobile-title-${entry.lang}`;
+
+                      return (
+                        <div key={entry.lang} className="flex items-center justify-center gap-2 px-2">
+                          <h2 className="min-w-0 max-w-[calc(100%-70px)] truncate text-center text-[18px] font-extrabold leading-tight text-[var(--text-primary)]">
+                            {entry.line}
+                          </h2>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyToClipboard(entry.line, copyType);
+                            }}
+                            onMouseEnter={() =>
+                              setHoveredItem({
+                                id: `copy-${copyType}`,
+                                label: `${langName} 제목 복사`,
+                                description: `${langName} 제목 한 줄을 복사합니다.`,
+                              })
+                            }
+                            onMouseLeave={() => setHoveredItem(null)}
+                            className="flex h-[46px] min-w-[58px] items-center justify-center gap-1.5 rounded-xl bg-white/5 px-3 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                            title={`${langLabel} 제목 복사`}
+                          >
+                            {copiedType === copyType ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-75" />}
+                            <span className="text-[13px] font-extrabold opacity-90">{langLabel}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {(() => {
+                    const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
+                    if (!generatedAtLabel) return null;
+                    return (
+                      <div className="flex justify-center px-4">
+                        <p className="text-[12px] font-semibold text-[var(--text-secondary)]/80 tracking-tight text-center">
+                          {generatedAtLabel}
+                          {isInLatestGenerationBatch(result) && (
+                            <span className="ml-1 text-[#f0c079] font-bold">(최근 생성곡)</span>
+                          )}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <button
+                      onClick={() => {
+                        if (isConfirmingDeleteHistory) {
+                          deleteHistoryItem(historyIndex);
+                          setIsConfirmingDeleteHistory(false);
+                        } else {
+                          setIsConfirmingDeleteHistory(true);
+                          setTimeout(() => setIsConfirmingDeleteHistory(false), 3000);
+                        }
+                      }}
+                      className={cn(
+                        "p-3 rounded-2xl border shadow-lg transition-all group/trash flex items-center justify-center min-w-[52px] min-h-[52px]",
+                        isConfirmingDeleteHistory 
+                          ? "bg-red-500 text-white border-red-600" 
+                          : "bg-[var(--hover-bg)] border-[var(--border-color)] hover:bg-red-500/20"
+                      )}
+                      title={isConfirmingDeleteHistory ? "정말 삭제하시겠습니까?" : "히스토리에서 삭제"}
+                    >
+                      {isConfirmingDeleteHistory ? (
+                        <span className="text-[10px] font-bold px-1 whitespace-nowrap">삭제 확인</span>
+                      ) : (
+                        <Trash2 className="w-6 h-6 text-[var(--text-secondary)] group-hover/trash:text-red-500" />
+                      )}
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigateHistory('prev')}
+                        disabled={historyIndex >= history.length - 1}
+                        className={cn(
+                          "px-4 py-3.5 rounded-xl transition-all border min-w-[58px] min-h-[52px] flex items-center justify-center",
+                          "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+                        )}
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                      <span className="text-base font-mono font-bold text-[var(--text-secondary)] min-w-[76px] text-center">
+                        {historyIndex + 1} / {history.length}
+                      </span>
+                      <button
+                        onClick={() => navigateHistory('next')}
+                        disabled={historyIndex <= 0}
+                        className={cn(
+                          "px-4 py-3.5 rounded-xl transition-all border min-w-[58px] min-h-[52px] flex items-center justify-center",
+                          "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
+                        )}
+                      >
+                        <ArrowRight className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => toggleFavorite(result)}
+                      className="p-3 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[52px] min-h-[52px] flex items-center justify-center"
+                    >
+                      <Heart 
+                        className={cn(
+                          "w-6 h-6 transition-all",
+                          favorites.some(f => f.title === result.title && f.prompt === result.prompt)
+                            ? "fill-[#cd8c31] text-[#cd8c31]"
+                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                        )} 
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="hidden sm:block space-y-4 pt-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-[#cd8c31] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-[18px] h-[18px]" />

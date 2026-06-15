@@ -10298,7 +10298,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">보관함</span>
                     </button>
                   </div>
-                  <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 scale-90 sm:scale-100 origin-top-right items-end">
+                  <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 origin-top-right items-end">
                     {(() => {
                       const CopyBtn = ({ text, type, label, description }: { text: string, type: string, label: string, description: string, key?: any }) => (
                         <button 
@@ -10314,11 +10314,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
-                          className="inline-flex items-center gap-1.5 p-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
+                          className="inline-flex min-h-[40px] items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
                           title={`${label} 복사`}
                         >
-                          {copiedType === type ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 opacity-60" />}
-                          <span className="text-[10px] font-bold opacity-80">{label}</span>
+                          {copiedType === type ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 opacity-70" />}
+                          <span className="text-[11px] sm:text-xs font-bold opacity-85">{label}</span>
                         </button>
                       );
 
@@ -10339,11 +10339,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })
                               }
                               onMouseLeave={() => setHoveredItem(null)}
-                              className="flex items-center justify-center gap-1.5 p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
+                              className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm"
                               title="생성곡 수정"
                             >
-                              <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-75" />
-                              <span className="text-[10px] sm:text-xs font-bold tracking-tight">수정</span>
+                              <Edit2 className="w-5 h-5 opacity-80" />
                             </button>
                             <button 
                               onClick={(e) => {
@@ -10359,10 +10358,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })
                               }
                               onMouseLeave={() => setHoveredItem(null)}
-                              className="flex flex-1 items-center justify-center gap-1.5 p-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                              className="flex flex-1 min-h-[40px] items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                             >
-                              {copiedType === 'title' ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" /> : <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-80" />}
-                              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tight">전체복사</span>
+                              {copiedType === 'title' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 opacity-85" />}
+                              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-tight">전체복사</span>
                             </button>
                           </div>
                           
@@ -10680,18 +10679,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => openRecentSongEditor('prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'edit-generated-prompt', label: '프롬프트 수정', description: '보관함 저장 전 음악 프롬프트를 수정합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn"
+                      className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn"
                     >
-                      <Edit2 className="w-4 h-4 md:w-5 md:h-5 opacity-75" />
+                      <Edit2 className="w-5 h-5 opacity-80" />
                       <span className="hidden md:block text-sm font-bold">수정</span>
                     </button>
                     <button
                       onClick={() => copyToClipboard(normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
+                      className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
                     >
-                      {copiedType === 'prompt' ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                      {copiedType === 'prompt' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                       <span className="hidden md:block text-sm font-bold">복사</span>
                     </button>
                   </div>
@@ -10765,18 +10764,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   onClick={() => openRecentSongEditor('lyrics')}
                                   onMouseEnter={() => setHoveredItem({ id: `edit-${copyType}`, label: `${label} 가사 수정`, description: '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.' })}
                                   onMouseLeave={() => setHoveredItem(null)}
-                                  className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn"
+                                  className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn"
                                 >
-                                  <Edit2 className="w-4 h-4 md:w-5 md:h-5 opacity-75" />
+                                  <Edit2 className="w-5 h-5 opacity-80" />
                                   <span className="hidden md:block text-sm font-bold">수정</span>
                                 </button>
                                 <button
                                   onClick={() => copyToClipboard(lyricsText, copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
-                                  className="flex items-center gap-1.5 p-2 md:px-3.5 md:py-2 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
+                                  className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
                                 >
-                                  {copiedType === copyType ? <Check className="w-4 h-4 md:w-5 md:h-5 text-green-500" /> : <Copy className="w-4 h-4 md:w-5 md:h-5" />}
+                                  {copiedType === copyType ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                                   <span className="hidden md:block text-sm font-bold">복사</span>
                                 </button>
                               </div>

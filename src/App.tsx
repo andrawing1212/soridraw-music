@@ -10502,7 +10502,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                   </div>
 
-                  <div className="space-y-1 pt-0">
+                  <div className="space-y-0 pt-0">
                     {(() => {
                       const entries = getTitleOnlyEntriesForDisplay(result);
                       const isRecent = isInLatestGenerationBatch(result);
@@ -10515,11 +10515,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
                         const copyType = `mobile-title-${entry.lang}`;
                         const titleClassName = index === 0 ? primaryClass : secondaryClass;
+                        const titleSizeClass = index === 0
+                          ? 'text-[18px] leading-[1.2]'
+                          : 'text-[15px] leading-[1.15]';
+                        const rowHeightClass = index === 0 ? 'min-h-[31px]' : 'min-h-[27px]';
 
                         return (
-                          <div key={entry.lang} className="grid grid-cols-[64px_minmax(0,1fr)_64px] items-center gap-1.5 px-0.5">
-                            <div aria-hidden="true" className="h-[40px] w-[64px]" />
-                            <h2 className={`min-w-0 truncate text-center text-[17px] font-extrabold leading-tight ${titleClassName}`}>
+                          <div key={entry.lang} className={`relative flex items-center justify-center px-[66px] ${rowHeightClass}`}>
+                            <h2 className={`min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
                               {entry.line}
                             </h2>
                             <button
@@ -10536,11 +10539,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })
                               }
                               onMouseLeave={() => setHoveredItem(null)}
-                              className="ml-auto flex h-[40px] w-[64px] items-center justify-center gap-1.5 rounded-xl bg-white/5 px-2 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
+                              className="absolute right-0 top-1/2 flex h-[34px] w-[58px] -translate-y-1/2 items-center justify-center gap-1 rounded-xl bg-white/5 px-1.5 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm"
                               title={`${langLabel} 제목 복사`}
                             >
-                              {copiedType === copyType ? <Check className="w-[18px] h-[18px] text-green-500" /> : <Copy className="w-[18px] h-[18px] opacity-75" />}
-                              <span className="text-[12px] font-extrabold opacity-90">{langLabel}</span>
+                              {copiedType === copyType ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-75" />}
+                              <span className="text-[11px] font-extrabold opacity-90">{langLabel}</span>
                             </button>
                           </div>
                         );

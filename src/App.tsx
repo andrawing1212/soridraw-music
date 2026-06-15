@@ -10501,8 +10501,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
 
-                <div className="sm:hidden space-y-2.5 pt-0">
-                  <div className="grid grid-cols-[92px_minmax(0,1fr)_92px] items-center gap-1.5">
+                <div className="sm:hidden space-y-1.5 pt-0">
+                  <div className="grid grid-cols-[88px_minmax(0,1fr)_88px] items-center gap-1.5">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -10513,17 +10513,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[42px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-2 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
+                      className="flex h-[40px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-2 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
                     >
-                      <HeartIcon className="w-[18px] h-[18px]" />
-                      <span className="text-[13px] font-extrabold whitespace-nowrap">보관함</span>
+                      <HeartIcon className="w-[17px] h-[17px]" />
+                      <span className="text-[12px] font-extrabold whitespace-nowrap">보관함</span>
                     </button>
 
-                    <div className="flex min-w-0 translate-y-[2px] items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
-                      <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
-                      <span className="whitespace-nowrap">제목</span>
-                      <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
-                    </div>
+                    <div aria-hidden="true" />
 
                     <button 
                       onClick={(e) => {
@@ -10539,15 +10535,21 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[42px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-2 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      className="flex h-[40px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-2 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
-                      {copiedType === 'title' ? <Check className="w-[18px] h-[18px] text-green-500" /> : <Copy className="w-[18px] h-[18px] opacity-85" />}
-                      <span className="text-[13px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
+                      {copiedType === 'title' ? <Check className="w-[17px] h-[17px] text-green-500" /> : <Copy className="w-[17px] h-[17px] opacity-85" />}
+                      <span className="text-[12px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-[48px_minmax(0,1fr)_48px] items-center gap-1.5 pt-0 -mt-0.5">
-                    <div aria-hidden="true" className="h-[42px] w-[48px]" />
+                  <div className="flex translate-y-[2px] items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
+                    <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
+                    <span className="whitespace-nowrap">제목</span>
+                    <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
+                  </div>
+
+                  <div className="grid grid-cols-[48px_minmax(0,1fr)_48px] items-center gap-1.5 pt-0">
+                    <div aria-hidden="true" className="h-[38px] w-[48px]" />
                     <p className="min-w-0 truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
@@ -10570,7 +10572,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       />
                     </div>
                   ) : (
-                    <div className="relative min-h-[76px] pt-0">
+                    <div className="relative min-h-[72px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10580,22 +10582,24 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <>
-                            <div className="flex min-h-[70px] flex-col items-center justify-center gap-0.5 px-[66px]">
-                              {entries.map((entry, index) => {
-                                const titleClassName = index === 0 ? primaryClass : secondaryClass;
-                                const titleSizeClass = index === 0
-                                  ? 'text-[18px] leading-[1.08]'
-                                  : 'text-[15px] leading-[1.02]';
+                            <div className="flex min-h-[46px] items-start justify-center px-[66px] pt-[2px]">
+                              <div className="inline-flex max-w-full flex-col items-start gap-[3px]">
+                                {entries.map((entry, index) => {
+                                  const titleClassName = index === 0 ? primaryClass : secondaryClass;
+                                  const titleSizeClass = index === 0
+                                    ? 'text-[18px] leading-[1.12]'
+                                    : 'text-[15px] leading-[1.08]';
 
-                                return (
-                                  <h2 key={entry.lang} className={`w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
-                                    {entry.line}
-                                  </h2>
-                                );
-                              })}
+                                  return (
+                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-left font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                      {entry.line}
+                                    </h2>
+                                  );
+                                })}
+                              </div>
                             </div>
 
-                            <div className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col gap-2">
+                            <div className="absolute right-0 top-0 flex flex-col gap-2">
                               {entries.map((entry) => {
                                 const langLabel = entry.lang.toUpperCase();
                                 const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;

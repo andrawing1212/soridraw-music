@@ -10397,7 +10397,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
           <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
@@ -10552,7 +10552,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
                   </div>
 
-                  <div className="flex justify-center pt-0.5 pb-2">
+                  <div className="flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
@@ -10574,7 +10574,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       />
                     </div>
                   ) : (
-                    <div className="relative min-h-[84px] pt-1">
+                    <div className="relative min-h-[80px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -10584,7 +10584,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <>
-                            <div className="flex min-h-[64px] items-start justify-center px-[70px] pt-[2px]">
+                            <div className="flex min-h-[60px] items-start justify-center px-[70px] pt-0">
                               <div className="inline-flex max-w-full flex-col items-center gap-[8px] text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
@@ -10654,7 +10654,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     );
                   })()}
 
-                  <div className="flex items-center justify-between gap-2 pt-2">
+                  <div className="flex w-full max-w-full items-center justify-between gap-1 pt-2 overflow-visible">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {
@@ -10666,7 +10666,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         }
                       }}
                       className={cn(
-                        "p-3 rounded-2xl border shadow-lg transition-all group/trash flex items-center justify-center min-w-[52px] min-h-[52px]",
+                        "p-2.5 rounded-2xl border shadow-lg transition-all group/trash flex items-center justify-center min-w-[48px] min-h-[48px] shrink-0",
                         isConfirmingDeleteHistory 
                           ? "bg-red-500 text-white border-red-600" 
                           : "bg-[var(--hover-bg)] border-[var(--border-color)] hover:bg-red-500/20"
@@ -10680,25 +10680,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       )}
                     </button>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
                       <button
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}
                         className={cn(
-                          "px-4 py-3.5 rounded-xl transition-all border min-w-[58px] min-h-[52px] flex items-center justify-center",
+                          "px-3 py-3 rounded-xl transition-all border min-w-[46px] min-h-[48px] flex items-center justify-center shrink-0",
                           "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
                         )}
                       >
                         <ArrowLeft className="w-5 h-5" />
                       </button>
-                      <span className="text-base font-mono font-bold text-[var(--text-secondary)] min-w-[76px] text-center">
+                      <span className="text-sm font-mono font-bold text-[var(--text-secondary)] min-w-[54px] text-center shrink-0">
                         {historyIndex + 1} / {history.length}
                       </span>
                       <button
                         onClick={() => navigateHistory('next')}
                         disabled={historyIndex <= 0}
                         className={cn(
-                          "px-4 py-3.5 rounded-xl transition-all border min-w-[58px] min-h-[52px] flex items-center justify-center",
+                          "px-3 py-3 rounded-xl transition-all border min-w-[46px] min-h-[48px] flex items-center justify-center shrink-0",
                           "bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed"
                         )}
                       >
@@ -10708,7 +10708,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={() => toggleFavorite(result)}
-                      className="p-3 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[52px] min-h-[52px] flex items-center justify-center"
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0"
                     >
                       <Heart 
                         className={cn(
@@ -10822,7 +10822,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       )}
                     </button>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5">
                       <button
                         onClick={() => navigateHistory('prev')}
                         disabled={historyIndex >= history.length - 1}

@@ -10440,10 +10440,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
-                          className="flex min-h-[40px] items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                          className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 shadow-sm"
                         >
-                          {copiedType === 'title' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 opacity-85" />}
-                          <span className="text-xs font-bold uppercase tracking-tight">전체복사</span>
+                          {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-85" />}
+                          <span className="text-xs md:text-sm font-bold uppercase tracking-tight">전체복사</span>
                         </button>
                       );
                     })()}
@@ -10556,7 +10556,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                             </div>
 
-                            <div className="absolute right-0 top-[-36px] flex flex-col gap-2">
+                            <div className="absolute right-0 top-[-10px] flex flex-col gap-2">
                               {entries.map((entry) => {
                                 const langLabel = entry.lang.toUpperCase();
                                 const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;
@@ -10609,7 +10609,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     );
                   })()}
 
-                  <div className="flex w-full max-w-full items-center justify-between gap-1 pt-2 overflow-visible">
+                  <div className="flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {

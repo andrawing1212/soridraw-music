@@ -667,16 +667,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const computeFloatingMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 280) => {
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
-    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
 
-    // 메뉴는 클릭한 순간의 문서 좌표에 고정한다.
-    // 스크롤 중 위치를 재계산하지 않아 화면을 따라오지 않게 한다.
+    // 모바일에서 페이지 스크롤 위치가 섞이면 메뉴가 화면 상단으로 튀는 문제가 있어
+    // 더보기 메뉴는 viewport 기준 fixed 좌표로 고정한다.
     const topBelowViewport = rect.bottom + 8;
     const topAboveViewport = rect.top - estimatedHeight - 8;
-    const viewportTop = topBelowViewport + estimatedHeight > window.innerHeight
-      ? Math.max(margin, topAboveViewport)
-      : Math.max(margin, topBelowViewport);
-    const top = viewportTop + scrollTop;
+    const maxTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
+    const preferredTop = topBelowViewport + estimatedHeight > window.innerHeight
+      ? topAboveViewport
+      : topBelowViewport;
+    const top = Math.min(Math.max(margin, preferredTop), maxTop);
     const right = Math.max(margin, window.innerWidth - rect.right);
 
     return { top, right };
@@ -4864,6 +4864,55 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }
         .suno-mobile-title-strip:active { cursor: grabbing; }
         .suno-mobile-title-strip::-webkit-scrollbar { display: none; }
+
+        @keyframes sunoFailureMarquee {
+          0%, 14% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+
+        .suno-failure-marquee {
+          min-width: 0;
+          flex: 1 1 180px;
+          max-width: min(420px, 48vw);
+        }
+
+        .suno-failure-marquee-window {
+          display: block;
+          min-width: 0;
+          overflow: hidden;
+          white-space: nowrap;
+        }
+
+        .suno-failure-marquee-track {
+          display: inline-flex;
+          align-items: center;
+          width: max-content;
+          min-width: 100%;
+        }
+
+        .suno-failure-marquee-text {
+          display: inline-block;
+          padding-right: 2rem;
+        }
+
+        .suno-failure-marquee-copy {
+          display: none;
+        }
+
+        @media (max-width: 767px) {
+          .suno-failure-marquee {
+            flex: 1 1 0;
+            max-width: min(42vw, 220px);
+          }
+
+          .suno-failure-marquee-track {
+            animation: sunoFailureMarquee 12s linear infinite;
+          }
+
+          .suno-failure-marquee-copy {
+            display: inline-block;
+          }
+        }
       `}</style>
       <AnimatePresence>
         {renameModalArgs && (
@@ -5336,9 +5385,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               </span>
                             )}
                             {isFailed ? (
-                              <span className="text-xs opacity-50 truncate flex items-center gap-1.5">
-                                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                                생성 실패: {getSunoFailureDisplayMessage(group)}
+                              <span className="suno-failure-marquee text-xs opacity-50 flex items-center gap-1.5 min-w-0">
+                                <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                <span className="suno-failure-marquee-window">
+                                  <span className="suno-failure-marquee-track">
+                                    <span className="suno-failure-marquee-text">생성 실패: {getSunoFailureDisplayMessage(group)}</span>
+                                    <span className="suno-failure-marquee-text suno-failure-marquee-copy" aria-hidden="true">생성 실패: {getSunoFailureDisplayMessage(group)}</span>
+                                  </span>
+                                </span>
                               </span>
                             ) : isPending ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5 text-blue-400">
@@ -6041,7 +6095,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -6237,7 +6291,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 right: activeMenuState.position.right,

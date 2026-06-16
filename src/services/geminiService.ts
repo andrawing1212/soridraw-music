@@ -18728,6 +18728,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     geminiAttemptedModels: geminiModelInfo.attemptedModels,
   } as any;
 
+  (result as any).userInput = params.userInput ?? "";
+
   return result as SongResult;
 }
 

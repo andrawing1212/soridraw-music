@@ -5489,6 +5489,7 @@ const toggleCycleVariantSelection = (
             lyrics: song.lyrics,
             prompt: song.prompt,
             appliedKeywords: song.appliedKeywords,
+            userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
             situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
             isLocked: false,
             createdAtMs: Date.now(),
@@ -5628,7 +5629,11 @@ const toggleCycleVariantSelection = (
     return randomItem?.id ?? null;
   }, [hierarchyLeafGenreItems]);
 
-  const applyKeywordsToNext = useCallback((appliedKeywords: SongResult['appliedKeywords']) => {
+  const applyKeywordsToNext = useCallback((rawAppliedKeywords: SongResult['appliedKeywords']) => {
+    const appliedKeywords = (rawAppliedKeywords && typeof rawAppliedKeywords === 'object' && ('appliedKeywords' in rawAppliedKeywords))
+      ? ((rawAppliedKeywords as any).appliedKeywords || {})
+      : (rawAppliedKeywords || {});
+
     // Mobile browsers can keep the tapped result-card tooltip hovered after applying keywords.
     // Clear only that transient hint so the bottom generate bar does not look expanded/stuck.
     if (longPressTimerRef.current) {
@@ -5842,10 +5847,14 @@ const toggleCycleVariantSelection = (
 
     // Restore command window prompt content
     const resolvedUserInput = String(
-      appliedKeywords.userInput ||
-      (appliedKeywords as any).commandInput ||
-      (appliedKeywords as any).directInput ||
-      (appliedKeywords as any).customPrompt ||
+      appliedKeywords?.userInput ||
+      (appliedKeywords as any)?.commandInput ||
+      (appliedKeywords as any)?.directInput ||
+      (appliedKeywords as any)?.customPrompt ||
+      (rawAppliedKeywords as any)?.userInput ||
+      (rawAppliedKeywords as any)?.commandInput ||
+      (rawAppliedKeywords as any)?.directInput ||
+      (rawAppliedKeywords as any)?.customPrompt ||
       ''
     ).trim();
     setUserInput(resolvedUserInput);
@@ -7517,6 +7526,7 @@ const saveRecentSong = async (newSong: any) => {
           prompt: songWithLanguageFallback.prompt,
           createdAt: generatedAt,
           updatedAt: generatedAt,
+          userInput: userInput,
           appliedKeywords: {
             ...songWithLanguageFallback.appliedKeywords,
             genre: [],

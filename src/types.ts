@@ -392,6 +392,7 @@ export interface SongResult {
   };
   prompt: string;
   appliedKeywords: AppliedKeywords;
+  userInput?: string;
   situationSummary?: string;
   randomKeywords?: string[];
   geminiModelInfo?: {

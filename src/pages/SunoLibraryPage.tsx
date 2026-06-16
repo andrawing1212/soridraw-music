@@ -680,18 +680,35 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return { top, right };
   };
 
+  const getWorkspaceMoreMenuEstimatedHeight = (group: any) => {
+    const isFailed = group?.status === 'failed';
+    const baseCount = 2; // 디테일, 선택
+    let itemCount = baseCount;
+
+    if (filter === 'trash') {
+      if (!isSharedView) itemCount += 2; // 복구, 영구 삭제
+    } else if (isFailed) {
+      if (!isSharedView) itemCount += 1; // 삭제(휴지통)
+    } else {
+      itemCount += 4; // 다운로드, 다음곡에 적용, 공유, 플레이리스트 저장
+      if (!isSharedView) itemCount += 2; // 즐겨찾기, 삭제(휴지통)
+    }
+
+    return Math.max(144, itemCount * 40 + 16);
+  };
+
   const computeWorkspaceMoreMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 300, estimatedWidth = 192) => {
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
 
     // 뮤직노트처럼 최초 클릭한 문서 위치에 메뉴를 고정한다.
     // fixed를 쓰면 스크롤 시 메뉴만 화면을 따라다녀서, workspace 더보기 메뉴는 absolute 문서 좌표로 렌더링한다.
+    // 메뉴 항목 수에 따라 실제 높이를 다르게 잡아야 실패곡(3개 메뉴)이 과하게 위로 뜨지 않는다.
     const viewportTopBelow = rect.bottom + 8;
     const viewportTopAbove = rect.top - estimatedHeight - 8;
     const maxViewportTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
-    const preferredViewportTop = viewportTopBelow + estimatedHeight > window.innerHeight
-      ? viewportTopAbove
-      : viewportTopBelow;
+    const shouldOpenAbove = viewportTopBelow + estimatedHeight > window.innerHeight;
+    const preferredViewportTop = shouldOpenAbove ? viewportTopAbove : viewportTopBelow;
 
     const viewportTop = Math.min(Math.max(margin, preferredViewportTop), maxViewportTop);
     const viewportLeft = Math.min(
@@ -5448,7 +5465,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 } else {
                                   setActiveMenuState({
                                     id,
-                                    position: computeWorkspaceMoreMenuPosition(e.currentTarget, 300, 192),
+                                    position: computeWorkspaceMoreMenuPosition(e.currentTarget, getWorkspaceMoreMenuEstimatedHeight(group), 192),
                                     anchorEl: e.currentTarget,
                                     group,
                                     item,

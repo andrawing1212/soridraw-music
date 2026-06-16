@@ -598,7 +598,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   interface MenuState {
     id: string;
-    position: { top: number; right: number };
+    position: { top: number; left: number };
     anchorEl?: HTMLElement | null;
     group: any;
     item: any;
@@ -668,8 +668,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
 
-    // 모바일에서 페이지 스크롤 위치가 섞이면 메뉴가 화면 상단으로 튀는 문제가 있어
-    // 더보기 메뉴는 viewport 기준 fixed 좌표로 고정한다.
     const topBelowViewport = rect.bottom + 8;
     const topAboveViewport = rect.top - estimatedHeight - 8;
     const maxTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
@@ -680,6 +678,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const right = Math.max(margin, window.innerWidth - rect.right);
 
     return { top, right };
+  };
+
+  const computeWorkspaceMoreMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 300, estimatedWidth = 192) => {
+    const rect = anchorEl.getBoundingClientRect();
+    const margin = 12;
+
+    // 뮤직노트처럼 최초 클릭한 문서 위치에 메뉴를 고정한다.
+    // fixed를 쓰면 스크롤 시 메뉴만 화면을 따라다녀서, workspace 더보기 메뉴는 absolute 문서 좌표로 렌더링한다.
+    const viewportTopBelow = rect.bottom + 8;
+    const viewportTopAbove = rect.top - estimatedHeight - 8;
+    const maxViewportTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
+    const preferredViewportTop = viewportTopBelow + estimatedHeight > window.innerHeight
+      ? viewportTopAbove
+      : viewportTopBelow;
+
+    const viewportTop = Math.min(Math.max(margin, preferredViewportTop), maxViewportTop);
+    const viewportLeft = Math.min(
+      Math.max(margin, rect.right - estimatedWidth),
+      Math.max(margin, window.innerWidth - estimatedWidth - margin)
+    );
+
+    return {
+      top: viewportTop + window.scrollY,
+      left: viewportLeft + window.scrollX,
+    };
   };
 
   interface DeleteAction {
@@ -5425,7 +5448,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 } else {
                                   setActiveMenuState({
                                     id,
-                                    position: computeFloatingMenuPosition(e.currentTarget, 300),
+                                    position: computeWorkspaceMoreMenuPosition(e.currentTarget, 300, 192),
                                     anchorEl: e.currentTarget,
                                     group,
                                     item,
@@ -6291,10 +6314,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
-                right: activeMenuState.position.right,
+                left: activeMenuState.position.left,
               }}
               onClick={(e) => e.stopPropagation()}
             >

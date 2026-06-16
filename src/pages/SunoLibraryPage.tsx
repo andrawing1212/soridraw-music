@@ -2003,6 +2003,51 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }];
   };
 
+  const isTrackStuck = (group: any) => {
+    if (!group || !group.id) return false;
+
+    const statusStr = String(group.status || '').toLowerCase();
+    
+    // Normal completed tracks should absolutely NEVER be marked as failed
+    if (statusStr === 'completed' || statusStr === 'success') {
+      return false;
+    }
+
+    // Check if we already have audio or sunodata or audiurls
+    const items = extractSunoData(group);
+    const hasAudioUrl = items.some((item: any) => {
+      const url = getAudioUrl(item, group);
+      return typeof url === 'string' && url.trim().length > 0;
+    });
+    const hasSunoData = Array.isArray(group?.sunoData) && group.sunoData.length > 0;
+    const hasAudioUrls = Array.isArray(group?.audioUrls) && group.audioUrls.length > 0;
+    
+    if (hasAudioUrl || hasSunoData || hasAudioUrls) {
+      return false;
+    }
+
+    // Must be in one of these generating/pending/processing statuses, or status is empty/null/missing while loading
+    const isPendingStatus = !statusStr || ['processing', 'pending', 'generating', 'submitted', 'queued', 'queue', 'running', 'in_progress', '생성', '진행', '대기'].includes(statusStr);
+    if (!isPendingStatus) return false;
+
+    // Let's get the creation time
+    let createdTime = 0;
+    if (group.createdAt?.seconds) {
+      createdTime = group.createdAt.seconds * 1000;
+    } else if (group.createdAt?.toDate) {
+      createdTime = group.createdAt.toDate().getTime();
+    } else if (typeof group.createdAt === 'string' || typeof group.createdAt === 'number') {
+      createdTime = new Date(group.createdAt).getTime();
+    }
+
+    if (!createdTime) return false;
+
+    const elapsedMs = Date.now() - createdTime;
+    const isTimedOut = elapsedMs > 20 * 60 * 1000; // 20 minutes
+
+    return isTimedOut;
+  };
+
 
 
   const collectStatusCandidates = (source: any): string[] => {
@@ -2253,6 +2298,33 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   useEffect(() => {
+    if (!user || isSharedView || tracks.length === 0) return;
+
+    // Identify tracks that have been stuck for more than 20 minutes without audio URLs
+    const stuckTracks = tracks.filter(isTrackStuck);
+    if (stuckTracks.length === 0) return;
+
+    // Quietly update each stuck track status to failed in firestore
+    stuckTracks.forEach(async (group) => {
+      try {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+        const reason = '생성 시간 초과 (20분 경과)';
+        await updateDoc(trackRef, {
+          status: 'failed',
+          failedAt: serverTimestamp(),
+          failureReason: reason,
+          lastStatusRaw: 'timeout | timed_out',
+          lastStatusCheckedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        console.log(`[Suno Safety Hook] Automatically marked stuck Suno track ${group.id} as failed.`);
+      } catch (e) {
+        console.error('Failed to update stuck track to failed:', e);
+      }
+    });
+  }, [tracks, user, isSharedView]);
+
+  useEffect(() => {
     if (isSharedView || !user) return;
 
     const intervalId = setInterval(() => {
@@ -2342,10 +2414,33 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, [tracks, user, isSharedView]);
 
   const checkStatus = async (trackId: string, taskId: string) => {
-    if (!taskId) {
-      alert('taskId가 없어 상태 확인을 할 수 없습니다.');
+    const user = auth.currentUser;
+    if (!user) {
+      alert('로그인이 필요합니다.');
       return;
     }
+
+    if (!taskId) {
+      const group = tracks.find(t => t.id === trackId);
+      if (group && isTrackStuck(group)) {
+        try {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+          await updateDoc(trackRef, {
+            status: 'failed',
+            failedAt: serverTimestamp(),
+            failureReason: '생성 시간 초과 (Task ID 없음 및 20분 경과)',
+            updatedAt: serverTimestamp(),
+          });
+          alert('생성 시간이 20분을 초과하여 실패로 처리되었습니다.');
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        alert('taskId가 없어 상태 확인을 할 수 없습니다.');
+      }
+      return;
+    }
+
     if (checkingIdsRef.current.has(trackId)) {
       return;
     }
@@ -2353,43 +2448,108 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     try {
       checkingIdsRef.current.add(trackId);
       setStatusChecking(trackId);
-      const user = auth.currentUser;
-
-      if (!user) {
-        alert('로그인이 필요합니다.');
-        return;
-      }
 
       const token = await user.getIdToken();
-      const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ trackId, taskId })
-      });
+      let res: Response | null = null;
+      let data: any = null;
+      let fetchFailed = false;
 
-      const data = await res.json();
+      try {
+        res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ trackId, taskId })
+        });
+        
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
 
-      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
+        if (!res.ok) {
+          fetchFailed = true;
+        }
+      } catch (err) {
+        console.error('Fetch error in checkStatus:', err);
+        fetchFailed = true;
+      }
 
-      if (!res.ok) {
-        alert(`상태 확인 실패: ${data?.error || data?.message || 'unknown error'}`);
+      const group = tracks.find(t => t.id === trackId);
+
+      if (fetchFailed) {
+        if (group && isTrackStuck(group)) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+          await updateDoc(trackRef, {
+            status: 'failed',
+            failedAt: serverTimestamp(),
+            failureReason: '상태 조회 실패 및 생성 시간 초과 (20분 경과)',
+            updatedAt: serverTimestamp(),
+          });
+          alert('상태 정보를 가져오는데 실패했으며, 생성 시간이 20분을 초과하여 실패 처리되었습니다.');
+          return;
+        }
+
+        const errorMsg = data?.error || data?.message || '네트워크 오류';
+        alert(`상태 확인 실패: ${errorMsg}`);
         return;
       }
+
+      const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
 
       if (resolved.status === 'completed') {
         alert('생성 완료되었습니다.');
       } else if (resolved.status === 'failed') {
-        alert('생성에 실패했습니다.');
+        const displayMsg = data ? getSunoFailureDisplayMessage({ ...group, apiStatusResponse: data }) : '생성에 실패했습니다.';
+        alert(`생성에 실패했습니다: ${displayMsg}`);
       } else if (resolved.status === 'processing') {
-        alert('아직 생성 중입니다.');
+        if (group && isTrackStuck(group)) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+          await updateDoc(trackRef, {
+            status: 'failed',
+            failedAt: serverTimestamp(),
+            failureReason: '생성 시간 초과 (20분 경과)',
+            updatedAt: serverTimestamp(),
+          });
+          alert('서버에서는 아직 진행 중으로 보고되나, 생성 시작 후 20분이 초과하여 실패로 처리합니다.');
+        } else {
+          alert('아직 생성 중입니다.');
+        }
       } else {
-        alert('상태 응답을 받았지만 완료/실패 상태를 확정하지 못했습니다.');
+        if (group && isTrackStuck(group)) {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+          await updateDoc(trackRef, {
+            status: 'failed',
+            failedAt: serverTimestamp(),
+            failureReason: '알 수 없는 상태 지속 및 생성 시간 초과 (20분 경과)',
+            updatedAt: serverTimestamp(),
+          });
+          alert('알 수 없는 상태가 진행된 상태에서 생성 시간이 초과되어 실패로 처리되었습니다.');
+        } else {
+          alert('상태 응답을 받았지만 완료/실패 상태를 확정하지 못했습니다.');
+        }
       }
     } catch (error) {
       console.error(error);
+      const group = tracks.find(t => t.id === trackId);
+      if (group && isTrackStuck(group)) {
+        try {
+          const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
+          await updateDoc(trackRef, {
+            status: 'failed',
+            failedAt: serverTimestamp(),
+            failureReason: '상태 확인 중 오류 발생 및 생성 시간 초과',
+            updatedAt: serverTimestamp(),
+          });
+          alert('확인 중 오류가 발생했으나, 생성 시간이 20분을 초과하여 실패 처리되었습니다.');
+          return;
+        } catch (dbErr) {
+          console.error(dbErr);
+        }
+      }
       alert('상태 확인 중 오류가 발생했습니다.');
     } finally {
       checkingIdsRef.current.delete(trackId);
@@ -6053,33 +6213,36 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {[
-                { icon: Info, label: '디테일', action: () => {
-                  const creatorMeta = resolveCreatorSnapshot(activeMenuState.group, activeMenuState.item, { fallbackToCurrentUser: !isSharedView });
-                  setShowDetails({ ...activeMenuState.group, ...creatorMeta, item: activeMenuState.item, itemIndex: activeMenuState.idx });
-                  setActiveMenuState(null);
-                } },
-                { icon: CheckSquare, label: '선택', action: () => {
-                  enterMultiSelectWith(buildWorkspaceSelection(activeMenuState.group, activeMenuState.item, activeMenuState.idx));
-                  setActiveMenuState(null);
-                } },
-                filter !== 'trash' ? { 
-                  icon: Download, 
-                  label: '다운로드', 
-                  action: () => { 
-                    const title = getTitle(activeMenuState.item, activeMenuState.group, activeMenuState.idx);
-                    handleDownload(activeMenuState.audioUrl, title); 
-                    setActiveMenuState(null); 
-                  } 
-                } : null,
-                filter !== 'trash' ? { icon: RefreshCw, label: '다음곡에 적용', highlight: true, action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
-                !isSharedView && filter !== 'trash' ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
-                filter !== 'trash' ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
-                !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제(휴지통)', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
-                !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
-                !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,
-              ].filter(Boolean).map((m: any, i) => (
+              {(() => {
+                const isFailed = activeMenuState.group?.status === 'failed';
+                return [
+                  { icon: Info, label: '디테일', action: () => {
+                    const creatorMeta = resolveCreatorSnapshot(activeMenuState.group, activeMenuState.item, { fallbackToCurrentUser: !isSharedView });
+                    setShowDetails({ ...activeMenuState.group, ...creatorMeta, item: activeMenuState.item, itemIndex: activeMenuState.idx });
+                    setActiveMenuState(null);
+                  } },
+                  { icon: CheckSquare, label: '선택', action: () => {
+                    enterMultiSelectWith(buildWorkspaceSelection(activeMenuState.group, activeMenuState.item, activeMenuState.idx));
+                    setActiveMenuState(null);
+                  } },
+                  filter !== 'trash' && !isFailed ? { 
+                    icon: Download, 
+                    label: '다운로드', 
+                    action: () => { 
+                      const title = getTitle(activeMenuState.item, activeMenuState.group, activeMenuState.idx);
+                      handleDownload(activeMenuState.audioUrl, title); 
+                      setActiveMenuState(null); 
+                    } 
+                  } : null,
+                  filter !== 'trash' && !isFailed ? { icon: RefreshCw, label: '다음곡에 적용', highlight: true, action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
+                  filter !== 'trash' && !isFailed ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
+                  !isSharedView && filter !== 'trash' && !isFailed ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
+                  filter !== 'trash' && !isFailed ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
+                  !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제(휴지통)', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
+                  !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
+                  !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,
+                ];
+              })().filter(Boolean).map((m: any, i) => (
                 <button
                   key={i}
                   onClick={m.action}

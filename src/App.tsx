@@ -10552,7 +10552,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="flex justify-center pt-2">
+                            <div className="flex justify-center pt-1">
                               {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                             </div>
 

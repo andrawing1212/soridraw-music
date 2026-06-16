@@ -4751,13 +4751,17 @@ function App() {
   const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
   const [isGenerating, setIsGenerating] = useState(false);
   const generationProgressLabels = [
-    '방향 잡는 중...',
-    '키워드 정리 중...',
-    '가사 쓰는 중...',
-    '프롬프트 정리 중...',
-    '마무리 중...',
+    '방향 잡는 중',
+    '키워드 정리 중',
+    '가사 쓰는 중',
+    '프롬프트 정리 중',
+    '마무리 중',
   ];
+  const generationProgressDotSteps = ['.', '..', '...'];
+  const GENERATION_DOT_CYCLES_PER_LABEL = 2;
+  const GENERATION_DOT_INTERVAL_MS = 650;
   const [generationProgressIndex, setGenerationProgressIndex] = useState(0);
+  const [generationProgressStep, setGenerationProgressStep] = useState(0);
   const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
   const [isHomeMusicApiMenuCollapsed, setIsHomeMusicApiMenuCollapsed] = useState(true);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
@@ -6847,18 +6851,29 @@ const saveRecentSong = async (newSong: any) => {
   useEffect(() => {
     if (!isGenerating) {
       setGenerationProgressIndex(0);
+      setGenerationProgressStep(0);
       return;
     }
 
     setGenerationProgressIndex(0);
+    setGenerationProgressStep(0);
+    const stepsPerLabel = generationProgressDotSteps.length * GENERATION_DOT_CYCLES_PER_LABEL;
     const timer = window.setInterval(() => {
-      setGenerationProgressIndex((prev) => (prev + 1) % generationProgressLabels.length);
-    }, 1800);
+      setGenerationProgressStep((prev) => {
+        const next = prev + 1;
+        if (next % stepsPerLabel === 0) {
+          setGenerationProgressIndex((current) => (current + 1) % generationProgressLabels.length);
+        }
+        return next;
+      });
+    }, GENERATION_DOT_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, [isGenerating, generationProgressLabels.length]);
+  }, [isGenerating, generationProgressLabels.length, generationProgressDotSteps.length]);
 
-  const generationProgressLabel = generationProgressLabels[generationProgressIndex] || generationProgressLabels[0];
+  const generationProgressBaseLabel = generationProgressLabels[generationProgressIndex] || generationProgressLabels[0];
+  const generationProgressDots = generationProgressDotSteps[generationProgressStep % generationProgressDotSteps.length] || '...';
+  const generationProgressLabel = `${generationProgressBaseLabel}${generationProgressDots}`;
 
   /* 
   useEffect(() => {
@@ -9122,7 +9137,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           className={cn(
             "w-full py-4 md:py-5 rounded-2xl text-white font-black shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
-              ? "bg-[#E7AD68]/90 text-[#171717] border border-[#E7AD68]/30 cursor-wait text-[17px] sm:text-[20px] md:text-[30px] tracking-[-0.02em]" 
+              ? "bg-[#658761] text-white border border-[#8FA68A]/70 cursor-wait text-[14px] sm:text-[20px] md:text-[30px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_0_18px_rgba(101,135,97,0.24)]" 
               : "soridraw-generate-heartbeat bg-[#E7AD68] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
           )}
         >

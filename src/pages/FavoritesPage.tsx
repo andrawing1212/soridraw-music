@@ -2213,9 +2213,8 @@ ${song.prompt}
       songStructure: song.appliedKeywords.songStructure ?? '2',
       customStructure: song.appliedKeywords.customStructure ?? [],
       userInput: song.appliedKeywords.userInput ?? '',
-      lyricDraft: song.appliedKeywords.lyricDraft ?? '',
-      isLyricMode: song.appliedKeywords.isLyricMode ?? false,
-      lyricMode: song.appliedKeywords.lyricMode ?? 'assist',
+      lyricDraft: '',
+      isLyricMode: false,
     };
     const serialized = JSON.stringify(pendingKeywords);
     sessionStorage.setItem('pendingAppliedKeywords', serialized);

@@ -3304,6 +3304,7 @@ function buildAppliedKeywordPayload(
     lyricDraft: params.lyricDraft,
     isLyricMode: params.isLyricMode ?? false,
     lyricMode: params.lyricMode ?? "assist",
+    userInput: params.userInput ?? "",
   };
 }
 
@@ -18719,6 +18720,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     secondaryLanguage: secondaryLanguage as any,
     isNoLyrics: params.isNoLyrics as any,
     instrumentalBgmMode: Boolean((params as any).instrumentalBgmMode) as any,
+    userInput: params.userInput ?? "",
     geminiUsedModel: geminiModelInfo.usedModel,
     geminiFallbackUsed: geminiModelInfo.fallbackUsed,
     geminiFallbackFrom: geminiModelInfo.fallbackFrom || null,

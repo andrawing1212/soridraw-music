@@ -5840,9 +5840,19 @@ const toggleCycleVariantSelection = (
     setIsLyricMode(false);
     setLyricDraft('');
 
+    // Restore command window prompt content
+    const resolvedUserInput = String(
+      appliedKeywords.userInput ||
+      (appliedKeywords as any).commandInput ||
+      (appliedKeywords as any).directInput ||
+      (appliedKeywords as any).customPrompt ||
+      ''
+    ).trim();
+    setUserInput(resolvedUserInput);
+
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast, setIsLyricMode, setLyricDraft]);
+  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast, setIsLyricMode, setLyricDraft, setUserInput]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);

@@ -10404,15 +10404,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
-                          label: '보관함으로 이동',
-                          description: '보관함 페이지로 이동합니다.',
+                          label: '뮤직노트로 이동',
+                          description: '뮤직노트 페이지로 이동합니다.',
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-[#cd8c31]/10 text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all active:scale-95 shadow-sm"
                     >
-                      <HeartIcon className="w-5 h-5" />
-                      <span className="text-xs md:text-sm font-bold whitespace-nowrap">보관함</span>
+                      <HeartIcon className="w-5 h-5 fill-current text-[#cd8c31]" />
+                      <span className="text-xs md:text-sm font-bold whitespace-nowrap">뮤직노트</span>
                     </button>
                   </div>
                   <div className="absolute top-4 right-4 z-10 hidden flex-col gap-2 origin-top-right items-end sm:flex">
@@ -10448,15 +10448,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history-mobile',
-                          label: '보관함으로 이동',
-                          description: '보관함 페이지로 이동합니다.',
+                          label: '뮤직노트로 이동',
+                          description: '뮤직노트 페이지로 이동합니다.',
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-1.5 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
                     >
-                      <HeartIcon className="w-[16px] h-[16px]" />
-                      <span className="text-[11px] font-extrabold whitespace-nowrap">보관함</span>
+                      <HeartIcon className="w-[16px] h-[16px] fill-current text-[#cd8c31]" />
+                      <span className="text-[11px] font-extrabold whitespace-nowrap">뮤직노트</span>
                     </button>
 
                     <div className="flex items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
@@ -10862,10 +10862,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-[7px] sm:gap-2 px-[13px] sm:px-3.5 h-[38px] sm:h-10 min-w-[95px] sm:min-w-[99px] rounded-xl bg-[#cd8c31]/[0.08] text-[#cd8c31] hover:bg-[#cd8c31]/[0.12] transition-all shadow-sm text-[12px] font-bold border border-[#cd8c31]/[0.18] active:scale-95"
+                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#e8a94a] text-[#24170b] hover:bg-[#f0b45a] transition-all shadow-sm text-[13px] sm:text-[14px] font-black border border-[#f0c079]/30 active:scale-95"
                     >
-                      <RefreshCw className="w-[15px] h-[15px] sm:w-4 sm:h-4" />
-                      <span className="whitespace-nowrap">다음 곡에 적용</span>
+                      <RefreshCw className="w-[17px] h-[17px] sm:w-[18px] sm:h-[18px]" />
+                      <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
                     </button>
                   </div>
                 </div>

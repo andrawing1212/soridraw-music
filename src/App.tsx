@@ -10490,7 +10490,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
 
                   <div className="flex justify-center pt-2.5 pb-0.5">
-                    <p className="max-w-[calc(100%-80px)] truncate text-center text-[17px] font-extrabold text-[#cd8c31]/90 tracking-tight">
+                    <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#cd8c31]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
                   </div>
@@ -10529,8 +10529,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
                                   const titleSizeClass = index === 0
-                                    ? 'text-[18px] leading-[1.12]'
-                                    : 'text-[15px] leading-[1.08]';
+                                    ? 'text-[21px] leading-[1.08]'
+                                    : 'text-[18px] leading-[1.06]';
 
                                   return (
                                     <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
@@ -10674,7 +10674,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </div>
                   </div>
                   <div className="relative h-auto min-h-[132px] flex items-center justify-center w-full px-4 mt-2">
-                    <div className="w-full max-w-2xl text-center flex flex-col items-center">
+                    <div className="w-full max-w-none text-center flex flex-col items-center">
                       {(() => {
                         if (isRecentSongSectionEditing('title') && recentSongEditDraft) {
                           return (
@@ -10707,7 +10707,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                         return (
                           <div className="relative w-full min-h-[132px] flex flex-col items-center justify-start pt-0">
-                            <p className="max-w-[calc(100%-160px)] truncate text-center text-lg md:text-xl font-extrabold text-[#cd8c31]/90 tracking-tight">
+                            <p className="max-w-[calc(100%-160px)] truncate text-center text-base md:text-lg font-extrabold text-[#cd8c31]/90 tracking-tight">
                               [{genrePrefix}]
                             </p>
 
@@ -10716,8 +10716,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
                                   const titleSizeClass = index === 0
-                                    ? 'text-xl md:text-2xl leading-[1.12]'
-                                    : 'text-base md:text-lg leading-[1.1]';
+                                    ? 'text-2xl md:text-3xl leading-[1.1]'
+                                    : 'text-lg md:text-xl leading-[1.08]';
 
                                   return (
                                     <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
@@ -10727,7 +10727,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })}
                               </div>
 
-                              <div className="absolute right-4 top-1 flex flex-col gap-2">
+                              <div className="absolute right-0 top-1 flex flex-col gap-2">
                                 {entries.map((entry) => {
                                   const langLabel = entry.lang.toUpperCase();
                                   const langName = lyricLanguageLabels[entry.lang]?.ko || langLabel;

@@ -4750,6 +4750,14 @@ function App() {
   const [lyricDraft, setLyricDraft] = useState('');
   const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
   const [isGenerating, setIsGenerating] = useState(false);
+  const generationProgressLabels = [
+    '방향 잡는 중...',
+    '키워드 정리 중...',
+    '가사 쓰는 중...',
+    '프롬프트 정리 중...',
+    '마무리 중...',
+  ];
+  const [generationProgressIndex, setGenerationProgressIndex] = useState(0);
   const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
   const [isHomeMusicApiMenuCollapsed, setIsHomeMusicApiMenuCollapsed] = useState(true);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
@@ -6835,6 +6843,22 @@ const saveRecentSong = async (newSong: any) => {
     console.error("Failed to save recent songs:", e);
   }
 };
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationProgressIndex(0);
+      return;
+    }
+
+    setGenerationProgressIndex(0);
+    const timer = window.setInterval(() => {
+      setGenerationProgressIndex((prev) => (prev + 1) % generationProgressLabels.length);
+    }, 1800);
+
+    return () => window.clearInterval(timer);
+  }, [isGenerating, generationProgressLabels.length]);
+
+  const generationProgressLabel = generationProgressLabels[generationProgressIndex] || generationProgressLabels[0];
 
   /* 
   useEffect(() => {
@@ -9082,30 +9106,30 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <button
           onClick={() => {
             if (isGenerating) {
-              handleGenerate();
-            } else {
-              setShowMainGenerationModal(true);
+              setActionButtonHint({ id: 'generate', label: generationProgressLabel, description: '곡을 만들고 있습니다. 잠시만 기다려주세요.' });
+              return;
             }
-            setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
+            setShowMainGenerationModal(true);
+            setActionButtonHint({ id: 'generate', label: '생성하기', description: '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
           }}
-          onMouseEnter={() => setActionButtonHint({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+          onMouseEnter={() => setActionButtonHint({ id: 'generate', label: isGenerating ? generationProgressLabel : '생성하기', description: isGenerating ? '곡을 만들고 있습니다. 잠시만 기다려주세요.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({ id: 'generate', label: '생성하기', description: isGenerating ? '생성을 중단합니다.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+          onTouchStart={() => handleLongPressStart({ id: 'generate', label: isGenerating ? generationProgressLabel : '생성하기', description: isGenerating ? '곡을 만들고 있습니다. 잠시만 기다려주세요.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
           onTouchEnd={handleLongPressEnd}
           className={cn(
-            "w-full py-4 md:py-5 rounded-2xl text-white font-black text-[25px] md:text-[34px] shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
+            "w-full py-4 md:py-5 rounded-2xl text-white font-black shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
-              ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30" 
-              : "soridraw-generate-heartbeat bg-[#E7AD68] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
+              ? "bg-[#E7AD68]/90 text-[#171717] border border-[#E7AD68]/30 cursor-wait text-[17px] sm:text-[20px] md:text-[30px] tracking-[-0.02em]" 
+              : "soridraw-generate-heartbeat bg-[#E7AD68] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
           )}
         >
           {isGenerating ? (
             <>
-              <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
-              <span>작곡 취소</span>
+              <Loader2 className="hidden sm:block w-5 h-5 md:w-6 md:h-6 animate-spin" />
+              <span className="whitespace-nowrap leading-none">{generationProgressLabel}</span>
             </>
           ) : (
             <>

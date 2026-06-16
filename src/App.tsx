@@ -9137,13 +9137,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           className={cn(
             "w-full py-4 md:py-5 rounded-2xl text-white font-black shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
-              ? "bg-[#cd8c31] text-[#171717] border border-[#cd8c31]/35 cursor-wait text-[14px] sm:text-[20px] md:text-[30px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(205,140,49,0.18)]" 
+              ? "bg-[#D8A4A2] text-[#171717] border border-[#AC6B69]/45 cursor-wait min-h-[64px] md:min-h-[76px] text-[13px] sm:text-[18px] md:text-[24px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(216,164,162,0.20)]" 
               : "soridraw-generate-heartbeat bg-[#E7AD68] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
           )}
         >
           {isGenerating ? (
             <>
-              <Loader2 className="hidden sm:block w-5 h-5 md:w-6 md:h-6 animate-spin" />
+              <Loader2 className="block w-4 h-4 sm:w-5 sm:h-5 md:w-5 md:h-5 animate-spin shrink-0" />
               <span className="whitespace-nowrap leading-none">{generationProgressLabel}</span>
             </>
           ) : (

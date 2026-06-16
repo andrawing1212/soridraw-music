@@ -541,3 +541,42 @@ body::-webkit-scrollbar-thumb:hover {
 .dark .studio-tone-down .soridraw-expand-card {
   background-color: #1a1a1a !important;
 }
+
+
+/* SORIDRAW_129_GENERATE_HEARTBEAT_GLOW
+   Subtle breathing glow for the floating/generate action button. */
+@keyframes soridraw-generate-heartbeat-glow {
+  0%, 100% {
+    box-shadow:
+      0 8px 18px rgba(0, 0, 0, 0.32),
+      0 0 0 0 rgba(231, 173, 104, 0.00),
+      0 0 0 0 rgba(240, 192, 121, 0.00);
+  }
+  44% {
+    box-shadow:
+      0 10px 22px rgba(0, 0, 0, 0.36),
+      0 0 18px 4px rgba(231, 173, 104, 0.22),
+      0 0 34px 10px rgba(240, 192, 121, 0.10);
+  }
+  62% {
+    box-shadow:
+      0 9px 20px rgba(0, 0, 0, 0.34),
+      0 0 10px 2px rgba(231, 173, 104, 0.14),
+      0 0 22px 6px rgba(240, 192, 121, 0.07);
+  }
+}
+
+.soridraw-generate-heartbeat {
+  animation: soridraw-generate-heartbeat-glow 2.9s ease-in-out infinite;
+}
+
+.soridraw-generate-heartbeat:hover,
+.soridraw-generate-heartbeat:active {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soridraw-generate-heartbeat {
+    animation: none;
+  }
+}

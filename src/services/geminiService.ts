@@ -18356,14 +18356,16 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     },
   };
 
+  let responseError: any = null;
   try {
     response = await generateContentWithModelFallback(
       ai,
       generateParams,
       "generateSong",
     );
-  } catch (fallbackError) {
+  } catch (fallbackError: any) {
     console.warn("[SORIDRAW Generation Guard] model fallback chain failed, trying minimal fallback:", fallbackError);
+    responseError = fallbackError;
     try {
       response = await generateContentWithModelFallback(
         ai,
@@ -18377,41 +18379,46 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         },
         "generateSong minimal",
       );
-    } catch (minimalError) {
-      console.warn("[SORIDRAW Generation Guard] minimal fallback failed, using local emergency result:", minimalError);
+    } catch (minimalError: any) {
+      console.warn("[SORIDRAW Generation Guard] minimal fallback failed:", minimalError);
+      responseError = minimalError;
       response = null;
     }
   }
 
-  let result: any;
-  try {
-    result = JSON.parse(response?.text || "{}");
-  } catch (parseError) {
-    console.warn("[SORIDRAW Generation Guard] JSON parse failed, using local emergency result:", parseError, response?.text);
-    result = {};
+  if (!response) {
+    const errorMsg = responseError?.message || "Gemini AI가 정상적인 응답을 반환하지 못했습니다. API 키 유효성 또는 생성 제한 한도를 확인해주세요.";
+    throw new Error(errorMsg);
   }
 
-  if (!result || typeof result !== "object") result = {};
+  let result: any;
+  try {
+    result = JSON.parse(response.text || "{}");
+  } catch (parseError: any) {
+    console.warn("[SORIDRAW Generation Guard] JSON parse failed:", parseError, response.text);
+    throw new Error(`Gemini AI 응답 형식이 분석에 실패했습니다. (JSON parse오류: ${parseError.message})`);
+  }
+
+  if (!result || typeof result !== "object") {
+    throw new Error("Gemini AI의 생성 응답 데이터가 이상 상태입니다. 다시 시도해 주세요.");
+  }
+
+  if (!result.title || typeof result.title !== "string" || result.title.trim() === "") {
+    throw new Error("정상적인 곡 제목을 생성하지 못했습니다. 다시 생성 버튼을 눌러주세요.");
+  }
+
+  if (!params.isNoLyrics && (!result.lyrics || typeof result.lyrics !== "object")) {
+    throw new Error("정상적인 곡 가사를 생성하지 못했습니다. 다시 생성 버튼을 눌러주세요.");
+  }
+
   const geminiModelInfo: GeminiModelUsageInfo = (response as any)?.__soridrawGeminiModelInfo || {
-    usedModel: response ? GEMINI_TEXT_MODEL_CHAIN[0] : "local-emergency",
-    fallbackUsed: !response,
-    fallbackFrom: response ? null : GEMINI_TEXT_MODEL_CHAIN[0],
-    fallbackReason: response ? null : "local_emergency_result",
-    attemptedModels: response ? [GEMINI_TEXT_MODEL_CHAIN[0]] : [...GEMINI_TEXT_MODEL_CHAIN],
+    usedModel: GEMINI_TEXT_MODEL_CHAIN[0],
+    fallbackUsed: false,
+    fallbackFrom: null,
+    fallbackReason: null,
+    attemptedModels: [...GEMINI_TEXT_MODEL_CHAIN],
   };
   (result as any).geminiModelInfo = geminiModelInfo;
-  if (!result.title || typeof result.title !== "string") {
-    result.title = hasKoreanLanguage ? "다시 시작" : "New Start";
-  }
-  if (!params.isNoLyrics && (!result.lyrics || typeof result.lyrics !== "object")) {
-    const emergencyKoreanLyrics = `[Intro: soft opening]\n조용히 불이 켜지고\n아직 끝나지 않은 마음이 움직여\n\n[Verse: calm]\n말하지 못한 한 줄을\n오늘은 천천히 꺼내 봐\n\n[Chorus: focused hook]\n다시 시작해도 괜찮아\n조금 어긋난 마음도 노래가 돼\n\n[Outro: warm release]\n남은 빛을 따라가`;
-    result.lyrics = {
-      korean: requestedLyricLanguages.includes("ko") ? emergencyKoreanLyrics : "",
-      english: requestedLyricLanguages.some((lang) => lang !== "ko")
-        ? "[Intro: soft opening]\nA quiet light turns on\nAnd the feeling starts again\n\n[Chorus: focused hook]\nIt is okay to begin again\nEven a broken moment can become a song"
-        : "",
-    };
-  }
 
   // Title Post-processing
   const subGenreIds = (params.subGenre ?? []).map((id) => id.toLowerCase());

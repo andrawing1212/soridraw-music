@@ -5801,11 +5801,6 @@ const toggleCycleVariantSelection = (
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
     if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
-    
-    if (appliedKeywords.userInput !== undefined) setUserInput(appliedKeywords.userInput);
-    if (appliedKeywords.lyricDraft !== undefined) setLyricDraft(appliedKeywords.lyricDraft);
-    if (appliedKeywords.isLyricMode !== undefined) setIsLyricMode(appliedKeywords.isLyricMode);
-    if (appliedKeywords.lyricMode !== undefined) setLyricMode(appliedKeywords.lyricMode);
 
     if (appliedKeywords.vocal) {
       const v = appliedKeywords.vocal;
@@ -6882,6 +6877,10 @@ const saveRecentSong = async (newSong: any) => {
 
     // Show the loading state immediately on click.
     // The Gemini API key lookup can take 1-2 seconds, so it must not block the button feedback.
+    setIsRecentSongEditOpen(false);
+    setRecentSongInlineEditMode(null);
+    setRecentSongEditDraft(null);
+
     setIsGenerating(true);
     setResult(prev => (prev ? { ...prev, title: '생성 중...' } : null));
     abortControllerRef.current = new AbortController();

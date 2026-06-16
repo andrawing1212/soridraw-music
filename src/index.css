@@ -89,6 +89,44 @@
 
 html {
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(205, 140, 49, 0.42) rgba(10, 10, 10, 0.35);
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: rgba(10, 10, 10, 0.45);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: rgba(205, 140, 49, 0.42);
+  border-radius: 999px;
+  border: 2px solid rgba(10, 10, 10, 0.45);
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: rgba(205, 140, 49, 0.68);
+}
+
+@media (max-width: 640px) {
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb {
+    border-width: 1px;
+  }
 }
 
 @layer base {

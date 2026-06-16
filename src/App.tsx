@@ -10508,7 +10508,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
                         placeholder="외국어 제목"
                       />
-                      <div className="flex justify-center pt-0">
+                      <div className="flex justify-center pt-2">
                         {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                       </div>
                     </div>
@@ -10540,7 +10540,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="flex justify-center pt-0">
+                            <div className="flex justify-center pt-2">
                               {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                             </div>
 

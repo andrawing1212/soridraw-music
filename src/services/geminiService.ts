@@ -110,7 +110,7 @@ function getAI(apiKeyOverride?: string | null) {
 
 const GEMINI_TEXT_MODEL_CHAIN = [
   "gemini-3.5-flash",
-  "gemini-3-flash",
+  "gemini-3-flash-preview",
   "gemini-3.1-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
@@ -227,7 +227,6 @@ async function generateContentWithModelFallback(
         firstFallbackReason = getGeminiFallbackReason(error);
       }
       console.warn(`[SORIDRAW Gemini Fallback] ${context}: ${model} failed`, error);
-      if (!isGeminiRetryableError(error) && i >= 1) break;
     }
   }
   throw lastError;

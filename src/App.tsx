@@ -5837,9 +5837,12 @@ const toggleCycleVariantSelection = (
       setTempoEnabled(true);
     }
 
+    setIsLyricMode(false);
+    setLyricDraft('');
+
     showToast('키워드가 다음 곡에 적용되었습니다.');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast]);
+  }, [hierarchyLeafGenreItems, setSelectedGenres, setSubGenre, setSelectedMoods, setSelectedThemes, setSelectedStyles, setSelectedInstrumentSounds, setSelectedPointSounds, setIsPointSoundMode, setKpopMode, setIsKoreanEnglishMix, setCitypopMode, setLyricsLength, setSongStructure, setPinnedGenres, setPinnedThemes, setMaleCount, setFemaleCount, setRapEnabled, setCustomStructure, setTempoEnabled, setMinBPM, setMaxBPM, showToast, setIsLyricMode, setLyricDraft]);
 
 
   const [isGenreRandomized, setIsGenreRandomized] = useState(false);
@@ -6882,7 +6885,6 @@ const saveRecentSong = async (newSong: any) => {
     setRecentSongEditDraft(null);
 
     setIsGenerating(true);
-    setResult(prev => (prev ? { ...prev, title: '생성 중...' } : null));
     abortControllerRef.current = new AbortController();
 
     let personalGeminiApiKey = '';
@@ -10399,7 +10401,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <motion.div
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-6 pt-4 md:pt-5 border-t-2 border-[#cd8c31]/30 shadow-[0_-1px_0_rgba(205,140,49,0.16)]"
+              className={cn(
+                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#cd8c31]/30 shadow-[0_-1px_0_rgba(205,140,49,0.16)] transition-all duration-300 relative",
+                isGenerating && "opacity-40 pointer-events-none blur-[1px]"
+              )}
             >
 
 

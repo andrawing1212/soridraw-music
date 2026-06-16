@@ -10459,7 +10459,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <span className="text-[11px] font-extrabold whitespace-nowrap">보관함</span>
                     </button>
 
-                    <div aria-hidden="true" />
+                    <div className="flex items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
+                      <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
+                      <span className="whitespace-nowrap">제목</span>
+                      <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
+                    </div>
 
                     <button 
                       onClick={(e) => {
@@ -10483,11 +10487,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   </div>
 
-                  <div className="flex mt-1.5 items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
-                    <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
-                    <span className="whitespace-nowrap">제목</span>
-                    <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
-                  </div>
 
                   <div className="flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#cd8c31]/90 tracking-tight">

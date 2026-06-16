@@ -4759,7 +4759,7 @@ function App() {
   ];
   const generationProgressDotSteps = ['.', '..', '...'];
   const GENERATION_DOT_CYCLES_PER_LABEL = 2;
-  const GENERATION_DOT_INTERVAL_MS = 650;
+  const GENERATION_DOT_INTERVAL_MS = 1000;
   const [generationProgressIndex, setGenerationProgressIndex] = useState(0);
   const [generationProgressStep, setGenerationProgressStep] = useState(0);
   const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
@@ -9137,7 +9137,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           className={cn(
             "w-full py-4 md:py-5 rounded-2xl text-white font-black shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
-              ? "bg-[#658761] text-white border border-[#8FA68A]/70 cursor-wait text-[14px] sm:text-[20px] md:text-[30px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_0_18px_rgba(101,135,97,0.24)]" 
+              ? "bg-[#cd8c31] text-[#171717] border border-[#cd8c31]/35 cursor-wait text-[14px] sm:text-[20px] md:text-[30px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(205,140,49,0.18)]" 
               : "soridraw-generate-heartbeat bg-[#E7AD68] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
           )}
         >

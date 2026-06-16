@@ -3387,6 +3387,8 @@ function App() {
     koreanTitle: string;
     secondaryTitle: string;
     secondaryLanguage: LanguageCode;
+    showKoreanTitleInput: boolean;
+    showSecondaryTitleInput: boolean;
     prompt: string;
     koreanLyrics: string;
     secondaryLyrics: string;
@@ -7925,11 +7927,15 @@ ${normalizePromptForDisplay(result.prompt)}
     const displayLanguages = getDisplayLyricLanguages(result);
     const fallbackSecondary = (((result.appliedKeywords as any)?.secondaryLanguage || displayLanguages.find((lang) => lang !== 'ko') || 'en') as LanguageCode);
     const secondaryLanguage = fallbackSecondary === 'ko' ? 'en' : fallbackSecondary;
+    const initialKoreanTitle = stripDisplayTitlePart(titleMap.ko || result.koreanTitle || '');
+    const initialSecondaryTitle = stripDisplayTitlePart(titleMap[secondaryLanguage] || result.englishTitle || '');
 
     setRecentSongEditDraft({
-      koreanTitle: stripDisplayTitlePart(titleMap.ko || result.koreanTitle || ''),
-      secondaryTitle: stripDisplayTitlePart(titleMap[secondaryLanguage] || result.englishTitle || ''),
+      koreanTitle: initialKoreanTitle,
+      secondaryTitle: initialSecondaryTitle,
       secondaryLanguage,
+      showKoreanTitleInput: Boolean(initialKoreanTitle) || !initialSecondaryTitle,
+      showSecondaryTitleInput: Boolean(initialSecondaryTitle),
       prompt: result.prompt || '',
       koreanLyrics: lyricsMap.ko || result.lyrics?.korean || '',
       secondaryLyrics: lyricsMap[secondaryLanguage] || result.lyrics?.english || '',
@@ -7956,12 +7962,14 @@ ${normalizePromptForDisplay(result.prompt)}
     const previousApplied = (song.appliedKeywords || {}) as any;
     const existingTitles = getTitleLanguageMap(song);
     const existingLyrics = getLyricsLanguageMap(song);
+    const shouldEditKoreanTitle = draft.showKoreanTitleInput !== false;
+    const shouldEditSecondaryTitle = draft.showSecondaryTitleInput === true;
 
     const nextTitlesByLanguage: Partial<Record<LanguageCode, string>> = {
       ...existingTitles,
-      ko: koreanTitle,
-      [secondaryLanguage]: secondaryTitle,
     };
+    if (shouldEditKoreanTitle) nextTitlesByLanguage.ko = koreanTitle;
+    if (shouldEditSecondaryTitle) nextTitlesByLanguage[secondaryLanguage] = secondaryTitle;
 
     const nextLyricsByLanguage: Partial<Record<LanguageCode, string>> = {
       ...existingLyrics,
@@ -7971,8 +7979,8 @@ ${normalizePromptForDisplay(result.prompt)}
 
     const titleLanguages = Array.from(new Set([
       ...(((previousApplied.titleLanguages || previousApplied.lyricLanguages || []) as LanguageCode[]).filter(Boolean)),
-      koreanTitle ? 'ko' : null,
-      secondaryTitle ? secondaryLanguage : null,
+      shouldEditKoreanTitle && koreanTitle ? 'ko' : null,
+      shouldEditSecondaryTitle && secondaryTitle ? secondaryLanguage : null,
     ].filter(Boolean))) as LanguageCode[];
 
     const lyricLanguages = Array.from(new Set([
@@ -7983,9 +7991,9 @@ ${normalizePromptForDisplay(result.prompt)}
 
     return {
       ...song,
-      title: koreanTitle || secondaryTitle || song.title || 'Untitled',
-      koreanTitle,
-      englishTitle: secondaryTitle || song.englishTitle || '',
+      title: (shouldEditKoreanTitle ? koreanTitle : '') || (shouldEditSecondaryTitle ? secondaryTitle : '') || song.title || 'Untitled',
+      koreanTitle: shouldEditKoreanTitle ? koreanTitle : (song.koreanTitle || ''),
+      englishTitle: shouldEditSecondaryTitle ? secondaryTitle : (song.englishTitle || ''),
       prompt,
       lyrics: {
         ...(song.lyrics || { korean: '', english: '' }),
@@ -10496,18 +10504,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   {isRecentSongSectionEditing('title') && recentSongEditDraft ? (
                     <div className="space-y-1.5 pt-1.5 px-1">
-                      <input
-                        value={recentSongEditDraft.koreanTitle}
-                        onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
-                        className="w-full rounded-xl border border-[#cd8c31]/25 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
-                        placeholder="한국어 제목"
-                      />
-                      <input
-                        value={recentSongEditDraft.secondaryTitle}
-                        onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
-                        className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
-                        placeholder="외국어 제목"
-                      />
+                      {recentSongEditDraft.showKoreanTitleInput && (
+                        <input
+                          value={recentSongEditDraft.koreanTitle}
+                          onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                          className="w-full rounded-xl border border-[#cd8c31]/25 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                          placeholder="한국어 제목"
+                        />
+                      )}
+                      {recentSongEditDraft.showSecondaryTitleInput && (
+                        <input
+                          value={recentSongEditDraft.secondaryTitle}
+                          onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                          className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                          placeholder="외국어 제목"
+                        />
+                      )}
                       <div className="flex justify-center pt-2">
                         {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                       </div>
@@ -10678,18 +10690,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         if (isRecentSongSectionEditing('title') && recentSongEditDraft) {
                           return (
                             <div className="w-full max-w-2xl space-y-2 px-4 sm:px-10">
-                              <input
-                                value={recentSongEditDraft.koreanTitle}
-                                onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
-                                className="w-full rounded-2xl border border-[#cd8c31]/25 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
-                                placeholder="한국어 제목"
-                              />
-                              <input
-                                value={recentSongEditDraft.secondaryTitle}
-                                onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
-                                className="w-full rounded-2xl border border-[#cd8c31]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
-                                placeholder="외국어 제목"
-                              />
+                              {recentSongEditDraft.showKoreanTitleInput && (
+                                <input
+                                  value={recentSongEditDraft.koreanTitle}
+                                  onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                                  className="w-full rounded-2xl border border-[#cd8c31]/25 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                  placeholder="한국어 제목"
+                                />
+                              )}
+                              {recentSongEditDraft.showSecondaryTitleInput && (
+                                <input
+                                  value={recentSongEditDraft.secondaryTitle}
+                                  onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                                  className="w-full rounded-2xl border border-[#cd8c31]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                  placeholder="외국어 제목"
+                                />
+                              )}
                               <div className="flex justify-center pt-1">
                                 {renderRecentSongInlineEditActions('title', 'edit-generated-title-desktop-inline', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                               </div>
@@ -11353,38 +11369,42 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-black text-[#cd8c31]">한글 제목</span>
-                      <input
-                        value={recentSongEditDraft.koreanTitle}
-                        onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, koreanTitle: event.target.value } : prev)}
-                        placeholder="한글 제목"
-                        className={cn(
-                          "w-full rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15",
-                          recentSongEditFocus === 'title' && "ring-2 ring-[#cd8c31]/10"
-                        )}
-                      />
-                    </label>
-                    <label className="space-y-1.5">
-                      <span className="text-xs font-black text-[#cd8c31]">보조 제목</span>
-                      <div className="flex gap-2">
-                        <select
-                          value={recentSongEditDraft.secondaryLanguage}
-                          onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryLanguage: event.target.value as LanguageCode } : prev)}
-                          className="w-[92px] rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-3 py-3 text-xs font-bold text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50"
-                        >
-                          {(['en', 'ja', 'zh', 'es', 'fr'] as LanguageCode[]).map((lang) => (
-                            <option key={lang} value={lang}>{lyricLanguageLabels[lang]?.ko || lang}</option>
-                          ))}
-                        </select>
+                    {recentSongEditDraft.showKoreanTitleInput && (
+                      <label className="space-y-1.5">
+                        <span className="text-xs font-black text-[#cd8c31]">한글 제목</span>
                         <input
-                          value={recentSongEditDraft.secondaryTitle}
-                          onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryTitle: event.target.value } : prev)}
-                          placeholder="보조 제목"
-                          className="min-w-0 flex-1 rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15"
+                          value={recentSongEditDraft.koreanTitle}
+                          onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, koreanTitle: event.target.value } : prev)}
+                          placeholder="한글 제목"
+                          className={cn(
+                            "w-full rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15",
+                            recentSongEditFocus === 'title' && "ring-2 ring-[#cd8c31]/10"
+                          )}
                         />
-                      </div>
-                    </label>
+                      </label>
+                    )}
+                    {recentSongEditDraft.showSecondaryTitleInput && (
+                      <label className="space-y-1.5">
+                        <span className="text-xs font-black text-[#cd8c31]">보조 제목</span>
+                        <div className="flex gap-2">
+                          <select
+                            value={recentSongEditDraft.secondaryLanguage}
+                            onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryLanguage: event.target.value as LanguageCode } : prev)}
+                            className="w-[92px] rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-3 py-3 text-xs font-bold text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50"
+                          >
+                            {(['en', 'ja', 'zh', 'es', 'fr'] as LanguageCode[]).map((lang) => (
+                              <option key={lang} value={lang}>{lyricLanguageLabels[lang]?.ko || lang}</option>
+                            ))}
+                          </select>
+                          <input
+                            value={recentSongEditDraft.secondaryTitle}
+                            onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryTitle: event.target.value } : prev)}
+                            placeholder="보조 제목"
+                            className="min-w-0 flex-1 rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15"
+                          />
+                        </div>
+                      </label>
+                    )}
                   </div>
 
                   <label className="space-y-1.5 block">

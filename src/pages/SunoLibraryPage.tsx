@@ -2043,7 +2043,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!createdTime) return false;
 
     const elapsedMs = Date.now() - createdTime;
-    const isTimedOut = elapsedMs > 20 * 60 * 1000; // 20 minutes
+    const isTimedOut = elapsedMs > 3 * 60 * 1000; // 3 minutes timeout
 
     return isTimedOut;
   };
@@ -2137,37 +2137,63 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const getSunoFailureReason = (data: any, rawStatus?: string | null) => {
     const candidates = [
+      data?.errorMessage,
+      data?.failedReason,
       data?.failureReason,
       data?.reason,
       data?.error,
+      data?.data?.errorMessage,
+      data?.data?.failedReason,
       data?.data?.failureReason,
       data?.data?.reason,
       data?.data?.error,
+      data?.response?.errorMessage,
+      data?.response?.failedReason,
       data?.response?.failureReason,
       data?.response?.reason,
       data?.response?.error,
+      data?.data?.response?.errorMessage,
+      data?.data?.response?.failedReason,
       data?.data?.response?.failureReason,
       data?.data?.response?.reason,
       data?.data?.response?.error,
-      rawStatus,
     ];
 
     const found = candidates.find(isMeaningfulSunoFailureText);
-    return found ? String(found).trim() : '사이트 확인요망';
+    if (found) {
+      const foundStr = String(found).trim();
+      // Remove any internal http code or debug payload slop from the reason string if present
+      if (foundStr.length > 0 && !/pending|success|completed|complete/i.test(foundStr)) {
+        return foundStr;
+      }
+    }
+    return '';
   };
 
   const getSunoFailureDisplayMessage = (group: any) => {
-    const reason = getSunoFailureReason(
-      group?.apiStatusResponse || group?.apiResponse || null,
-      group?.failureReason || group?.lastStatusRaw || null
-    );
+    if (!group) return '알 수 없는 오류가 발생했습니다.';
 
-    // Keep the UI clear: provider-side failed/cancelled/error states should tell the user to check the site,
-    // not show wrapper text like "success".
-    if (!isMeaningfulSunoFailureText(reason) || /fail|failed|failure|error|reject|cancel|timeout|expired|실패|취소|오류/i.test(reason)) {
-      return '사이트 확인요망';
+    const dbReason = String(group.failureReason || group.errorMessage || '').trim();
+    
+    // Check if it's a timeout (stuck error)
+    const isTimeout = 
+      dbReason.toLowerCase().includes('시간 초과') || 
+      dbReason.toLowerCase().includes('timeout') || 
+      dbReason.toLowerCase().includes('timed_out') || 
+      dbReason.toLowerCase().includes('시간초과') ||
+      dbReason.toLowerCase().includes('3분 경과') ||
+      dbReason.toLowerCase().includes('20분 경과');
+
+    if (isTimeout) {
+      return 'Music API에서 완료 결과를 받지 못했습니다. 다시 생성해주세요.';
     }
-    return reason;
+
+    // Default or explicit error message
+    if (dbReason && !/pending|success|completed|complete/i.test(dbReason) && dbReason.length > 2) {
+      return dbReason;
+    }
+
+    return 'Suno 생성 과정에서 오류가 발생했습니다. 잠시 후 다시 생성해주세요.';
   };
 
   const syncStatusResponseToFirestore = async (trackId: string, taskId: string, data: any) => {
@@ -2300,7 +2326,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   useEffect(() => {
     if (!user || isSharedView || tracks.length === 0) return;
 
-    // Identify tracks that have been stuck for more than 20 minutes without audio URLs
+    // Identify tracks that have been stuck for more than 3 minutes without audio URLs
     const stuckTracks = tracks.filter(isTrackStuck);
     if (stuckTracks.length === 0) return;
 
@@ -2308,11 +2334,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     stuckTracks.forEach(async (group) => {
       try {
         const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
-        const reason = '생성 시간 초과 (20분 경과)';
+        const reason = '생성 시간 초과 (3분 경과)';
         await updateDoc(trackRef, {
           status: 'failed',
           failedAt: serverTimestamp(),
           failureReason: reason,
+          errorMessage: reason, // Add errorMessage
           lastStatusRaw: 'timeout | timed_out',
           lastStatusCheckedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -2428,10 +2455,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           await updateDoc(trackRef, {
             status: 'failed',
             failedAt: serverTimestamp(),
-            failureReason: '생성 시간 초과 (Task ID 없음 및 20분 경과)',
+            failureReason: '생성 시간 초과 (3분 경과)',
+            errorMessage: '생성 시간 초과 (3분 경과)',
             updatedAt: serverTimestamp(),
           });
-          alert('생성 시간이 20분을 초과하여 실패로 처리되었습니다.');
+          alert('Music API에서 완료 결과를 받지 못했습니다. 다시 생성해주세요.');
         } catch (e) {
           console.error(e);
         }
@@ -2486,15 +2514,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           await updateDoc(trackRef, {
             status: 'failed',
             failedAt: serverTimestamp(),
-            failureReason: '상태 조회 실패 및 생성 시간 초과 (20분 경과)',
+            failureReason: '상태 조회 실패 및 생성 시간 초과 (3분 경과)',
+            errorMessage: '상태 조회 실패 및 생성 시간 초과 (3분 경과)',
             updatedAt: serverTimestamp(),
           });
-          alert('상태 정보를 가져오는데 실패했으며, 생성 시간이 20분을 초과하여 실패 처리되었습니다.');
+          alert('Music API에서 완료 결과를 받지 못했습니다. 다시 생성해주세요.');
           return;
         }
 
-        const errorMsg = data?.error || data?.message || '네트워크 오류';
-        alert(`상태 확인 실패: ${errorMsg}`);
+        alert('Suno 생성 과정에서 오류가 발생했습니다. 잠시 후 다시 생성해주세요.');
         return;
       }
 
@@ -2503,18 +2531,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       if (resolved.status === 'completed') {
         alert('생성 완료되었습니다.');
       } else if (resolved.status === 'failed') {
-        const displayMsg = data ? getSunoFailureDisplayMessage({ ...group, apiStatusResponse: data }) : '생성에 실패했습니다.';
-        alert(`생성에 실패했습니다: ${displayMsg}`);
+        const displayMsg = getSunoFailureDisplayMessage({ ...group, failureReason: group?.failureReason, errorMessage: group?.errorMessage });
+        alert(displayMsg);
       } else if (resolved.status === 'processing') {
         if (group && isTrackStuck(group)) {
           const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
           await updateDoc(trackRef, {
             status: 'failed',
             failedAt: serverTimestamp(),
-            failureReason: '생성 시간 초과 (20분 경과)',
+            failureReason: '생성 시간 초과 (3분 경과)',
+            errorMessage: '생성 시간 초과 (3분 경과)',
             updatedAt: serverTimestamp(),
           });
-          alert('서버에서는 아직 진행 중으로 보고되나, 생성 시작 후 20분이 초과하여 실패로 처리합니다.');
+          alert('Music API에서 완료 결과를 받지 못했습니다. 다시 생성해주세요.');
         } else {
           alert('아직 생성 중입니다.');
         }
@@ -2524,10 +2553,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           await updateDoc(trackRef, {
             status: 'failed',
             failedAt: serverTimestamp(),
-            failureReason: '알 수 없는 상태 지속 및 생성 시간 초과 (20분 경과)',
+            failureReason: '생성 시간 초과 (3분 경과)',
+            errorMessage: '생성 시간 초과 (3분 경과)',
             updatedAt: serverTimestamp(),
           });
-          alert('알 수 없는 상태가 진행된 상태에서 생성 시간이 초과되어 실패로 처리되었습니다.');
+          alert('Music API에서 완료 결과를 받지 못했습니다. 다시 생성해주세요.');
         } else {
           alert('상태 응답을 받았지만 완료/실패 상태를 확정하지 못했습니다.');
         }
@@ -2541,16 +2571,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           await updateDoc(trackRef, {
             status: 'failed',
             failedAt: serverTimestamp(),
-            failureReason: '상태 확인 중 오류 발생 및 생성 시간 초과',
+            failureReason: '생성 시간 초과 (3분 경과)',
+            errorMessage: '생성 시간 초과 (3분 경과)',
             updatedAt: serverTimestamp(),
           });
-          alert('확인 중 오류가 발생했으나, 생성 시간이 20분을 초과하여 실패 처리되었습니다.');
+          alert('Music API에서 완료 결과를 받지 못했습니다. 다시 생성해주세요.');
           return;
         } catch (dbErr) {
           console.error(dbErr);
         }
       }
-      alert('상태 확인 중 오류가 발생했습니다.');
+      alert('Suno 생성 과정에서 오류가 발생했습니다. 잠시 후 다시 생성해주세요.');
     } finally {
       checkingIdsRef.current.delete(trackId);
       setStatusChecking(null);

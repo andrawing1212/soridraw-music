@@ -648,6 +648,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryLongPressTriggeredRef = useRef(false);
   const librarySuppressNextCardClickRef = useRef(false);
+  const libraryDragSelectActiveRef = useRef(false);
+  const libraryDragSelectMovedRef = useRef(false);
+  const libraryDragSelectStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const libraryDragSelectStartSelectionRef = useRef<MultiSelectedTrack | null>(null);
+  const libraryDragSelectSuppressClickRef = useRef(false);
+
+  useEffect(() => {
+    const stopLibraryDragSelect = () => handleLibraryDragSelectEnd();
+    window.addEventListener('mouseup', stopLibraryDragSelect);
+    return () => window.removeEventListener('mouseup', stopLibraryDragSelect);
+  }, []);
 
   useEffect(() => {
     const closeFloatingMenus = () => {
@@ -2926,6 +2937,73 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     });
   };
 
+  const addLibraryTrackToSelection = (selection: MultiSelectedTrack | null) => {
+    if (!selection) return;
+    setSelectedTrackMap((prev) => prev[selection.key] ? prev : { ...prev, [selection.key]: selection });
+  };
+
+  const resetLibraryDragSelectState = () => {
+    libraryDragSelectActiveRef.current = false;
+    libraryDragSelectMovedRef.current = false;
+    libraryDragSelectStartPointRef.current = null;
+    libraryDragSelectStartSelectionRef.current = null;
+  };
+
+  const handleLibraryDragSelectStart = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
+    if (!multiSelectMode || event.button !== 0) return;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
+      return;
+    }
+
+    event.preventDefault();
+    libraryDragSelectActiveRef.current = true;
+    libraryDragSelectMovedRef.current = false;
+    libraryDragSelectStartPointRef.current = { x: event.clientX, y: event.clientY };
+    libraryDragSelectStartSelectionRef.current = selection;
+  };
+
+  const handleLibraryDragSelectMove = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
+    if (!multiSelectMode || !libraryDragSelectActiveRef.current || !libraryDragSelectStartPointRef.current) return;
+
+    event.preventDefault();
+    const dx = event.clientX - libraryDragSelectStartPointRef.current.x;
+    const dy = event.clientY - libraryDragSelectStartPointRef.current.y;
+    const movedDistance = Math.sqrt(dx * dx + dy * dy);
+
+    if (movedDistance <= 5 && !libraryDragSelectMovedRef.current) return;
+
+    libraryDragSelectMovedRef.current = true;
+    addLibraryTrackToSelection(libraryDragSelectStartSelectionRef.current);
+    addLibraryTrackToSelection(selection);
+  };
+
+  const handleLibraryDragSelectEnter = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
+    if (!multiSelectMode || !libraryDragSelectActiveRef.current) return;
+
+    event.preventDefault();
+    libraryDragSelectMovedRef.current = true;
+    addLibraryTrackToSelection(libraryDragSelectStartSelectionRef.current);
+    addLibraryTrackToSelection(selection);
+  };
+
+  const handleLibraryDragSelectEnd = () => {
+    if (libraryDragSelectActiveRef.current && libraryDragSelectMovedRef.current) {
+      libraryDragSelectSuppressClickRef.current = true;
+    }
+    resetLibraryDragSelectState();
+  };
+
+  const consumeLibraryDragSelectClick = (event: React.MouseEvent) => {
+    if (!libraryDragSelectSuppressClickRef.current) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    libraryDragSelectSuppressClickRef.current = false;
+    return true;
+  };
+
   const enterMultiSelectWith = (selection: MultiSelectedTrack) => {
     setMultiSelectMode(true);
     setBulkMenuState(null);
@@ -2965,6 +3043,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const handleLibraryCardLongPressStart = (event: any, selection: MultiSelectedTrack) => {
     clearLibraryLongPressTimer();
+    if (multiSelectMode) return;
 
     const target = event.target as HTMLElement | null;
     if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
@@ -5136,7 +5215,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   return (
     <div
-      className="soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)]"
+      className={`soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const hasOpenMoreMenu = Boolean(activeMenuState || activePlaylistItemMenu || bulkMenuState);
@@ -5151,6 +5230,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }
 
         if (target.closest('[data-floating-menu="true"]')) return;
+
+        if (multiSelectMode && consumeLibraryDragSelectClick(e)) return;
 
         if (multiSelectMode && !target.closest('[data-selection-keep="true"]')) {
           clearMultiSelect();
@@ -5676,14 +5757,24 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
                           className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
-                          onMouseDown={(event) => handleLibraryCardLongPressStart(event, selection)}
-                          onMouseMove={handleLibraryCardLongPressMove}
-                          onMouseUp={handleLibraryCardLongPressEnd}
+                          onMouseDown={(event) => {
+                            handleLibraryDragSelectStart(event, selection);
+                            handleLibraryCardLongPressStart(event, selection);
+                          }}
+                          onMouseMove={(event) => {
+                            handleLibraryDragSelectMove(event, selection);
+                            handleLibraryCardLongPressMove(event);
+                          }}
+                          onMouseUp={() => {
+                            handleLibraryDragSelectEnd();
+                            handleLibraryCardLongPressEnd();
+                          }}
                           onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onTouchMove={handleLibraryCardLongPressMove}
                           onTouchEnd={handleLibraryCardLongPressEnd}
                           onTouchCancel={handleLibraryCardLongPressEnd}
                           onMouseEnter={(event) => {
+                            handleLibraryDragSelectEnter(event, selection);
                             event.currentTarget.style.backgroundColor = '#171717';
                           }}
                           onMouseLeave={(event) => {
@@ -5692,6 +5783,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           }}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e)) return;
+                             if (consumeLibraryDragSelectClick(e)) return;
                              if (shouldIgnoreLibraryCardClickFromPointerTravel(e)) return;
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {
@@ -6059,9 +6151,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return (
                     <div 
                       key={item.id} 
-                      onMouseDown={(event) => handleLibraryCardLongPressStart(event, selection)}
-                      onMouseMove={handleLibraryCardLongPressMove}
-                      onMouseUp={handleLibraryCardLongPressEnd}
+                      onMouseDown={(event) => {
+                        handleLibraryDragSelectStart(event, selection);
+                        handleLibraryCardLongPressStart(event, selection);
+                      }}
+                      onMouseMove={(event) => {
+                        handleLibraryDragSelectMove(event, selection);
+                        handleLibraryCardLongPressMove(event);
+                      }}
+                      onMouseUp={() => {
+                        handleLibraryDragSelectEnd();
+                        handleLibraryCardLongPressEnd();
+                      }}
+                      onMouseEnter={(event) => handleLibraryDragSelectEnter(event, selection)}
                       onMouseLeave={handleLibraryCardLongPressEnd}
                       onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                       onTouchMove={handleLibraryCardLongPressMove}
@@ -6069,6 +6171,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onTouchCancel={handleLibraryCardLongPressEnd}
                       onClick={(event) => {
                         if (consumeLibrarySuppressedClick(event)) return;
+                        if (consumeLibraryDragSelectClick(event)) return;
                         if (shouldIgnoreLibraryCardClickFromPointerTravel(event)) return;
                         if (multiSelectMode) toggleSelectedTrack(selection);
                       }}

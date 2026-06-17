@@ -774,6 +774,11 @@ export default function FavoritesPage({
   const cardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
   const suppressNextCardClickRef = useRef(false);
+  const selectionDragActiveRef = useRef(false);
+  const selectionDragMovedRef = useRef(false);
+  const selectionDragStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const selectionDragStartSongIdRef = useRef<string | null>(null);
+  const suppressSelectionDragClickRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
   const selectionHistoryPushedRef = useRef(false);
   const detailHistoryPushedRef = useRef(false);
@@ -918,7 +923,7 @@ export default function FavoritesPage({
     const folder = folders.find((item) => item.id === folderId) || folders[0];
     if (!folder) return;
 
-    const targetSongIds = Array.from(new Set(picker.songIds.filter(Boolean)));
+    const targetSongIds: string[] = Array.from(new Set<string>(picker.songIds.filter((id): id is string => Boolean(id))));
     if (targetSongIds.length === 0) return;
 
     const updates = mode === 'sharedNote'
@@ -2055,6 +2060,12 @@ export default function FavoritesPage({
   }, []);
 
   useEffect(() => {
+    const stopSelectionDrag = () => handleSelectionDragEnd();
+    window.addEventListener('mouseup', stopSelectionDrag);
+    return () => window.removeEventListener('mouseup', stopSelectionDrag);
+  }, []);
+
+  useEffect(() => {
     if (!activeFavoriteMenuId) return;
 
     const closeMoreMenuOnBack = () => {
@@ -2114,10 +2125,76 @@ export default function FavoritesPage({
     return movedDistance > 10;
   };
 
+  const addSongToSelection = (songId: string) => {
+    setSelectedSongIds(prev => prev.includes(songId) ? prev : [...prev, songId]);
+  };
+
   const toggleSongSelection = (songId: string) => {
     setSelectedSongIds(prev =>
       prev.includes(songId) ? prev.filter(id => id !== songId) : [...prev, songId]
     );
+  };
+
+  const resetSelectionDragState = () => {
+    selectionDragActiveRef.current = false;
+    selectionDragMovedRef.current = false;
+    selectionDragStartPointRef.current = null;
+    selectionDragStartSongIdRef.current = null;
+  };
+
+  const handleSelectionDragStart = (event: React.MouseEvent, songId: string) => {
+    if (!isSelectionMode || event.button !== 0) return;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"], [data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) {
+      return;
+    }
+
+    event.preventDefault();
+    selectionDragActiveRef.current = true;
+    selectionDragMovedRef.current = false;
+    selectionDragStartPointRef.current = { x: event.clientX, y: event.clientY };
+    selectionDragStartSongIdRef.current = songId;
+  };
+
+  const handleSelectionDragMove = (event: React.MouseEvent, songId: string) => {
+    if (!isSelectionMode || !selectionDragActiveRef.current || !selectionDragStartPointRef.current) return;
+
+    event.preventDefault();
+    const dx = event.clientX - selectionDragStartPointRef.current.x;
+    const dy = event.clientY - selectionDragStartPointRef.current.y;
+    const movedDistance = Math.sqrt(dx * dx + dy * dy);
+
+    if (movedDistance <= 5 && !selectionDragMovedRef.current) return;
+
+    selectionDragMovedRef.current = true;
+    if (selectionDragStartSongIdRef.current) addSongToSelection(selectionDragStartSongIdRef.current);
+    addSongToSelection(songId);
+  };
+
+  const handleSelectionDragEnter = (event: React.MouseEvent, songId: string) => {
+    if (!isSelectionMode || !selectionDragActiveRef.current) return;
+
+    event.preventDefault();
+    selectionDragMovedRef.current = true;
+    if (selectionDragStartSongIdRef.current) addSongToSelection(selectionDragStartSongIdRef.current);
+    addSongToSelection(songId);
+  };
+
+  const handleSelectionDragEnd = () => {
+    if (selectionDragActiveRef.current && selectionDragMovedRef.current) {
+      suppressSelectionDragClickRef.current = true;
+    }
+    resetSelectionDragState();
+  };
+
+  const consumeSelectionDragClick = (event: React.MouseEvent) => {
+    if (!suppressSelectionDragClickRef.current) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressSelectionDragClickRef.current = false;
+    return true;
   };
 
   const cycleSelectionModeSelection = (fallbackSongId?: string) => {
@@ -2142,6 +2219,7 @@ export default function FavoritesPage({
 
   const handleCardLongPressStart = (event: React.MouseEvent | React.TouchEvent, song: any) => {
     clearSelectionLongPressTimer();
+    if (isSelectionMode) return;
 
     const target = event.target as HTMLElement | null;
     if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
@@ -3518,7 +3596,10 @@ ${song.prompt}
 
   return (
     <div 
-      className="soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative"
+      className={cn(
+        "soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
+        isSelectionMode ? "select-none" : ""
+      )}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
 
@@ -3528,6 +3609,8 @@ ${song.prompt}
           setActiveFavoriteMenuId(null);
           return;
         }
+
+        if (isSelectionMode && consumeSelectionDragClick(e)) return;
 
         if (!isSelectionMode) return;
         if (target.closest('[data-selection-keep="true"]')) return;
@@ -3736,9 +3819,18 @@ ${song.prompt}
                   data-selection-keep="true"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  onMouseDown={(event) => handleCardLongPressStart(event, song)}
-                  onMouseMove={handleCardLongPressMove}
-                  onMouseUp={handleCardLongPressEnd}
+                  onMouseDown={(event) => {
+                    handleSelectionDragStart(event, song.id);
+                    handleCardLongPressStart(event, song);
+                  }}
+                  onMouseMove={(event) => {
+                    handleSelectionDragMove(event, song.id);
+                    handleCardLongPressMove(event);
+                  }}
+                  onMouseUp={() => {
+                    handleSelectionDragEnd();
+                    handleCardLongPressEnd();
+                  }}
                   onTouchStart={(event) => handleCardLongPressStart(event, song)}
                   onTouchMove={handleCardLongPressMove}
                   onTouchEnd={handleCardLongPressEnd}
@@ -3748,6 +3840,7 @@ ${song.prompt}
                   }}
                   onClickCapture={(event) => {
                     if (!isSelectionMode) return;
+                    if (consumeSelectionDragClick(event)) return;
                     const target = event.target as HTMLElement | null;
                     if (target?.closest('[data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) return;
                     event.preventDefault();
@@ -3757,6 +3850,7 @@ ${song.prompt}
                     setActiveFavoriteMenuId(null);
                   }}
                   onMouseEnter={(event) => {
+                    handleSelectionDragEnter(event, song.id);
                     event.currentTarget.style.backgroundColor = '#171717';
                   }}
                   onMouseLeave={(event) => {
@@ -3770,6 +3864,10 @@ ${song.prompt}
                       longPressTriggeredRef.current = false;
                       suppressNextCardClickRef.current = false;
                       cardClickStartPointRef.current = null;
+                      return;
+                    }
+
+                    if (consumeSelectionDragClick(e)) {
                       return;
                     }
 

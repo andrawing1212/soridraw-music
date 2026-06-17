@@ -382,6 +382,19 @@ export default function FavoritesPage({
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
+  const [myNoteFolders, setMyNoteFolders] = useState<Array<{ id: string; title: string }>>([
+    { id: 'default', title: '기본' },
+    { id: '1', title: '1' },
+    { id: '2', title: '2' },
+    { id: '3', title: '3' },
+  ]);
+  const [sharedNoteFolders, setSharedNoteFolders] = useState<Array<{ id: string; title: string }>>([
+    { id: 'default', title: '기본' },
+    { id: '1', title: '1' },
+    { id: '2', title: '2' },
+  ]);
+  const [selectedMyNoteFolderId, setSelectedMyNoteFolderId] = useState('default');
+  const [selectedSharedNoteFolderId, setSelectedSharedNoteFolderId] = useState('default');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [visibleCount, setVisibleCount] = useState(15);
@@ -2668,20 +2681,85 @@ ${song.prompt}
     { id: 'sharedNote' as const, label: '공유 노트', description: '공유받은 곡을 저장하고 조회 전용으로 관리할 공간입니다.' },
   ];
 
+  const handleAddMusicNoteFolder = (mode: 'myNote' | 'sharedNote') => {
+    const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
+    if (folders.length >= 10) {
+      showFavoriteToast('최대 개수까지 생성되었습니다.');
+      return;
+    }
+
+    const numberTitles = folders
+      .map((folder) => Number(folder.title))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const nextNumber = numberTitles.length > 0 ? Math.max(...numberTitles) + 1 : 1;
+    const nextFolder = { id: `local-${mode}-${Date.now()}`, title: String(nextNumber) };
+
+    if (mode === 'sharedNote') {
+      setSharedNoteFolders((prev) => [...prev, nextFolder]);
+      setSelectedSharedNoteFolderId(nextFolder.id);
+    } else {
+      setMyNoteFolders((prev) => [...prev, nextFolder]);
+      setSelectedMyNoteFolderId(nextFolder.id);
+    }
+  };
+
+  const renderMusicNoteFolderBar = (mode: 'myNote' | 'sharedNote') => {
+    const isShared = mode === 'sharedNote';
+    const folders = isShared ? sharedNoteFolders : myNoteFolders;
+    const selectedId = isShared ? selectedSharedNoteFolderId : selectedMyNoteFolderId;
+    const setSelectedId = isShared ? setSelectedSharedNoteFolderId : setSelectedMyNoteFolderId;
+
+    return (
+      <div className="mt-4 md:mt-5 space-y-3" data-selection-keep="true">
+        <h3 className="px-2 text-[12px] md:text-sm font-bold text-[#D8A4A2]/80 tracking-wide">
+          {isShared ? '공유 받은 노트' : '나의 노트폴더'}
+        </h3>
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+          {folders.map((folder) => (
+            <button
+              key={folder.id}
+              type="button"
+              onClick={() => setSelectedId(folder.id)}
+              className={cn(
+                'shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border',
+                selectedId === folder.id
+                  ? 'bg-[#AC5045]/78 text-white border-[#AC5045]/55 shadow-lg'
+                  : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+              )}
+            >
+              {folder.title}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => handleAddMusicNoteFolder(mode)}
+            className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+            title={isShared ? '공유 노트폴더 추가' : '노트폴더 추가'}
+          >
+            <span className="text-lg font-light leading-none">+</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderMusicNotePendingView = (mode: 'myNote' | 'sharedNote') => {
     const isShared = mode === 'sharedNote';
     return (
-      <div className="mt-4 md:mt-6 min-h-[34vh] rounded-3xl border border-black/20 bg-[var(--card-bg)] p-8 text-center shadow-[var(--shadow-md)]">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-[#D8A4A2]">
-          {isShared ? <Share2 className="h-6 w-6" /> : <FolderOutput className="h-6 w-6" />}
+      <>
+        {renderMusicNoteFolderBar(mode)}
+        <div className="mt-2 md:mt-3 min-h-[34vh] rounded-3xl border border-black/20 bg-[var(--card-bg)] p-8 text-center shadow-[var(--shadow-md)]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-[#D8A4A2]">
+            {isShared ? <Share2 className="h-6 w-6" /> : <FolderOutput className="h-6 w-6" />}
+          </div>
+          <h3 className="mt-5 text-xl font-black text-white">{isShared ? '공유 노트' : '마이 노트'}</h3>
+          <p className="mx-auto mt-2 max-w-[520px] text-sm leading-6 text-white/48">
+            {isShared
+              ? '공유받은 뮤직노트를 저장하고 조회 전용으로 관리하는 공간입니다. 다음 단계에서 공유 저장과 읽기 전용 상세 화면을 연결합니다.'
+              : '내 뮤직노트를 개인 폴더로 정리하는 공간입니다. 다음 단계에서 폴더 생성과 곡 저장 기능을 연결합니다.'}
+          </p>
         </div>
-        <h3 className="mt-5 text-xl font-black text-white">{isShared ? '공유 노트' : '마이 노트'}</h3>
-        <p className="mx-auto mt-2 max-w-[520px] text-sm leading-6 text-white/48">
-          {isShared
-            ? '공유받은 뮤직노트를 저장하고 조회 전용으로 관리하는 공간입니다. 다음 단계에서 공유 저장과 읽기 전용 상세 화면을 연결합니다.'
-            : '내 뮤직노트를 개인 폴더로 정리하는 공간입니다. 다음 단계에서 폴더 생성과 곡 저장 기능을 연결합니다.'}
-        </p>
-      </div>
+      </>
     );
   };
 

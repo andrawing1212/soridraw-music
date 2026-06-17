@@ -4793,10 +4793,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     if (clientX < rect.left + edgeSize) {
       const strength = Math.min(1, Math.max(0, (rect.left + edgeSize - clientX) / edgeSize));
-      delta = -Math.round(5 + strength * 17);
+      delta = -Math.max(1, Math.round(1 + strength * 5));
     } else if (clientX > rect.right - edgeSize) {
       const strength = Math.min(1, Math.max(0, (clientX - (rect.right - edgeSize)) / edgeSize));
-      delta = Math.round(5 + strength * 17);
+      delta = Math.max(1, Math.round(1 + strength * 5));
     }
 
     if (delta !== 0) {
@@ -4928,8 +4928,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     if (!drag.active) return;
     event.preventDefault();
-    // Active dragging is handled by the window-level pointer listener so it still works
-    // even when the finger leaves the playlist row or the original button.
+    // Keep the drag responsive while the finger is still inside the original playlist button.
+    // The window-level listener still handles movement outside the playlist row.
+    autoScrollPlaylistBar(drag.section, event.clientX);
+    reorderPlaylistsByPointer(drag.section, drag.playlistId, event.clientX);
   };
 
   const finishPlaylistDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {

@@ -3028,10 +3028,10 @@ ${song.prompt}
 
     if (clientX < rect.left + edgeSize) {
       const strength = Math.min(1, Math.max(0, (rect.left + edgeSize - clientX) / edgeSize));
-      delta = -Math.round(5 + strength * 17);
+      delta = -Math.max(1, Math.round(1 + strength * 5));
     } else if (clientX > rect.right - edgeSize) {
       const strength = Math.min(1, Math.max(0, (clientX - (rect.right - edgeSize)) / edgeSize));
-      delta = Math.round(5 + strength * 17);
+      delta = Math.max(1, Math.round(1 + strength * 5));
     }
 
     if (delta !== 0) {
@@ -3146,8 +3146,10 @@ ${song.prompt}
 
     if (!drag.active) return;
     event.preventDefault();
-    // Active dragging is handled by the window-level pointer listener so it still works
-    // even when the finger leaves the folder row or the original button.
+    // Keep the drag responsive while the finger is still inside the original folder button.
+    // The window-level listener still handles movement outside the folder row.
+    autoScrollMusicNoteFolderBar(drag.mode, event.clientX);
+    reorderMusicNoteFoldersByPointer(drag.mode, drag.folderId, event.clientX);
   };
 
   const finishMusicNoteFolderDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {

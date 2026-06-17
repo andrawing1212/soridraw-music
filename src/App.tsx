@@ -525,22 +525,22 @@ type StudioSectionAccent = {
 };
 
 const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
-  bar: 'bg-[#F6C85F]/95',
-  text: 'text-[#FFD98A]',
-  softText: 'text-[#FFD98A]/58',
-  selected: 'bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#F6C85F]/14 border-black/20 text-[#FFD98A] hover:bg-[#F6C85F]/20',
-  summaryActive: 'bg-[#F6C85F]/[0.035] border-[#F6C85F]/15 text-[#FFD98A]',
-  summaryRest: 'border-[#F6C85F]/10 bg-black/5',
-  summaryHover: 'hover:border-[#F6C85F]/20 hover:bg-[#F6C85F]/[0.035]',
+  bar: 'bg-[#FFBB22]/95',
+  text: 'text-[#FFD36A]',
+  softText: 'text-[#FFD36A]/58',
+  selected: 'bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#FFBB22]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFBB22]/20',
+  summaryActive: 'bg-[#FFBB22]/[0.035] border-[#FFBB22]/15 text-[#FFD36A]',
+  summaryRest: 'border-[#FFBB22]/10 bg-black/5',
+  summaryHover: 'hover:border-[#FFBB22]/20 hover:bg-[#FFBB22]/[0.035]',
   summaryBorder: 'rgba(246, 200, 95, 0.14)',
   summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
   summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#F6C85F]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#F6C85F]/80 text-[#171717] border-black/20',
-  badgeAccent: '#F6C85F',
+  pointSelected: 'bg-[#FFBB22]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#FFBB22]/80 text-[#171717] border-black/20',
+  badgeAccent: '#FFBB22',
 };
 
 const STUDIO_ACCENT_RED: StudioSectionAccent = {
@@ -1549,9 +1549,9 @@ const StoryboardSlider = ({ label, left, right, value, onChange, description, st
   const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
   const accentStyle = accent === 'characterB'
     ? {
-        text: 'text-[#FFD98A]',
-        dot: 'bg-[#F6C85F] shadow-[0_0_8px_rgba(246,200,95,0.36)]',
-        badge: 'border-black/20 text-[#FFD98A]',
+        text: 'text-[#FFD36A]',
+        dot: 'bg-[#FFBB22] shadow-[0_0_8px_rgba(255,187,34,0.36)]',
+        badge: 'border-black/20 text-[#FFD36A]',
         slider: 'storyboard-slider--character-b',
       }
     : {
@@ -2855,8 +2855,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleHomeClick}
               className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
-                isActivePath('/') && "bg-[#F6C85F]/18 text-[#F6C85F]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFBB22]/15 hover:text-[#FFBB22]",
+                isActivePath('/') && "bg-[#FFBB22]/18 text-[#FFBB22]"
               )}
               aria-label="홈"
               title="홈"
@@ -2868,8 +2868,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleStudioClick}
               className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
-                isActivePath('/studio') && "bg-[#F6C85F]/18 text-[#F6C85F]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFBB22]/15 hover:text-[#FFBB22]",
+                isActivePath('/studio') && "bg-[#FFBB22]/18 text-[#FFBB22]"
               )}
               aria-label="스튜디오"
               title="스튜디오"
@@ -2881,8 +2881,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleHistoryClick}
               className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
-                isActivePath('/history') && "bg-[#F6C85F]/18 text-[#F6C85F]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFBB22]/15 hover:text-[#FFBB22]",
+                isActivePath('/history') && "bg-[#FFBB22]/18 text-[#FFBB22]"
               )}
               aria-label="뮤직노트"
               title="뮤직노트"
@@ -2904,8 +2904,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 setIsProfileOpen(false);
               }}
               className={cn(
-                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
-                isActivePath('/suno-library') && "bg-[#F6C85F]/18 text-[#F6C85F]"
+                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFBB22]/15 hover:text-[#FFBB22]",
+                isActivePath('/suno-library') && "bg-[#FFBB22]/18 text-[#FFBB22]"
               )}
               aria-label="라이브러리"
               title="라이브러리"
@@ -2927,8 +2927,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#F6C85F]/15",
-                    isProfileOpen && "bg-[#F6C85F]/18"
+                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFBB22]/15",
+                    isProfileOpen && "bg-[#FFBB22]/18"
                   )}
                   aria-label="마이페이지 메뉴"
                   title="마이페이지"
@@ -2945,7 +2945,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F] disabled:opacity-50"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFBB22]/15 hover:text-[#FFBB22] disabled:opacity-50"
                   aria-label="로그인"
                   title="로그인"
                 >
@@ -2970,7 +2970,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#F6C85F]/12 hover:text-[#F6C85F]"
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFBB22]/12 hover:text-[#FFBB22]"
                       >
                         <Users className="h-5 w-5" />
                         관리자메뉴
@@ -2983,7 +2983,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         setIsProfileOpen(false);
                         setIsExpanded(false);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#F6C85F]/12 hover:text-[#F6C85F]"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFBB22]/12 hover:text-[#FFBB22]"
                     >
                       <UserIcon className="h-5 w-5" />
                       마이페이지
@@ -2997,7 +2997,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#F6C85F] transition-all hover:bg-[#F6C85F]/12"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#FFBB22] transition-all hover:bg-[#FFBB22]/12"
                     >
                       <LogOut className="h-5 w-5" />
                       로그아웃
@@ -3015,8 +3015,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
-                  isExpanded && "bg-[#F6C85F]/18 text-[#F6C85F]"
+                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFBB22]/15 hover:text-[#FFBB22]",
+                  isExpanded && "bg-[#FFBB22]/18 text-[#FFBB22]"
                 )}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
@@ -9110,10 +9110,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#F6C85F] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFBB22] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
-          <Dices className="w-5 h-5 text-[#F6C85F] group-hover:rotate-180 transition-transform duration-500" />
-          <span className="hidden md:block font-bold text-[#F6C85F]">랜덤 선택</span>
+          <Dices className="w-5 h-5 text-[#FFBB22] group-hover:rotate-180 transition-transform duration-500" />
+          <span className="hidden md:block font-bold text-[#FFBB22]">랜덤 선택</span>
         </button>
       </div>
 
@@ -9617,7 +9617,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       aria-label="통합 검색"
                       title="통합 검색"
                     >
-                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#F6C85F] group-hover:scale-110 transition-transform" />
+                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFBB22] group-hover:scale-110 transition-transform" />
                     </button>
                   )}
 
@@ -9629,8 +9629,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <h1 
                       className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
-                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#F6C85F]" />
-                      <span>Sori <span className="text-[#F6C85F]">Studio</span></span>
+                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFBB22]" />
+                      <span>Sori <span className="text-[#FFBB22]">Studio</span></span>
                     </h1>
                   </motion.div>
                 </div>
@@ -10021,7 +10021,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-black text-[#FFD98A] mb-2">캐릭터 B</label>
+                              <label className="block text-xs font-black text-[#FFD36A] mb-2">캐릭터 B</label>
                               <input
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
@@ -10052,7 +10052,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                             <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#FFD98A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
+                                <p className="text-sm font-black text-[#FFD36A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} accent="characterB" statusLabels={["존댓말", "반존대", "반말"]} />
                               <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["잔잔", "울컥", "폭발"]} />
@@ -10354,7 +10354,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#F6C85F] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
+                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
@@ -10394,7 +10394,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           onClick={() => setIsActionButtonsCollapsed(true)}
                           onMouseEnter={() => {}}
                           onMouseLeave={() => {}}
-                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#F6C85F] hover:bg-white/[0.045] hover:text-[#F6C85F] transition-all shadow-none items-center justify-center opacity-100"
+                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFBB22] hover:bg-white/[0.045] hover:text-[#FFBB22] transition-all shadow-none items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -12693,7 +12693,7 @@ function GenreSelectModal({
                 className={cn(
                   "w-full text-left rounded-2xl border px-4 py-2 transition-all",
                   isSelected
-                    ? "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                    ? "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]"
                 )}
               >
@@ -13672,11 +13672,11 @@ function CategorySection({
 
             if (isKpop) {
               if (kpopMode === 2) {
-                kpopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                kpopStyle = "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
                 displayLabel = "K-Pop (Mix)";
               } else if (kpopMode === 1) {
-                kpopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                kpopStyle = "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
                 displayLabel = "K-Pop";
               } else {
@@ -13690,11 +13690,11 @@ function CategorySection({
             let citypopStyle = "";
             if (isCitypop) {
               if (citypopMode === 2) {
-                citypopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                citypopStyle = "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
                 displayLabel = "City Pop(M)";
               } else if (citypopMode === 1) {
-                citypopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                citypopStyle = "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
                 displayLabel = "City Pop(O)";
               } else {
@@ -13789,7 +13789,7 @@ function CategorySection({
                     className={cn(
                       "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                       isPinned 
-                        ? "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong opacity-100 scale-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)]" 
+                        ? "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong opacity-100 scale-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)]" 
                         : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-amber-300"
                     )}
                   >

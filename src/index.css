@@ -43,11 +43,11 @@
   --soridraw-border: #f1efed;
   --soridraw-text-main: #1a1a1a;
   --soridraw-text-muted: #7d756d;
-  --soridraw-selected-bg: #F6C85F;
+  --soridraw-selected-bg: #FFBB22;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #F6C85F;
+  --soridraw-menu-theme-color: #FFBB22;
   --soridraw-green-tone: #7FBD75;
-  --soridraw-menu-amber: #F6C85F;
+  --soridraw-menu-amber: #FFBB22;
   --soridraw-menu-red: #E45F59;
   --soridraw-menu-green: #7FBD75;
 }
@@ -78,11 +78,11 @@
   --soridraw-border: rgba(255, 255, 255, 0.25);
   --soridraw-text-main: #f8f9fa;
   --soridraw-text-muted: #b0b3b8;
-  --soridraw-selected-bg: #F6C85F;
+  --soridraw-selected-bg: #FFBB22;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #F6C85F;
+  --soridraw-menu-theme-color: #FFBB22;
   --soridraw-green-tone: #7FBD75;
-  --soridraw-menu-amber: #F6C85F;
+  --soridraw-menu-amber: #FFBB22;
   --soridraw-menu-red: #E45F59;
   --soridraw-menu-green: #7FBD75;
 }
@@ -282,9 +282,9 @@ body::-webkit-scrollbar-thumb:hover {
   --soridraw-border: rgba(241, 218, 164, 0.10);
   --soridraw-text-main: #f8f9fa;
   --soridraw-text-muted: #b0b3b8;
-  --soridraw-selected-bg: #F6C85F;
+  --soridraw-selected-bg: #FFBB22;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #F6C85F;
+  --soridraw-menu-theme-color: #FFBB22;
   --soridraw-green-tone: #7FBD75;
 }
 
@@ -383,7 +383,7 @@ body::-webkit-scrollbar-thumb:hover {
 .soridraw-selected-strong .soridraw-count-badge-main,
 .soridraw-count-badge-main {
   background: rgba(3, 3, 3, 0.94) !important;
-  color: var(--soridraw-badge-accent, #F6C85F) !important;
+  color: var(--soridraw-badge-accent, #FFBB22) !important;
   font-weight: 950 !important;
   -webkit-text-stroke: 0 !important;
   text-shadow: 0 0 0 transparent !important;

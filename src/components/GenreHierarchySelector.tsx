@@ -22,13 +22,13 @@ function cn(...inputs: ClassValue[]) {
 
 
 const genreAccent = {
-  bar: 'bg-[#F6C85F]/95',
-  text: 'text-[#FFD98A]',
-  softText: 'text-[#FFD98A]/58',
-  selected: 'bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#F6C85F]/14 border-black/20 text-[#FFD98A] hover:bg-[#F6C85F]/20',
-  summaryActive: 'bg-[#F6C85F]/[0.035] border-[#F6C85F]/15 text-[#FFD98A]',
-  summaryHover: 'hover:border-[#F6C85F]/20 hover:bg-[#F6C85F]/[0.035]',
+  bar: 'bg-[#FFBB22]/95',
+  text: 'text-[#FFD36A]',
+  softText: 'text-[#FFD36A]/58',
+  selected: 'bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#FFBB22]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFBB22]/20',
+  summaryActive: 'bg-[#FFBB22]/[0.035] border-[#FFBB22]/15 text-[#FFD36A]',
+  summaryHover: 'hover:border-[#FFBB22]/20 hover:bg-[#FFBB22]/[0.035]',
   summaryBorder: 'rgba(246, 200, 95, 0.14)',
   summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
   summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
@@ -910,8 +910,8 @@ export default function GenreHierarchySelector({
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
-          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#F6C85F]/30", genreAccent.summaryHover),
-          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#F6C85F]/30"
+          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#FFBB22]/30", genreAccent.summaryHover),
+          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#FFBB22]/30"
         )}
         style={{
           '--soridraw-summary-border': genreAccent.summaryBorder,

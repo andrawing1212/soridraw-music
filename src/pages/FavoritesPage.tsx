@@ -3721,7 +3721,7 @@ ${song.prompt}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               onClick={() => navigate('/studio')}
-              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#DFA05D] transition-all flex items-center justify-center"
+              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#FFBB22] transition-all flex items-center justify-center"
             >
               <Zap className="w-4 h-4" />
             </button>

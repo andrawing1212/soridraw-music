@@ -4926,7 +4926,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               onClick={() => navigate('/studio')}
-              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#DFA05D] hover:bg-white/5 shadow-btn transition-all"
+              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-white/5 shadow-btn transition-all"
             >
               <Zap className="w-4 h-4" />
             </button>
@@ -5762,7 +5762,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {isSharedView && (
               <button
                 onClick={() => navigate('/studio')}
-                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#DFA05D] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
+                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
               >
                 <Zap className="w-4 h-4" />스튜디오
               </button>

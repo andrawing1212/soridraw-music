@@ -13665,10 +13665,10 @@ function CategorySection({
 
             const labelLength = String(displayLabel ?? '').replace(/\s+/g, '').length;
             const uniformLabelTextClass = labelLength >= 6
-              ? "text-[11px] md:text-[11.5px] leading-[1.05]"
+              ? "text-[13px] md:text-[11.5px] leading-[1.05]"
               : labelLength >= 4
-                ? "text-[11px] md:text-[11.5px] leading-[1.08]"
-                : "text-[13px] md:text-[13.5px] leading-tight";
+                ? "text-[13px] md:text-[11.5px] leading-[1.08]"
+                : "text-[15px] md:text-[13.5px] leading-tight";
 
             if (isKpop) {
               if (kpopMode === 2) {
@@ -17580,7 +17580,7 @@ function VocalControl({
                 }}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
+                  "flex-1 py-2.5 rounded-xl text-[14px] font-bold transition-all",
                   vocalMode === mode 
                     ? "bg-[#7FBD75] text-[#171717] font-black shadow-md" 
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-btn-hover"
@@ -17600,7 +17600,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
                     ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
@@ -17615,7 +17615,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
                     ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
@@ -17632,7 +17632,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
+                  "py-3.5 px-3 rounded-2xl text-[15px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
                   maleCount > 0
                     ? "bg-blue-600/20 border-blue-500/40 text-blue-400"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -17646,7 +17646,7 @@ function VocalControl({
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "py-3.5 px-3 rounded-2xl text-[13px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
+                  "py-3.5 px-3 rounded-2xl text-[15px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
                   femaleCount > 0
                     ? "bg-pink-600/20 border-pink-500/40 text-pink-400"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -17715,7 +17715,7 @@ function VocalControl({
                                 onMouseEnter={() => onHover({ id: `role-${role}`, ...info })}
                                 onMouseLeave={() => onHover(null)}
                                 className={cn(
-                                  "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all border",
+                                  "px-2.5 py-1 rounded-md text-[12px] font-bold transition-all border",
                                   isActive
                                     ? "bg-[#7FBD75]/20 border-black/20 text-[#B8F4AA]"
                                     : isRoleLimitReached
@@ -17762,11 +17762,11 @@ function VocalControl({
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <span className={cn(
-                                "text-[10px] font-black tracking-tight",
+                                "text-[12px] font-black tracking-tight",
                                 member.gender === 'male' ? "text-[#4B6280]" : "text-[#73495D]"
                               )}>보컬 캐릭터 만들기</span>
                             </div>
-                            <p className="mt-1 text-[10px] font-bold text-[var(--text-primary)] truncate">
+                            <p className="mt-1 text-[12px] font-bold text-[var(--text-primary)] truncate">
                               {getVocalCharacterSummary(member)}
                             </p>
                           </div>
@@ -17801,7 +17801,7 @@ function VocalControl({
                                   type="button"
                                   onClick={() => { handleUpdateMember(idx, { toneId: undefined }); setMemberToneDirectInputId(null); setMemberToneDirectDraft(''); setActiveVocalTonePopup(null); }}
                                   className={cn(
-                                    "w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border",
+                                    "w-full text-left px-2.5 py-1.5 rounded-lg text-[12px] font-bold transition-all border",
                                     !member.toneId
                                       ? "bg-[#7FBD75] text-[#171717] font-black border-black/20 shadow-lg shadow-[#7FBD75]/20"
                                       : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
@@ -17827,21 +17827,21 @@ function VocalControl({
                                         if (e.key === 'Escape') cancelMemberToneDirectInput();
                                       }}
                                       placeholder="직접 입력: 예: 공기 섞인 콧소리, 2000s K-indie airy tone"
-                                      className="w-full rounded-lg border border-[#3a3a3a] bg-[#1f1f1f] px-2.5 py-2 text-[10px] font-bold text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:border-brand-orange/60"
+                                      className="w-full rounded-lg border border-[#3a3a3a] bg-[#1f1f1f] px-2.5 py-2 text-[12px] font-bold text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:border-brand-orange/60"
                                       autoFocus
                                     />
                                     <div className="grid grid-cols-2 gap-1.5">
                                       <button
                                         type="button"
                                         onClick={cancelMemberToneDirectInput}
-                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a]"
+                                        className="px-2.5 py-1.5 rounded-lg text-[12px] font-bold border bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a]"
                                       >
                                         취소
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => applyMemberToneDirectInput(idx)}
-                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-brand-orange border-brand-orange text-white shadow-lg shadow-[#7FBD75]/20 disabled:opacity-50"
+                                        className="px-2.5 py-1.5 rounded-lg text-[12px] font-bold border bg-brand-orange border-brand-orange text-white shadow-lg shadow-[#7FBD75]/20 disabled:opacity-50"
                                         disabled={!memberToneDirectDraft.trim()}
                                       >
                                         적용
@@ -17855,7 +17855,7 @@ function VocalControl({
                                       e.stopPropagation();
                                       startMemberToneDirectInput(member);
                                     }}
-                                    className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
+                                    className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[12px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
                                   >
                                     <span>직접 입력</span>
                                     <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -17872,7 +17872,7 @@ function VocalControl({
                                         type="button"
                                         onClick={() => { handleUpdateMember(idx, { toneId: tone.id }); setMemberToneDirectInputId(null); setMemberToneDirectDraft(''); setActiveVocalTonePopup(null); }}
                                         className={cn(
-                                          "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border text-left",
+                                          "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[12px] font-bold transition-all border text-left",
                                           isToneActive
                                             ? "bg-[#7FBD75] text-[#171717] font-black border-black/20 shadow-lg shadow-[#7FBD75]/20"
                                             : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"

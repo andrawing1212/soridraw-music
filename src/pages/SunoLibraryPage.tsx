@@ -252,7 +252,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistDragging, setPlaylistDragging] = useState<{ section: 'normal' | 'shared'; playlistId: string } | null>(null);
   const playlistButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const playlistPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const playlistDragRef = useRef<{ section: 'normal' | 'shared'; playlistId: string; pointerId: number; startX: number; startY: number; active: boolean } | null>(null);
+  const playlistDragRef = useRef<{ section: 'normal' | 'shared'; playlistId: string; pointerId: number; startX: number; startY: number; active: boolean; target?: HTMLButtonElement | null } | null>(null);
   const playlistSuppressClickRef = useRef<string | null>(null);
   const playlistsRef = useRef<Playlist[]>([]);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
@@ -4848,7 +4848,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const pointerId = event.pointerId;
     const startX = event.clientX;
     const startY = event.clientY;
-    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false };
+    const target = event.currentTarget;
+    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false, target };
 
     playlistPressTimerRef.current = window.setTimeout(() => {
       const drag = playlistDragRef.current;
@@ -4857,7 +4858,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       setPlaylistDragging({ section, playlistId: playlist.id! });
       document.body.classList.add('soridraw-folder-dragging');
       try {
-        event.currentTarget.setPointerCapture(pointerId);
+        target.setPointerCapture(pointerId);
       } catch {
         // Ignore capture failures.
       }
@@ -4901,7 +4902,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }, 250);
 
     try {
-      event?.currentTarget.releasePointerCapture?.(drag.pointerId);
+      (event?.currentTarget || drag.target)?.releasePointerCapture?.(drag.pointerId);
     } catch {
       // Ignore release failures.
     }
@@ -5712,8 +5713,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedNormalPlaylistId(playlist.id!);
                         setActivePlaylistSection('normal');
                       }}
-                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border touch-pan-x select-none ${
-                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing' : ''
+                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
+                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-none' : 'touch-pan-x'
                       } ${
                         isDraggingPlaylist ? 'soridraw-folder-drag-active z-10' : ''
                       } ${
@@ -5761,7 +5762,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setActivePlaylistSection('shared');
                       }}
                       className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
-                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing' : ''
+                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-none' : 'touch-pan-x'
                       } ${
                         isDraggingPlaylist ? 'soridraw-folder-drag-active z-10' : ''
                       } ${

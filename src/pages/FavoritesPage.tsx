@@ -458,7 +458,7 @@ export default function FavoritesPage({
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
   const musicNoteFolderButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const musicNoteFolderPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const musicNoteFolderDragRef = useRef<{ mode: MusicNoteFolderMode; folderId: string; pointerId: number; startX: number; startY: number; active: boolean } | null>(null);
+  const musicNoteFolderDragRef = useRef<{ mode: MusicNoteFolderMode; folderId: string; pointerId: number; startX: number; startY: number; active: boolean; target?: HTMLButtonElement | null } | null>(null);
   const musicNoteFolderSuppressClickRef = useRef<string | null>(null);
   const myNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
   const sharedNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_SHARED_NOTE_FOLDERS);
@@ -3066,7 +3066,8 @@ ${song.prompt}
     const pointerId = event.pointerId;
     const startX = event.clientX;
     const startY = event.clientY;
-    musicNoteFolderDragRef.current = { mode, folderId: folder.id, pointerId, startX, startY, active: false };
+    const target = event.currentTarget;
+    musicNoteFolderDragRef.current = { mode, folderId: folder.id, pointerId, startX, startY, active: false, target };
 
     musicNoteFolderPressTimerRef.current = window.setTimeout(() => {
       const drag = musicNoteFolderDragRef.current;
@@ -3075,7 +3076,7 @@ ${song.prompt}
       setMusicNoteFolderDragging({ mode, folderId: folder.id });
       document.body.classList.add('soridraw-folder-dragging');
       try {
-        event.currentTarget.setPointerCapture(pointerId);
+        target.setPointerCapture(pointerId);
       } catch {
         // Ignore capture failures on older mobile browsers.
       }
@@ -3119,7 +3120,7 @@ ${song.prompt}
     }, 250);
 
     try {
-      event?.currentTarget.releasePointerCapture?.(drag.pointerId);
+      (event?.currentTarget || drag.target)?.releasePointerCapture?.(drag.pointerId);
     } catch {
       // Ignore release failures.
     }
@@ -3164,8 +3165,9 @@ ${song.prompt}
                   setSelectedId(folder.id);
                 }}
                 className={cn(
-                  'shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border touch-pan-x select-none',
-                  !isDefaultFolder && 'cursor-grab active:cursor-grabbing',
+                  'shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none',
+                  !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-none',
+                  isDefaultFolder && 'touch-pan-x',
                   isDraggingFolder && 'soridraw-folder-drag-active z-10',
                   selectedId === folder.id
                     ? 'bg-[#AC5045]/78 text-white border-[#AC5045]/55 shadow-lg'

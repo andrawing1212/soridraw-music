@@ -181,7 +181,6 @@ function AnimatedTrackPlayButton({
               ? 'ring-2 ring-[#658761]/45'
               : 'hover:ring-2 hover:ring-[#658761]/35 group-hover:scale-[1.03]'
       }`}
-      title={durationLabel || undefined}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-[#658761]/10 via-[#658761]/6 to-white/[0.03]" />
       {shouldUseImage ? (
@@ -2927,6 +2926,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const isTrackSelected = (key: string) => Boolean(selectedTrackMap[key]);
 
+  const clearLibrarySelectionClickGuards = () => {
+    clearLibraryLongPressTimer();
+    libraryLongPressTriggeredRef.current = false;
+    librarySuppressNextCardClickRef.current = false;
+    librarySuppressNextCardClickKeyRef.current = null;
+    libraryDragSelectSuppressClickRef.current = false;
+    libraryCardClickStartPointRef.current = null;
+  };
+
   const toggleSelectedTrack = (selection: MultiSelectedTrack, force?: boolean) => {
     setSelectedTrackMap((prev) => {
       const exists = Boolean(prev[selection.key]);
@@ -4808,7 +4816,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             <button
               onClick={() => navigate('/studio')}
               className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#DFA05D] hover:bg-white/5 shadow-btn transition-all"
-              title="스튜디오"
             >
               <Zap className="w-4 h-4" />
             </button>
@@ -4861,7 +4868,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
                       workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
                     }`}
-                    title={opt.label}
                   >
                     <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                   </button>
@@ -5242,14 +5248,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         <button
           onClick={() => handleRenamePlaylist(activePlaylist)}
           className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#B8C9B2] hover:bg-white/5 transition-all"
-          title="플레이리스트 이름 변경"
         >
           <Edit2 className="w-4 h-4" />
         </button>
         <button
           onClick={() => handleDeletePlaylist(activePlaylist)}
           className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-red-400 hover:bg-red-400/10 transition-all"
-          title="플레이리스트 삭제"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -5262,7 +5266,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       className={`soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
+        const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
         const hasOpenMoreMenu = Boolean(activeMenuState || activePlaylistItemMenu || bulkMenuState);
+
+        if (multiSelectMode && isSelectionActionTarget) return;
 
         if (hasOpenMoreMenu && !target.closest('[data-more-menu-panel="true"]')) {
           e.preventDefault();
@@ -5628,7 +5635,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               type="button"
               onClick={handleCreditShortcutClick}
               className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2] transition-all hover:bg-[#658761]/18 active:scale-[0.98]"
-              title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인 · 마이페이지 크레딧 확인으로 이동` : '마이페이지 크레딧 확인으로 이동'}
             >
               {remainingCredits.toLocaleString()} credit
             </button>
@@ -5672,7 +5678,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   type="button"
                   onClick={handleCreditShortcutClick}
                   className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#658761]/22 bg-[#658761]/12 text-xs font-bold text-[#B8C9B2] transition-all hover:bg-[#658761]/18 active:scale-[0.98]"
-                  title={remainingCreditsUpdatedAt ? `${formatCreditCheckedAt(remainingCreditsUpdatedAt)} 확인 · 마이페이지 크레딧 확인으로 이동` : '마이페이지 크레딧 확인으로 이동'}
                 >
                   남은 크레딧 {remainingCredits.toLocaleString()}
                 </button>
@@ -5831,7 +5836,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                              if (shouldIgnoreLibraryCardClickFromPointerTravel(e)) return;
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
                              if (multiSelectMode) {
+                               e.preventDefault();
+                               e.stopPropagation();
                                toggleSelectedTrack(selection);
+                               clearLibrarySelectionClickGuards();
+                               resetLibraryDragSelectState();
                                return;
                              }
                              if (audioUrl) {
@@ -5863,9 +5872,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               type="button"
                               data-no-card-long-press="true"
                               data-selection-checkbox="true"
-                              onClick={(e) => { if (consumeLibraryDragSelectClick(e)) return; e.stopPropagation(); toggleSelectedTrack(selection); }}
+                              onClick={(e) => {
+                            if (consumeLibraryDragSelectClick(e)) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleSelectedTrack(selection);
+                            clearLibrarySelectionClickGuards();
+                            resetLibraryDragSelectState();
+                          }}
                               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
-                              title={isSelected ? '선택 해제' : '선택'}
                             >
                               {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                             </button>
@@ -5883,7 +5898,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               }}
                               className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
                               style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
-                              title="색상 지정"
                             />
                             {activeColorMenu === `workspace-${group.id}-${idx}` && (
                               <div data-floating-menu="true" className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20" onClick={(e) => e.stopPropagation()}>
@@ -5901,7 +5915,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                     }}
                                     className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
                                     style={{ backgroundColor: c.color }}
-                                    title={c.label}
                                   />
                                 ))}
                               </div>
@@ -5917,7 +5930,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             {sunoVersionLabel && (
                               <span
                                 className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${getSunoModelVersionBadgeClass(sunoVersionLabel)}`}
-                                title={`Suno ${sunoVersionLabel}로 생성`}
                               >
                                 {sunoVersionLabel}
                               </span>
@@ -5943,7 +5955,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           {isCompleted && isWorkspaceItemUnplayed(group, item, idx) && (
                             <span
                               className="w-2 h-2 rounded-full bg-[#658761] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
-                              title="아직 재생하지 않은 완성곡"
                             />
                           )}
 
@@ -6003,7 +6014,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <p className="text-[11px] text-white/35">
                   {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 총 {filteredTracks.length}세트
                 </p>
-                {showWorkspaceMoreTooltip && (
+                {false && showWorkspaceMoreTooltip && (
                   <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#658761]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
                     <p className="text-xs font-bold text-[#658761]">더보기</p>
                     <p className="mt-1 text-[11px] text-white/60">곡을 10세트 더 불러옵니다.</p>
@@ -6053,7 +6064,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
                           : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
-                      title={isDefaultPlaylist ? playlist.title : '0.7초 길게 눌러 순서 변경'}
                     >
                       {playlist.title}
                     </button>
@@ -6062,7 +6072,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button 
                   onClick={() => handleAddPlaylist('normal')}
                   className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
-                  title="플레이리스트 추가"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
@@ -6104,7 +6113,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
                           : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
-                      title={isDefaultPlaylist ? playlist.title : '0.7초 길게 눌러 순서 변경'}
                     >
                       <Share2 className="w-3.5 h-3.5" />
                       {playlist.title}
@@ -6114,7 +6122,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button 
                   onClick={() => handleAddPlaylist('shared')}
                   className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
-                  title="공유 플레이리스트 추가"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
@@ -6220,7 +6227,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         if (consumeLibrarySuppressedClick(event, selection.key)) return;
                         if (consumeLibraryDragSelectClick(event)) return;
                         if (shouldIgnoreLibraryCardClickFromPointerTravel(event)) return;
-                        if (multiSelectMode) toggleSelectedTrack(selection);
+                        if (multiSelectMode) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleSelectedTrack(selection);
+                          clearLibrarySelectionClickGuards();
+                          resetLibraryDragSelectState();
+                        }
                       }}
                       data-selection-keep="true"
                       className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
@@ -6311,9 +6324,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           type="button"
                           data-no-card-long-press="true"
                           data-selection-checkbox="true"
-                          onClick={(e) => { if (consumeLibraryDragSelectClick(e)) return; e.stopPropagation(); toggleSelectedTrack(selection); }}
+                          onClick={(e) => {
+                            if (consumeLibraryDragSelectClick(e)) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleSelectedTrack(selection);
+                            clearLibrarySelectionClickGuards();
+                            resetLibraryDragSelectState();
+                          }}
                           className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
-                          title={isSelected ? '선택 해제' : '선택'}
                         >
                           {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                         </button>
@@ -6386,7 +6405,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         {isPlaylistItemUnplayed(item) && (
                           <span
                             className="w-2 h-2 rounded-full bg-[#658761] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
-                            title="아직 재생하지 않은 완성곡"
                           />
                         )}
                         {playlistSortMode === 'custom' && (
@@ -6722,7 +6740,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   type="button"
                   onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
-                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onTouchStart={(event) => event.stopPropagation()}
                   data-selection-keep="true"
                   data-floating-menu="true"
                   className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
@@ -6768,7 +6788,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   type="button"
                   onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
-                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onTouchStart={(event) => event.stopPropagation()}
                   data-selection-keep="true"
                   data-floating-menu="true"
                   className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"

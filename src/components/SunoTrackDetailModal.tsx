@@ -236,7 +236,6 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
                     <button
                       onClick={() => onEdit(displayTrack)}
                       className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#8A4EAD]/35 bg-[#8A4EAD]/10 text-[#A567CF] shadow-[0_0_16px_rgba(138,78,173,0.14)] transition-all hover:bg-[#8A4EAD]/16 hover:border-[#A567CF]/50 hover:text-[#C084F5]"
-                      title="다음곡에 적용"
                       aria-label="다음곡에 적용"
                     >
                       <RefreshCw className="h-5 w-5" />

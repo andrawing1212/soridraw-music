@@ -652,6 +652,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryDragSelectMovedRef = useRef(false);
   const libraryDragSelectStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryDragSelectStartSelectionRef = useRef<MultiSelectedTrack | null>(null);
+  const libraryDragSelectActionRef = useRef<'select' | 'deselect'>('select');
+  const libraryDragSelectVisitedKeysRef = useRef<Set<string>>(new Set());
   const libraryDragSelectSuppressClickRef = useRef(false);
 
   useEffect(() => {
@@ -2937,9 +2939,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     });
   };
 
-  const addLibraryTrackToSelection = (selection: MultiSelectedTrack | null) => {
+  const setLibraryTrackSelection = (selection: MultiSelectedTrack | null, shouldSelect: boolean) => {
     if (!selection) return;
-    setSelectedTrackMap((prev) => prev[selection.key] ? prev : { ...prev, [selection.key]: selection });
+    setSelectedTrackMap((prev) => {
+      const exists = Boolean(prev[selection.key]);
+      if (shouldSelect) return exists ? prev : { ...prev, [selection.key]: selection };
+      if (!exists) return prev;
+      const next = { ...prev };
+      delete next[selection.key];
+      return next;
+    });
+  };
+
+  const applyLibraryTrackDragSelection = (selection: MultiSelectedTrack | null) => {
+    if (!selection || libraryDragSelectVisitedKeysRef.current.has(selection.key)) return;
+    libraryDragSelectVisitedKeysRef.current.add(selection.key);
+    setLibraryTrackSelection(selection, libraryDragSelectActionRef.current === 'select');
   };
 
   const resetLibraryDragSelectState = () => {
@@ -2947,6 +2962,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     libraryDragSelectMovedRef.current = false;
     libraryDragSelectStartPointRef.current = null;
     libraryDragSelectStartSelectionRef.current = null;
+    libraryDragSelectActionRef.current = 'select';
+    libraryDragSelectVisitedKeysRef.current.clear();
   };
 
   const handleLibraryDragSelectStart = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
@@ -2962,6 +2979,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     libraryDragSelectMovedRef.current = false;
     libraryDragSelectStartPointRef.current = { x: event.clientX, y: event.clientY };
     libraryDragSelectStartSelectionRef.current = selection;
+    libraryDragSelectActionRef.current = selectedTrackMap[selection.key] ? 'deselect' : 'select';
+    libraryDragSelectVisitedKeysRef.current.clear();
   };
 
   const handleLibraryDragSelectMove = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
@@ -2975,8 +2994,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (movedDistance <= 5 && !libraryDragSelectMovedRef.current) return;
 
     libraryDragSelectMovedRef.current = true;
-    addLibraryTrackToSelection(libraryDragSelectStartSelectionRef.current);
-    addLibraryTrackToSelection(selection);
+    applyLibraryTrackDragSelection(libraryDragSelectStartSelectionRef.current);
+    applyLibraryTrackDragSelection(selection);
   };
 
   const handleLibraryDragSelectEnter = (event: React.MouseEvent, selection: MultiSelectedTrack) => {
@@ -2984,8 +3003,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     event.preventDefault();
     libraryDragSelectMovedRef.current = true;
-    addLibraryTrackToSelection(libraryDragSelectStartSelectionRef.current);
-    addLibraryTrackToSelection(selection);
+    applyLibraryTrackDragSelection(libraryDragSelectStartSelectionRef.current);
+    applyLibraryTrackDragSelection(selection);
   };
 
   const handleLibraryDragSelectEnd = () => {
@@ -3052,6 +3071,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     const startPoint = getLibraryLongPressPoint(event);
     if (!startPoint) return;
+    const shouldStartDragSelectAfterLongPress = !('touches' in event);
     libraryLongPressStartPointRef.current = startPoint;
     libraryCardClickStartPointRef.current = startPoint;
 
@@ -3063,6 +3083,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         clearMultiSelect();
       } else {
         enterMultiSelectWith(selection);
+        if (shouldStartDragSelectAfterLongPress) {
+          libraryDragSelectActiveRef.current = true;
+          libraryDragSelectMovedRef.current = false;
+          libraryDragSelectStartPointRef.current = startPoint;
+          libraryDragSelectStartSelectionRef.current = selection;
+          libraryDragSelectActionRef.current = 'select';
+          libraryDragSelectVisitedKeysRef.current = new Set([selection.key]);
+        }
       }
     }, 500);
   };

@@ -778,6 +778,8 @@ export default function FavoritesPage({
   const selectionDragMovedRef = useRef(false);
   const selectionDragStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionDragStartSongIdRef = useRef<string | null>(null);
+  const selectionDragActionRef = useRef<'select' | 'deselect'>('select');
+  const selectionDragVisitedSongIdsRef = useRef<Set<string>>(new Set());
   const suppressSelectionDragClickRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
   const selectionHistoryPushedRef = useRef(false);
@@ -2125,8 +2127,18 @@ export default function FavoritesPage({
     return movedDistance > 10;
   };
 
-  const addSongToSelection = (songId: string) => {
-    setSelectedSongIds(prev => prev.includes(songId) ? prev : [...prev, songId]);
+  const setSongSelection = (songId: string, shouldSelect: boolean) => {
+    setSelectedSongIds(prev => {
+      const exists = prev.includes(songId);
+      if (shouldSelect) return exists ? prev : [...prev, songId];
+      return exists ? prev.filter(id => id !== songId) : prev;
+    });
+  };
+
+  const applySongSelectionByDrag = (songId: string | null) => {
+    if (!songId || selectionDragVisitedSongIdsRef.current.has(songId)) return;
+    selectionDragVisitedSongIdsRef.current.add(songId);
+    setSongSelection(songId, selectionDragActionRef.current === 'select');
   };
 
   const toggleSongSelection = (songId: string) => {
@@ -2140,6 +2152,8 @@ export default function FavoritesPage({
     selectionDragMovedRef.current = false;
     selectionDragStartPointRef.current = null;
     selectionDragStartSongIdRef.current = null;
+    selectionDragActionRef.current = 'select';
+    selectionDragVisitedSongIdsRef.current.clear();
   };
 
   const handleSelectionDragStart = (event: React.MouseEvent, songId: string) => {
@@ -2155,6 +2169,8 @@ export default function FavoritesPage({
     selectionDragMovedRef.current = false;
     selectionDragStartPointRef.current = { x: event.clientX, y: event.clientY };
     selectionDragStartSongIdRef.current = songId;
+    selectionDragActionRef.current = selectedSongIds.includes(songId) ? 'deselect' : 'select';
+    selectionDragVisitedSongIdsRef.current.clear();
   };
 
   const handleSelectionDragMove = (event: React.MouseEvent, songId: string) => {
@@ -2168,8 +2184,8 @@ export default function FavoritesPage({
     if (movedDistance <= 5 && !selectionDragMovedRef.current) return;
 
     selectionDragMovedRef.current = true;
-    if (selectionDragStartSongIdRef.current) addSongToSelection(selectionDragStartSongIdRef.current);
-    addSongToSelection(songId);
+    applySongSelectionByDrag(selectionDragStartSongIdRef.current);
+    applySongSelectionByDrag(songId);
   };
 
   const handleSelectionDragEnter = (event: React.MouseEvent, songId: string) => {
@@ -2177,8 +2193,8 @@ export default function FavoritesPage({
 
     event.preventDefault();
     selectionDragMovedRef.current = true;
-    if (selectionDragStartSongIdRef.current) addSongToSelection(selectionDragStartSongIdRef.current);
-    addSongToSelection(songId);
+    applySongSelectionByDrag(selectionDragStartSongIdRef.current);
+    applySongSelectionByDrag(songId);
   };
 
   const handleSelectionDragEnd = () => {
@@ -2230,6 +2246,7 @@ export default function FavoritesPage({
 
     const startPoint = getLongPressPoint(event);
     if (!startPoint) return;
+    const shouldStartSelectionDragAfterLongPress = !('touches' in event);
     selectionLongPressStartPointRef.current = startPoint;
     cardClickStartPointRef.current = startPoint;
 
@@ -2248,6 +2265,14 @@ export default function FavoritesPage({
       } else {
         setIsSelectionMode(true);
         setSelectedSongIds(prev => prev.includes(song.id) ? prev : [...prev, song.id]);
+        if (shouldStartSelectionDragAfterLongPress) {
+          selectionDragActiveRef.current = true;
+          selectionDragMovedRef.current = false;
+          selectionDragStartPointRef.current = startPoint;
+          selectionDragStartSongIdRef.current = song.id;
+          selectionDragActionRef.current = 'select';
+          selectionDragVisitedSongIdsRef.current = new Set([song.id]);
+        }
         setPendingSelectionAction(null);
         setActiveFavoriteMenuId(null);
         setActiveFavoriteColorMenuId(null);

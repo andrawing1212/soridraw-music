@@ -11383,7 +11383,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 ? (!isActionButtonsCollapsed && shouldShowActionButtons
                     ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
-                : "bottom-10 max-w-[250px] md:max-w-[400px]"
+                : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
+                    ? "bottom-[7.75rem] md:bottom-[8.75rem] max-w-[250px] md:max-w-[400px]"
+                    : "bottom-10 max-w-[250px] md:max-w-[400px]")
             )}
           >
             <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>

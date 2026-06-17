@@ -44,7 +44,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 
@@ -417,6 +417,8 @@ const getMusicNoteFolderIdFromSong = (song: any, mode: MusicNoteFolderMode): str
   return '__unassigned__';
 };
 
+const isFavoriteInTrash = (song: any): boolean => Boolean(song?.hidden === true || song?.favoriteHidden === true || song?.deletedAt || song?.trashedAt);
+
 
 export default function FavoritesPage({ 
   favorites, 
@@ -476,6 +478,7 @@ export default function FavoritesPage({
   const myNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
   const sharedNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_SHARED_NOTE_FOLDERS);
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
+  const [favoriteTrashView, setFavoriteTrashView] = useState(false);
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [visibleCount, setVisibleCount] = useState(15);
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -764,6 +767,7 @@ export default function FavoritesPage({
   const favoriteUserRef = useRef<User | null>(user);
   const [lastSelectionAction, setLastSelectionAction] = useState<'none' | 'lock' | 'unlock'>('none');
   const [pendingSelectionAction, setPendingSelectionAction] = useState<'delete' | 'lock' | 'unlock' | null>(null);
+  const [favoriteSelectionMoreOpen, setFavoriteSelectionMoreOpen] = useState(false);
   const recentlyUnlockedFavoriteIdsRef = useRef<Set<string>>(new Set());
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectionLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -908,33 +912,162 @@ export default function FavoritesPage({
 
   const saveSongsToMusicNoteFolder = async (folderId: string) => {
     if (!user?.uid || !musicNoteFolderPicker) return;
-    const mode = musicNoteFolderPicker.mode;
+    const picker = musicNoteFolderPicker;
+    const mode = picker.mode;
     const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
     const folder = folders.find((item) => item.id === folderId) || folders[0];
     if (!folder) return;
+
+    const targetSongIds = Array.from(new Set(picker.songIds.filter(Boolean)));
+    if (targetSongIds.length === 0) return;
 
     const updates = mode === 'sharedNote'
       ? { sharedNoteFolderId: folder.id, sharedNoteFolderTitle: folder.title, sharedNoteFolderUpdatedAt: Date.now() }
       : { noteFolderId: folder.id, noteFolderTitle: folder.title, noteFolderUpdatedAt: Date.now() };
 
+    // 폴더를 누르는 순간 선택 UI를 즉시 닫고, 저장은 뒤에서 바로 진행한다.
+    // 이렇게 해야 폴더 목록이 아래로 내려가는 중간 절차 없이 바로 이동된 것처럼 보인다.
+    setMusicNoteFolderPicker(null);
+    setFavoriteSelectionMoreOpen(false);
+    if (isSelectionMode) exitSelectionMode('history');
+
+    if (mode === 'sharedNote') {
+      setMusicNoteViewMode('sharedNote');
+      setSelectedSharedNoteFolderId(folder.id);
+    } else {
+      setMusicNoteViewMode('myNote');
+      setSelectedMyNoteFolderId(folder.id);
+    }
+
     try {
       await Promise.all(
-        musicNoteFolderPicker.songIds.map((id) => updateDoc(doc(db, 'favorites', id), updates))
+        targetSongIds.map((id) => updateDoc(doc(db, 'favorites', id), updates))
       );
       showFavoriteToast(`${folder.title} 폴더에 저장했습니다.`);
-      setMusicNoteFolderPicker(null);
-      if (mode === 'sharedNote') {
-        setMusicNoteViewMode('sharedNote');
-        setSelectedSharedNoteFolderId(folder.id);
-      } else {
-        setMusicNoteViewMode('myNote');
-        setSelectedMyNoteFolderId(folder.id);
-      }
-      exitSelectionMode('ui');
     } catch (error) {
       console.error('save music note folder failed:', error);
       showFavoriteToast('폴더 저장에 실패했습니다.');
     }
+  };
+
+  const removeSongsFromCurrentMusicNoteFolder = async (songIds: string[], modeOverride?: MusicNoteFolderMode): Promise<boolean> => {
+    if (!user?.uid) return false;
+    const mode = modeOverride || (musicNoteViewMode === 'sharedNote' ? 'sharedNote' : musicNoteViewMode === 'myNote' ? 'myNote' : null);
+    const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
+    if (!mode || safeSongIds.length === 0) return false;
+
+    const updates = mode === 'sharedNote'
+      ? { sharedNoteFolderId: null, sharedNoteFolderTitle: null, sharedNoteFolderUpdatedAt: Date.now() }
+      : { noteFolderId: null, noteFolderTitle: null, noteFolderUpdatedAt: Date.now() };
+
+    try {
+      await Promise.all(safeSongIds.map((id) => updateDoc(doc(db, 'favorites', id), updates)));
+      showFavoriteToast(`${safeSongIds.length}곡을 현재 폴더에서 제거했습니다.`);
+      return true;
+    } catch (error) {
+      console.error('remove songs from music note folder failed:', error);
+      showFavoriteToast('폴더에서 제거하지 못했습니다.');
+      return false;
+    }
+  };
+
+  const moveSongsToFavoriteTrash = async (songIds: string[]): Promise<boolean> => {
+    if (!user?.uid) return false;
+    const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
+    if (safeSongIds.length === 0) return false;
+
+    try {
+      await Promise.all(
+        safeSongIds.map((id) => updateDoc(doc(db, 'favorites', id), {
+          hidden: true,
+          favoriteHidden: true,
+          isPublic: false,
+          deletedAt: serverTimestamp(),
+          trashedAt: Date.now(),
+        }))
+      );
+      showFavoriteToast(`${safeSongIds.length}곡을 휴지통으로 이동했습니다.`);
+      return true;
+    } catch (error) {
+      console.error('move songs to favorite trash failed:', error);
+      showFavoriteToast('휴지통 이동에 실패했습니다.');
+      return false;
+    }
+  };
+
+  const restoreSongsFromFavoriteTrash = async (songIds: string[]): Promise<boolean> => {
+    if (!user?.uid) return false;
+    const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
+    if (safeSongIds.length === 0) return false;
+
+    try {
+      await Promise.all(
+        safeSongIds.map((id) => updateDoc(doc(db, 'favorites', id), {
+          hidden: false,
+          favoriteHidden: false,
+          deletedAt: null,
+          trashedAt: null,
+        }))
+      );
+      showFavoriteToast(`${safeSongIds.length}곡을 복구했습니다.`);
+      return true;
+    } catch (error) {
+      console.error('restore songs from favorite trash failed:', error);
+      showFavoriteToast('복구에 실패했습니다.');
+      return false;
+    }
+  };
+
+  const permanentlyDeleteFavoriteSongs = async (songIds: string[]): Promise<boolean> => {
+    if (!user?.uid) return false;
+    const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
+    if (safeSongIds.length === 0) return false;
+
+    try {
+      await Promise.all(
+        safeSongIds.map((id) => deleteDoc(doc(db, 'favorites', id)))
+      );
+      showFavoriteToast(`${safeSongIds.length}곡을 영구 삭제했습니다.`);
+      return true;
+    } catch (error) {
+      console.error('permanently delete favorite songs failed:', error);
+      showFavoriteToast('영구 삭제에 실패했습니다.');
+      return false;
+    }
+  };
+
+  const handleSelectionRestoreFromTrash = () => {
+    if (selectedSongIds.length === 0) return;
+    restoreSongsFromFavoriteTrash(selectedSongIds).then((restored) => {
+      if (restored) {
+        setFavoriteSelectionMoreOpen(false);
+        exitSelectionMode();
+      }
+    });
+  };
+
+  const handleSelectionPermanentDeleteFromTrash = () => {
+    if (selectedSongIds.length === 0) return;
+    permanentlyDeleteFavoriteSongs(selectedSongIds).then((deleted) => {
+      if (deleted) {
+        setFavoriteSelectionMoreOpen(false);
+        exitSelectionMode();
+      }
+    });
+  };
+
+  const deleteSongsByMusicNoteContext = async (songs: any[]): Promise<boolean> => {
+    const deletableSongs = songs.filter((song) => song?.id && !song.isLocked);
+    if (deletableSongs.length === 0) {
+      showFavoriteToast(songs.length === 0 ? '삭제할 곡을 선택해주세요.' : '잠긴 곡은 삭제할 수 없습니다.');
+      return false;
+    }
+
+    if (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') {
+      return removeSongsFromCurrentMusicNoteFolder(deletableSongs.map((song) => song.id), musicNoteViewMode);
+    }
+
+    return moveSongsToFavoriteTrash(deletableSongs.map((song) => song.id));
   };
 
 
@@ -1808,9 +1941,11 @@ export default function FavoritesPage({
       return;
     }
     
-    toggleFavorite(song);
-    setSelectedSong(null);
-    setConfirmDeleteSong(false);
+    const deleted = await deleteSongsByMusicNoteContext([song]);
+    if (deleted) {
+      setSelectedSong(null);
+      setConfirmDeleteSong(false);
+    }
   };
 
   const getBulkLockHover = (isConfirm = confirmLockAll === 1) => ({
@@ -2056,6 +2191,7 @@ export default function FavoritesPage({
     setSelectedSongIds([]);
     setLastSelectionAction('none');
     setPendingSelectionAction(null);
+    setFavoriteSelectionMoreOpen(false);
     setConfirmDeleteAll(0);
     setConfirmUnlockAll(0);
     setConfirmLockAll(0);
@@ -2245,8 +2381,8 @@ export default function FavoritesPage({
     const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
     const deletableSongs = selectedSongs.filter(song => !song.isLocked);
     
-    await Promise.all(deletableSongs.map(song => Promise.resolve(toggleFavorite(song))));
-    exitSelectionMode();
+    const deleted = await deleteSongsByMusicNoteContext(deletableSongs);
+    if (deleted) exitSelectionMode();
   };
 
   const handleSelectionConfirm = () => {
@@ -2262,6 +2398,7 @@ export default function FavoritesPage({
   };
 
   const handleSortChange = (newSort: 'latest' | 'oldest' | 'genre' | 'title' | 'locked') => {
+    setFavoriteTrashView(false);
     if (newSort === 'title') {
       setSortBy(prev => prev === 'title-en' ? 'title-ko' : 'title-en');
     } else if (newSort === 'genre') {
@@ -2377,8 +2514,39 @@ ${song.prompt}
   };
 
   const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+  const isFavoriteTrashMode = musicNoteViewMode === 'noteSpace' && favoriteTrashView;
   const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
+  const areSelectedSongsAllLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked);
+
+  const handleSelectionMoveToFolder = () => {
+    if (selectedSongIds.length === 0) return;
+    setFavoriteSelectionMoreOpen(false);
+    openMusicNoteFolderPicker(selectedSongIds, musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
+  };
+
+  const handleSelectionQuickLock = async () => {
+    if (selectedSongs.length === 0) return;
+    const shouldLock = !areSelectedSongsAllLocked;
+    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
+    setFavoriteSelectionMoreOpen(false);
+    showFavoriteToast(shouldLock ? `${selectedSongs.length}곡을 잠금 처리했습니다.` : `${selectedSongs.length}곡 잠금을 해제했습니다.`);
+  };
+
+  const handleSelectionQuickDelete = () => {
+    if (selectedSongIds.length === 0) return;
+    const deletable = favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+    if (deletable.length === 0) {
+      showFavoriteToast('잠긴 곡은 삭제할 수 없습니다.');
+      return;
+    }
+    deleteSongsByMusicNoteContext(deletable).then((deleted) => {
+      if (deleted) {
+        setFavoriteSelectionMoreOpen(false);
+        exitSelectionMode();
+      }
+    });
+  };
 
   const applyKeywordsToNext = (song: any) => {
     onHover(null);
@@ -2653,7 +2821,7 @@ ${song.prompt}
     }
   };
 
-  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'delete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected', song: any) => {
+  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
     setActiveFavoriteMenuId(null);
 
     if (action === 'details') {
@@ -2721,8 +2889,18 @@ ${song.prompt}
     }
 
     if (action === 'deleteSelected') {
-      favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
-      exitSelectionMode();
+      const targets = favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+      deleteSongsByMusicNoteContext(targets).then((deleted) => { if (deleted) exitSelectionMode(); });
+      return;
+    }
+
+    if (action === 'restoreSelected') {
+      handleSelectionRestoreFromTrash();
+      return;
+    }
+
+    if (action === 'permanentDeleteSelected') {
+      handleSelectionPermanentDeleteFromTrash();
       return;
     }
 
@@ -2761,11 +2939,21 @@ ${song.prompt}
       return;
     }
 
+    if (action === 'restore') {
+      restoreSongsFromFavoriteTrash([song.id]);
+      return;
+    }
+
+    if (action === 'permanentDelete') {
+      permanentlyDeleteFavoriteSongs([song.id]);
+      return;
+    }
+
     if (action === 'delete') {
       if (song.isLocked) {
         forceDeleteUnlockedFavoriteIfNeeded(song);
       } else {
-        toggleFavorite(song);
+        deleteSongsByMusicNoteContext([song]);
       }
     }
   };
@@ -2820,12 +3008,16 @@ ${song.prompt}
       getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
+    const isTrashed = isFavoriteInTrash(song);
+    const matchesTrashState = favoriteTrashView
+      ? musicNoteViewMode === 'noteSpace' && isTrashed
+      : !isTrashed;
     const matchesFolder = musicNoteViewMode === 'noteSpace'
       ? true
       : musicNoteViewMode === 'myNote'
         ? getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
         : getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
-    return matchesSearch && matchesColor && matchesFolder;
+    return matchesSearch && matchesColor && matchesTrashState && matchesFolder;
   }).sort((a, b) => {
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
 
@@ -3459,6 +3651,17 @@ ${song.prompt}
                 {mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}
               </button>
             ))}
+            <button
+              onClick={() => {
+                setMusicNoteViewMode('noteSpace');
+                setFavoriteTrashView((prev) => !prev);
+                setVisibleCount(15);
+                exitSelectionMode('ui');
+              }}
+              className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${favoriteTrashView ? 'bg-[#AC5045]/72 text-white' : 'bg-transparent text-white/50 hover:text-white/75'}`}
+            >
+              휴지통
+            </button>
           </div>
         </div>
       </div>
@@ -3471,6 +3674,7 @@ ${song.prompt}
               type="button"
               onClick={() => {
                 setMusicNoteViewMode(tab.id);
+                setFavoriteTrashView(false);
                 setVisibleCount(15);
                 exitSelectionMode('ui');
               }}
@@ -3779,7 +3983,23 @@ ${song.prompt}
                               className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-[#AC5045]/30 bg-[#181818] py-2 shadow-2xl"
                               onClick={(event) => event.stopPropagation()}
                             >
-                            {isBulkMenu ? (
+                            {isFavoriteTrashMode ? (
+                              isBulkMenu ? (
+                                <>
+                                  <div className="px-4 py-2 text-xs font-bold text-[#AC5045]">선택한 {selectedSongIds.length}곡</div>
+                                  <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
+                                  <button onClick={() => executeFavoriteMenuAction('restoreSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />복구</button>
+                                  <button onClick={() => executeFavoriteMenuAction('permanentDeleteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />영구 삭제</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />디테일</button>
+                                  <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택</button>
+                                  <button onClick={() => executeFavoriteMenuAction('restore', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />복구</button>
+                                  <button onClick={() => executeFavoriteMenuAction('permanentDelete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />영구 삭제</button>
+                                </>
+                              )
+                            ) : isBulkMenu ? (
                               <>
                                 <div className="px-4 py-2 text-xs font-bold text-[#AC5045]">선택한 {selectedSongIds.length}곡</div>
                                 <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
@@ -3942,20 +4162,155 @@ ${song.prompt}
       </AnimatePresence>
 
       <AnimatePresence>
+        {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && (
+          <motion.div
+            data-selection-keep="true"
+            data-selection-action-bar="true"
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424]/78 px-3 py-2.5 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {isFavoriteTrashMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={selectAllVisibleFavorites}
+                  className="flex min-w-[70px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[82px] md:px-3"
+                >
+                  <CheckSquare className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">전체선택</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectionRestoreFromTrash}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <RefreshCw className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">복구</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectionPermanentDeleteFromTrash}
+                  className="flex min-w-[70px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-red-500/10 md:min-w-[82px] md:px-3"
+                >
+                  <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">영구삭제</span>
+                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setFavoriteSelectionMoreOpen(prev => !prev)}
+                    className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                  >
+                    <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
+                    <span className="text-[12px] font-black md:text-sm">더보기</span>
+                  </button>
+                  <AnimatePresence>
+                    {favoriteSelectionMoreOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ duration: 0.16 }}
+                        className="absolute bottom-[calc(100%+12px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
+                      >
+                        <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
+                        <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
+                        <button onClick={handleSelectionRestoreFromTrash} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><RefreshCw className="h-4 w-4" />복구</button>
+                        <button onClick={handleSelectionPermanentDeleteFromTrash} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-red-400 hover:bg-red-500/10"><Trash2 className="h-4 w-4" />영구 삭제</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSelectionMoveToFolder}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <FolderOutput className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">이동</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectionQuickLock}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  {areSelectedSongsAllLocked ? <Unlock className="h-6 w-6 md:h-7 md:w-7" /> : <Lock className="h-6 w-6 md:h-7 md:w-7" />}
+                  <span className="text-[12px] font-black md:text-sm">잠금</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFavoriteSelectionMoreOpen(false); shareSelectedFavoriteSongs(); }}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <Share2 className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">공유</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSelectionQuickDelete}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-red-500/10 md:min-w-[72px] md:px-3"
+                >
+                  <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">삭제</span>
+                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setFavoriteSelectionMoreOpen(prev => !prev)}
+                    className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                  >
+                    <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
+                    <span className="text-[12px] font-black md:text-sm">더보기</span>
+                  </button>
+                  <AnimatePresence>
+                    {favoriteSelectionMoreOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ duration: 0.16 }}
+                        className="absolute bottom-[calc(100%+12px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
+                      >
+                        <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
+                        <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {musicNoteFolderPicker && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
-            className="fixed inset-0 z-[155] flex items-end justify-center bg-black/55 px-4 pb-6 backdrop-blur-sm md:items-center md:pb-0"
+            className={cn(
+              "fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center",
+              isSelectionMode && selectedSongIds.length > 0
+                ? "pb-[128px] md:pb-[142px]"
+                : "pb-6 md:pb-0"
+            )}
             onClick={() => setMusicNoteFolderPicker(null)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 18, scale: 0.96 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0, y: 0, scale: 1 }}
+              transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
               className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#AC5045]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
@@ -4009,7 +4364,10 @@ ${song.prompt}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 14, scale: 0.96 }}
             transition={{ duration: 0.16 }}
-            className="fixed bottom-6 left-1/2 z-[160] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+            className={cn(
+              "fixed left-1/2 z-[160] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#1c1c1c]/95 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl",
+              isSelectionMode && selectedSongIds.length > 0 ? "bottom-[7.75rem] md:bottom-[8.75rem]" : "bottom-6"
+            )}
           >
             <span className="inline-flex items-center gap-2 whitespace-pre-line">
               <Check className="h-4 w-4 text-[#AC5045]" />

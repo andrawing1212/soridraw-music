@@ -6,7 +6,7 @@ import {
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
-  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, CheckSquare, Square, ListChecks, Palette
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -642,6 +642,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [bulkMenuState, setBulkMenuState] = useState<{ top: number; right: number; anchorEl?: HTMLElement | null } | null>(null);
   const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
   const selectedTrackCount = selectedTrackList.length;
+  const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -665,6 +666,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         setSelectedTrackMap({});
         setBulkShareModalOpen(false);
         setBulkMoveModalOpen(false);
+        setLibrarySelectionMoreOpen(false);
       }
     };
 
@@ -758,6 +760,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [isPlaylistConfirming, setIsPlaylistConfirming] = useState(false);
   const [bulkShareModalOpen, setBulkShareModalOpen] = useState(false);
   const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
+  const [librarySelectionMoreOpen, setLibrarySelectionMoreOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteAction | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -2940,6 +2943,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setBulkMenuState(null);
     setBulkShareModalOpen(false);
     setBulkMoveModalOpen(false);
+    setLibrarySelectionMoreOpen(false);
   };
 
   const clearLibraryLongPressTimer = () => {
@@ -4135,20 +4139,98 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
+    const fromPlaylistId = activePlaylistId;
+    const targetItems = targets.map((selection) => selection.item as PlaylistItem);
+
+    // 폴더를 누르는 순간 선택 UI를 즉시 닫고, 이동 처리는 뒤에서 바로 진행한다.
+    setBulkMoveModalOpen(false);
+    setBulkMenuState(null);
+    clearMultiSelect();
+
     let moved = 0;
-    for (const selection of targets) {
+    for (const item of targetItems) {
       try {
-        await movePlaylistItem(user.uid, activePlaylistId, targetPlaylistId, selection.item as PlaylistItem);
+        await movePlaylistItem(user.uid, fromPlaylistId, targetPlaylistId, item);
         moved += 1;
       } catch (e: any) {
         if (e?.message !== 'DUPLICATE') console.error('bulk move failed:', e);
       }
     }
 
-    setBulkMoveModalOpen(false);
-    setBulkMenuState(null);
-    clearMultiSelect();
     showToast(moved > 0 ? `${moved}곡을 폴더 이동했습니다.` : '이미 대상 폴더에 있는 곡입니다.');
+  };
+
+  const handleBulkRestoreSelectedFromTrash = async () => {
+    if (!user || selectedTrackCount === 0) return;
+    setLibrarySelectionMoreOpen(false);
+    setBulkMenuState(null);
+
+    try {
+      const workspaceGroups = new Map<string, { group: any; indices: Set<number> }>();
+      for (const selection of selectedTrackList) {
+        if (selection.context !== 'workspace') continue;
+        const groupId = selection.group?.id;
+        if (!groupId) continue;
+        if (!workspaceGroups.has(groupId)) workspaceGroups.set(groupId, { group: selection.group, indices: new Set<number>() });
+        workspaceGroups.get(groupId)!.indices.add(selection.idx);
+      }
+
+      for (const [groupId, payload] of workspaceGroups.entries()) {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', groupId);
+        const items = extractSunoData(payload.group);
+        if (items.length > 0) {
+          const nextSunoData = items.map((entry: any, entryIndex: number) => payload.indices.has(entryIndex) ? { ...entry, hidden: false } : entry);
+          await updateDoc(trackRef, { sunoData: nextSunoData, hidden: false, deletedAt: null });
+        } else {
+          await updateDoc(trackRef, { hidden: false, deletedAt: null });
+        }
+      }
+
+      clearMultiSelect();
+      showToast('선택한 곡을 복구했습니다.');
+    } catch (e) {
+      console.error('bulk restore failed:', e);
+      showToast('선택한 곡 복구에 실패했습니다.');
+    }
+  };
+
+  const handleBulkPermanentDeleteSelectedFromTrash = async () => {
+    if (!user || selectedTrackCount === 0) return;
+    setLibrarySelectionMoreOpen(false);
+    setBulkMenuState(null);
+
+    try {
+      const { deleteDoc } = await import('firebase/firestore');
+      const workspaceGroups = new Map<string, { group: any; indices: Set<number> }>();
+      for (const selection of selectedTrackList) {
+        if (selection.context !== 'workspace') continue;
+        const groupId = selection.group?.id;
+        if (!groupId) continue;
+        if (!workspaceGroups.has(groupId)) workspaceGroups.set(groupId, { group: selection.group, indices: new Set<number>() });
+        workspaceGroups.get(groupId)!.indices.add(selection.idx);
+      }
+
+      for (const [groupId, payload] of workspaceGroups.entries()) {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', groupId);
+        const items = extractSunoData(payload.group);
+        if (items.length > 0) {
+          const nextSunoData = items.filter((_: any, entryIndex: number) => !payload.indices.has(entryIndex));
+          if (nextSunoData.length === 0) {
+            await deleteDoc(trackRef);
+          } else {
+            await updateDoc(trackRef, { sunoData: nextSunoData });
+          }
+        } else {
+          await deleteDoc(trackRef);
+        }
+      }
+
+      clearMultiSelect();
+      showToast('선택한 곡을 영구 삭제했습니다.');
+    } catch (e) {
+      console.error('bulk permanent delete failed:', e);
+      showToast('선택한 곡 영구 삭제에 실패했습니다.');
+    }
   };
 
   const handleBulkDeleteSelected = () => {
@@ -4206,6 +4288,28 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         }
       }
     });
+  };
+
+  const handleLibrarySelectionMove = async () => {
+    if (selectedTrackCount === 0) return;
+    setLibrarySelectionMoreOpen(false);
+    setBulkMenuState(null);
+
+    if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
+      if (hasUnavailableSharedSelection) {
+        showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.');
+        return;
+      }
+      setBulkMoveModalOpen(true);
+      return;
+    }
+
+    await handleBulkPlaylistSave();
+  };
+
+  const handleLibrarySelectionLock = () => {
+    setLibrarySelectionMoreOpen(false);
+    showToast('라이브러리 잠금 기능은 다음 단계에서 연결합니다.');
   };
 
   const handleDeleteClick = (groupId: string, itemIndex: number, group: any, action: 'hide' | 'restore' | 'permanentDelete') => {
@@ -6313,7 +6417,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center"
+            className={`fixed left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center ${multiSelectMode && selectedTrackCount > 0 ? 'bottom-[7.75rem] md:bottom-[8.75rem]' : 'bottom-24'}`}
           >
             <Share2 className="w-4 h-4 text-[#658761] shrink-0" />
             <span className="text-sm font-bold tracking-tight whitespace-nowrap">{shareToastInfo}</span>
@@ -6424,6 +6528,103 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
 
       <AnimatePresence>
+        {multiSelectMode && selectedTrackCount > 0 && !bulkMoveModalOpen && !bulkShareModalOpen && (
+          <motion.div
+            data-selection-keep="true"
+            data-floating-menu="true"
+            data-selection-action-bar="true"
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed bottom-5 left-1/2 z-[170] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-[34px] border border-white/10 bg-[#242424]/78 px-3 py-2.5 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl favorite-keyword-strip md:bottom-7 md:gap-3 md:px-5 md:py-3"
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {isLibraryTrashMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={selectAllVisibleTracks}
+                  className="flex min-w-[70px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[82px] md:px-3"
+                >
+                  <CheckSquare className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">전체선택</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkRestoreSelectedFromTrash}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <RefreshCw className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">복구</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkPermanentDeleteSelectedFromTrash}
+                  className="flex min-w-[70px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-red-500/10 md:min-w-[82px] md:px-3"
+                >
+                  <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">영구삭제</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => { setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">더보기</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleLibrarySelectionMove}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <FolderOutput className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">이동</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLibrarySelectionLock}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <Lock className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">잠금</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLibrarySelectionMoreOpen(false); setBulkShareModalOpen(true); setBulkMenuState(null); }}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <Share2 className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">공유</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteSelected}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-red-500/10 md:min-w-[72px] md:px-3"
+                >
+                  <Trash2 className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">삭제</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => { setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
+                >
+                  <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
+                  <span className="text-[12px] font-black md:text-sm">더보기</span>
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {bulkMenuState && multiSelectMode && (
           <>
             <motion.div
@@ -6438,86 +6639,124 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 선택한 {selectedTrackCount}곡
               </div>
 
-              <button
-                onClick={selectAllVisibleTracks}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
-              >
-                <CheckSquare className="w-4 h-4" />
-                전체선택
-              </button>
+              {isLibraryTrashMode ? (
+                <>
+                  <button
+                    onClick={selectAllVisibleTracks}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    전체선택
+                  </button>
 
-              <button
-                onClick={clearMultiSelect}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
-              >
-                <X className="w-4 h-4" />
-                선택해제
-              </button>
+                  <button
+                    onClick={clearMultiSelect}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                    선택해제
+                  </button>
 
-              <button
-                disabled={hasUnavailableSharedSelection}
-                onClick={handleBulkDownload}
-                className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
-              >
-                <Download className="w-4 h-4" />
-                다운로드
-              </button>
+                  <button
+                    onClick={handleBulkRestoreSelectedFromTrash}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    복구
+                  </button>
 
-              <button
-                disabled={hasUnavailableSharedSelection}
-                onClick={() => {
-                  if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 공유할 수 없습니다.'); return; }
-                  setBulkMenuState(null); setBulkShareModalOpen(true);
-                }}
-                className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
-              >
-                <Share2 className="w-4 h-4" />
-                공유
-              </button>
+                  <button
+                    onClick={handleBulkPermanentDeleteSelectedFromTrash}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    영구 삭제
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={selectAllVisibleTracks}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    전체선택
+                  </button>
 
-              {!isSharedView && libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
-                <button
-                  onClick={handleBulkFavorite}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
-                >
-                  <Star className="w-4 h-4" />
-                  즐겨찾기
-                </button>
-              )}
+                  <button
+                    onClick={clearMultiSelect}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                    선택해제
+                  </button>
 
-              {(libraryViewMode !== 'sharedPlaylist' || isSharedView) && (
-                <button
-                  disabled={hasUnavailableSharedSelection}
-                  onClick={handleBulkPlaylistSave}
-                  className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
-                >
-                  <FolderOutput className="w-4 h-4" />
-                  플레이리스트 저장
-                </button>
-              )}
+                  <button
+                    disabled={hasUnavailableSharedSelection}
+                    onClick={handleBulkDownload}
+                    className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+                  >
+                    <Download className="w-4 h-4" />
+                    다운로드
+                  </button>
 
-              {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
-                <button
-                  disabled={hasUnavailableSharedSelection}
-                  onClick={() => {
-                    if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.'); return; }
-                    setBulkMenuState(null); setBulkMoveModalOpen(true);
-                  }}
-                  className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
-                >
-                  <FolderOutput className="w-4 h-4" />
-                  폴더 이동
-                </button>
-              )}
+                  <button
+                    disabled={hasUnavailableSharedSelection}
+                    onClick={() => {
+                      if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 공유할 수 없습니다.'); return; }
+                      setBulkMenuState(null); setBulkShareModalOpen(true);
+                    }}
+                    className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+                  >
+                    <Share2 className="w-4 h-4" />
+                    공유
+                  </button>
 
-              {!isSharedView && (
-                <button
-                  onClick={handleBulkDeleteSelected}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  {libraryViewMode === 'workspace' ? '선택삭제(휴지통)' : '리스트 삭제'}
-                </button>
+                  {!isSharedView && libraryViewMode !== 'sharedPlaylist' && selectedTrackList.some((selection) => selection.context !== 'sharedPlaylist' && (selection.item as any)?.sourceType !== 'shared_track') && (
+                    <button
+                      onClick={handleBulkFavorite}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-all"
+                    >
+                      <Star className="w-4 h-4" />
+                      즐겨찾기
+                    </button>
+                  )}
+
+                  {(libraryViewMode !== 'sharedPlaylist' || isSharedView) && (
+                    <button
+                      disabled={hasUnavailableSharedSelection}
+                      onClick={handleBulkPlaylistSave}
+                      className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+                    >
+                      <FolderOutput className="w-4 h-4" />
+                      플레이리스트 저장
+                    </button>
+                  )}
+
+                  {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
+                    <button
+                      disabled={hasUnavailableSharedSelection}
+                      onClick={() => {
+                        if (hasUnavailableSharedSelection) { showToast('비공개로 전환된 공유곡은 폴더 이동할 수 없습니다.'); return; }
+                        setBulkMenuState(null); setBulkMoveModalOpen(true);
+                      }}
+                      className={hasUnavailableSharedSelection ? blockedBulkActionClass : normalBulkActionClass}
+                    >
+                      <FolderOutput className="w-4 h-4" />
+                      폴더 이동
+                    </button>
+                  )}
+
+                  {!isSharedView && (
+                    <button
+                      onClick={handleBulkDeleteSelected}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-left hover:bg-red-500/10 transition-all text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {libraryViewMode === 'workspace' ? '선택삭제(휴지통)' : '리스트 삭제'}
+                    </button>
+                  )}
+                </>
               )}
             </motion.div>
           </>
@@ -6526,7 +6765,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkShareModalOpen && multiSelectMode && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkShareModalOpen(false)}>
+          <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkShareModalOpen(false)}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -6578,11 +6817,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
+          <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 0, scale: 1 }}
+              transition={{ duration: 0.08 }}
               className="w-full max-w-sm bg-[#1a1a1a] border border-black/20 rounded-2xl p-5 shadow-2xl relative overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >

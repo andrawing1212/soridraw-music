@@ -3718,8 +3718,8 @@ ${song.prompt}
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="mt-[13px] md:mt-[21px] space-y-12">
-          <div className="space-y-4">
+        <div className="mt-[13px] md:mt-[21px] space-y-12" data-selection-keep="true">
+          <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id, song);

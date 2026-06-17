@@ -5591,7 +5591,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="!mt-3 pt-0 space-y-4 md:space-y-5">
+          <div className="!mt-3 pt-0 space-y-4 md:space-y-5" data-selection-keep="true">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
@@ -5878,7 +5878,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
 
         {(libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') && (
-          <div className="space-y-5 mt-3">
+          <div className="space-y-5 mt-3" data-selection-keep="true">
             {/* Playlist Tabs Layout */}
             
             {libraryViewMode === 'playlist' && (
@@ -5990,7 +5990,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <Loader2 className="w-6 h-6 animate-spin text-[#658761]" />
               </div>
             ) : playlistItems.length > 0 ? (
-              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-black/15">
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-black/15" data-selection-keep="true">
                 {(() => {
                   const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {

@@ -405,13 +405,16 @@ const normalizeMusicNoteFolders = (value: any, fallback: MusicNoteFolder[]): Mus
 };
 
 const getMusicNoteFolderIdFromSong = (song: any, mode: MusicNoteFolderMode): string => {
-  if (!song) return mode === 'myNote' ? 'default' : '__unassigned__';
+  if (!song) return '__unassigned__';
   const raw = mode === 'sharedNote'
     ? song.sharedNoteFolderId || song.sharedNoteFolder || song.noteSharedFolderId
     : song.noteFolderId || song.myNoteFolderId || song.favoriteFolderId || song.folderId;
   const normalized = String(raw || '').trim();
   if (normalized) return normalized;
-  return mode === 'myNote' ? 'default' : '__unassigned__';
+
+  // 노트 스페이스에 저장된 곡을 마이 노트 기본 폴더로 자동 포함하지 않는다.
+  // 사용자가 폴더 저장에서 직접 기본 폴더를 선택한 곡만 기본 폴더에 표시한다.
+  return '__unassigned__';
 };
 
 

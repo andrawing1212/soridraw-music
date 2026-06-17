@@ -263,6 +263,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     target?: HTMLButtonElement | null;
     windowMoveHandler?: (event: PointerEvent) => void;
     windowEndHandler?: (event: PointerEvent) => void;
+    windowTouchMoveHandler?: (event: TouchEvent) => void;
+    windowTouchEndHandler?: (event: TouchEvent) => void;
   } | null>(null);
   const playlistSuppressClickRef = useRef<string | null>(null);
   const playlistsRef = useRef<Playlist[]>([]);
@@ -4793,10 +4795,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     if (clientX < rect.left + edgeSize) {
       const strength = Math.min(1, Math.max(0, (rect.left + edgeSize - clientX) / edgeSize));
-      delta = -Math.max(1, Math.round(1 + strength * 5));
+      delta = -(0.25 + strength * 0.55);
     } else if (clientX > rect.right - edgeSize) {
       const strength = Math.min(1, Math.max(0, (clientX - (rect.right - edgeSize)) / edgeSize));
-      delta = Math.max(1, Math.round(1 + strength * 5));
+      delta = 0.25 + strength * 0.55;
     }
 
     if (delta !== 0) {
@@ -4892,20 +4894,40 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const handleWindowPointerMove = (nativeEvent: PointerEvent) => {
         const currentDrag = playlistDragRef.current;
         if (!currentDrag?.active || currentDrag.pointerId !== pointerId) return;
+        if (nativeEvent.pointerType === 'touch') return;
         nativeEvent.preventDefault();
         autoScrollPlaylistBar(currentDrag.section, nativeEvent.clientX);
         reorderPlaylistsByPointer(currentDrag.section, currentDrag.playlistId, nativeEvent.clientX);
+      };
+      const handleWindowTouchMove = (nativeEvent: TouchEvent) => {
+        const currentDrag = playlistDragRef.current;
+        if (!currentDrag?.active || currentDrag.pointerId !== pointerId) return;
+        const touch = nativeEvent.touches?.[0];
+        if (!touch) return;
+        nativeEvent.preventDefault();
+        autoScrollPlaylistBar(currentDrag.section, touch.clientX);
+        reorderPlaylistsByPointer(currentDrag.section, currentDrag.playlistId, touch.clientX);
       };
       const handleWindowPointerEnd = (nativeEvent: PointerEvent) => {
         const currentDrag = playlistDragRef.current;
         if (!currentDrag || currentDrag.pointerId !== pointerId) return;
         void finishPlaylistDrag();
       };
+      const handleWindowTouchEnd = () => {
+        const currentDrag = playlistDragRef.current;
+        if (!currentDrag || currentDrag.pointerId !== pointerId) return;
+        void finishPlaylistDrag();
+      };
       drag.windowMoveHandler = handleWindowPointerMove;
       drag.windowEndHandler = handleWindowPointerEnd;
+      drag.windowTouchMoveHandler = handleWindowTouchMove;
+      drag.windowTouchEndHandler = handleWindowTouchEnd;
       window.addEventListener('pointermove', handleWindowPointerMove, { passive: false });
       window.addEventListener('pointerup', handleWindowPointerEnd, { passive: false });
       window.addEventListener('pointercancel', handleWindowPointerEnd, { passive: false });
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+      window.addEventListener('touchend', handleWindowTouchEnd, { passive: false });
+      window.addEventListener('touchcancel', handleWindowTouchEnd, { passive: false });
       try {
         target.setPointerCapture(pointerId);
       } catch {
@@ -4927,9 +4949,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     if (!drag.active) return;
+    if (event.pointerType === 'touch') return;
     event.preventDefault();
-    // Keep the drag responsive while the finger is still inside the original playlist button.
-    // The window-level listener still handles movement outside the playlist row.
+    // Keep the drag responsive while the cursor is still inside the original playlist button.
+    // Touch dragging is handled by the window-level touch listener so native scroll does not trap it.
     autoScrollPlaylistBar(drag.section, event.clientX);
     reorderPlaylistsByPointer(drag.section, drag.playlistId, event.clientX);
   };
@@ -4944,6 +4967,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (drag?.windowEndHandler) {
       window.removeEventListener('pointerup', drag.windowEndHandler);
       window.removeEventListener('pointercancel', drag.windowEndHandler);
+    }
+    if (drag?.windowTouchMoveHandler) window.removeEventListener('touchmove', drag.windowTouchMoveHandler);
+    if (drag?.windowTouchEndHandler) {
+      window.removeEventListener('touchend', drag.windowTouchEndHandler);
+      window.removeEventListener('touchcancel', drag.windowTouchEndHandler);
     }
     document.body.classList.remove('soridraw-folder-dragging');
 
@@ -5754,7 +5782,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
               <div
                 ref={(element) => { playlistBarRefs.current.normal = element; }}
-                className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+                className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
               >
                 {visibleNormalPlaylists.map((playlist) => {
                   const dragKey = getPlaylistDragKey('normal', playlist.id!);
@@ -5805,7 +5833,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
               <div
                 ref={(element) => { playlistBarRefs.current.shared = element; }}
-                className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+                className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
               >
                 {visibleSharedPlaylists.map((playlist) => {
                   const dragKey = getPlaylistDragKey('shared', playlist.id!);

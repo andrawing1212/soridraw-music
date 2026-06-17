@@ -586,6 +586,13 @@ body.soridraw-folder-dragging {
   cursor: grabbing;
   user-select: none;
   -webkit-user-select: none;
+  overscroll-behavior: contain;
+}
+
+body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
+  touch-action: none;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
 }
 
 @keyframes soridraw-folder-drag-active-pulse {

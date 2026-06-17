@@ -2970,7 +2970,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!multiSelectMode || event.button !== 0) return;
 
     const target = event.target as HTMLElement | null;
-    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
+    const isSelectionCheckbox = Boolean(target?.closest('[data-selection-checkbox="true"]'));
+    if (!isSelectionCheckbox && target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"]')) {
       return;
     }
 
@@ -3019,6 +3020,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     event.preventDefault();
     event.stopPropagation();
+    (event.nativeEvent as any)?.stopImmediatePropagation?.();
     libraryDragSelectSuppressClickRef.current = false;
     return true;
   };
@@ -3122,6 +3124,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     event.preventDefault?.();
     event.stopPropagation?.();
+    event.nativeEvent?.stopImmediatePropagation?.();
     libraryLongPressTriggeredRef.current = false;
     librarySuppressNextCardClickRef.current = false;
     libraryCardClickStartPointRef.current = null;
@@ -5846,7 +5849,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <button
                               type="button"
                               data-no-card-long-press="true"
-                              onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
+                              data-selection-checkbox="true"
+                              onClick={(e) => { if (consumeLibraryDragSelectClick(e)) return; e.stopPropagation(); toggleSelectedTrack(selection); }}
                               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                               title={isSelected ? '선택 해제' : '선택'}
                             >
@@ -5968,10 +5972,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               );
             })}
             {hasMoreWorkspaceTracks && (
-              <div className="flex flex-col items-center gap-2 pt-8 pb-4">
+              <div className="flex flex-col items-center gap-2 pt-1 pb-4" data-selection-keep="true">
                 <button
                   type="button"
-                  onClick={() => setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length))}
+                  data-selection-keep="true"
+                  onPointerDown={(event) => { if (multiSelectMode) event.stopPropagation(); }}
+                  onClick={(event) => { event.stopPropagation(); setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length)); }}
                   onMouseEnter={() => setShowWorkspaceMoreTooltip(true)}
                   onMouseLeave={() => setShowWorkspaceMoreTooltip(false)}
                   onFocus={() => setShowWorkspaceMoreTooltip(true)}
@@ -6291,7 +6297,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <button
                           type="button"
                           data-no-card-long-press="true"
-                          onClick={(e) => { e.stopPropagation(); toggleSelectedTrack(selection); }}
+                          data-selection-checkbox="true"
+                          onClick={(e) => { if (consumeLibraryDragSelectClick(e)) return; e.stopPropagation(); toggleSelectedTrack(selection); }}
                           className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                           title={isSelected ? '선택 해제' : '선택'}
                         >
@@ -6566,6 +6573,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               exit={{ opacity: 0, scale: 0.95 }}
               className="w-full max-w-sm bg-[#1a1a1a] border border-black/20 rounded-2xl p-6 shadow-2xl relative overflow-hidden"
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-6">
                 <h2 className="text-xl font-black tracking-tight text-white mb-1">공유 설정</h2>
@@ -6700,7 +6708,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </button>
                 <button
                   type="button"
-                  onClick={(event) => { setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  data-selection-keep="true"
+                  data-floating-menu="true"
                   className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
                 >
                   <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
@@ -6743,7 +6754,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </button>
                 <button
                   type="button"
-                  onClick={(event) => { setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  data-selection-keep="true"
+                  data-floating-menu="true"
                   className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
                 >
                   <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
@@ -6762,9 +6776,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
             >
               <div className="px-4 py-2 text-[11px] font-bold text-[#658761] border-b border-black/15">
                 선택한 {selectedTrackCount}곡

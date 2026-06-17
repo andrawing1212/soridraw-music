@@ -2160,7 +2160,8 @@ export default function FavoritesPage({
     if (!isSelectionMode || event.button !== 0) return;
 
     const target = event.target as HTMLElement | null;
-    if (target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"], [data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) {
+    const isSelectionCheckbox = Boolean(target?.closest('[data-selection-checkbox="true"]'));
+    if (!isSelectionCheckbox && target?.closest('button, a, input, textarea, select, [contenteditable="true"], [data-floating-menu="true"], [data-no-card-long-press="true"], [data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) {
       return;
     }
 
@@ -2209,6 +2210,7 @@ export default function FavoritesPage({
 
     event.preventDefault();
     event.stopPropagation();
+    (event.nativeEvent as any)?.stopImmediatePropagation?.();
     suppressSelectionDragClickRef.current = false;
     return true;
   };
@@ -2282,6 +2284,18 @@ export default function FavoritesPage({
 
   const handleCardLongPressEnd = () => {
     clearSelectionLongPressTimer();
+  };
+
+  const consumeFavoriteSuppressedClick = (event: React.MouseEvent) => {
+    if (!longPressTriggeredRef.current && !suppressNextCardClickRef.current) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    (event.nativeEvent as any)?.stopImmediatePropagation?.();
+    longPressTriggeredRef.current = false;
+    suppressNextCardClickRef.current = false;
+    cardClickStartPointRef.current = null;
+    return true;
   };
 
   const exitSelectionMode = (source: 'ui' | 'history' = 'ui') => {
@@ -3081,6 +3095,7 @@ ${song.prompt}
         <span
           key={`${entry.type}-${entry.value}`}
           onClick={(event) => {
+            if (isSelectionMode) return;
             event.stopPropagation();
             onHover({
               id: `favorite-${entry.type}-${entry.value}`,
@@ -3629,10 +3644,12 @@ ${song.prompt}
         const target = e.target as HTMLElement;
 
         if (activeFavoriteMenuId && !target.closest('[data-more-menu-panel="true"]')) {
-          e.preventDefault();
-          e.stopPropagation();
           setActiveFavoriteMenuId(null);
-          return;
+          if (!target.closest('[data-selection-action-bar="true"], [data-floating-menu="true"]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
         }
 
         if (isSelectionMode && consumeSelectionDragClick(e)) return;
@@ -3826,7 +3843,7 @@ ${song.prompt}
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="mt-[13px] md:mt-[21px] space-y-12" data-selection-keep="true">
+        <div className="mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
           <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
@@ -3865,6 +3882,7 @@ ${song.prompt}
                   }}
                   onClickCapture={(event) => {
                     if (!isSelectionMode) return;
+                    if (consumeFavoriteSuppressedClick(event)) return;
                     if (consumeSelectionDragClick(event)) return;
                     const target = event.target as HTMLElement | null;
                     if (target?.closest('[data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) return;
@@ -3883,12 +3901,7 @@ ${song.prompt}
                     event.currentTarget.style.backgroundColor = '';
                   }}
                   onClick={(e) => {
-                    if (longPressTriggeredRef.current || suppressNextCardClickRef.current) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      longPressTriggeredRef.current = false;
-                      suppressNextCardClickRef.current = false;
-                      cardClickStartPointRef.current = null;
+                    if (consumeFavoriteSuppressedClick(e)) {
                       return;
                     }
 
@@ -3921,7 +3934,9 @@ ${song.prompt}
                     {isSelectionMode && (
                       <button
                         data-no-card-long-press="true"
+                        data-selection-checkbox="true"
                         onClick={(event) => {
+                          if (consumeSelectionDragClick(event)) return;
                           event.stopPropagation();
                           toggleSongSelection(song.id);
                         }}
@@ -4017,8 +4032,7 @@ ${song.prompt}
                           </div>
                           <div className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-192px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[14px] font-bold text-white/92 md:max-w-none cursor-default">
                             <span
-                              data-no-card-long-press="true"
-                              className="inline-block max-w-full select-text cursor-text"
+                              className={cn("inline-block max-w-full", isSelectionMode ? "select-none cursor-pointer" : "select-text cursor-text")}
                               onMouseDown={(event) => {
                                 const point = getLongPressPoint(event);
                                 if (point) cardClickStartPointRef.current = point;
@@ -4034,8 +4048,7 @@ ${song.prompt}
                         </div>
                         <h3 className="hidden md:block min-w-0 text-[15px] font-bold text-white truncate cursor-default">
                           <span
-                            data-no-card-long-press="true"
-                            className="inline-block max-w-full truncate align-bottom select-text cursor-text"
+                            className={cn("inline-block max-w-full truncate align-bottom", isSelectionMode ? "select-none cursor-pointer" : "select-text cursor-text")}
                             onMouseDown={(event) => {
                               const point = getLongPressPoint(event);
                               if (point) cardClickStartPointRef.current = point;
@@ -4054,7 +4067,7 @@ ${song.prompt}
                         <div
                           className="favorite-keyword-strip relative flex w-full max-w-[calc(100vw-232px)] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
                           onMouseDown={(event) => {
-                            event.stopPropagation();
+                            if (isSelectionMode) return;
                             const target = event.currentTarget;
                             const startX = event.pageX;
                             const startScrollLeft = target.scrollLeft;
@@ -4071,7 +4084,6 @@ ${song.prompt}
                             document.addEventListener('mousemove', onMove);
                             document.addEventListener('mouseup', onUp);
                           }}
-                          onClick={(event) => event.stopPropagation()}
                         >
                           {renderFavoriteKeywordChips(song)}
                         </div>
@@ -4173,9 +4185,11 @@ ${song.prompt}
           </div>
 
           {visibleCount < filteredFavorites.length && (
-            <div className="flex justify-center pt-8">
+            <div className="flex justify-center pt-1" data-selection-keep="true">
               <button
-                onClick={() => setVisibleCount(prev => prev + 15)}
+                data-selection-keep="true"
+                onPointerDown={(event) => { if (isSelectionMode) event.stopPropagation(); }}
+                onClick={(event) => { event.stopPropagation(); setVisibleCount(prev => prev + 15); }}
                 onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 15개 더 불러옵니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]"
@@ -4300,6 +4314,7 @@ ${song.prompt}
         {isSelectionMode && selectedSongIds.length > 0 && !musicNoteFolderPicker && (
           <motion.div
             data-selection-keep="true"
+            data-floating-menu="true"
             data-selection-action-bar="true"
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -4338,7 +4353,10 @@ ${song.prompt}
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setFavoriteSelectionMoreOpen(prev => !prev)}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(prev => !prev); }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    data-selection-keep="true"
+                    data-floating-menu="true"
                     className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
                   >
                     <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
@@ -4351,6 +4369,9 @@ ${song.prompt}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.16 }}
+                        data-selection-keep="true"
+                        data-floating-menu="true"
+                        data-more-menu-panel="true"
                         className="absolute bottom-[calc(100%+12px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
                       >
                         <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
@@ -4399,7 +4420,10 @@ ${song.prompt}
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setFavoriteSelectionMoreOpen(prev => !prev)}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(prev => !prev); }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    data-selection-keep="true"
+                    data-floating-menu="true"
                     className="flex min-w-[62px] flex-col items-center justify-center gap-1 rounded-2xl px-2.5 py-1.5 text-white transition-all hover:bg-white/8 md:min-w-[72px] md:px-3"
                   >
                     <MoreVertical className="h-6 w-6 md:h-7 md:w-7" />
@@ -4412,6 +4436,9 @@ ${song.prompt}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.16 }}
+                        data-selection-keep="true"
+                        data-floating-menu="true"
+                        data-more-menu-panel="true"
                         className="absolute bottom-[calc(100%+12px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
                       >
                         <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>

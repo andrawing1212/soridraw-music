@@ -22,16 +22,16 @@ function cn(...inputs: ClassValue[]) {
 
 
 const genreAccent = {
-  bar: 'bg-[#DFA05D]/95',
-  text: 'text-[#E8B878]',
-  softText: 'text-[#E8B878]/58',
-  selected: 'bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#DFA05D]/14 border-black/20 text-[#E8B878] hover:bg-[#DFA05D]/20',
-  summaryActive: 'bg-[#DFA05D]/[0.035] border-[#DFA05D]/15 text-[#E8B878]',
-  summaryHover: 'hover:border-[#DFA05D]/20 hover:bg-[#DFA05D]/[0.035]',
-  summaryBorder: 'rgba(223, 160, 93, 0.14)',
-  summaryBorderHover: 'rgba(223, 160, 93, 0.24)',
-  summaryActiveBg: 'rgba(223, 160, 93, 0.035)',
+  bar: 'bg-[#F6C85F]/95',
+  text: 'text-[#FFD98A]',
+  softText: 'text-[#FFD98A]/58',
+  selected: 'bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#F6C85F]/14 border-black/20 text-[#FFD98A] hover:bg-[#F6C85F]/20',
+  summaryActive: 'bg-[#F6C85F]/[0.035] border-[#F6C85F]/15 text-[#FFD98A]',
+  summaryHover: 'hover:border-[#F6C85F]/20 hover:bg-[#F6C85F]/[0.035]',
+  summaryBorder: 'rgba(246, 200, 95, 0.14)',
+  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
+  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
   selectedBorder: 'border-black/20',
 };
 
@@ -910,8 +910,8 @@ export default function GenreHierarchySelector({
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
-          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30", genreAccent.summaryHover),
-          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#DFA05D]/30"
+          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#F6C85F]/30", genreAccent.summaryHover),
+          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#F6C85F]/30"
         )}
         style={{
           '--soridraw-summary-border': genreAccent.summaryBorder,

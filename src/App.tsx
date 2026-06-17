@@ -525,60 +525,60 @@ type StudioSectionAccent = {
 };
 
 const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
-  bar: 'bg-[#DFA05D]/95',
-  text: 'text-[#E8B878]',
-  softText: 'text-[#E8B878]/58',
-  selected: 'bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#DFA05D]/14 border-black/20 text-[#E8B878] hover:bg-[#DFA05D]/20',
-  summaryActive: 'bg-[#DFA05D]/[0.035] border-[#DFA05D]/15 text-[#E8B878]',
-  summaryRest: 'border-[#DFA05D]/10 bg-black/5',
-  summaryHover: 'hover:border-[#DFA05D]/20 hover:bg-[#DFA05D]/[0.035]',
-  summaryBorder: 'rgba(223, 160, 93, 0.14)',
-  summaryBorderHover: 'rgba(223, 160, 93, 0.24)',
-  summaryActiveBg: 'rgba(223, 160, 93, 0.035)',
+  bar: 'bg-[#F6C85F]/95',
+  text: 'text-[#FFD98A]',
+  softText: 'text-[#FFD98A]/58',
+  selected: 'bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#F6C85F]/14 border-black/20 text-[#FFD98A] hover:bg-[#F6C85F]/20',
+  summaryActive: 'bg-[#F6C85F]/[0.035] border-[#F6C85F]/15 text-[#FFD98A]',
+  summaryRest: 'border-[#F6C85F]/10 bg-black/5',
+  summaryHover: 'hover:border-[#F6C85F]/20 hover:bg-[#F6C85F]/[0.035]',
+  summaryBorder: 'rgba(246, 200, 95, 0.14)',
+  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
+  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#DFA05D]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#DFA05D]/80 text-[#171717] border-black/20',
-  badgeAccent: '#DFA05D',
+  pointSelected: 'bg-[#F6C85F]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#F6C85F]/80 text-[#171717] border-black/20',
+  badgeAccent: '#F6C85F',
 };
 
 const STUDIO_ACCENT_RED: StudioSectionAccent = {
-  bar: 'bg-[#AC5045]/95',
-  text: 'text-[#D79084]',
-  softText: 'text-[#D79084]/58',
-  selected: 'bg-[#AC5045]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#AC5045]/15 border-black/20 text-[#D79084] hover:bg-[#AC5045]/22',
-  summaryActive: 'bg-[#AC5045]/[0.035] border-[#AC5045]/15 text-[#D79084]',
-  summaryRest: 'border-[#AC5045]/10 bg-black/5',
-  summaryHover: 'hover:border-[#AC5045]/20 hover:bg-[#AC5045]/[0.035]',
-  summaryBorder: 'rgba(172, 80, 69, 0.14)',
-  summaryBorderHover: 'rgba(172, 80, 69, 0.24)',
-  summaryActiveBg: 'rgba(172, 80, 69, 0.035)',
+  bar: 'bg-[#E45F59]/95',
+  text: 'text-[#FF9B92]',
+  softText: 'text-[#FF9B92]/58',
+  selected: 'bg-[#E45F59]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#E45F59]/15 border-black/20 text-[#FF9B92] hover:bg-[#E45F59]/22',
+  summaryActive: 'bg-[#E45F59]/[0.035] border-[#E45F59]/15 text-[#FF9B92]',
+  summaryRest: 'border-[#E45F59]/10 bg-black/5',
+  summaryHover: 'hover:border-[#E45F59]/20 hover:bg-[#E45F59]/[0.035]',
+  summaryBorder: 'rgba(228, 95, 89, 0.14)',
+  summaryBorderHover: 'rgba(228, 95, 89, 0.24)',
+  summaryActiveBg: 'rgba(228, 95, 89, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#AC5045]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#AC5045]/80 text-[#171717] font-black border-black/20',
-  badgeAccent: '#AC5045',
+  pointSelected: 'bg-[#E45F59]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#E45F59]/80 text-[#171717] font-black border-black/20',
+  badgeAccent: '#E45F59',
 };
 
 const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
-  bar: 'bg-[#658761]/95',
-  text: 'text-[#A8C49F]',
-  softText: 'text-[#A8C49F]/58',
-  selected: 'bg-[#658761]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#658761]/15 border-black/20 text-[#A8C49F] hover:bg-[#658761]/22',
-  summaryActive: 'bg-[#658761]/[0.035] border-[#658761]/15 text-[#A8C49F]',
-  summaryRest: 'border-[#658761]/10 bg-black/5',
-  summaryHover: 'hover:border-[#658761]/20 hover:bg-[#658761]/[0.035]',
-  summaryBorder: 'rgba(101, 135, 97, 0.14)',
-  summaryBorderHover: 'rgba(101, 135, 97, 0.24)',
-  summaryActiveBg: 'rgba(101, 135, 97, 0.035)',
+  bar: 'bg-[#7FBD75]/95',
+  text: 'text-[#B8F4AA]',
+  softText: 'text-[#B8F4AA]/58',
+  selected: 'bg-[#7FBD75]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#7FBD75]/15 border-black/20 text-[#B8F4AA] hover:bg-[#7FBD75]/22',
+  summaryActive: 'bg-[#7FBD75]/[0.035] border-[#7FBD75]/15 text-[#B8F4AA]',
+  summaryRest: 'border-[#7FBD75]/10 bg-black/5',
+  summaryHover: 'hover:border-[#7FBD75]/20 hover:bg-[#7FBD75]/[0.035]',
+  summaryBorder: 'rgba(127, 189, 117, 0.14)',
+  summaryBorderHover: 'rgba(127, 189, 117, 0.24)',
+  summaryActiveBg: 'rgba(127, 189, 117, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#658761]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#658761]/80 text-[#171717] font-black border-black/20',
-  badgeAccent: '#658761',
+  pointSelected: 'bg-[#7FBD75]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#7FBD75]/80 text-[#171717] font-black border-black/20',
+  badgeAccent: '#7FBD75',
 };
 
 type StudioMenuThemeKey = 'amber' | 'red' | 'green';
@@ -1207,7 +1207,7 @@ const SituationChoicePicker = ({
               <button
                 type="button"
                 onClick={startDirectInput}
-                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#A8C49F]"
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
               >
                 <span>직접 입력</span>
                 <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -1421,7 +1421,7 @@ const SituationVersionPicker = ({ value, onChange }: SituationVersionPickerProps
               <button
                 type="button"
                 onClick={startDirectInput}
-                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#A8C49F]"
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
               >
                 <span>직접 입력</span>
                 <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -1534,9 +1534,9 @@ const getStoryboardSliderHint = (value: number, left: string, right: string, lab
 
 const StoryboardSectionTitle = ({ title, description }: { title: string; description?: string }) => (
   <div className="flex items-start gap-3">
-    <span className="mt-1 h-6 w-1.5 rounded-full bg-[#AC5045] shadow-[0_0_12px_rgba(172,80,69,0.38)] shrink-0" />
+    <span className="mt-1 h-6 w-1.5 rounded-full bg-[#E45F59] shadow-[0_0_12px_rgba(228,95,89,0.38)] shrink-0" />
     <div className="min-w-0">
-      <p className="text-lg md:text-xl font-black text-[#D79084] tracking-tight">{title}</p>
+      <p className="text-lg md:text-xl font-black text-[#FF9B92] tracking-tight">{title}</p>
       {description && <p className="mt-1.5 text-sm md:text-[15px] leading-relaxed text-[var(--text-secondary)]">{description}</p>}
     </div>
   </div>
@@ -1549,15 +1549,15 @@ const StoryboardSlider = ({ label, left, right, value, onChange, description, st
   const rightLabelClass = right.length > 3 ? 'text-[11px] md:text-xs tracking-[-0.02em]' : 'text-xs md:text-sm';
   const accentStyle = accent === 'characterB'
     ? {
-        text: 'text-[#E8B878]',
-        dot: 'bg-[#DFA05D] shadow-[0_0_8px_rgba(223,160,93,0.36)]',
-        badge: 'border-black/20 text-[#E8B878]',
+        text: 'text-[#FFD98A]',
+        dot: 'bg-[#F6C85F] shadow-[0_0_8px_rgba(246,200,95,0.36)]',
+        badge: 'border-black/20 text-[#FFD98A]',
         slider: 'storyboard-slider--character-b',
       }
     : {
-        text: 'text-[#D79084]',
-        dot: 'bg-[#AC5045] shadow-[0_0_8px_rgba(172,80,69,0.36)]',
-        badge: 'border-black/20 text-[#D79084]',
+        text: 'text-[#FF9B92]',
+        dot: 'bg-[#E45F59] shadow-[0_0_8px_rgba(228,95,89,0.36)]',
+        badge: 'border-black/20 text-[#FF9B92]',
         slider: 'storyboard-slider--story',
       };
   return (
@@ -2116,11 +2116,11 @@ const MOOD_BPM: Record<string, { min: number; max: number }> = {
 };
 
 const CYCLE_VARIANT_COLORS = [
-  "bg-[#A47048]/72 border-[#C69A76]/55 text-[#FFF7EF] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
-  "bg-[#AC6B69]/72 border-[#D8A4A2]/50 text-[#FFF4F3] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
-  "bg-[#965B77]/72 border-[#C995AC]/50 text-[#FFF2F8] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
-  "bg-[#877198]/72 border-[#BBA8CA]/50 text-[#F8F1FF] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
-  "bg-[#5E7FA8]/72 border-[#A7BCD8]/50 text-[#F1F7FF] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
+  "bg-[#D98A52]/72 border-[#F0B584]/55 text-[#FFF7EF] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
+  "bg-[#E06B76]/72 border-[#FFAAA7]/50 text-[#FFF4F3] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
+  "bg-[#D46AA0]/72 border-[#F0A3C9]/50 text-[#FFF2F8] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
+  "bg-[#B088E6]/72 border-[#D7BFFF]/50 text-[#F8F1FF] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
+  "bg-[#6EA8E8]/72 border-[#B9D8FF]/50 text-[#F1F7FF] shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
 ] as const;
 
 function buildCycleLookup<T extends { variants: readonly { id: string }[] }>(cycles: readonly T[]) {
@@ -2700,7 +2700,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
           onClick={() => goToTopNav('/')}
           className="flex min-w-[176px] shrink-0 items-center rounded-xl px-3 py-2 text-left transition-all hover:bg-white/[0.04]"
         >
-          <span className="font-display text-[22px] font-black leading-none tracking-tight bg-gradient-to-r from-[#F0D37C] via-[#F09B83] to-[#D86D8E] bg-clip-text text-transparent drop-shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+          <span className="font-display text-[22px] font-black leading-none tracking-tight bg-gradient-to-r from-[#FFE08A] via-[#FF9A80] to-[#F06CA4] bg-clip-text text-transparent drop-shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
             SORiDRAW
           </span>
         </button>
@@ -2855,8 +2855,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleHomeClick}
               className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
-                isActivePath('/') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
+                isActivePath('/') && "bg-[#F6C85F]/18 text-[#F6C85F]"
               )}
               aria-label="홈"
               title="홈"
@@ -2868,8 +2868,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleStudioClick}
               className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
-                isActivePath('/studio') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
+                isActivePath('/studio') && "bg-[#F6C85F]/18 text-[#F6C85F]"
               )}
               aria-label="스튜디오"
               title="스튜디오"
@@ -2881,8 +2881,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               type="button"
               onClick={handleHistoryClick}
               className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
-                isActivePath('/history') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
+                isActivePath('/history') && "bg-[#F6C85F]/18 text-[#F6C85F]"
               )}
               aria-label="뮤직노트"
               title="뮤직노트"
@@ -2904,8 +2904,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 setIsProfileOpen(false);
               }}
               className={cn(
-                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
-                isActivePath('/suno-library') && "bg-[#DFA05D]/18 text-[#DFA05D]"
+                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
+                isActivePath('/suno-library') && "bg-[#F6C85F]/18 text-[#F6C85F]"
               )}
               aria-label="라이브러리"
               title="라이브러리"
@@ -2927,8 +2927,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#DFA05D]/15",
-                    isProfileOpen && "bg-[#DFA05D]/18"
+                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#F6C85F]/15",
+                    isProfileOpen && "bg-[#F6C85F]/18"
                   )}
                   aria-label="마이페이지 메뉴"
                   title="마이페이지"
@@ -2945,7 +2945,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D] disabled:opacity-50"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F] disabled:opacity-50"
                   aria-label="로그인"
                   title="로그인"
                 >
@@ -2970,7 +2970,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#F6C85F]/12 hover:text-[#F6C85F]"
                       >
                         <Users className="h-5 w-5" />
                         관리자메뉴
@@ -2983,7 +2983,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         setIsProfileOpen(false);
                         setIsExpanded(false);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#DFA05D]/12 hover:text-[#DFA05D]"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#F6C85F]/12 hover:text-[#F6C85F]"
                     >
                       <UserIcon className="h-5 w-5" />
                       마이페이지
@@ -2997,7 +2997,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#DFA05D] transition-all hover:bg-[#DFA05D]/12"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#F6C85F] transition-all hover:bg-[#F6C85F]/12"
                     >
                       <LogOut className="h-5 w-5" />
                       로그아웃
@@ -3015,8 +3015,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#DFA05D]/15 hover:text-[#DFA05D]",
-                  isExpanded && "bg-[#DFA05D]/18 text-[#DFA05D]"
+                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#F6C85F]/15 hover:text-[#F6C85F]",
+                  isExpanded && "bg-[#F6C85F]/18 text-[#F6C85F]"
                 )}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
@@ -9065,7 +9065,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     if (type === 'style') return 'text-violet-300 border-violet-400/30 bg-violet-500/10';
     if (type === 'sound') return 'text-sky-300 border-sky-400/30 bg-sky-500/10';
     if (type === 'mood') return 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10';
-    return 'text-[#C995AC] border-fuchsia-400/30 bg-fuchsia-500/10';
+    return 'text-[#F0A3C9] border-fuchsia-400/30 bg-fuchsia-500/10';
   };
 
   const getGlobalSearchBreadcrumbParts = (groupLabel: string): string[] => {
@@ -9110,10 +9110,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#DFA05D] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#F6C85F] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
-          <Dices className="w-5 h-5 text-[#DFA05D] group-hover:rotate-180 transition-transform duration-500" />
-          <span className="hidden md:block font-bold text-[#DFA05D]">랜덤 선택</span>
+          <Dices className="w-5 h-5 text-[#F6C85F] group-hover:rotate-180 transition-transform duration-500" />
+          <span className="hidden md:block font-bold text-[#F6C85F]">랜덤 선택</span>
         </button>
       </div>
 
@@ -9137,8 +9137,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           className={cn(
             "w-full py-4 md:py-5 rounded-2xl text-white font-black shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGenerating 
-              ? "bg-[#AC5045]/74 text-[#171717] border border-black/20 cursor-wait min-h-[64px] md:min-h-[76px] text-[18px] sm:text-[20px] md:text-[21px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(172,80,69,0.24)]" 
-              : "soridraw-generate-heartbeat bg-[#E7AD68] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(231,173,104,0.16)] hover:bg-[#ECB976]"
+              ? "bg-[#E45F59]/74 text-[#171717] border border-black/20 cursor-wait min-h-[64px] md:min-h-[76px] text-[18px] sm:text-[20px] md:text-[21px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(228,95,89,0.24)]" 
+              : "soridraw-generate-heartbeat bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70]"
           )}
         >
           {isGenerating ? (
@@ -9369,7 +9369,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           className={cn(
                             "w-full rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.99]",
                             isSelected
-                              ? "border-black/20 bg-[#658761]/74 text-[#171717] font-black soridraw-selected-strong shadow-lg shadow-[#658761]/10"
+                              ? "border-black/20 bg-[#7FBD75]/74 text-[#171717] font-black soridraw-selected-strong shadow-lg shadow-[#7FBD75]/10"
                               : "border-[var(--modal-button-border)] bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
                           )}
                         >
@@ -9404,7 +9404,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             </div>
                             <span className={cn(
                               "mt-1 shrink-0 rounded-full px-2 py-1 text-[10px] font-black",
-                              isSelected ? "bg-[#658761] text-[#171717] font-black" : "bg-[var(--hover-bg)] text-[var(--text-secondary)]"
+                              isSelected ? "bg-[#7FBD75] text-[#171717] font-black" : "bg-[var(--hover-bg)] text-[var(--text-secondary)]"
                             )}>
                               {isSelected ? '선택됨' : '선택'}
                             </span>
@@ -9442,7 +9442,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               >
                 <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                   <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#D8B88C]/70">SORiDRAW</p>
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F2C587]/70">SORiDRAW</p>
                     <h2 className="mt-1 text-lg font-black text-white">
                       {authMode === 'signup' ? '이메일 회원가입' : authMode === 'reset' ? '비밀번호 재설정' : '로그인'}
                     </h2>
@@ -9495,7 +9495,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     disabled={isLoggingIn}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.07] px-4 py-3 text-sm font-black text-white transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-60"
                   >
-                    {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#D8B88C]" />}
+                    {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#F2C587]" />}
                     Google로 계속하기
                   </button>
 
@@ -9514,7 +9514,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         onChange={(event) => setAuthEmail(event.target.value)}
                         autoComplete="email"
                         placeholder="name@example.com"
-                        className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8B88C]/45"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
                       />
                     </label>
 
@@ -9527,7 +9527,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           onChange={(event) => setAuthPassword(event.target.value)}
                           autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
                           placeholder="6자 이상"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8B88C]/45"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
                         />
                       </label>
                     )}
@@ -9541,13 +9541,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           onChange={(event) => setAuthPasswordConfirm(event.target.value)}
                           autoComplete="new-password"
                           placeholder="비밀번호 다시 입력"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8B88C]/45"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
                         />
                       </label>
                     )}
 
                     {authMessage && (
-                      <div className="rounded-xl border border-[#D8B88C]/20 bg-[#D8B88C]/10 px-3 py-2 text-xs font-bold leading-5 text-[#F0D37C]">
+                      <div className="rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2 text-xs font-bold leading-5 text-[#FFE08A]">
                         {authMessage}
                       </div>
                     )}
@@ -9555,7 +9555,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="submit"
                       disabled={isLoggingIn}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#D56C7F] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
                     >
                       {isLoggingIn && <Loader2 className="h-4 w-4 animate-spin" />}
                       {authMode === 'signup' ? '이메일로 가입하기' : authMode === 'reset' ? '재설정 메일 보내기' : '이메일로 로그인'}
@@ -9570,7 +9570,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           setAuthMode('login');
                           setAuthMessage(null);
                         }}
-                        className="text-[#D8B88C] hover:text-[#F0D37C]"
+                        className="text-[#F2C587] hover:text-[#FFE08A]"
                       >
                         로그인으로 돌아가기
                       </button>
@@ -9581,7 +9581,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           setAuthMode('reset');
                           setAuthMessage(null);
                         }}
-                        className="text-[#D8B88C] hover:text-[#F0D37C]"
+                        className="text-[#F2C587] hover:text-[#FFE08A]"
                       >
                         비밀번호를 잊으셨나요?
                       </button>
@@ -9617,7 +9617,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       aria-label="통합 검색"
                       title="통합 검색"
                     >
-                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#DFA05D] group-hover:scale-110 transition-transform" />
+                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#F6C85F] group-hover:scale-110 transition-transform" />
                     </button>
                   )}
 
@@ -9629,8 +9629,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <h1 
                       className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
-                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#c8801b]" />
-                      <span>Sori <span className="text-[#c8801b]">Studio</span></span>
+                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#F6C85F]" />
+                      <span>Sori <span className="text-[#F6C85F]">Studio</span></span>
                     </h1>
                   </motion.div>
                 </div>
@@ -9873,8 +9873,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   className="flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-[#AC5045]/12 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="w-[22px] h-[22px] text-[#D79084]" />
+                    <div className="w-11 h-11 rounded-2xl bg-[#E45F59]/12 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="w-[22px] h-[22px] text-[#FF9B92]" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -9897,7 +9897,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     className={cn(
                       "p-2 rounded-xl border border-black/20 transition-all shadow-btn",
                       menuLocks.situation
-                        ? "bg-[#AC5045]/72 text-[#17120F] border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                        ? "bg-[#E45F59]/72 text-[#17120F] border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                         : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                     )}
                     title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
@@ -9920,7 +9920,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     className={cn(
                       "px-3 py-2 rounded-xl border text-xs font-black transition-all shadow-btn",
                       hasActiveSituation(situation)
-                        ? "bg-[#AC5045]/78 border-black/20 text-[#171717] font-black soridraw-selected-strong hover:bg-[#AC5045]/86"
+                        ? "bg-[#E45F59]/78 border-black/20 text-[#171717] font-black soridraw-selected-strong hover:bg-[#E45F59]/86"
                         : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                     )}
                     aria-label="스토리보드 설정 열기"
@@ -9965,10 +9965,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onPointerDown={(e) => e.stopPropagation()}
                       onPointerUp={(e) => e.stopPropagation()}
                     >
-                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 bg-[var(--card-bg)]/95 backdrop-blur-xl shadow-[inset_0_-1px_0_rgba(172,80,69,0.08)]">
+                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 bg-[var(--card-bg)]/95 backdrop-blur-xl shadow-[inset_0_-1px_0_rgba(228,95,89,0.08)]">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <Users className="w-[22px] h-[22px] text-[#D79084]" />
+                            <Users className="w-[22px] h-[22px] text-[#FF9B92]" />
                             <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
                             <span className="text-[11px] font-bold text-[var(--text-tertiary)]">Storyboard</span>
                           </div>
@@ -9979,7 +9979,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <button
                               type="button"
                               onClick={clearDraftSituation}
-                              className="px-3 py-2 rounded-xl bg-btn-bg text-[11px] font-black text-[var(--text-secondary)] hover:text-[#D79084] hover:bg-[#AC5045]/10 transition-all"
+                              className="px-3 py-2 rounded-xl bg-btn-bg text-[11px] font-black text-[var(--text-secondary)] hover:text-[#FF9B92] hover:bg-[#E45F59]/10 transition-all"
                             >
                               전체 해제
                             </button>
@@ -9988,7 +9988,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <button
                               type="button"
                               onClick={applyStoryboardModal}
-                              className="p-2 rounded-xl bg-[#AC5045]/78 text-[#171717] font-black soridraw-selected-strong hover:bg-[#AC5045]/86 transition-all"
+                              className="p-2 rounded-xl bg-[#E45F59]/78 text-[#171717] font-black soridraw-selected-strong hover:bg-[#E45F59]/86 transition-all"
                               title="적용"
                               aria-label="스토리보드 적용"
                             >
@@ -10012,21 +10012,21 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-black text-[#D79084] mb-2">캐릭터 A</label>
+                              <label className="block text-xs font-black text-[#FF9B92] mb-2">캐릭터 A</label>
                               <input
                                 value={draftSituation.targetA || ''}
                                 onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
                                 placeholder="예: 저승사자, 엄마, 상사"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-black text-[#E8B878] mb-2">캐릭터 B</label>
+                              <label className="block text-xs font-black text-[#FFD98A] mb-2">캐릭터 B</label>
                               <input
                                 value={draftSituation.targetB || ''}
                                 onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
                                 placeholder="예: 귀신, 아들, 직원"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                               />
                             </div>
                           </div>
@@ -10037,7 +10037,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#D79084] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
+                                <p className="text-sm font-black text-[#FF9B92] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="story" />
                               <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} accent="story" />
@@ -10046,13 +10046,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 value={draftSituation.speakerAExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                               />
                             </div>
 
                             <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#E8B878] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
+                                <p className="text-sm font-black text-[#FFD98A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} accent="characterB" statusLabels={["존댓말", "반존대", "반말"]} />
                               <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["잔잔", "울컥", "폭발"]} />
@@ -10061,7 +10061,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 value={draftSituation.speakerBExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
                                 placeholder="추가 말맛: 예: 공손하지만 안 물러남"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                               />
                             </div>
                           </div>
@@ -10074,7 +10074,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             onChange={(e) => updateDraftSituationField('description', e.target.value)}
                             placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
                             rows={4}
-                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40 resize-none"
+                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40 resize-none"
                           />
                           <input
                             value={draftSituation.detailCustom || draftSituation.details || ''}
@@ -10083,7 +10083,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               updateDraftSituationField('detailPresets', []);
                             }}
                             placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#AC5045]/40"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                           />
                         </section>
 
@@ -10354,7 +10354,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#DFA05D] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
+                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#F6C85F] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
@@ -10394,7 +10394,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           onClick={() => setIsActionButtonsCollapsed(true)}
                           onMouseEnter={() => {}}
                           onMouseLeave={() => {}}
-                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#DFA05D] hover:bg-white/[0.045] hover:text-[#DFA05D] transition-all shadow-none items-center justify-center opacity-100"
+                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#F6C85F] hover:bg-white/[0.045] hover:text-[#F6C85F] transition-all shadow-none items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -11911,7 +11911,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           transform: translate(-50%, -50%);
           border-radius: 999px;
           border: 0;
-          background: rgba(101,135,97,0.34);
+          background: rgba(127,189,117,0.34);
           pointer-events: none;
           z-index: 1;
         }
@@ -12168,7 +12168,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
   }, []);
 
   const getPreviewKeywordTextClass = (id: string) => {
-    if (id === 'genre') return 'text-[#E7AD68]';
+    if (id === 'genre') return 'text-[#FFC15A]';
     if (id === 'style') return 'text-[#C9A7FF]';
     if (id === 'sound') return 'text-[#8FC7FF]';
     if (id === 'mood') return 'text-[#9EDFA3]';
@@ -12243,11 +12243,11 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
               <div className="relative shrink-0 px-6 pt-6 pb-4 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
                 <div className="min-w-0 flex-1 pr-4">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <Sparkles className="w-5 h-5 text-[#E7AD68] shrink-0" />
+                    <Sparkles className="w-5 h-5 text-[#FFC15A] shrink-0" />
                     <h2 className="text-lg md:text-xl font-black tracking-tight text-[var(--text-primary)] truncate">
                       곡 미리보기
                     </h2>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/[0.055] text-[#E7AD68] shrink-0">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/[0.055] text-[#FFC15A] shrink-0">
                       AI 기획 해석
                     </span>
                   </div>
@@ -12286,16 +12286,16 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 {/* Genre Chip Bar */}
                 <div className="bg-white/[0.035] rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0 max-w-full overflow-hidden select-text">
                   <span className="text-xs font-black text-[var(--text-secondary)] shrink-0">매칭 장르</span>
-                  <span className="text-sm font-black text-[#E7AD68] break-words whitespace-normal min-w-0 max-w-full leading-snug">{details.genreStr}</span>
+                  <span className="text-sm font-black text-[#FFC15A] break-words whitespace-normal min-w-0 max-w-full leading-snug">{details.genreStr}</span>
                 </div>
 
                 {/* 곡 해석 요약 (Standalone - Big Card at Top) */}
                 <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                   <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
-                    <Compass className="w-5 h-5 text-[#E7AD68]" />
+                    <Compass className="w-5 h-5 text-[#FFC15A]" />
                   </div>
                   <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                    <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">곡 해석 요약</h4>
+                    <h4 className="text-xs font-black text-[#FFC15A] font-sans tracking-tight">곡 해석 요약</h4>
                     <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                       {details.interpretationSummary}
                     </p>
@@ -12307,10 +12307,10 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   {/* 예상 분위기 */}
                   <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
-                      <Sunset className="w-5 h-5 text-[#E7AD68]" />
+                      <Sunset className="w-5 h-5 text-[#FFC15A]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 분위기</h4>
+                      <h4 className="text-xs font-black text-[#FFC15A] font-sans tracking-tight">예상 분위기</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedAtmosphere}
                       </p>
@@ -12320,10 +12320,10 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   {/* 예상 보컬 */}
                   <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
-                      <Mic2 className="w-5 h-5 text-[#E7AD68]" />
+                      <Mic2 className="w-5 h-5 text-[#FFC15A]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 보컬</h4>
+                      <h4 className="text-xs font-black text-[#FFC15A] font-sans tracking-tight">예상 보컬</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedVocals}
                       </p>
@@ -12333,10 +12333,10 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   {/* 예상 전개 */}
                   <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
-                      <Activity className="w-5 h-5 text-[#E7AD68]" />
+                      <Activity className="w-5 h-5 text-[#FFC15A]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 전개</h4>
+                      <h4 className="text-xs font-black text-[#FFC15A] font-sans tracking-tight">예상 전개</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedArrangement}
                       </p>
@@ -12346,10 +12346,10 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                   {/* 예상 가사 방향 */}
                   <div className="p-5 rounded-2xl bg-white/[0.035] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden select-text">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.055] flex items-center justify-center shrink-0">
-                      <PenTool className="w-5 h-5 text-[#E7AD68]" />
+                      <PenTool className="w-5 h-5 text-[#FFC15A]" />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-0 overflow-hidden">
-                      <h4 className="text-xs font-black text-[#E7AD68] font-sans tracking-tight">예상 가사 방향</h4>
+                      <h4 className="text-xs font-black text-[#FFC15A] font-sans tracking-tight">예상 가사 방향</h4>
                       <p className="text-xs md:text-[13px] font-medium leading-relaxed text-[var(--text-secondary)] break-words whitespace-normal min-w-0 max-w-full">
                         {details.expectedLyrics}
                       </p>
@@ -12358,8 +12358,8 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 </div>
 
                 {/* 주의할 점 */}
-                <div className="p-5 rounded-2xl bg-[#2A1A0D] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden shadow-[inset_0_0_0_1px_rgba(231,173,104,0.10),0_14px_34px_rgba(0,0,0,0.18)] select-text">
-                  <div className="w-10 h-10 rounded-xl bg-[#E7AD68]/18 flex items-center justify-center shrink-0 shadow-[0_0_18px_rgba(231,173,104,0.16)]">
+                <div className="p-5 rounded-2xl bg-[#2A1A0D] flex gap-4 transition-all min-w-0 max-w-full overflow-hidden shadow-[inset_0_0_0_1px_rgba(255,193,90,0.10),0_14px_34px_rgba(0,0,0,0.18)] select-text">
+                  <div className="w-10 h-10 rounded-xl bg-[#FFC15A]/18 flex items-center justify-center shrink-0 shadow-[0_0_18px_rgba(255,193,90,0.16)]">
                     <AlertTriangle className="w-5 h-5 text-[#F2B15D]" />
                   </div>
                   <div className="space-y-2 flex-1 min-w-0 overflow-hidden">
@@ -12378,7 +12378,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-6 py-3 rounded-full text-sm font-black bg-[#E7AD68] text-[#111111] hover:bg-[#ECB976] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_10px_24px_rgba(231,173,104,0.20)] outline-none select-none shrink-0"
+                  className="px-6 py-3 rounded-full text-sm font-black bg-[#FFC15A] text-[#111111] hover:bg-[#FFCB70] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-[0_10px_24px_rgba(255,193,90,0.20)] outline-none select-none shrink-0"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   확인
@@ -12693,7 +12693,7 @@ function GenreSelectModal({
                 className={cn(
                   "w-full text-left rounded-2xl border px-4 py-2 transition-all",
                   isSelected
-                    ? "bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                    ? "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                     : "bg-[var(--card-bg)] border-[var(--border-color)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)]"
                 )}
               >
@@ -13039,7 +13039,7 @@ function CycleSection({
             ))}
           </div>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#C995AC]/45" : sectionAccent.softText)}>
+          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#F0A3C9]/45" : sectionAccent.softText)}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
         )}
@@ -13672,11 +13672,11 @@ function CategorySection({
 
             if (isKpop) {
               if (kpopMode === 2) {
-                kpopStyle = "bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                kpopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "K-Pop (한글+영어): 한국어와 영어가 자연스럽게 섞인 K-Pop 스타일의 가사를 생성합니다.";
                 displayLabel = "K-Pop (Mix)";
               } else if (kpopMode === 1) {
-                kpopStyle = "bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                kpopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "K-Pop (기본): 한국의 대중음악으로, 다양한 장르가 혼합된 세련된 사운드입니다.";
                 displayLabel = "K-Pop";
               } else {
@@ -13690,11 +13690,11 @@ function CategorySection({
             let citypopStyle = "";
             if (isCitypop) {
               if (citypopMode === 2) {
-                citypopStyle = "bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                citypopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "City Pop (현대): 누디스코, 신스팝, 매끄러운 현대적 감각이 더해진 모던 시티팝입니다.";
                 displayLabel = "City Pop(M)";
               } else if (citypopMode === 1) {
-                citypopStyle = "bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
+                citypopStyle = "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]";
                 displayDescription = "City Pop (올드): 80년대 일본 팝, 펑크, 그루비한 레트로 사운드의 오리지널 시티팝입니다.";
                 displayLabel = "City Pop(O)";
               } else {
@@ -13789,7 +13789,7 @@ function CategorySection({
                     className={cn(
                       "absolute -top-2 -right-2 p-1.5 rounded-full border transition-all z-10",
                       isPinned 
-                        ? "bg-[#DFA05D]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong opacity-100 scale-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)]" 
+                        ? "bg-[#F6C85F]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong opacity-100 scale-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)]" 
                         : "bg-white/8 border-white/15 text-[var(--text-secondary)] opacity-0 scale-75 group-hover/btn:opacity-100 group-hover/btn:scale-100 hover:text-amber-300"
                     )}
                   >
@@ -14961,7 +14961,7 @@ function SongStructureIntegratedControl({
     )}>
       <div className="flex flex-col gap-3 mb-4 min-w-0">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-bold text-[#A8C49F] uppercase tracking-wider">Keep 섹션</p>
+          <p className="text-xs font-bold text-[#B8F4AA] uppercase tracking-wider">Keep 섹션</p>
           <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
         </div>
         <div className="space-y-2">
@@ -14972,7 +14972,7 @@ function SongStructureIntegratedControl({
               value={structureSearch}
               onChange={(e) => setStructureSearch(e.target.value)}
               placeholder="섹션 이름 또는 내용 검색..."
-              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#658761]/40 shadow-inner"
+              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#7FBD75]/40 shadow-inner"
             />
             {structureSearch && (
               <button onClick={() => setStructureSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -14988,7 +14988,7 @@ function SongStructureIntegratedControl({
                 className={cn(
                   "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-btn",
                   structureFilter === f
-                    ? "bg-[#658761]/20 border-black/20 text-[#A8C49F]"
+                    ? "bg-[#7FBD75]/20 border-black/20 text-[#B8F4AA]"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
                 )}
               >
@@ -15016,7 +15016,7 @@ function SongStructureIntegratedControl({
                 {editingPresetTitleId === preset.id ? (
                   <button
                     onClick={() => confirmEditPresetTitle(preset.id)}
-                    className="w-7 h-7 rounded-lg border bg-[#658761]/20 border-black/20/50 text-[#A8C49F] hover:bg-[#658761]/30 transition-all flex items-center justify-center"
+                    className="w-7 h-7 rounded-lg border bg-[#7FBD75]/20 border-black/20/50 text-[#B8F4AA] hover:bg-[#7FBD75]/30 transition-all flex items-center justify-center"
                     aria-label="Keep 섹션 이름 수정 완료"
                   >
                     <Check className="w-3.5 h-3.5" />
@@ -15024,7 +15024,7 @@ function SongStructureIntegratedControl({
                 ) : (
                   <button
                     onClick={() => startEditPresetTitle(preset)}
-                    className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-[#A8C49F] hover:border-black/20 hover:bg-[#658761]/10 transition-all flex items-center justify-center"
+                    className="w-7 h-7 rounded-lg border bg-white/5 border-white/15 text-[var(--text-secondary)] hover:text-[#B8F4AA] hover:border-black/20 hover:bg-[#7FBD75]/10 transition-all flex items-center justify-center"
                     aria-label="Keep 섹션 이름 편집"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -15064,7 +15064,7 @@ function SongStructureIntegratedControl({
                         if (e.key === 'Enter') confirmEditPresetTitle(preset.id);
                         if (e.key === 'Escape') cancelEditPresetTitle();
                       }}
-                      className="min-w-0 flex-1 rounded-lg bg-black/20 border border-black/20 px-2 py-1 text-sm font-bold text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#658761]/40"
+                      className="min-w-0 flex-1 rounded-lg bg-black/20 border border-black/20 px-2 py-1 text-sm font-bold text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#7FBD75]/40"
                     />
                   ) : (
                     <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
@@ -15072,7 +15072,7 @@ function SongStructureIntegratedControl({
                   {preset.reaction && editingPresetTitleId !== preset.id && (
                     <span className={cn(
                       "shrink-0 p-1 rounded-md",
-                      preset.reaction === 'like' ? "bg-[#658761]/20 text-[#A8C49F]" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
+                      preset.reaction === 'like' ? "bg-[#7FBD75]/20 text-[#B8F4AA]" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-btn-border"
                     )}>
                       {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
                     </span>
@@ -15093,7 +15093,7 @@ function SongStructureIntegratedControl({
                     onClick={() => handleToggleReaction(preset.id, 'like')}
                     className={cn(
                       "p-1.5 rounded-lg transition-all",
-                      preset.reaction === 'like' ? "bg-[#658761] text-[#171717] font-black shadow-sm" : "text-[var(--text-secondary)] hover:bg-white/10"
+                      preset.reaction === 'like' ? "bg-[#7FBD75] text-[#171717] font-black shadow-sm" : "text-[var(--text-secondary)] hover:bg-white/10"
                     )}
                   >
                     <ThumbsUp className="w-3.5 h-3.5" />
@@ -15102,7 +15102,7 @@ function SongStructureIntegratedControl({
                     onClick={() => handleToggleReaction(preset.id, 'dislike')}
                     className={cn(
                       "p-1.5 rounded-lg transition-all",
-                      preset.reaction === 'dislike' ? "bg-[#658761]/16 text-[#171717] font-black shadow-sm" : "text-[var(--text-secondary)] hover:bg-white/10"
+                      preset.reaction === 'dislike' ? "bg-[#7FBD75]/16 text-[#171717] font-black shadow-sm" : "text-[var(--text-secondary)] hover:bg-white/10"
                     )}
                   >
                     <ThumbsDown className="w-3.5 h-3.5" />
@@ -15113,7 +15113,7 @@ function SongStructureIntegratedControl({
                     handleLoadPreset(preset);
                     if (modalMode) closeSavedSectionsModal();
                   }}
-                  className="flex-1 py-1.5 rounded-xl bg-[#658761]/10 border border-black/20/25 text-[11px] font-bold text-[#A8C49F] hover:bg-[#658761]/16 transition-all"
+                  className="flex-1 py-1.5 rounded-xl bg-[#7FBD75]/10 border border-black/20/25 text-[11px] font-bold text-[#B8F4AA] hover:bg-[#7FBD75]/16 transition-all"
                 >
                   불러오기
                 </button>
@@ -15134,7 +15134,7 @@ function SongStructureIntegratedControl({
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
           >
-            <span className="w-1.5 h-5 bg-[#658761] rounded-full" />
+            <span className="w-1.5 h-5 bg-[#7FBD75] rounded-full" />
             섹션구조
           </h3>
           <div className="flex items-center gap-2">
@@ -15147,7 +15147,7 @@ function SongStructureIntegratedControl({
                 className={cn(
                   "p-2 rounded-lg transition-all border border-btn-border shadow-btn",
                   isLocked
-                    ? "bg-[#658761]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                    ? "bg-[#7FBD75]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -15163,7 +15163,7 @@ function SongStructureIntegratedControl({
               className={cn(
                 "p-2 rounded-lg transition-all border shadow-btn",
                 (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
-                  ? "bg-[#658761]/20 text-[#A8C49F] border-black/20/30 hover:bg-[#658761]/30" 
+                  ? "bg-[#7FBD75]/20 text-[#B8F4AA] border-black/20/30 hover:bg-[#7FBD75]/30" 
                   : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
             >
@@ -15193,7 +15193,7 @@ function SongStructureIntegratedControl({
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
-                <p className="text-[13px] font-bold text-[#A8C49F] uppercase tracking-wider">│가사 길이</p>
+                <p className="text-[13px] font-bold text-[#B8F4AA] uppercase tracking-wider">│가사 길이</p>
                 <div className="flex gap-2">
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
@@ -15212,7 +15212,7 @@ function SongStructureIntegratedControl({
                         className={cn(
                           "w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border shadow-sm",
                           lyricsLength === opt.id
-                            ? "bg-[#658761] border-black/20 text-[#171717] font-black shadow-lg shadow-[#658761]/20"
+                            ? "bg-[#7FBD75] border-black/20 text-[#171717] font-black shadow-lg shadow-[#7FBD75]/20"
                             : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                         )}
                       >
@@ -15229,7 +15229,7 @@ function SongStructureIntegratedControl({
 
               {/* 3. 섹션 */}
               <div className="space-y-2">
-                <p className="text-[13px] font-bold text-[#A8C49F] uppercase tracking-wider">│섹션</p>
+                <p className="text-[13px] font-bold text-[#B8F4AA] uppercase tracking-wider">│섹션</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -15247,7 +15247,7 @@ function SongStructureIntegratedControl({
                         className={cn(
                           "py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
                           songStructure === opt.id
-                            ? "bg-[#658761] border-black/20 text-[#171717] font-black shadow-lg shadow-[#658761]/20"
+                            ? "bg-[#7FBD75] border-black/20 text-[#171717] font-black shadow-lg shadow-[#7FBD75]/20"
                             : isCustomLocked
                               ? "bg-btn-bg border-btn-border text-[var(--text-secondary)]/60 hover:bg-btn-hover"
                               : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
@@ -15261,8 +15261,8 @@ function SongStructureIntegratedControl({
                 </div>
                 
                 {/* Structure Guide - Always Visible */}
-                <div className="mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#658761]/5">
-                  <p className="text-[10px] font-bold text-[#A8C49F] mb-1 uppercase tracking-tight">
+                <div className="mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#7FBD75]/5">
+                  <p className="text-[10px] font-bold text-[#B8F4AA] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '현재 커스텀 섹션' : songStructure === '1' ? '기본 섹션 상세 가이드' : `섹션 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
@@ -15323,7 +15323,7 @@ function SongStructureIntegratedControl({
                     <button
                       type="button"
                       onClick={resetDraftStructure}
-                      className="h-10 px-3 rounded-xl border border-black/20/30 bg-[#658761]/10 text-[#A8C49F] hover:bg-[#658761]/20 transition-all text-[11px] font-black whitespace-nowrap"
+                      className="h-10 px-3 rounded-xl border border-black/20/30 bg-[#7FBD75]/10 text-[#B8F4AA] hover:bg-[#7FBD75]/20 transition-all text-[11px] font-black whitespace-nowrap"
                       title="섹션 전체 해제"
                     >
                       전체 해제
@@ -15337,7 +15337,7 @@ function SongStructureIntegratedControl({
                       className={cn(
                         "w-10 h-10 rounded-xl border flex items-center justify-center transition-all shrink-0",
                         canApplyCustomStructureDraft
-                          ? "bg-[#658761] text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:bg-[#6F946A]"
+                          ? "bg-[#7FBD75] text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:bg-[#6F946A]"
                           : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                       )}
                       title="변경 적용"
@@ -15348,7 +15348,7 @@ function SongStructureIntegratedControl({
                   )}
                   <button
                     onClick={() => closeCustomModal()}
-                    className="w-10 h-10 rounded-xl border border-[var(--modal-button-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[#A8C49F] hover:border-black/20 hover:bg-[#658761]/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#658761]/25 transition-all flex items-center justify-center shrink-0"
+                    className="w-10 h-10 rounded-xl border border-[var(--modal-button-border)] bg-[var(--hover-bg)] text-[var(--text-secondary)] hover:text-[#B8F4AA] hover:border-black/20 hover:bg-[#7FBD75]/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#7FBD75]/25 transition-all flex items-center justify-center shrink-0"
                     aria-label={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "섹션 커스텀 닫기"}
                     title={hasCustomStructureModalChanges ? "변경 적용 없이 닫기" : "닫기"}
                   >
@@ -15360,7 +15360,7 @@ function SongStructureIntegratedControl({
               <div className="p-5 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1 min-h-0 space-y-5">
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-3">
-                    <p className="text-xs font-bold text-[#A8C49F] uppercase tracking-wider">섹션 추가</p>
+                    <p className="text-xs font-bold text-[#B8F4AA] uppercase tracking-wider">섹션 추가</p>
                     <div className="flex gap-1 rounded-xl bg-black/10 border border-[var(--modal-button-border)] p-1">
                       {(['all', 'basic', 'my'] as const).map((filter) => (
                         <button
@@ -15370,7 +15370,7 @@ function SongStructureIntegratedControl({
                           className={cn(
                             "px-2.5 py-1 rounded-lg text-[10px] font-black transition-all",
                             sectionLibraryFilter === filter
-                              ? "bg-[#658761] text-[#171717] font-black"
+                              ? "bg-[#7FBD75] text-[#171717] font-black"
                               : "text-[var(--text-secondary)] hover:bg-white/10"
                           )}
                         >
@@ -15425,7 +15425,7 @@ function SongStructureIntegratedControl({
                               tabIndex={0}
                               onClick={(e) => { e.preventDefault(); e.stopPropagation(); openCustomSectionEditor(custom); }}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openCustomSectionEditor(custom); } }}
-                              className="ml-1 inline-flex items-center rounded-md px-1.5 py-1 text-[#A8C49F] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
+                              className="ml-1 inline-flex items-center rounded-md px-1.5 py-1 text-[#B8F4AA] hover:text-[var(--text-primary)] hover:bg-white/10 transition-all"
                               title="내 섹션 수정"
                             >
                               <Edit2 className="w-[22px] h-[22px]" />
@@ -15462,7 +15462,7 @@ function SongStructureIntegratedControl({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-black text-[#A8C49F]">커스텀 섹션 {editingCustomSectionId ? '수정' : '추가'}</p>
+                            <p className="text-sm font-black text-[#B8F4AA]">커스텀 섹션 {editingCustomSectionId ? '수정' : '추가'}</p>
                             <p className="text-[11px] text-[var(--text-secondary)]">
                               {editingCustomSectionId ? '한글은 설명용, 영어는 실제 가사 태그용입니다.' : '한글 섹션명만 입력하면 영어 태그명은 자동 생성됩니다.'}
                             </p>
@@ -15473,14 +15473,14 @@ function SongStructureIntegratedControl({
                           value={customSectionDraft.labelKo}
                           onChange={(e) => setCustomSectionDraft((prev) => ({ ...prev, labelKo: e.target.value }))}
                           placeholder="한글 섹션명: 예: 속삭이는 랩"
-                          className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#658761]/40"
+                          className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#7FBD75]/40"
                         />
                         {editingCustomSectionId && (
                           <input
                             value={customSectionDraft.labelEn}
                             onChange={(e) => setCustomSectionDraft((prev) => ({ ...prev, labelEn: e.target.value }))}
                             placeholder="영어 태그명: 예: Whisper Rap"
-                            className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#658761]/40"
+                            className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#7FBD75]/40"
                           />
                         )}
                         <div className={cn("grid gap-2", editingCustomSectionId ? "grid-cols-3" : "grid-cols-2")}>
@@ -15494,7 +15494,7 @@ function SongStructureIntegratedControl({
                             </button>
                           )}
                           <button type="button" onClick={() => closeCustomSectionEditor()} className="py-2.5 rounded-xl bg-btn-bg border border-[var(--modal-button-border)] text-sm font-bold text-[var(--text-primary)]">취소</button>
-                          <button type="button" onClick={saveCustomSectionDefinition} disabled={isCustomSectionConverting} className="py-2.5 rounded-xl bg-[#658761] border border-black/20 text-sm font-bold text-[#171717] disabled:opacity-60">{isCustomSectionConverting ? '자동 변환 중...' : '저장'}</button>
+                          <button type="button" onClick={saveCustomSectionDefinition} disabled={isCustomSectionConverting} className="py-2.5 rounded-xl bg-[#7FBD75] border border-black/20 text-sm font-bold text-[#171717] disabled:opacity-60">{isCustomSectionConverting ? '자동 변환 중...' : '저장'}</button>
                         </div>
                       </div>
                     </div>
@@ -15504,7 +15504,7 @@ function SongStructureIntegratedControl({
                 <div className="space-y-4 min-w-0">
                   <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch min-w-0">
                     <div className="flex-1 min-w-0 rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3 overflow-hidden">
-                      <p className="text-[11px] font-bold text-[#A8C49F] mb-2">미리보기</p>
+                      <p className="text-[11px] font-bold text-[#B8F4AA] mb-2">미리보기</p>
                       <div className="h-[42px] overflow-y-auto pr-1 custom-scrollbar">
                         <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
                           {(draftStructure ?? []).length > 0 ? formatStructureText(draftStructure) : '섹션을 추가하면 현재 구조가 여기에 표시됩니다.'}
@@ -15517,7 +15517,7 @@ function SongStructureIntegratedControl({
                         onClick={openSavedSectionsModal}
                         title="Keep 섹션"
                         aria-label="Keep 섹션"
-                        className="xl:hidden w-10 h-10 rounded-xl border border-black/20/45 bg-[#658761]/10 text-[#A8C49F] hover:bg-[#658761]/15 transition-all shadow-btn flex items-center justify-center"
+                        className="xl:hidden w-10 h-10 rounded-xl border border-black/20/45 bg-[#7FBD75]/10 text-[#B8F4AA] hover:bg-[#7FBD75]/15 transition-all shadow-btn flex items-center justify-center"
                       >
                         <Bookmark className="w-[18px] h-[18px]" />
                       </button>
@@ -15526,7 +15526,7 @@ function SongStructureIntegratedControl({
                         className={cn(
                           "px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border transition-all font-bold text-xs sm:text-sm shadow-btn",
                           (draftStructure ?? []).length > 0
-                            ? "bg-btn-bg text-[#A8C49F] border-black/20 hover:bg-[#658761]/10"
+                            ? "bg-btn-bg text-[#B8F4AA] border-black/20 hover:bg-[#7FBD75]/10"
                             : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                         )}
                         disabled={(draftStructure ?? []).length === 0}
@@ -15540,7 +15540,7 @@ function SongStructureIntegratedControl({
                   <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(330px,0.72fr)] gap-4 min-w-0 items-stretch">
                     <div className="space-y-3 min-w-0 flex flex-col h-[520px]">
                       <div className="flex items-center justify-between gap-3 shrink-0">
-                        <p className="text-xs font-bold text-[#A8C49F] uppercase tracking-wider">현재 구조</p>
+                        <p className="text-xs font-bold text-[#B8F4AA] uppercase tracking-wider">현재 구조</p>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
@@ -15552,14 +15552,14 @@ function SongStructureIntegratedControl({
                               "relative w-9 h-9 rounded-xl border transition-all shadow-btn flex items-center justify-center",
                               canToggleDraftStructureTags
                                 ? isDraftStructureTagsCleared
-                                  ? "bg-[#658761]/10 border-black/20/45 text-[#A8C49F] hover:bg-[#658761]/15"
+                                  ? "bg-[#7FBD75]/10 border-black/20/45 text-[#B8F4AA] hover:bg-[#7FBD75]/15"
                                   : "bg-red-500/5 border-red-400/45 text-[var(--text-secondary)] hover:border-red-300/70 hover:bg-red-500/10"
                                 : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/35 cursor-not-allowed"
                             )}
                           >
                             <Tag className={cn("w-4 h-4", canToggleDraftStructureTags && !isDraftStructureTagsCleared && "text-[var(--text-secondary)]")} />
                             {isDraftStructureTagsCleared ? (
-                              <RotateCcw className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-[#A8C49F] p-[1px]" />
+                              <RotateCcw className="absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] text-[#B8F4AA] p-[1px]" />
                             ) : (
                               <X className={cn("absolute -right-1 -top-1 w-3.5 h-3.5 rounded-full bg-[var(--bg-secondary)] p-[1px]", canToggleDraftStructureTags ? "text-red-300 ring-1 ring-red-400/35" : "text-[var(--text-secondary)]/35")} />
                             )}
@@ -15583,7 +15583,7 @@ function SongStructureIntegratedControl({
                             className={cn(
                               "px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-btn",
                               canApplyCustomStructureDraft
-                                ? "bg-[#658761] text-[#171717] font-black border-black/20 hover:brightness-110"
+                                ? "bg-[#7FBD75] text-[#171717] font-black border-black/20 hover:brightness-110"
                                 : "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/50 cursor-not-allowed"
                             )}
                           >
@@ -15630,7 +15630,7 @@ function SongStructureIntegratedControl({
                       <div className="h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
                       <div className="flex flex-col gap-3 mb-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-bold text-[#A8C49F] uppercase tracking-wider">Keep 섹션</p>
+                          <p className="text-xs font-bold text-[#B8F4AA] uppercase tracking-wider">Keep 섹션</p>
                           <span className="text-[11px] text-[var(--text-secondary)]">{filteredSavedStructures.length} / {savedStructures.length}개</span>
                         </div>
                         
@@ -15643,7 +15643,7 @@ function SongStructureIntegratedControl({
                               value={structureSearch}
                               onChange={(e) => setStructureSearch(e.target.value)}
                               placeholder="섹션 이름 또는 내용 검색..."
-                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#658761]/40 shadow-inner"
+                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#7FBD75]/40 shadow-inner"
                             />
                             {structureSearch && (
                               <button 
@@ -15663,7 +15663,7 @@ function SongStructureIntegratedControl({
                                 className={cn(
                                   "flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-btn",
                                   structureFilter === f
-                                    ? "bg-[#658761]/20 border-black/20 text-[#A8C49F]"
+                                    ? "bg-[#7FBD75]/20 border-black/20 text-[#B8F4AA]"
                                     : "bg-btn-bg border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:bg-btn-hover"
                                 )}
                               >
@@ -15691,7 +15691,7 @@ function SongStructureIntegratedControl({
                                 {editingPresetTitleId === preset.id ? (
                                   <button
                                     onClick={() => confirmEditPresetTitle(preset.id)}
-                                    className="w-7 h-7 rounded-lg border bg-[#658761]/20 border-black/20/50 text-[#A8C49F] hover:bg-[#658761]/30 transition-all flex items-center justify-center"
+                                    className="w-7 h-7 rounded-lg border bg-[#7FBD75]/20 border-black/20/50 text-[#B8F4AA] hover:bg-[#7FBD75]/30 transition-all flex items-center justify-center"
                                     aria-label="Keep 섹션 이름 수정 완료"
                                   >
                                     <Check className="w-3.5 h-3.5" />
@@ -15699,7 +15699,7 @@ function SongStructureIntegratedControl({
                                 ) : (
                                   <button
                                     onClick={() => startEditPresetTitle(preset)}
-                                    className="w-7 h-7 rounded-lg border bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:text-[#A8C49F] hover:border-black/20 hover:bg-[#658761]/10 transition-all flex items-center justify-center"
+                                    className="w-7 h-7 rounded-lg border bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)] hover:text-[#B8F4AA] hover:border-black/20 hover:bg-[#7FBD75]/10 transition-all flex items-center justify-center"
                                     aria-label="Keep 섹션 이름 편집"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
@@ -15739,7 +15739,7 @@ function SongStructureIntegratedControl({
                                         if (e.key === 'Enter') confirmEditPresetTitle(preset.id);
                                         if (e.key === 'Escape') cancelEditPresetTitle();
                                       }}
-                                      className="min-w-0 flex-1 rounded-lg bg-black/20 border border-black/20 px-2 py-1 text-sm font-bold text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#658761]/40"
+                                      className="min-w-0 flex-1 rounded-lg bg-black/20 border border-black/20 px-2 py-1 text-sm font-bold text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#7FBD75]/40"
                                     />
                                   ) : (
                                     <p className="text-sm font-bold text-[var(--text-primary)] truncate">{preset.name}</p>
@@ -15747,7 +15747,7 @@ function SongStructureIntegratedControl({
                                   {preset.reaction && editingPresetTitleId !== preset.id && (
                                     <span className={cn(
                                       "shrink-0 p-1 rounded-md",
-                                      preset.reaction === 'like' ? "bg-[#658761]/20 text-[#A8C49F]" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-[var(--modal-button-border)]"
+                                      preset.reaction === 'like' ? "bg-[#7FBD75]/20 text-[#B8F4AA]" : "bg-btn-bg text-[var(--text-secondary)] shadow-btn border border-[var(--modal-button-border)]"
                                     )}>
                                       {preset.reaction === 'like' ? <ThumbsUp className="w-2.5 h-2.5" /> : <ThumbsDown className="w-2.5 h-2.5" />}
                                     </span>
@@ -15770,7 +15770,7 @@ function SongStructureIntegratedControl({
                                     className={cn(
                                       "p-1.5 rounded-lg transition-all",
                                       preset.reaction === 'like'
-                                        ? "bg-[#658761] text-[#171717] font-black shadow-sm"
+                                        ? "bg-[#7FBD75] text-[#171717] font-black shadow-sm"
                                         : "text-[var(--text-secondary)] hover:bg-white/10"
                                     )}
                                   >
@@ -15781,7 +15781,7 @@ function SongStructureIntegratedControl({
                                     className={cn(
                                       "p-1.5 rounded-lg transition-all",
                                       preset.reaction === 'dislike'
-                                        ? "bg-[#658761]/16 text-[#171717] font-black shadow-sm"
+                                        ? "bg-[#7FBD75]/16 text-[#171717] font-black shadow-sm"
                                         : "text-[var(--text-secondary)] hover:bg-white/10"
                                     )}
                                   >
@@ -15790,7 +15790,7 @@ function SongStructureIntegratedControl({
                                 </div>
                                 <button
                                   onClick={() => handleLoadPreset(preset)}
-                                  className="flex-1 py-1.5 rounded-xl bg-[#658761]/10 border border-black/20/25 text-[11px] font-bold text-[#A8C49F] hover:bg-[#658761]/16 transition-all"
+                                  className="flex-1 py-1.5 rounded-xl bg-[#7FBD75]/10 border border-black/20/25 text-[11px] font-bold text-[#B8F4AA] hover:bg-[#7FBD75]/16 transition-all"
                                 >
                                   불러오기
                                 </button>
@@ -15832,7 +15832,7 @@ function SongStructureIntegratedControl({
             >
               <div className="px-4 py-3 border-b border-[var(--modal-soft-border)] flex items-center justify-between gap-3 shrink-0">
                 <div>
-                  <p className="text-sm font-black text-[#A8C49F]">Keep 섹션</p>
+                  <p className="text-sm font-black text-[#B8F4AA]">Keep 섹션</p>
                   <p className="text-[11px] text-[var(--text-secondary)]">저장된 섹션 구성을 불러오거나 편집합니다.</p>
                 </div>
                 <button
@@ -15876,7 +15876,7 @@ function SongStructureIntegratedControl({
             >
               <div className="px-5 py-4 border-b border-[var(--modal-soft-border)] flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-[#A8C49F]">저장</h3>
+                  <h3 className="text-base font-bold text-[#B8F4AA]">저장</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">현재 구조를 저장할 제목을 입력합니다.</p>
                 </div>
                 <button
@@ -15896,7 +15896,7 @@ function SongStructureIntegratedControl({
                     if (e.key === 'Enter' && (draftStructure ?? []).length > 0) handleSavePreset();
                   }}
                   placeholder="예: 감성 발라드형"
-                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[#658761]/40 shadow-inner"
+                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] px-3 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[#7FBD75]/40 shadow-inner"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -15910,7 +15910,7 @@ function SongStructureIntegratedControl({
                     type="button"
                     onClick={handleSavePreset}
                     disabled={(draftStructure ?? []).length === 0}
-                    className="py-3 rounded-xl bg-[#658761] border border-black/20 text-sm font-bold text-[#171717] hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                    className="py-3 rounded-xl bg-[#7FBD75] border border-black/20 text-sm font-bold text-[#171717] hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                   >
                     {editingSavedStructureId ? '업데이트 저장' : '저장'}
                   </button>
@@ -16390,7 +16390,7 @@ function TagEditModal({
                 {SECTION_META[section].descriptionKo}
               </p>
             )}
-            <p className="text-[10px] text-[#A8C49F] font-bold mt-1 uppercase tracking-wider">
+            <p className="text-[10px] text-[#B8F4AA] font-bold mt-1 uppercase tracking-wider">
               {`최대 ${maxSelectable}개 선택 가능`}
             </p>
           </div>
@@ -16414,7 +16414,7 @@ function TagEditModal({
                   className={cn(
                     "px-2.5 py-1 rounded-lg text-[10px] font-black transition-all",
                     tagLibraryFilter === filter
-                      ? "bg-[#658761] text-[#171717] font-black"
+                      ? "bg-[#7FBD75] text-[#171717] font-black"
                       : "text-[var(--text-secondary)] hover:bg-white/10"
                   )}
                 >
@@ -16461,10 +16461,10 @@ function TagEditModal({
                     "px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5",
                     selectedTags.includes(tag)
                       ? isVocalPlacement
-                        ? "bg-[#658761] border-black/20 text-[#171717] font-black shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                        ? "bg-[#7FBD75] border-black/20 text-[#171717] font-black shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                         : isPointSoundTag
-                          ? "bg-[#658761] border-black/20 text-[#171717] font-black shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
-                          : "bg-[#658761] border-black/20 text-[#171717] font-black"
+                          ? "bg-[#7FBD75] border-black/20 text-[#171717] font-black shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                          : "bg-[#7FBD75] border-black/20 text-[#171717] font-black"
                       : isLocked
                         ? "bg-white/5 border-white/10 text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                         : isVocalPlacement
@@ -16481,7 +16481,7 @@ function TagEditModal({
                       tabIndex={0}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); const target = localCustomTagsForSection.find((item) => item.label === tag); if (target) openCustomSectionTagEditor(target); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); const target = localCustomTagsForSection.find((item) => item.label === tag); if (target) openCustomSectionTagEditor(target); } }}
-                      className={cn("ml-1 inline-flex items-center rounded-md px-1 py-0.5 transition-all", selectedTags.includes(tag) ? "text-[#171717] bg-[#658761]/20 hover:bg-[#658761]/30" : "text-[#A8C49F] hover:text-[var(--text-primary)] hover:bg-white/10")}
+                      className={cn("ml-1 inline-flex items-center rounded-md px-1 py-0.5 transition-all", selectedTags.includes(tag) ? "text-[#171717] bg-[#7FBD75]/20 hover:bg-[#7FBD75]/30" : "text-[#B8F4AA] hover:text-[var(--text-primary)] hover:bg-white/10")}
                       title="내 태그 수정"
                     >
                       <Edit2 className="w-3 h-3" />
@@ -16517,7 +16517,7 @@ function TagEditModal({
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black text-[#A8C49F]">커스텀 태그 {editingCustomTagId ? '수정' : '추가'}</p>
+                    <p className="text-sm font-black text-[#B8F4AA]">커스텀 태그 {editingCustomTagId ? '수정' : '추가'}</p>
                     <p className="text-[11px] text-[var(--text-secondary)]">
                       {editingCustomTagId ? '한글은 설명용, 영어는 실제 태그용입니다.' : '한글 태그명만 입력하면 영어 실행 태그는 자동 생성됩니다.'}
                     </p>
@@ -16528,14 +16528,14 @@ function TagEditModal({
                   value={customTagDraft.labelKo}
                   onChange={(e) => setCustomTagDraft((prev) => ({ ...prev, labelKo: e.target.value }))}
                   placeholder="한글 태그명: 예: 숨죽인 톤"
-                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#658761]/40"
+                  className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#7FBD75]/40"
                 />
                 {editingCustomTagId && (
                   <input
                     value={customTagDraft.labelEn}
                     onChange={(e) => setCustomTagDraft((prev) => ({ ...prev, labelEn: e.target.value }))}
                     placeholder="영어 태그명: 예: held-back muted tone"
-                    className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#658761]/40"
+                    className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#7FBD75]/40"
                   />
                 )}
                 <div className={cn("grid gap-2", editingCustomTagId ? "grid-cols-3" : "grid-cols-2")}>
@@ -16543,7 +16543,7 @@ function TagEditModal({
                     <button type="button" onClick={() => { const target = localCustomTagsForSection.find((item) => item.id === editingCustomTagId); if (target) deleteCustomSectionTag(target.label); closeCustomTagEditor(); }} className="py-2.5 rounded-xl bg-red-500/10 border border-red-500/40 text-sm font-bold text-red-300">삭제</button>
                   )}
                   <button type="button" onClick={() => closeCustomTagEditor()} className="py-2.5 rounded-xl bg-btn-bg border border-btn-border text-sm font-bold text-[var(--text-primary)]">취소</button>
-                  <button type="button" onClick={addCustomSectionTag} disabled={isCustomTagConverting} className="py-2.5 rounded-xl bg-[#658761] border border-black/20 text-sm font-bold text-[#171717] disabled:opacity-60">{isCustomTagConverting ? '자동 변환 중...' : '저장'}</button>
+                  <button type="button" onClick={addCustomSectionTag} disabled={isCustomTagConverting} className="py-2.5 rounded-xl bg-[#7FBD75] border border-black/20 text-sm font-bold text-[#171717] disabled:opacity-60">{isCustomTagConverting ? '자동 변환 중...' : '저장'}</button>
                 </div>
               </div>
             </div>
@@ -16562,7 +16562,7 @@ function TagEditModal({
               onClick={() => onSave(selectedTags)}
               onMouseEnter={() => onHover({ id: 'tag-modal-save', label: 'Save', labelKo: '저장', description: '선택한 태그를 해당 섹션에 적용합니다.' })}
               onMouseLeave={() => onHover(null)}
-              className="flex-1 py-3 rounded-xl bg-[#658761] border border-black/20 text-sm font-bold text-[#171717] hover:brightness-110 transition-all shadow-lg shadow-[#658761]/20"
+              className="flex-1 py-3 rounded-xl bg-[#7FBD75] border border-black/20 text-sm font-bold text-[#171717] hover:brightness-110 transition-all shadow-lg shadow-[#7FBD75]/20"
             >
               저장
             </button>
@@ -17501,7 +17501,7 @@ function VocalControl({
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
           >
-            <span className="w-1.5 h-5 bg-[#658761] rounded-full" />
+            <span className="w-1.5 h-5 bg-[#7FBD75] rounded-full" />
             보컬
           </h3>
         </div>
@@ -17516,7 +17516,7 @@ function VocalControl({
               className={cn(
                 "p-2 rounded-lg transition-all border border-btn-border shadow-btn",
                 isLocked
-                  ? "bg-[#658761]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                  ? "bg-[#7FBD75]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
               )}
               title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -17532,7 +17532,7 @@ function VocalControl({
             className={cn(
               "p-2 rounded-lg transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0)
-                ? "bg-[#658761]/20 text-[#A8C49F] border-black/20/30 hover:bg-[#658761]/30" 
+                ? "bg-[#7FBD75]/20 text-[#B8F4AA] border-black/20/30 hover:bg-[#7FBD75]/30" 
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
           >
@@ -17582,7 +17582,7 @@ function VocalControl({
                 className={cn(
                   "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
                   vocalMode === mode 
-                    ? "bg-[#658761] text-[#171717] font-black shadow-md" 
+                    ? "bg-[#7FBD75] text-[#171717] font-black shadow-md" 
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-btn-hover"
                 )}
               >
@@ -17717,7 +17717,7 @@ function VocalControl({
                                 className={cn(
                                   "px-2.5 py-1 rounded-md text-[10px] font-bold transition-all border",
                                   isActive
-                                    ? "bg-[#658761]/20 border-black/20 text-[#A8C49F]"
+                                    ? "bg-[#7FBD75]/20 border-black/20 text-[#B8F4AA]"
                                     : isRoleLimitReached
                                       ? "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                                       : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -17803,8 +17803,8 @@ function VocalControl({
                                   className={cn(
                                     "w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border",
                                     !member.toneId
-                                      ? "bg-[#658761] text-[#171717] font-black border-black/20 shadow-lg shadow-[#658761]/20"
-                                      : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#A8C49F]"
+                                      ? "bg-[#7FBD75] text-[#171717] font-black border-black/20 shadow-lg shadow-[#7FBD75]/20"
+                                      : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
                                   )}
                                 >
                                   <div className="flex items-center justify-between gap-3">
@@ -17841,7 +17841,7 @@ function VocalControl({
                                       <button
                                         type="button"
                                         onClick={() => applyMemberToneDirectInput(idx)}
-                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-brand-orange border-brand-orange text-white shadow-lg shadow-[#658761]/20 disabled:opacity-50"
+                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-brand-orange border-brand-orange text-white shadow-lg shadow-[#7FBD75]/20 disabled:opacity-50"
                                         disabled={!memberToneDirectDraft.trim()}
                                       >
                                         적용
@@ -17855,7 +17855,7 @@ function VocalControl({
                                       e.stopPropagation();
                                       startMemberToneDirectInput(member);
                                     }}
-                                    className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#A8C49F]"
+                                    className="w-full flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
                                   >
                                     <span>직접 입력</span>
                                     <Edit2 className="w-3.5 h-3.5 shrink-0" />
@@ -17874,8 +17874,8 @@ function VocalControl({
                                         className={cn(
                                           "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border text-left",
                                           isToneActive
-                                            ? "bg-[#658761] text-[#171717] font-black border-black/20 shadow-lg shadow-[#658761]/20"
-                                            : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#A8C49F]"
+                                            ? "bg-[#7FBD75] text-[#171717] font-black border-black/20 shadow-lg shadow-[#7FBD75]/20"
+                                            : "bg-[#1f1f1f] border-[#3a3a3a] text-[var(--text-secondary)] hover:bg-[#2a2a2a] hover:text-[#B8F4AA]"
                                         )}
                                       >
                                         <span className="leading-snug">{tone.labelKo || tone.label}</span>
@@ -17933,7 +17933,7 @@ function VocalControl({
                 onTouchMove={blockVocalCharacterOuterScroll}
                 className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
               >
-                <div className="flex items-center justify-between gap-3 bg-[#151515] px-5 py-4 shadow-[inset_0_-1px_0_rgba(101,135,97,0.08)]">
+                <div className="flex items-center justify-between gap-3 bg-[#151515] px-5 py-4 shadow-[inset_0_-1px_0_rgba(127,189,117,0.08)]">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className={cn(
@@ -17944,14 +17944,14 @@ function VocalControl({
                         {editingVocalMember.gender === 'male' ? '남성' : '여성'} {editingVocalMemberIndex + 1} 캐릭터
                       </h4>
                     </div>
-                    <p className="mt-1 truncate text-xs font-bold text-[#A8C49F]">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-[#B8F4AA]">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {hasVocalCharacterSelection && (
                       <button
                         type="button"
                         onClick={clearLocalVocalCharacter}
-                        className="h-10 px-3 rounded-xl bg-[#658761]/12 text-[#A8C49F] hover:bg-[#658761]/18 transition-all text-[11px] font-black whitespace-nowrap"
+                        className="h-10 px-3 rounded-xl bg-[#7FBD75]/12 text-[#B8F4AA] hover:bg-[#7FBD75]/18 transition-all text-[11px] font-black whitespace-nowrap"
                         title="캐릭터 전체 해제"
                       >
                         전체 해제
@@ -17961,7 +17961,7 @@ function VocalControl({
                       <button
                         type="button"
                         onClick={applyVocalCharacterAndClose}
-                        className="w-10 h-10 rounded-xl border flex items-center justify-center transition-all shrink-0 bg-[#658761] text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:bg-[#6F946A]"
+                        className="w-10 h-10 rounded-xl border flex items-center justify-center transition-all shrink-0 bg-[#7FBD75] text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:bg-[#6F946A]"
                         title="변경 적용"
                         aria-label="변경 적용"
                       >
@@ -17971,7 +17971,7 @@ function VocalControl({
                     <button
                       type="button"
                       onClick={closeVocalCharacterEditor}
-                      className="rounded-full bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-[#658761]/10 hover:text-[#A8C49F]"
+                      className="rounded-full bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-[#7FBD75]/10 hover:text-[#B8F4AA]"
                       title={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
                       aria-label={hasVocalCharacterChanges ? "변경 적용 없이 닫기" : "닫기"}
                     >
@@ -17994,7 +17994,7 @@ function VocalControl({
                           <h5 className="text-base font-black text-[var(--text-primary)]">보컬 캐릭터 게이지</h5>
                           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">가운데가 기본값입니다. 움직인 항목만 보컬 프롬프트에 반영됩니다.</p>
                         </div>
-                        <span className="text-xs font-bold text-[#A8C49F]">좌우 5단계 · 기교 좌우 7단계</span>
+                        <span className="text-xs font-bold text-[#B8F4AA]">좌우 5단계 · 기교 좌우 7단계</span>
                       </div>
 
                       <div className="space-y-3">
@@ -18016,22 +18016,22 @@ function VocalControl({
                               className={cn(
                                 "rounded-2xl p-4 transition-all shadow-[0_10px_26px_rgba(0,0,0,0.18)]",
                                 isCardActive
-                                  ? "bg-[#658761]/12"
+                                  ? "bg-[#7FBD75]/12"
                                   : "bg-[#1a1a1a]"
                               )}
                             >
                               <div className="mb-3 flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="flex flex-wrap items-center gap-2.5">
-                                    <h6 className="text-base font-black text-[#A8C49F]">{config.titleKo}</h6>
-                                    <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-black", isDefault ? "bg-btn-bg text-[var(--text-secondary)]" : "bg-[#658761]/14 text-[#A8C49F]")}>{step.labelKo}</span>
+                                    <h6 className="text-base font-black text-[#B8F4AA]">{config.titleKo}</h6>
+                                    <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-black", isDefault ? "bg-btn-bg text-[var(--text-secondary)]" : "bg-[#7FBD75]/14 text-[#B8F4AA]")}>{step.labelKo}</span>
                                     {isOrnament && !isSecondaryDefault && (
-                                      <span className="rounded-full bg-[#658761]/14 px-2.5 py-0.5 text-[11px] font-black text-[#A8C49F]">{secondaryStep.labelKo}</span>
+                                      <span className="rounded-full bg-[#7FBD75]/14 px-2.5 py-0.5 text-[11px] font-black text-[#B8F4AA]">{secondaryStep.labelKo}</span>
                                     )}
                                   </div>
                                   <p className="mt-1.5 text-xs leading-snug text-[var(--text-secondary)]">{config.subtitleKo}</p>
                                 </div>
-                                <span className="shrink-0 text-xs font-black text-[#A8C49F]">{isOrnament ? `${value}/${config.steps.length}${!isSecondaryDefault ? ` · ${secondaryValue}/${config.steps.length}` : ''}` : `${value}/${config.steps.length}`}</span>
+                                <span className="shrink-0 text-xs font-black text-[#B8F4AA]">{isOrnament ? `${value}/${config.steps.length}${!isSecondaryDefault ? ` · ${secondaryValue}/${config.steps.length}` : ''}` : `${value}/${config.steps.length}`}</span>
                               </div>
 
                               {isOrnament ? (
@@ -18183,7 +18183,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               onMouseLeave={() => setShowTitleTooltip(false)}
               className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
             >
-              <span className="w-1.5 h-5 bg-[#658761] rounded-full" />
+              <span className="w-1.5 h-5 bg-[#7FBD75] rounded-full" />
               템포(BPM)
             </h3>
 
@@ -18208,7 +18208,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                     onMinChange(clamped);
                   }
                 }}
-                className="w-7 bg-transparent text-[#A8C49F] font-mono font-bold text-[14px] focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-7 bg-transparent text-[#B8F4AA] font-mono font-bold text-[14px] focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
@@ -18242,7 +18242,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 className={cn(
                   "px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
                   enabled 
-                    ? "bg-[#658761] text-[#171717] font-black" 
+                    ? "bg-[#7FBD75] text-[#171717] font-black" 
                     : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
                 )}
               >
@@ -18256,7 +18256,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 className={cn(
                   "p-2 rounded-lg transition-all border shadow-btn",
                   (!enabled || min !== 90 || max !== 110)
-                    ? "bg-[#658761]/20 text-[#A8C49F] border-black/20/30 hover:bg-[#658761]/30" 
+                    ? "bg-[#7FBD75]/20 text-[#B8F4AA] border-black/20/30 hover:bg-[#7FBD75]/30" 
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
               >
@@ -18278,7 +18278,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               className={cn(
                 "px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
                 enabled 
-                  ? "bg-[#658761] text-[#171717] font-black" 
+                  ? "bg-[#7FBD75] text-[#171717] font-black" 
                   : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
               )}
             >
@@ -18292,7 +18292,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
               className={cn(
                 "p-2 rounded-lg transition-all border",
                 (!enabled || min !== 90 || max !== 110)
-                  ? "bg-[#658761]/20 text-[#A8C49F] border-black/20/30 hover:bg-[#658761]/30" 
+                  ? "bg-[#7FBD75]/20 text-[#B8F4AA] border-black/20/30 hover:bg-[#7FBD75]/30" 
                   : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
               )}
             >
@@ -18322,7 +18322,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                 onMinChange(clamped);
               }
             }}
-            className="w-9 bg-transparent text-[#A8C49F] font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-9 bg-transparent text-[#B8F4AA] font-mono font-bold text-base focus:outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <span className="text-[var(--text-secondary)]/50 font-bold text-base">-</span>
           <input
@@ -18374,7 +18374,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
           <div 
             className={cn(
               "absolute h-full rounded-full transition-colors",
-              !enabled ? (isValid ? "bg-[#658761]" : "bg-[var(--text-secondary)]/30") : "bg-[#658761]/40"
+              !enabled ? (isValid ? "bg-[#7FBD75]" : "bg-[var(--text-secondary)]/30") : "bg-[#7FBD75]/40"
             )}
             style={{ left: `${minPos}%`, width: `${maxPos - minPos}%` }}
           />
@@ -18386,13 +18386,13 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             className={cn(
               "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
-                ? "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#658761]/20 scale-110" 
-                : "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#658761]/10 scale-100 cursor-not-allowed",
+                ? "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#7FBD75]/20 scale-110" 
+                : "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#7FBD75]/10 scale-100 cursor-not-allowed",
               isDragging === 'min' && "scale-125 border-[#B8CB93]"
             )}
             style={{ left: `${minPos}%` }}
           >
-            <div className={cn("w-1.5 h-1.5 rounded-full", !enabled ? "bg-[#658761]" : "bg-[#658761]/50")} />
+            <div className={cn("w-1.5 h-1.5 rounded-full", !enabled ? "bg-[#7FBD75]" : "bg-[#7FBD75]/50")} />
           </div>
 
           {/* Max Handle */}
@@ -18422,12 +18422,12 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
       {/* Status Guidance Text - Repositioned to Bottom Center */}
       <div className="flex justify-center mt-2">
         {enabled ? (
-          <span className="text-[#A8C49F] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#658761]/10 px-3 py-0.5 rounded-full border border-black/20/20">
+          <span className="text-[#B8F4AA] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#7FBD75]/10 px-3 py-0.5 rounded-full border border-black/20/20">
             <Sparkles className="w-3 h-3 animate-pulse" /> 랜덤 템포 적용됨
           </span>
         ) : (
           isValid ? (
-            <span className="text-[#C5D6BD] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#658761]/12 px-3 py-0.5 rounded-full border border-black/20/24">
+            <span className="text-[#C5D6BD] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#7FBD75]/12 px-3 py-0.5 rounded-full border border-black/20/24">
               <Check className="w-3 h-3" /> 템포 지정됨
             </span>
           ) : (

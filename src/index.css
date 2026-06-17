@@ -3,7 +3,7 @@
 
 @theme {
   --color-brand-orange: #ff8200;
-  --color-studio-brown: #DC9146;
+  --color-studio-brown: #F6B85F;
   --font-sans: "Pretendard", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Playfair Display", serif;
   
@@ -43,13 +43,13 @@
   --soridraw-border: #f1efed;
   --soridraw-text-main: #1a1a1a;
   --soridraw-text-muted: #7d756d;
-  --soridraw-selected-bg: #dfa05d;
+  --soridraw-selected-bg: #F6C85F;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #dfa05d;
-  --soridraw-green-tone: #658761;
-  --soridraw-menu-amber: #dfa05d;
-  --soridraw-menu-red: #ac5045;
-  --soridraw-menu-green: #658761;
+  --soridraw-menu-theme-color: #F6C85F;
+  --soridraw-green-tone: #7FBD75;
+  --soridraw-menu-amber: #F6C85F;
+  --soridraw-menu-red: #E45F59;
+  --soridraw-menu-green: #7FBD75;
 }
 
 .dark {
@@ -78,13 +78,13 @@
   --soridraw-border: rgba(255, 255, 255, 0.25);
   --soridraw-text-main: #f8f9fa;
   --soridraw-text-muted: #b0b3b8;
-  --soridraw-selected-bg: #dfa05d;
+  --soridraw-selected-bg: #F6C85F;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #dfa05d;
-  --soridraw-green-tone: #658761;
-  --soridraw-menu-amber: #dfa05d;
-  --soridraw-menu-red: #ac5045;
-  --soridraw-menu-green: #658761;
+  --soridraw-menu-theme-color: #F6C85F;
+  --soridraw-green-tone: #7FBD75;
+  --soridraw-menu-amber: #F6C85F;
+  --soridraw-menu-red: #E45F59;
+  --soridraw-menu-green: #7FBD75;
 }
 
 html {
@@ -248,7 +248,7 @@ body::-webkit-scrollbar-thumb:hover {
    Merge the studio hero into the page background; keep only a thin divider line. */
 .dark .studio-hero-tone {
   --hover-bg: rgba(255, 255, 255, 0.055);
-  --home-card-border: rgba(223, 160, 93, 0.10);
+  --home-card-border: rgba(246, 200, 95, 0.10);
   background: transparent !important;
 }
 
@@ -258,14 +258,14 @@ body::-webkit-scrollbar-thumb:hover {
 
 .dark .studio-hero-tone [class*="bg-[var(--card-bg)]"] {
   background-color: rgba(22, 22, 22, 0.86) !important;
-  border-color: rgba(223, 160, 93, 0.12) !important;
+  border-color: rgba(246, 200, 95, 0.12) !important;
 }
 
 .dark .studio-tone-down {
   --card-bg: #171717;
   --bg-secondary: #121212;
   --input-bg: rgba(255, 255, 255, 0.045);
-  --hover-bg: rgba(223, 160, 93, 0.07);
+  --hover-bg: rgba(246, 200, 95, 0.07);
   --hover-bg-solid: #202020;
   --border-color: rgba(241, 218, 164, 0.12);
   --home-card-border: rgba(241, 218, 164, 0.10);
@@ -274,7 +274,7 @@ body::-webkit-scrollbar-thumb:hover {
   --modal-button-border: rgba(241, 218, 164, 0.10);
   --button-bg: rgba(255, 255, 255, 0.04);
   --button-border: rgba(241, 218, 164, 0.10);
-  --button-hover-bg: rgba(223, 160, 93, 0.08);
+  --button-hover-bg: rgba(246, 200, 95, 0.08);
   --button-shadow: none;
   --shadow-md: 0 10px 18px rgba(0, 0, 0, 0.44), 0 3px 8px rgba(0, 0, 0, 0.32);
   --soridraw-panel-bg: #121212;
@@ -282,10 +282,10 @@ body::-webkit-scrollbar-thumb:hover {
   --soridraw-border: rgba(241, 218, 164, 0.10);
   --soridraw-text-main: #f8f9fa;
   --soridraw-text-muted: #b0b3b8;
-  --soridraw-selected-bg: #dfa05d;
+  --soridraw-selected-bg: #F6C85F;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #dfa05d;
-  --soridraw-green-tone: #658761;
+  --soridraw-menu-theme-color: #F6C85F;
+  --soridraw-green-tone: #7FBD75;
 }
 
 .dark .studio-tone-down [class*="bg-[var(--card-bg)]"] {
@@ -298,7 +298,7 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .dark .studio-tone-down [class*="hover:bg-btn-hover"]:hover {
-  background-color: rgba(223, 160, 93, 0.08) !important;
+  background-color: rgba(246, 200, 95, 0.08) !important;
 }
 
 .dark .studio-tone-down [class*="border-btn-border"],
@@ -383,7 +383,7 @@ body::-webkit-scrollbar-thumb:hover {
 .soridraw-selected-strong .soridraw-count-badge-main,
 .soridraw-count-badge-main {
   background: rgba(3, 3, 3, 0.94) !important;
-  color: var(--soridraw-badge-accent, #DFA05D) !important;
+  color: var(--soridraw-badge-accent, #F6C85F) !important;
   font-weight: 950 !important;
   -webkit-text-stroke: 0 !important;
   text-shadow: 0 0 0 transparent !important;
@@ -427,19 +427,19 @@ body::-webkit-scrollbar-thumb:hover {
    Music Note and Library pages use page-specific accent tones and the same
    soft, low-border surface treatment used in Studio. */
 .dark .soridraw-musicnote-theme {
-  --page-accent: #AC5045;
-  --page-accent-soft: rgba(172, 80, 69, 0.14);
-  --page-accent-hover: rgba(172, 80, 69, 0.20);
-  --page-accent-text: #D79084;
+  --page-accent: #E45F59;
+  --page-accent-soft: rgba(228, 95, 89, 0.14);
+  --page-accent-hover: rgba(228, 95, 89, 0.20);
+  --page-accent-text: #FF9B92;
   --page-soft-border: rgba(0, 0, 0, 0.30);
   --page-soft-border-hover: rgba(0, 0, 0, 0.38);
 }
 
 .dark .soridraw-library-theme {
-  --page-accent: #658761;
-  --page-accent-soft: rgba(101, 135, 97, 0.14);
-  --page-accent-hover: rgba(101, 135, 97, 0.20);
-  --page-accent-text: #A8C49F;
+  --page-accent: #7FBD75;
+  --page-accent-soft: rgba(127, 189, 117, 0.14);
+  --page-accent-hover: rgba(127, 189, 117, 0.20);
+  --page-accent-text: #B8F4AA;
   --page-soft-border: rgba(0, 0, 0, 0.30);
   --page-soft-border-hover: rgba(0, 0, 0, 0.38);
 }
@@ -482,7 +482,7 @@ body::-webkit-scrollbar-thumb:hover {
   border-color: var(--page-accent) !important;
 }
 
-.dark .soridraw-musicnote-theme :where([class*="text-[#D8A4A2]"], [class*="text-[#D45A66]"], [class*="text-[#F07882]"]) {
+.dark .soridraw-musicnote-theme :where([class*="text-[#FFAAA7]"], [class*="text-[#D45A66]"], [class*="text-[#F07882]"]) {
   color: var(--page-accent-text) !important;
 }
 
@@ -549,19 +549,19 @@ body::-webkit-scrollbar-thumb:hover {
   0%, 100% {
     box-shadow:
       0 8px 18px rgba(0, 0, 0, 0.32),
-      0 0 0 0 rgba(231, 173, 104, 0.00),
+      0 0 0 0 rgba(255, 193, 90, 0.00),
       0 0 0 0 rgba(240, 192, 121, 0.00);
   }
   44% {
     box-shadow:
       0 10px 22px rgba(0, 0, 0, 0.36),
-      0 0 18px 4px rgba(231, 173, 104, 0.22),
+      0 0 18px 4px rgba(255, 193, 90, 0.22),
       0 0 34px 10px rgba(240, 192, 121, 0.10);
   }
   62% {
     box-shadow:
       0 9px 20px rgba(0, 0, 0, 0.34),
-      0 0 10px 2px rgba(231, 173, 104, 0.14),
+      0 0 10px 2px rgba(255, 193, 90, 0.14),
       0 0 22px 6px rgba(240, 192, 121, 0.07);
   }
 }

@@ -176,13 +176,13 @@ function AnimatedTrackPlayButton({
         unavailable
           ? 'opacity-50 cursor-not-allowed text-white/20'
           : isNowPlaying
-            ? 'ring-[3px] ring-[#658761]/20 shadow-[0_12px_30px_rgba(101,135,97,0.22)] scale-[1.03]'
+            ? 'ring-[3px] ring-[#7FBD75]/20 shadow-[0_12px_30px_rgba(127,189,117,0.22)] scale-[1.03]'
             : isActive
-              ? 'ring-2 ring-[#658761]/45'
-              : 'hover:ring-2 hover:ring-[#658761]/35 group-hover:scale-[1.03]'
+              ? 'ring-2 ring-[#7FBD75]/45'
+              : 'hover:ring-2 hover:ring-[#7FBD75]/35 group-hover:scale-[1.03]'
       }`}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-[#658761]/10 via-[#658761]/6 to-white/[0.03]" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#7FBD75]/10 via-[#7FBD75]/6 to-white/[0.03]" />
       {shouldUseImage ? (
         <img
           src={imageUrl || ''}
@@ -194,7 +194,7 @@ function AnimatedTrackPlayButton({
       ) : null}
 
       {isNowPlaying && <div className="pointer-events-none absolute inset-0 rounded-full suno-playing-ring" />}
-      {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-[#658761]/22 shadow-[0_0_18px_rgba(101,135,97,0.20)]" />}
+      {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-[#7FBD75]/22 shadow-[0_0_18px_rgba(127,189,117,0.20)]" />}
 
       <div className={`absolute inset-0 transition-colors ${isNowPlaying ? 'bg-black/30' : 'bg-black/45 group-hover:bg-black/35'}`} />
 
@@ -4941,7 +4941,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#658761]/45 transition-all text-sm text-[var(--text-primary)]"
+                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
               />
               {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
                 <div className="absolute inset-0 flex items-center pl-11 pr-4 pointer-events-none overflow-hidden">
@@ -4967,7 +4967,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setWorkspaceColorFilter('all')}
-                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#B8C9B2] bg-[#658761]/24' : 'text-white/40 hover:text-white/70'}`}
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
                 >
                   전체
                 </button>
@@ -4990,7 +4990,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     key={f}
                     onClick={() => setFilter(f)}
                     className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                      filter === f ? 'bg-[#658761]/78 text-white' : 'bg-transparent text-white/50 hover:text-white/75'
+                      filter === f ? 'bg-[#7FBD75]/78 text-white' : 'bg-transparent text-white/50 hover:text-white/75'
                     }`}
                   >
                     {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
@@ -5003,7 +5003,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setPlaylistColorFilter('all')}
-                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#B8C9B2] bg-[#658761]/24' : 'text-white/40 hover:text-white/70'}`}
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
                 >
                   전체
                 </button>
@@ -5039,7 +5039,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     onClick={() => setPlaylistSortMode(opt.value as any)}
                     className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
                       playlistSortMode === opt.value
-                        ? 'bg-[#658761]/24 text-[#B8C9B2]'
+                        ? 'bg-[#7FBD75]/24 text-[#C7F7BD]'
                         : 'text-white/40 hover:text-white/70'
                     }`}
                   >
@@ -5057,7 +5057,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
                     className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
                       playlistVisibilityFilter === opt.value
-                        ? 'bg-[#658761]/24 text-[#B8C9B2]'
+                        ? 'bg-[#7FBD75]/24 text-[#C7F7BD]'
                         : 'text-white/40 hover:text-white/70'
                     }`}
                   >
@@ -5080,7 +5080,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
             onClick={() => setLibraryViewMode('workspace')}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
           </button>
@@ -5094,7 +5094,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             플레이리스트
           </button>
@@ -5108,7 +5108,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#658761]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             공유 플레이리스트
           </button>
@@ -5358,7 +5358,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <div className="shrink-0 inline-flex items-center overflow-hidden rounded-xl bg-[var(--bg-secondary)] shadow-btn">
         <button
           onClick={() => handleRenamePlaylist(activePlaylist)}
-          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#B8C9B2] hover:bg-white/5 transition-all"
+          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#C7F7BD] hover:bg-white/5 transition-all"
         >
           <Edit2 className="w-4 h-4" />
         </button>
@@ -5582,7 +5582,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   onChange={e => setRenameModalArgs({ ...renameModalArgs, newTitle: e.target.value })}
                   placeholder="플레이리스트 이름 (최대 20자)"
                   maxLength={20}
-                  className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-black/15 focus:border-[#658761]/45 transition-colors"
+                  className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-black/15 focus:border-[#7FBD75]/45 transition-colors"
                   autoFocus
                   onKeyDown={async (e) => {
                     if (e.key === 'Enter') {
@@ -5606,7 +5606,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
-                <button className="px-4 py-2 font-bold bg-[#658761] text-white rounded-xl hover:bg-[#658761]/90 transition-colors" onClick={async () => {
+                <button className="px-4 py-2 font-bold bg-[#7FBD75] text-white rounded-xl hover:bg-[#7FBD75]/90 transition-colors" onClick={async () => {
                   if (!user || (renameModalArgs.playlist as any).isFallback) return;
                   const trimmedTitle = renameModalArgs.newTitle.trim();
                   if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
@@ -5705,7 +5705,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               exit={{ opacity: 0, y: 24, scale: 0.96 }}
               className="w-full max-w-sm rounded-[2rem] bg-[#1f1f1f] border border-black/20 shadow-2xl p-7 text-center"
             >
-              <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-[#658761]/20 text-[#658761] flex items-center justify-center">
+              <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-[#7FBD75]/20 text-[#7FBD75] flex items-center justify-center">
                 <Info className="w-8 h-8" />
               </div>
               <h2 className="text-2xl font-black text-white mb-3">Chrome에서 열어주세요</h2>
@@ -5716,7 +5716,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div className="space-y-3">
                 <button
                   onClick={openCurrentShareInChrome}
-                  className="w-full py-4 rounded-2xl bg-[#658761] text-white font-black text-lg shadow-lg shadow-[#658761]/18 hover:bg-[#658761]/90 transition-all"
+                  className="w-full py-4 rounded-2xl bg-[#7FBD75] text-white font-black text-lg shadow-lg shadow-[#7FBD75]/18 hover:bg-[#7FBD75]/90 transition-all"
                 >
                   공유 음악 듣기
                 </button>
@@ -5745,7 +5745,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             <button
               type="button"
               onClick={handleCreditShortcutClick}
-              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#658761]/12 border border-[#658761]/22 text-[#B8C9B2] transition-all hover:bg-[#658761]/18 active:scale-[0.98]"
+              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#7FBD75]/12 border border-[#7FBD75]/22 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
             >
               {remainingCredits.toLocaleString()} credit
             </button>
@@ -5769,12 +5769,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             )}
             <div className="min-w-0">
               <h1 className="text-3xl md:text-5xl font-black leading-none tracking-tight text-white font-display flex items-center gap-3">
-                <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#658761] shrink-0">
+                <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#7FBD75] shrink-0">
                   <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
                   <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
                   <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
                 </div>
-                {isSharedView ? '공유된 음악' : <>Suno <span className="text-[#658761]">Library</span></>}
+                {isSharedView ? '공유된 음악' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
               </h1>
               <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">
                 {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
@@ -5788,7 +5788,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   type="button"
                   onClick={handleCreditShortcutClick}
-                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#658761]/22 bg-[#658761]/12 text-xs font-bold text-[#B8C9B2] transition-all hover:bg-[#658761]/18 active:scale-[0.98]"
+                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
                 >
                   남은 크레딧 {remainingCredits.toLocaleString()}
                 </button>
@@ -5808,7 +5808,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <>
         {loading || sharedTrackLoading ? (
           <div className="!mt-3 pt-0 flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-[#658761]" />
+            <Loader2 className="w-8 h-8 animate-spin text-[#7FBD75]" />
           </div>
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
           <div className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 text-center">
@@ -5819,7 +5819,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#658761]/16 bg-white/[0.015]"
+            className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#7FBD75]/16 bg-white/[0.015]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -5848,9 +5848,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   className="bg-[#151515] border border-black/24 rounded-2xl shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
                 >
                   {/* Group Header */}
-                  <div className="px-4 md:px-6 py-4 border-b border-[#658761]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-[#171717] rounded-t-2xl overflow-hidden">
+                  <div className="px-4 md:px-6 py-4 border-b border-[#7FBD75]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-[#171717] rounded-t-2xl overflow-hidden">
                     <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#658761] shrink-0">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#7FBD75] shrink-0">
                         <Music className="w-5 h-5" />
                       </div>
                       <div className="min-w-0 flex-1 pr-1 md:pr-0">
@@ -5898,7 +5898,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </div>
 
                   {/* Tracks List */}
-                  <div className="divide-y divide-[#658761]/8">
+                  <div className="divide-y divide-[#7FBD75]/8">
                     {items.map(({ item, idx }: { item: any; idx: number }) => {
                       const audioUrl = getAudioUrl(item, group);
                       const duration = getDuration(item, group);
@@ -5991,7 +5991,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             clearLibrarySelectionClickGuards();
                             resetLibraryDragSelectState();
                           }}
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#7FBD75]/75 bg-[#7FBD75]/20 text-[#B8F0AE] shadow-[0_0_0_1px_rgba(127,189,117,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                             >
                               {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                             </button>
@@ -6030,7 +6030,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 ))}
                               </div>
                             )}
-                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#658761]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#7FBD75]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
                               <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
                                 {getTitle(item, group, idx)}
                               </span>
@@ -6065,7 +6065,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
                           {isCompleted && isWorkspaceItemUnplayed(group, item, idx) && (
                             <span
-                              className="w-2 h-2 rounded-full bg-[#658761] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
+                              className="w-2 h-2 rounded-full bg-[#7FBD75] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
                             />
                           )}
 
@@ -6094,7 +6094,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   });
                                 }
                               }}
-                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#658761] hover:text-[#658761]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
+                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#7FBD75] hover:text-[#7FBD75]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
@@ -6119,15 +6119,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   onBlur={() => setShowWorkspaceMoreTooltip(false)}
                   className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
                 >
-                  <span className="text-[#658761] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
+                  <span className="text-[#7FBD75] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
                   더보기 ({filteredTracks.length - workspaceVisibleCount}세트 남음)
                 </button>
                 <p className="text-[11px] text-white/35">
                   {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 총 {filteredTracks.length}세트
                 </p>
                 {false && showWorkspaceMoreTooltip && (
-                  <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#658761]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
-                    <p className="text-xs font-bold text-[#658761]">더보기</p>
+                  <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#7FBD75]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
+                    <p className="text-xs font-bold text-[#7FBD75]">더보기</p>
                     <p className="mt-1 text-[11px] text-white/60">곡을 10세트 더 불러옵니다.</p>
                   </div>
                 )}
@@ -6172,7 +6172,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
                       } ${
                         activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
-                          ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
+                          ? 'bg-[#7FBD75]/78 text-white border-[#7FBD75]/55 shadow-lg' 
                           : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
                     >
@@ -6221,7 +6221,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
                       } ${
                         activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
-                          ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
+                          ? 'bg-[#7FBD75]/78 text-white border-[#7FBD75]/55 shadow-lg' 
                           : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
                     >
@@ -6244,7 +6244,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
               <div className="flex justify-center p-6 mt-3 border-t border-black/15">
-                <Loader2 className="w-6 h-6 animate-spin text-[#658761]" />
+                <Loader2 className="w-6 h-6 animate-spin text-[#7FBD75]" />
               </div>
             ) : playlistItems.length > 0 ? (
               <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-black/15" data-selection-keep="true">
@@ -6443,7 +6443,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             clearLibrarySelectionClickGuards();
                             resetLibraryDragSelectState();
                           }}
-                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#658761]/75 bg-[#658761]/20 text-[#9fc49a] shadow-[0_0_0_1px_rgba(101,135,97,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
+                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#7FBD75]/75 bg-[#7FBD75]/20 text-[#B8F0AE] shadow-[0_0_0_1px_rgba(127,189,117,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                         >
                           {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                         </button>
@@ -6487,7 +6487,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             </div>
                           )}
                           
-                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#658761]' : 'text-white'}`}>
+                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#7FBD75]' : 'text-white'}`}>
                             <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
                               {formatSunoDisplayTitle(item.title)}
                             </span>
@@ -6515,7 +6515,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       <div className="flex items-center pr-2 ml-2">
                         {isPlaylistItemUnplayed(item) && (
                           <span
-                            className="w-2 h-2 rounded-full bg-[#658761] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
+                            className="w-2 h-2 rounded-full bg-[#7FBD75] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
                           />
                         )}
                         {playlistSortMode === 'custom' && (
@@ -6565,7 +6565,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!);
                               setActiveColorMenu(null);
                             }}
-                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-[#658761] hover:text-[#658761]/80' : 'rounded-full text-white/40 hover:text-white'}`}
+                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-[#7FBD75] hover:text-[#7FBD75]/80' : 'rounded-full text-white/40 hover:text-white'}`}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
@@ -6589,7 +6589,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   enterMultiSelectWith(selection);
                                   setActivePlaylistItemMenu(null);
                                 }}
-                                className="w-full text-left px-4 py-2 hover:bg-[#658761]/10 flex items-center justify-between group text-white/80 hover:text-[#658761]"
+                                className="w-full text-left px-4 py-2 hover:bg-[#7FBD75]/10 flex items-center justify-between group text-white/80 hover:text-[#7FBD75]"
                               >
                                 <span className="flex items-center gap-2"><CheckSquare className="w-4 h-4 opacity-70" />선택</span>
                               </button>
@@ -6670,7 +6670,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center border-t border-black/15 mt-3">
-                <Music className="w-12 h-12 text-[#658761]/40 mb-4" />
+                <Music className="w-12 h-12 text-[#7FBD75]/40 mb-4" />
                 <h2 className="text-xl font-bold mb-2">
                   {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}
                 </h2>
@@ -6699,7 +6699,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             className={`fixed left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center ${multiSelectMode && selectedTrackCount > 0 ? 'bottom-[7.75rem] md:bottom-[8.75rem]' : 'bottom-24'}`}
           >
-            <Share2 className="w-4 h-4 text-[#658761] shrink-0" />
+            <Share2 className="w-4 h-4 text-[#7FBD75] shrink-0" />
             <span className="text-sm font-bold tracking-tight whitespace-nowrap">{shareToastInfo}</span>
           </motion.div>
         )}
@@ -6726,7 +6726,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <div className="space-y-6">
                   <button
                     onClick={handlePublicShare}
-                    className="w-full py-4 bg-[#658761] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#658761]/90 transition-all shadow-lg shadow-[#658761]/18"
+                    className="w-full py-4 bg-[#7FBD75] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#7FBD75]/90 transition-all shadow-lg shadow-[#7FBD75]/18"
                   >
                     <Share2 className="w-5 h-5" /> 링크 공유하기
                   </button>
@@ -6922,12 +6922,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#658761]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#7FBD75]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <div className="px-4 py-2 text-[11px] font-bold text-[#658761] border-b border-black/15">
+              <div className="px-4 py-2 text-[11px] font-bold text-[#7FBD75] border-b border-black/15">
                 선택한 {selectedTrackCount}곡
               </div>
 
@@ -7075,7 +7075,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <>
                     <button
                       onClick={handleBulkAllPublic}
-                      className="w-full py-4 bg-[#658761] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#658761]/90 transition-all shadow-lg shadow-[#658761]/18"
+                      className="w-full py-4 bg-[#7FBD75] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#7FBD75]/90 transition-all shadow-lg shadow-[#7FBD75]/18"
                     >
                       <Globe2 className="w-5 h-5" /> All 공개
                     </button>
@@ -7122,12 +7122,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 0, scale: 1 }}
               transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#658761]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#7FBD75]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#B8C9B2]/75">playlist folder</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C7F7BD]/75">playlist folder</p>
                   <h3 className="mt-1 text-lg font-black text-white">플레이리스트 저장</h3>
                   <p className="mt-1 text-xs leading-5 text-white/45">
                     {playlistSavePicker.isShared ? '공유 받은 곡 플레이리스트를 선택하세요.' : '저장할 플레이리스트를 선택하세요.'}
@@ -7150,10 +7150,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       key={playlist.id}
                       type="button"
                       onClick={() => savePlaylistPickerTargets(playlist)}
-                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#658761]/45 bg-[#658761]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#658761]/32 hover:text-white'}`}
+                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#7FBD75]/45 bg-[#7FBD75]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#7FBD75]/32 hover:text-white'}`}
                     >
-                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#B8C9B2]" />{playlist.title}</span>
-                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#B8C9B2]" />}
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#C7F7BD]" />{playlist.title}</span>
+                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#C7F7BD]" />}
                     </button>
                   );
                 })}
@@ -7283,7 +7283,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               className="w-full max-w-[360px] overflow-hidden rounded-3xl border border-black/20 bg-[var(--bg-secondary)] shadow-2xl"
             >
               <div className="px-5 pt-5 pb-4 border-b border-black/15">
-                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-[#658761]/25 bg-[#658761]/10 text-[#658761]'}`}>
+                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-[#7FBD75]/25 bg-[#7FBD75]/10 text-[#7FBD75]'}`}>
                   <Trash2 className="h-5 w-5" />
                 </div>
                 <h3 className="text-center text-lg font-black text-white tracking-tight">
@@ -7316,7 +7316,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       setIsPlaylistConfirming(false);
                     }
                   }}
-                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-[#658761] hover:bg-[#658761]/90 shadow-lg shadow-[#658761]/15'}`}
+                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-[#7FBD75] hover:bg-[#7FBD75]/90 shadow-lg shadow-[#7FBD75]/15'}`}
                 >
                   {isPlaylistConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
                   {playlistConfirmAction.confirmLabel}
@@ -7346,7 +7346,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-[#658761]/28 rounded-3xl shadow-2xl p-6"
+              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-[#7FBD75]/28 rounded-3xl shadow-2xl p-6"
             >
               <div className="flex flex-col items-center text-center">
                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">

@@ -44,7 +44,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 
@@ -351,6 +351,60 @@ type FavoriteSunoLink = {
   fetchedAt?: number;
 };
 
+type MusicNoteFolderMode = 'myNote' | 'sharedNote';
+type MusicNoteFolder = { id: string; title: string; order?: number; isDefault?: boolean; createdAt?: number; updatedAt?: number };
+
+const DEFAULT_MY_NOTE_FOLDERS: MusicNoteFolder[] = [
+  { id: 'default', title: '기본', order: 1, isDefault: true },
+  { id: '1', title: '1', order: 2 },
+  { id: '2', title: '2', order: 3 },
+  { id: '3', title: '3', order: 4 },
+];
+
+const DEFAULT_SHARED_NOTE_FOLDERS: MusicNoteFolder[] = [
+  { id: 'default', title: '기본', order: 1, isDefault: true },
+  { id: '1', title: '1', order: 2 },
+  { id: '2', title: '2', order: 3 },
+];
+
+const normalizeMusicNoteFolders = (value: any, fallback: MusicNoteFolder[]): MusicNoteFolder[] => {
+  const rawList = Array.isArray(value) ? value : [];
+  const merged = [...fallback, ...rawList]
+    .filter((folder) => folder && typeof folder === 'object')
+    .map((folder, index) => ({
+      id: String(folder.id || folder.folderId || `folder-${index}`).trim(),
+      title: String(folder.title || folder.name || '').trim(),
+      order: Number.isFinite(Number(folder.order)) ? Number(folder.order) : index + 1,
+      isDefault: Boolean(folder.isDefault || folder.id === 'default' || folder.folderId === 'default'),
+      createdAt: Number.isFinite(Number(folder.createdAt)) ? Number(folder.createdAt) : undefined,
+      updatedAt: Number.isFinite(Number(folder.updatedAt)) ? Number(folder.updatedAt) : undefined,
+    }))
+    .filter((folder) => folder.id && folder.title);
+
+  const seen = new Set<string>();
+  return merged
+    .filter((folder) => {
+      if (seen.has(folder.id)) return false;
+      seen.add(folder.id);
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.id === 'default') return -1;
+      if (b.id === 'default') return 1;
+      return (a.order || 999) - (b.order || 999);
+    });
+};
+
+const getMusicNoteFolderIdFromSong = (song: any, mode: MusicNoteFolderMode): string => {
+  if (!song) return mode === 'myNote' ? 'default' : '__unassigned__';
+  const raw = mode === 'sharedNote'
+    ? song.sharedNoteFolderId || song.sharedNoteFolder || song.noteSharedFolderId
+    : song.noteFolderId || song.myNoteFolderId || song.favoriteFolderId || song.folderId;
+  const normalized = String(raw || '').trim();
+  if (normalized) return normalized;
+  return mode === 'myNote' ? 'default' : '__unassigned__';
+};
+
 
 export default function FavoritesPage({ 
   favorites, 
@@ -382,19 +436,11 @@ export default function FavoritesPage({
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
-  const [myNoteFolders, setMyNoteFolders] = useState<Array<{ id: string; title: string }>>([
-    { id: 'default', title: '기본' },
-    { id: '1', title: '1' },
-    { id: '2', title: '2' },
-    { id: '3', title: '3' },
-  ]);
-  const [sharedNoteFolders, setSharedNoteFolders] = useState<Array<{ id: string; title: string }>>([
-    { id: 'default', title: '기본' },
-    { id: '1', title: '1' },
-    { id: '2', title: '2' },
-  ]);
+  const [myNoteFolders, setMyNoteFolders] = useState<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
+  const [sharedNoteFolders, setSharedNoteFolders] = useState<MusicNoteFolder[]>(DEFAULT_SHARED_NOTE_FOLDERS);
   const [selectedMyNoteFolderId, setSelectedMyNoteFolderId] = useState('default');
   const [selectedSharedNoteFolderId, setSelectedSharedNoteFolderId] = useState('default');
+  const [musicNoteFolderPicker, setMusicNoteFolderPicker] = useState<{ mode: MusicNoteFolderMode; songIds: string[] } | null>(null);
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [showSortPopup, setShowSortPopup] = useState(false);
   const [visibleCount, setVisibleCount] = useState(15);
@@ -748,6 +794,100 @@ export default function FavoritesPage({
       setFavoriteToastMessage(null);
       favoriteToastTimerRef.current = null;
     }, 2200);
+  };
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMusicNoteFolders = async () => {
+      if (!user?.uid) {
+        setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
+        setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
+        setSelectedMyNoteFolderId('default');
+        setSelectedSharedNoteFolderId('default');
+        return;
+      }
+
+      try {
+        const snap = await getDoc(doc(db, 'user_structures', user.uid));
+        if (cancelled) return;
+        const data: any = snap.exists() ? snap.data() : {};
+        const stored = data?.musicNoteFolders || {};
+        const nextMy = normalizeMusicNoteFolders(stored.myNote || data?.myNoteFolders, DEFAULT_MY_NOTE_FOLDERS);
+        const nextShared = normalizeMusicNoteFolders(stored.sharedNote || data?.sharedNoteFolders, DEFAULT_SHARED_NOTE_FOLDERS);
+        setMyNoteFolders(nextMy);
+        setSharedNoteFolders(nextShared);
+        setSelectedMyNoteFolderId((prev) => nextMy.some((folder) => folder.id === prev) ? prev : 'default');
+        setSelectedSharedNoteFolderId((prev) => nextShared.some((folder) => folder.id === prev) ? prev : 'default');
+      } catch (error) {
+        console.warn('load music note folders failed:', error);
+        if (!cancelled) {
+          setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
+          setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
+        }
+      }
+    };
+
+    loadMusicNoteFolders();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  const persistMusicNoteFolders = async (mode: MusicNoteFolderMode, folders: MusicNoteFolder[]) => {
+    if (!user?.uid) return;
+    const normalized = normalizeMusicNoteFolders(folders, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS);
+    await setDoc(doc(db, 'user_structures', user.uid), {
+      musicNoteFolders: {
+        [mode]: normalized.map((folder, index) => ({
+          id: folder.id,
+          title: folder.title,
+          order: folder.order || index + 1,
+          isDefault: Boolean(folder.isDefault || folder.id === 'default'),
+          createdAt: folder.createdAt || Date.now(),
+          updatedAt: Date.now(),
+        })),
+        updatedAt: Date.now(),
+      },
+    }, { merge: true });
+  };
+
+  const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {
+    const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
+    if (safeSongIds.length === 0) return;
+    const mode: MusicNoteFolderMode = preferredMode || (musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
+    setMusicNoteFolderPicker({ mode, songIds: safeSongIds });
+    setActiveFavoriteMenuId(null);
+  };
+
+  const saveSongsToMusicNoteFolder = async (folderId: string) => {
+    if (!user?.uid || !musicNoteFolderPicker) return;
+    const mode = musicNoteFolderPicker.mode;
+    const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
+    const folder = folders.find((item) => item.id === folderId) || folders[0];
+    if (!folder) return;
+
+    const updates = mode === 'sharedNote'
+      ? { sharedNoteFolderId: folder.id, sharedNoteFolderTitle: folder.title, sharedNoteFolderUpdatedAt: Date.now() }
+      : { noteFolderId: folder.id, noteFolderTitle: folder.title, noteFolderUpdatedAt: Date.now() };
+
+    try {
+      await Promise.all(
+        musicNoteFolderPicker.songIds.map((id) => updateDoc(doc(db, 'favorites', id), updates))
+      );
+      showFavoriteToast(`${folder.title} 폴더에 저장했습니다.`);
+      setMusicNoteFolderPicker(null);
+      if (mode === 'sharedNote') {
+        setMusicNoteViewMode('sharedNote');
+        setSelectedSharedNoteFolderId(folder.id);
+      } else {
+        setMusicNoteViewMode('myNote');
+        setSelectedMyNoteFolderId(folder.id);
+      }
+      exitSelectionMode('ui');
+    } catch (error) {
+      console.error('save music note folder failed:', error);
+      showFavoriteToast('폴더 저장에 실패했습니다.');
+    }
   };
 
 
@@ -2529,8 +2669,7 @@ ${song.prompt}
     }
 
     if (action === 'folderSelected') {
-      onHover({ id: 'favorite-folder-selected-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
-      setActiveFavoriteMenuId(null);
+      openMusicNoteFolderPicker(selectedSongIds, musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
       return;
     }
 
@@ -2571,7 +2710,7 @@ ${song.prompt}
     }
 
     if (action === 'folder') {
-      onHover({ id: 'favorite-folder-pending', label: '폴더 저장', description: '폴더 기능은 다음 단계에서 비용 구조 확인 후 연결합니다.', _ts: Date.now() });
+      openMusicNoteFolderPicker([song.id], musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
       return;
     }
 
@@ -2634,7 +2773,12 @@ ${song.prompt}
       getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
-    return matchesSearch && matchesColor;
+    const matchesFolder = musicNoteViewMode === 'noteSpace'
+      ? true
+      : musicNoteViewMode === 'myNote'
+        ? getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
+        : getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
+    return matchesSearch && matchesColor && matchesFolder;
   }).sort((a, b) => {
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
 
@@ -2681,7 +2825,7 @@ ${song.prompt}
     { id: 'sharedNote' as const, label: '공유 노트', description: '공유받은 곡을 저장하고 조회 전용으로 관리할 공간입니다.' },
   ];
 
-  const handleAddMusicNoteFolder = (mode: 'myNote' | 'sharedNote') => {
+  const handleAddMusicNoteFolder = async (mode: MusicNoteFolderMode) => {
     const folders = mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders;
     if (folders.length >= 10) {
       showFavoriteToast('최대 개수까지 생성되었습니다.');
@@ -2692,14 +2836,29 @@ ${song.prompt}
       .map((folder) => Number(folder.title))
       .filter((value) => Number.isFinite(value) && value > 0);
     const nextNumber = numberTitles.length > 0 ? Math.max(...numberTitles) + 1 : 1;
-    const nextFolder = { id: `local-${mode}-${Date.now()}`, title: String(nextNumber) };
+    const nextFolder: MusicNoteFolder = {
+      id: `note-${mode}-${Date.now()}`,
+      title: String(nextNumber),
+      order: folders.length + 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const nextFolders = [...folders, nextFolder];
 
     if (mode === 'sharedNote') {
-      setSharedNoteFolders((prev) => [...prev, nextFolder]);
+      setSharedNoteFolders(nextFolders);
       setSelectedSharedNoteFolderId(nextFolder.id);
     } else {
-      setMyNoteFolders((prev) => [...prev, nextFolder]);
+      setMyNoteFolders(nextFolders);
       setSelectedMyNoteFolderId(nextFolder.id);
+    }
+
+    try {
+      await persistMusicNoteFolders(mode, nextFolders);
+      showFavoriteToast('폴더를 추가했습니다.');
+    } catch (error) {
+      console.error('add music note folder failed:', error);
+      showFavoriteToast('폴더 추가에 실패했습니다.');
     }
   };
 
@@ -2930,11 +3089,11 @@ ${song.prompt}
         </div>
       </div>
 
-      {musicNoteViewMode === 'myNote' ? (
-        renderMusicNotePendingView('myNote')
-      ) : musicNoteViewMode === 'sharedNote' ? (
-        renderMusicNotePendingView('sharedNote')
-      ) : (isFavoritesLoading && favorites.length === 0) ? (
+      {(musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') && (
+        renderMusicNoteFolderBar(musicNoteViewMode)
+      )}
+
+      {(isFavoritesLoading && favorites.length === 0) ? (
         <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Loader2 className="w-12 h-12 text-[#AC5045] animate-spin mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>
@@ -3271,6 +3430,67 @@ ${song.prompt}
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {musicNoteFolderPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[155] flex items-end justify-center bg-black/55 px-4 pb-6 backdrop-blur-sm md:items-center md:pb-0"
+            onClick={() => setMusicNoteFolderPicker(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#AC5045]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D8A4A2]/75">music note folder</p>
+                  <h3 className="mt-1 text-lg font-black text-white">폴더 저장</h3>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    {musicNoteFolderPicker.mode === 'sharedNote' ? '공유 노트 폴더를 선택하세요.' : '마이 노트 폴더를 선택하세요.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMusicNoteFolderPicker(null)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-2">
+                {(musicNoteFolderPicker.mode === 'sharedNote' ? sharedNoteFolders : myNoteFolders).map((folder) => {
+                  const selectedId = musicNoteFolderPicker.mode === 'sharedNote' ? selectedSharedNoteFolderId : selectedMyNoteFolderId;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => saveSongsToMusicNoteFolder(folder.id)}
+                      className={cn(
+                        'flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all',
+                        selectedId === folder.id
+                          ? 'border-[#AC5045]/45 bg-[#AC5045]/22 text-white'
+                          : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#AC5045]/32 hover:text-white'
+                      )}
+                    >
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8A4A2]" />{folder.title}</span>
+                      {selectedId === folder.id && <Check className="h-4 w-4 text-[#D8A4A2]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {favoriteToastMessage && (

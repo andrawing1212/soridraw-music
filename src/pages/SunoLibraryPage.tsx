@@ -249,6 +249,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [selectedNormalPlaylistId, setSelectedNormalPlaylistId] = useState<string | null>(null);
   const [selectedSharedPlaylistId, setSelectedSharedPlaylistId] = useState<string | null>(null);
   const [activePlaylistSection, setActivePlaylistSection] = useState<'normal' | 'shared'>('normal');
+  const [playlistDragging, setPlaylistDragging] = useState<{ section: 'normal' | 'shared'; playlistId: string } | null>(null);
+  const playlistButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const playlistPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const playlistDragRef = useRef<{ section: 'normal' | 'shared'; playlistId: string; pointerId: number; startX: number; startY: number; active: boolean } | null>(null);
+  const playlistSuppressClickRef = useRef<string | null>(null);
+  const playlistsRef = useRef<Playlist[]>([]);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
@@ -964,6 +970,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       if (unsub) unsub();
     };
   }, [user, libraryViewMode, isSharedView]);
+
+  useEffect(() => {
+    playlistsRef.current = playlists;
+  }, [playlists]);
+
+  useEffect(() => () => {
+    if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
+    document.body.classList.remove('soridraw-folder-dragging');
+  }, []);
 
   const actualNormalPlaylists = useMemo(() => playlists.filter(p => p.type === 'normal').sort((a, b) => a.order - b.order), [playlists]);
   const actualSharedPlaylists = useMemo(() => playlists.filter(p => p.type === 'shared').sort((a, b) => a.order - b.order), [playlists]);
@@ -4745,6 +4760,162 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     );
   };
 
+  const PLAYLIST_REORDER_LONG_PRESS_MS = 700;
+  const PLAYLIST_REORDER_RIGHT_TRIGGER_RATIO = 0.62;
+  const PLAYLIST_REORDER_LEFT_TRIGGER_RATIO = 0.42;
+
+  const getPlaylistDragKey = (section: 'normal' | 'shared', playlistId: string) => `${section}:${playlistId}`;
+
+  const getPlaylistsBySectionForDrag = (section: 'normal' | 'shared') => (
+    playlistsRef.current
+      .filter((playlist) => playlist.type === section)
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+  );
+
+  const reorderPlaylistsByPointer = (section: 'normal' | 'shared', playlistId: string, clientX: number) => {
+    const currentSectionList = getPlaylistsBySectionForDrag(section);
+    const draggedPlaylist = currentSectionList.find((playlist) => playlist.id === playlistId);
+    if (!draggedPlaylist || (draggedPlaylist as any).isFallback) return;
+
+    const defaultPlaylist = currentSectionList[0];
+    if (!defaultPlaylist || defaultPlaylist.id === playlistId) return;
+
+    const movablePlaylists = currentSectionList.slice(1);
+    const currentIndex = movablePlaylists.findIndex((playlist) => playlist.id === playlistId);
+    if (currentIndex < 0) return;
+
+    const centers = movablePlaylists
+      .map((playlist, index) => {
+        const key = getPlaylistDragKey(section, playlist.id!);
+        const element = playlistButtonRefs.current[key];
+        const rect = element?.getBoundingClientRect();
+        return rect ? { id: playlist.id!, index, center: rect.left + rect.width / 2 } : null;
+      })
+      .filter(Boolean) as Array<{ id: string; index: number; center: number }>;
+
+    if (centers.length <= 1) return;
+
+    const currentCenter = centers.find((item) => item.id === playlistId)?.center;
+    if (!Number.isFinite(currentCenter)) return;
+
+    let targetIndex = currentIndex;
+    const nextCenter = centers[currentIndex + 1]?.center;
+    const previousCenter = centers[currentIndex - 1]?.center;
+
+    if (nextCenter !== undefined && clientX > currentCenter! + (nextCenter - currentCenter!) * PLAYLIST_REORDER_RIGHT_TRIGGER_RATIO) {
+      targetIndex = currentIndex + 1;
+    } else if (previousCenter !== undefined && clientX < currentCenter! - (currentCenter! - previousCenter) * PLAYLIST_REORDER_LEFT_TRIGGER_RATIO) {
+      targetIndex = currentIndex - 1;
+    }
+
+    if (targetIndex === currentIndex) return;
+
+    const nextMovable = [...movablePlaylists];
+    const [moving] = nextMovable.splice(currentIndex, 1);
+    nextMovable.splice(targetIndex, 0, moving);
+
+    const nextSectionList = [defaultPlaylist, ...nextMovable].map((playlist, index) => ({
+      ...playlist,
+      order: index + 1,
+    }));
+    const nextById = new Map(nextSectionList.map((playlist) => [playlist.id, playlist]));
+    const nextPlaylists = playlistsRef.current.map((playlist) => nextById.get(playlist.id) || playlist);
+    playlistsRef.current = nextPlaylists;
+    setPlaylists(nextPlaylists);
+  };
+
+  const persistPlaylistOrder = async (section: 'normal' | 'shared') => {
+    if (!user?.uid) return;
+    const sectionList = getPlaylistsBySectionForDrag(section).map((playlist, index) => ({ ...playlist, order: index + 1 }));
+    await Promise.all(
+      sectionList
+        .filter((playlist) => playlist.id && !(playlist as any).isFallback)
+        .map((playlist) => updateDoc(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }))
+    );
+  };
+
+  const handlePlaylistPointerDown = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    section: 'normal' | 'shared',
+    playlist: Playlist,
+  ) => {
+    const sectionList = section === 'normal' ? visibleNormalPlaylists : visibleSharedPlaylists;
+    const isDefaultPlaylist = playlist.id === sectionList[0]?.id;
+    if (isDefaultPlaylist || (playlist as any).isFallback || !playlist.id) return;
+    if (event.button !== undefined && event.button !== 0) return;
+
+    if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    playlistDragRef.current = { section, playlistId: playlist.id, pointerId, startX, startY, active: false };
+
+    playlistPressTimerRef.current = window.setTimeout(() => {
+      const drag = playlistDragRef.current;
+      if (!drag || drag.pointerId !== pointerId || drag.playlistId !== playlist.id || drag.section !== section) return;
+      drag.active = true;
+      setPlaylistDragging({ section, playlistId: playlist.id! });
+      document.body.classList.add('soridraw-folder-dragging');
+      try {
+        event.currentTarget.setPointerCapture(pointerId);
+      } catch {
+        // Ignore capture failures.
+      }
+    }, PLAYLIST_REORDER_LONG_PRESS_MS);
+  };
+
+  const handlePlaylistPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = playlistDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const moved = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.active && moved > 10) {
+      if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
+      playlistPressTimerRef.current = null;
+      playlistDragRef.current = null;
+      return;
+    }
+
+    if (!drag.active) return;
+    event.preventDefault();
+    reorderPlaylistsByPointer(drag.section, drag.playlistId, event.clientX);
+  };
+
+  const finishPlaylistDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {
+    if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
+    playlistPressTimerRef.current = null;
+
+    const drag = playlistDragRef.current;
+    playlistDragRef.current = null;
+    document.body.classList.remove('soridraw-folder-dragging');
+
+    if (!drag?.active) {
+      setPlaylistDragging(null);
+      return;
+    }
+
+    const dragKey = getPlaylistDragKey(drag.section, drag.playlistId);
+    playlistSuppressClickRef.current = dragKey;
+    window.setTimeout(() => {
+      if (playlistSuppressClickRef.current === dragKey) playlistSuppressClickRef.current = null;
+    }, 250);
+
+    try {
+      event?.currentTarget.releasePointerCapture?.(drag.pointerId);
+    } catch {
+      // Ignore release failures.
+    }
+
+    setPlaylistDragging(null);
+    try {
+      await persistPlaylistOrder(drag.section);
+      showToast('플레이리스트 순서를 변경했습니다.');
+    } catch (error) {
+      console.error('playlist reorder failed:', error);
+      showToast('플레이리스트 순서 저장에 실패했습니다.');
+    }
+  };
+
   const renderActivePlaylistManageButtons = (section: 'normal' | 'shared') => {
     const list = section === 'normal' ? visibleNormalPlaylists : visibleSharedPlaylists;
     const selectedId = section === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
@@ -5524,22 +5695,38 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
               <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
-                {visibleNormalPlaylists.map((playlist) => (
-                  <button 
-                    key={playlist.id} 
-                    onClick={() => {
-                      setSelectedNormalPlaylistId(playlist.id!);
-                      setActivePlaylistSection('normal');
-                    }}
-                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border ${
-                      activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
-                        ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
-                        : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    {playlist.title}
-                  </button>
-                ))}
+                {visibleNormalPlaylists.map((playlist) => {
+                  const dragKey = getPlaylistDragKey('normal', playlist.id!);
+                  const isDefaultPlaylist = playlist.id === visibleNormalPlaylists[0]?.id;
+                  const isDraggingPlaylist = playlistDragging?.section === 'normal' && playlistDragging.playlistId === playlist.id;
+                  return (
+                    <button 
+                      key={playlist.id}
+                      ref={(element) => { playlistButtonRefs.current[dragKey] = element; }}
+                      onPointerDown={(event) => handlePlaylistPointerDown(event, 'normal', playlist)}
+                      onPointerMove={handlePlaylistPointerMove}
+                      onPointerUp={finishPlaylistDrag}
+                      onPointerCancel={finishPlaylistDrag}
+                      onClick={() => {
+                        if (playlistSuppressClickRef.current === dragKey) return;
+                        setSelectedNormalPlaylistId(playlist.id!);
+                        setActivePlaylistSection('normal');
+                      }}
+                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border touch-pan-x select-none ${
+                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing' : ''
+                      } ${
+                        isDraggingPlaylist ? 'soridraw-folder-drag-active z-10' : ''
+                      } ${
+                        activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
+                          ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
+                          : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                      title={isDefaultPlaylist ? playlist.title : '0.7초 길게 눌러 순서 변경'}
+                    >
+                      {playlist.title}
+                    </button>
+                  );
+                })}
                 <button 
                   onClick={() => handleAddPlaylist('normal')}
                   className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
@@ -5556,23 +5743,39 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
               <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
-                {visibleSharedPlaylists.map((playlist) => (
-                  <button 
-                    key={playlist.id} 
-                    onClick={() => {
-                      setSelectedSharedPlaylistId(playlist.id!);
-                      setActivePlaylistSection('shared');
-                    }}
-                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 ${
-                      activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
-                        ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
-                        : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    {playlist.title}
-                  </button>
-                ))}
+                {visibleSharedPlaylists.map((playlist) => {
+                  const dragKey = getPlaylistDragKey('shared', playlist.id!);
+                  const isDefaultPlaylist = playlist.id === visibleSharedPlaylists[0]?.id;
+                  const isDraggingPlaylist = playlistDragging?.section === 'shared' && playlistDragging.playlistId === playlist.id;
+                  return (
+                    <button 
+                      key={playlist.id}
+                      ref={(element) => { playlistButtonRefs.current[dragKey] = element; }}
+                      onPointerDown={(event) => handlePlaylistPointerDown(event, 'shared', playlist)}
+                      onPointerMove={handlePlaylistPointerMove}
+                      onPointerUp={finishPlaylistDrag}
+                      onPointerCancel={finishPlaylistDrag}
+                      onClick={() => {
+                        if (playlistSuppressClickRef.current === dragKey) return;
+                        setSelectedSharedPlaylistId(playlist.id!);
+                        setActivePlaylistSection('shared');
+                      }}
+                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
+                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing' : ''
+                      } ${
+                        isDraggingPlaylist ? 'soridraw-folder-drag-active z-10' : ''
+                      } ${
+                        activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
+                          ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
+                          : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                      }`}
+                      title={isDefaultPlaylist ? playlist.title : '0.7초 길게 눌러 순서 변경'}
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      {playlist.title}
+                    </button>
+                  );
+                })}
                 <button 
                   onClick={() => handleAddPlaylist('shared')}
                   className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"

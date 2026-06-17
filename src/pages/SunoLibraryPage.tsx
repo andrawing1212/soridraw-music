@@ -559,6 +559,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const [renameModalArgs, setRenameModalArgs] = useState<{ playlist: Playlist, newTitle: string } | null>(null);
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
+  type PlaylistSaveTarget = { group: any; item: any; audioUrl: string; idx: number };
+  const [playlistSavePicker, setPlaylistSavePicker] = useState<{ isShared: boolean; targets: PlaylistSaveTarget[]; playlists: Playlist[] } | null>(null);
 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
@@ -3763,13 +3765,25 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }, 700);
   };
 
-  const handleSavePlaylist = async (group: any, item: any, url: string, idx: number) => {
+  const getPlaylistSaveIsShared = (group: any, item: any) => (
+    Boolean(isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track')
+  );
+
+  const handleSavePlaylist = async (
+    group: any,
+    item: any,
+    url: string,
+    idx: number,
+    targetPlaylistOverride?: Playlist,
+    options?: { silent?: boolean }
+  ): Promise<'saved' | 'duplicate' | 'failed' | 'blocked'> => {
+    const silent = Boolean(options?.silent);
     if (!user) {
-      showToast("로그인이 필요합니다.");
-      return;
+      if (!silent) showToast("로그인이 필요합니다.");
+      return 'blocked';
     }
 
-    const isShared = Boolean(isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track');
+    const isShared = getPlaylistSaveIsShared(group, item);
 
     try {
       await ensureDefaultPlaylists(user.uid);
@@ -3777,17 +3791,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       console.error("Failed to ensure default playlists", e);
     }
 
-    let targetPlaylist: Playlist | undefined;
-    try {
-      const dbLists = await getPlaylistsByType(user.uid, isShared ? "shared" : "normal");
-      targetPlaylist = dbLists[0];
-    } catch (e) {
-      console.error("Failed to fetch target playlists", e);
+    let targetPlaylist: Playlist | undefined = targetPlaylistOverride;
+    if (!targetPlaylist?.id) {
+      try {
+        const dbLists = await getPlaylistsByType(user.uid, isShared ? "shared" : "normal");
+        targetPlaylist = dbLists.find((list) => !(list as any).isFallback) || dbLists[0];
+      } catch (e) {
+        console.error("Failed to fetch target playlists", e);
+      }
     }
 
     if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
-      showToast(`저장할 ${isShared ? '공유 받은 곡 ' : ''}플레이리스트가 없습니다.`);
-      return;
+      if (!silent) showToast(`저장할 ${isShared ? '공유 받은 곡 ' : ''}플레이리스트가 없습니다.`);
+      return 'blocked';
     }
 
     const finalAudioUrl =
@@ -3803,8 +3819,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       "";
 
     if (!finalAudioUrl) {
-      showToast("저장할 오디오 URL이 없습니다.");
-      return;
+      if (!silent) showToast("저장할 오디오 URL이 없습니다.");
+      return 'blocked';
     }
 
     const safeShareId =
@@ -3826,8 +3842,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (isShared) {
       const isPublic = await ensureSharedItemIsPublic(sourceId, false);
       if (!isPublic) {
-        showToast('원곡자가 비공개로 전환하여 플레이리스트에 저장할 수 없습니다.');
-        return;
+        if (!silent) showToast('원곡자가 비공개로 전환하여 플레이리스트에 저장할 수 없습니다.');
+        return 'blocked';
       }
     }
 
@@ -3881,7 +3897,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     try {
       await addPlaylistItem(user.uid, targetPlaylist.id!, itemData);
-      showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
+      if (!silent) showToast(`'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
+      return 'saved';
     } catch (error: any) {
       console.error("shared playlist save failed:", {
         error,
@@ -3893,10 +3910,103 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         isSharedView
       });
       if (error.message === 'DUPLICATE') {
-        showToast("이미 이 플레이리스트에 저장된 곡입니다.");
-      } else {
-        showToast("플레이리스트 저장에 실패했습니다.");
+        if (!silent) showToast("이미 이 플레이리스트에 저장된 곡입니다.");
+        return 'duplicate';
       }
+      if (!silent) showToast("플레이리스트 저장에 실패했습니다.");
+      return 'failed';
+    }
+  };
+
+  const openPlaylistSavePicker = async (targets: PlaylistSaveTarget[]) => {
+    if (!user) {
+      showToast("로그인이 필요합니다.");
+      return;
+    }
+
+    const safeTargets = targets.filter((target) => target && (target.group || target.item));
+    if (safeTargets.length === 0) return;
+
+    if (safeTargets.some(({ group, item }) => getPlaylistSaveIsShared(group, item))) {
+      const hasPrivateShared = await Promise.all(
+        safeTargets
+          .filter(({ group, item }) => getPlaylistSaveIsShared(group, item))
+          .map(async ({ group, item, idx }) => {
+            const sourceId = String(
+              group?.shareId ||
+              group?.id ||
+              group?.trackId ||
+              group?.sourceId ||
+              group?.shareData?.id ||
+              item?.shareId ||
+              item?.id ||
+              item?.audioId ||
+              item?.taskId ||
+              `shared_${Date.now()}_${idx}`
+            );
+            return !(await ensureSharedItemIsPublic(sourceId, false));
+          })
+      );
+      if (hasPrivateShared.some(Boolean)) {
+        showToast('원곡자가 비공개로 전환하여 플레이리스트에 저장할 수 없습니다.');
+        return;
+      }
+    }
+
+    const isShared = safeTargets.every(({ group, item }) => getPlaylistSaveIsShared(group, item));
+    if (!isShared && safeTargets.some(({ group, item }) => getPlaylistSaveIsShared(group, item))) {
+      showToast('일반 곡과 공유곡은 한 번에 같은 플레이리스트로 저장할 수 없습니다.');
+      return;
+    }
+
+    try {
+      await ensureDefaultPlaylists(user.uid);
+    } catch (e) {
+      console.error("Failed to ensure default playlists", e);
+    }
+
+    let targetLists = (isShared ? actualSharedPlaylists : actualNormalPlaylists).filter((playlist) => !(playlist as any).isFallback);
+    if (targetLists.length === 0) {
+      try {
+        const dbLists = await getPlaylistsByType(user.uid, isShared ? "shared" : "normal");
+        targetLists = dbLists.filter((playlist) => playlist.id && !(playlist as any).isFallback);
+      } catch (e) {
+        console.error("Failed to fetch target playlists", e);
+      }
+    }
+
+    if (targetLists.length === 0) {
+      showToast(`저장할 ${isShared ? '공유 받은 곡 ' : ''}플레이리스트가 없습니다.`);
+      return;
+    }
+
+    setPlaylistSavePicker({ isShared, targets: safeTargets, playlists: targetLists });
+    setActiveMenuState(null);
+    setBulkMenuState(null);
+  };
+
+  const savePlaylistPickerTargets = async (targetPlaylist: Playlist) => {
+    if (!playlistSavePicker) return;
+    const picker = playlistSavePicker;
+    setPlaylistSavePicker(null);
+    setBulkMenuState(null);
+
+    let saved = 0;
+    let duplicate = 0;
+    let failed = 0;
+    for (const target of picker.targets) {
+      const result = await handleSavePlaylist(target.group, target.item, target.audioUrl, target.idx, targetPlaylist, { silent: true });
+      if (result === 'saved') saved += 1;
+      else if (result === 'duplicate') duplicate += 1;
+      else failed += 1;
+    }
+
+    if (saved > 0) {
+      showToast(picker.targets.length > 1 ? `${targetPlaylist.title} 플레이리스트에 ${saved}곡 저장되었습니다.` : `'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
+    } else if (duplicate > 0 && failed === 0) {
+      showToast('이미 이 플레이리스트에 저장된 곡입니다.');
+    } else {
+      showToast('플레이리스트 저장에 실패했습니다.');
     }
   };
 
@@ -4055,15 +4165,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       showToast('비공개로 전환된 공유곡은 플레이리스트에 저장할 수 없습니다.');
       return;
     }
-    for (const selection of selectedTrackList) {
+
+    const targets: PlaylistSaveTarget[] = selectedTrackList.map((selection) => {
       if (selection.context === 'workspace') {
-        await handleSavePlaylist(selection.group, selection.item, selection.audioUrl, selection.idx);
-      } else {
-        const { group, item, idx } = getBulkShareTarget(selection);
-        await handleSavePlaylist(group, item, selection.audioUrl, idx ?? 0);
+        return { group: selection.group, item: selection.item, audioUrl: selection.audioUrl, idx: selection.idx };
       }
-    }
-    setBulkMenuState(null);
+      const { group, item, idx } = getBulkShareTarget(selection);
+      return { group, item, audioUrl: selection.audioUrl, idx: idx ?? 0 };
+    });
+
+    await openPlaylistSavePicker(targets);
   };
 
   const buildBulkShareItem = (selection: MultiSelectedTrack) => {
@@ -4503,7 +4614,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!bulkShareModalOpen || !!bulkMoveModalOpen;
+  const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
 
   const closeModal = () => {
     modalHistoryPushedRef.current = false;
@@ -4771,7 +4882,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (isPlaylistTrack) {
           handleMoveToOtherPlaylist(parent as PlaylistItem);
         } else {
-          handleSavePlaylist(parent, workspaceItem || parent, track.url || '', itemIndex);
+          void openPlaylistSavePicker([{ group: parent, item: workspaceItem || parent, audioUrl: track.url || '', idx: itemIndex }]);
         }
         return;
       }
@@ -6997,6 +7108,62 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
 
       <AnimatePresence>
+        {playlistSavePicker && (
+          <motion.div
+            data-selection-keep="true"
+            data-floating-menu="true"
+            className={`fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center ${multiSelectMode && selectedTrackCount > 0 ? 'pb-[128px] md:pb-[142px]' : 'pb-6 md:pb-0'}`}
+            onClick={() => setPlaylistSavePicker(null)}
+          >
+            <motion.div
+              data-selection-keep="true"
+              data-floating-menu="true"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 0, scale: 1 }}
+              transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#658761]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#B8C9B2]/75">playlist folder</p>
+                  <h3 className="mt-1 text-lg font-black text-white">플레이리스트 저장</h3>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    {playlistSavePicker.isShared ? '공유 받은 곡 플레이리스트를 선택하세요.' : '저장할 플레이리스트를 선택하세요.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPlaylistSavePicker(null)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-2 max-h-[50vh] overflow-y-auto pr-1">
+                {playlistSavePicker.playlists.map((playlist) => {
+                  const selectedId = playlistSavePicker.isShared ? selectedSharedPlaylistId : selectedNormalPlaylistId;
+                  return (
+                    <button
+                      key={playlist.id}
+                      type="button"
+                      onClick={() => savePlaylistPickerTargets(playlist)}
+                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#658761]/45 bg-[#658761]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#658761]/32 hover:text-white'}`}
+                    >
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#B8C9B2]" />{playlist.title}</span>
+                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#B8C9B2]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
           <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
             <motion.div
@@ -7080,7 +7247,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   filter !== 'trash' && !isFailed ? { icon: RefreshCw, label: '다음곡에 적용', highlight: true, action: () => { handleApplyNext(activeMenuState.group, activeMenuState.item); setActiveMenuState(null); } } : null,
                   filter !== 'trash' && !isFailed ? { icon: Share2, label: isSharedView ? '공유하기' : '공유', action: () => { isSharedView ? handleShareCurrentPage() : handleShare(activeMenuState.group, activeMenuState.item, activeMenuState.idx); setActiveMenuState(null); } } : null,
                   !isSharedView && filter !== 'trash' && !isFailed ? { icon: Star, label: activeMenuState.group?.favorite ? '즐겨찾기 해제' : '즐겨찾기', filled: Boolean(activeMenuState.group?.favorite), action: () => { handleToggleWorkspaceFavorite(activeMenuState.group); setActiveMenuState(null); } } : null,
-                  filter !== 'trash' && !isFailed ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { handleSavePlaylist(activeMenuState.group, activeMenuState.item, activeMenuState.audioUrl, activeMenuState.idx); setActiveMenuState(null); } } : null,
+                  filter !== 'trash' && !isFailed ? { icon: FolderOutput, label: '플레이리스트 저장', action: () => { void openPlaylistSavePicker([{ group: activeMenuState.group, item: activeMenuState.item, audioUrl: activeMenuState.audioUrl, idx: activeMenuState.idx }]); } } : null,
                   !isSharedView && filter !== 'trash' ? { icon: Trash2, label: '삭제(휴지통)', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'hide'); setActiveMenuState(null); }, danger: true } : null,
                   !isSharedView && filter === 'trash' ? { icon: RefreshCw, label: '복구', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'restore'); setActiveMenuState(null); } } : null,
                   !isSharedView && filter === 'trash' ? { icon: Trash2, label: '영구 삭제', action: () => { handleDeleteClick(activeMenuState.group.id, activeMenuState.idx, activeMenuState.group, 'permanentDelete'); setActiveMenuState(null); }, danger: true } : null,

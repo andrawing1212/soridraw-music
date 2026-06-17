@@ -595,6 +595,15 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   scroll-behavior: auto;
 }
 
+/* SORIDRAW 149: give long-press folder drag room so the lifted button is not clipped by the horizontal scroll container */
+.soridraw-folder-drag-scrollbar {
+  padding-top: 10px !important;
+  padding-bottom: 14px !important;
+  margin-top: -8px;
+  margin-bottom: -4px;
+  overflow-y: visible !important;
+}
+
 @keyframes soridraw-folder-drag-active-pulse {
   0%, 100% {
     box-shadow:
@@ -613,7 +622,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 .soridraw-folder-drag-active {
   position: relative;
   touch-action: none;
-  transform: translateY(-2px) scale(1.07) !important;
+  transform: translateY(-1px) scale(1.06) !important;
   border-color: rgba(255, 255, 255, 0.68) !important;
   animation: soridraw-folder-drag-active-pulse 0.9s ease-in-out infinite;
 }

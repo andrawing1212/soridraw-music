@@ -3746,6 +3746,16 @@ ${song.prompt}
                   onContextMenu={(event) => {
                     if (isSelectionMode) event.preventDefault();
                   }}
+                  onClickCapture={(event) => {
+                    if (!isSelectionMode) return;
+                    const target = event.target as HTMLElement | null;
+                    if (target?.closest('[data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleSongSelection(song.id);
+                    setPendingSelectionAction(null);
+                    setActiveFavoriteMenuId(null);
+                  }}
                   onMouseEnter={(event) => {
                     event.currentTarget.style.backgroundColor = '#171717';
                   }}
@@ -3780,7 +3790,8 @@ ${song.prompt}
                   }}
                   className={cn(
                     "group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
-                    isSelectionMode ? "cursor-pointer" : ""
+                    isSelectionMode ? "cursor-pointer" : "",
+                    isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
                   )}
                 >
                   <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
@@ -3847,6 +3858,7 @@ ${song.prompt}
 
                     <button
                       data-no-card-long-press="true"
+                      data-favorite-color-control="true"
                       onClick={(event) => {
                         event.stopPropagation();
                         setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
@@ -3858,7 +3870,7 @@ ${song.prompt}
                     />
 
                     {activeFavoriteColorMenuId === song.id && (
-                      <div className="absolute left-14 md:left-20 top-[54px] z-40 flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                      <div data-favorite-color-menu="true" className="absolute left-14 md:left-20 top-[54px] z-40 flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                         {FAVORITE_COLOR_OPTIONS.map((color) => (
                           <button
                             key={color.value}

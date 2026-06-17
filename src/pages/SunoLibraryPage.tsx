@@ -648,6 +648,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryLongPressTriggeredRef = useRef(false);
   const librarySuppressNextCardClickRef = useRef(false);
+  const librarySuppressNextCardClickKeyRef = useRef<string | null>(null);
   const libraryDragSelectActiveRef = useRef(false);
   const libraryDragSelectMovedRef = useRef(false);
   const libraryDragSelectStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -3043,6 +3044,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setBulkShareModalOpen(false);
     setBulkMoveModalOpen(false);
     setLibrarySelectionMoreOpen(false);
+    librarySuppressNextCardClickKeyRef.current = null;
   };
 
   const clearLibraryLongPressTimer = () => {
@@ -3080,6 +3082,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     libraryLongPressTimerRef.current = setTimeout(() => {
       libraryLongPressTriggeredRef.current = true;
       librarySuppressNextCardClickRef.current = true;
+      librarySuppressNextCardClickKeyRef.current = selection.key;
 
       if (multiSelectMode) {
         clearMultiSelect();
@@ -3119,14 +3122,24 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     clearLibraryLongPressTimer();
   };
 
-  const consumeLibrarySuppressedClick = (event: any) => {
+  const consumeLibrarySuppressedClick = (event: any, selectionKey?: string) => {
     if (!libraryLongPressTriggeredRef.current && !librarySuppressNextCardClickRef.current) return false;
+
+    const suppressKey = librarySuppressNextCardClickKeyRef.current;
+    if (suppressKey && selectionKey && suppressKey !== selectionKey) {
+      libraryLongPressTriggeredRef.current = false;
+      librarySuppressNextCardClickRef.current = false;
+      librarySuppressNextCardClickKeyRef.current = null;
+      libraryCardClickStartPointRef.current = null;
+      return false;
+    }
 
     event.preventDefault?.();
     event.stopPropagation?.();
     event.nativeEvent?.stopImmediatePropagation?.();
     libraryLongPressTriggeredRef.current = false;
     librarySuppressNextCardClickRef.current = false;
+    librarySuppressNextCardClickKeyRef.current = null;
     libraryCardClickStartPointRef.current = null;
     return true;
   };
@@ -4252,10 +4265,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const fromPlaylistId = activePlaylistId;
     const targetItems = targets.map((selection) => selection.item as PlaylistItem);
 
-    // 폴더를 누르는 순간 선택 UI를 즉시 닫고, 이동 처리는 뒤에서 바로 진행한다.
+    // 폴더 선택창만 닫고 선택모드는 유지한다.
+    // 모바일에서 선택 액션바/모달이 동시에 사라지면 폴더 목록이 튕겨 보일 수 있다.
     setBulkMoveModalOpen(false);
     setBulkMenuState(null);
-    clearMultiSelect();
 
     let moved = 0;
     for (const item of targetItems) {
@@ -5813,7 +5826,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             event.currentTarget.style.backgroundColor = '';
                           }}
                           onClick={(e) => {
-                             if (consumeLibrarySuppressedClick(e)) return;
+                             if (consumeLibrarySuppressedClick(e, selection.key)) return;
                              if (consumeLibraryDragSelectClick(e)) return;
                              if (shouldIgnoreLibraryCardClickFromPointerTravel(e)) return;
                              if ((e.target as HTMLElement).closest('button')) return; // ignore if clicking buttons
@@ -6204,7 +6217,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onTouchEnd={handleLibraryCardLongPressEnd}
                       onTouchCancel={handleLibraryCardLongPressEnd}
                       onClick={(event) => {
-                        if (consumeLibrarySuppressedClick(event)) return;
+                        if (consumeLibrarySuppressedClick(event, selection.key)) return;
                         if (consumeLibraryDragSelectClick(event)) return;
                         if (shouldIgnoreLibraryCardClickFromPointerTravel(event)) return;
                         if (multiSelectMode) toggleSelectedTrack(selection);
@@ -6963,8 +6976,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <AnimatePresence>
         {bulkMoveModalOpen && multiSelectMode && (
-          <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
+          <div data-selection-keep="true" data-floating-menu="true" className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/25" onClick={() => setBulkMoveModalOpen(false)}>
             <motion.div
+              data-selection-keep="true"
+              data-floating-menu="true"
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1 }}

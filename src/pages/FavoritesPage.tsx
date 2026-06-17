@@ -774,6 +774,7 @@ export default function FavoritesPage({
   const cardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
   const suppressNextCardClickRef = useRef(false);
+  const suppressNextCardClickSongIdRef = useRef<string | null>(null);
   const selectionDragActiveRef = useRef(false);
   const selectionDragMovedRef = useRef(false);
   const selectionDragStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -932,11 +933,10 @@ export default function FavoritesPage({
       ? { sharedNoteFolderId: folder.id, sharedNoteFolderTitle: folder.title, sharedNoteFolderUpdatedAt: Date.now() }
       : { noteFolderId: folder.id, noteFolderTitle: folder.title, noteFolderUpdatedAt: Date.now() };
 
-    // 폴더를 누르는 순간 선택 UI를 즉시 닫고, 저장은 뒤에서 바로 진행한다.
-    // 이렇게 해야 폴더 목록이 아래로 내려가는 중간 절차 없이 바로 이동된 것처럼 보인다.
+    // 폴더를 누르는 순간 폴더 선택창만 닫고, 선택모드는 유지한다.
+    // 모바일에서 선택 액션바가 동시에 사라지면 폴더 목록이 튕겨 보일 수 있다.
     setMusicNoteFolderPicker(null);
     setFavoriteSelectionMoreOpen(false);
-    if (isSelectionMode) exitSelectionMode('history');
 
     if (mode === 'sharedNote') {
       setMusicNoteViewMode('sharedNote');
@@ -2257,6 +2257,7 @@ export default function FavoritesPage({
 
       longPressTriggeredRef.current = true;
       suppressNextCardClickRef.current = true;
+      suppressNextCardClickSongIdRef.current = song.id;
 
       if (isSelectionMode) {
         setIsSelectionMode(false);
@@ -2286,14 +2287,24 @@ export default function FavoritesPage({
     clearSelectionLongPressTimer();
   };
 
-  const consumeFavoriteSuppressedClick = (event: React.MouseEvent) => {
+  const consumeFavoriteSuppressedClick = (event: React.MouseEvent, songId?: string) => {
     if (!longPressTriggeredRef.current && !suppressNextCardClickRef.current) return false;
+
+    const suppressSongId = suppressNextCardClickSongIdRef.current;
+    if (suppressSongId && songId && suppressSongId !== songId) {
+      longPressTriggeredRef.current = false;
+      suppressNextCardClickRef.current = false;
+      suppressNextCardClickSongIdRef.current = null;
+      cardClickStartPointRef.current = null;
+      return false;
+    }
 
     event.preventDefault();
     event.stopPropagation();
     (event.nativeEvent as any)?.stopImmediatePropagation?.();
     longPressTriggeredRef.current = false;
     suppressNextCardClickRef.current = false;
+    suppressNextCardClickSongIdRef.current = null;
     cardClickStartPointRef.current = null;
     return true;
   };
@@ -2315,6 +2326,7 @@ export default function FavoritesPage({
     selectionBeforeSelectAllRef.current = [];
     clearSelectionLongPressTimer();
     longPressTriggeredRef.current = false;
+    suppressNextCardClickSongIdRef.current = null;
     selectionHistoryPushedRef.current = false;
   };
 
@@ -3882,7 +3894,7 @@ ${song.prompt}
                   }}
                   onClickCapture={(event) => {
                     if (!isSelectionMode) return;
-                    if (consumeFavoriteSuppressedClick(event)) return;
+                    if (consumeFavoriteSuppressedClick(event, song.id)) return;
                     if (consumeSelectionDragClick(event)) return;
                     const target = event.target as HTMLElement | null;
                     if (target?.closest('[data-favorite-color-control="true"], [data-favorite-color-menu="true"]')) return;
@@ -3901,7 +3913,7 @@ ${song.prompt}
                     event.currentTarget.style.backgroundColor = '';
                   }}
                   onClick={(e) => {
-                    if (consumeFavoriteSuppressedClick(e)) {
+                    if (consumeFavoriteSuppressedClick(e, song.id)) {
                       return;
                     }
 
@@ -4205,6 +4217,8 @@ ${song.prompt}
       <AnimatePresence>
         {musicNoteFolderRenameArgs && (
           <motion.div
+            data-selection-keep="true"
+            data-floating-menu="true"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -4268,6 +4282,8 @@ ${song.prompt}
       <AnimatePresence>
         {musicNoteFolderDeleteArgs && (
           <motion.div
+            data-selection-keep="true"
+            data-floating-menu="true"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -4456,6 +4472,8 @@ ${song.prompt}
       <AnimatePresence>
         {musicNoteFolderPicker && (
           <motion.div
+            data-selection-keep="true"
+            data-floating-menu="true"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -4469,6 +4487,8 @@ ${song.prompt}
             onClick={() => setMusicNoteFolderPicker(null)}
           >
             <motion.div
+              data-selection-keep="true"
+              data-floating-menu="true"
               initial={{ opacity: 0, y: 12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 0, scale: 1 }}

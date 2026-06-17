@@ -605,6 +605,7 @@ body.soridraw-folder-dragging {
 
 .soridraw-folder-drag-active {
   position: relative;
+  touch-action: none;
   transform: translateY(-2px) scale(1.07) !important;
   border-color: rgba(255, 255, 255, 0.68) !important;
   animation: soridraw-folder-drag-active-pulse 0.9s ease-in-out infinite;

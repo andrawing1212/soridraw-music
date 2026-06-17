@@ -251,8 +251,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [activePlaylistSection, setActivePlaylistSection] = useState<'normal' | 'shared'>('normal');
   const [playlistDragging, setPlaylistDragging] = useState<{ section: 'normal' | 'shared'; playlistId: string } | null>(null);
   const playlistButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const playlistBarRefs = useRef<Record<'normal' | 'shared', HTMLDivElement | null>>({ normal: null, shared: null });
   const playlistPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const playlistDragRef = useRef<{ section: 'normal' | 'shared'; playlistId: string; pointerId: number; startX: number; startY: number; active: boolean; target?: HTMLButtonElement | null } | null>(null);
+  const playlistDragRef = useRef<{
+    section: 'normal' | 'shared';
+    playlistId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+    target?: HTMLButtonElement | null;
+    windowMoveHandler?: (event: PointerEvent) => void;
+    windowEndHandler?: (event: PointerEvent) => void;
+  } | null>(null);
   const playlistSuppressClickRef = useRef<string | null>(null);
   const playlistsRef = useRef<Playlist[]>([]);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
@@ -4772,6 +4783,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       .sort((a, b) => (a.order || 0) - (b.order || 0))
   );
 
+  const autoScrollPlaylistBar = (section: 'normal' | 'shared', clientX: number) => {
+    const container = playlistBarRefs.current[section];
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const edgeSize = Math.min(72, Math.max(46, rect.width * 0.18));
+    let delta = 0;
+
+    if (clientX < rect.left + edgeSize) {
+      const strength = Math.min(1, Math.max(0, (rect.left + edgeSize - clientX) / edgeSize));
+      delta = -Math.round(5 + strength * 17);
+    } else if (clientX > rect.right - edgeSize) {
+      const strength = Math.min(1, Math.max(0, (clientX - (rect.right - edgeSize)) / edgeSize));
+      delta = Math.round(5 + strength * 17);
+    }
+
+    if (delta !== 0) {
+      container.scrollLeft += delta;
+    }
+  };
+
   const reorderPlaylistsByPointer = (section: 'normal' | 'shared', playlistId: string, clientX: number) => {
     const currentSectionList = getPlaylistsBySectionForDrag(section);
     const draggedPlaylist = currentSectionList.find((playlist) => playlist.id === playlistId);
@@ -4857,6 +4889,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       drag.active = true;
       setPlaylistDragging({ section, playlistId: playlist.id! });
       document.body.classList.add('soridraw-folder-dragging');
+      const handleWindowPointerMove = (nativeEvent: PointerEvent) => {
+        const currentDrag = playlistDragRef.current;
+        if (!currentDrag?.active || currentDrag.pointerId !== pointerId) return;
+        nativeEvent.preventDefault();
+        autoScrollPlaylistBar(currentDrag.section, nativeEvent.clientX);
+        reorderPlaylistsByPointer(currentDrag.section, currentDrag.playlistId, nativeEvent.clientX);
+      };
+      const handleWindowPointerEnd = (nativeEvent: PointerEvent) => {
+        const currentDrag = playlistDragRef.current;
+        if (!currentDrag || currentDrag.pointerId !== pointerId) return;
+        void finishPlaylistDrag();
+      };
+      drag.windowMoveHandler = handleWindowPointerMove;
+      drag.windowEndHandler = handleWindowPointerEnd;
+      window.addEventListener('pointermove', handleWindowPointerMove, { passive: false });
+      window.addEventListener('pointerup', handleWindowPointerEnd, { passive: false });
+      window.addEventListener('pointercancel', handleWindowPointerEnd, { passive: false });
       try {
         target.setPointerCapture(pointerId);
       } catch {
@@ -4879,7 +4928,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     if (!drag.active) return;
     event.preventDefault();
-    reorderPlaylistsByPointer(drag.section, drag.playlistId, event.clientX);
+    // Active dragging is handled by the window-level pointer listener so it still works
+    // even when the finger leaves the playlist row or the original button.
   };
 
   const finishPlaylistDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {
@@ -4888,6 +4938,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     const drag = playlistDragRef.current;
     playlistDragRef.current = null;
+    if (drag?.windowMoveHandler) window.removeEventListener('pointermove', drag.windowMoveHandler);
+    if (drag?.windowEndHandler) {
+      window.removeEventListener('pointerup', drag.windowEndHandler);
+      window.removeEventListener('pointercancel', drag.windowEndHandler);
+    }
     document.body.classList.remove('soridraw-folder-dragging');
 
     if (!drag?.active) {
@@ -5695,7 +5750,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {libraryViewMode === 'playlist' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
-              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+              <div
+                ref={(element) => { playlistBarRefs.current.normal = element; }}
+                className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+              >
                 {visibleNormalPlaylists.map((playlist) => {
                   const dragKey = getPlaylistDragKey('normal', playlist.id!);
                   const isDefaultPlaylist = playlist.id === visibleNormalPlaylists[0]?.id;
@@ -5714,9 +5772,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setActivePlaylistSection('normal');
                       }}
                       className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
-                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-none' : 'touch-pan-x'
+                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
-                        isDraggingPlaylist ? 'soridraw-folder-drag-active z-10' : ''
+                        isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
                       } ${
                         activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
                           ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 
@@ -5743,7 +5801,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {libraryViewMode === 'sharedPlaylist' && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
-              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+              <div
+                ref={(element) => { playlistBarRefs.current.shared = element; }}
+                className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+              >
                 {visibleSharedPlaylists.map((playlist) => {
                   const dragKey = getPlaylistDragKey('shared', playlist.id!);
                   const isDefaultPlaylist = playlist.id === visibleSharedPlaylists[0]?.id;
@@ -5762,9 +5823,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setActivePlaylistSection('shared');
                       }}
                       className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
-                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-none' : 'touch-pan-x'
+                        !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
-                        isDraggingPlaylist ? 'soridraw-folder-drag-active z-10' : ''
+                        isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
                       } ${
                         activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
                           ? 'bg-[#658761]/78 text-white border-[#658761]/55 shadow-lg' 

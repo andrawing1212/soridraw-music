@@ -457,8 +457,19 @@ export default function FavoritesPage({
   const [musicNoteFolderDeleteArgs, setMusicNoteFolderDeleteArgs] = useState<{ mode: MusicNoteFolderMode; folder: MusicNoteFolder } | null>(null);
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
   const musicNoteFolderButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const musicNoteFolderBarRefs = useRef<Record<MusicNoteFolderMode, HTMLDivElement | null>>({ myNote: null, sharedNote: null });
   const musicNoteFolderPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const musicNoteFolderDragRef = useRef<{ mode: MusicNoteFolderMode; folderId: string; pointerId: number; startX: number; startY: number; active: boolean; target?: HTMLButtonElement | null } | null>(null);
+  const musicNoteFolderDragRef = useRef<{
+    mode: MusicNoteFolderMode;
+    folderId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+    target?: HTMLButtonElement | null;
+    windowMoveHandler?: (event: PointerEvent) => void;
+    windowEndHandler?: (event: PointerEvent) => void;
+  } | null>(null);
   const musicNoteFolderSuppressClickRef = useRef<string | null>(null);
   const myNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
   const sharedNoteFoldersRef = useRef<MusicNoteFolder[]>(DEFAULT_SHARED_NOTE_FOLDERS);
@@ -3007,6 +3018,27 @@ ${song.prompt}
     }
   };
 
+  const autoScrollMusicNoteFolderBar = (mode: MusicNoteFolderMode, clientX: number) => {
+    const container = musicNoteFolderBarRefs.current[mode];
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const edgeSize = Math.min(72, Math.max(46, rect.width * 0.18));
+    let delta = 0;
+
+    if (clientX < rect.left + edgeSize) {
+      const strength = Math.min(1, Math.max(0, (rect.left + edgeSize - clientX) / edgeSize));
+      delta = -Math.round(5 + strength * 17);
+    } else if (clientX > rect.right - edgeSize) {
+      const strength = Math.min(1, Math.max(0, (clientX - (rect.right - edgeSize)) / edgeSize));
+      delta = Math.round(5 + strength * 17);
+    }
+
+    if (delta !== 0) {
+      container.scrollLeft += delta;
+    }
+  };
+
   const reorderMusicNoteFoldersByPointer = (mode: MusicNoteFolderMode, folderId: string, clientX: number) => {
     const folders = getMusicNoteFoldersByMode(mode);
     const draggedFolder = folders.find((folder) => folder.id === folderId);
@@ -3075,6 +3107,23 @@ ${song.prompt}
       drag.active = true;
       setMusicNoteFolderDragging({ mode, folderId: folder.id });
       document.body.classList.add('soridraw-folder-dragging');
+      const handleWindowPointerMove = (nativeEvent: PointerEvent) => {
+        const currentDrag = musicNoteFolderDragRef.current;
+        if (!currentDrag?.active || currentDrag.pointerId !== pointerId) return;
+        nativeEvent.preventDefault();
+        autoScrollMusicNoteFolderBar(currentDrag.mode, nativeEvent.clientX);
+        reorderMusicNoteFoldersByPointer(currentDrag.mode, currentDrag.folderId, nativeEvent.clientX);
+      };
+      const handleWindowPointerEnd = (nativeEvent: PointerEvent) => {
+        const currentDrag = musicNoteFolderDragRef.current;
+        if (!currentDrag || currentDrag.pointerId !== pointerId) return;
+        void finishMusicNoteFolderDrag();
+      };
+      drag.windowMoveHandler = handleWindowPointerMove;
+      drag.windowEndHandler = handleWindowPointerEnd;
+      window.addEventListener('pointermove', handleWindowPointerMove, { passive: false });
+      window.addEventListener('pointerup', handleWindowPointerEnd, { passive: false });
+      window.addEventListener('pointercancel', handleWindowPointerEnd, { passive: false });
       try {
         target.setPointerCapture(pointerId);
       } catch {
@@ -3097,7 +3146,8 @@ ${song.prompt}
 
     if (!drag.active) return;
     event.preventDefault();
-    reorderMusicNoteFoldersByPointer(drag.mode, drag.folderId, event.clientX);
+    // Active dragging is handled by the window-level pointer listener so it still works
+    // even when the finger leaves the folder row or the original button.
   };
 
   const finishMusicNoteFolderDrag = async (event?: React.PointerEvent<HTMLButtonElement>) => {
@@ -3106,6 +3156,11 @@ ${song.prompt}
 
     const drag = musicNoteFolderDragRef.current;
     musicNoteFolderDragRef.current = null;
+    if (drag?.windowMoveHandler) window.removeEventListener('pointermove', drag.windowMoveHandler);
+    if (drag?.windowEndHandler) {
+      window.removeEventListener('pointerup', drag.windowEndHandler);
+      window.removeEventListener('pointercancel', drag.windowEndHandler);
+    }
     document.body.classList.remove('soridraw-folder-dragging');
 
     if (!drag?.active) {
@@ -3146,7 +3201,10 @@ ${song.prompt}
         <h3 className="px-2 text-[12px] md:text-sm font-bold text-[#D8A4A2]/80 tracking-wide">
           {isShared ? '공유 받은 노트' : '나의 노트폴더'}
         </h3>
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2">
+        <div
+          ref={(element) => { musicNoteFolderBarRefs.current[mode] = element; }}
+          className="flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
+        >
           {folders.map((folder) => {
             const dragKey = getMusicNoteFolderDragKey(mode, folder.id);
             const isDraggingFolder = musicNoteFolderDragging?.mode === mode && musicNoteFolderDragging.folderId === folder.id;
@@ -3166,9 +3224,9 @@ ${song.prompt}
                 }}
                 className={cn(
                   'shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none',
-                  !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-none',
+                  !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-pan-x',
                   isDefaultFolder && 'touch-pan-x',
-                  isDraggingFolder && 'soridraw-folder-drag-active z-10',
+                  isDraggingFolder && 'soridraw-folder-drag-active touch-none z-10',
                   selectedId === folder.id
                     ? 'bg-[#AC5045]/78 text-white border-[#AC5045]/55 shadow-lg'
                     : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'

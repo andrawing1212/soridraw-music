@@ -2985,7 +2985,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       } else {
         enterMultiSelectWith(selection);
       }
-    }, 800);
+    }, 500);
   };
 
   const handleLibraryCardLongPressMove = (event: any) => {

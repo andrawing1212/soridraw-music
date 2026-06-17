@@ -2174,7 +2174,7 @@ export default function FavoritesPage({
         setActiveFavoriteMenuId(null);
         setActiveFavoriteColorMenuId(null);
       }
-    }, 800);
+    }, 500);
   };
 
   const handleCardLongPressEnd = () => {

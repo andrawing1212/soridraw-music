@@ -9638,7 +9638,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {/* Selection Sections */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-2 min-[1180px]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}

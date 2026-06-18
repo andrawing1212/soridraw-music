@@ -3661,7 +3661,9 @@ ${song.prompt}
 
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
 
-        if (activeFavoriteMenuId && !target.closest('[data-more-menu-panel="true"]')) {
+        const isMoreMenuButtonTarget = Boolean(target.closest('[data-more-menu-button="true"]'));
+
+        if (activeFavoriteMenuId && !target.closest('[data-more-menu-panel="true"]') && !isMoreMenuButtonTarget) {
           setActiveFavoriteMenuId(null);
           if (!target.closest('[data-selection-action-bar="true"], [data-floating-menu="true"]')) {
             e.preventDefault();
@@ -4125,6 +4127,7 @@ ${song.prompt}
 <div className="relative">
                         <button
                           data-floating-menu="true"
+                          data-more-menu-button="true"
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -4144,7 +4147,7 @@ ${song.prompt}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.9, y: -10 }}
                               transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                              className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border border-[#E45F59]/30 bg-[#181818] py-2 shadow-2xl"
+                              className="absolute right-0 top-11 z-50 w-48 overflow-hidden rounded-2xl border border-[#E45F59]/30 bg-[#181818] py-2 shadow-2xl"
                               onClick={(event) => event.stopPropagation()}
                             >
                             {isFavoriteTrashMode ? (
@@ -4374,7 +4377,7 @@ ${song.prompt}
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(prev => !prev); }}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(false); showFavoriteToast('아직 준비중입니다.'); }}
                     onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                     onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                     onTouchStart={(event) => event.stopPropagation()}
@@ -4443,7 +4446,7 @@ ${song.prompt}
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(prev => !prev); }}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); setFavoriteSelectionMoreOpen(false); showFavoriteToast('아직 준비중입니다.'); }}
                     onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                     onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                     onTouchStart={(event) => event.stopPropagation()}

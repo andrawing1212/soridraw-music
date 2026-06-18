@@ -15143,7 +15143,7 @@ function SongStructureIntegratedControl({
                 onMouseEnter={() => onHover({ id: 'song-structure-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '섹션 구조를 랜덤 선택에 다시 포함합니다.' : '현재 섹션 구조 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-2 rounded-lg transition-all border border-btn-border shadow-btn",
+                  "p-[9px] rounded-lg transition-all border border-btn-border shadow-btn",
                   isLocked
                     ? "bg-[#7FBD75]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -15151,7 +15151,7 @@ function SongStructureIntegratedControl({
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={isLocked ? '섹션 구조 잠금 해제' : '섹션 구조 잠금'}
               >
-                {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
             <button
@@ -15159,13 +15159,13 @@ function SongStructureIntegratedControl({
               onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '섹션 설정을 초기화합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2 rounded-lg transition-all border shadow-btn",
+                "p-[9px] rounded-lg transition-all border shadow-btn",
                 (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
                   ? "bg-[#7FBD75]/20 text-[#B8F4AA] border-black/20/30 hover:bg-[#7FBD75]/30" 
                   : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-4 h-4" />
             </button>
           </div>
           <AnimatePresence>
@@ -17491,8 +17491,8 @@ function VocalControl({
   });
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl pt-3 px-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
-      <div className="relative mb-3 flex items-center justify-between">
+    <div className="bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
+      <div className="relative mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
@@ -17512,7 +17512,7 @@ function VocalControl({
               onMouseEnter={() => onHover({ id: 'vocal-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '보컬 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 보컬 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2 rounded-lg transition-all border border-btn-border shadow-btn",
+                "p-[9px] rounded-lg transition-all border border-btn-border shadow-btn",
                 isLocked
                   ? "bg-[#7FBD75]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -17520,7 +17520,7 @@ function VocalControl({
               title={isLocked ? '잠금 해제' : '메뉴 잠금'}
               aria-label={isLocked ? '보컬 잠금 해제' : '보컬 잠금'}
             >
-              {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
             </button>
           )}
           <button
@@ -17528,13 +17528,13 @@ function VocalControl({
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "p-2 rounded-lg transition-all border shadow-btn",
+              "p-[9px] rounded-lg transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0)
                 ? "bg-[#7FBD75]/20 text-[#B8F4AA] border-black/20/30 hover:bg-[#7FBD75]/30" 
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-4 h-4" />
           </button>
         </div>
 

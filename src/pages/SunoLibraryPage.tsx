@@ -6850,7 +6850,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </button>
                 <button
                   type="button"
-                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); setBulkMenuState(null); showToast('아직 준비중입니다.'); }}
                   onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                   onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                   onTouchStart={(event) => event.stopPropagation()}
@@ -6898,7 +6898,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </button>
                 <button
                   type="button"
-                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); openBulkMenuFromButton(event.currentTarget); }}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setLibrarySelectionMoreOpen(false); setBulkMenuState(null); showToast('아직 준비중입니다.'); }}
                   onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                   onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                   onTouchStart={(event) => event.stopPropagation()}

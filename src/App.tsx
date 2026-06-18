@@ -4598,6 +4598,26 @@ function App() {
 
   const row1MaxHeight = useMemo(() => Math.max(genreHeight, styleHeight, soundHeight), [genreHeight, styleHeight, soundHeight]);
   const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
+  const [isStudioWideSelectionLayout, setIsStudioWideSelectionLayout] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024 && window.matchMedia('(orientation: landscape)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateStudioSelectionLayout = () => {
+      setIsStudioWideSelectionLayout(window.innerWidth >= 1024 && window.matchMedia('(orientation: landscape)').matches);
+    };
+
+    updateStudioSelectionLayout();
+    window.addEventListener('resize', updateStudioSelectionLayout);
+    window.addEventListener('orientationchange', updateStudioSelectionLayout);
+    return () => {
+      window.removeEventListener('resize', updateStudioSelectionLayout);
+      window.removeEventListener('orientationchange', updateStudioSelectionLayout);
+    };
+  }, []);
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
@@ -9638,7 +9658,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {/* Selection Sections */}
-              <div className="grid grid-cols-1 md:grid-cols-2 min-[1180px]:grid-cols-3 gap-5 items-start">
+              <div className="grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -9706,7 +9726,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
               />
           <CycleSection 
@@ -9731,7 +9751,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             isExpanded={isStyleExpanded}
             onToggleExpand={() => toggleMainSections('style')}
             onHeightChange={setStyleHeight}
-            forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+            forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('style', isOpen); }}
           />
           <CycleSection 
@@ -9786,7 +9806,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             isExpanded={isSoundExpanded}
             onToggleExpand={() => toggleMainSections('sound')}
             onHeightChange={setSoundHeight}
-            forcedHeight={window.innerWidth >= 768 && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+            forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('sound', isOpen); }}
           />
         </div>

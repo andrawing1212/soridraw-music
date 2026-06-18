@@ -784,7 +784,7 @@ export default function GenreHierarchySelector({
                 }
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
+                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
                     ? genreAccent.selected
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover",
@@ -792,7 +792,7 @@ export default function GenreHierarchySelector({
                 title={isLocked ? "잠금 해제" : "메뉴 잠금"}
                 aria-label={isLocked ? "장르 잠금 해제" : "장르 잠금"}
               >
-                {isLocked ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
             <button
@@ -808,14 +808,14 @@ export default function GenreHierarchySelector({
               }
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
+                "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                 isRandomized
                   ? genreAccent.selected
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover",
               )}
               title="랜덤 선택"
             >
-              <Dices className="w-[18px] h-[18px]" />
+              <Dices className="w-4 h-4" />
             </button>
             <button
               onClick={onClear}
@@ -830,14 +830,14 @@ export default function GenreHierarchySelector({
               }
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-3 rounded-xl transition-all border shadow-btn",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 selectedCount > 0 || isRandomized
                   ? genreAccent.selectedSoft
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
               )}
               title="초기화"
             >
-              <RotateCcw className="w-[18px] h-[18px]" />
+              <RotateCcw className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -881,7 +881,7 @@ export default function GenreHierarchySelector({
                       : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                   )}
                 >
-                  <span className="text-[13px] md:text-[14.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                  <span className="text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
                 </button>
@@ -1060,12 +1060,12 @@ export default function GenreHierarchySelector({
                             title="세부 장르 열기"
                           >
                             <div className="w-full min-w-0">
-                              <div className="font-bold text-lg md:text-xl tracking-tight break-keep truncate">
+                              <div className="font-bold text-[20px] md:text-[22px] tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
                               <div
                                 className={cn(
-                                  "text-xs md:text-[13px] truncate w-full break-keep mt-1",
+                                  "text-[14px] md:text-[15px] truncate w-full break-keep mt-1",
                                   isActiveVisual
                                     ? "text-[#171717]/75 font-black"
                                     : "text-[var(--text-secondary)]",

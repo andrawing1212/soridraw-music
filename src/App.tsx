@@ -9878,8 +9878,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">Storyboard</h3>
-                        <span className="text-xs font-bold text-[var(--text-secondary)]">스토리보드</span>
+                        <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
                       </div>
                       <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
@@ -9903,7 +9902,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
                     aria-label={menuLocks.situation ? '스토리보드 잠금 해제' : '스토리보드 잠금'}
                   >
-                    {menuLocks.situation ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
+                    {menuLocks.situation ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                   </button>
                   {hasActiveSituation(situation) && (
                     <button
@@ -9970,7 +9969,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <div className="flex items-center gap-2">
                             <Users className="w-[22px] h-[22px] text-[#FF9B92]" />
                             <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
-                            <span className="text-[11px] font-bold text-[var(--text-tertiary)]">Storyboard</span>
                           </div>
                           <p className="mt-1 text-[11px] md:text-xs text-[var(--text-secondary)]">캐릭터와 이야기 흐름을 정해요</p>
                         </div>
@@ -12501,7 +12499,7 @@ function GenreCategorySection({
                 : "bg-white/10 text-[var(--text-secondary)] hover:bg-white/20"
             )}
           >
-            <Dices className="w-[18px] h-[18px]" />
+            <Dices className="w-4 h-4" />
           </button>
           <button
             onClick={onClear}
@@ -12513,13 +12511,13 @@ function GenreCategorySection({
             onTouchStart={() => onLongPressStart({ id: 'genre-clear', label: 'Reset', labelKo: '초기화', description: '선택한 장르를 초기화합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
-              "p-3 rounded-xl transition-all border shadow-btn",
+              "p-2.5 rounded-xl transition-all border shadow-btn",
               (!!selectedChild || isRandomized)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
                 : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
             )}
           >
-            <RotateCcw className="w-[18px] h-[18px]" />
+            <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -12887,7 +12885,7 @@ function CycleSection({
                 onTouchStart={() => onLongPressStart({ id: `cycle-lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
-                  "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
+                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
                     ? sectionAccent.selected
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -12895,24 +12893,24 @@ function CycleSection({
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
               >
-                {isLocked ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
-            <button onClick={onRandom} className={cn("p-3 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
-              <Dices className="w-[18px] h-[18px]" />
+            <button onClick={onRandom} className={cn("p-2.5 rounded-xl transition-all shadow-btn border border-btn-border", isRandomized ? sectionAccent.selected : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover')}>
+              <Dices className="w-4 h-4" />
             </button>
             <button 
               onClick={onClear}
               onMouseEnter={() => onHover({ id: 'cycle-clear', label: 'Reset', labelKo: '초기화', description: `${title} 설정을 초기화합니다.` })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-3 rounded-xl transition-all border shadow-btn",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 (activeSelected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-[18px] h-[18px]" />
+              <RotateCcw className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -12973,7 +12971,7 @@ function CycleSection({
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
-                  <span className="text-[14px] md:text-[15px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
+                  <span className="text-[16px] md:text-[17px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
                     {folderLabel}
                   </span>
                   {selectedCountInCycle > 0 && (
@@ -13380,7 +13378,7 @@ function CycleKeywordPopup({
                     )}
                   >
                     <div className="min-w-0">
-                      <span className={cn("text-sm truncate block", isSelected ? "font-black" : "font-black")}>{variant.labelKo || variant.label}</span>
+                      <span className={cn("text-[16px] truncate block", isSelected ? "font-black" : "font-black")}>{variant.labelKo || variant.label}</span>
                       <p className={cn("text-xs mt-1 leading-snug line-clamp-2", isSelected ? "text-[#050505]/85 font-extrabold" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                     </div>
                   </button>
@@ -13570,7 +13568,7 @@ function CategorySection({
                 onTouchStart={() => onLongPressStart({ id: `lock-${title}`, label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? `${titleKo || title} 메뉴를 랜덤 선택에 다시 포함합니다.` : `현재 ${titleKo || title} 설정을 유지하고 랜덤 선택에서 제외합니다.` })}
                 onTouchEnd={onLongPressEnd}
                 className={cn(
-                  "p-3 rounded-xl transition-all shadow-btn border border-btn-border",
+                  "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                   isLocked
                     ? sectionAccent.selected
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -13578,7 +13576,7 @@ function CategorySection({
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
                 aria-label={`${titleKo || title} ${isLocked ? '잠금 해제' : '잠금'}`}
               >
-                {isLocked ? <Lock className="w-[18px] h-[18px]" /> : <Unlock className="w-[18px] h-[18px]" />}
+                {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
               </button>
             )}
             <button 
@@ -13591,13 +13589,13 @@ function CategorySection({
               onTouchStart={() => onLongPressStart({ id: 'random-cat', label: 'Random', labelKo: '랜덤 선택', description: `${titleKo || title} 키워드를 무작위로 선택합니다.` })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "p-3 rounded-xl transition-all shadow-btn",
+                "p-2.5 rounded-xl transition-all shadow-btn",
                 isRandomized 
                   ? sectionAccent.selected 
                   : "bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover"
               )}
             >
-              <Dices className="w-[18px] h-[18px]" />
+              <Dices className="w-4 h-4" />
             </button>
             {!hidePin && onUnpinAll && (
               <button 
@@ -13609,9 +13607,9 @@ function CategorySection({
                 }}
                 onTouchStart={() => onLongPressStart({ id: 'unpin-all', label: 'Unpin All', labelKo: '모든 핀 해제', description: '고정된 모든 키워드를 해제합니다.' })}
                 onTouchEnd={onLongPressEnd}
-                className="p-3 rounded-xl bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover transition-all shadow-btn"
+                className="p-2.5 rounded-xl bg-btn-bg text-[var(--text-secondary)] border border-btn-border hover:bg-btn-hover transition-all shadow-btn"
               >
-                <PinOff className="w-[18px] h-[18px]" />
+                <PinOff className="w-4 h-4" />
               </button>
             )}
             <button 
@@ -13624,13 +13622,13 @@ function CategorySection({
               onTouchStart={() => onLongPressStart({ id: 'clear', label: 'Reset', labelKo: '초기화', description: hidePin ? '모든 선택을 초기화합니다.' : '핀을 제외한 모든 선택을 초기화합니다.' })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                "p-3 rounded-xl transition-all border shadow-btn",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-[18px] h-[18px]" />
+              <RotateCcw className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -13665,10 +13663,10 @@ function CategorySection({
 
             const labelLength = String(displayLabel ?? '').replace(/\s+/g, '').length;
             const uniformLabelTextClass = labelLength >= 6
-              ? "text-[13px] md:text-[11.5px] leading-[1.05]"
+              ? "text-[13px] md:text-[12.5px] leading-[1.05]"
               : labelLength >= 4
-                ? "text-[13px] md:text-[11.5px] leading-[1.08]"
-                : "text-[15px] md:text-[13.5px] leading-tight";
+                ? "text-[13px] md:text-[12.5px] leading-[1.08]"
+                : "text-[15px] md:text-[14.5px] leading-tight";
 
             if (isKpop) {
               if (kpopMode === 2) {
@@ -14719,7 +14717,7 @@ function SongStructureIntegratedControl({
 
 
   const structureOptions = [
-    { id: '1', label: '기본', description: '장르에 맞춰 Hook / Break / Drop / Instrumental을 안정적으로 섞는 세련된 랜덤 기본 구조입니다.' },
+    { id: '1', label: '기본', description: '장르에 따른 안정적인 기본 섹션을 랜덤으로 적용합니다. 가장 대중적이지만 가끔 실험적인 구조가 나올 수 있습니다.' },
     { id: '2', label: '1', description: '일반적인 기본 섹션 구성. 추천 2~4분' },
     { id: '3', label: '2', description: '브릿지와 반복이 확장된 섹션 구성. 추천 4~6분' },
     { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
@@ -14727,7 +14725,7 @@ function SongStructureIntegratedControl({
 
   const handleSelectStructure = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
-      '1': '장르별로 안정적인 기본 뼈대를 고르고 Hook / Break / Drop / Instrumental을 세련되게 섞는 기본 랜덤 구조',
+      '1': '장르에 따른 안정적인 기본 섹션을 랜덤으로 적용합니다. 가장 대중적이지만 가끔 실험적인 구조가 나올 수 있습니다.',
       '2': '가장 일반적인 기본 섹션 구성 · 추천 길이 2~4분',
       '3': '브릿지와 반복이 확장된 섹션 구성 · 추천 길이 4~6분',
       'custom': (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · Pro부터 사용할 수 있습니다.',
@@ -15132,9 +15130,9 @@ function SongStructureIntegratedControl({
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+            className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
           >
-            <span className="w-1.5 h-5 bg-[#7FBD75] rounded-full" />
+            <span className="w-1.5 h-6 bg-[#7FBD75] rounded-full" />
             섹션구조
           </h3>
           <div className="flex items-center gap-2">
@@ -15193,7 +15191,7 @@ function SongStructureIntegratedControl({
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
-                <p className="text-[13px] font-bold text-[#B8F4AA] uppercase tracking-wider">│가사 길이</p>
+                <p className="text-[14px] md:text-[15px] font-bold text-[#B8F4AA] uppercase tracking-wider">│가사 길이</p>
                 <div className="flex gap-2">
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
@@ -15210,7 +15208,7 @@ function SongStructureIntegratedControl({
                         onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border shadow-sm",
+                          "w-full py-1.5 rounded-xl text-[14px] md:text-[15px] font-bold transition-all border shadow-sm",
                           lyricsLength === opt.id
                             ? "bg-[#7FBD75] border-black/20 text-[#171717] font-black shadow-lg shadow-[#7FBD75]/20"
                             : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
@@ -15229,7 +15227,7 @@ function SongStructureIntegratedControl({
 
               {/* 3. 섹션 */}
               <div className="space-y-2">
-                <p className="text-[13px] font-bold text-[#B8F4AA] uppercase tracking-wider">│섹션</p>
+                <p className="text-[14px] md:text-[15px] font-bold text-[#B8F4AA] uppercase tracking-wider">│섹션</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -15245,7 +15243,7 @@ function SongStructureIntegratedControl({
                         onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
+                          "py-1.5 rounded-xl text-[14px] md:text-[15px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
                           songStructure === opt.id
                             ? "bg-[#7FBD75] border-black/20 text-[#171717] font-black shadow-lg shadow-[#7FBD75]/20"
                             : isCustomLocked
@@ -15266,7 +15264,7 @@ function SongStructureIntegratedControl({
                     {songStructure === 'custom' ? '현재 커스텀 섹션' : songStructure === '1' ? '기본 섹션 상세 가이드' : `섹션 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "장르에 따라 안정적인 기본 뼈대를 고른 뒤 Hook, Break, Drop, Instrumental, Bridge를 필요한 곳에만 섞습니다. 대중적인 흐름은 유지하고, 중간 전환만 세련되게 변주합니다."}
+                    {songStructure === '1' && "장르에 따른 안정적인 기본 섹션을 랜덤으로 적용합니다. 가장 대중적이지만 가끔 실험적인 구조가 나올 수 있습니다."}
                     {songStructure === '2' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
                     {songStructure === '3' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
                     {songStructure === 'custom' && (
@@ -17499,9 +17497,9 @@ function VocalControl({
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
-            className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+            className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
           >
-            <span className="w-1.5 h-5 bg-[#7FBD75] rounded-full" />
+            <span className="w-1.5 h-6 bg-[#7FBD75] rounded-full" />
             보컬
           </h3>
         </div>
@@ -18181,9 +18179,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
             <h3 
               onMouseEnter={() => setShowTitleTooltip(true)}
               onMouseLeave={() => setShowTitleTooltip(false)}
-              className="text-[18px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
+              className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
             >
-              <span className="w-1.5 h-5 bg-[#7FBD75] rounded-full" />
+              <span className="w-1.5 h-6 bg-[#7FBD75] rounded-full" />
               템포(BPM)
             </h3>
 

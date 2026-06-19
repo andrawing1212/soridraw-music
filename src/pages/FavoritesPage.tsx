@@ -437,7 +437,8 @@ export default function FavoritesPage({
   hoveredItem,
   onLongPressStart,
   onLongPressEnd,
-  isFavoritesLoading = false
+  isFavoritesLoading = false,
+  onLogin
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
@@ -451,6 +452,7 @@ export default function FavoritesPage({
   onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
   onLongPressEnd: () => void;
   isFavoritesLoading?: boolean;
+  onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
@@ -868,6 +870,16 @@ export default function FavoritesPage({
     }, 2200);
   };
 
+  const requestMusicNoteLogin = () => {
+    setActiveFavoriteMenuId(null);
+    setMusicNoteShareInfo(null);
+    if (typeof onLogin === 'function') {
+      onLogin();
+      return;
+    }
+    showFavoriteToast('로그인이 필요합니다.');
+  };
+
   const getMusicNoteMemo = (song: any): string => String(song?.musicNoteMemo || song?.noteMemo || song?.memo || '');
 
   const normalizeMusicNoteDuplicateText = (value: any): string => String(value || '')
@@ -889,7 +901,7 @@ export default function FavoritesPage({
   const saveMusicNoteMemo = async (song: any) => {
     if (!song?.id || isMusicNoteSharedView) return;
     if (!user?.uid) {
-      showFavoriteToast('로그인이 필요합니다.');
+      requestMusicNoteLogin();
       return;
     }
 
@@ -3427,7 +3439,7 @@ ${song.prompt}
   const saveSharedMusicNoteToSharedNote = async (song: any) => {
     if (!song) return;
     if (!user?.uid) {
-      showFavoriteToast('로그인이 필요합니다.');
+      requestMusicNoteLogin();
       return;
     }
     if (!song?.isSharedMusicNote && !isMusicNoteSharedView) {
@@ -3499,6 +3511,11 @@ ${song.prompt}
 
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
     setActiveFavoriteMenuId(null);
+
+    if (isMusicNoteSharedView && !user?.uid && ['details', 'apply', 'saveSharedNote'].includes(action)) {
+      requestMusicNoteLogin();
+      return;
+    }
 
     if (action === 'details') {
       setSelectedSong(song);

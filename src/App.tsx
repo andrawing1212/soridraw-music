@@ -11312,6 +11312,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   unlockAllFavorites={unlockAllFavorites}
                   lockAllFavorites={lockAllFavorites}
                   user={user || auth.currentUser}
+                  onLogin={handleLogin}
                   onHover={() => {}}
                   hoveredItem={null}
                   onLongPressStart={() => {}}

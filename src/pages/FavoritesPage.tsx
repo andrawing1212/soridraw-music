@@ -461,6 +461,8 @@ export default function FavoritesPage({
   const [showMusicNoteKakaoWarning, setShowMusicNoteKakaoWarning] = useState(false);
   const [musicNoteShareInfo, setMusicNoteShareInfo] = useState<{ songs: any[]; mode: 'default' | 'pc-panel'; shareId?: string; isPublic?: boolean } | null>(null);
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
+  const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
+  const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
   const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
@@ -862,10 +864,11 @@ export default function FavoritesPage({
   }, []);
 
   useEffect(() => {
-    const noteShareId = new URL(window.location.href).searchParams.get('note');
+    const noteShareId = musicNoteShareParam;
     if (!noteShareId) {
       setIsMusicNoteSharedView(false);
       setSharedMusicNoteSongs([]);
+      setShowMusicNoteKakaoWarning(false);
       return;
     }
 
@@ -894,7 +897,8 @@ export default function FavoritesPage({
           originalFavoriteId: song?.originalFavoriteId || song?.id || null,
           sharedNoteShareId: noteShareId,
           isSharedMusicNote: true,
-          isLocked: true,
+          sharedReadOnly: true,
+          isLocked: false,
         }));
 
         if (!cancelled) {
@@ -919,7 +923,7 @@ export default function FavoritesPage({
     return () => {
       cancelled = true;
     };
-  }, [isKakaoInAppBrowser]);
+  }, [isKakaoInAppBrowser, musicNoteShareParam]);
 
 
   useEffect(() => {
@@ -1162,10 +1166,18 @@ export default function FavoritesPage({
     if (!rawUrl) return null;
 
     const rankValue = Number(link?.rank);
+    const coverUrl = typeof link?.coverUrl === 'string'
+      ? link.coverUrl
+      : typeof link?.imageUrl === 'string'
+        ? link.imageUrl
+        : typeof link?.thumbnailUrl === 'string'
+          ? link.thumbnailUrl
+          : null;
+
     return {
       url: rawUrl,
       title: typeof link?.title === 'string' ? link.title : null,
-      coverUrl: typeof link?.coverUrl === 'string' ? link.coverUrl : null,
+      coverUrl,
       durationSeconds: typeof link?.durationSeconds === 'number' ? link.durationSeconds : null,
       durationText: typeof link?.durationText === 'string' ? link.durationText : null,
       rank: rankValue === 1 || rankValue === 2 ? rankValue as 1 | 2 : (index === 0 ? 1 : 2),
@@ -1175,9 +1187,13 @@ export default function FavoritesPage({
   };
 
   const getFavoriteSunoLinks = (song: any): FavoriteSunoLink[] => {
-    const list = Array.isArray(song?.sunoLinks)
-      ? song.sunoLinks.map((link: any, index: number) => normalizeFavoriteSunoLink(link, index)).filter(Boolean) as FavoriteSunoLink[]
-      : [];
+    const rawLinks = Array.isArray(song?.sunoLinks)
+      ? song.sunoLinks
+      : Array.isArray(song?.sunoShareLinks)
+        ? song.sunoShareLinks
+        : [];
+
+    const list = rawLinks.map((link: any, index: number) => normalizeFavoriteSunoLink(link, index)).filter(Boolean) as FavoriteSunoLink[];
 
     if (list.length > 0) return list.slice(0, 2);
 
@@ -1218,7 +1234,9 @@ export default function FavoritesPage({
   };
 
   const getFavoriteSunoShareUrl = (song: any): string => {
-    return String(getFavoriteMainSunoLink(song)?.url || '').trim();
+    const mainUrl = String(getFavoriteMainSunoLink(song)?.url || '').trim();
+    if (mainUrl) return mainUrl;
+    return song?.isSharedMusicNote ? String(song?.audioUrl || '').trim() : '';
   };
 
   const normalizeFavoriteSunoShareUrl = (value: string): string => {
@@ -2691,7 +2709,7 @@ ${song.prompt}
     copyToClipboard(text, `all-${song.id}`);
   };
 
-  if (!user) {
+  if (!user && !isMusicNoteShareRoute) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-6 font-sans">
         <div className="p-6 rounded-full bg-[var(--bg-secondary)]/50 mb-6">
@@ -3056,14 +3074,19 @@ ${song.prompt}
 
   const getMusicNoteShareSongPayload = (song: any) => {
     const titles = getNormalizedTitles(song);
-    const links = getFavoriteSunoLinks(song).map((link: any) => ({
+    const links = getFavoriteSunoLinks(song).map((link: any, index: number) => ({
       url: link?.url || '',
       title: link?.title || '',
-      imageUrl: link?.imageUrl || '',
-      duration: link?.duration || null,
+      coverUrl: link?.coverUrl || '',
+      imageUrl: link?.coverUrl || '',
+      durationSeconds: typeof link?.durationSeconds === 'number' ? link.durationSeconds : null,
       durationText: link?.durationText || '',
+      rank: index === 0 ? 1 : 2,
       updatedAt: link?.updatedAt || null,
-    })).filter((link: any) => link.url || link.title || link.imageUrl);
+      fetchedAt: link?.fetchedAt || null,
+    })).filter((link: any) => link.url || link.title || link.coverUrl || link.imageUrl);
+
+    const mainSunoLink = links[0] || null;
 
     return {
       id: `shared-${String(song?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`,
@@ -3080,14 +3103,16 @@ ${song.prompt}
       appliedKeywords: { genre: [], mood: [], theme: [], style: [], instrumentSound: [], ...(song?.appliedKeywords || {}) },
       requestPayload: song?.requestPayload || null,
       style: song?.style || '',
-      sunoShareUrl: song?.sunoShareUrl || '',
+      sunoShareUrl: song?.sunoShareUrl || mainSunoLink?.url || '',
+      sunoLinks: links,
       sunoShareLinks: links,
+      mainSunoIndex: 0,
       sunoData: Array.isArray(song?.sunoData) ? song.sunoData : null,
-      imageUrl: song?.imageUrl || song?.coverUrl || '',
+      imageUrl: song?.imageUrl || song?.coverUrl || mainSunoLink?.coverUrl || mainSunoLink?.imageUrl || '',
       audioUrl: song?.audioUrl || '',
       createdAtText: getRelativeTime(song?.createdAtMs || song?.createdAt),
       isSharedMusicNote: true,
-      isLocked: true,
+      isLocked: false,
       sharedReadOnly: true,
     };
   };

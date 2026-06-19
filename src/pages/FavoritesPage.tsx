@@ -3590,11 +3590,12 @@ ${song.prompt}
     const matchesTrashState = favoriteTrashView
       ? musicNoteViewMode === 'noteSpace' && isTrashed
       : !isTrashed;
+    const isSharedNoteOnly = isSharedMusicNoteItem(song);
     const matchesFolder = musicNoteViewMode === 'noteSpace'
-      ? true
+      ? !isSharedNoteOnly
       : musicNoteViewMode === 'myNote'
-        ? getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
-        : getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
+        ? !isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
+        : isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
     return matchesSearch && matchesColor && matchesTrashState && matchesFolder;
   }).sort((a, b) => {
     if (isMusicNoteSharedView) return 0;

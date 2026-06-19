@@ -5573,22 +5573,6 @@ ${song.prompt}
                       </>
                     )}
 
-                    {!isMusicNoteSharedView && selectedSong?.id && !isFavoriteTrashMode && (
-                      <div className="mx-auto mt-5 w-full max-w-[720px]">
-                        <textarea
-                          value={favoriteMemoDrafts[selectedSong.id] ?? getMusicNoteMemo(selectedSong)}
-                          onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [selectedSong.id]: event.target.value }))}
-                          onBlur={() => saveMusicNoteMemo(selectedSong)}
-                          placeholder="메모 추가..."
-                          rows={2}
-                          className="w-full resize-none rounded-2xl border border-white/[0.07] bg-black/[0.16] px-4 py-3 text-center text-[13px] font-medium leading-relaxed text-white/72 outline-none transition-all placeholder:text-white/28 focus:border-[#E45F59]/40 focus:bg-black/[0.22] md:text-sm"
-                        />
-                        {favoriteMemoSavingIds[selectedSong.id] && (
-                          <div className="mt-1 text-center text-[10px] font-bold text-[#FFAAA3]/70">메모 저장 중...</div>
-                        )}
-                      </div>
-                    )}
-
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                       {getFavoriteDetailCreatedAt(selectedSong) && (
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
@@ -5651,6 +5635,56 @@ ${song.prompt}
                     )}
                   </div>
                 </section>
+
+                {!isMusicNoteSharedView && selectedSong?.id && !isFavoriteTrashMode && (
+                  <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-5 md:p-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">memo</div>
+                        <h4 className="mt-1 text-xl font-bold text-white">개인 메모</h4>
+                        <p className="mt-1 text-sm leading-6 text-white/42">이 곡에 대한 개인 메모를 남겨 관리합니다. 공유 링크에는 포함되지 않습니다.</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {(favoriteMemoDrafts[selectedSong.id] ?? getMusicNoteMemo(selectedSong)) !== getMusicNoteMemo(selectedSong) && (
+                          <button
+                            type="button"
+                            onClick={() => saveMusicNoteMemo(selectedSong)}
+                            disabled={!!favoriteMemoSavingIds[selectedSong.id]}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#E45F59]/45 bg-[#E45F59]/16 text-[#FFAAA3] transition-all hover:bg-[#E45F59]/24 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label="메모 저장"
+                          >
+                            {favoriteMemoSavingIds[selectedSong.id] ? <div className="h-4 w-4 rounded-full border-2 border-[#FFAAA3]/25 border-t-[#FFAAA3] animate-spin" /> : <Check className="h-4 w-4" />}
+                          </button>
+                        )}
+                        {(favoriteMemoDrafts[selectedSong.id] ?? getMusicNoteMemo(selectedSong)) !== getMusicNoteMemo(selectedSong) && (
+                          <button
+                            type="button"
+                            onClick={() => setFavoriteMemoDrafts(prev => {
+                              const next = { ...prev };
+                              delete next[selectedSong.id];
+                              return next;
+                            })}
+                            disabled={!!favoriteMemoSavingIds[selectedSong.id]}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/65 transition-all hover:text-[#FFAAA3] disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label="메모 취소"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <textarea
+                      value={favoriteMemoDrafts[selectedSong.id] ?? getMusicNoteMemo(selectedSong)}
+                      onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [selectedSong.id]: event.target.value }))}
+                      placeholder="곡에 대한 개인 메모를 입력하세요..."
+                      rows={4}
+                      className="w-full min-h-[120px] resize-y rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all placeholder:text-white/28 focus:border-[#E45F59]/45 focus:bg-black/[0.22] md:text-[15px]"
+                    />
+                    {favoriteMemoSavingIds[selectedSong.id] && (
+                      <div className="mt-2 text-[11px] font-bold text-[#FFAAA3]/75">메모 저장 중...</div>
+                    )}
+                  </section>
+                )}
 
                 {!isSelectedSongReadOnly && (
                 <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FFB5AA]/60 shadow-[0_0_0_1px_rgba(255,181,170,0.22),0_18px_52px_rgba(255,111,95,0.22)]')}>

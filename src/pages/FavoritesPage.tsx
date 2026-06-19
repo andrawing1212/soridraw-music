@@ -3487,6 +3487,8 @@ ${song.prompt}
   };
 
   const filteredFavorites = activeFavoriteSource.filter(song => {
+    if (isMusicNoteSharedView) return true;
+
     const matchesSearch = (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (song.englishTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3510,6 +3512,8 @@ ${song.prompt}
         : getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
     return matchesSearch && matchesColor && matchesTrashState && matchesFolder;
   }).sort((a, b) => {
+    if (isMusicNoteSharedView) return 0;
+
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
 
     switch (sortBy) {
@@ -4064,13 +4068,18 @@ ${song.prompt}
           <div>
             <h1 className="text-3xl md:text-5xl font-black leading-none tracking-tight text-white font-display flex items-center gap-3">
               <HeartIcon className="w-9 h-9 text-[#E45F59] shrink-0" />
-              <span>Music <span className="text-[#E45F59]">Note</span></span>
+              {isMusicNoteSharedView ? (
+                <span>공유된 <span className="text-[#E45F59]">뮤직노트</span></span>
+              ) : (
+                <span>Music <span className="text-[#E45F59]">Note</span></span>
+              )}
             </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">{isMusicNoteSharedView ? sharedMusicNoteTitle : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}</p>
+            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">{isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}</p>
           </div>
 
       </motion.div>
 
+      {!isMusicNoteSharedView && (
       <div className="space-y-4 md:space-y-5">
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -4163,6 +4172,7 @@ ${song.prompt}
           </div>
         </div>
       </div>
+      )}
 
       {!isMusicNoteSharedView && (
       <div className="mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
@@ -4504,13 +4514,16 @@ ${song.prompt}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.9, y: -10 }}
                               transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                              className="absolute right-0 top-11 z-50 w-48 overflow-hidden rounded-2xl border border-[#E45F59]/30 bg-[#181818] py-2 shadow-2xl"
+                              className="absolute right-0 top-11 z-50 w-40 overflow-hidden rounded-xl border border-black/15 bg-[#2a2a2a] py-1 text-sm shadow-2xl"
                               onClick={(event) => event.stopPropagation()}
                             >
                             {isMusicNoteSharedView ? (
                               <>
-                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />디테일</button>
-                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Info className="w-4 h-4 opacity-70" />디테일</button>
+                                {getFavoriteSunoShareUrl(song) && (
+                                  <button onClick={() => executeFavoriteMenuAction('sunoOpen', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Play className="w-4 h-4 opacity-70 fill-current" />재생 링크 열기</button>
+                                )}
+                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Share2 className="w-4 h-4 opacity-70" />공유</button>
                               </>
                             ) : isFavoriteTrashMode ? (
                               isBulkMenu ? (

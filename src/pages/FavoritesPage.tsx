@@ -877,7 +877,7 @@ export default function FavoritesPage({
 
     (async () => {
       try {
-        const shareSnap = await getDoc(doc(db, 'music_note_shares', noteShareId));
+        const shareSnap = await getDoc(doc(db, 'suno_shares', noteShareId));
         if (!shareSnap.exists() || shareSnap.data()?.isPublic !== true) {
           if (!cancelled) {
             setSharedMusicNoteSongs([]);
@@ -903,10 +903,13 @@ export default function FavoritesPage({
           setSharedMusicNoteTitle(data?.title || '공유된 뮤직노트');
         }
       } catch (error: any) {
-        console.error('music note share load failed:', error);
+        const code = String(error?.code || '');
+        if (code !== 'permission-denied') {
+          console.error('music note share load failed:', error);
+        }
         if (!cancelled) {
           setSharedMusicNoteSongs([]);
-          setSharedMusicNoteError(error?.code && error.code !== 'permission-denied');
+          setSharedMusicNoteError(code && code !== 'permission-denied');
         }
       } finally {
         if (!cancelled) setSharedMusicNoteLoading(false);
@@ -3111,7 +3114,9 @@ ${song.prompt}
       shareId,
       data: cleanUndefinedValues({
         shareId,
+        shareKind: 'music-note',
         shareType: isPublic ? 'public' : 'private',
+        trackId: shareId,
         title,
         songCount: shareSongs.length,
         song: shareSongs.length === 1 ? shareSongs[0] : null,
@@ -3152,13 +3157,29 @@ ${song.prompt}
 
     const isPublic = options?.isPublic !== false;
     const { shareId, data } = buildMusicNoteSharePayload(songs, isPublic);
+    const shareRef = doc(db, 'suno_shares', shareId);
 
-    await setDoc(doc(db, 'music_note_shares', shareId), {
-      ...data,
-      updatedAt: serverTimestamp(),
-      ...(isPublic ? { publicSharedAt: serverTimestamp() } : { privateUpdatedAt: serverTimestamp() }),
-      createdAt: serverTimestamp(),
-    }, { merge: true });
+    if (isPublic) {
+      await setDoc(shareRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+        publicSharedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      }, { merge: true });
+    } else {
+      try {
+        await updateDoc(shareRef, {
+          ...data,
+          updatedAt: serverTimestamp(),
+          privateUpdatedAt: serverTimestamp(),
+        });
+      } catch (error: any) {
+        const code = String(error?.code || '');
+        if (code !== 'not-found' && code !== 'permission-denied') {
+          throw error;
+        }
+      }
+    }
 
     syncMusicNoteShareStateToFavorites(songs, shareId, isPublic);
     setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic } : prev);
@@ -3175,7 +3196,7 @@ ${song.prompt}
     setMusicNoteShareInfo({ songs: targets, mode, shareId, isPublic: initialPublic });
     setActiveFavoriteMenuId(null);
 
-    getDoc(doc(db, 'music_note_shares', shareId))
+    getDoc(doc(db, 'suno_shares', shareId))
       .then((shareSnap) => {
         if (!shareSnap.exists()) {
           setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: false } : prev);
@@ -3184,8 +3205,12 @@ ${song.prompt}
         const nextPublic = shareSnap.data()?.isPublic === true;
         setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: nextPublic } : prev);
       })
-      .catch((error) => {
-        console.warn('music note share status load failed:', error);
+      .catch((error: any) => {
+        const code = String(error?.code || '');
+        if (code !== 'permission-denied') {
+          console.warn('music note share status load failed:', error);
+        }
+        setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: false } : prev);
       });
   };
 

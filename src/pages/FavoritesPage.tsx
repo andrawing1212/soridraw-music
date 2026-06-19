@@ -509,6 +509,8 @@ export default function FavoritesPage({
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
+  const [favoriteMemoDrafts, setFavoriteMemoDrafts] = useState<Record<string, string>>({});
+  const [favoriteMemoSavingIds, setFavoriteMemoSavingIds] = useState<Record<string, boolean>>({});
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
   const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -864,6 +866,93 @@ export default function FavoritesPage({
       setFavoriteToastMessage(null);
       favoriteToastTimerRef.current = null;
     }, 2200);
+  };
+
+  const getMusicNoteMemo = (song: any): string => String(song?.musicNoteMemo || song?.noteMemo || song?.memo || '');
+
+  const normalizeMusicNoteDuplicateText = (value: any): string => String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+
+  const getMusicNoteDuplicateKey = (song: any): string => {
+    const titles = getNormalizedTitles(song);
+    const title = normalizeMusicNoteDuplicateText(`${titles.korean || ''}|${titles.english || ''}|${song?.title || ''}`);
+    const prompt = normalizeMusicNoteDuplicateText(song?.prompt || '');
+    const lyricKo = normalizeMusicNoteDuplicateText(song?.lyrics?.korean || '');
+    const lyricEn = normalizeMusicNoteDuplicateText(song?.lyrics?.english || '');
+    const source = normalizeMusicNoteDuplicateText(`${song?.originalFavoriteId || ''}|${song?.sharedNoteShareId || ''}|${song?.sunoShareUrl || ''}`);
+    return [source, title, prompt, lyricKo, lyricEn].filter(Boolean).join('::') || String(song?.id || 'unknown');
+  };
+
+  const saveMusicNoteMemo = async (song: any) => {
+    if (!song?.id || isMusicNoteSharedView) return;
+    if (!user?.uid) {
+      showFavoriteToast('로그인이 필요합니다.');
+      return;
+    }
+
+    const nextMemo = favoriteMemoDrafts[song.id];
+    if (nextMemo === undefined) return;
+
+    const currentMemo = getMusicNoteMemo(song);
+    if (nextMemo === currentMemo) return;
+
+    setFavoriteMemoSavingIds(prev => ({ ...prev, [song.id]: true }));
+    try {
+      await Promise.resolve(updateFavorite(song.id, {
+        musicNoteMemo: nextMemo,
+        noteMemo: nextMemo,
+        memoUpdatedAt: Date.now(),
+      } as any));
+      if (selectedSong?.id === song.id) {
+        setSelectedSong({ ...(selectedSong || {}), musicNoteMemo: nextMemo, noteMemo: nextMemo, memoUpdatedAt: Date.now() });
+      }
+      setFavoriteMemoDrafts(prev => {
+        const next = { ...prev };
+        delete next[song.id];
+        return next;
+      });
+      showFavoriteToast('메모를 저장했습니다.');
+    } catch (error) {
+      console.error('music note memo save failed:', error);
+      showFavoriteToast('메모 저장에 실패했습니다.');
+    } finally {
+      setFavoriteMemoSavingIds(prev => {
+        const next = { ...prev };
+        delete next[song.id];
+        return next;
+      });
+    }
+  };
+
+  const copyTextWithFallback = async (text: string) => {
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // fallback below
+    }
+
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', 'true');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return copied;
+    } catch {
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -3051,25 +3140,25 @@ ${song.prompt}
 
   const handleMusicNoteShareCurrentPage = async () => {
     const shareUrl = window.location.href;
+    const shareText = `SORIDRAW Music Note 공유\n${shareUrl}`;
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: 'SORIDRAW Music Note 공유',
-          text: 'SORIDRAW에서 공유된 뮤직노트입니다.',
-          url: shareUrl,
-        });
-        return;
+        try {
+          await navigator.share({
+            title: 'SORIDRAW Music Note 공유',
+            text: 'SORIDRAW에서 공유된 뮤직노트입니다.',
+            url: shareUrl,
+          });
+          return;
+        } catch (error: any) {
+          if (error?.name === 'AbortError') return;
+        }
       }
-      await navigator.clipboard.writeText(shareUrl);
-      showFavoriteToast('공유 링크가 복사되었습니다.');
-    } catch (error: any) {
-      if (error?.name === 'AbortError') return;
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        showFavoriteToast('공유 링크가 복사되었습니다.');
-      } catch {
-        showFavoriteToast('공유에 실패했습니다.');
-      }
+
+      const copied = await copyTextWithFallback(shareText);
+      showFavoriteToast(copied ? '공유 링크가 복사되었습니다.' : '공유에 실패했습니다.');
+    } catch {
+      showFavoriteToast('공유에 실패했습니다.');
     }
   };
 
@@ -3131,6 +3220,7 @@ ${song.prompt}
       imageUrl: song?.imageUrl || song?.coverUrl || mainSunoLink?.coverUrl || '',
       audioUrl: song?.audioUrl || '',
       createdAtText: getRelativeTime(song?.createdAtMs || song?.createdAt),
+      musicNoteDuplicateKey: getMusicNoteDuplicateKey(song),
       isSharedMusicNote: true,
       isLocked: false,
       sharedReadOnly: true,
@@ -3287,6 +3377,7 @@ ${song.prompt}
       if (navigator.share) {
         try {
           await navigator.share({ title, text, url: shareUrl });
+          showFavoriteToast('공유 링크를 보냈습니다.');
           setMusicNoteShareInfo(null);
           return;
         } catch (error: any) {
@@ -3294,8 +3385,9 @@ ${song.prompt}
         }
       }
 
-      await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
-      showFavoriteToast('공유 링크가 복사되었습니다.');
+      const copied = await copyTextWithFallback(`${title}\n${shareUrl}`);
+      if (!copied) throw new Error('clipboard-failed');
+      showFavoriteToast(musicNoteShareInfo.songs.length > 1 ? '선택한 곡 공유 링크가 복사되었습니다.' : '공유 링크가 복사되었습니다.');
       setMusicNoteShareInfo(null);
     } catch (error: any) {
       if (error?.message !== 'login-required') {
@@ -3343,6 +3435,17 @@ ${song.prompt}
       return;
     }
 
+    const duplicateKey = getMusicNoteDuplicateKey(song);
+    const existingSharedNote = favorites.find(item => isSharedMusicNoteItem(item) && getMusicNoteDuplicateKey(item) === duplicateKey);
+    if (existingSharedNote) {
+      setMusicNoteViewMode('sharedNote');
+      setSelectedSharedNoteFolderId(getMusicNoteFolderIdFromSong(existingSharedNote, 'sharedNote') || 'default');
+      setActiveFavoriteMenuId(null);
+      showFavoriteToast('이미 공유 노트에 저장된 곡입니다.');
+      navigate('/history');
+      return;
+    }
+
     const titles = getNormalizedTitles(song);
     const sunoLinks = getFavoriteSunoLinks(song);
     const mainSunoLink = getFavoriteMainSunoLink(song);
@@ -3358,6 +3461,9 @@ ${song.prompt}
       userInput: song?.userInput || song?.appliedKeywords?.userInput || '',
       situationSummary: song?.situationSummary || song?.appliedKeywords?.situationSummary || '',
       style: song?.style || '',
+      musicNoteMemo: '',
+      noteMemo: '',
+      musicNoteDuplicateKey: duplicateKey,
       sunoShareUrl: song?.sunoShareUrl || mainSunoLink?.url || '',
       sunoLinks,
       sunoShareLinks: sunoLinks,
@@ -3571,7 +3677,7 @@ ${song.prompt}
     });
   };
 
-  const filteredFavorites = activeFavoriteSource.filter(song => {
+  const filteredFavoriteBase = activeFavoriteSource.filter(song => {
     if (isMusicNoteSharedView) return true;
 
     const matchesSearch = (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3597,7 +3703,16 @@ ${song.prompt}
         ? !isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
         : isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
     return matchesSearch && matchesColor && matchesTrashState && matchesFolder;
-  }).sort((a, b) => {
+  });
+
+  const dedupedFilteredFavorites = musicNoteViewMode === 'sharedNote' && !isMusicNoteSharedView
+    ? filteredFavoriteBase.filter((song, index, list) => {
+        const key = getMusicNoteDuplicateKey(song);
+        return list.findIndex(item => getMusicNoteDuplicateKey(item) === key) === index;
+      })
+    : filteredFavoriteBase;
+
+  const filteredFavorites = dedupedFilteredFavorites.sort((a, b) => {
     if (isMusicNoteSharedView) return 0;
 
     const isKorean = (text: string) => /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
@@ -4563,6 +4678,33 @@ ${song.prompt}
                           {getRelativeTime(song.createdAtMs || song.createdAt)}
                         </span>
                       </div>
+                      {!isMusicNoteSharedView && !isFavoriteTrashMode && (
+                        <div
+                          className="mt-2 max-w-full"
+                          data-no-card-long-press="true"
+                          onClick={(event) => event.stopPropagation()}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onTouchStart={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            type="text"
+                            value={favoriteMemoDrafts[song.id] ?? getMusicNoteMemo(song)}
+                            onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [song.id]: event.target.value }))}
+                            onBlur={() => saveMusicNoteMemo(song)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                (event.currentTarget as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="메모 추가..."
+                            className="w-full max-w-[520px] rounded-lg border border-white/[0.06] bg-black/[0.12] px-2.5 py-1.5 text-[11px] font-medium text-white/68 outline-none transition-all placeholder:text-white/24 focus:border-[#E45F59]/35 focus:bg-black/[0.18] md:text-xs"
+                          />
+                          {favoriteMemoSavingIds[song.id] && (
+                            <div className="mt-1 text-[10px] font-bold text-[#FFAAA3]/70">메모 저장 중...</div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">

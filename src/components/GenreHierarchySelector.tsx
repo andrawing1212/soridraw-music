@@ -22,16 +22,16 @@ function cn(...inputs: ClassValue[]) {
 
 
 const genreAccent = {
-  bar: 'bg-[#FFBB22]/95',
-  text: 'text-[#FFD36A]',
-  softText: 'text-[#FFD36A]/58',
-  selected: 'bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#FFBB22]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFBB22]/20',
-  summaryActive: 'bg-[#FFBB22]/[0.035] border-[#FFBB22]/15 text-[#FFD36A]',
-  summaryHover: 'hover:border-[#FFBB22]/20 hover:bg-[#FFBB22]/[0.035]',
-  summaryBorder: 'rgba(246, 200, 95, 0.14)',
-  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
-  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
+  bar: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.95)]',
+  text: 'text-[var(--soridraw-menu-amber-soft)]',
+  softText: 'text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.58)]',
+  selected: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.72)] border-black/20 text-[var(--soridraw-selected-text)] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.14)] border-black/20 text-[var(--soridraw-menu-amber-soft)] hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.20)]',
+  summaryActive: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.035)] border-[rgb(var(--soridraw-menu-amber-rgb)/0.15)] text-[var(--soridraw-menu-amber-soft)]',
+  summaryHover: 'hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.20)] hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.035)]',
+  summaryBorder: 'rgb(var(--soridraw-menu-amber-rgb) / 0.14)',
+  summaryBorderHover: 'rgb(var(--soridraw-menu-amber-rgb) / 0.24)',
+  summaryActiveBg: 'rgb(var(--soridraw-menu-amber-rgb) / 0.035)',
   selectedBorder: 'border-black/20',
 };
 
@@ -910,8 +910,8 @@ export default function GenreHierarchySelector({
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
-          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#FFBB22]/30", genreAccent.summaryHover),
-          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#FFBB22]/30"
+          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[rgb(var(--soridraw-menu-amber-rgb)/0.30)]", genreAccent.summaryHover),
+          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[rgb(var(--soridraw-menu-amber-rgb)/0.30)]"
         )}
         style={{
           '--soridraw-summary-border': genreAccent.summaryBorder,
@@ -973,7 +973,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={handleClearModalSelection}
-                      className="h-10 px-2.5 rounded-full border border-[#A47048]/35 bg-[#A47048]/12 text-[#D9B89D] text-[10.5px] font-black hover:bg-[#A47048]/18 transition-all active:scale-95"
+                      className="h-10 px-2.5 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] text-[var(--soridraw-menu-amber-soft)] text-[10.5px] font-black hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] transition-all active:scale-95"
                       title="전체해제"
                       aria-label="선택한 장르 전체해제"
                     >
@@ -984,7 +984,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={applyModalChanges}
-                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-[#A47048]/72 text-[#FFF7EF] border-[#C69A76]/55 hover:bg-[#A47048]/78"
+                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.72)] text-[var(--soridraw-selected-text)] border-[rgb(var(--soridraw-menu-amber-rgb)/0.55)] hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.78)]"
                       title="변경 적용"
                       aria-label="변경 적용"
                     >
@@ -994,7 +994,7 @@ export default function GenreHierarchySelector({
                   <button
                     type="button"
                     onClick={() => closeModal()}
-                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-[#D9B89D] hover:border-[#A47048]/45"
+                    className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:text-[var(--soridraw-menu-amber-soft)] hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.45)]"
                     title={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
                     aria-label={showConfirmButton ? "변경 적용 없이 닫기" : "닫기"}
                   >
@@ -1004,13 +1004,13 @@ export default function GenreHierarchySelector({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-[#A47048]/6 border-b border-[#A47048]/18 flex items-center justify-start gap-2 overflow-hidden text-left">
-                <span className="text-[10px] font-black text-[#D9B89D] uppercase tracking-widest shrink-0">
+              <div className="px-6 py-2.5 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.06)] border-b border-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] flex items-center justify-start gap-2 overflow-hidden text-left">
+                <span className="text-[10px] font-black text-[var(--soridraw-menu-amber-soft)] uppercase tracking-widest shrink-0">
                   Selection
                 </span>
                 <div className="min-w-0 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   {pendingSubIds.length > 0 ? (
-                    <span className="text-[#D9B89D] truncate">
+                    <span className="text-[var(--soridraw-menu-amber-soft)] truncate">
                       {pendingSubIds.map(resolveGenreDisplayLabel).join(" · ")}
                     </span>
                   ) : (
@@ -1055,7 +1055,7 @@ export default function GenreHierarchySelector({
                               "w-full min-h-[82px] rounded-2xl border p-4 md:p-5 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.01] active:scale-[0.99]",
                               isActiveVisual
                                 ? genreAccent.selected
-                                : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-[#A47048]/35 text-[var(--text-primary)] shadow-btn",
+                                : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] text-[var(--text-primary)] shadow-btn",
                             )}
                             title="세부 장르 열기"
                           >
@@ -1067,7 +1067,7 @@ export default function GenreHierarchySelector({
                                 className={cn(
                                   "text-[14px] md:text-[15px] truncate w-full break-keep mt-1",
                                   isActiveVisual
-                                    ? "text-[#171717]/75 font-black"
+                                    ? "text-[rgb(23_23_23/0.75)] font-black"
                                     : "text-[var(--text-secondary)]",
                                 )}
                               >
@@ -1107,7 +1107,7 @@ export default function GenreHierarchySelector({
                             isActiveVisual && "font-black soridraw-selected-strong",
                             isActiveVisual
                               ? genreAccent.selected
-                              : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-[#A47048]/35 shadow-btn",
+                              : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] shadow-btn",
                           )}
                         >
                           {item.labelKo || item.label}
@@ -1120,7 +1120,7 @@ export default function GenreHierarchySelector({
 
               {/* Bottom Info Area */}
               <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
-                <div className="p-2.5 rounded-xl bg-[#A47048]/12 text-[#D9B89D] shrink-0 shadow-inner hidden md:flex">
+                <div className="p-2.5 rounded-xl bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] text-[var(--soridraw-menu-amber-soft)] shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1 text-center">

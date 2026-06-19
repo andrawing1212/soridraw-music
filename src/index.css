@@ -48,6 +48,9 @@
   --soridraw-menu-theme-color: #FFBB22;
   --soridraw-green-tone: #7FBD75;
   --soridraw-menu-amber: #FFBB22;
+  --soridraw-menu-amber-rgb: 255 187 34;
+  --soridraw-menu-amber-soft: #FFD36A;
+  --soridraw-menu-amber-soft-rgb: 255 211 106;
   --soridraw-menu-red: #E45F59;
   --soridraw-menu-green: #7FBD75;
 }
@@ -83,6 +86,9 @@
   --soridraw-menu-theme-color: #FFBB22;
   --soridraw-green-tone: #7FBD75;
   --soridraw-menu-amber: #FFBB22;
+  --soridraw-menu-amber-rgb: 255 187 34;
+  --soridraw-menu-amber-soft: #FFD36A;
+  --soridraw-menu-amber-soft-rgb: 255 211 106;
   --soridraw-menu-red: #E45F59;
   --soridraw-menu-green: #7FBD75;
 }

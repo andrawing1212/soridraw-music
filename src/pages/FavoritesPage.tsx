@@ -252,7 +252,7 @@ function getTimestampMs(value: any): number {
 }
 
 function getFavoriteDetailCreatedAt(song: any): string {
-  const timestamp = song?.createdAt ?? song?.timestamp ?? song?.updatedAt;
+  const timestamp = song?.createdAtMs ?? song?.createdAt ?? song?.timestamp ?? song?.updatedAt;
   const ms = getTimestampMs(timestamp);
   if (!ms) return '';
 
@@ -1981,6 +1981,13 @@ export default function FavoritesPage({
   };
 
   const handleSave = async () => {
+    if (isSelectedSongReadOnly) {
+      setIsEditing(false);
+      setActiveEditSection(null);
+      setIsSyncEnabled(false);
+      showFavoriteToast('공유 노트는 수정할 수 없습니다.');
+      return;
+    }
     await commitFavoriteDraftIfNeeded();
     setIsEditing(false);
     setActiveEditSection(null);
@@ -1988,6 +1995,10 @@ export default function FavoritesPage({
   };
 
   const handleRestoreOriginal = () => {
+    if (isSelectedSongReadOnly) {
+      showFavoriteToast('공유 노트는 수정할 수 없습니다.');
+      return;
+    }
     if (!originalLyricsKo && !originalLyricsEn && !originalTitle && !originalPrompt) return;
     setEditedKoreanLyrics(originalLyricsKo);
     setEditedEnglishLyrics(originalLyricsEn);
@@ -3363,7 +3374,7 @@ ${song.prompt}
       sharedNoteFolderId: 'default',
       sharedNoteFolderTitle: '기본',
       sharedNoteFolderUpdatedAt: Date.now(),
-      createdAtMs: Date.now(),
+      createdAtMs: getTimestampMs(song?.createdAtMs || song?.createdAt || song?.timestamp) || Date.now(),
       createdAt: serverTimestamp(),
     });
 
@@ -5419,19 +5430,14 @@ ${song.prompt}
                     )}
 
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                      {getDisplaySubGenre(selectedSong) && (
+                      {getFavoriteDetailCreatedAt(selectedSong) && (
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
-                          {getDisplaySubGenre(selectedSong)}
+                          생성일: {getFavoriteDetailCreatedAt(selectedSong)}
                         </span>
                       )}
                       {getFavoriteDetailCreator(selectedSong, user) && (
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
                           제작자: {getFavoriteDetailCreator(selectedSong, user)}
-                        </span>
-                      )}
-                      {getFavoriteDetailCreatedAt(selectedSong) && (
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
-                          생성일: {getFavoriteDetailCreatedAt(selectedSong)}
                         </span>
                       )}
                     </div>
@@ -5748,7 +5754,7 @@ ${song.prompt}
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">lyrics ko</div>
                         <h4 className="mt-1 text-xl font-bold text-white">한글 가사</h4>
-                        {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
+                        {!isSelectedSongReadOnly && isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <div className="mt-3 space-y-2">
                             <button
                               onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -5780,7 +5786,7 @@ ${song.prompt}
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {isEditing && activeEditSection === 'lyrics-ko' ? (
+                        {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-ko' ? (
                           <>
                             {isKoreanLyricsEditChanged && (
                               <button
@@ -5802,7 +5808,7 @@ ${song.prompt}
                               <X className="h-4 w-4" />
                             </button>
                           </>
-                        ) : !isEditing && (
+                        ) : !isEditing && !isSelectedSongReadOnly && (
                           <button
                             onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-ko'); }}
                             onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-edit', label: '한글 가사 수정', description: '한글 가사를 수정합니다.' })}
@@ -5827,7 +5833,7 @@ ${song.prompt}
                       </div>
                     </div>
 
-                    {isEditing && activeEditSection === 'lyrics-ko' ? (
+                    {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-ko' ? (
                       <textarea
                         value={editedKoreanLyrics}
                         onChange={(e) => setEditedKoreanLyrics(e.target.value)}
@@ -5845,7 +5851,7 @@ ${song.prompt}
                       <div className="min-w-0">
                         <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">lyrics foreign</div>
                         <h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4>
-                        {isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
+                        {!isSelectedSongReadOnly && isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <div className="mt-3 space-y-2">
                             <button
                               onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -5877,7 +5883,7 @@ ${song.prompt}
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {isEditing && activeEditSection === 'lyrics-en' ? (
+                        {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-en' ? (
                           <>
                             {isForeignLyricsEditChanged && (
                               <button
@@ -5899,7 +5905,7 @@ ${song.prompt}
                               <X className="h-4 w-4" />
                             </button>
                           </>
-                        ) : !isEditing && (
+                        ) : !isEditing && !isSelectedSongReadOnly && (
                           <button
                             onClick={() => { setIsEditing(true); setActiveEditSection('lyrics-en'); }}
                             onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-edit', label: '외국어 가사 수정', description: '외국어 가사를 수정합니다.' })}
@@ -5924,7 +5930,7 @@ ${song.prompt}
                       </div>
                     </div>
 
-                    {isEditing && activeEditSection === 'lyrics-en' ? (
+                    {!isSelectedSongReadOnly && isEditing && activeEditSection === 'lyrics-en' ? (
                       <textarea
                         value={editedEnglishLyrics}
                         onChange={(e) => setEditedEnglishLyrics(e.target.value)}
@@ -5945,7 +5951,7 @@ ${song.prompt}
                       <h4 className="mt-1 text-xl font-bold text-white">곡 프롬프트</h4>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isEditing && activeEditSection === 'prompt' ? (
+                      {!isSelectedSongReadOnly && isEditing && activeEditSection === 'prompt' ? (
                         <>
                           {isPromptEditChanged && (
                             <button
@@ -5967,7 +5973,7 @@ ${song.prompt}
                             <X className="h-4 w-4" />
                           </button>
                         </>
-                      ) : !isEditing && (
+                      ) : !isEditing && !isSelectedSongReadOnly && (
                         <button
                           onClick={() => { setIsEditing(true); setActiveEditSection('prompt'); }}
                           onMouseEnter={() => onHover({ id: 'detail-prompt-edit', label: '프롬프트 수정', description: '곡 프롬프트를 수정합니다.' })}
@@ -5991,7 +5997,7 @@ ${song.prompt}
                       </button>
                     </div>
                   </div>
-                  {isEditing && activeEditSection === 'prompt' ? (
+                  {!isSelectedSongReadOnly && isEditing && activeEditSection === 'prompt' ? (
                     <textarea
                       value={editedPrompt}
                       onChange={(e) => setEditedPrompt(e.target.value)}

@@ -5818,10 +5818,10 @@ ${song.prompt}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="inline-flex h-11 min-w-[136px] items-center justify-center gap-2 rounded-2xl border border-[#55D7FF]/55 bg-[#1F9DFF]/20 px-3 text-[#D9FAFF] shadow-[0_10px_28px_rgba(31,157,255,0.18)] transition-all hover:border-[#8EEBFF]/70 hover:bg-[#1F9DFF]/30 hover:text-white"
+                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl border border-[#f0c079]/30 bg-[#e8a94a] px-4 text-[13px] font-black text-[#24170b] shadow-sm transition-all hover:bg-[#f0b45a] active:scale-95"
                         >
-                          <RefreshCw className="h-4.5 w-4.5" />
-                          <span className="whitespace-nowrap text-xs font-black">다음곡에 적용</span>
+                          <RefreshCw className="h-[17px] w-[17px]" />
+                          <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
                         </button>
                       )}
                       <button

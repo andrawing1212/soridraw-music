@@ -49,7 +49,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 
@@ -457,13 +457,14 @@ export default function FavoritesPage({
   const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
   const [sharedMusicNoteLoading, setSharedMusicNoteLoading] = useState(false);
   const [sharedMusicNoteError, setSharedMusicNoteError] = useState(false);
-  const [sharedMusicNoteTitle, setSharedMusicNoteTitle] = useState('공유된 뮤직노트');
+  const [sharedMusicNoteTitle, setSharedMusicNoteTitle] = useState('공유 뮤직노트');
   const [showMusicNoteKakaoWarning, setShowMusicNoteKakaoWarning] = useState(false);
   const [musicNoteShareInfo, setMusicNoteShareInfo] = useState<{ songs: any[]; mode: 'default' | 'pc-panel'; shareId?: string; isPublic?: boolean } | null>(null);
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
   const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
+  const isSelectedSongReadOnly = Boolean(selectedSong?.sharedReadOnly || selectedSong?.isSharedMusicNote || isMusicNoteSharedView);
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const [myNoteFolders, setMyNoteFolders] = useState<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
@@ -904,7 +905,7 @@ export default function FavoritesPage({
         if (!cancelled) {
           setSharedMusicNoteSongs(normalized);
           setSharedMusicNoteError(false);
-          setSharedMusicNoteTitle(data?.title || '공유된 뮤직노트');
+          setSharedMusicNoteTitle(data?.title || '공유 뮤직노트');
         }
       } catch (error: any) {
         const code = String(error?.code || '');
@@ -3108,7 +3109,7 @@ ${song.prompt}
       sunoShareLinks: links,
       mainSunoIndex: 0,
       sunoData: Array.isArray(song?.sunoData) ? song.sunoData : null,
-      imageUrl: song?.imageUrl || song?.coverUrl || mainSunoLink?.coverUrl || mainSunoLink?.imageUrl || '',
+      imageUrl: song?.imageUrl || song?.coverUrl || mainSunoLink?.coverUrl || '',
       audioUrl: song?.audioUrl || '',
       createdAtText: getRelativeTime(song?.createdAtMs || song?.createdAt),
       isSharedMusicNote: true,
@@ -3311,7 +3312,65 @@ ${song.prompt}
     }
   };
 
-  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
+
+  const saveSharedMusicNoteToSharedNote = async (song: any) => {
+    if (!song) return;
+    if (!user?.uid) {
+      showFavoriteToast('로그인이 필요합니다.');
+      return;
+    }
+    if (!song?.isSharedMusicNote && !isMusicNoteSharedView) {
+      showFavoriteToast('공유된 뮤직노트만 저장할 수 있습니다.');
+      return;
+    }
+
+    const titles = getNormalizedTitles(song);
+    const sunoLinks = getFavoriteSunoLinks(song);
+    const mainSunoLink = getFavoriteMainSunoLink(song);
+    const payload = cleanUndefinedValues({
+      uid: user.uid,
+      title: getCombinedFavoriteTitle(song),
+      koreanTitle: titles.korean || '',
+      englishTitle: titles.english || '',
+      genre: getResolvedGenre(song),
+      lyrics: song?.lyrics || { korean: '', english: '' },
+      prompt: song?.prompt || '',
+      appliedKeywords: { ...(song?.appliedKeywords || {}) },
+      userInput: song?.userInput || song?.appliedKeywords?.userInput || '',
+      situationSummary: song?.situationSummary || song?.appliedKeywords?.situationSummary || '',
+      style: song?.style || '',
+      sunoShareUrl: song?.sunoShareUrl || mainSunoLink?.url || '',
+      sunoLinks,
+      sunoShareLinks: sunoLinks,
+      mainSunoIndex: getFavoriteSunoMainIndex(song),
+      sunoData: Array.isArray(song?.sunoData) ? song.sunoData : null,
+      imageUrl: song?.imageUrl || song?.coverUrl || mainSunoLink?.coverUrl || '',
+      audioUrl: song?.audioUrl || '',
+      isLocked: false,
+      sourceType: 'shared_music_note',
+      originalFavoriteId: song?.originalFavoriteId || song?.id || null,
+      sharedNoteShareId: song?.sharedNoteShareId || musicNoteShareParam || null,
+      sharedNoteFolderId: 'default',
+      sharedNoteFolderTitle: '기본',
+      sharedNoteFolderUpdatedAt: Date.now(),
+      createdAtMs: Date.now(),
+      createdAt: serverTimestamp(),
+    });
+
+    try {
+      await addDoc(collection(db, 'favorites'), payload);
+      setMusicNoteViewMode('sharedNote');
+      setSelectedSharedNoteFolderId('default');
+      setActiveFavoriteMenuId(null);
+      showFavoriteToast('공유 노트에 저장했습니다.');
+      navigate('/history');
+    } catch (error) {
+      console.error('save shared music note failed:', error);
+      showFavoriteToast('공유 노트 저장에 실패했습니다.');
+    }
+  };
+
+  const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
     setActiveFavoriteMenuId(null);
 
     if (action === 'details') {
@@ -3426,6 +3485,11 @@ ${song.prompt}
 
     if (action === 'folder') {
       openMusicNoteFolderPicker([song.id], musicNoteViewMode === 'sharedNote' ? 'sharedNote' : 'myNote');
+      return;
+    }
+
+    if (action === 'saveSharedNote') {
+      saveSharedMusicNoteToSharedNote(song);
       return;
     }
 
@@ -4066,10 +4130,10 @@ ${song.prompt}
         className="mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
       >
           <div>
-            <h1 className="text-3xl md:text-5xl font-black leading-none tracking-tight text-white font-display flex items-center gap-3">
+            <h1 className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3", isMusicNoteSharedView ? "font-sans" : "font-display")}>
               <HeartIcon className="w-9 h-9 text-[#E45F59] shrink-0" />
               {isMusicNoteSharedView ? (
-                <span>공유된 <span className="text-[#E45F59]">뮤직노트</span></span>
+                <span>공유 <span className="text-[#E45F59]">뮤직노트</span></span>
               ) : (
                 <span>Music <span className="text-[#E45F59]">Note</span></span>
               )}
@@ -4520,10 +4584,10 @@ ${song.prompt}
                             {isMusicNoteSharedView ? (
                               <>
                                 <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Info className="w-4 h-4 opacity-70" />디테일</button>
-                                {getFavoriteSunoShareUrl(song) && (
-                                  <button onClick={() => executeFavoriteMenuAction('sunoOpen', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Play className="w-4 h-4 opacity-70 fill-current" />재생 링크 열기</button>
-                                )}
-                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Share2 className="w-4 h-4 opacity-70" />공유</button>
+                                <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Square className="w-4 h-4 opacity-70" />선택</button>
+                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#E45F59] hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><RefreshCw className="w-4 h-4 opacity-80" />다음곡에 적용</button>
+                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><Share2 className="w-4 h-4 opacity-70" />공유하기</button>
+                                <button onClick={() => executeFavoriteMenuAction('saveSharedNote', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#E45F59]/10 hover:text-[#FFAAA3] flex items-center gap-3"><FolderOutput className="w-4 h-4 opacity-70" />노트 저장</button>
                               </>
                             ) : isFavoriteTrashMode ? (
                               isBulkMenu ? (
@@ -5220,9 +5284,10 @@ ${song.prompt}
               <div className="relative flex items-center justify-between gap-4 border-b border-black/20 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
                   <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#FFAAA3] text-[#FF927F]">music note detail</div>
-                  <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">디테일 & Edit</h3>
+                  <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">{isSelectedSongReadOnly ? '디테일' : '디테일 & Edit'}</h3>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
+                  {!isSelectedSongReadOnly && (
                   <a
                     href="https://suno.com/create"
                     target="_blank"
@@ -5238,6 +5303,7 @@ ${song.prompt}
                   >
                     <img src="/suno-icon.webp" alt="SUNO" className="h-full w-full rounded-[14px] object-cover" />
                   </a>
+                  )}
                   <button
                     onClick={() => closeSelectedSong()}
                     onMouseEnter={() => onHover({ id: 'detail-close', label: '닫기', description: '상세정보 창을 닫습니다.' })}
@@ -5259,7 +5325,7 @@ ${song.prompt}
                       <h4 className="mt-1 text-2xl font-bold text-white">제목</h4>
                     </div>
                     <div className="flex items-center gap-2">
-                      {!isEditing && (
+                      {!isEditing && !isSelectedSongReadOnly && (
                         <button
                           onClick={() => {
                             setIsEditing(true);
@@ -5408,6 +5474,7 @@ ${song.prompt}
                   </div>
                 </section>
 
+                {!isSelectedSongReadOnly && (
                 <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FFB5AA]/60 shadow-[0_0_0_1px_rgba(255,181,170,0.22),0_18px_52px_rgba(255,111,95,0.22)]')}>
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
@@ -5522,6 +5589,7 @@ ${song.prompt}
                   )}
                   <SunoUrlGuideCard collapsible />
                 </section>
+                )}
 
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                   <div className="flex items-start justify-between gap-4">

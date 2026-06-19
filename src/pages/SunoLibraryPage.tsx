@@ -5768,13 +5768,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-3xl md:text-5xl font-black leading-none tracking-tight text-white font-display flex items-center gap-3">
+              <h1 className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3 ${isSharedView ? 'font-sans' : 'font-display'}`}>
                 <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#7FBD75] shrink-0">
                   <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
                   <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
                   <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
                 </div>
-                {isSharedView ? '공유된 음악' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
+                {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
               </h1>
               <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">
                 {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}

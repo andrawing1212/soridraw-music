@@ -463,10 +463,18 @@ export default function FavoritesPage({
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
-  const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
-  const isSelectedSongReadOnly = Boolean(selectedSong?.sharedReadOnly || selectedSong?.isSharedMusicNote || isMusicNoteSharedView);
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
+  const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
+  const isSharedMusicNoteItem = (song: any) => Boolean(
+    song?.sharedReadOnly
+    || song?.isSharedMusicNote
+    || song?.sourceType === 'shared_music_note'
+    || song?.sharedNoteShareId
+    || song?.sharedNoteFolderId
+  );
+  const shouldHideSunoUrlControls = (song: any) => Boolean(isMusicNoteSharedView || isSharedMusicNoteItem(song) || musicNoteViewMode === 'sharedNote');
+  const isSelectedSongReadOnly = Boolean(isMusicNoteSharedView || isSharedMusicNoteItem(selectedSong) || musicNoteViewMode === 'sharedNote');
   const [myNoteFolders, setMyNoteFolders] = useState<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
   const [sharedNoteFolders, setSharedNoteFolders] = useState<MusicNoteFolder[]>(DEFAULT_SHARED_NOTE_FOLDERS);
   const [selectedMyNoteFolderId, setSelectedMyNoteFolderId] = useState('default');
@@ -3347,6 +3355,8 @@ ${song.prompt}
       imageUrl: song?.imageUrl || song?.coverUrl || mainSunoLink?.coverUrl || '',
       audioUrl: song?.audioUrl || '',
       isLocked: false,
+      isSharedMusicNote: true,
+      sharedReadOnly: true,
       sourceType: 'shared_music_note',
       originalFavoriteId: song?.originalFavoriteId || song?.id || null,
       sharedNoteShareId: song?.sharedNoteShareId || musicNoteShareParam || null,
@@ -4627,7 +4637,9 @@ ${song.prompt}
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#D45A66] hover:text-[#F07882] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
-                                <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FFAAA3] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
+                                {!shouldHideSunoUrlControls(song) && (
+                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FFAAA3] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
+                                )}
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
                               </>

@@ -137,7 +137,7 @@ service cloud.firestore {
         return data.ownerUid is string &&
                data.ownerUid.size() <= 128 &&
                data.title is string &&
-               data.isPublic == true &&
+               data.isPublic is bool &&
                data.songs is list &&
                data.songs.size() > 0 &&
                data.songs.size() <= 50;

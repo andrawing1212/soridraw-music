@@ -459,7 +459,7 @@ export default function FavoritesPage({
   const [sharedMusicNoteError, setSharedMusicNoteError] = useState(false);
   const [sharedMusicNoteTitle, setSharedMusicNoteTitle] = useState('공유된 뮤직노트');
   const [showMusicNoteKakaoWarning, setShowMusicNoteKakaoWarning] = useState(false);
-  const [musicNoteShareInfo, setMusicNoteShareInfo] = useState<{ songs: any[]; mode: 'default' | 'pc-panel' } | null>(null);
+  const [musicNoteShareInfo, setMusicNoteShareInfo] = useState<{ songs: any[]; mode: 'default' | 'pc-panel'; shareId?: string; isPublic?: boolean } | null>(null);
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
   const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
   const [searchQuery, setSearchQuery] = useState('');
@@ -3033,13 +3033,22 @@ ${song.prompt}
   };
 
   const makeMusicNoteShareId = (songs: any[]) => {
+    const uid = String(user?.uid || 'guest').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
     if (songs.length === 1) {
       const base = String(songs[0]?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 96);
-      const uid = String(user?.uid || 'guest').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
       return `musicnote_${uid}_${base}`;
     }
-    const uid = String(user?.uid || 'guest').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
-    return `musicnote_bulk_${uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const sourceKey = songs
+      .map(song => String(song?.id || song?.originalFavoriteId || song?.title || 'item'))
+      .sort()
+      .join('|');
+    let hash = 0;
+    for (let i = 0; i < sourceKey.length; i += 1) {
+      hash = ((hash << 5) - hash + sourceKey.charCodeAt(i)) | 0;
+    }
+    const safeHash = Math.abs(hash).toString(36);
+    return `musicnote_bulk_${uid}_${songs.length}_${safeHash}`;
   };
 
   const getMusicNoteShareSongPayload = (song: any) => {
@@ -3092,36 +3101,67 @@ ${song.prompt}
     return value;
   };
 
-  const createMusicNoteShareDocument = async (songs: any[]) => {
+  const buildMusicNoteSharePayload = (songs: any[], isPublic: boolean) => {
+    const shareId = makeMusicNoteShareId(songs);
+    const shareSongs = songs.map(getMusicNoteShareSongPayload);
+    const title = songs.length === 1 ? getCombinedFavoriteTitle(songs[0]) : `선택한 ${songs.length}곡`;
+    const displayName = user?.displayName || user?.email?.split('@')[0] || 'SORIDRAW';
+
+    return {
+      shareId,
+      data: cleanUndefinedValues({
+        shareId,
+        shareType: isPublic ? 'public' : 'private',
+        title,
+        songCount: shareSongs.length,
+        song: shareSongs.length === 1 ? shareSongs[0] : null,
+        songs: shareSongs,
+        ownerUid: user?.uid || '',
+        ownerNickname: displayName,
+        creatorNickname: displayName,
+        ownerEmail: user?.email || null,
+        creatorEmail: user?.email || null,
+        isPublic,
+      })
+    };
+  };
+
+  const syncMusicNoteShareStateToFavorites = (songs: any[], shareId: string, isPublic: boolean) => {
+    songs.forEach((song) => {
+      if (!song?.id || String(song.id).startsWith('shared-')) return;
+      try {
+        updateFavorite(song.id, {
+          isPublic,
+          shareId,
+          shareType: isPublic ? 'public' : 'private',
+          musicNoteShareId: shareId,
+          musicNoteShareUpdatedAt: Date.now(),
+        } as any);
+      } catch (error) {
+        console.warn('music note favorite share state sync skipped:', error);
+      }
+    });
+  };
+
+  const createMusicNoteShareDocument = async (songs: any[], options?: { isPublic?: boolean }) => {
     if (!user?.uid) {
       showFavoriteToast('로그인이 필요합니다.');
       throw new Error('login-required');
     }
     if (songs.length === 0) throw new Error('empty-share');
 
-    const shareId = makeMusicNoteShareId(songs);
-    const shareSongs = songs.map(getMusicNoteShareSongPayload);
-    const title = songs.length === 1 ? getCombinedFavoriteTitle(songs[0]) : `선택한 ${songs.length}곡`;
-    const displayName = user.displayName || user.email?.split('@')[0] || 'SORIDRAW';
+    const isPublic = options?.isPublic !== false;
+    const { shareId, data } = buildMusicNoteSharePayload(songs, isPublic);
 
     await setDoc(doc(db, 'music_note_shares', shareId), {
-      ...cleanUndefinedValues({
-        shareId,
-        shareType: songs.length === 1 ? 'music_note' : 'music_note_bulk',
-        title,
-        songCount: shareSongs.length,
-        song: shareSongs.length === 1 ? shareSongs[0] : null,
-        songs: shareSongs,
-        ownerUid: user.uid,
-        ownerNickname: displayName,
-        creatorNickname: displayName,
-        ownerEmail: user.email || null,
-        creatorEmail: user.email || null,
-        isPublic: true,
-      }),
-      createdAt: serverTimestamp(),
+      ...data,
       updatedAt: serverTimestamp(),
-    });
+      ...(isPublic ? { publicSharedAt: serverTimestamp() } : { privateUpdatedAt: serverTimestamp() }),
+      createdAt: serverTimestamp(),
+    }, { merge: true });
+
+    syncMusicNoteShareStateToFavorites(songs, shareId, isPublic);
+    setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic } : prev);
 
     return getMusicNoteSharePageUrl(shareId);
   };
@@ -3129,8 +3169,24 @@ ${song.prompt}
   const openMusicNoteShareModal = (songs: any[], mode: 'default' | 'pc-panel' = 'default') => {
     const targets = songs.filter(Boolean);
     if (targets.length === 0) return;
-    setMusicNoteShareInfo({ songs: targets, mode });
+
+    const shareId = makeMusicNoteShareId(targets);
+    const initialPublic = targets.length === 1 ? Boolean(targets[0]?.isPublic || targets[0]?.shareType === 'public') : targets.every(song => song?.isPublic === true);
+    setMusicNoteShareInfo({ songs: targets, mode, shareId, isPublic: initialPublic });
     setActiveFavoriteMenuId(null);
+
+    getDoc(doc(db, 'music_note_shares', shareId))
+      .then((shareSnap) => {
+        if (!shareSnap.exists()) {
+          setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: false } : prev);
+          return;
+        }
+        const nextPublic = shareSnap.data()?.isPublic === true;
+        setMusicNoteShareInfo(prev => prev && prev.shareId === shareId ? { ...prev, isPublic: nextPublic } : prev);
+      })
+      .catch((error) => {
+        console.warn('music note share status load failed:', error);
+      });
   };
 
   const shareFavoriteSong = async (song: any) => {
@@ -3154,7 +3210,7 @@ ${song.prompt}
   const handleMusicNotePublicShare = async () => {
     if (!musicNoteShareInfo) return;
     try {
-      const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs);
+      const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: true });
       const title = musicNoteShareInfo.songs.length === 1 ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0]) : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
       const text = musicNoteShareInfo.songs.length === 1 ? 'SORIDRAW Music Note 공유곡입니다.' : `SORIDRAW Music Note에서 선택한 ${musicNoteShareInfo.songs.length}곡입니다.`;
 
@@ -3179,65 +3235,28 @@ ${song.prompt}
     }
   };
 
-  const handleMusicNotePlatformShare = async (platform: string) => {
+  const handleMusicNotePublicStatus = async () => {
     if (!musicNoteShareInfo) return;
     try {
-      const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs);
-      const title = musicNoteShareInfo.songs.length === 1 ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0]) : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
-
-      if (platform === 'copy') {
-        if (navigator.share) {
-          try {
-            await navigator.share({ title, text: 'SORIDRAW Music Note 공유곡입니다.', url: shareUrl });
-          } catch (error: any) {
-            if (error?.name === 'AbortError') return;
-            await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
-            showFavoriteToast('공유 링크가 복사되었습니다.');
-          }
-        } else {
-          await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
-          showFavoriteToast('공유 링크가 복사되었습니다.');
-        }
-      } else if (platform === 'email') {
-        window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`;
-      } else if (platform === 'facebook') {
-        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
-      } else if (platform === 'twitter') {
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
-      } else if (platform === 'telegram') {
-        window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(title)}`, '_blank');
-      } else if (platform === 'kakao' || platform === 'kakao_me') {
-        const kakao = (window as any).Kakao;
-        if (kakao && kakao.isInitialized()) {
-          try {
-            kakao.Share.sendDefault({
-              objectType: 'feed',
-              content: {
-                title,
-                description: 'SORIDRAW Music Note 공유곡입니다.',
-                imageUrl: 'https://soridraw-music.vercel.app/og-image.png',
-                link: {
-                  mobileWebUrl: shareUrl,
-                  webUrl: shareUrl,
-                },
-              },
-            });
-          } catch (error) {
-            console.error('Kakao music note share failed:', error);
-            showFavoriteToast('카카오톡 공유에 실패했습니다.');
-          }
-        } else {
-          showFavoriteToast('카카오톡 SDK가 초기화되지 않았습니다.');
-        }
-      } else {
-        await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
-        showFavoriteToast('링크가 복사되었습니다. 원하는 앱에 붙여넣어 공유해주세요.');
-      }
-      setMusicNoteShareInfo(null);
+      await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: true });
+      showFavoriteToast('공개 상태로 전환되었습니다.');
     } catch (error: any) {
       if (error?.message !== 'login-required') {
-        console.error('music note platform share failed:', error);
-        showFavoriteToast('공유 실패');
+        console.error('music note public update failed:', error);
+        showFavoriteToast('공개 전환 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  const handleMusicNotePrivateStatus = async () => {
+    if (!musicNoteShareInfo) return;
+    try {
+      await createMusicNoteShareDocument(musicNoteShareInfo.songs, { isPublic: false });
+      showFavoriteToast('비공개 상태로 전환되었습니다.');
+    } catch (error: any) {
+      if (error?.message !== 'login-required') {
+        console.error('music note private update failed:', error);
+        showFavoriteToast('비공개 전환 중 오류가 발생했습니다.');
       }
     }
   };
@@ -4863,30 +4882,38 @@ ${song.prompt}
                   <Share2 className="h-5 w-5" /> 링크 공유하기
                 </button>
 
-                <div className="grid grid-cols-4 gap-x-2 gap-y-6">
-                  {[
-                    { id: 'kakao', label: '카카오톡', icon: MessageCircle, bgColor: 'bg-[#FEE500]', iconColor: 'text-[#3C1E1E]', disabled: !(window as any).Kakao?.isInitialized() },
-                    { id: 'email', label: '이메일', icon: Mail, bgColor: 'bg-white/10', iconColor: 'text-white' },
-                    { id: 'facebook', label: 'Facebook', icon: Facebook, bgColor: 'bg-[#1877F2]', iconColor: 'text-white' },
-                    { id: 'twitter', label: 'X', icon: Twitter, bgColor: 'bg-black border border-white/20', iconColor: 'text-white' },
-                    { id: 'telegram', label: '텔레그램', icon: Send, bgColor: 'bg-[#0088cc]', iconColor: 'text-white' },
-                  ].map(platform => (
-                    <button
-                      key={platform.id}
-                      type="button"
-                      disabled={platform.disabled}
-                      onClick={() => handleMusicNotePlatformShare(platform.id)}
-                      className={`group flex flex-col items-center gap-2 transition-opacity ${platform.disabled ? 'cursor-not-allowed opacity-30' : 'opacity-100'}`}
-                    >
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${platform.bgColor} shadow-lg transition-all group-hover:scale-110`}>
-                        <platform.icon className={`h-6 w-6 ${platform.iconColor}`} />
-                      </div>
-                      <span className="text-center text-[10px] font-bold text-white/50 transition-colors group-hover:text-white">
-                        {platform.label}
-                      </span>
-                    </button>
-                  ))}
+                <div className="pt-4 border-t border-black/15">
+                  <div className="mb-3 text-center text-[10px] font-bold uppercase tracking-widest text-white/30">공개 범위 설정</div>
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'public', label: '공개', active: musicNoteShareInfo.isPublic === true, action: handleMusicNotePublicStatus, color: 'note' },
+                      { id: 'private', label: '비공개', active: musicNoteShareInfo.isPublic !== true, action: handleMusicNotePrivateStatus, color: 'gray' },
+                    ].map(btn => (
+                      <button
+                        key={btn.id}
+                        type="button"
+                        onClick={btn.action}
+                        className={`flex-1 rounded-xl border py-3 text-sm font-bold transition-all ${
+                          btn.active
+                            ? btn.color === 'note'
+                              ? 'border-[#E45F59]/35 bg-[#E45F59]/15 text-[#FFAAA3]'
+                              : 'border-white/10 bg-white/10 text-white/65'
+                            : 'border-black/15 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setMusicNoteShareInfo(null)}
+                  className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-white/20 transition-all hover:text-white/60"
+                >
+                  닫기
+                </button>
               </div>
             </motion.div>
           </motion.div>

@@ -882,6 +882,12 @@ export default function FavoritesPage({
 
   const getMusicNoteMemo = (song: any): string => String(song?.musicNoteMemo || song?.noteMemo || song?.memo || '');
 
+  const getSharedMusicNoteCreator = (song: any): string => {
+    if (!song) return '';
+    const text = getFavoriteDetailCreator(song, null);
+    return text ? `원곡자: ${text}` : '';
+  };
+
   const normalizeMusicNoteDuplicateText = (value: any): string => String(value || '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
@@ -4690,38 +4696,16 @@ ${song.prompt}
                           }}
                         >
                           {renderFavoriteKeywordChips(song)}
+                          {musicNoteViewMode === 'sharedNote' && getSharedMusicNoteCreator(song) && (
+                            <span className="shrink-0 rounded-md border border-[#E45F59]/15 bg-[#E45F59]/10 px-2 py-0.5 text-[9px] font-bold text-[#FFAAA3]/82 whitespace-nowrap">
+                              {getSharedMusicNoteCreator(song)}
+                            </span>
+                          )}
                         </div>
                         <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">
                           {getRelativeTime(song.createdAtMs || song.createdAt)}
                         </span>
                       </div>
-                      {!isMusicNoteSharedView && !isFavoriteTrashMode && (
-                        <div
-                          className="mt-2 max-w-full"
-                          data-no-card-long-press="true"
-                          onClick={(event) => event.stopPropagation()}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          onTouchStart={(event) => event.stopPropagation()}
-                        >
-                          <input
-                            type="text"
-                            value={favoriteMemoDrafts[song.id] ?? getMusicNoteMemo(song)}
-                            onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [song.id]: event.target.value }))}
-                            onBlur={() => saveMusicNoteMemo(song)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') {
-                                event.preventDefault();
-                                (event.currentTarget as HTMLInputElement).blur();
-                              }
-                            }}
-                            placeholder="메모 추가..."
-                            className="w-full max-w-[520px] rounded-lg border border-white/[0.06] bg-black/[0.12] px-2.5 py-1.5 text-[11px] font-medium text-white/68 outline-none transition-all placeholder:text-white/24 focus:border-[#E45F59]/35 focus:bg-black/[0.18] md:text-xs"
-                          />
-                          {favoriteMemoSavingIds[song.id] && (
-                            <div className="mt-1 text-[10px] font-bold text-[#FFAAA3]/70">메모 저장 중...</div>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -5587,6 +5571,22 @@ ${song.prompt}
                           </p>
                         )}
                       </>
+                    )}
+
+                    {!isMusicNoteSharedView && selectedSong?.id && !isFavoriteTrashMode && (
+                      <div className="mx-auto mt-5 w-full max-w-[720px]">
+                        <textarea
+                          value={favoriteMemoDrafts[selectedSong.id] ?? getMusicNoteMemo(selectedSong)}
+                          onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [selectedSong.id]: event.target.value }))}
+                          onBlur={() => saveMusicNoteMemo(selectedSong)}
+                          placeholder="메모 추가..."
+                          rows={2}
+                          className="w-full resize-none rounded-2xl border border-white/[0.07] bg-black/[0.16] px-4 py-3 text-center text-[13px] font-medium leading-relaxed text-white/72 outline-none transition-all placeholder:text-white/28 focus:border-[#E45F59]/40 focus:bg-black/[0.22] md:text-sm"
+                        />
+                        {favoriteMemoSavingIds[selectedSong.id] && (
+                          <div className="mt-1 text-center text-[10px] font-bold text-[#FFAAA3]/70">메모 저장 중...</div>
+                        )}
+                      </div>
                     )}
 
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">

@@ -131,6 +131,33 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
     }
 
+    // Music Note Shares
+    match /music_note_shares/{shareId} {
+      function isValidMusicNoteShare(data) {
+        return data.ownerUid is string &&
+               data.ownerUid.size() <= 128 &&
+               data.title is string &&
+               data.isPublic == true &&
+               data.songs is list &&
+               data.songs.size() > 0 &&
+               data.songs.size() <= 50;
+      }
+
+      allow read: if resource.data.isPublic == true ||
+                   isOwner(resource.data.ownerUid) ||
+                   isAdmin();
+
+      allow create: if isAuthenticated() &&
+                     request.resource.data.ownerUid == request.auth.uid &&
+                     isValidMusicNoteShare(request.resource.data);
+
+      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+                    request.resource.data.ownerUid == resource.data.ownerUid &&
+                    isValidMusicNoteShare(request.resource.data);
+
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
     // Playlist Likes
     match /playlist_like_counts/{trackGlobalId} {
       allow read: if isAuthenticated();

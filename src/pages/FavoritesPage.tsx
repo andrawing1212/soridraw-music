@@ -37,7 +37,12 @@ import {
   ChevronUp,
   RefreshCw,
   Settings,
-  Loader2
+  Loader2,
+  MessageCircle,
+  Mail,
+  Facebook,
+  Twitter,
+  Send
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -448,6 +453,15 @@ export default function FavoritesPage({
   isFavoritesLoading?: boolean;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
+  const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
+  const [sharedMusicNoteLoading, setSharedMusicNoteLoading] = useState(false);
+  const [sharedMusicNoteError, setSharedMusicNoteError] = useState(false);
+  const [sharedMusicNoteTitle, setSharedMusicNoteTitle] = useState('공유된 뮤직노트');
+  const [showMusicNoteKakaoWarning, setShowMusicNoteKakaoWarning] = useState(false);
+  const [musicNoteShareInfo, setMusicNoteShareInfo] = useState<{ songs: any[]; mode: 'default' | 'pc-panel' } | null>(null);
+  const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
+  const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const [myNoteFolders, setMyNoteFolders] = useState<MusicNoteFolder[]>(DEFAULT_MY_NOTE_FOLDERS);
@@ -840,6 +854,69 @@ export default function FavoritesPage({
       favoriteToastTimerRef.current = null;
     }, 2200);
   };
+
+  useEffect(() => {
+    if ((window as any).Kakao && !(window as any).Kakao.isInitialized()) {
+      (window as any).Kakao.init("YOUR_KAKAO_JAVASCRIPT_KEY");
+    }
+  }, []);
+
+  useEffect(() => {
+    const noteShareId = new URL(window.location.href).searchParams.get('note');
+    if (!noteShareId) {
+      setIsMusicNoteSharedView(false);
+      setSharedMusicNoteSongs([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsMusicNoteSharedView(true);
+    setSharedMusicNoteLoading(true);
+    setSharedMusicNoteError(false);
+    if (isKakaoInAppBrowser) setShowMusicNoteKakaoWarning(true);
+
+    (async () => {
+      try {
+        const shareSnap = await getDoc(doc(db, 'music_note_shares', noteShareId));
+        if (!shareSnap.exists() || shareSnap.data()?.isPublic !== true) {
+          if (!cancelled) {
+            setSharedMusicNoteSongs([]);
+            setSharedMusicNoteError(false);
+          }
+          return;
+        }
+
+        const data: any = shareSnap.data();
+        const rawSongs = Array.isArray(data.songs) ? data.songs : (data.song ? [data.song] : []);
+        const normalized = rawSongs.map((song: any, index: number) => ({
+          ...song,
+          id: song?.id || `shared-note-${noteShareId}-${index}`,
+          originalFavoriteId: song?.originalFavoriteId || song?.id || null,
+          sharedNoteShareId: noteShareId,
+          isSharedMusicNote: true,
+          isLocked: true,
+        }));
+
+        if (!cancelled) {
+          setSharedMusicNoteSongs(normalized);
+          setSharedMusicNoteError(false);
+          setSharedMusicNoteTitle(data?.title || '공유된 뮤직노트');
+        }
+      } catch (error: any) {
+        console.error('music note share load failed:', error);
+        if (!cancelled) {
+          setSharedMusicNoteSongs([]);
+          setSharedMusicNoteError(error?.code && error.code !== 'permission-denied');
+        }
+      } finally {
+        if (!cancelled) setSharedMusicNoteLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isKakaoInAppBrowser]);
 
 
   useEffect(() => {
@@ -1457,7 +1534,7 @@ export default function FavoritesPage({
       return;
     }
 
-    const existingIds = new Set(favorites.map(song => song.id));
+    const existingIds = new Set(activeFavoriteSource.map(song => song.id));
     const favoriteMap = { ...readLocalColorMap('soridraw.favoriteColorTags'), ...favoriteColorMap };
     const workspaceMap = readLocalColorMap('soridraw.library.workspaceColorTags');
     const playlistMap = readLocalColorMap('soridraw.library.playlistColorTags');
@@ -2224,7 +2301,7 @@ export default function FavoritesPage({
   };
 
   const cycleSelectionModeSelection = (fallbackSongId?: string) => {
-    const allSongIds = favorites.map(song => song.id);
+    const allSongIds = activeFavoriteSource.map(song => song.id);
     if (allSongIds.length === 0) return;
 
     const isAllSelected = selectedSongIds.length === allSongIds.length && allSongIds.every(id => selectedSongIds.includes(id));
@@ -2245,6 +2322,7 @@ export default function FavoritesPage({
 
   const handleCardLongPressStart = (event: React.MouseEvent | React.TouchEvent, song: any) => {
     clearSelectionLongPressTimer();
+    if (isMusicNoteSharedView) return;
     if (isSelectionMode) return;
 
     const target = event.target as HTMLElement | null;
@@ -2466,7 +2544,7 @@ export default function FavoritesPage({
       return;
     }
     
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
     const allLocked = selectedSongs.every(song => song.isLocked);
@@ -2474,7 +2552,7 @@ export default function FavoritesPage({
   };
 
   const executeSelectedLock = async (shouldLock: boolean) => {
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
     await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
@@ -2492,7 +2570,7 @@ export default function FavoritesPage({
       return;
     }
 
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     const deletableSongs = selectedSongs.filter(song => !song.isLocked);
 
     if (deletableSongs.length === 0) {
@@ -2515,7 +2593,7 @@ export default function FavoritesPage({
   };
 
   const executeSelectedDelete = async () => {
-    const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+    const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     const deletableSongs = selectedSongs.filter(song => !song.isLocked);
     
     const deleted = await deleteSongsByMusicNoteContext(deletableSongs);
@@ -2650,7 +2728,7 @@ ${song.prompt}
     return `${diffInYears}년 전`;
   };
 
-  const selectedSongs = favorites.filter(song => selectedSongIds.includes(song.id));
+  const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
   const isFavoriteTrashMode = musicNoteViewMode === 'noteSpace' && favoriteTrashView;
   const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
   const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
@@ -2672,7 +2750,7 @@ ${song.prompt}
 
   const handleSelectionQuickDelete = () => {
     if (selectedSongIds.length === 0) return;
-    const deletable = favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+    const deletable = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
     if (deletable.length === 0) {
       showFavoriteToast('잠긴 곡은 삭제할 수 없습니다.');
       return;
@@ -2918,43 +2996,249 @@ ${song.prompt}
     ].filter(Boolean).join('\n');
   };
 
-  const shareFavoriteSong = async (song: any) => {
-    const title = getCombinedFavoriteTitle(song);
-    const text = getFavoriteFullShareText(song);
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: `SORIDRAW - ${title}`, text });
-      } else {
-        await navigator.clipboard.writeText(text);
-        setCopiedType(`share-${song.id}`);
-        setTimeout(() => setCopiedType(null), 1800);
-      }
-    } catch (error) {
-      console.warn('favorite share cancelled or failed', error);
-    }
+  const getMusicNoteSharePageUrl = (shareId: string) => {
+    const appOrigin = window.location.hostname.includes("run.app") || window.location.hostname.includes("aistudio.google.com")
+      ? "https://soridraw-music.vercel.app"
+      : window.location.origin;
+    return `${appOrigin}/history?note=${encodeURIComponent(shareId)}`;
   };
 
+  const openCurrentMusicNoteShareInChrome = () => {
+    const currentUrl = window.location.href.replace(/^https?:\/\//, '');
+    window.location.href = `intent://${currentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+  };
 
-  const shareSelectedFavoriteSongs = async () => {
-    const targets = favorites.filter(song => selectedSongIds.includes(song.id));
-    if (targets.length === 0) return;
-
-    const text = targets.map((song, index) => `--- ${index + 1}. ${getCombinedFavoriteTitle(song)} ---\n${getFavoriteFullShareText(song)}`).join('\n\n');
+  const handleMusicNoteShareCurrentPage = async () => {
+    const shareUrl = window.location.href;
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `SORIDRAW 선택한 ${targets.length}곡`,
-          text: `SORIDRAW Music Note에서 선택한 ${targets.length}곡입니다.\n\n${text}`,
+          title: 'SORIDRAW Music Note 공유',
+          text: 'SORIDRAW에서 공유된 뮤직노트입니다.',
+          url: shareUrl,
         });
-      } else {
-        await navigator.clipboard.writeText(`SORIDRAW Music Note 선택곡 ${targets.length}곡\n\n${text}`);
-        setCopiedType('share-selected');
-        setTimeout(() => setCopiedType(null), 1800);
+        return;
       }
-    } catch (error) {
-      console.warn('selected favorites share cancelled or failed', error);
-    } finally {
-      setActiveFavoriteMenuId(null);
+      await navigator.clipboard.writeText(shareUrl);
+      showFavoriteToast('공유 링크가 복사되었습니다.');
+    } catch (error: any) {
+      if (error?.name === 'AbortError') return;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        showFavoriteToast('공유 링크가 복사되었습니다.');
+      } catch {
+        showFavoriteToast('공유에 실패했습니다.');
+      }
+    }
+  };
+
+  const makeMusicNoteShareId = (songs: any[]) => {
+    if (songs.length === 1) {
+      const base = String(songs[0]?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 96);
+      const uid = String(user?.uid || 'guest').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+      return `musicnote_${uid}_${base}`;
+    }
+    const uid = String(user?.uid || 'guest').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+    return `musicnote_bulk_${uid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  };
+
+  const getMusicNoteShareSongPayload = (song: any) => {
+    const titles = getNormalizedTitles(song);
+    const links = getFavoriteSunoLinks(song).map((link: any) => ({
+      url: link?.url || '',
+      title: link?.title || '',
+      imageUrl: link?.imageUrl || '',
+      duration: link?.duration || null,
+      durationText: link?.durationText || '',
+      updatedAt: link?.updatedAt || null,
+    })).filter((link: any) => link.url || link.title || link.imageUrl);
+
+    return {
+      id: `shared-${String(song?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+      originalFavoriteId: song?.id || null,
+      uid: null,
+      title: getCombinedFavoriteTitle(song),
+      koreanTitle: titles.korean || '',
+      englishTitle: titles.english || '',
+      lyrics: {
+        korean: song?.lyrics?.korean || '',
+        english: song?.lyrics?.english || '',
+      },
+      prompt: song?.prompt || '',
+      appliedKeywords: { genre: [], mood: [], theme: [], style: [], instrumentSound: [], ...(song?.appliedKeywords || {}) },
+      requestPayload: song?.requestPayload || null,
+      style: song?.style || '',
+      sunoShareUrl: song?.sunoShareUrl || '',
+      sunoShareLinks: links,
+      sunoData: Array.isArray(song?.sunoData) ? song.sunoData : null,
+      imageUrl: song?.imageUrl || song?.coverUrl || '',
+      audioUrl: song?.audioUrl || '',
+      createdAtText: getRelativeTime(song?.createdAtMs || song?.createdAt),
+      isSharedMusicNote: true,
+      isLocked: true,
+      sharedReadOnly: true,
+    };
+  };
+
+  const cleanUndefinedValues = (value: any): any => {
+    if (Array.isArray(value)) return value.map(cleanUndefinedValues);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([, v]) => v !== undefined)
+          .map(([k, v]) => [k, cleanUndefinedValues(v)])
+      );
+    }
+    return value;
+  };
+
+  const createMusicNoteShareDocument = async (songs: any[]) => {
+    if (!user?.uid) {
+      showFavoriteToast('로그인이 필요합니다.');
+      throw new Error('login-required');
+    }
+    if (songs.length === 0) throw new Error('empty-share');
+
+    const shareId = makeMusicNoteShareId(songs);
+    const shareSongs = songs.map(getMusicNoteShareSongPayload);
+    const title = songs.length === 1 ? getCombinedFavoriteTitle(songs[0]) : `선택한 ${songs.length}곡`;
+    const displayName = user.displayName || user.email?.split('@')[0] || 'SORIDRAW';
+
+    await setDoc(doc(db, 'music_note_shares', shareId), {
+      ...cleanUndefinedValues({
+        shareId,
+        shareType: songs.length === 1 ? 'music_note' : 'music_note_bulk',
+        title,
+        songCount: shareSongs.length,
+        song: shareSongs.length === 1 ? shareSongs[0] : null,
+        songs: shareSongs,
+        ownerUid: user.uid,
+        ownerNickname: displayName,
+        creatorNickname: displayName,
+        ownerEmail: user.email || null,
+        creatorEmail: user.email || null,
+        isPublic: true,
+      }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return getMusicNoteSharePageUrl(shareId);
+  };
+
+  const openMusicNoteShareModal = (songs: any[], mode: 'default' | 'pc-panel' = 'default') => {
+    const targets = songs.filter(Boolean);
+    if (targets.length === 0) return;
+    setMusicNoteShareInfo({ songs: targets, mode });
+    setActiveFavoriteMenuId(null);
+  };
+
+  const shareFavoriteSong = async (song: any) => {
+    if (isMusicNoteSharedView) {
+      await handleMusicNoteShareCurrentPage();
+      return;
+    }
+    openMusicNoteShareModal([song], 'default');
+  };
+
+  const shareSelectedFavoriteSongs = async () => {
+    const targets = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
+    if (targets.length === 0) return;
+    if (isMusicNoteSharedView) {
+      await handleMusicNoteShareCurrentPage();
+      return;
+    }
+    openMusicNoteShareModal(targets, 'default');
+  };
+
+  const handleMusicNotePublicShare = async () => {
+    if (!musicNoteShareInfo) return;
+    try {
+      const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs);
+      const title = musicNoteShareInfo.songs.length === 1 ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0]) : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
+      const text = musicNoteShareInfo.songs.length === 1 ? 'SORIDRAW Music Note 공유곡입니다.' : `SORIDRAW Music Note에서 선택한 ${musicNoteShareInfo.songs.length}곡입니다.`;
+
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text, url: shareUrl });
+          setMusicNoteShareInfo(null);
+          return;
+        } catch (error: any) {
+          if (error?.name === 'AbortError') return;
+        }
+      }
+
+      await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+      showFavoriteToast('공유 링크가 복사되었습니다.');
+      setMusicNoteShareInfo(null);
+    } catch (error: any) {
+      if (error?.message !== 'login-required') {
+        console.error('music note share failed:', error);
+        showFavoriteToast('공유 처리 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  const handleMusicNotePlatformShare = async (platform: string) => {
+    if (!musicNoteShareInfo) return;
+    try {
+      const shareUrl = await createMusicNoteShareDocument(musicNoteShareInfo.songs);
+      const title = musicNoteShareInfo.songs.length === 1 ? getCombinedFavoriteTitle(musicNoteShareInfo.songs[0]) : `SORIDRAW 선택한 ${musicNoteShareInfo.songs.length}곡`;
+
+      if (platform === 'copy') {
+        if (navigator.share) {
+          try {
+            await navigator.share({ title, text: 'SORIDRAW Music Note 공유곡입니다.', url: shareUrl });
+          } catch (error: any) {
+            if (error?.name === 'AbortError') return;
+            await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+            showFavoriteToast('공유 링크가 복사되었습니다.');
+          }
+        } else {
+          await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+          showFavoriteToast('공유 링크가 복사되었습니다.');
+        }
+      } else if (platform === 'email') {
+        window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareUrl)}`;
+      } else if (platform === 'facebook') {
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
+      } else if (platform === 'twitter') {
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
+      } else if (platform === 'telegram') {
+        window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(title)}`, '_blank');
+      } else if (platform === 'kakao' || platform === 'kakao_me') {
+        const kakao = (window as any).Kakao;
+        if (kakao && kakao.isInitialized()) {
+          try {
+            kakao.Share.sendDefault({
+              objectType: 'feed',
+              content: {
+                title,
+                description: 'SORIDRAW Music Note 공유곡입니다.',
+                imageUrl: 'https://soridraw-music.vercel.app/og-image.png',
+                link: {
+                  mobileWebUrl: shareUrl,
+                  webUrl: shareUrl,
+                },
+              },
+            });
+          } catch (error) {
+            console.error('Kakao music note share failed:', error);
+            showFavoriteToast('카카오톡 공유에 실패했습니다.');
+          }
+        } else {
+          showFavoriteToast('카카오톡 SDK가 초기화되지 않았습니다.');
+        }
+      } else {
+        await navigator.clipboard.writeText(`${title}\n${shareUrl}`);
+        showFavoriteToast('링크가 복사되었습니다. 원하는 앱에 붙여넣어 공유해주세요.');
+      }
+      setMusicNoteShareInfo(null);
+    } catch (error: any) {
+      if (error?.message !== 'login-required') {
+        console.error('music note platform share failed:', error);
+        showFavoriteToast('공유 실패');
+      }
     }
   };
 
@@ -3015,7 +3299,7 @@ ${song.prompt}
     }
 
     if (action === 'unfavoriteSelected') {
-      favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
+      activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
       exitSelectionMode();
       return;
     }
@@ -3026,7 +3310,7 @@ ${song.prompt}
     }
 
     if (action === 'deleteSelected') {
-      const targets = favorites.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+      const targets = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
       deleteSongsByMusicNoteContext(targets).then((deleted) => { if (deleted) exitSelectionMode(); });
       return;
     }
@@ -3133,7 +3417,7 @@ ${song.prompt}
     });
   };
 
-  const filteredFavorites = favorites.filter(song => {
+  const filteredFavorites = activeFavoriteSource.filter(song => {
     const matchesSearch = (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (song.englishTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3713,7 +3997,7 @@ ${song.prompt}
               <HeartIcon className="w-9 h-9 text-[#E45F59] shrink-0" />
               <span>Music <span className="text-[#E45F59]">Note</span></span>
             </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">저장한 곡을 편집하고, 다음 곡에 적용합니다.</p>
+            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">{isMusicNoteSharedView ? sharedMusicNoteTitle : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}</p>
           </div>
 
       </motion.div>
@@ -3811,6 +4095,7 @@ ${song.prompt}
         </div>
       </div>
 
+      {!isMusicNoteSharedView && (
       <div className="mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
         <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
@@ -3839,23 +4124,26 @@ ${song.prompt}
           ))}
         </div>
       </div>
+      )}
 
-      {(musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') && (
+      {!isMusicNoteSharedView && (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') && (
         renderMusicNoteFolderBar(musicNoteViewMode)
       )}
 
-      {(isFavoritesLoading && favorites.length === 0) ? (
+      {((isFavoritesLoading && activeFavoriteSource.length === 0) || sharedMusicNoteLoading) ? (
         <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Loader2 className="w-12 h-12 text-[#E45F59] animate-spin mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>
         </div>
-      ) : favorites.length === 0 ? (
+      ) : activeFavoriteSource.length === 0 ? (
         <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
-          <p className="text-[var(--text-secondary)] text-lg font-medium">아직 저장된 곡이 없습니다.</p>
-          <Link to="/" className="mt-6 text-[#E45F59] font-bold hover:underline">
-            첫 번째 곡 만들러 가기
-          </Link>
+          <p className="text-[var(--text-secondary)] text-lg font-medium">{isMusicNoteSharedView ? (sharedMusicNoteError ? '공유 노트 조회 중 오류가 발생했습니다.' : '공유된 뮤직노트를 이용할 수 없습니다.') : '아직 저장된 곡이 없습니다.'}</p>
+          {!isMusicNoteSharedView && (
+            <Link to="/" className="mt-6 text-[#E45F59] font-bold hover:underline">
+              첫 번째 곡 만들러 가기
+            </Link>
+          )}
         </div>
       ) : filteredFavorites.length === 0 ? (
         <div className="mt-[13px] md:mt-[21px] min-h-[30vh] flex flex-col items-center justify-center text-center">
@@ -4150,7 +4438,12 @@ ${song.prompt}
                               className="absolute right-0 top-11 z-50 w-48 overflow-hidden rounded-2xl border border-[#E45F59]/30 bg-[#181818] py-2 shadow-2xl"
                               onClick={(event) => event.stopPropagation()}
                             >
-                            {isFavoriteTrashMode ? (
+                            {isMusicNoteSharedView ? (
+                              <>
+                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />디테일</button>
+                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                              </>
+                            ) : isFavoriteTrashMode ? (
                               isBulkMenu ? (
                                 <>
                                   <div className="px-4 py-2 text-xs font-bold text-[#E45F59]">선택한 {selectedSongIds.length}곡</div>
@@ -4477,6 +4770,125 @@ ${song.prompt}
                 </div>
               </>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showMusicNoteKakaoWarning && isMusicNoteSharedView && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              className="w-full max-w-sm rounded-[2rem] border border-black/20 bg-[#1f1f1f] p-7 text-center shadow-2xl"
+            >
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#E45F59]/20 text-[#FFAAA3]">
+                <Info className="h-8 w-8" />
+              </div>
+              <h2 className="mb-3 text-2xl font-black text-white">Chrome에서 열어주세요</h2>
+              <p className="mb-6 text-sm leading-relaxed text-white/60">
+                카카오톡 브라우저에서는 Google 로그인 및 일부 기능이 제한될 수 있습니다.<br />
+                정상적인 뮤직노트 감상과 저장 기능 사용을 위해 Chrome에서 열어주세요.
+              </p>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={openCurrentMusicNoteShareInChrome}
+                  className="w-full rounded-2xl bg-[#E45F59] py-4 text-lg font-black text-white shadow-lg shadow-[#E45F59]/18 transition-all hover:bg-[#E45F59]/90"
+                >
+                  공유 뮤직노트 보기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMusicNoteShareCurrentPage}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 py-4 text-lg font-black text-white transition-all hover:bg-white/15"
+                >
+                  <Share2 className="h-5 w-5" /> 공유하기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMusicNoteKakaoWarning(false)}
+                  className="w-full pb-1 pt-3 font-bold text-white/40 transition-colors hover:text-white/70"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {musicNoteShareInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[240] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+            onClick={() => setMusicNoteShareInfo(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[#E45F59]/25 bg-[#1a1a1a] p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setMusicNoteShareInfo(null)}
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="mb-6 text-center">
+                <h2 className="mb-1 text-xl font-black tracking-tight text-white">공유 설정</h2>
+                <p className="text-xs font-medium lowercase text-white/40">공유할 방법을 선택해주세요.</p>
+              </div>
+
+              <div className="space-y-6">
+                <button
+                  type="button"
+                  onClick={handleMusicNotePublicShare}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E45F59] py-4 text-base font-black text-white shadow-lg shadow-[#E45F59]/18 transition-all hover:bg-[#E45F59]/90"
+                >
+                  <Share2 className="h-5 w-5" /> 링크 공유하기
+                </button>
+
+                <div className="grid grid-cols-4 gap-x-2 gap-y-6">
+                  {[
+                    { id: 'kakao', label: '카카오톡', icon: MessageCircle, bgColor: 'bg-[#FEE500]', iconColor: 'text-[#3C1E1E]', disabled: !(window as any).Kakao?.isInitialized() },
+                    { id: 'email', label: '이메일', icon: Mail, bgColor: 'bg-white/10', iconColor: 'text-white' },
+                    { id: 'facebook', label: 'Facebook', icon: Facebook, bgColor: 'bg-[#1877F2]', iconColor: 'text-white' },
+                    { id: 'twitter', label: 'X', icon: Twitter, bgColor: 'bg-black border border-white/20', iconColor: 'text-white' },
+                    { id: 'telegram', label: '텔레그램', icon: Send, bgColor: 'bg-[#0088cc]', iconColor: 'text-white' },
+                  ].map(platform => (
+                    <button
+                      key={platform.id}
+                      type="button"
+                      disabled={platform.disabled}
+                      onClick={() => handleMusicNotePlatformShare(platform.id)}
+                      className={`group flex flex-col items-center gap-2 transition-opacity ${platform.disabled ? 'cursor-not-allowed opacity-30' : 'opacity-100'}`}
+                    >
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${platform.bgColor} shadow-lg transition-all group-hover:scale-110`}>
+                        <platform.icon className={`h-6 w-6 ${platform.iconColor}`} />
+                      </div>
+                      <span className="text-center text-[10px] font-bold text-white/50 transition-colors group-hover:text-white">
+                        {platform.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

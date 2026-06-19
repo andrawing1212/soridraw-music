@@ -11301,10 +11301,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
                 </div>
               </div>
-            ) : (user || auth.currentUser) ? (
+            ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
                 <FavoritesPageLazy
-                  favorites={favorites}
+                  favorites={new URLSearchParams(location.search).has('note') ? [] : favorites}
                   isFavoritesLoading={isFavoritesLoading}
                   toggleFavorite={toggleFavorite}
                   updateFavorite={updateFavorite}

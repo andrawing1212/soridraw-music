@@ -112,9 +112,9 @@ function SunoUrlMobileGuideButton() {
       <button
         type="button"
         onClick={() => setIsGuideOpen(true)}
-        className="inline-flex h-9 items-center justify-center rounded-2xl border border-[#FF7A6C]/28 bg-[#FF5C52]/12 px-3 text-[11px] font-black text-[#FFAAA3] shadow-[0_10px_26px_rgba(255,92,82,0.12)] transition-all hover:bg-[#FF5C52]/18 hover:text-white lg:hidden"
+        className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl bg-[#FF5C52] px-3 text-[11px] font-black text-white shadow-[0_12px_30px_rgba(255,92,82,0.28)] ring-1 ring-[#FFAAA3]/22 transition-all hover:bg-[#FF7066] hover:shadow-[0_14px_34px_rgba(255,92,82,0.34)] lg:hidden"
       >
-        URL 연결 가이드
+        URL 연결가이드
       </button>
 
       <AnimatePresence>
@@ -5455,7 +5455,7 @@ ${song.prompt}
                   <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Trash2 className="h-4 w-4" />전체 제거</button>
                 )}
                 <button type="button" onClick={closeFavoriteSunoUrlEditor} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/70 transition-all hover:text-white">취소</button>
-                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={!sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_12px_30px_rgba(255,92,82,0.22)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35"><Check className="h-4 w-4" />저장</button>
+                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={!sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#C86A64] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(200,106,100,0.18)] transition-all hover:bg-[#D67770] disabled:cursor-not-allowed disabled:opacity-35"><Check className="h-4 w-4" />저장</button>
               </div>
             </motion.div>
           </motion.div>
@@ -5776,15 +5776,13 @@ ${song.prompt}
 
                 {!isSelectedSongReadOnly && (
                 <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FF7A6C]/70 shadow-[0_0_0_1px_rgba(255,122,108,0.26),0_18px_52px_rgba(255,92,82,0.24)]')}>
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 pr-2">
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF7A6C]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
                       <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
-                    <div className="flex shrink-0 justify-end">
-                      <SunoUrlMobileGuideButton />
-                    </div>
+                    <SunoUrlMobileGuideButton />
                   </div>
                   {getFavoriteSunoLinks(selectedSong).length > 0 && (
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -5879,7 +5877,7 @@ ${song.prompt}
                         />
                       </div>
                     ))}
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_12px_34px_rgba(255,92,82,0.24)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
+                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#C86A64] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(200,106,100,0.18)] transition-all hover:bg-[#D67770] disabled:cursor-not-allowed disabled:opacity-35">
                       <Check className="h-4 w-4" />
                       저장
                     </button>
@@ -5908,7 +5906,7 @@ ${song.prompt}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl border border-[#f0c079]/30 bg-[#e8a94a] px-4 text-[13px] font-black text-[#24170b] shadow-sm transition-all hover:bg-[#f0b45a] active:scale-95"
+                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF5C52] px-4 text-[13px] font-black text-white shadow-[0_12px_30px_rgba(255,92,82,0.22)] transition-all hover:bg-[#FF7066] active:scale-95"
                         >
                           <RefreshCw className="h-[17px] w-[17px]" />
                           <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>

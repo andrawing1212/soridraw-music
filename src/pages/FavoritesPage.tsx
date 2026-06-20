@@ -386,7 +386,7 @@ function getTimestampMs(value: any): number {
 }
 
 function getFavoriteDetailCreatedAt(song: any): string {
-  const timestamp = song?.createdAtMs ?? song?.createdAt ?? song?.timestamp ?? song?.updatedAt;
+  const timestamp = song?.originalCreatedAtMs ?? song?.createdAtMs ?? song?.originalCreatedAt ?? song?.createdAt ?? song?.timestamp ?? song?.updatedAt;
   const ms = getTimestampMs(timestamp);
   if (!ms) return '';
 
@@ -1107,7 +1107,12 @@ export default function FavoritesPage({
   const getCurrentFavoriteCreatorName = () => getCreatorNicknameFromProfile(favoriteUserProfile, user);
 
   const getMusicNoteCreatorUid = (song: any): string => {
-    const rawUid = song?.creatorUid || song?.ownerUid || song?.originalOwnerUid || song?.createdByUid || song?.uid;
+    const rawUid = song?.originalCreatorUid
+      || song?.originalOwnerUid
+      || song?.creatorUid
+      || song?.ownerUid
+      || song?.createdByUid
+      || (!isSharedMusicNoteItem(song) ? song?.uid : null);
     return typeof rawUid === 'string' ? rawUid.trim() : '';
   };
 
@@ -1152,7 +1157,9 @@ export default function FavoritesPage({
   };
 
   const getCreatorUidForMusicNoteShare = (song: any): string | null => {
-    if (isSharedMusicNoteItem(song)) return song?.ownerUid || song?.creatorUid || null;
+    if (isSharedMusicNoteItem(song)) {
+      return song?.originalCreatorUid || song?.creatorUid || song?.originalOwnerUid || song?.ownerUid || null;
+    }
     return user?.uid || null;
   };
 
@@ -1317,13 +1324,25 @@ export default function FavoritesPage({
           ...song,
           id: song?.id || `shared-note-${noteShareId}-${index}`,
           originalFavoriteId: song?.originalFavoriteId || song?.id || null,
-          ownerUid: song?.ownerUid || data?.ownerUid || null,
-          ownerNickname: song?.ownerNickname || data?.ownerNickname || shareCreator,
-          creatorNickname: song?.creatorNickname || data?.creatorNickname || shareCreator,
-          creatorDisplayId: song?.creatorDisplayId || data?.creatorDisplayId || shareCreator,
-          creatorName: song?.creatorName || data?.creatorName || shareCreator,
+          ownerUid: song?.originalOwnerUid || song?.ownerUid || data?.originalOwnerUid || data?.ownerUid || null,
+          creatorUid: song?.originalCreatorUid || song?.creatorUid || song?.ownerUid || data?.originalCreatorUid || data?.creatorUid || data?.ownerUid || null,
+          originalOwnerUid: song?.originalOwnerUid || song?.ownerUid || data?.originalOwnerUid || data?.ownerUid || null,
+          originalCreatorUid: song?.originalCreatorUid || song?.creatorUid || song?.ownerUid || data?.originalCreatorUid || data?.creatorUid || data?.ownerUid || null,
+          ownerNickname: song?.originalOwnerNickname || song?.ownerNickname || data?.originalOwnerNickname || data?.ownerNickname || shareCreator,
+          creatorNickname: song?.originalCreatorNickname || song?.creatorNickname || data?.originalCreatorNickname || data?.creatorNickname || shareCreator,
+          creatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || data?.originalCreatorDisplayId || data?.creatorDisplayId || shareCreator,
+          creatorName: song?.originalCreatorName || song?.creatorName || data?.originalCreatorName || data?.creatorName || shareCreator,
+          originalOwnerNickname: song?.originalOwnerNickname || song?.ownerNickname || data?.originalOwnerNickname || data?.ownerNickname || shareCreator,
+          originalCreatorNickname: song?.originalCreatorNickname || song?.creatorNickname || data?.originalCreatorNickname || data?.creatorNickname || shareCreator,
+          originalCreatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || data?.originalCreatorDisplayId || data?.creatorDisplayId || shareCreator,
+          originalCreatorName: song?.originalCreatorName || song?.creatorName || data?.originalCreatorName || data?.creatorName || shareCreator,
           ownerEmail: song?.ownerEmail || data?.ownerEmail || null,
           creatorEmail: song?.creatorEmail || data?.creatorEmail || null,
+          createdAtMs: getTimestampMs(song?.originalCreatedAtMs || song?.createdAtMs || song?.originalCreatedAt || song?.createdAt || song?.timestamp || data?.originalCreatedAtMs || data?.createdAtMs || data?.originalCreatedAt || data?.createdAt || data?.timestamp) || undefined,
+          originalCreatedAtMs: getTimestampMs(song?.originalCreatedAtMs || song?.createdAtMs || song?.originalCreatedAt || song?.createdAt || song?.timestamp || data?.originalCreatedAtMs || data?.createdAtMs || data?.originalCreatedAt || data?.createdAt || data?.timestamp) || undefined,
+          createdAt: song?.originalCreatedAt || song?.createdAt || data?.originalCreatedAt || data?.createdAt || null,
+          originalCreatedAt: song?.originalCreatedAt || song?.createdAt || data?.originalCreatedAt || data?.createdAt || null,
+          timestamp: song?.timestamp || data?.timestamp || null,
           sharedNoteShareId: noteShareId,
           isSharedMusicNote: true,
           sharedReadOnly: true,
@@ -3521,6 +3540,8 @@ ${song.prompt}
     const titles = getNormalizedTitles(song);
     const creatorDisplayName = getCreatorNameForMusicNoteShare(song);
     const creatorUid = getCreatorUidForMusicNoteShare(song);
+    const sourceCreatedAtMs = getTimestampMs(song?.originalCreatedAtMs || song?.createdAtMs || song?.originalCreatedAt || song?.createdAt || song?.timestamp) || null;
+    const sourceCreatedAtValue = song?.originalCreatedAt || song?.createdAt || (sourceCreatedAtMs ? new Date(sourceCreatedAtMs) : null);
     const links = getFavoriteSunoLinks(song).map((link: any, index: number) => ({
       url: link?.url || '',
       title: link?.title || '',
@@ -3541,12 +3562,23 @@ ${song.prompt}
       uid: null,
       ownerUid: creatorUid,
       creatorUid,
-      ownerNickname: creatorDisplayName,
-      creatorNickname: creatorDisplayName,
-      creatorDisplayId: creatorDisplayName,
-      creatorName: creatorDisplayName,
+      originalOwnerUid: song?.originalOwnerUid || song?.ownerUid || creatorUid,
+      originalCreatorUid: song?.originalCreatorUid || song?.creatorUid || creatorUid,
+      ownerNickname: song?.originalOwnerNickname || song?.ownerNickname || creatorDisplayName,
+      creatorNickname: song?.originalCreatorNickname || song?.creatorNickname || creatorDisplayName,
+      creatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || creatorDisplayName,
+      creatorName: song?.originalCreatorName || song?.creatorName || creatorDisplayName,
+      originalOwnerNickname: song?.originalOwnerNickname || song?.ownerNickname || creatorDisplayName,
+      originalCreatorNickname: song?.originalCreatorNickname || song?.creatorNickname || creatorDisplayName,
+      originalCreatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || creatorDisplayName,
+      originalCreatorName: song?.originalCreatorName || song?.creatorName || creatorDisplayName,
       ownerEmail: song?.ownerEmail || user?.email || null,
       creatorEmail: song?.creatorEmail || user?.email || null,
+      createdAtMs: sourceCreatedAtMs,
+      originalCreatedAtMs: sourceCreatedAtMs,
+      createdAt: sourceCreatedAtValue,
+      originalCreatedAt: sourceCreatedAtValue,
+      timestamp: song?.timestamp || null,
       title: getCombinedFavoriteTitle(song),
       koreanTitle: titles.korean || '',
       englishTitle: titles.english || '',
@@ -3603,10 +3635,17 @@ ${song.prompt}
         song: shareSongs.length === 1 ? shareSongs[0] : null,
         songs: shareSongs,
         ownerUid: user?.uid || '',
+        creatorUid: user?.uid || '',
+        originalOwnerUid: user?.uid || '',
+        originalCreatorUid: user?.uid || '',
         ownerNickname: displayName,
         creatorNickname: displayName,
         creatorDisplayId: displayName,
         creatorName: displayName,
+        originalOwnerNickname: displayName,
+        originalCreatorNickname: displayName,
+        originalCreatorDisplayId: displayName,
+        originalCreatorName: displayName,
         ownerEmail: user?.email || null,
         creatorEmail: user?.email || null,
         isPublic,
@@ -3798,14 +3837,22 @@ ${song.prompt}
     const sunoLinks = getFavoriteSunoLinks(song);
     const mainSunoLink = getFavoriteMainSunoLink(song);
     const sharedCreator = getMusicNoteCreatorNickname(song);
+    const sourceCreatedAtMs = getTimestampMs(song?.originalCreatedAtMs || song?.createdAtMs || song?.originalCreatedAt || song?.createdAt || song?.timestamp) || Date.now();
+    const sourceCreatedAtValue = song?.originalCreatedAt || song?.createdAt || new Date(sourceCreatedAtMs);
     const payload = cleanUndefinedValues({
       uid: user.uid,
-      ownerUid: song?.ownerUid || song?.creatorUid || null,
-      creatorUid: song?.creatorUid || song?.ownerUid || null,
-      ownerNickname: song?.ownerNickname || sharedCreator,
-      creatorNickname: song?.creatorNickname || sharedCreator,
-      creatorDisplayId: song?.creatorDisplayId || sharedCreator,
-      creatorName: song?.creatorName || sharedCreator,
+      ownerUid: song?.originalOwnerUid || song?.ownerUid || song?.creatorUid || null,
+      creatorUid: song?.originalCreatorUid || song?.creatorUid || song?.ownerUid || null,
+      originalOwnerUid: song?.originalOwnerUid || song?.ownerUid || song?.creatorUid || null,
+      originalCreatorUid: song?.originalCreatorUid || song?.creatorUid || song?.ownerUid || null,
+      ownerNickname: song?.originalOwnerNickname || song?.ownerNickname || sharedCreator,
+      creatorNickname: song?.originalCreatorNickname || song?.creatorNickname || sharedCreator,
+      creatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || sharedCreator,
+      creatorName: song?.originalCreatorName || song?.creatorName || sharedCreator,
+      originalOwnerNickname: song?.originalOwnerNickname || song?.ownerNickname || sharedCreator,
+      originalCreatorNickname: song?.originalCreatorNickname || song?.creatorNickname || sharedCreator,
+      originalCreatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || sharedCreator,
+      originalCreatorName: song?.originalCreatorName || song?.creatorName || sharedCreator,
       ownerEmail: song?.ownerEmail || null,
       creatorEmail: song?.creatorEmail || null,
       title: getCombinedFavoriteTitle(song),
@@ -3837,8 +3884,12 @@ ${song.prompt}
       sharedNoteFolderId: 'default',
       sharedNoteFolderTitle: '기본',
       sharedNoteFolderUpdatedAt: Date.now(),
-      createdAtMs: getTimestampMs(song?.createdAtMs || song?.createdAt || song?.timestamp) || Date.now(),
-      createdAt: serverTimestamp(),
+      createdAtMs: sourceCreatedAtMs,
+      originalCreatedAtMs: sourceCreatedAtMs,
+      createdAt: sourceCreatedAtValue,
+      originalCreatedAt: sourceCreatedAtValue,
+      sharedNoteSavedAt: serverTimestamp(),
+      sharedNoteSavedAtMs: Date.now(),
     });
 
     try {
@@ -6284,8 +6335,8 @@ ${song.prompt}
                       onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [selectedSong.id]: event.target.value }))}
                       placeholder="곡에 대한 메모를 입력하세요..."
                       rows={4}
-                      style={{ height: favoriteMemoExpanded ? 300 : 150 }}
-                      className="w-full min-h-[120px] resize-none rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all duration-200 placeholder:text-white/28 focus:border-[#E45F59]/45 focus:bg-black/[0.22] md:text-[15px]"
+                      style={{ height: favoriteMemoExpanded ? 300 : 128 }}
+                      className="w-full min-h-[104px] resize-none rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all duration-200 placeholder:text-white/28 focus:border-[#E45F59]/45 focus:bg-black/[0.22] md:text-[15px]"
                     />
                     <button
                       type="button"

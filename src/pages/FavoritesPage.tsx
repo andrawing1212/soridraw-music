@@ -106,13 +106,60 @@ function cn(...inputs: ClassValue[]) {
 
 function SunoUrlMobileGuideButton() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const guideHistoryPushedRef = useRef(false);
+
+  const markGuideClosed = () => {
+    setIsGuideOpen(false);
+    guideHistoryPushedRef.current = false;
+    try {
+      (window as any).__soridrawSunoMobileGuideOpen = false;
+    } catch {
+      // window may be unavailable in non-browser environments.
+    }
+  };
+
+  const openGuide = (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    setIsGuideOpen(true);
+    try {
+      (window as any).__soridrawSunoMobileGuideOpen = true;
+      if (!guideHistoryPushedRef.current) {
+        window.history.pushState({ favoritesOverlay: 'suno-mobile-guide' }, '');
+        guideHistoryPushedRef.current = true;
+      }
+    } catch {
+      guideHistoryPushedRef.current = false;
+    }
+  };
+
+  const requestGuideClose = () => {
+    if (guideHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    markGuideClosed();
+  };
+
+  useEffect(() => {
+    const handleExternalClose = () => markGuideClosed();
+    window.addEventListener('soridraw:close-suno-mobile-guide', handleExternalClose);
+    return () => {
+      window.removeEventListener('soridraw:close-suno-mobile-guide', handleExternalClose);
+      try {
+        (window as any).__soridrawSunoMobileGuideOpen = false;
+      } catch {
+        // window may be unavailable in non-browser environments.
+      }
+    };
+  }, []);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setIsGuideOpen(true)}
-        className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl bg-[#FF5C52] px-3 text-[11px] font-black text-white shadow-[0_12px_30px_rgba(255,92,82,0.28)] ring-1 ring-[#FFAAA3]/22 transition-all hover:bg-[#FF7066] hover:shadow-[0_14px_34px_rgba(255,92,82,0.34)] lg:hidden"
+        onClick={openGuide}
+        className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl bg-[#FF5C52] px-3.5 text-[11px] font-black text-white transition-all hover:bg-[#FF7066] active:scale-[0.98] lg:hidden"
       >
         URL 연결가이드
       </button>
@@ -124,7 +171,7 @@ function SunoUrlMobileGuideButton() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[220] flex items-center justify-center bg-black/76 px-4 py-6 backdrop-blur-md"
-            onClick={() => setIsGuideOpen(false)}
+            onClick={requestGuideClose}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 14 }}
@@ -142,7 +189,7 @@ function SunoUrlMobileGuideButton() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsGuideOpen(false)}
+                  onClick={requestGuideClose}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/58 transition-all hover:text-white"
                   aria-label="가이드 닫기"
                 >
@@ -177,7 +224,7 @@ function SunoUrlMobileGuideButton() {
 
               <button
                 type="button"
-                onClick={() => setIsGuideOpen(false)}
+                onClick={requestGuideClose}
                 className="mt-5 flex h-11 w-full items-center justify-center rounded-2xl bg-[#FF5C52] text-sm font-black text-white transition-all hover:bg-[#FF7066]"
               >
                 확인
@@ -2724,6 +2771,11 @@ export default function FavoritesPage({
     const handlePopState = (e: PopStateEvent) => {
       // Clear any pending actions on back navigation
       setPendingSelectionAction(null);
+
+      if ((window as any).__soridrawSunoMobileGuideOpen) {
+        window.dispatchEvent(new CustomEvent('soridraw:close-suno-mobile-guide'));
+        return;
+      }
 
       // If we have pending confirmations in popup, cancel them first
       if (confirmDeleteSong || confirmToggleLock) {
@@ -5776,13 +5828,15 @@ ${song.prompt}
 
                 {!isSelectedSongReadOnly && (
                 <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FF7A6C]/70 shadow-[0_0_0_1px_rgba(255,122,108,0.26),0_18px_52px_rgba(255,92,82,0.24)]')}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1 pr-2">
+                  <div className="relative">
+                    <div className="absolute right-0 top-0 lg:hidden">
+                      <SunoUrlMobileGuideButton />
+                    </div>
+                    <div className="min-w-0 pr-[128px] lg:pr-0">
                       <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF7A6C]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
-                      <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
-                    <SunoUrlMobileGuideButton />
+                    <p className="mt-2 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                   </div>
                   {getFavoriteSunoLinks(selectedSong).length > 0 && (
                     <div className="mt-4 grid gap-3 md:grid-cols-2">

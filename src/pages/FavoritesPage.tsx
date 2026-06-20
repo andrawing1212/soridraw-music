@@ -5034,8 +5034,13 @@ ${song.prompt}
                         <span className="hidden md:inline text-[10px] text-white/35 shrink-0 select-none cursor-default">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
                       </div>
                       <div className="mt-2 flex items-center gap-2 min-w-0">
+                        {musicNoteListCreator && (
+                          <span className="shrink-0 whitespace-nowrap text-[10px] font-bold leading-none text-[#FFAAA3]/90 select-none cursor-default">
+                            {musicNoteListCreator}
+                          </span>
+                        )}
                         <div
-                          className="favorite-keyword-strip relative flex w-full max-w-[calc(100vw-232px)] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
+                          className="favorite-keyword-strip relative flex min-w-0 flex-1 max-w-[calc(100vw-244px)] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
                           onMouseDown={(event) => {
                             if (isSelectionMode) return;
                             const target = event.currentTarget;
@@ -5055,11 +5060,6 @@ ${song.prompt}
                             document.addEventListener('mouseup', onUp);
                           }}
                         >
-                          {musicNoteListCreator && (
-                            <span className="shrink-0 rounded-md border border-[#E45F59]/30 bg-[#E45F59]/16 px-2 py-0.5 text-[10px] font-black text-[#FFC0B8] whitespace-nowrap shadow-[0_0_10px_rgba(228,95,89,0.10)]">
-                              {musicNoteListCreator}
-                            </span>
-                          )}
                           {renderFavoriteKeywordChips(song)}
                         </div>
                         <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">

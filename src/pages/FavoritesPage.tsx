@@ -1037,7 +1037,7 @@ export default function FavoritesPage({
 
   const getSharedMusicNoteCreator = (song: any): string => {
     if (!song) return '';
-    const text = getFavoriteDetailCreator(song, null);
+    const text = getFavoriteDetailCreator(song, null) || (isSharedMusicNoteItem(song) ? 'SORIDRAW' : '');
     return text ? `원곡자: ${text}` : '';
   };
 
@@ -1160,10 +1160,18 @@ export default function FavoritesPage({
 
         const data: any = shareSnap.data();
         const rawSongs = Array.isArray(data.songs) ? data.songs : (data.song ? [data.song] : []);
+        const shareCreator = data?.creatorDisplayId || data?.creatorNickname || data?.ownerNickname || data?.creatorName || data?.ownerName || data?.ownerEmail || data?.creatorEmail || 'SORIDRAW';
         const normalized = rawSongs.map((song: any, index: number) => ({
           ...song,
           id: song?.id || `shared-note-${noteShareId}-${index}`,
           originalFavoriteId: song?.originalFavoriteId || song?.id || null,
+          ownerUid: song?.ownerUid || data?.ownerUid || null,
+          ownerNickname: song?.ownerNickname || data?.ownerNickname || shareCreator,
+          creatorNickname: song?.creatorNickname || data?.creatorNickname || shareCreator,
+          creatorDisplayId: song?.creatorDisplayId || data?.creatorDisplayId || shareCreator,
+          creatorName: song?.creatorName || data?.creatorName || shareCreator,
+          ownerEmail: song?.ownerEmail || data?.ownerEmail || null,
+          creatorEmail: song?.creatorEmail || data?.creatorEmail || null,
           sharedNoteShareId: noteShareId,
           isSharedMusicNote: true,
           sharedReadOnly: true,
@@ -3359,6 +3367,7 @@ ${song.prompt}
 
   const getMusicNoteShareSongPayload = (song: any) => {
     const titles = getNormalizedTitles(song);
+    const creatorDisplayName = user?.displayName || user?.email?.split('@')[0] || getFavoriteDetailCreator(song, user) || 'SORIDRAW';
     const links = getFavoriteSunoLinks(song).map((link: any, index: number) => ({
       url: link?.url || '',
       title: link?.title || '',
@@ -3377,6 +3386,13 @@ ${song.prompt}
       id: `shared-${String(song?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`,
       originalFavoriteId: song?.id || null,
       uid: null,
+      ownerUid: user?.uid || song?.ownerUid || null,
+      ownerNickname: creatorDisplayName,
+      creatorNickname: creatorDisplayName,
+      creatorDisplayId: creatorDisplayName,
+      creatorName: creatorDisplayName,
+      ownerEmail: user?.email || song?.ownerEmail || null,
+      creatorEmail: user?.email || song?.creatorEmail || null,
       title: getCombinedFavoriteTitle(song),
       koreanTitle: titles.korean || '',
       englishTitle: titles.english || '',
@@ -3625,8 +3641,16 @@ ${song.prompt}
     const titles = getNormalizedTitles(song);
     const sunoLinks = getFavoriteSunoLinks(song);
     const mainSunoLink = getFavoriteMainSunoLink(song);
+    const sharedCreator = getFavoriteDetailCreator(song, null) || 'SORIDRAW';
     const payload = cleanUndefinedValues({
       uid: user.uid,
+      ownerUid: song?.ownerUid || null,
+      ownerNickname: song?.ownerNickname || sharedCreator,
+      creatorNickname: song?.creatorNickname || sharedCreator,
+      creatorDisplayId: song?.creatorDisplayId || sharedCreator,
+      creatorName: song?.creatorName || sharedCreator,
+      ownerEmail: song?.ownerEmail || null,
+      creatorEmail: song?.creatorEmail || null,
       title: getCombinedFavoriteTitle(song),
       koreanTitle: titles.korean || '',
       englishTitle: titles.english || '',
@@ -4854,7 +4878,7 @@ ${song.prompt}
                           }}
                         >
                           {musicNoteViewMode === 'sharedNote' && getSharedMusicNoteCreator(song) && (
-                            <span className="shrink-0 rounded-md border border-[#E45F59]/22 bg-[#E45F59]/12 px-2 py-0.5 text-[9px] font-extrabold text-[#FFB7AF] whitespace-nowrap">
+                            <span className="shrink-0 rounded-md border border-[#E45F59]/30 bg-[#E45F59]/16 px-2 py-0.5 text-[10px] font-black text-[#FFC0B8] whitespace-nowrap shadow-[0_0_10px_rgba(228,95,89,0.10)]">
                               {getSharedMusicNoteCreator(song)}
                             </span>
                           )}

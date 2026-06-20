@@ -103,6 +103,90 @@ function cn(...inputs: ClassValue[]) {
 }
 
 
+
+function SunoUrlMobileGuideButton() {
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setIsGuideOpen(true)}
+        className="inline-flex h-9 items-center justify-center rounded-2xl border border-[#FF7A6C]/28 bg-[#FF5C52]/12 px-3 text-[11px] font-black text-[#FFAAA3] shadow-[0_10px_26px_rgba(255,92,82,0.12)] transition-all hover:bg-[#FF5C52]/18 hover:text-white lg:hidden"
+      >
+        URL 연결 가이드
+      </button>
+
+      <AnimatePresence>
+        {isGuideOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[220] flex items-center justify-center bg-black/76 px-4 py-6 backdrop-blur-md"
+            onClick={() => setIsGuideOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 14 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-[560px] overflow-hidden rounded-[28px] border border-[#FF7A6C]/22 bg-[#181818] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.62)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FFAAA3]/78">mobile guide</div>
+                  <h3 className="mt-1 text-xl font-black text-white">모바일 수노 링크 복사 방법</h3>
+                  <p className="mt-2 text-sm leading-6 text-white/55">수노 앱/모바일 화면에서 <span className="font-bold text-white/82">노래 공유</span>를 누른 뒤 <span className="font-bold text-white/82">링크 복사</span>를 선택하고, SORIDRAW 입력칸에 붙여 넣으면 됩니다.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsGuideOpen(false)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/58 transition-all hover:text-white"
+                  aria-label="가이드 닫기"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {[
+                  { step: '1', title: '노래 공유', img: '/suno-mobile-share-guide-1.jpeg', alt: '수노 모바일 노래 공유 버튼 위치' },
+                  { step: '2', title: '링크 복사', img: '/suno-mobile-share-guide-2.jpeg', alt: '수노 모바일 링크 복사 버튼 위치' },
+                ].map((item) => (
+                  <div key={item.step} className="rounded-2xl border border-white/10 bg-black/18 p-3">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-black text-white/82">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#FF5C52]/20 text-[12px] text-[#FFAAA3]">{item.step}</span>
+                      {item.title}
+                    </div>
+                    <div className="flex justify-center overflow-hidden rounded-2xl bg-black/25 p-2">
+                      <img
+                        src={item.img}
+                        alt={item.alt}
+                        className="h-auto max-h-[230px] w-auto max-w-full rounded-xl object-contain sm:max-h-[280px]"
+                        loading="lazy"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsGuideOpen(false)}
+                className="mt-5 flex h-11 w-full items-center justify-center rounded-2xl bg-[#FF5C52] text-sm font-black text-white transition-all hover:bg-[#FF7066]"
+              >
+                확인
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 function SunoUrlGuideCard({ compact = false, collapsible = false }: { compact?: boolean; collapsible?: boolean }) {
   const [isGuideExpanded, setIsGuideExpanded] = useState(() => {
     if (!collapsible) return true;
@@ -5316,6 +5400,7 @@ ${song.prompt}
                   <p className="mt-1 truncate text-sm text-white/45">{getCombinedFavoriteTitle(sunoUrlEditorSong)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <SunoUrlMobileGuideButton />
                   <button
                     type="button"
                     onClick={() => window.open('https://suno.com/create', '_blank', 'noopener,noreferrer')}
@@ -5360,7 +5445,7 @@ ${song.prompt}
                   </div>
                 ))}
                 {sunoUrlError ? <p className="mt-2 text-xs font-semibold text-red-300">{sunoUrlError}</p> : <p className="mt-2 text-xs leading-5 text-white/38">수노에서 한 번에 생성된 2곡까지 연결할 수 있습니다. 1순위 곡이 목록의 메인 커버/재생 대상이 됩니다.</p>}
-                <SunoUrlGuideCard compact />
+                <div className="hidden lg:block"><SunoUrlGuideCard compact /></div>
               </div>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 {getFavoriteSunoShareUrl(sunoUrlEditorSong) && (
@@ -5694,7 +5779,9 @@ ${song.prompt}
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
                       <p className="mt-1 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
                     </div>
-                    <div className="hidden" />
+                    <div className="flex shrink-0 justify-end">
+                      <SunoUrlMobileGuideButton />
+                    </div>
                   </div>
                   {getFavoriteSunoLinks(selectedSong).length > 0 && (
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -5799,7 +5886,7 @@ ${song.prompt}
                   ) : (
                     <p className="mt-2 text-xs text-white/35">1순위 수노 URL이 뮤직노트 목록의 메인 커버와 재생 대상이 됩니다. 두 URL을 모두 비우고 저장하면 연결이 해제됩니다.</p>
                   )}
-                  <SunoUrlGuideCard collapsible />
+                  <div className="hidden lg:block"><SunoUrlGuideCard collapsible /></div>
                 </section>
                 )}
 

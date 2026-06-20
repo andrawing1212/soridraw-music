@@ -5776,6 +5776,147 @@ ${song.prompt}
                   </div>
                 </section>
 
+                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">info set</div>
+                        <h4 className="mt-1 text-[22px] font-bold text-white">키워드</h4>
+                      </div>
+                      <div className="-mt-1 flex shrink-0 items-center gap-2">
+                      {!isEditing && (
+                        <button
+                          onClick={() => applyKeywordsToNext(selectedSong)}
+                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                          onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF5C52] px-4 text-[13px] font-black text-white shadow-[0_12px_30px_rgba(255,92,82,0.22)] transition-all hover:bg-[#FF7066] active:scale-95"
+                        >
+                          <RefreshCw className="h-[17px] w-[17px]" />
+                          <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setIsInfoExpanded((prev) => !prev)}
+                        onMouseEnter={() => onHover({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
+                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                        onTouchStart={() => onLongPressStart({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
+                        onTouchEnd={onLongPressEnd}
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFAAA3]"
+                      >
+                        {isInfoExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                      </button>
+                      </div>
+                    </div>
+                    <p className="text-sm leading-6 text-white/45">곡의 키워드와 핵심 정보를 확인합니다.</p>
+                  </div>
+
+                  {!isInfoExpanded && (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
+                        Genre: {getDisplaySubGenre(selectedSong) || '정보 없음'}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
+                        Tempo: {selectedSong.appliedKeywords.tempo || '정보 없음'}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
+                        {resolveKeywordsForDisplay(selectedSong).length}개 카테고리
+                      </span>
+                    </div>
+                  )}
+
+                  <AnimatePresence initial={false}>
+                    {isInfoExpanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginTop: 20 }}
+                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
+                          <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
+                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">keywords</div>
+                                <h4 className="mt-1 text-xl font-bold text-white">곡 키워드 & 스타일</h4>
+                              </div>
+                              {!isEditing && (
+                                <button
+                                  onClick={() => {
+                                    const sections = resolveKeywordsForDisplay(selectedSong);
+                                    const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
+                                    copyToClipboard(text, 'keywords');
+                                  }}
+                                  onMouseEnter={() => onHover({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
+                                  onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                                  onTouchStart={() => onLongPressStart({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
+                                  onTouchEnd={onLongPressEnd}
+                                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFAAA3]"
+                                >
+                                  {copiedType === 'keywords' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                </button>
+                              )}
+                            </div>
+                            <div className="space-y-4">
+                              {resolveKeywordsForDisplay(selectedSong).map((section) => (
+                                <div key={section.key} className="space-y-2.5">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/38">{section.title}</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {section.items.map((item, idx) => (
+                                      <span
+                                        key={`${section.key}-${idx}`}
+                                        className={cn(
+                                          'rounded-full border px-3 py-1.5 text-[12px] font-medium',
+                                          getAppliedKeywordChipClass(section.key || section.accent || '', item.isRandom)
+                                        )}
+                                      >
+                                        {item.label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+
+                          <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
+                            <div className="mb-4">
+                              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">overview</div>
+                              <h4 className="mt-1 text-xl font-bold text-white">핵심 정보</h4>
+                            </div>
+                            <div className="grid gap-3">
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">genre</p>
+                                <p className="mt-2 text-lg font-semibold text-white/90">{getDisplaySubGenre(selectedSong) || '정보 없음'}</p>
+                              </div>
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">vocal</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] text-white/75">{selectedSong.appliedKeywords.vocalType || '정보 없음'}</span>
+                                  {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
+                                    <span className="rounded-full border border-[#D85C56]/25 bg-[#D85C56]/10 px-3 py-1 text-[12px] text-[#FFAAA3]">보컬톤: {selectedSong.appliedKeywords.vocalTone}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">tempo</p>
+                                <p className="mt-2 text-base font-semibold text-white/88">{selectedSong.appliedKeywords.tempo || '정보 없음'}</p>
+                              </div>
+                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">structure</p>
+                                <div className="mt-2 rounded-xl border border-black/20 bg-black/20 px-3 py-3 text-[12px] leading-6 text-white/72" style={{ wordBreak: 'break-word' }}>
+                                  {getFavoriteStructureText(selectedSong)}
+                                </div>
+                              </div>
+                            </div>
+                          </section>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
+
                 {!isMusicNoteSharedView && selectedSong?.id && !isFavoriteTrashMode && (
                   <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-5 md:p-6">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -5945,144 +6086,6 @@ ${song.prompt}
                 </section>
                 )}
 
-                <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">info set</div>
-                      <h4 className="mt-1 text-[22px] font-bold text-white">키워드</h4>
-                      <p className="mt-1 text-sm text-white/45">곡의 키워드와 핵심 정보를 확인합니다.</p>
-                    </div>
-                    <div className="-mt-1 flex shrink-0 items-center gap-2">
-                      {!isEditing && (
-                        <button
-                          onClick={() => applyKeywordsToNext(selectedSong)}
-                          onMouseEnter={() => onHover({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                          onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
-                          onTouchEnd={onLongPressEnd}
-                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF5C52] px-4 text-[13px] font-black text-white shadow-[0_12px_30px_rgba(255,92,82,0.22)] transition-all hover:bg-[#FF7066] active:scale-95"
-                        >
-                          <RefreshCw className="h-[17px] w-[17px]" />
-                          <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setIsInfoExpanded((prev) => !prev)}
-                        onMouseEnter={() => onHover({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
-                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        onTouchStart={() => onLongPressStart({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
-                        onTouchEnd={onLongPressEnd}
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFAAA3]"
-                      >
-                        {isInfoExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {!isInfoExpanded && (
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
-                        Genre: {getDisplaySubGenre(selectedSong) || '정보 없음'}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
-                        Tempo: {selectedSong.appliedKeywords.tempo || '정보 없음'}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/68">
-                        {resolveKeywordsForDisplay(selectedSong).length}개 카테고리
-                      </span>
-                    </div>
-                  )}
-
-                  <AnimatePresence initial={false}>
-                    {isInfoExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                        animate={{ opacity: 1, height: 'auto', marginTop: 20 }}
-                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
-                          <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
-                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">keywords</div>
-                                <h4 className="mt-1 text-xl font-bold text-white">곡 키워드 & 스타일</h4>
-                              </div>
-                              {!isEditing && (
-                                <button
-                                  onClick={() => {
-                                    const sections = resolveKeywordsForDisplay(selectedSong);
-                                    const text = sections.map(s => s.items.map(i => i.label).join(', ')).join(', ');
-                                    copyToClipboard(text, 'keywords');
-                                  }}
-                                  onMouseEnter={() => onHover({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
-                                  onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                                  onTouchStart={() => onLongPressStart({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
-                                  onTouchEnd={onLongPressEnd}
-                                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFAAA3]"
-                                >
-                                  {copiedType === 'keywords' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                </button>
-                              )}
-                            </div>
-                            <div className="space-y-4">
-                              {resolveKeywordsForDisplay(selectedSong).map((section) => (
-                                <div key={section.key} className="space-y-2.5">
-                                  <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/38">{section.title}</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {section.items.map((item, idx) => (
-                                      <span
-                                        key={`${section.key}-${idx}`}
-                                        className={cn(
-                                          'rounded-full border px-3 py-1.5 text-[12px] font-medium',
-                                          getAppliedKeywordChipClass(section.key || section.accent || '', item.isRandom)
-                                        )}
-                                      >
-                                        {item.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </section>
-
-                          <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
-                            <div className="mb-4">
-                              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFAAA3]">overview</div>
-                              <h4 className="mt-1 text-xl font-bold text-white">핵심 정보</h4>
-                            </div>
-                            <div className="grid gap-3">
-                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">genre</p>
-                                <p className="mt-2 text-lg font-semibold text-white/90">{getDisplaySubGenre(selectedSong) || '정보 없음'}</p>
-                              </div>
-                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">vocal</p>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] text-white/75">{selectedSong.appliedKeywords.vocalType || '정보 없음'}</span>
-                                  {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
-                                    <span className="rounded-full border border-[#D85C56]/25 bg-[#D85C56]/10 px-3 py-1 text-[12px] text-[#FFAAA3]">보컬톤: {selectedSong.appliedKeywords.vocalTone}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">tempo</p>
-                                <p className="mt-2 text-base font-semibold text-white/88">{selectedSong.appliedKeywords.tempo || '정보 없음'}</p>
-                              </div>
-                              <div className="rounded-2xl border border-black/20 bg-white/[0.03] p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/35">structure</p>
-                                <div className="mt-2 rounded-xl border border-black/20 bg-black/20 px-3 py-3 text-[12px] leading-6 text-white/72" style={{ wordBreak: 'break-word' }}>
-                                  {getFavoriteStructureText(selectedSong)}
-                                </div>
-                              </div>
-                            </div>
-                          </section>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </section>
 
                 <div className="grid gap-5 xl:grid-cols-2">
                   <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">

@@ -412,6 +412,7 @@ export interface AppUserInfo {
   uid: string;
   email: string | null;
   displayName: string | null;
+  nickname?: string | null;
   role: UserRole;
   accountStatus: AccountStatus;
   paymentStatus: PaymentStatus;

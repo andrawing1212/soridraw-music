@@ -405,7 +405,18 @@ function getFavoriteDetailCreatedAt(song: any): string {
 }
 
 
-function getFavoriteDetailCreator(song: any, user?: User | null): string {
+function normalizeFavoriteCreatorId(value: any, ownerUid?: string | null): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return '';
+  if (/^soridraw(?:'s studio)?$/i.test(text)) return '';
+  if (ownerUid && text === ownerUid) return '';
+  if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+  if (text.includes('@')) return text.split('@')[0] || '';
+  return text;
+}
+
+function getFavoriteCreatorId(song: any, user?: User | null): string {
+  const ownerUid = String(song?.ownerUid || song?.uid || user?.uid || '');
   const candidates = [
     song?.creatorDisplayId,
     song?.ownerNickname,
@@ -414,21 +425,34 @@ function getFavoriteDetailCreator(song: any, user?: User | null): string {
     song?.creatorName,
     song?.ownerDisplayName,
     song?.createdByName,
-    song?.artist,
-    song?.artistName,
-    song?.author,
     song?.ownerEmail,
     song?.creatorEmail,
     user?.displayName,
     user?.email,
   ];
-  const ownerUid = String(song?.ownerUid || song?.uid || '');
   for (const value of candidates) {
-    const text = typeof value === 'string' ? value.trim() : '';
-    if (!text) continue;
-    if (ownerUid && text === ownerUid) continue;
-    if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) continue;
-    return text;
+    const text = normalizeFavoriteCreatorId(value, ownerUid);
+    if (text) return text;
+  }
+  return '';
+}
+
+function getFavoriteDetailCreator(song: any, user?: User | null): string {
+  return getFavoriteCreatorId(song, user);
+}
+
+function getUserProfileDisplayName(profile: any, user?: User | null): string {
+  const candidates = [
+    profile?.nickname,
+    profile?.displayName,
+    profile?.name,
+    user?.displayName,
+    profile?.email,
+    user?.email,
+  ];
+  for (const value of candidates) {
+    const text = normalizeFavoriteCreatorId(value, user?.uid || profile?.uid || '');
+    if (text) return text;
   }
   return '';
 }
@@ -939,6 +963,7 @@ export default function FavoritesPage({
   const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
   const [, setFavoriteColorSyncTick] = useState(0);
   const [isFavoriteAdminUser, setIsFavoriteAdminUser] = useState(false);
+  const [favoriteUserProfile, setFavoriteUserProfile] = useState<any | null>(null);
   const lastFavoriteServerColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorBaselineRef = useRef<string>('{}');
@@ -975,20 +1000,30 @@ export default function FavoritesPage({
 
   useEffect(() => {
     let cancelled = false;
-    const loadAdminRole = async () => {
+    const loadUserProfile = async () => {
       if (!user?.uid) {
-        if (!cancelled) setIsFavoriteAdminUser(false);
+        if (!cancelled) {
+          setIsFavoriteAdminUser(false);
+          setFavoriteUserProfile(null);
+        }
         return;
       }
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
-        if (!cancelled) setIsFavoriteAdminUser(snap.exists() && snap.data()?.role === 'admin');
+        if (!cancelled) {
+          const data: any | null = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
+          setFavoriteUserProfile(data);
+          setIsFavoriteAdminUser(Boolean(data && data.role === 'admin'));
+        }
       } catch (error) {
-        console.warn('favorite admin role check failed', error);
-        if (!cancelled) setIsFavoriteAdminUser(false);
+        console.warn('favorite user profile check failed', error);
+        if (!cancelled) {
+          setFavoriteUserProfile(null);
+          setIsFavoriteAdminUser(false);
+        }
       }
     };
-    loadAdminRole();
+    loadUserProfile();
     return () => { cancelled = true; };
   }, [user?.uid]);
 
@@ -1036,9 +1071,20 @@ export default function FavoritesPage({
   const getMusicNoteMemo = (song: any): string => String(song?.musicNoteMemo || song?.noteMemo || song?.memo || '');
 
   const getSharedMusicNoteCreator = (song: any): string => {
-    if (!song) return '';
-    const text = getFavoriteDetailCreator(song, null) || (isSharedMusicNoteItem(song) ? 'SORIDRAW' : '');
-    return text ? `원곡자: ${text}` : '';
+    if (!song || !isSharedMusicNoteItem(song)) return '';
+    return getFavoriteCreatorId(song, null);
+  };
+
+  const getCurrentFavoriteCreatorName = () => getUserProfileDisplayName(favoriteUserProfile, user);
+
+  const getCreatorNameForMusicNoteShare = (song: any): string => {
+    if (isSharedMusicNoteItem(song)) return getFavoriteCreatorId(song, null);
+    return getCurrentFavoriteCreatorName();
+  };
+
+  const getCreatorUidForMusicNoteShare = (song: any): string | null => {
+    if (isSharedMusicNoteItem(song)) return song?.ownerUid || song?.creatorUid || null;
+    return user?.uid || null;
   };
 
   const normalizeMusicNoteDuplicateText = (value: any): string => String(value || '')
@@ -1160,7 +1206,7 @@ export default function FavoritesPage({
 
         const data: any = shareSnap.data();
         const rawSongs = Array.isArray(data.songs) ? data.songs : (data.song ? [data.song] : []);
-        const shareCreator = data?.creatorDisplayId || data?.creatorNickname || data?.ownerNickname || data?.creatorName || data?.ownerName || data?.ownerEmail || data?.creatorEmail || 'SORIDRAW';
+        const shareCreator = getFavoriteCreatorId(data, null);
         const normalized = rawSongs.map((song: any, index: number) => ({
           ...song,
           id: song?.id || `shared-note-${noteShareId}-${index}`,
@@ -3367,7 +3413,8 @@ ${song.prompt}
 
   const getMusicNoteShareSongPayload = (song: any) => {
     const titles = getNormalizedTitles(song);
-    const creatorDisplayName = user?.displayName || user?.email?.split('@')[0] || getFavoriteDetailCreator(song, user) || 'SORIDRAW';
+    const creatorDisplayName = getCreatorNameForMusicNoteShare(song);
+    const creatorUid = getCreatorUidForMusicNoteShare(song);
     const links = getFavoriteSunoLinks(song).map((link: any, index: number) => ({
       url: link?.url || '',
       title: link?.title || '',
@@ -3386,13 +3433,14 @@ ${song.prompt}
       id: `shared-${String(song?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`,
       originalFavoriteId: song?.id || null,
       uid: null,
-      ownerUid: user?.uid || song?.ownerUid || null,
+      ownerUid: creatorUid,
+      creatorUid,
       ownerNickname: creatorDisplayName,
       creatorNickname: creatorDisplayName,
       creatorDisplayId: creatorDisplayName,
       creatorName: creatorDisplayName,
-      ownerEmail: user?.email || song?.ownerEmail || null,
-      creatorEmail: user?.email || song?.creatorEmail || null,
+      ownerEmail: song?.ownerEmail || user?.email || null,
+      creatorEmail: song?.creatorEmail || user?.email || null,
       title: getCombinedFavoriteTitle(song),
       koreanTitle: titles.korean || '',
       englishTitle: titles.english || '',
@@ -3435,7 +3483,7 @@ ${song.prompt}
     const shareId = makeMusicNoteShareId(songs);
     const shareSongs = songs.map(getMusicNoteShareSongPayload);
     const title = songs.length === 1 ? getCombinedFavoriteTitle(songs[0]) : `선택한 ${songs.length}곡`;
-    const displayName = user?.displayName || user?.email?.split('@')[0] || 'SORIDRAW';
+    const displayName = getCurrentFavoriteCreatorName();
 
     return {
       shareId,
@@ -3451,6 +3499,8 @@ ${song.prompt}
         ownerUid: user?.uid || '',
         ownerNickname: displayName,
         creatorNickname: displayName,
+        creatorDisplayId: displayName,
+        creatorName: displayName,
         ownerEmail: user?.email || null,
         creatorEmail: user?.email || null,
         isPublic,
@@ -3641,10 +3691,11 @@ ${song.prompt}
     const titles = getNormalizedTitles(song);
     const sunoLinks = getFavoriteSunoLinks(song);
     const mainSunoLink = getFavoriteMainSunoLink(song);
-    const sharedCreator = getFavoriteDetailCreator(song, null) || 'SORIDRAW';
+    const sharedCreator = getFavoriteCreatorId(song, null);
     const payload = cleanUndefinedValues({
       uid: user.uid,
-      ownerUid: song?.ownerUid || null,
+      ownerUid: song?.ownerUid || song?.creatorUid || null,
+      creatorUid: song?.creatorUid || song?.ownerUid || null,
       ownerNickname: song?.ownerNickname || sharedCreator,
       creatorNickname: song?.creatorNickname || sharedCreator,
       creatorDisplayId: song?.creatorDisplayId || sharedCreator,

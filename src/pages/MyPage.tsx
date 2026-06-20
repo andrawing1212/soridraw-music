@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, signOut, updateProfile, User } from 'firebase/auth';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -235,6 +235,10 @@ export default function MyPage() {
   const [profile, setProfile] = useState<AppUserInfo | null>(null);
   const [isApiRegistered, setIsApiRegistered] = useState(() => getLocalApiStatus(auth.currentUser?.uid));
   const [remainingCredits, setRemainingCredits] = useState<number | null>(() => getRemainingCredits(auth.currentUser?.uid));
+  const [nicknameDraft, setNicknameDraft] = useState('');
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [isSavingNickname, setIsSavingNickname] = useState(false);
+  const [nicknameMessage, setNicknameMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -296,6 +300,51 @@ export default function MyPage() {
   const generatedCount = profile?.songGeneratedCount || 0;
   const favoriteCount = profile?.favoriteCount || 0;
   const dailyLimitText = plan.dailyGenerateLimit === null ? '제한 없음' : `하루 ${plan.dailyGenerateLimit}회`;
+  const displayNickname = useMemo(() => {
+    const profileAny = profile as any;
+    return String(profileAny?.nickname || profileAny?.displayName || user?.displayName || user?.email?.split('@')[0] || 'SORIDRAW User').trim();
+  }, [profile, user?.displayName, user?.email]);
+
+  useEffect(() => {
+    if (!user) {
+      setNicknameDraft('');
+      setIsEditingNickname(false);
+      setNicknameMessage(null);
+      return;
+    }
+    setNicknameDraft(displayNickname === 'SORIDRAW User' ? '' : displayNickname);
+  }, [user?.uid, displayNickname]);
+
+  const handleSaveNickname = useCallback(async () => {
+    if (!user?.uid || isSavingNickname) return;
+    const nextNickname = nicknameDraft.trim().replace(/\s+/g, ' ');
+    if (!nextNickname) {
+      setNicknameMessage('닉네임을 입력해주세요.');
+      return;
+    }
+    if (nextNickname.length > 20) {
+      setNicknameMessage('닉네임은 20자 이내로 입력해주세요.');
+      return;
+    }
+
+    setIsSavingNickname(true);
+    setNicknameMessage(null);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        nickname: nextNickname,
+        displayName: nextNickname,
+        updatedAt: Date.now(),
+      });
+      await updateProfile(user, { displayName: nextNickname }).catch(() => {});
+      setIsEditingNickname(false);
+      setNicknameMessage('닉네임이 저장되었습니다.');
+    } catch (error) {
+      console.error('nickname update failed:', error);
+      setNicknameMessage('닉네임 저장에 실패했습니다.');
+    } finally {
+      setIsSavingNickname(false);
+    }
+  }, [isSavingNickname, nicknameDraft, user]);
 
   const handleLogout = useCallback(async () => {
     await signOut(auth);
@@ -353,10 +402,58 @@ export default function MyPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-4 min-w-0">
                 <img src={user.photoURL || 'https://picsum.photos/seed/soridraw-user/160/160'} alt="profile" referrerPolicy="no-referrer" className="h-16 w-16 rounded-3xl object-cover border border-white/10 shadow-xl" />
-                <div className="min-w-0">
-                  <h2 className="truncate text-xl font-black">{user.displayName || 'SORIDRAW User'}</h2>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isEditingNickname ? (
+                      <>
+                        <input
+                          value={nicknameDraft}
+                          onChange={(event) => setNicknameDraft(event.target.value)}
+                          maxLength={20}
+                          className="h-9 min-w-[180px] rounded-xl border border-white/10 bg-black/20 px-3 text-sm font-black text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8A4A2]/55"
+                          placeholder="닉네임 입력"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveNickname}
+                          disabled={isSavingNickname}
+                          className="rounded-xl bg-[#D8A4A2] px-3 py-2 text-xs font-black text-[#211615] transition-all hover:brightness-110 disabled:opacity-60"
+                        >
+                          저장
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingNickname(false);
+                            setNicknameDraft(displayNickname === 'SORIDRAW User' ? '' : displayNickname);
+                            setNicknameMessage(null);
+                          }}
+                          disabled={isSavingNickname}
+                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-white/70 transition-all hover:bg-white/[0.08] hover:text-white disabled:opacity-60"
+                        >
+                          취소
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="truncate text-xl font-black">{displayNickname}</h2>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNicknameDraft(displayNickname === 'SORIDRAW User' ? '' : displayNickname);
+                            setIsEditingNickname(true);
+                            setNicknameMessage(null);
+                          }}
+                          className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-[#D8A4A2] transition-all hover:bg-[#AC6B69]/12"
+                        >
+                          닉네임 변경
+                        </button>
+                      </>
+                    )}
+                  </div>
                   <p className="truncate text-sm text-[var(--text-secondary)]">{user.email || profile?.email || '-'}</p>
                   <p className="mt-1 text-xs text-[var(--text-secondary)]">가입일 {formatDate(profile?.createdAt)}</p>
+                  {nicknameMessage && <p className="mt-1 text-xs font-bold text-[#D8A4A2]">{nicknameMessage}</p>}
                 </div>
               </div>
               <button onClick={handleLogout} className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-[var(--text-secondary)] hover:bg-rose-500/10 hover:text-rose-300 transition-all" title="로그아웃">

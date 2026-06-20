@@ -723,25 +723,7 @@ export default function FavoritesPage({
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [favoriteMemoDrafts, setFavoriteMemoDrafts] = useState<Record<string, string>>({});
   const [favoriteMemoSavingIds, setFavoriteMemoSavingIds] = useState<Record<string, boolean>>({});
-  const [favoriteMemoTextareaHeight, setFavoriteMemoTextareaHeight] = useState(150);
-  const startFavoriteMemoResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const startY = event.clientY;
-    const startHeight = favoriteMemoTextareaHeight;
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const nextHeight = Math.min(360, Math.max(120, startHeight + moveEvent.clientY - startY));
-      setFavoriteMemoTextareaHeight(nextHeight);
-    };
-    const stopResize = () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', stopResize);
-      window.removeEventListener('pointercancel', stopResize);
-    };
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', stopResize, { once: true });
-    window.addEventListener('pointercancel', stopResize, { once: true });
-  };
+  const [favoriteMemoExpanded, setFavoriteMemoExpanded] = useState(false);
   const [favoriteToastMessage, setFavoriteToastMessage] = useState<string | null>(null);
   const favoriteToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -6302,18 +6284,18 @@ ${song.prompt}
                       onChange={(event) => setFavoriteMemoDrafts(prev => ({ ...prev, [selectedSong.id]: event.target.value }))}
                       placeholder="곡에 대한 메모를 입력하세요..."
                       rows={4}
-                      style={{ height: favoriteMemoTextareaHeight }}
-                      className="w-full min-h-[120px] resize-none rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all placeholder:text-white/28 focus:border-[#E45F59]/45 focus:bg-black/[0.22] md:text-[15px]"
+                      style={{ height: favoriteMemoExpanded ? 300 : 150 }}
+                      className="w-full min-h-[120px] resize-none rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all duration-200 placeholder:text-white/28 focus:border-[#E45F59]/45 focus:bg-black/[0.22] md:text-[15px]"
                     />
-                    <div
-                      role="separator"
-                      aria-orientation="horizontal"
-                      aria-label="메모 입력창 높이 조절"
-                      onPointerDown={startFavoriteMemoResize}
-                      className="mt-2 flex h-7 cursor-ns-resize touch-none items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.035] transition-all hover:border-[#E45F59]/35 hover:bg-[#E45F59]/10 active:bg-[#E45F59]/14"
+                    <button
+                      type="button"
+                      aria-expanded={favoriteMemoExpanded}
+                      aria-label={favoriteMemoExpanded ? '메모 입력창 기본 크기로 줄이기' : '메모 입력창 크게 펼치기'}
+                      onClick={() => setFavoriteMemoExpanded(prev => !prev)}
+                      className="mt-2 flex h-8 w-full cursor-pointer touch-manipulation items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.035] transition-all hover:border-[#E45F59]/35 hover:bg-[#E45F59]/10 active:bg-[#E45F59]/14"
                     >
-                      <span className="h-1.5 w-16 rounded-full bg-white/24" />
-                    </div>
+                      <span className={`h-1.5 rounded-full bg-white/24 transition-all ${favoriteMemoExpanded ? 'w-20' : 'w-16'}`} />
+                    </button>
                     {favoriteMemoSavingIds[selectedSong.id] && (
                       <div className="mt-2 text-[11px] font-bold text-[#FFAAA3]/75">메모 저장 중...</div>
                     )}

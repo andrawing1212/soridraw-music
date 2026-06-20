@@ -408,7 +408,7 @@ function getFavoriteDetailCreatedAt(song: any): string {
 function normalizeFavoriteCreatorId(value: any, ownerUid?: string | null): string {
   const text = typeof value === 'string' ? value.trim() : '';
   if (!text) return '';
-  if (/^soridraw(?:'s studio)?$/i.test(text)) return '';
+  if (text === 'SORIDRAW' || text === "SORIDRAW's Studio") return '';
   if (ownerUid && text === ownerUid) return '';
   if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
   if (text.includes('@')) return text.split('@')[0] || '';
@@ -439,6 +439,57 @@ function getFavoriteCreatorId(song: any, user?: User | null): string {
 
 function getFavoriteDetailCreator(song: any, user?: User | null): string {
   return getFavoriteCreatorId(song, user);
+}
+
+function makeTemporaryCreatorId(seed?: string | null): string {
+  const source = String(seed || 'soridraw-user').trim() || 'soridraw-user';
+  let hash = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    hash = ((hash << 5) - hash + source.charCodeAt(i)) | 0;
+  }
+  const code = Math.abs(hash).toString(16).toUpperCase().padStart(7, '0').slice(0, 7);
+  return `소리드로우${code}`;
+}
+
+function normalizeCreatorNickname(value: any, ownerUid?: string | null, ownerEmail?: string | null): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return '';
+  if (text === 'SORIDRAW' || text === "SORIDRAW's Studio") return '';
+  if (/^소리드로우[0-9A-F]{7}$/i.test(text)) return text;
+  if (ownerUid && text === ownerUid) return '';
+  if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+  if (text.includes('@')) return '';
+  const emailLocal = typeof ownerEmail === 'string' ? ownerEmail.split('@')[0] : '';
+  if (emailLocal && text.toLowerCase() === emailLocal.toLowerCase()) return '';
+  return text;
+}
+
+function normalizeTrustedCreatorNickname(value: any, ownerUid?: string | null, ownerEmail?: string | null): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return '';
+  if (/^소리드로우[0-9A-F]{7}$/i.test(text)) return text;
+  if (ownerUid && text === ownerUid) return '';
+  if (!text.includes('@') && /^[A-Za-z0-9_-]{20,}$/.test(text)) return '';
+  if (text.includes('@')) return '';
+  const emailLocal = typeof ownerEmail === 'string' ? ownerEmail.split('@')[0] : '';
+  if (emailLocal && text.toLowerCase() === emailLocal.toLowerCase()) return '';
+  return text;
+}
+
+function getCreatorNicknameFromProfile(profile: any, user?: User | null): string {
+  const ownerUid = user?.uid || profile?.uid || '';
+  const ownerEmail = user?.email || profile?.email || '';
+  const candidates = [
+    profile?.nickname,
+    user?.displayName,
+    profile?.displayName,
+    profile?.name,
+  ];
+  for (const value of candidates) {
+    const text = normalizeTrustedCreatorNickname(value, ownerUid, ownerEmail);
+    if (text) return text;
+  }
+  return makeTemporaryCreatorId(ownerUid || ownerEmail);
 }
 
 function getUserProfileDisplayName(profile: any, user?: User | null): string {
@@ -626,6 +677,7 @@ export default function FavoritesPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
+  const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
   const isSharedMusicNoteItem = (song: any) => Boolean(
     song?.sharedReadOnly
     || song?.isSharedMusicNote
@@ -1070,15 +1122,50 @@ export default function FavoritesPage({
 
   const getMusicNoteMemo = (song: any): string => String(song?.musicNoteMemo || song?.noteMemo || song?.memo || '');
 
-  const getSharedMusicNoteCreator = (song: any): string => {
-    if (!song || !isSharedMusicNoteItem(song)) return '';
-    return getFavoriteCreatorId(song, null);
+  const getCurrentFavoriteCreatorName = () => getCreatorNicknameFromProfile(favoriteUserProfile, user);
+
+  const getMusicNoteCreatorUid = (song: any): string => {
+    const rawUid = song?.creatorUid || song?.ownerUid || song?.originalOwnerUid || song?.createdByUid || song?.uid;
+    return typeof rawUid === 'string' ? rawUid.trim() : '';
   };
 
-  const getCurrentFavoriteCreatorName = () => getUserProfileDisplayName(favoriteUserProfile, user);
+  const getMusicNoteCreatorNickname = (song: any): string => {
+    if (!song) return '';
+    const uid = getMusicNoteCreatorUid(song);
+    const email = song?.creatorEmail || song?.ownerEmail || '';
+    const isOwnNote = Boolean(user?.uid && (uid === user.uid || song?.uid === user.uid || song?.ownerUid === user.uid || song?.creatorUid === user.uid));
+
+    if (isOwnNote) {
+      return getCurrentFavoriteCreatorName();
+    }
+
+    const profileName = uid && Object.prototype.hasOwnProperty.call(creatorNameByUid, uid)
+      ? normalizeTrustedCreatorNickname(creatorNameByUid[uid], uid, email)
+      : '';
+    if (profileName) return profileName;
+
+    const storedCandidates = [
+      song?.creatorDisplayId,
+      song?.creatorNickname,
+      song?.ownerNickname,
+      song?.creatorName,
+      song?.ownerName,
+      song?.ownerDisplayName,
+      song?.createdByName,
+    ];
+    for (const value of storedCandidates) {
+      const text = normalizeCreatorNickname(value, uid, email);
+      if (text) return text;
+    }
+
+    if (uid || email) return makeTemporaryCreatorId(uid || email);
+    return '';
+  };
+
+  const getSharedMusicNoteCreator = (song: any): string => getMusicNoteCreatorNickname(song);
 
   const getCreatorNameForMusicNoteShare = (song: any): string => {
-    if (isSharedMusicNoteItem(song)) return getFavoriteCreatorId(song, null);
+    if (isSharedMusicNoteItem(song)) return getMusicNoteCreatorNickname(song);
     return getCurrentFavoriteCreatorName();
   };
 
@@ -1086,6 +1173,43 @@ export default function FavoritesPage({
     if (isSharedMusicNoteItem(song)) return song?.ownerUid || song?.creatorUid || null;
     return user?.uid || null;
   };
+
+  useEffect(() => {
+    const uids: string[] = Array.from(new Set<string>(
+      activeFavoriteSource
+        .map((song: any) => getMusicNoteCreatorUid(song))
+        .filter((uid: string): uid is string => Boolean(uid) && !Object.prototype.hasOwnProperty.call(creatorNameByUid, uid))
+    ));
+
+    if (uids.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const entries: Array<[string, string]> = await Promise.all(uids.map(async (uid): Promise<[string, string]> => {
+        try {
+          const snap = await getDoc(doc(db, 'users', uid));
+          if (!snap.exists()) return [uid, ''];
+          const data: any = snap.data();
+          return [uid, getCreatorNicknameFromProfile({ ...data, uid }, null)];
+        } catch {
+          return [uid, ''];
+        }
+      }));
+
+      if (cancelled) return;
+      setCreatorNameByUid(prev => {
+        const next = { ...prev };
+        entries.forEach(([uid, name]) => {
+          next[uid] = name || '';
+        });
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFavoriteSource, creatorNameByUid]);
 
   const normalizeMusicNoteDuplicateText = (value: any): string => String(value || '')
     .toLowerCase()
@@ -3691,7 +3815,7 @@ ${song.prompt}
     const titles = getNormalizedTitles(song);
     const sunoLinks = getFavoriteSunoLinks(song);
     const mainSunoLink = getFavoriteMainSunoLink(song);
-    const sharedCreator = getFavoriteCreatorId(song, null);
+    const sharedCreator = getMusicNoteCreatorNickname(song);
     const payload = cleanUndefinedValues({
       uid: user.uid,
       ownerUid: song?.ownerUid || song?.creatorUid || null,
@@ -4698,6 +4822,9 @@ ${song.prompt}
               const mobileTitleText = mobileTitles.korean && mobileTitles.english
                 ? `${mobileTitles.korean} | ${mobileTitles.english}`
                 : mobileTitles.korean || mobileTitles.english || 'Untitled';
+              const musicNoteListCreator = (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote')
+                ? getMusicNoteCreatorNickname(song)
+                : '';
 
               return (
                 <motion.div
@@ -4928,9 +5055,9 @@ ${song.prompt}
                             document.addEventListener('mouseup', onUp);
                           }}
                         >
-                          {musicNoteViewMode === 'sharedNote' && getSharedMusicNoteCreator(song) && (
+                          {musicNoteListCreator && (
                             <span className="shrink-0 rounded-md border border-[#E45F59]/30 bg-[#E45F59]/16 px-2 py-0.5 text-[10px] font-black text-[#FFC0B8] whitespace-nowrap shadow-[0_0_10px_rgba(228,95,89,0.10)]">
-                              {getSharedMusicNoteCreator(song)}
+                              {musicNoteListCreator}
                             </span>
                           )}
                           {renderFavoriteKeywordChips(song)}
@@ -5807,15 +5934,15 @@ ${song.prompt}
                       </>
                     )}
 
-                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <div className="mt-4 flex flex-col items-center justify-center gap-1.5">
+                      {getMusicNoteCreatorNickname(selectedSong) && (
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
+                          제작자: {getMusicNoteCreatorNickname(selectedSong)}
+                        </span>
+                      )}
                       {getFavoriteDetailCreatedAt(selectedSong) && (
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
                           생성일: {getFavoriteDetailCreatedAt(selectedSong)}
-                        </span>
-                      )}
-                      {getFavoriteDetailCreator(selectedSong, user) && (
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-[12px] font-medium text-white/70">
-                          제작자: {getFavoriteDetailCreator(selectedSong, user)}
                         </span>
                       )}
                     </div>

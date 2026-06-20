@@ -413,26 +413,31 @@ export default function MyPage() {
                           className="h-9 min-w-[180px] rounded-xl border border-white/10 bg-black/20 px-3 text-sm font-black text-white outline-none transition-all placeholder:text-white/25 focus:border-[#D8A4A2]/55"
                           placeholder="닉네임 입력"
                         />
-                        <button
-                          type="button"
-                          onClick={handleSaveNickname}
-                          disabled={isSavingNickname}
-                          className="rounded-xl bg-[#D8A4A2] px-3 py-2 text-xs font-black text-[#211615] transition-all hover:brightness-110 disabled:opacity-60"
-                        >
-                          저장
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsEditingNickname(false);
-                            setNicknameDraft(displayNickname === 'SORIDRAW User' ? '' : displayNickname);
-                            setNicknameMessage(null);
-                          }}
-                          disabled={isSavingNickname}
-                          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-white/70 transition-all hover:bg-white/[0.08] hover:text-white disabled:opacity-60"
-                        >
-                          취소
-                        </button>
+                        <div className="flex flex-col items-start gap-1">
+                          <p className="text-[10px] font-bold leading-none text-[#D8A4A2]/80">14일 동안 변경을 할 수 없습니다.</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleSaveNickname}
+                              disabled={isSavingNickname}
+                              className="rounded-xl bg-[#D8A4A2] px-3 py-2 text-xs font-black text-[#211615] transition-all hover:brightness-110 disabled:opacity-60"
+                            >
+                              저장
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditingNickname(false);
+                                setNicknameDraft(displayNickname === 'SORIDRAW User' ? '' : displayNickname);
+                                setNicknameMessage(null);
+                              }}
+                              disabled={isSavingNickname}
+                              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-white/70 transition-all hover:bg-white/[0.08] hover:text-white disabled:opacity-60"
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
                       </>
                     ) : (
                       <>

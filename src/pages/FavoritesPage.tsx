@@ -4834,12 +4834,12 @@ ${song.prompt}
                             document.addEventListener('mouseup', onUp);
                           }}
                         >
-                          {renderFavoriteKeywordChips(song)}
                           {musicNoteViewMode === 'sharedNote' && getSharedMusicNoteCreator(song) && (
-                            <span className="shrink-0 rounded-md border border-[#E45F59]/15 bg-[#E45F59]/10 px-2 py-0.5 text-[9px] font-bold text-[#FFAAA3]/82 whitespace-nowrap">
+                            <span className="shrink-0 rounded-md border border-[#E45F59]/22 bg-[#E45F59]/12 px-2 py-0.5 text-[9px] font-extrabold text-[#FFB7AF] whitespace-nowrap">
                               {getSharedMusicNoteCreator(song)}
                             </span>
                           )}
+                          {renderFavoriteKeywordChips(song)}
                         </div>
                         <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">
                           {getRelativeTime(song.createdAtMs || song.createdAt)}

@@ -1120,29 +1120,56 @@ export default function FavoritesPage({
     if (!song) return '';
     const uid = getMusicNoteCreatorUid(song);
     const email = song?.creatorEmail || song?.ownerEmail || '';
-    const isOwnNote = Boolean(user?.uid && (uid === user.uid || song?.uid === user.uid || song?.ownerUid === user.uid || song?.creatorUid === user.uid));
+
+    // Check if it is a shared note to avoid mistakenly treating the current saving user as the creator
+    const isShared = isSharedMusicNoteItem(song);
+    const isOwnNote = isShared
+      ? Boolean(user?.uid && uid === user.uid)
+      : Boolean(user?.uid && (uid === user.uid || song?.uid === user.uid || song?.ownerUid === user.uid || song?.creatorUid === user.uid));
 
     if (isOwnNote) {
       return getCurrentFavoriteCreatorName();
     }
 
-    const profileName = uid && Object.prototype.hasOwnProperty.call(creatorNameByUid, uid)
-      ? normalizeTrustedCreatorNickname(creatorNameByUid[uid], uid, email)
-      : '';
-    if (profileName) return profileName;
-
-    const storedCandidates = [
-      song?.creatorDisplayId,
+    // Prioritize the requested stored fields: "originalCreatorNickname", "creatorNickname", "creatorDisplayName" (as creatorDisplayId), "creatorName", "ownerNickname", etc.
+    const storedPriorityCandidates = [
+      song?.originalCreatorNickname,
       song?.creatorNickname,
-      song?.ownerNickname,
+      song?.originalCreatorDisplayName,
+      song?.creatorDisplayName,
+      song?.creatorDisplayId,
+      song?.originalCreatorName,
       song?.creatorName,
+      song?.originalOwnerNickname,
+      song?.ownerNickname,
+      song?.originalOwnerName,
       song?.ownerName,
       song?.ownerDisplayName,
       song?.createdByName,
     ];
-    for (const value of storedCandidates) {
+
+    // First search: Look for real non-temporary names stored in these candidates
+    for (const value of storedPriorityCandidates) {
       const text = normalizeCreatorNickname(value, uid, email);
-      if (text) return text;
+      if (text && !/^소리드로우[0-9A-F]{7}$/i.test(text)) {
+        return text;
+      }
+    }
+
+    // Fallback 1: Retreive creator profile fetched from the database
+    const profileName = uid && Object.prototype.hasOwnProperty.call(creatorNameByUid, uid)
+      ? normalizeTrustedCreatorNickname(creatorNameByUid[uid], uid, email)
+      : '';
+    if (profileName && !/^소리드로우[0-9A-F]{7}$/i.test(profileName)) {
+      return profileName;
+    }
+
+    // Fallback 2: Any stored candidates (including existing temporary ones)
+    for (const value of storedPriorityCandidates) {
+      const text = normalizeCreatorNickname(value, uid, email);
+      if (text) {
+        return text;
+      }
     }
 
     if (uid || email) return makeTemporaryCreatorId(uid || email);
@@ -3849,12 +3876,17 @@ ${song.prompt}
       creatorNickname: song?.originalCreatorNickname || song?.creatorNickname || sharedCreator,
       creatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || sharedCreator,
       creatorName: song?.originalCreatorName || song?.creatorName || sharedCreator,
+      creatorDisplayName: song?.originalCreatorDisplayName || song?.creatorDisplayName || sharedCreator,
       originalOwnerNickname: song?.originalOwnerNickname || song?.ownerNickname || sharedCreator,
       originalCreatorNickname: song?.originalCreatorNickname || song?.creatorNickname || sharedCreator,
       originalCreatorDisplayId: song?.originalCreatorDisplayId || song?.creatorDisplayId || sharedCreator,
       originalCreatorName: song?.originalCreatorName || song?.creatorName || sharedCreator,
+      originalCreatorDisplayName: song?.originalCreatorDisplayName || song?.creatorDisplayName || sharedCreator,
       ownerEmail: song?.ownerEmail || null,
       creatorEmail: song?.creatorEmail || null,
+      savedByUid: user.uid,
+      savedByNickname: getCurrentFavoriteCreatorName(),
+      savedByEmail: user.email || null,
       title: getCombinedFavoriteTitle(song),
       koreanTitle: titles.korean || '',
       englishTitle: titles.english || '',
@@ -4855,7 +4887,7 @@ ${song.prompt}
               const mobileTitleText = mobileTitles.korean && mobileTitles.english
                 ? `${mobileTitles.korean} | ${mobileTitles.english}`
                 : mobileTitles.korean || mobileTitles.english || 'Untitled';
-              const musicNoteListCreator = (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote')
+              const musicNoteListCreator = (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote' || isMusicNoteSharedView || isSharedMusicNoteItem(song))
                 ? getMusicNoteCreatorNickname(song)
                 : '';
 

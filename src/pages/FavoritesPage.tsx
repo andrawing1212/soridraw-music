@@ -131,14 +131,14 @@ function SunoUrlMobileGuideButton() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 14 }}
               transition={{ duration: 0.18 }}
-              className="w-full max-w-[560px] overflow-hidden rounded-[28px] border border-[#FF7A6C]/22 bg-[#181818] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.62)]"
+              className="max-h-[88vh] w-full max-w-[620px] overflow-y-auto rounded-[28px] border border-[#FF7A6C]/22 bg-[#181818] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.62)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FFAAA3]/78">mobile guide</div>
                   <h3 className="mt-1 text-xl font-black text-white">모바일 수노 링크 복사 방법</h3>
-                  <p className="mt-2 text-sm leading-6 text-white/55">수노 앱/모바일 화면에서 <span className="font-bold text-white/82">노래 공유</span>를 누른 뒤 <span className="font-bold text-white/82">링크 복사</span>를 선택하고, SORIDRAW 입력칸에 붙여 넣으면 됩니다.</p>
+                  <p className="mt-2 text-sm leading-6 text-white/55">수노 앱/모바일 화면에서 공유 링크를 복사한 뒤, 이 입력칸에 그대로 붙여 넣으면 됩니다.</p>
                 </div>
                 <button
                   type="button"
@@ -150,26 +150,29 @@ function SunoUrlMobileGuideButton() {
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {[
-                  { step: '1', title: '노래 공유', img: '/suno-mobile-share-guide-1.jpeg', alt: '수노 모바일 노래 공유 버튼 위치' },
-                  { step: '2', title: '링크 복사', img: '/suno-mobile-share-guide-2.jpeg', alt: '수노 모바일 링크 복사 버튼 위치' },
-                ].map((item) => (
-                  <div key={item.step} className="rounded-2xl border border-white/10 bg-black/18 p-3">
-                    <div className="mb-3 flex items-center gap-2 text-sm font-black text-white/82">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#FF5C52]/20 text-[12px] text-[#FFAAA3]">{item.step}</span>
-                      {item.title}
-                    </div>
-                    <div className="flex justify-center overflow-hidden rounded-2xl bg-black/25 p-2">
-                      <img
-                        src={item.img}
-                        alt={item.alt}
-                        className="h-auto max-h-[230px] w-auto max-w-full rounded-xl object-contain sm:max-h-[280px]"
-                        loading="lazy"
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-4 space-y-2 text-xs text-white/62">
+                <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#D85C56]/16 text-[11px] font-bold text-[#FFAAA3]">1</span><span>수노 앱에서 원하는 곡의 <span className="font-semibold text-white/84">노래 공유</span>를 누르세요.</span></div>
+                <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#D85C56]/16 text-[11px] font-bold text-[#FFAAA3]">2</span><span><span className="font-semibold text-white/84">링크 복사</span>를 선택해 공유 링크를 복사하세요.</span></div>
+                <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#D85C56]/16 text-[11px] font-bold text-[#FFAAA3]">3</span><span>복사한 주소를 SORIDRAW 입력칸에 붙여 넣고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2">
+                  <img
+                    src="/suno-mobile-share-guide-1.jpeg"
+                    alt="수노 모바일 노래 공유 버튼 위치"
+                    className="mx-auto h-auto max-h-[320px] w-auto max-w-full rounded-xl object-contain"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2">
+                  <img
+                    src="/suno-mobile-share-guide-2.jpeg"
+                    alt="수노 모바일 링크 복사 버튼 위치"
+                    className="mx-auto h-auto max-h-[320px] w-auto max-w-full rounded-xl object-contain"
+                    loading="lazy"
+                  />
+                </div>
               </div>
 
               <button

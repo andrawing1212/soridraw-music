@@ -51,7 +51,7 @@
   --soridraw-menu-amber-rgb: 255 187 34;
   --soridraw-menu-amber-soft: #FFD36A;
   --soridraw-menu-amber-soft-rgb: 255 211 106;
-  --soridraw-menu-red: #E45F59;
+  --soridraw-menu-red: #FF5C52;
   --soridraw-menu-green: #7FBD75;
 }
 
@@ -89,7 +89,7 @@
   --soridraw-menu-amber-rgb: 255 187 34;
   --soridraw-menu-amber-soft: #FFD36A;
   --soridraw-menu-amber-soft-rgb: 255 211 106;
-  --soridraw-menu-red: #E45F59;
+  --soridraw-menu-red: #FF5C52;
   --soridraw-menu-green: #7FBD75;
 }
 
@@ -433,10 +433,10 @@ body::-webkit-scrollbar-thumb:hover {
    Music Note and Library pages use page-specific accent tones and the same
    soft, low-border surface treatment used in Studio. */
 .dark .soridraw-musicnote-theme {
-  --page-accent: #E45F59;
-  --page-accent-soft: rgba(228, 95, 89, 0.14);
-  --page-accent-hover: rgba(228, 95, 89, 0.20);
-  --page-accent-text: #FF9B92;
+  --page-accent: #FF5C52;
+  --page-accent-soft: rgba(255, 92, 82, 0.14);
+  --page-accent-hover: rgba(255, 92, 82, 0.20);
+  --page-accent-text: #FF8B84;
   --page-soft-border: rgba(0, 0, 0, 0.30);
   --page-soft-border-hover: rgba(0, 0, 0, 0.38);
 }
@@ -488,7 +488,7 @@ body::-webkit-scrollbar-thumb:hover {
   border-color: var(--page-accent) !important;
 }
 
-.dark .soridraw-musicnote-theme :where([class*="text-[#FFAAA7]"], [class*="text-[#D45A66]"], [class*="text-[#F07882]"]) {
+.dark .soridraw-musicnote-theme :where([class*="text-[#FF8B84]"], [class*="text-[#FF7066]"]) {
   color: var(--page-accent-text) !important;
 }
 

@@ -528,7 +528,7 @@ const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
   bar: 'bg-[#FFBB22]/95',
   text: 'text-[#FFD36A]',
   softText: 'text-[#FFD36A]/58',
-  selected: 'bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selected: 'bg-[#FFBB22] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
   selectedSoft: 'bg-[#FFBB22]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFBB22]/20',
   summaryActive: 'bg-[#FFBB22]/[0.035] border-[#FFBB22]/15 text-[#FFD36A]',
   summaryRest: 'border-[#FFBB22]/10 bg-black/5',
@@ -538,8 +538,8 @@ const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
   summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#FFBB22]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#FFBB22]/80 text-[#171717] border-black/20',
+  pointSelected: 'bg-[#FFBB22] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#FFBB22] text-[#171717] border-black/20',
   badgeAccent: '#FFBB22',
 };
 
@@ -566,7 +566,7 @@ const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
   bar: 'bg-[#FFBB22]/95',
   text: 'text-[#FFD36A]',
   softText: 'text-[#FFD36A]/58',
-  selected: 'bg-[#FFBB22]/74 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selected: 'bg-[#FFBB22] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
   selectedSoft: 'bg-[#FFBB22]/15 border-black/20 text-[#FFD36A] hover:bg-[#FFBB22]/22',
   summaryActive: 'bg-[#FFBB22]/[0.035] border-[#FFBB22]/15 text-[#FFD36A]',
   summaryRest: 'border-[#FFBB22]/10 bg-black/5',
@@ -576,8 +576,8 @@ const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
   summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
   selectedBorder: 'border-black/20',
   badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#FFBB22]/68 border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#FFBB22]/80 text-[#171717] font-black border-black/20',
+  pointSelected: 'bg-[#FFBB22] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#FFBB22] text-[#171717] font-black border-black/20',
   badgeAccent: '#FFBB22',
 };
 
@@ -661,6 +661,30 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
     return getKeywordChipClass('genre', true);
   }
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)]';
+};
+
+const getAppliedSelectionKeywordChipClass = (typeOrKey: string) => {
+  const normalized = String(typeOrKey || '').toLowerCase();
+
+  if (normalized === 'genre' || normalized === 'subgenre' || normalized.includes('genre')) {
+    return 'bg-[#4A3510]/92 border-[#FFBB22]/35 text-[#FFD36A] shadow-[0_8px_18px_rgba(255,187,34,0.10)]';
+  }
+  if (normalized === 'mood' || normalized.includes('mood') || normalized.includes('atmosphere')) {
+    return 'bg-[#3D2530]/92 border-[#FF7895]/35 text-[#FFB4C4] shadow-[0_8px_18px_rgba(255,120,149,0.09)]';
+  }
+  if (normalized === 'theme' || normalized.includes('theme') || normalized.includes('topic')) {
+    return 'bg-[#203546]/92 border-[#64D2FF]/35 text-[#A9E7FF] shadow-[0_8px_18px_rgba(100,210,255,0.09)]';
+  }
+  if (normalized === 'style' || normalized.includes('style')) {
+    return 'bg-[#30284C]/92 border-[#B893FF]/35 text-[#D9CBFF] shadow-[0_8px_18px_rgba(184,147,255,0.09)]';
+  }
+  if (normalized === 'sound' || normalized === 'point-sound' || normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
+    return 'bg-[#233A2C]/92 border-[#7EDB83]/35 text-[#BDF6C4] shadow-[0_8px_18px_rgba(126,219,131,0.09)]';
+  }
+  if (normalized === 'mix' || normalized === 'rap') {
+    return 'bg-[#4A3510]/92 border-[#FFBB22]/35 text-[#FFD36A] shadow-[0_8px_18px_rgba(255,187,34,0.10)]';
+  }
+  return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
 };
 
 
@@ -8457,6 +8481,23 @@ ${normalizePromptForDisplay(result.prompt)}
       label: resolveGenreChipLabel(id),
     }));
 
+  const removeAppliedGenreKeyword = (id: string) => {
+    setIsGenreRandomized(false);
+    setSelectedGenres((prev) => prev.filter((value) => value !== id));
+    setSubGenre((prev) => prev.filter((value) => value !== id));
+
+    if (id === 'kpop') setKpopMode(0);
+    if (id === 'citypop') setCitypopMode(0);
+
+    if (id === 'traditional-trot') {
+      const moodsToRemove = ['sad', 'nostalgic', 'lonely', 'emotional', 'dark'];
+      setSelectedMoods((prev) => prev.filter((moodId) => !moodsToRemove.includes(moodId)));
+    } else if (id === 'semi-trot') {
+      const moodsToRemove = ['bright', 'hopeful', 'warm', 'tense'];
+      setSelectedMoods((prev) => prev.filter((moodId) => !moodsToRemove.includes(moodId)));
+    }
+  };
+
   type GlobalSearchType = 'genre' | 'style' | 'sound' | 'mood' | 'theme';
 
   const normalizeGlobalSearchText = (value: unknown) =>
@@ -10431,8 +10472,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
               {[
                 ...displayGenreKeywords,
-                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
                 ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
+                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
                 ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
                 ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
                 ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
@@ -10441,9 +10482,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               ].map((item) => {
                   const chipClassName = cn(
                     'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                    item.type === 'mix' || item.type === 'rap' || item.type === 'vocal-tone'
-                      ? 'bg-brand-orange/10 border-brand-orange/20 text-brand-orange'
-                      : getAppliedKeywordChipClass(item.type)
+                    getAppliedSelectionKeywordChipClass(item.type)
                   );
                   return (
                     <span
@@ -10453,11 +10492,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       {item.label}
                       <button 
                         onClick={() => {
-                          if (item.type === 'genre') toggleSelection(item.id, 'genre');
-                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+                          if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
                           else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
                           else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
-                          else if (item.type === 'sound') setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+                          else if (item.type === 'sound') {
+                            if (!clearRecommendedSoundCombo(item.id)) {
+                              setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+                            }
+                          }
+                          else if (item.type === 'point-sound') {
+                            const pointSoundId = item.id.replace(/^point-/, '');
+                            setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
+                          }
                           else if (item.type === 'mix') { setIsKoreanEnglishMix(false); setEnglishMixRatio(10); }
                           else if (item.type === 'rap') setRapEnabled(false);
                               }}

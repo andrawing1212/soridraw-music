@@ -25,7 +25,7 @@ const genreAccent = {
   bar: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.95)]',
   text: 'text-[var(--soridraw-menu-amber-soft)]',
   softText: 'text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.58)]',
-  selected: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.72)] border-black/20 text-[var(--soridraw-selected-text)] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selected: 'bg-[var(--soridraw-menu-amber)] border-black/20 text-[var(--soridraw-selected-text)] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
   selectedSoft: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.14)] border-black/20 text-[var(--soridraw-menu-amber-soft)] hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.20)]',
   summaryActive: 'bg-[rgb(var(--soridraw-menu-amber-rgb)/0.035)] border-[rgb(var(--soridraw-menu-amber-rgb)/0.15)] text-[var(--soridraw-menu-amber-soft)]',
   summaryHover: 'hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.20)] hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.035)]',
@@ -984,7 +984,7 @@ export default function GenreHierarchySelector({
                     <button
                       type="button"
                       onClick={applyModalChanges}
-                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.72)] text-[var(--soridraw-selected-text)] border-[rgb(var(--soridraw-menu-amber-rgb)/0.55)] hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.78)]"
+                      className="w-10 h-10 rounded-full border transition-all flex items-center justify-center shrink-0 shadow-btn active:scale-90 bg-[var(--soridraw-menu-amber)] text-[var(--soridraw-selected-text)] border-[rgb(var(--soridraw-menu-amber-rgb)/0.55)] hover:brightness-110"
                       title="변경 적용"
                       aria-label="변경 적용"
                     >
